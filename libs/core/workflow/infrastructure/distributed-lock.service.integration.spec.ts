@@ -1,53 +1,38 @@
 /**
- * INTEGRATION TEST — DistributedLockService against a real Postgres.
+ * INTEGRATION TEST — DistributedLockService against a real Postgres, and
+ * against the same Postgres behind PgBouncer in transaction mode.
  *
- * Exercises the failure modes that prompted the QueryRunner-pinning fix:
- *   1. Re-entrant FALSE acquire when the pool reuses a connection that
- *      already holds the advisory lock.
- *   2. Lock leak when release() runs on a different connection than
- *      acquire().
+ * Each "instance" is its own DataSource + service, the way two api/worker
+ * replicas are. Behind PgBouncer the session advisory locks this service
+ * used before let both instances hold one key and left released keys held;
+ * the same specs on both targets prove the lease implementation does not
+ * depend on keeping a server session.
  *
- * Both modes manifest as "the gate lets >1 caller through" or "pg_locks
- * still shows the lock held after every caller released," depending on
- * how the pool happens to hand out connections. The fix pins one
- * QueryRunner per lock so acquire/release always run on the same
- * session. These tests assert that contract.
- *
- * The contentious tests deliberately spin up their own DataSource with
- * `extra.max = 2` to FORCE the pool to reuse connections across
- * callers — the same parameter window where `scripts/reproduce-
- * distributed-lock-bug.ts` reliably reproduces both failure modes
- * against the unfixed implementation. Without that forced reuse, pg-
- * pool's FIFO ordering can mask the bug under low contention.
- *
- * Skips automatically if Postgres isn't reachable, matching the pattern
- * used by other *.integration.spec.ts files (e.g.
- * test/integration/platformData/save-pull-request-cache.integration.spec.ts).
+ * Targets: Postgres at TEST_PG_HOST:TEST_PG_PORT (default localhost:5432),
+ * and PgBouncer at TEST_PG_HOST:TEST_PGBOUNCER_PORT when set. CI sets it
+ * (docker-compose.test.yml `db_pgbouncer`), and the spec refuses to run in
+ * CI without it so the pooler case can never be skipped silently.
  */
 // Load .env so API_PG_DB_PASSWORD / API_PG_DB_USERNAME resolve to the
 // values docker-compose.dev.yml expects. Without this the spec would
-// silently fall back to default credentials, probe Postgres with the
-// wrong password, mark itself unreachable, and every test would no-op
-// to "pass" — a false green.
+// silently fall back to default credentials and fail to connect.
 require('dotenv').config();
 
 import { DataSource } from 'typeorm';
 
-import {
-    DistributedLock,
-    DistributedLockService,
-} from './distributed-lock.service';
+import { DistributedLockLeases2026112300000000 } from '@libs/core/infrastructure/database/typeorm/migrations/2026112300000000-DistributedLockLeases';
 
-// docker-compose.dev.yml exposes Postgres on host port 5432, so the
-// host-side jest runner reaches it at localhost. API_PG_DB_HOST is the
-// container-internal hostname ("db_postgres") which won't resolve from
-// the host — only use it when TEST_PG_HOST is explicitly set (e.g. when
-// running tests inside the api container).
+import { DistributedLockService } from './distributed-lock.service';
+import { DistributedLockRepository } from './repositories/distributed-lock.repository';
+
 const PG_HOST = process.env.TEST_PG_HOST ?? 'localhost';
 const PG_PORT = parseInt(
     process.env.TEST_PG_PORT ?? process.env.API_PG_DB_PORT ?? '5432',
     10,
 );
+const PGBOUNCER_PORT = process.env.TEST_PGBOUNCER_PORT
+    ? parseInt(process.env.TEST_PGBOUNCER_PORT, 10)
+    : undefined;
 const PG_USER =
     process.env.TEST_PG_USER ?? process.env.API_PG_DB_USERNAME ?? 'kodusdev';
 const PG_PASSWORD =
@@ -57,11 +42,19 @@ const PG_PASSWORD =
 const PG_DB =
     process.env.TEST_PG_DB ?? process.env.API_PG_DB_DATABASE ?? 'kodus_db';
 
-function makeDataSource(poolMax: number): DataSource {
+const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
+
+if (!skipIntegration && process.env.CI && PGBOUNCER_PORT === undefined) {
+    throw new Error(
+        'TEST_PGBOUNCER_PORT is required in CI: the PgBouncer case is what this spec exists for.',
+    );
+}
+
+function makeDataSource(port: number, poolMax = 5): DataSource {
     return new DataSource({
         type: 'postgres',
         host: PG_HOST,
-        port: PG_PORT,
+        port,
         username: PG_USER,
         password: PG_PASSWORD,
         database: PG_DB,
@@ -78,256 +71,196 @@ function makeDataSource(poolMax: number): DataSource {
     });
 }
 
-async function isPostgresReachable(): Promise<boolean> {
-    const probe = makeDataSource(1);
-    try {
-        await probe.initialize();
-        await probe.query('SELECT 1');
-        await probe.destroy();
-        return true;
-    } catch {
-        try {
-            await probe.destroy();
-        } catch {
-            // ignore
-        }
-        return false;
-    }
-}
+const uniqueKey = (suffix: string) =>
+    `dls-it::${process.pid}::${Date.now()}::${Math.random()
+        .toString(36)
+        .slice(2)}::${suffix}`;
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
+const targets = [
+    { name: 'Postgres, direct', port: PG_PORT },
+    ...(PGBOUNCER_PORT !== undefined
+        ? [{ name: 'PgBouncer, transaction mode', port: PGBOUNCER_PORT }]
+        : []),
+];
 
 (skipIntegration ? describe.skip : describe)(
-    'DistributedLockService (integration, real Postgres)',
+    'DistributedLockService (integration)',
     () => {
-        let canRun = true;
-        let baseDataSource: DataSource;
-        let baseService: DistributedLockService;
-
-        const uniqueKey = (suffix: string) =>
-            `dls-integration::${process.pid}::${Date.now()}::${Math.random()
-                .toString(36)
-                .slice(2)}::${suffix}`;
-
-        const hashKey = (
-            svc: DistributedLockService,
-            key: string,
-        ): [number, number] =>
-            (svc as unknown as {
-                hashKey: (k: string) => [number, number];
-            }).hashKey(key);
-
-        const heldLockRows = async (
-            ds: DataSource,
-            svc: DistributedLockService,
-            key: string,
-        ) => {
-            const [classid, objid] = hashKey(svc, key);
-            return ds.query(
-                `SELECT pid, granted FROM pg_locks
-                  WHERE locktype = 'advisory'
-                    AND classid = $1
-                    AND objid = $2`,
-                [classid, objid],
-            );
-        };
-
         beforeAll(async () => {
-            const reachable = await isPostgresReachable();
-            if (!reachable) {
-                canRun = false;
-                // Loud failure instead of silent no-op tests. If you
-                // want to genuinely skip integration runs, set
-                // SKIP_INTEGRATION=true.
+            // The lease table comes from a migration; run its up() (idempotent)
+            // so the spec does not depend on the migration runner.
+            const direct = makeDataSource(PG_PORT, 1);
+            try {
+                await direct.initialize();
+            } catch (error) {
                 throw new Error(
-                    `Postgres unreachable at ${PG_USER}@${PG_HOST}:${PG_PORT}/${PG_DB}. ` +
-                        `Set TEST_PG_* env vars or run with SKIP_INTEGRATION=true to skip.`,
+                    `Postgres unreachable at ${PG_USER}@${PG_HOST}:${PG_PORT}/${PG_DB} (${(error as Error).message}). ` +
+                        'Set TEST_PG_* env vars or run with SKIP_INTEGRATION=true to skip.',
+                    { cause: error },
                 );
             }
-            baseDataSource = makeDataSource(5);
-            await baseDataSource.initialize();
-            baseService = new DistributedLockService(baseDataSource);
-        });
+            const runner = direct.createQueryRunner();
+            await new DistributedLockLeases2026112300000000().up(runner);
+            await runner.release();
+            await direct.destroy();
+        }, 30_000);
 
-        afterAll(async () => {
-            if (baseDataSource?.isInitialized) {
-                await baseDataSource.destroy();
-            }
-        });
+        describe.each(targets)('on $name', ({ port }) => {
+            const sources: DataSource[] = [];
+            let instanceA: DistributedLockService;
+            let instanceB: DistributedLockService;
+            let observer: DistributedLockService;
+            let repository: DistributedLockRepository;
 
-        // ── Basic API contract ─────────────────────────────────────
-
-        it('acquires when no other holder exists, then releases cleanly', async () => {
-            if (!canRun) return;
-            const key = uniqueKey('basic');
-
-            const lock = await baseService.acquire(key);
-            expect(lock).not.toBeNull();
-            expect(lock!.isReleased()).toBe(false);
-
-            expect(
-                (await heldLockRows(baseDataSource, baseService, key)).length,
-            ).toBeGreaterThanOrEqual(1);
-
-            await lock!.release();
-            expect(lock!.isReleased()).toBe(true);
-        });
-
-        it('returns null when the key is already held', async () => {
-            if (!canRun) return;
-            const key = uniqueKey('exclusion');
-
-            const first = await baseService.acquire(key);
-            expect(first).not.toBeNull();
-
-            const second = await baseService.acquire(key);
-            expect(second).toBeNull();
-
-            await first!.release();
-
-            const third = await baseService.acquire(key);
-            expect(third).not.toBeNull();
-            await third!.release();
-        });
-
-        it('different keys never block each other', async () => {
-            if (!canRun) return;
-            const k1 = uniqueKey('k1');
-            const k2 = uniqueKey('k2');
-
-            const a = await baseService.acquire(k1);
-            const b = await baseService.acquire(k2);
-            expect(a).not.toBeNull();
-            expect(b).not.toBeNull();
-
-            await a!.release();
-            await b!.release();
-        });
-
-        it('release() is idempotent — calling twice does not throw or double-unlock', async () => {
-            if (!canRun) return;
-            const key = uniqueKey('idempotent');
-
-            const lock = await baseService.acquire(key);
-            expect(lock).not.toBeNull();
-
-            await lock!.release();
-            await expect(lock!.release()).resolves.toBeUndefined();
-            expect(lock!.isReleased()).toBe(true);
-        });
-
-        // ── Bug-targeted tests (use a dedicated tight-pool DataSource
-        //    to force the connection-reuse scenario that exposes the
-        //    pre-fix re-entrant FALSE acquire / wrong-connection
-        //    release leak. These are the assertions that flip from
-        //    PASS to FAIL on the unfixed implementation.) ───────────
-
-
-        // ── TTL & isLocked ─────────────────────────────────────────
-
-        it('TTL auto-releases the lock on the pinned session', async () => {
-            if (!canRun) return;
-            const ds = makeDataSource(2);
-            await ds.initialize();
-            const svc = new DistributedLockService(ds);
-            try {
-                const key = uniqueKey('ttl');
-                const TTL_MS = 150;
-
-                const lock = await svc.acquire(key, { ttl: TTL_MS });
-                expect(lock).not.toBeNull();
-                expect(lock!.isReleased()).toBe(false);
-
-                // Run some unrelated pool churn so a wrong-connection
-                // auto-release would also fail to unlock.
-                await Promise.all([
-                    ds.query('SELECT pg_sleep(0.01)'),
-                    ds.query('SELECT pg_sleep(0.01)'),
-                ]);
-
-                await sleep(TTL_MS + 400);
-
-                expect(lock!.isReleased()).toBe(true);
-                const leaked = await heldLockRows(ds, svc, key);
-                expect(leaked).toEqual([]);
-
-                const reacquired = await svc.acquire(key);
-                expect(reacquired).not.toBeNull();
-                await reacquired!.release();
-            } finally {
-                await ds.destroy();
-            }
-        });
-
-        it('isLocked() does not leak the advisory lock when the key is free', async () => {
-            if (!canRun) return;
-            const ds = makeDataSource(2);
-            await ds.initialize();
-            const svc = new DistributedLockService(ds);
-            try {
-                const key = uniqueKey('islocked-free');
-
-                // Warm the pool, then run pool churn so isLocked's
-                // internal unlock would land on the wrong connection
-                // under the unfixed implementation.
-                await Promise.all([ds.query('SELECT 1'), ds.query('SELECT 1')]);
-                await expect(svc.isLocked(key)).resolves.toBe(false);
-                await Promise.all([
-                    ds.query('SELECT pg_sleep(0.01)'),
-                    ds.query('SELECT pg_sleep(0.01)'),
-                ]);
-
-                const leaked = await heldLockRows(ds, svc, key);
-                expect(leaked).toEqual([]);
-            } finally {
-                await ds.destroy();
-            }
-        });
-
-        it('isLocked() reports true when another holder has the key', async () => {
-            if (!canRun) return;
-            const key = uniqueKey('islocked-held');
-
-            const lock = await baseService.acquire(key);
-            expect(lock).not.toBeNull();
-
-            await expect(baseService.isLocked(key)).resolves.toBe(true);
-
-            await lock!.release();
-        });
-
-        it('failed acquire does not leak a pooled connection', async () => {
-            if (!canRun) return;
-            const ds = makeDataSource(3);
-            await ds.initialize();
-            const svc = new DistributedLockService(ds);
-            try {
-                const key = uniqueKey('failpath');
-                const holder = await svc.acquire(key);
-                expect(holder).not.toBeNull();
-
-                // Run more failed-acquire attempts than the pool size.
-                // If the failure path leaked the QueryRunner, the pool
-                // would exhaust and the next attempt would block on
-                // connectionTimeoutMillis until throwing.
-                const FAILED_ATTEMPTS = 12;
-                for (let i = 0; i < FAILED_ATTEMPTS; i++) {
-                    const start = Date.now();
-                    const got = await svc.acquire(key);
-                    expect(got).toBeNull();
-                    expect(Date.now() - start).toBeLessThan(2000);
+            beforeAll(async () => {
+                // Small pools, so the pooler keeps reusing the same few
+                // server sessions — the condition that broke session locks.
+                for (let i = 0; i < 3; i++) {
+                    const ds = makeDataSource(port, 2);
+                    await ds.initialize();
+                    sources.push(ds);
                 }
+                instanceA = new DistributedLockService(sources[0]);
+                instanceB = new DistributedLockService(sources[1]);
+                observer = new DistributedLockService(sources[2]);
+                repository = new DistributedLockRepository(sources[2]);
+            }, 30_000);
 
-                await holder!.release();
-            } finally {
-                await ds.destroy();
-            }
+            afterAll(async () => {
+                await Promise.all(sources.map((ds) => ds.destroy()));
+            });
+
+            it('two instances never hold the same key at the same time, and a released key is free right away', async () => {
+                for (let round = 0; round < 20; round++) {
+                    const key = uniqueKey(`exclusive-${round}`);
+
+                    const lockA = await instanceA.acquire(key);
+                    expect(lockA).not.toBeNull();
+                    expect(await instanceB.acquire(key)).toBeNull();
+
+                    await lockA!.release();
+                    expect(await observer.isLocked(key)).toBe(false);
+
+                    const lockB = await instanceB.acquire(key);
+                    expect(lockB).not.toBeNull();
+                    await lockB!.release();
+                }
+            });
+
+            it('many instances racing for one key: exactly one wins', async () => {
+                const key = uniqueKey('race');
+                const contenders = [
+                    instanceA,
+                    instanceB,
+                    observer,
+                    instanceA,
+                    instanceB,
+                    observer,
+                ];
+                const results = await Promise.all(
+                    contenders.map((svc) => svc.acquire(key)),
+                );
+                const winners = results.filter((lock) => lock !== null);
+                expect(winners).toHaveLength(1);
+                await winners[0]!.release();
+            });
+
+            /**
+             * Moves a lease past its expiry (or max hold) on the database
+             * clock, instead of sleeping: the specs then hold on any
+             * latency, including a busy CI runner.
+             */
+            const expireLease = (key: string) =>
+                sources[2].query(
+                    `UPDATE "kodus_workflow"."distributed_locks"
+                        SET expires_at = now() - interval '1 second'
+                      WHERE lock_key = $1`,
+                    [key],
+                );
+            const reachMaxHold = (key: string) =>
+                sources[2].query(
+                    `UPDATE "kodus_workflow"."distributed_locks"
+                        SET max_hold_until = now() - interval '1 second'
+                      WHERE lock_key = $1`,
+                    [key],
+                );
+
+            it('a holder that died frees the key once its lease expires', async () => {
+                const key = uniqueKey('dead-holder');
+                expect(await repository.tryAcquire(key, 'dead', 60_000)).toBe(
+                    true,
+                );
+                expect(await repository.tryAcquire(key, 'alive', 60_000)).toBe(
+                    false,
+                );
+
+                await expireLease(key);
+
+                expect(await repository.tryAcquire(key, 'alive', 60_000)).toBe(
+                    true,
+                );
+                await repository.release(key, 'alive');
+            });
+
+            it('renewing keeps a lease alive, but never past its max hold', async () => {
+                const key = uniqueKey('max-hold');
+                expect(
+                    await repository.tryAcquire(key, 'holder', 60_000, 120_000),
+                ).toBe(true);
+
+                // A beat that lands after the lease ran out, before anyone
+                // took the key, keeps it.
+                await expireLease(key);
+                expect(await repository.renew(key, 'holder', 60_000)).toBe(
+                    true,
+                );
+                expect(await repository.isHeld(key)).toBe(true);
+
+                await reachMaxHold(key);
+                expect(await repository.renew(key, 'holder', 60_000)).toBe(
+                    false,
+                );
+                expect(await repository.isHeld(key)).toBe(false);
+                expect(await repository.tryAcquire(key, 'next', 60_000)).toBe(
+                    true,
+                );
+                await repository.release(key, 'next');
+            });
+
+            it('a holder whose lease was taken over can neither renew nor release the new holder', async () => {
+                const key = uniqueKey('takeover');
+                expect(await repository.tryAcquire(key, 'old', 60_000)).toBe(
+                    true,
+                );
+                await expireLease(key);
+                expect(await repository.tryAcquire(key, 'new', 60_000)).toBe(
+                    true,
+                );
+
+                expect(await repository.renew(key, 'old', 60_000)).toBe(false);
+                expect(await repository.release(key, 'old')).toBe(false);
+                expect(await repository.isHeld(key)).toBe(true);
+
+                await repository.release(key, 'new');
+            });
+
+            it('the sweep deletes leases left by dead holders and keeps live ones', async () => {
+                const dead = uniqueKey('sweep-dead');
+                const live = uniqueKey('sweep-live');
+                await repository.tryAcquire(dead, 'dead', 60_000);
+                await repository.tryAcquire(live, 'live', 60_000);
+                await expireLease(dead);
+
+                expect(
+                    await repository.deleteExpired(0),
+                ).toBeGreaterThanOrEqual(1);
+
+                expect(await repository.isHeld(dead)).toBe(false);
+                expect(await repository.tryAcquire(live, 'other', 60_000)).toBe(
+                    false,
+                );
+                await repository.release(live, 'live');
+            });
         });
     },
 );
-
-// Keep the import of DistributedLock alive so unused-symbol linters don't
-// strip it — it is the public return type of acquire().
-void DistributedLock;
