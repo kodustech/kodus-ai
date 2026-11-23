@@ -80,14 +80,21 @@ interface ToolCallRecord {
  * objects each step, so the serialized text is the stable identity. Owned by
  * one run's compressor, so concurrent runs on a worker never evict each
  * other's heads (a global budget did, at peak: 4 runs with 2.35M-char heads
- * re-tokenized every count). Bounded: at most MAX_RUN_COUNTS entries, the
- * oldest going first, and each entry holds a 44-char digest, never the
- * serialized text (a head that changes every step would otherwise keep up
+ * re-tokenized every count). Bounded: at most MAX_RUN_COUNTS entries,
+ * the least recently used going first, and each entry holds a 44-char
+ * digest, never the serialized text (a head that changes every step would otherwise keep up
  * to MAX_RUN_COUNTS multi-megabyte strings alive). Hashing 2.35M chars
  * takes milliseconds; tokenizing them took 1.8s.
  */
 export type MessageTokenCounts = Map<string, number>;
 const MAX_RUN_COUNTS = 256;
+/**
+ * Only messages above this many serialized chars go in the per-run counts:
+ * smaller ones are cheap and already in the shared memo of token-estimate
+ * (same bound), and one compression pass can write hundreds of them, which
+ * pushed the head out of the map.
+ */
+const RUN_COUNT_MIN_CHARS = 200_000;
 
 function countKey(serialized: string): string {
     return createHash('sha256').update(serialized).digest('base64');
@@ -116,15 +123,25 @@ export function estimateMessagesTokens(
 ): number {
     let total = 0;
     for (const msg of messages) {
-        if (!counts) {
+        // null, undefined and non-objects keep estimateValueTokens' count.
+        if (!counts || msg == null || typeof msg !== 'object') {
             total += estimateValueTokens(msg);
             continue;
         }
         // Same count estimateValueTokens gives: the serialized message.
         const serialized = serializeForCount(msg);
+        if (serialized.length <= RUN_COUNT_MIN_CHARS) {
+            total += estimateTextTokens(serialized);
+            continue;
+        }
         const key = countKey(serialized);
         let tokens = counts.get(key);
-        if (tokens === undefined) {
+        if (tokens !== undefined) {
+            // Re-insert on a hit: Map order is the LRU order, and the head
+            // is read on every count.
+            counts.delete(key);
+            counts.set(key, tokens);
+        } else {
             tokens = estimateTextTokens(serialized);
             if (counts.size >= MAX_RUN_COUNTS) {
                 counts.delete(counts.keys().next().value as string);

@@ -26,6 +26,7 @@ jest.mock('picomatch', () => {
 import picomatch from 'picomatch';
 
 import {
+    _getCompiledListStats,
     _clearMatcherCache,
     _getMatcherCacheSize,
     createGlobMatcher,
@@ -471,5 +472,49 @@ describe('glob-utils literal prefilter (2026-11-23 stall)', () => {
         patterns.push('**/*.ts');
         expect(matcher('src/app.ts')).toBe(false);
         expect(matcher('logo.png')).toBe(true);
+    });
+});
+
+describe('glob-utils prefilter and list cache (review of 2026-11-23)', () => {
+    beforeEach(() => {
+        _clearMatcherCache();
+    });
+
+    it.each([
+        ['backslash escape', 'file\\d.txt', 'file1.txt'],
+        ['leading ./', './*', 'Dockerfile'],
+        ['./ hiding a negation', './!**/*.md', 'src/keep.ts'],
+        ['] first in a class', '[]debug]', 'd'],
+        ['escaped ] in a class', '[a\\]debug]', 'd'],
+        ['POSIX class', '[[:alpha:]debug]', 'a'],
+        ['double quotes', '**/"node_modules"/**', 'src/node_modules/a.js'],
+    ])('matches as picomatch does: %s', (_label, pattern, file) => {
+        for (const caseInsensitive of [false, true]) {
+            _clearMatcherCache();
+            const match = caseInsensitive
+                ? isFileMatchingGlobCaseInsensitive
+                : isFileMatchingGlob;
+            expect(match(file, [pattern])).toBe(
+                referenceMatch(file, [pattern], caseInsensitive),
+            );
+        }
+    });
+
+    it('never lets one cached list answer for a different list', () => {
+        // Joined with NUL, these two lists shared a key.
+        expect(isFileMatchingGlob('zz', ['a\u0000b'])).toBe(false);
+        expect(isFileMatchingGlob('a', ['a', 'b'])).toBe(true);
+        // Joined, [123] and ['123'] shared one too.
+        expect(() =>
+            isFileMatchingGlob('123', [123 as unknown as string]),
+        ).toThrow();
+        expect(isFileMatchingGlob('123', ['123'])).toBe(true);
+    });
+
+    it('does not cache a list larger than the whole budget', () => {
+        isFileMatchingGlob('src/a.ts', ['**/warm/**']);
+        const huge = Array.from({ length: 50_001 }, () => '**/huge/**');
+        expect(isFileMatchingGlob('src/a.ts', huge)).toBe(false);
+        expect(_getCompiledListStats()).toEqual({ lists: 1, patterns: 1 });
     });
 });

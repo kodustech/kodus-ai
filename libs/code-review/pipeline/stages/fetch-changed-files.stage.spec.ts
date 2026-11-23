@@ -305,6 +305,19 @@ describe('FetchChangedFilesStage', () => {
             warn.mockRestore();
         });
 
+        it('yields once every 500 files', async () => {
+            const spy = jest.spyOn(global, 'setImmediate');
+            try {
+                await (stage as any).splitIgnoredFiles(bigPr(1500), [
+                    '**/*.png',
+                ]);
+                // At files 500 and 1,000.
+                expect(spy).toHaveBeenCalledTimes(2);
+            } finally {
+                spy.mockRestore();
+            }
+        });
+
         it('splits reviewed and ignored files as before, in order', async () => {
             context.codeReviewConfig.ignorePaths = ['**/*.png'];
             const files = bigPr(1500);

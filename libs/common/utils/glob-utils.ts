@@ -144,16 +144,28 @@ const MAX_PREFILTERED_PATTERN_LENGTH = 4_096;
 export function requiredLiteral(pattern: string): string {
     if (
         typeof pattern !== 'string' ||
-        pattern.length > MAX_PREFILTERED_PATTERN_LENGTH ||
-        pattern.startsWith('!') ||
-        /[()|]/.test(pattern) ||
-        // An escaped `}` or a `}` inside `[...]` does not close a brace
-        // group, which stripBraceGroups cannot tell apart.
-        (pattern.includes('{') && /[\\[]/.test(pattern))
+        pattern.length > MAX_PREFILTERED_PATTERN_LENGTH
     ) {
         return '';
     }
-    const withoutChoices = stripBraceGroups(pattern).replace(
+    // picomatch drops a leading `./`: left in, it hid a `!` from the check
+    // below and made `.` the literal of `./*`.
+    const body = pattern.replace(/^(\.\/+)+/, '');
+    if (
+        body.startsWith('!') ||
+        /[()|]/.test(body) ||
+        // picomatch hands `\d`, `\s`, `\b` to the regex and drops `"`
+        // quotes, so neither is literal text of the path.
+        /[\\"]/.test(body) ||
+        // A `]` that does not close the class: `[]x]`, `[!]x]`, `[[:alpha:]x]`.
+        /\[(?:[!^]?\]|[^\]]*\[:)/.test(body) ||
+        // A `}` inside `[...]` does not close a brace group, which
+        // stripBraceGroups cannot tell apart.
+        (body.includes('{') && body.includes('['))
+    ) {
+        return '';
+    }
+    const withoutChoices = stripBraceGroups(body).replace(
         /\[[^\]]*\]/g,
         '/',
     );
@@ -255,13 +267,21 @@ function getCompiledPatternList(
         ? COMPILED_CASE_INSENSITIVE
         : COMPILED_CASE_SENSITIVE;
     const total = caseInsensitive ? 'insensitive' : 'sensitive';
-    const key = patterns.join('\u0000');
+    // JSON, not a join: `['a\u0000b']` and `['a', 'b']` joined alike, and
+    // `[123]` joined like `['123']`, so one tenant's list answered for
+    // another's.
+    const key = JSON.stringify(patterns);
     const cached = cache.get(key);
     if (cached) {
         // Re-insert: Map order is the LRU order.
         cache.delete(key);
         cache.set(key, cached);
         return cached.compiled;
+    }
+    if (patterns.length > MAX_COMPILED_PATTERNS) {
+        // Over the whole budget on its own: caching it would evict every
+        // other list and then stay pinned.
+        return compilePatternList(patterns, caseInsensitive);
     }
     while (
         cache.size > 0 &&
@@ -357,4 +377,13 @@ export const _getMatcherCacheSize = (): {
 } => ({
     caseSensitive: MATCHER_CACHE_CASE_SENSITIVE.size,
     caseInsensitive: MATCHER_CACHE_CASE_INSENSITIVE.size,
+});
+
+/** @internal Exported for testing purposes only */
+export const _getCompiledListStats = (): {
+    lists: number;
+    patterns: number;
+} => ({
+    lists: COMPILED_CASE_SENSITIVE.size,
+    patterns: COMPILED_PATTERN_TOTALS.sensitive,
 });

@@ -306,3 +306,41 @@ describe('estimateTextTokens — large-text memo (2026-11-23 9.2s compressor sta
         );
     });
 });
+
+describe('estimateTextTokens — memo bounds', () => {
+    it('holds at most 8 large texts, evicting the oldest', () => {
+        const encode = jest.fn().mockReturnValue([1]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                // 9 × 200,001 chars is far under the 8M-char budget, so only
+                // the entry cap can evict the first one.
+                const texts = Array.from(
+                    { length: 9 },
+                    (_, i) => `${i} ${'ab '.repeat(66_667)}`.slice(0, 200_001),
+                );
+                texts.forEach((t) => estimateTextTokens(t));
+                expect(encode).toHaveBeenCalledTimes(9);
+                estimateTextTokens(texts[8]);
+                expect(encode).toHaveBeenCalledTimes(9);
+                estimateTextTokens(texts[0]);
+                expect(encode).toHaveBeenCalledTimes(10);
+            },
+        );
+    });
+
+    it('reads a text of exactly 200,000 chars from the memo it was written to', () => {
+        const encode = jest.fn().mockReturnValue([1]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                const text = 'ab '.repeat(66_667).slice(0, 200_000);
+                estimateTextTokens(text);
+                estimateTextTokens(text);
+                expect(encode).toHaveBeenCalledTimes(1);
+            },
+        );
+    });
+});

@@ -149,7 +149,7 @@ describe('ContextWindowCompressor', () => {
 
 describe('ContextWindowCompressor — per-run token counts', () => {
     const head = (): AgentMessage[] => [
-        { role: 'user', content: 'Review this diff:\n' + codeLike(20_000) },
+        { role: 'user', content: 'Review this diff:\n' + codeLike(250_000) },
     ];
 
     it("keeps a run's head counted while another run churns its own messages", () => {
@@ -158,9 +158,16 @@ describe('ContextWindowCompressor — per-run token counts', () => {
         runA.maybeCompress(head());
         // More distinct messages than one run's counts hold: a store shared
         // between runs would evict runA's head here.
+        // Large messages only (small ones skip the counts); the tokenizer is
+        // stubbed for this churn to keep the test fast.
+        const base = 'x '.repeat(100_001);
+        tokenizerCalls.mockImplementation(() => 1);
         for (let i = 0; i < 300; i++) {
-            runB.maybeCompress([{ role: 'user', content: `other run ${i}` }]);
+            runB.maybeCompress([{ role: 'user', content: `${base}${i}` }]);
         }
+        tokenizerCalls.mockImplementation(
+            jest.requireActual('./token-estimator').estimateTextTokens,
+        );
         tokenizerCalls.mockClear();
         uncachedCalls.mockClear();
         runA.maybeCompress(head());

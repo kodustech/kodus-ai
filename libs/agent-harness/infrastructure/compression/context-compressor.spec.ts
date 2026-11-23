@@ -252,7 +252,8 @@ describe('estimateMessagesTokens — per-run counts', () => {
     const head = () =>
         ({
             role: 'user',
-            content: 'diff and graph context '.repeat(50),
+            // Above the 200k-char bound below which counts are not kept.
+            content: 'diff and graph context '.repeat(9_000),
         }) as any;
 
     it('reuses the count of a rebuilt message with the same content', () => {
@@ -280,6 +281,48 @@ describe('estimateMessagesTokens — per-run counts', () => {
             createHash('sha256').update(JSON.stringify(msg)).digest('base64');
         expect([...counts.keys()].sort()).toEqual(
             [sha256(big), sha256(head())].sort(),
+        );
+    });
+});
+
+describe('estimateMessagesTokens — per-run counts bounds', () => {
+    const big = (tag: string) =>
+        ({
+            role: 'user',
+            content: `${tag} ` + 'const value = compute(input);\n'.repeat(7_000),
+        }) as any;
+    const sha256 = (msg: unknown) =>
+        createHash('sha256').update(JSON.stringify(msg)).digest('base64');
+
+    it('keeps the head while newer entries fill the map (LRU on hit)', () => {
+        const counts = new Map<string, number>();
+        estimateMessagesTokens([big('head')], counts);
+        for (let i = 0; i < 255; i++) counts.set(`filler-${i}`, 1);
+        estimateMessagesTokens([big('head')], counts); // hit: now the newest
+        estimateMessagesTokens([big('other')], counts); // evicts one entry
+        expect(counts.size).toBe(256);
+        expect(counts.has(sha256(big('head')))).toBe(true);
+        expect(counts.has('filler-0')).toBe(false);
+    });
+
+    it('never holds more than 256 entries', () => {
+        const counts = new Map<string, number>();
+        for (let i = 0; i < 256; i++) counts.set(`filler-${i}`, 1);
+        estimateMessagesTokens([big('new')], counts);
+        expect(counts.size).toBe(256);
+    });
+
+    it('leaves small messages to the shared memo', () => {
+        const counts = new Map<string, number>();
+        estimateMessagesTokens([{ role: 'user', content: 'hi' }], counts);
+        expect(counts.size).toBe(0);
+    });
+
+    it('counts null and non-objects as the uncached path does', () => {
+        const counts = new Map<string, number>();
+        const odd = [null, undefined, 42] as any[];
+        expect(estimateMessagesTokens(odd, counts)).toBe(
+            estimateMessagesTokens(odd),
         );
     });
 });
