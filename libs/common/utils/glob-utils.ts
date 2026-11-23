@@ -159,6 +159,10 @@ export function requiredLiteral(pattern: string): string {
         // them is literal text of the path.
         /[\\"]/.test(body) ||
         body.includes('\u0000') ||
+        // picomatch compiles `.` as "any character" after `***` and in a
+        // pattern with a brace range (`{1..3}`), so there it is no literal.
+        body.includes('***') ||
+        /\{[^{}]*\.\.[^{}]*\}/.test(body) ||
         // A `]` that does not close the class: `[]x]`, `[!]x]`, `[[:alpha:]x]`.
         /\[(?:[!^]?\]|[^\]]*\[:)/.test(body) ||
         // A `}` inside `[...]` does not close a brace group, which

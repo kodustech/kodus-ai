@@ -136,10 +136,9 @@ export function estimateMessagesTokens(
         }
         // Same count estimateValueTokens gives: the serialized message.
         const serialized = serializeForCount(msg);
-        if (serialized === undefined) {
-            total += estimateValueTokens(msg);
-            continue;
-        }
+        // JSON has no text for it: 0, as estimateValueTokens counts it,
+        // without serializing a second time.
+        if (serialized === undefined) continue;
         if (serialized.length <= RUN_COUNT_MIN_CHARS) {
             total += estimateTextTokens(serialized);
             continue;
