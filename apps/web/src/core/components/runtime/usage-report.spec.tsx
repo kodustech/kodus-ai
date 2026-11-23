@@ -51,6 +51,7 @@ const report: RuntimeUsageReport = {
     counts: {
         runs: 1,
         runsListed: 1,
+        prs: 1,
         setups: 0,
         sandboxSessions: 0,
         sandboxOperations: {
@@ -93,6 +94,12 @@ const report: RuntimeUsageReport = {
         },
         kodusUsd: 0.01,
         complete: false,
+    },
+    pricing: {
+        hosts: [],
+        ownHostUsdPerHour: null,
+        effectiveUsdPerGbHour: null,
+        llmModels: [],
     },
     runs: [
         {
@@ -163,6 +170,9 @@ describe("the Runtime usage content", () => {
             .getAllByRole("region")
             .map((s) => s.getAttribute("aria-label"));
         expect(sections).toEqual([
+            "Cost of a Run",
+            "How Runs are priced",
+            "What would a month cost?",
             "This month",
             "LLM by agent",
             "Machine time",

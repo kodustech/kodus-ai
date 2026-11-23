@@ -8,6 +8,7 @@ import {
 } from "@components/runtime/empty-state";
 import { Metric, RuntimeSection } from "@components/runtime/section";
 import { StatusChip } from "@components/runtime/status-chip";
+import { RuntimeCostBlock } from "@components/runtime/usage-cost";
 import { Button } from "@components/ui/button";
 import {
     Select,
@@ -454,6 +455,7 @@ export const RuntimeUsageContent = () => {
                         />
                     ) : (
                         <>
+                            <RuntimeCostBlock report={report.data} />
                             <Summary report={report.data} />
                             <LlmByAgent report={report.data} />
                             <MachineTime report={report.data} />

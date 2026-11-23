@@ -47,6 +47,7 @@ const report = (
     counts: {
         runs: 12,
         runsListed: 12,
+        prs: 8,
         setups: 3,
         sandboxSessions: 2,
         sandboxOperations: {
@@ -76,10 +77,22 @@ const report = (
             completeRuns: 10,
             pricedUsd: 4,
             unpricedParts: { machines: 2, llm: 0, total: 2 },
-            perCompleteRun: { medianUsd: 0.31, maxUsd: 0.9 },
+            perCompleteRun: {
+                medianUsd: 0.31,
+                maxUsd: 0.9,
+                medianMachinesUsd: 0.07,
+                medianLlmManagedUsd: 0.2,
+                medianLlmByokUsd: 0.04,
+            },
         },
         kodusUsd: 3.6,
         complete: false,
+    },
+    pricing: {
+        hosts: [],
+        ownHostUsdPerHour: null,
+        effectiveUsdPerGbHour: null,
+        llmModels: [],
     },
     runs: [],
     ...patch,
