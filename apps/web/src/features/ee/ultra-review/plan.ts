@@ -27,7 +27,7 @@ export const normalizeUltraModel = (modelId: string): string => {
     id = id.split("@")[0];
     id = id.replace(/^(?:(?:us|eu|apac|global)\.)?[a-z]+\.(?=[a-z])/, "");
     // A Bedrock version (`-v1:0`) goes; a `-v4` that names the model stays.
-    id = id.replace(/-v\d+:.*$/, "");
+    id = id.replace(/-v\d+:\d+$/, "");
     id = id.split(":")[0];
     id = id.replace(/(\d)p(\d)/g, "$1-$2");
     id = id.replace(/[._\s]+/g, "-");

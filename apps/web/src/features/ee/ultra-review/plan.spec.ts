@@ -95,6 +95,7 @@ describe("normalizeUltraModel", () => {
         ["gpt-6.1-sol-2026-05-01", "gpt-6-1-sol"],
         ["deepseek-v4", "deepseek-v4"],
         ["kimi-k2-0905", "kimi-k2-0905"],
+        ["llama-v3:latest", "llama-v3"],
     ])("reads %s as %s, as the API does", (raw, normalized) => {
         expect(normalizeUltraModel(raw)).toBe(normalized);
     });

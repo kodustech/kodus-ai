@@ -337,6 +337,7 @@ describe('the merge ranking', () => {
         ['gpt-6.1-sol-2026-05-01', 'gpt-6-1-sol'],
         ['deepseek-v4', 'deepseek-v4'],
         ['kimi-k2-0905', 'kimi-k2-0905'],
+        ['llama-v3:latest', 'llama-v3'],
     ])('reads %s as %s', (raw, normalized) => {
         expect(normalizeModelId(raw)).toBe(normalized);
     });
