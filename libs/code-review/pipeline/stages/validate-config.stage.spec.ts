@@ -901,6 +901,7 @@ describe('ValidateConfigStage — v2 routing', () => {
             ['heavy', 'none', 'Someone with write access can ask for it.'],
             ['ultra', 'none', 'Someone with write access can ask for it.'],
             ['ultra', 'unknown', 'Kody could not check yours'],
+            ['heavy', null, 'Kody could not check yours'],
             ['ultra', null, 'Kody could not check yours'],
         ] as const)(
             '--%s from someone whose write access is %s runs no review and says why',
