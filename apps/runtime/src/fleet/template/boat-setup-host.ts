@@ -51,7 +51,8 @@ export class BoatSetupHost implements SetupHostPort {
         const host = await d.provider.create({
             hostId: req.hostId,
             clientToken: req.hostId,
-            cls: pool.hostClass,
+            // The build runs in the background and no Run waits on it: wait for a machine rather than fail fast.
+            cls: pool.hostClass.provider === 'boat' ? { ...pool.hostClass, boat: { ...pool.hostClass.boat, failFast: false } } : pool.hostClass,
             from: req.base,
             bootstrap: { ...d.bootstrap, token: minted.token },
             tags: { installation: d.installation, pool: req.poolId, host: req.hostId },

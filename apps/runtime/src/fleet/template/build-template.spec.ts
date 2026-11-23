@@ -1,5 +1,6 @@
 import { FakeHostProvider } from '@libs/runtime/fleet/fake-provider';
 import { parseHostPool } from '@libs/runtime/fleet/pool';
+import { ProviderError } from '@libs/runtime/fleet/provider-error';
 
 import { InMemoryTemplateStore } from '../testing';
 import { buildEnvironmentTemplate, type SetupHostPort } from './build-template';
@@ -117,13 +118,26 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         expect(templateNameOf('a', 'e', FP)).not.toBe(templateNameOf('b', 'e', FP));
     });
 
+    it('records why the provider failed (its code, never its message) on the failed template, and still destroys the setup host', async () => {
+        const w = world();
+        w.hosts.boot = async (req: { hostId: string; base: string }) => {
+            w.hosts.booted.push(req.hostId);
+            throw new ProviderError('capacity_unavailable', 'no_ready_machine');
+        };
+        const r = await buildEnvironmentTemplate(w.req, w.deps);
+        expect(r).toEqual({ ok: false, reason: 'build_error', cause: 'no_ready_machine' });
+        expect(w.store.rows.map((x) => [x.state, x.failure])).toEqual([['failed', 'build_error:no_ready_machine']]);
+        expect(w.hosts.destroyed).toEqual(w.hosts.booted);
+    });
+
     it('records the template failed, not building, when the seal throws, and still destroys the setup host', async () => {
         const w = world();
         w.hosts.seal = async () => {
             throw new Error('seal exploded');
         };
         const r = await buildEnvironmentTemplate(w.req, w.deps);
-        expect(r).toEqual({ ok: false, reason: 'build_error' });
+        // A free message is never stored: it may carry provider or host detail.
+        expect(r).toEqual({ ok: false, reason: 'build_error', cause: 'unexpected' });
         expect(w.store.rows.map((x) => x.state)).toEqual(['failed']);
         expect(w.hosts.destroyed).toEqual(w.hosts.booted);
     });

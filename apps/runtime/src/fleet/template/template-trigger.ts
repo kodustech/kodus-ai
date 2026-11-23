@@ -66,7 +66,7 @@ export class TemplateBuildTrigger {
         this.inflight.add(key);
         void this.d
             .build({ organizationId, environmentId, poolId, pool, fingerprint })
-            .then((r) => this.d.log?.('template.built', { environmentId, poolId, ok: r.ok, ...(r.ok === false ? { reason: r.reason } : {}) }))
+            .then((r) => this.d.log?.('template.built', { environmentId, poolId, ok: r.ok, ...(r.ok === false ? { reason: r.reason, ...(r.cause ? { cause: r.cause } : {}) } : {}) }))
             .catch((e) => this.d.log?.('template.build_error', { environmentId, poolId, error: (e as Error).message }))
             .finally(() => this.inflight.delete(key));
     }

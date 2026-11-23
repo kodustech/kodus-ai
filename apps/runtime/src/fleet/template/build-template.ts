@@ -1,3 +1,4 @@
+import { ProviderError } from '@libs/runtime/fleet/provider-error';
 import type { HostProvider } from '@libs/runtime/fleet/host-provider';
 import type { HostPool } from '@libs/runtime/fleet/pool';
 
@@ -42,7 +43,16 @@ export interface BuildTemplateRequest {
     fingerprint: string;
 }
 
-export type BuildTemplateResult = { ok: true; name: string; reused: boolean } | { ok: false; reason: 'org_not_admitted' | 'no_images' | 'bake_failed' | 'not_default_branch' | 'fingerprint_mismatch' | 'save_failed' | 'build_error' };
+export type BuildTemplateResult =
+    | { ok: true; name: string; reused: boolean }
+    | { ok: false; reason: 'org_not_admitted' | 'no_images' | 'bake_failed' | 'not_default_branch' | 'fingerprint_mismatch' | 'save_failed' | 'build_error'; cause?: string };
+
+/** Why a step threw, safe to log and store: a provider's code, or one of this module's own error words; never a free message. */
+function causeOf(e: unknown): string {
+    if (e instanceof ProviderError) return e.code;
+    const m = e instanceof Error ? e.message : '';
+    return /^[a-z][a-z0-9_]{2,40}$/.test(m) ? m : 'unexpected';
+}
 
 export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: BuildTemplateDeps): Promise<BuildTemplateResult> {
     // Customer data at rest in the provider needs legal sign-off: until then the pool's admission list is the gate.
@@ -53,9 +63,9 @@ export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: Bui
     if ((await d.store.find(req.organizationId, req.environmentId, req.poolId, req.fingerprint))?.state === 'ready') return { ok: true, name, reused: true };
     await d.store.begin({ ...key, name });
     const hostId = `tpl-${name}`;
-    const fail = async (reason: Exclude<BuildTemplateResult, { ok: true }>['reason']) => {
-        await d.store.fail(key, reason);
-        return { ok: false as const, reason };
+    const fail = async (reason: Exclude<BuildTemplateResult, { ok: true }>['reason'], cause?: string) => {
+        await d.store.fail(key, cause ? `${reason}:${cause}` : reason);
+        return { ok: false as const, reason, ...(cause ? { cause } : {}) };
     };
     try {
         const { providerId } = await d.setupHosts.boot({ hostId, organizationId: req.organizationId, environmentId: req.environmentId, poolId: req.poolId, fingerprint: req.fingerprint, base: d.cellBase });
@@ -72,9 +82,9 @@ export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: Bui
         if (image.state !== 'ready') return await fail('save_failed');
         for (const older of await d.store.promote(key)) if (older !== name) await d.provider.images.remove(older);
         return { ok: true, name, reused: false };
-    } catch {
-        // A throw from any step (the seal, the save, the provider) records the row failed, never left building.
-        return await fail('build_error');
+    } catch (e) {
+        // A throw from any step (the seal, the save, the provider) records the row failed, never left building, with why.
+        return await fail('build_error', causeOf(e));
     } finally {
         await d.setupHosts.destroy(hostId);
     }

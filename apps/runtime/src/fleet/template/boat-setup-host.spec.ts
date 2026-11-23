@@ -43,6 +43,16 @@ describe('the live setup host on boat (docs/runtime/host-providers.md §8.2)', (
         expect(w.provider.hosts.get(providerId)?.tags).toEqual({ installation: 'it', pool: 'boat-eu-perrun', host: 'tpl-1' });
     });
 
+    it('waits for a machine instead of failing fast when none is ready: the template build runs in the background, no Run waits on it', async () => {
+        const w = world();
+        const classes: unknown[] = [];
+        const create = w.provider.create.bind(w.provider);
+        w.provider.create = async (req) => (classes.push(req.cls), create(req));
+        await w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', fingerprint: 'a'.repeat(64), base: 'b' });
+        expect(classes).toEqual([expect.objectContaining({ provider: 'boat', boat: expect.objectContaining({ type: 'large', failFast: false }) })]);
+        expect(pool.hostClass).toMatchObject({ boat: { failFast: true } });
+    });
+
     it('refuses to boot when the hub refuses the token, and creates nothing', async () => {
         const w = world();
         (w.host as any).deps.hub.mint = async () => ({ ok: false, reason: 'unknown_pool' });
