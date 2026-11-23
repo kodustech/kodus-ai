@@ -34,4 +34,19 @@ describe("routingModelLabels", () => {
         expect(labels.get("openrouter")).toBe("GPT 5.4 · OpenRouter");
         expect(labels.get("env")).toBe("GPT 5.4");
     });
+
+    it("names two routes on one gateway by id, not by ordinal", () => {
+        const labels = routingModelLabels([
+            slot("a", "openai/gpt-4o", {
+                credentialId: "gw",
+                providerId: "openai_compatible",
+            }),
+            slot("b", "azure/gpt-4o", {
+                credentialId: "gw",
+                providerId: "openai_compatible",
+            }),
+        ]);
+        expect(labels.get("a")).toBe("GPT 4o (openai/gpt-4o)");
+        expect(labels.get("b")).toBe("GPT 4o (azure/gpt-4o)");
+    });
 });

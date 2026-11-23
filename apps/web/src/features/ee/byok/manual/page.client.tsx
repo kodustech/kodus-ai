@@ -69,7 +69,7 @@ import {
 } from "../_components/byok-write";
 import { credentialSettingsOverride } from "../_components/credential-settings-override";
 import { SuccessClaim } from "../_components/success-claim";
-import { modelLabeler } from "../_data/model-label";
+import { formatModelLabel } from "../_data/model-label";
 import { isPlatformFundedProvider } from "../_data/platform-funded";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
 import {
@@ -77,7 +77,7 @@ import {
     useKodusCreditBalance,
 } from "../_hooks/use-kodus-credit-balance";
 import type { BYOKConfig, BYOKConnectInput } from "../_types";
-import { maskKey, visibleModelIds } from "../_utils";
+import { maskKey, visibleModelLabels } from "../_utils";
 
 const ENDPOINT_NEEDS_KEY_MESSAGE =
     "No key is stored for this endpoint — paste its API key.";
@@ -415,9 +415,9 @@ export function ByokManualPageClient({
     const watchedBaseURL = form.watch("baseURL");
     // Title label: derive from the id — so the header reads "Edit Kimi K2.6" /
     // "Edit Deepseek V4 Pro", never a raw id.
-    const savedModelIds = visibleModelIds(existing);
     const editLabel = existingConfig?.model
-        ? modelLabeler(savedModelIds)(existingConfig.model)
+        ? (visibleModelLabels(existing).get(editModelId ?? "") ??
+          formatModelLabel(existingConfig.model))
         : "";
     const awsBearerToken = form.watch("awsBearerToken");
     const awsAccessKeyId = form.watch("awsAccessKeyId");
@@ -1069,9 +1069,7 @@ export function ByokManualPageClient({
                                                             : undefined
                                                     }
                                                     lockedInUse={modelInUse}
-                                                    knownModelIds={
-                                                        savedModelIds
-                                                    }
+                                                    lockedLabel={editLabel}
                                                 />
                                             </Suspense>
                                         </ErrorBoundary>

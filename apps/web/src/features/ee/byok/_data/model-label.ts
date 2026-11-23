@@ -76,35 +76,41 @@ export function formatModelLabel(id: string): string {
         .join(" ");
 }
 
+/** A model id, and the connection it runs on when the ids span several. */
+export type LabeledId = { id: string; connection?: string };
+
 /**
- * The label drops a snapshot pin, so a pinned id and its alias read the same
- * ("Deepseek V4.1 Flash" for both `deepseek-v4.1-flash` and
- * `deepseek-v4.1-flash-1017`). An id whose label another name in `ids` shares
- * carries the id too; labels nobody else has are unchanged. Names compare by
- * the last path segment, as the label reads it: the same model on two
- * providers (`gpt-5.4`, `openai/gpt-5.4`) is not a collision, the connection
- * tells those apart. `nameOf` swaps in another label, such as a provider's own
- * listing name.
+ * The label drops a snapshot pin and a path prefix, so different ids can read
+ * the same: a pin and its alias (`deepseek-v4.1-flash`, `-1017`), or two
+ * routes on one gateway (`openai/gpt-4o`, `azure/gpt-4o`). Those carry their
+ * id; labels nobody else has are unchanged. Across connections the prefix is
+ * routing, not identity: `gpt-5.4` on OpenAI and `openai/gpt-5.4` on
+ * OpenRouter are the same model, and the connection tells them apart. Ids
+ * given without a connection all count as one. `nameOf` swaps in another
+ * label, such as a provider's own listing name.
  */
 export function modelLabeler(
-    ids: Iterable<string | undefined | null>,
+    ids: Iterable<string | LabeledId | undefined | null>,
     nameOf: (id: string) => string = formatModelLabel,
 ) {
     const lastSegment = (id: string) => id.slice(id.lastIndexOf("/") + 1);
-    const namesByLabel = new Map<string, Set<string>>();
-    for (const id of ids) {
-        if (!id) continue;
-        const label = nameOf(id);
-        let names = namesByLabel.get(label);
-        if (!names) namesByLabel.set(label, (names = new Set()));
-        names.add(lastSegment(id));
+    const byLabel = new Map<string, LabeledId[]>();
+    for (const entry of ids) {
+        if (!entry) continue;
+        const model = typeof entry === "string" ? { id: entry } : entry;
+        const label = nameOf(model.id);
+        let group = byLabel.get(label);
+        if (!group) byLabel.set(label, (group = []));
+        group.push(model);
     }
-    const shares = (id: string) => {
-        const names = new Set(namesByLabel.get(nameOf(id)));
-        names.add(lastSegment(id));
-        return names.size > 1;
-    };
-    const labelOf = (id: string): string =>
-        shares(id) ? `${nameOf(id)} (${id})` : nameOf(id);
+    const shares = (id: string, connection?: string) =>
+        (byLabel.get(nameOf(id)) ?? []).some(
+            (other) =>
+                other.id !== id &&
+                (other.connection === connection ||
+                    lastSegment(other.id) !== lastSegment(id)),
+        );
+    const labelOf = (id: string, connection?: string): string =>
+        shares(id, connection) ? `${nameOf(id)} (${id})` : nameOf(id);
     return Object.assign(labelOf, { shares });
 }

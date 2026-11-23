@@ -12,7 +12,7 @@ import { capabilityGate } from "./capability-gate";
 /** What `routingModelLabels` reads from a model. */
 type LabeledModel = Pick<
     LLMModelStatus,
-    "modelId" | "model" | "providerId" | "baseUrl" | "managed"
+    "modelId" | "model" | "credentialId" | "providerId" | "baseUrl" | "managed"
 >;
 
 /** A stored config's models, as Routing's status lists them. */
@@ -28,6 +28,7 @@ export function routingModelsFromConfig(
         return {
             modelId: entry.id,
             model: entry.model,
+            credentialId: entry.credentialId,
             providerId: credential?.provider,
             baseUrl: typeof baseURL === "string" ? baseURL : undefined,
             managed: credential?.managed,
@@ -50,17 +51,23 @@ export function routingModelLabels(models: LabeledModel[]) {
     >();
     // A pinned id and its alias share a label; the id tells them apart. The
     // same id on two connections still needs the connection below.
+    const connectionOf = (model: LabeledModel) =>
+        model.credentialId ?? `${model.providerId}|${model.baseUrl}`;
     const labelOf = modelLabeler(
         models
             .filter((model) => !model.managed)
-            .map((model) => model.model ?? model.modelId),
+            .map((model) => ({
+                id: model.model ?? model.modelId,
+                connection: connectionOf(model),
+            })),
     );
     const entries = models.map((model) => ({
         ...model,
         label:
             (model.managed
                 ? formatModelLabel(model.model ?? model.modelId)
-                : labelOf(model.model ?? model.modelId)) || model.modelId,
+                : labelOf(model.model ?? model.modelId, connectionOf(model))) ||
+            model.modelId,
         host: hostOf(model.baseUrl),
     }));
     const labelCounts = new Map<string, number>();

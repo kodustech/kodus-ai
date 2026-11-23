@@ -105,20 +105,18 @@ export const groupModelsByProvider = (
         }));
 };
 
-/** Model ids the AI providers page shows: the Kodus default stays hidden. */
-export const visibleModelIds = (config: BYOKConfig | null | undefined) =>
-    groupModelsByProvider(config).flatMap(({ models }) =>
-        models.map((m) => m.model),
-    );
-
-/** Each shown model's label, by model slot id: a label two shown models
- *  share carries the id, so a pin and its alias read apart. */
+/** Each model the AI providers page shows, labeled by slot id. The Kodus
+ *  default stays hidden, so it never makes a shown model carry its id. */
 export const visibleModelLabels = (config: BYOKConfig | null | undefined) => {
-    const labelOf = modelLabeler(visibleModelIds(config));
+    const shown = groupModelsByProvider(config).flatMap(({ models }) => models);
+    const labelOf = modelLabeler(
+        shown.map((m) => ({ id: m.model, connection: m.credentialId })),
+    );
     return new Map(
-        groupModelsByProvider(config).flatMap(({ models }) =>
-            models.map((m): [string, string] => [m.id, labelOf(m.model)]),
-        ),
+        shown.map((m): [string, string] => [
+            m.id,
+            labelOf(m.model, m.credentialId),
+        ]),
     );
 };
 

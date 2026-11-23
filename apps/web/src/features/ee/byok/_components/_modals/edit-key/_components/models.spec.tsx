@@ -41,10 +41,10 @@ jest.mock("@services/organizationParameters/hooks", () => ({
 
 function Harness({
     lockedInUse,
-    knownModelIds,
+    lockedLabel,
 }: {
     lockedInUse: boolean;
-    knownModelIds?: string[];
+    lockedLabel?: string;
 }) {
     const form = useForm({
         defaultValues: {
@@ -56,7 +56,7 @@ function Harness({
         <FormProvider {...form}>
             <ByokModelSelect
                 lockedInUse={lockedInUse}
-                knownModelIds={knownModelIds}
+                lockedLabel={lockedLabel}
                 credentialStored
             />
         </FormProvider>
@@ -111,14 +111,11 @@ describe("ByokModelSelect — lock when the model is in use in Routing", () => {
         ).not.toBeInTheDocument();
     });
 
-    it("locked: a model whose label another saved model shares shows its id", () => {
+    it("locked: shows the name the page gives it, id included", () => {
         render(
             <Harness
                 lockedInUse
-                knownModelIds={[
-                    "deepseek/deepseek-v4-pro",
-                    "deepseek/deepseek-v4-pro-1017",
-                ]}
+                lockedLabel="Deepseek V4 Pro (deepseek/deepseek-v4-pro)"
             />,
         );
         expect(
@@ -618,5 +615,31 @@ describe("ByokModelSelect — models that share a label", () => {
         expect(screen.getByRole("combobox")).toHaveTextContent(
             "DeepSeek V4.1 Flash (deepseek-ai/DeepSeek-V4.1-Flash-1017)",
         );
+    });
+});
+
+describe("ByokModelSelect — one listing", () => {
+    it("ids that differ only before the last slash are different models", async () => {
+        mockPreview.mockReturnValue({
+            data: [
+                { id: "openai/gpt-4o", name: "GPT 4o" },
+                { id: "azure/gpt-4o", name: "GPT 4o" },
+            ],
+            isFetching: false,
+            isError: false,
+        });
+        render(
+            <LivePickerHarness
+                credentialStored
+                defaultValues={{
+                    provider: "openai_compatible",
+                    model: "",
+                    baseURL: "https://litellm.example.com/v1",
+                }}
+            />,
+        );
+        fireEvent.click(screen.getByRole("combobox"));
+        expect(await screen.findByText("openai/gpt-4o")).toBeInTheDocument();
+        expect(screen.getByText("azure/gpt-4o")).toBeInTheDocument();
     });
 });

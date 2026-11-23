@@ -42,7 +42,7 @@ export const ByokModelSelect = ({
     credentialStored = false,
     credentialId,
     lockedInUse = false,
-    knownModelIds = [],
+    lockedLabel,
 }: {
     /** Model ids to hide from the dropdown — e.g. models already enabled on this
      *  provider, so "Add model" never offers a duplicate. */
@@ -59,9 +59,9 @@ export const ByokModelSelect = ({
      *  fallback / a per-agent override). Swapping its id would silently change
      *  what runs, so the model field is read-only — tuning stays editable. */
     lockedInUse?: boolean;
-    /** Ids of the organization's saved models, so a locked model whose label
-     *  another one shares reads with its id. */
-    knownModelIds?: string[];
+    /** The locked model's name as the page title shows it, so a model whose
+     *  label another saved one shares reads with its id. */
+    lockedLabel?: string;
 } = {}) => {
     const form = useFormContext<EditKeyForm>();
     const provider = form.watch("provider");
@@ -103,7 +103,7 @@ export const ByokModelSelect = ({
     // In use in Routing → the model identity is frozen. Show it read-only with a
     // hint pointing at where to change it, instead of the editable picker.
     if (lockedInUse) {
-        return <ModelLockedField knownModelIds={knownModelIds} />;
+        return <ModelLockedField label={lockedLabel} />;
     }
 
     if (manual) {
@@ -141,11 +141,11 @@ export const ByokManualModelInput = () => <ModelInput />;
  * surface the current model with a lock affordance and tell the user where to
  * change it. Tuning fields around it stay editable.
  */
-const ModelLockedField = ({ knownModelIds }: { knownModelIds: string[] }) => {
+const ModelLockedField = ({ label: given }: { label?: string }) => {
     const form = useFormContext<EditKeyForm>();
     const model = form.watch("model");
-    // The friendly label, as the dropdown and the page title show it.
-    const label = modelLabeler([...knownModelIds, model])(model);
+    // The friendly label, as the page title shows it.
+    const label = given || formatModelLabel(model);
 
     return (
         <FormControl.Root>
