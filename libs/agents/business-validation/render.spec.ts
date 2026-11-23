@@ -240,3 +240,30 @@ describe('a met task', () => {
         expect(comment).not.toContain('met: Parent');
     });
 });
+
+describe('the met summary names each row once', () => {
+    it('names two rows by their own words when their labels read the same (AC #1 and AC01)', () => {
+        const met = outcome({ passed: true });
+        met.passed = true;
+        const [first] = met.checks[0].verdict.requirements!;
+        met.checks[0].verdict.requirements = [
+            {
+                ...first,
+                state: 'met',
+                source: 'AC #1',
+                requirement: 'Persists per user',
+            },
+            {
+                ...first,
+                state: 'met',
+                source: 'AC01',
+                requirement: 'Defaults to comfortable',
+            },
+        ];
+        met.checks[0].verdict.outOfScope = [];
+        const comment = renderComment(met);
+        expect(comment).not.toContain('AC01, AC01');
+        expect(comment).toContain('Persists per user');
+        expect(comment).toContain('Defaults to comfortable');
+    });
+});

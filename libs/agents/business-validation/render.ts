@@ -365,13 +365,21 @@ function metLabel(
     requirement: RequirementVerdict,
     all: RequirementVerdict[],
 ): string {
-    const source = requirement.source?.trim();
+    // Compared as shown: `AC #1` and `AC01` both read AC01, so neither names
+    // only its own row.
+    const label = requirement.source?.trim()
+        ? displayRequirementSource(requirement.source)
+        : undefined;
     if (
-        source &&
-        source !== 'Parent' &&
-        all.filter((r) => r.source?.trim() === source).length === 1
+        label &&
+        label !== 'Parent' &&
+        all.filter(
+            (r) =>
+                r.source?.trim() &&
+                displayRequirementSource(r.source) === label,
+        ).length === 1
     ) {
-        return displayRequirementSource(source);
+        return label;
     }
     const text = requirement.requirement.trim();
     return text.length > 60 ? `${text.slice(0, 57)}…` : text;
