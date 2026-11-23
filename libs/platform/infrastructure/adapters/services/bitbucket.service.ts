@@ -487,6 +487,14 @@ export class BitbucketService implements Omit<
         return impl.getListMembers(params);
     }
 
+    /** Data Center reads the permission; Cloud cannot say. */
+    async userCanWrite(params: any): Promise<boolean | undefined> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.userCanWrite?.(params);
+    }
+
     async verifyConnection(params: any) {
         const impl = await this.getImplementation(
             params.organizationAndTeamData,
