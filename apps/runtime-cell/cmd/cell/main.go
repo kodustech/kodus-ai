@@ -180,6 +180,8 @@ func run(log *slog.Logger, args []string) error {
 		// exercisedLines (-exercised-lines, on by default; each claim's coverage dir is a capped tmpfs).
 		ExercisedLines: st.ExercisedLines,
 	}
+	// A fleet host (the installer put the seal unit there) seals itself on cell.seal; any other cell refuses it.
+	cfg.HostSeal = hostSealer(hostSealUnitFile, runCommand)
 	// cell update reads it to refuse a release this hub would refuse (cellStateDir).
 	cfg.HubProtocolState = filepath.Join(st.StateDir, hubprotocol.StateName)
 	// The trust files a claim with org secrets mounts (trust.go), built

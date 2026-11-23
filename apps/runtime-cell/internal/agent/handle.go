@@ -126,6 +126,8 @@ func (a *Agent) Handle(ctx context.Context, m *protocol.Message) error {
 		return a.forgetSessions(ctx, *b)
 	case *protocol.OrgPurgeBody:
 		return a.orgPurge(*b)
+	case *protocol.CellSealBody:
+		return a.cellSeal()
 	case *protocol.CellRevokedBody:
 		a.deadman.Revoke()
 		a.log.Error("cell.revoked", "alarm", true, "reason", b.Reason)

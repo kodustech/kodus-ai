@@ -222,6 +222,10 @@ type Config struct {
 	// to the edge and the upstream of a preview claim's streams. Nil: the
 	// cell names no preview feature and nacks every preview frame.
 	Preview *PreviewCapability
+	// HostSeal seals this host before it is saved as an environment
+	// template's image (cell.seal, host_seal.go). Nil: this cell is not
+	// installed in fleet mode and refuses cell.seal.
+	HostSeal HostSealer
 	// SandboxSize is the size a sandbox that asks none runs at and is
 	// counted at, and the size of every blank sandbox (hello
 	// capabilities.sandboxSize). It must be within the driver's
