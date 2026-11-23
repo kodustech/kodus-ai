@@ -264,12 +264,15 @@ describe('estimateMessagesTokens — per-run counts', () => {
         expect(first).toBe(estimateMessagesTokens([head()]));
     });
 
-    it("keeps each run's counts apart, so runs never evict each other", () => {
-        const runs = Array.from(
-            { length: 20 },
-            () => new Map<string, number>(),
-        );
-        for (const counts of runs) estimateMessagesTokens([head()], counts);
-        expect(runs.every((counts) => counts.size === 1)).toBe(true);
+    it('keeps a digest per message, never the serialized text', () => {
+        const counts = new Map<string, number>();
+        const big = {
+            role: 'user',
+            content: 'const value = compute(input);\n'.repeat(20_000),
+        } as any;
+        estimateMessagesTokens([big, head()], counts);
+        expect(counts.size).toBe(2);
+        // A 600k-char head held as a key would stay alive for the whole run.
+        expect([...counts.keys()].every((key) => key.length <= 28)).toBe(true);
     });
 });
