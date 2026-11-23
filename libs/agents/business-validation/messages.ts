@@ -112,6 +112,33 @@ export function taskNotFoundMessage(attempts: ResolutionAttempt[]): string {
 I looked for ${tried.join(', ')}, and ${tried.length > 1 ? 'none of them exists' : "it doesn't exist there"}. Check the reference in the title, description or branch, then comment ${RERUN}.`;
 }
 
+/**
+ * The PR names a task, no tracker has it, and the repository asks for one:
+ * say what was looked for and where. A key the tracker can't see (another
+ * project, no permission) reads the same as a typo from here, so the author
+ * gets both ways out.
+ */
+export function taskRequiredNotFoundMessage(
+    attempts: ResolutionAttempt[],
+): string {
+    const tried = [
+        ...new Set(
+            attempts
+                .filter((a) => a.status === 'not_found')
+                .map((a) => `${a.reference} in ${a.tracker}`),
+        ),
+    ];
+    if (!tried.length) {
+        return taskRequiredMessage();
+    }
+    return `## 🤔 Which task is this?
+
+I looked for ${tried.join(', ')}, and ${tried.length > 1 ? 'none of them was found' : 'it was not found'}. This repository asks for a task so Kody can check the PR against it.
+
+### 💡 Next step
+If the reference is right, check that the Kodus connection can see that project. Otherwise fix the reference in the title, description or branch. Then comment ${RERUN}.`;
+}
+
 export function trackerUnavailableMessage(
     attempts: ResolutionAttempt[],
 ): string {

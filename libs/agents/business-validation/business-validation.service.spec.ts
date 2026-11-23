@@ -105,6 +105,30 @@ describe('BusinessValidationService · a task the PR names that does not exist',
     });
 });
 
+describe('BusinessValidationService · a referenced task the tracker cannot find (#2422)', () => {
+    const unreadable = {
+        kind: 'not_found',
+        looksIntended: false,
+        attempts: [
+            { reference: 'PAY-42', tracker: 'Jira', status: 'not_found' },
+        ],
+    };
+
+    it('tells a team that requires a task which reference it looked for, not that the PR names none', async () => {
+        const outcome = await decide(true, unreadable, [ref('PAY-42')]);
+        expect(outcome.kind).toBe('task_required');
+        expect(outcome.message).toContain('PAY-42');
+        expect(outcome.message).toContain('Jira');
+        expect(outcome.message).not.toContain("doesn't reference a task");
+    });
+
+    it('still says the PR names no task when it names none', async () => {
+        const outcome = await decide(true, { kind: 'no_reference' }, []);
+        expect(outcome.kind).toBe('task_required');
+        expect(outcome.message).toContain("doesn't reference a task");
+    });
+});
+
 describe('BusinessValidationService · a reference no connected tracker reads', () => {
     const unreadable = {
         kind: 'no_capable_tracker',
