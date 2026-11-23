@@ -78,7 +78,8 @@ export function ultraSaveRefusalMessage(
         return 'Ultra review is available on the Teams and Enterprise plans, and on a trial with three of your own models, and this organization is not on one, so the review mode was not changed.';
     }
     if (refusal === 'plan_unreadable') {
-        return "Kody could not read this organization's plan just now, so the review mode was not changed. Try again in a moment.";
+        // The web shows only the API's refusals that open with "Ultra review".
+        return "Ultra review is available on the Teams and Enterprise plans, and on a trial with three of your own models, and Kody could not read this organization's plan just now, so the review mode was not changed. Try again in a moment.";
     }
     switch (refusal.reason) {
         case 'too_few_models':

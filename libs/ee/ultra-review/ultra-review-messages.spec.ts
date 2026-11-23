@@ -152,6 +152,7 @@ describe('ultraFallbackInfoLine', () => {
 describe('ultraSaveRefusalMessage', () => {
     it.each([
         ['plan' as const, 'Teams and Enterprise plans'],
+        ['plan_unreadable' as const, "could not read this organization's plan"],
         [{ reason: 'too_few_models' as const, ownModels: 2 }, 'has 2,'],
         [
             { reason: 'not_configured' as const, ownModels: 3 },
