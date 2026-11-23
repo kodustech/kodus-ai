@@ -488,6 +488,10 @@ describe('glob-utils prefilter and list cache (review of 2026-11-23)', () => {
         ['escaped ] in a class', '[a\\]debug]', 'd'],
         ['POSIX class', '[[:alpha:]debug]', 'a'],
         ['double quotes', '**/"node_modules"/**', 'src/node_modules/a.js'],
+        // Unlike double quotes, picomatch keeps these as literal text.
+        ['single quotes', "**/'node_modules'/**", 'src/node_modules/a.js'],
+        ['single quotes, quoted path', "**/'node_modules'/**", "src/'node_modules'/a.js"],
+        ['backticks', '**/`node_modules`/**', 'src/node_modules/a.js'],
     ])('matches as picomatch does: %s', (_label, pattern, file) => {
         for (const caseInsensitive of [false, true]) {
             _clearMatcherCache();
@@ -513,8 +517,14 @@ describe('glob-utils prefilter and list cache (review of 2026-11-23)', () => {
 
     it('does not cache a list larger than the whole budget', () => {
         isFileMatchingGlob('src/a.ts', ['**/warm/**']);
+        isFileMatchingGlobCaseInsensitive('src/a.ts', ['**/warm/**']);
         const huge = Array.from({ length: 50_001 }, () => '**/huge/**');
         expect(isFileMatchingGlob('src/a.ts', huge)).toBe(false);
-        expect(_getCompiledListStats()).toEqual({ lists: 1, patterns: 1 });
+        expect(isFileMatchingGlobCaseInsensitive('src/a.ts', huge)).toBe(false);
+        const one = { lists: 1, patterns: 1 };
+        expect(_getCompiledListStats()).toEqual({
+            caseSensitive: one,
+            caseInsensitive: one,
+        });
     });
 });

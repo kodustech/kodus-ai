@@ -381,9 +381,15 @@ export const _getMatcherCacheSize = (): {
 
 /** @internal Exported for testing purposes only */
 export const _getCompiledListStats = (): {
-    lists: number;
-    patterns: number;
+    caseSensitive: { lists: number; patterns: number };
+    caseInsensitive: { lists: number; patterns: number };
 } => ({
-    lists: COMPILED_CASE_SENSITIVE.size,
-    patterns: COMPILED_PATTERN_TOTALS.sensitive,
+    caseSensitive: {
+        lists: COMPILED_CASE_SENSITIVE.size,
+        patterns: COMPILED_PATTERN_TOTALS.sensitive,
+    },
+    caseInsensitive: {
+        lists: COMPILED_CASE_INSENSITIVE.size,
+        patterns: COMPILED_PATTERN_TOTALS.insensitive,
+    },
 });
