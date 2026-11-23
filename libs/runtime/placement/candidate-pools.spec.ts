@@ -1,4 +1,4 @@
-import { boundKeyOfRun, candidatePools, type PoolView } from './candidate-pools';
+import { boundKeyOfRun, boundKeyOfTemplate, candidatePools, type PoolView } from './candidate-pools';
 
 const pool = (over: Partial<PoolView> & Pick<PoolView, 'poolId'>): PoolView => ({
     scope: 'kodus',
@@ -61,5 +61,10 @@ describe('candidatePools', () => {
     it('the bound key carries the org, so two orgs with the same Run id never share a host', () => {
         expect(boundKeyOfRun('a', 'r')).not.toBe(boundKeyOfRun('b', 'r'));
         expect(boundKeyOfRun('a', 'r')).toBe('run:a/r');
+    });
+
+    it("binds a template's setup host to its environment alone", () => {
+        expect(boundKeyOfTemplate('a', 'e')).toBe('template:a/e');
+        expect(boundKeyOfTemplate('a', 'e')).not.toBe(boundKeyOfRun('a', 'e'));
     });
 });

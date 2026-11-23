@@ -29,6 +29,14 @@ describe('the hub fleet routes', () => {
     };
     const body = { hostId: 'host-1', poolId: 'boat-eu-perrun', boundKey: 'run:org-a/r-1', ttlSeconds: 600 };
 
+    it("mints a token bound to a template's environment (template:<org>/<env>) and refuses other shapes", async () => {
+        const { controller, tokens } = setup();
+        const r = await controller.mint({}, { ...body, hostId: 'tpl-1', boundKey: 'template:org-a/env-1' });
+        expect(r.token.startsWith('kcf_')).toBe(true);
+        expect([...tokens.records?.values?.() ?? []].some((x: any) => x.boundKey === 'template:org-a/env-1')).toBe(true);
+        expect(await status(controller.mint({}, { ...body, hostId: 'tpl-2', boundKey: 'other:org-a/env-1' }))).toBe(400);
+    });
+
     it('mints a kcf_ token for a host of a pool a controller drives, storing only its hash, bound to pool, host and Run', async () => {
         const { tokens, controller } = setup();
         const r = await controller.mint({ socket: undefined }, body);

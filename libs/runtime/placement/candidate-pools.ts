@@ -42,6 +42,9 @@ export interface Placement {
 /** The key that binds a perRun host to one Run of one org. */
 export const boundKeyOfRun = (organizationId: string, runId: string) => `run:${organizationId}/${runId}`;
 
+/** The key that binds a template's setup host to one environment of one org (docs/runtime/host-providers.md §8.2): it receives only that environment's setup. */
+export const boundKeyOfTemplate = (organizationId: string, environmentId: string) => `template:${organizationId}/${environmentId}`;
+
 /**
  * The pools the claim may use, in order: the org's own first, then by weight, then by id. null: no pool a
  * controller drives admits the claim, so placement is what it was before pools (every connected cell the org

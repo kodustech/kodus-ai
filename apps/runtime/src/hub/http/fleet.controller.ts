@@ -10,8 +10,8 @@ const HostId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/);
 const MintBody = z.strictObject({
     hostId: HostId,
     poolId: z.string().min(1).max(160),
-    /** A perRun host's Run: run:<organizationId>/<runId>. */
-    boundKey: z.string().regex(/^run:[^/\s]{1,128}\/[^/\s]{1,128}$/).nullable(),
+    /** A perRun host's Run (run:<organizationId>/<runId>) or a template's setup host (template:<organizationId>/<environmentId>). */
+    boundKey: z.string().regex(/^(?:run|template):[^/\s]{1,128}\/[^/\s]{1,128}$/).nullable(),
     ttlSeconds: z.number().int().min(60).max(3600),
 });
 
