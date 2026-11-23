@@ -8,6 +8,7 @@ import {
     IAutomationService,
 } from '@libs/automation/domain/automation/contracts/automation.service';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
+import { reviewErrorsBlockApproval } from '@libs/code-review/domain/approval/review-approval-errors';
 import { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
 import { IAutomation } from '@libs/automation/domain/automation/interfaces/automation.interface';
 import {
@@ -898,6 +899,16 @@ export class AutomationCodeReviewService implements Omit<
         if (result.approvalReviewSummary) {
             Object.assign(baseData, {
                 approvalReviewSummary: result.approvalReviewSummary,
+            });
+        }
+
+        // What the approval cron needs to answer the same question the
+        // pipeline answered: a failed PR summary is partial but does not
+        // block approval (#2408). Persisted only when the run has errors, so
+        // an older execution keeps reading as blocking.
+        if (Array.isArray(result.errors) && result.errors.length > 0) {
+            Object.assign(baseData, {
+                reviewApprovalBlocked: reviewErrorsBlockApproval(result.errors),
             });
         }
         if (result.customAgentRiskSkips?.length) {

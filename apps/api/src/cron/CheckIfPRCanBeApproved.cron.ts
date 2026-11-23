@@ -35,6 +35,7 @@ import {
     IAutomationService,
 } from '@libs/automation/domain/automation/contracts/automation.service';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
+import { partialReviewBlocksApproval } from '@libs/code-review/domain/approval/review-approval-errors';
 import { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
 import {
     AUTOMATION_EXECUTION_SERVICE_TOKEN,
@@ -1460,11 +1461,12 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 repositoryId: repository?.id,
             });
         // Read partial executions so a failed rerun cannot expose an older
-        // successful judgment. Partial reviews cannot issue a new approval.
-        if (
-            lastExecution?.status === AutomationStatus.PARTIAL_ERROR &&
-            !policyActive
-        ) {
+        // successful judgment. A partial review cannot issue a new approval,
+        // unless its only failure is the PR summary: the pipeline already
+        // treats that one as non-blocking (#2408).
+        const partialErrorBlocksApproval =
+            partialReviewBlocksApproval(lastExecution);
+        if (partialErrorBlocksApproval && !policyActive) {
             return false;
         }
         const lastAnalyzedCommitSha = this.getLastAnalyzedCommitSha(
@@ -1567,7 +1569,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     );
                     return false;
                 }
-                if (lastExecution.status === AutomationStatus.PARTIAL_ERROR) {
+                if (partialErrorBlocksApproval) {
                     // The approval can succeed before publishing its explanation
                     // fails. Repair that comment only after verifying the host;
                     // a saved decision alone must never replay a partial review.
