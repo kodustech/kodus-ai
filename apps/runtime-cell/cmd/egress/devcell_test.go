@@ -75,6 +75,9 @@ func TestTheDevCellDefaults(t *testing.T) {
 		`BUILDER_TRUST=1`,                             // the message names the flag
 		`docker buildx bake runtime-builder`,          // and how to build it locally
 		`-gvisor-builder-trust`,
+		`-gvisor-build-state-min-free-gb "$BUILD_STATE_MIN_FREE_GB"`, // the floor the script checks is the one the cell gets
+		`BUILD_STATE_MIN_FREE_GB="${BUILD_STATE_MIN_FREE_GB:-20}"`,   // the cell's own default
+		`reflink=1`, // says whether the state's filesystem has reflinks
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("dev-gvisor-cell.sh lacks %q", want)

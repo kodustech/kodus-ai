@@ -50,6 +50,11 @@ none is confirmed.
   mounts are never exported by any BuildKit exporter ([moby/buildkit#1512](https://github.com/moby/buildkit/issues/1512),
   cited in `build-cache.md` section 2), so with the state off every cache mount is empty on every PR build. The test's
   note "BUILD_STATE was off" matches this flag.
+  The dev cell script (`apps/runtime-cell/scripts/dev-gvisor-cell.sh`) turns it on by default (`BUILD_STATE=0` opts
+  out) and, at start, prints whether the state's filesystem has reflinks (XFS with `reflink=1`, or btrfs; without them
+  the cache is slow) and how much disk is free against `-gvisor-build-state-min-free-gb` (20 by default, set with
+  `BUILD_STATE_MIN_FREE_GB`), warning when free space is under the floor plus a 20 GB margin: a cell under the floor
+  drops the cache right after seeding. A customer test measured 23 min cold against 5 min 44 s with the cache.
 - **Framework build caches are not in the author's rules.** The mount list is "Go /go/pkg/mod and /root/.cache/go-build,
   npm, pnpm store, Yarn Berry, Yarn 1, pip" (`recipe-author.agent.ts:414`). Nothing names `.next/cache`, `.nuxt`,
   `node_modules/.vite`, `.nx/cache` or `.turbo`. Next.js documents `.next/cache` as the directory to persist between CI

@@ -29,7 +29,10 @@
 # probes run only with it, ADR-071), BUILD_STATE (keep each environment's
 # BuildKit state: on by default, because off sends every Run down the slow
 # cache path; BUILD_STATE=0 or BUILD_STATE= turns it off) and BUILD_STATE_KEEP (what its GC keeps, 20GB by default:
-# a Go monorepo's module and build caches pass that). A pull request's
+# a Go monorepo's module and build caches pass that), BUILD_STATE_MIN_FREE_GB
+# (the cell's free-space floor, 20 by default: under it the cell drops the
+# states and builds run cold; the script warns when $STATE has less than the
+# floor plus a 20 GB margin free). A pull request's
 # build reads that state through a reflink clone when $STATE/work is on a
 # filesystem that has them (XFS, btrfs); on ext4 it reads it through the
 # kernel's overlay, where most Node builds fail once and run again cold.
@@ -77,6 +80,7 @@ BIN="$(cd "${2:?bin dir}" && pwd)"
 # Kept on unless the operator sets it to 0 or to nothing.
 BUILD_STATE="${BUILD_STATE-1}"
 [ "$BUILD_STATE" = 0 ] && BUILD_STATE=
+BUILD_STATE_MIN_FREE_GB="${BUILD_STATE_MIN_FREE_GB:-20}"
 BIN_INSTALL="${BIN_INSTALL:-/usr/local/lib/kodus-cell-dev}"
 HUB_URL="${HUB_URL:-wss://host.orb.internal:3410/cells}"
 GIT_API="${GIT_API:-http://host.orb.internal:3499}"
@@ -129,6 +133,36 @@ fi
 umask 077
 rm -rf "$STATE"/{observer-tls,egress,injector}
 mkdir -p "$STATE"/{pki,observer-tls,egress,injector,work}
+
+# The build state (the persistent build cache) is slow without reflinks and is
+# dropped right after seeding on a volume near the cell's free-space floor: say
+# so now, with the numbers, instead of leaving the first Runs cold unexplained.
+if [ -n "$BUILD_STATE" ]; then
+  echo "build state: ON (BUILD_STATE=0 turns it off)"
+  fstype="$(df -T "$STATE/work" 2>/dev/null | awk 'NR==2{print $2}')"
+  reflink=no
+  case "$fstype" in
+    btrfs) reflink=yes ;;
+    xfs) command -v xfs_info >/dev/null && xfs_info "$STATE/work" 2>/dev/null | grep -q 'reflink=1' && reflink=yes ;;
+  esac
+  if [ "$reflink" = yes ]; then
+    echo "build state: $STATE/work is on $fstype with reflinks: a build reads the state through a clone"
+  else
+    echo "WARNING build state: $STATE/work is on ${fstype:-an unknown filesystem} without reflinks (need XFS with reflink=1, or btrfs):" >&2
+    echo "  the cache is slow through the kernel's overlay and most Node builds fail once and run again cold" >&2
+  fi
+  free_gb="$(df -Pk "$STATE/work" | awk 'NR==2{print int($4/1048576)}')"
+  need_gb=$((BUILD_STATE_MIN_FREE_GB + 20))
+  if [ "$free_gb" -lt "$BUILD_STATE_MIN_FREE_GB" ]; then
+    echo "WARNING build state: ${free_gb} GB free on $STATE/work is under the cell's ${BUILD_STATE_MIN_FREE_GB} GB floor: it drops the cache as soon as it is seeded" >&2
+  elif [ "$free_gb" -lt "$need_gb" ]; then
+    echo "WARNING build state: ${free_gb} GB free on $STATE/work, floor ${BUILD_STATE_MIN_FREE_GB} GB, want at least ${need_gb} GB (floor + 20 GB margin): the cache is dropped once seeding fills the volume" >&2
+  else
+    echo "build state: ${free_gb} GB free on $STATE/work, floor ${BUILD_STATE_MIN_FREE_GB} GB"
+  fi
+else
+  echo "build state: OFF: every Run builds cold (the first Runs took 23 min against 5 min 44 s with the cache)"
+fi
 P="$STATE/pki"
 cp "$CERTS/ca.pem" "$CERTS/ca.key" "$P/"
 # The cell renews cell.pem in place and the hub then pins only the renewed
@@ -239,7 +273,7 @@ exec_cell=("$BIN/cell" -driver docker-gvisor -dev -hub-url "$HUB_URL" -git-api "
   -gvisor-holder-image "$HOLDER_IMAGE" -gvisor-builder-image "$BUILDER_IMAGE" ${BUILDER_TRUST:+-gvisor-builder-trust} -gvisor-egress-container "$EGRESS"
   -gvisor-mirror-goproxy "http://mirror.cell.internal:8080/go,off"
   -gvisor-mirror-npm "http://mirror.cell.internal:8080/npm/" -gvisor-mirror-pypi "http://mirror.cell.internal:8080/pypi/simple/"
-  -gvisor-mirror-registry "mirror.cell.internal:8080" ${MEM_LIMIT:+-gvisor-mem-limit "$MEM_LIMIT"} ${MEM_MAX:+-gvisor-mem-max "$MEM_MAX"} ${CPUS_MAX:+-gvisor-cpus-max "$CPUS_MAX"} ${BUILD_STATE:+-gvisor-build-state} ${BUILD_STATE_KEEP:+-gvisor-build-state-keep "$BUILD_STATE_KEEP"}
+  -gvisor-mirror-registry "mirror.cell.internal:8080" ${MEM_LIMIT:+-gvisor-mem-limit "$MEM_LIMIT"} ${MEM_MAX:+-gvisor-mem-max "$MEM_MAX"} ${CPUS_MAX:+-gvisor-cpus-max "$CPUS_MAX"} ${BUILD_STATE:+-gvisor-build-state -gvisor-build-state-min-free-gb "$BUILD_STATE_MIN_FREE_GB"} ${BUILD_STATE_KEEP:+-gvisor-build-state-keep "$BUILD_STATE_KEEP"}
   ${IMAGE_TRANSFER:+-gvisor-image-transfer "$IMAGE_TRANSFER"} ${REGISTRY_IMAGE:+-gvisor-registry-image "$REGISTRY_IMAGE"} ${REGISTRY_KEEP_GB:+-gvisor-registry-keep-gb "$REGISTRY_KEEP_GB"}
   -gvisor-observer-image "$OBSERVER_IMAGE" -gvisor-observer-tls-dir "$STATE/observer-tls"
   ${BROWSER_IMAGE:+-gvisor-browser-image "$BROWSER_IMAGE"}
