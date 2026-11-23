@@ -274,8 +274,12 @@ export class CodeReviewHandlerService {
             // The automation stores this on the execution: the approval cron
             // reads the status, and this is the part of the pipeline's
             // decision the status alone cannot carry (#2408).
+            // No errors means no evidence either way: the marker is left off
+            // and the cron keeps its fail-closed reading.
             const reviewApprovalBlocked =
-                reviewErrorsBlockApproval(collectedErrors);
+                collectedErrors.length > 0
+                    ? reviewErrorsBlockApproval(collectedErrors)
+                    : undefined;
             const hasCriticalError = collectedErrors.some(
                 (e) => (e.severity ?? 'critical') === 'critical',
             );
@@ -379,7 +383,9 @@ export class CodeReviewHandlerService {
                 approvalReviewSummary: result?.approvalReviewSummary,
                 customAgentRiskSkips: result?.customAgentRiskSkips,
                 statusInfo: finalStatus,
-                reviewApprovalBlocked,
+                ...(reviewApprovalBlocked === undefined
+                    ? {}
+                    : { reviewApprovalBlocked }),
                 orphanedBaseCommit: result?.orphanedBaseCommit,
                 businessLogicValidatedAt: result?.businessLogicValidatedAt,
                 licenseNoticePostedAt: result?.licenseNoticePostedAt,
