@@ -1,5 +1,8 @@
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
 
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+
+import { formatPullRequestDiff } from '../pull-request-diff';
 import type { AgentRun } from '../trackers/task-finder';
 import { createGapCheck, type RepositoryReader } from './gap-check';
 
@@ -363,5 +366,75 @@ describe('createGapCheck', () => {
                 throw new Error('model down');
             })(input),
         ).rejects.toThrow('model down');
+    });
+});
+
+describe("createGapCheck within the model's window (#2233)", () => {
+    const svg = (chars: number) => {
+        let out = '';
+        for (let i = 0; out.length < chars; i++) {
+            out += `+<path d="M${i % 97}.${i % 7} ${i % 13}.5L${i % 31} ${i % 11}z"/>\n`;
+        }
+        return out.slice(0, chars);
+    };
+    const bigDiff = formatPullRequestDiff(
+        Array.from({ length: 10 }, (_, i) => ({
+            filename: `icons/icon-${i}.svg`,
+            patch: svg(10_000),
+        })),
+    );
+
+    it('puts no more diff in the first message than a quarter of a small window', async () => {
+        let message = '';
+        await createGapCheck(
+            async (_spec, prompt) => {
+                message = prompt;
+            },
+            { contextWindowTokens: 16_000 },
+        )({ ...input, diff: bigDiff });
+        const diff = message.slice(message.indexOf('<pr_diff'));
+        expect(estimateTextTokens(diff)).toBeLessThanOrEqual(4_000 + 50);
+    });
+
+    it('shortens the files read so far before the next step once they outgrow the window', async () => {
+        let spec: AgentSpec | undefined;
+        await createGapCheck(
+            async (s) => {
+                spec = s;
+            },
+            { contextWindowTokens: 16_000 },
+        )(input);
+        const reads = Array.from({ length: 10 }, (_, i) => [
+            {
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: `c${i}`,
+                        toolName: 'read_file',
+                        input: { path: `src/f${i}.ts` },
+                    },
+                ],
+            },
+            {
+                role: 'tool',
+                content: [
+                    {
+                        type: 'tool-result',
+                        toolCallId: `c${i}`,
+                        toolName: 'read_file',
+                        output: { type: 'text', value: svg(12_000) },
+                    },
+                ],
+            },
+        ]).flat();
+        const messages = [{ role: 'user', content: 'the prompt' }, ...reads];
+        const directives = spec!.policies
+            .map((p) => p.prepareStep?.({ messages, stepNumber: 10 } as any))
+            .find((d) => d?.messages);
+        expect(directives?.messages).toBeDefined();
+        expect(
+            estimateTextTokens(JSON.stringify(directives!.messages)),
+        ).toBeLessThan(estimateTextTokens(JSON.stringify(messages)));
     });
 });

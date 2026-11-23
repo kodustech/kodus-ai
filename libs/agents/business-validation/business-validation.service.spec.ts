@@ -1,3 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+
 import type { TaskReference } from './business-validation.types';
 import {
     authorClaimSection,
@@ -10,6 +15,9 @@ import {
 } from './settings';
 import { resolveTasks } from './task-resolver';
 import { buildTaskTrackers } from './trackers/tracker-catalog';
+import { buildBusinessRulesAnalysisPrompt } from './judge/analysis-prompt.builder';
+import { ANALYZER_MAX_OUTPUT_TOKENS } from './judge/intent-judge';
+import { formatPullRequestDiff } from './pull-request-diff';
 
 jest.mock('./task-resolver', () => {
     const actual = jest.requireActual('./task-resolver');
@@ -684,5 +692,106 @@ describe('legacyOutcomeLabels', () => {
         expect(
             legacyOutcomeLabels({ kind: 'task_too_thin', tasks: [] } as any),
         ).toMatchObject({ taskContextStatus: 'weak' });
+    });
+});
+
+describe("BusinessValidationService · a judge call fits the model's window (#2233)", () => {
+    const skill = readFileSync(
+        join(__dirname, '../skills/business-rules-validation/SKILL.md'),
+        'utf8',
+    );
+    const svg = (chars: number) => {
+        let out = '';
+        for (let i = 0; out.length < chars; i++) {
+            out += `+<path d="M${i % 97}.${i % 7} ${i % 13}.5L${i % 31} ${i % 11}z"/>\n`;
+        }
+        return out.slice(0, chars);
+    };
+
+    it('sends a slot with a 32k-token input window no analyzer call over 32k tokens', async () => {
+        const window = 32_000;
+        const calls: string[] = [];
+        const service = new BusinessValidationService(
+            {} as any,
+            {} as any,
+            { findByKey: async () => undefined } as any,
+            {
+                loadInstructions: () => skill,
+                listReferences: () => [],
+                loadReference: () => undefined,
+            } as any,
+        );
+        const judge = {
+            modelSlot: {
+                provider: 'openai_compatible',
+                apiKey: '',
+                model: 'local-open-weights',
+                maxInputTokens: window,
+            },
+            translate: async (m: string) => m,
+            judge: async (input: any) => {
+                calls.push(
+                    `${input.instructions}\n${buildBusinessRulesAnalysisPrompt(input)}`,
+                );
+                return {
+                    needsMoreInfo: false,
+                    status: 'meets_requirements',
+                    requirements: [
+                        {
+                            requirement: 'Icons render in the header',
+                            state: 'met',
+                            evidence: [],
+                        },
+                    ],
+                };
+            },
+        };
+        const diff = formatPullRequestDiff([
+            { filename: 'src/header.tsx', patch: svg(20_000) },
+            ...Array.from({ length: 8 }, (_, i) => ({
+                filename: `icons/icon-${i}.svg`,
+                patch: svg(20_000),
+            })),
+        ]);
+
+        const outcome = await (service as any).decide(
+            {
+                door: 'auto',
+                organizationAndTeamData: { organizationId: 'org-1' },
+                pullRequest: { number: 1, body: 'Closes KOD-1' },
+                diff,
+            },
+            resolveBusinessLogicSettings({}),
+            {
+                kind: 'found',
+                attempts: [],
+                tasks: [
+                    {
+                        task: {
+                            tracker: 'Linear',
+                            id: 'KOD-1',
+                            title: 'New header icons',
+                            description:
+                                'Replace the header icons with the new set.',
+                            acceptanceCriteria: [
+                                'Icons render in the header',
+                                'Old icons are removed',
+                            ],
+                        },
+                    },
+                ],
+            },
+            [ref('KOD-1')],
+            ['Linear'],
+            async () => judge,
+        );
+
+        expect(diff.length).toBeLessThan(200_000);
+        expect(calls).toHaveLength(1);
+        expect(
+            estimateTextTokens(calls[0]) + ANALYZER_MAX_OUTPUT_TOKENS,
+        ).toBeLessThanOrEqual(window);
+        expect(outcome.kind).toBe('validated');
+        expect(outcome.unseenFiles.length).toBeGreaterThan(0);
     });
 });

@@ -1,4 +1,19 @@
-import { diffFor, fitDiff, formatPullRequestDiff } from './pull-request-diff';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+import {
+    diffFor,
+    diffTokenBudget,
+    fitDiff,
+    formatPullRequestDiff,
+} from './pull-request-diff';
+
+/** SVG path data: few characters per token, the shape behind #2233. */
+const svgPatch = (chars: number) => {
+    let out = '';
+    for (let i = 0; out.length < chars; i++) {
+        out += `+<path d="M${i % 97}.${i % 7} ${i % 13}.5L${i % 31} ${i % 11}z"/>\n`;
+    }
+    return out.slice(0, chars);
+};
 
 describe('fitDiff (UC-32)', () => {
     const diff = formatPullRequestDiff([
@@ -73,5 +88,78 @@ describe('diffFor: what one second look re-reads on every step', () => {
         expect(sent).toContain('=== FILE: huge.ts');
         expect(sent).toContain('read the rest of huge.ts with read_file');
         expect(sent.length).toBeLessThanOrEqual(24_000);
+    });
+});
+
+describe("fitDiff within the model's window (#2233)", () => {
+    const diff = formatPullRequestDiff([
+        { filename: 'src/a.ts', patch: svgPatch(30_000) },
+        { filename: 'icons/big.svg', patch: svgPatch(120_000) },
+        { filename: 'src/b.ts', patch: svgPatch(30_000) },
+    ]);
+
+    it('leaves out the files that would take the diff past the tokens, and names them, even under the character cap', () => {
+        const tokens = 30_000;
+        const { diff: sent, unseenFiles } = fitDiff(diff, {
+            chars: 200_000,
+            tokens,
+        });
+        expect(diff.length).toBeLessThan(200_000);
+        expect(estimateTextTokens(sent)).toBeLessThanOrEqual(tokens);
+        expect(unseenFiles).toContain('icons/big.svg');
+        expect(sent).toContain('=== FILE: src/a.ts');
+    });
+
+    it('cuts a diff with no file headers to the tokens too', () => {
+        const { diff: sent, unseenFiles } = fitDiff(svgPatch(100_000), {
+            chars: 200_000,
+            tokens: 5_000,
+        });
+        expect(estimateTextTokens(sent)).toBeLessThanOrEqual(5_000);
+        expect(sent.length).toBeGreaterThan(0);
+        expect(unseenFiles).toEqual(['(rest of the diff)']);
+    });
+
+    it('keeps the whole diff when the window holds it', () => {
+        expect(fitDiff(diff, { chars: 200_000, tokens: 1_000_000 })).toEqual({
+            diff,
+            unseenFiles: [],
+        });
+    });
+});
+
+describe('diffTokenBudget (#2233)', () => {
+    it('gives the diff what the window holds after the prompt, the answer and a margin', () => {
+        expect(
+            diffTokenBudget({
+                contextWindowTokens: 100_000,
+                promptTokens: 10_000,
+                outputTokens: 20_000,
+            }),
+        ).toBe(60_000);
+    });
+
+    it('leaves nothing for the diff when the window cannot hold the prompt and the answer', () => {
+        expect(
+            diffTokenBudget({
+                contextWindowTokens: 16_000,
+                promptTokens: 4_000,
+                outputTokens: 20_000,
+            }),
+        ).toBe(0);
+    });
+});
+
+describe("diffFor within the model's window (#2233)", () => {
+    it("keeps a second look's diff within its tokens and still names the files left out", () => {
+        const diff = formatPullRequestDiff(
+            Array.from({ length: 12 }, (_, i) => ({
+                filename: `icons/icon-${i}.svg`,
+                patch: svgPatch(4_000),
+            })),
+        );
+        const sent = diffFor(diff, {}, { chars: 24_000, tokens: 2_000 });
+        expect(estimateTextTokens(sent)).toBeLessThanOrEqual(2_000);
+        expect(sent).toContain('Also changed, not shown here');
     });
 });

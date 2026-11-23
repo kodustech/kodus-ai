@@ -1,3 +1,5 @@
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+
 /** A changed file as the code hosts return it. */
 export interface ChangedFile {
     filename: string;
@@ -18,8 +20,22 @@ export function formatPullRequestDiff(
         .join('\n\n');
 }
 
-/** About 50k tokens: room for the task, the instructions and the answer. */
+/**
+ * The most diff one judge call carries, whatever the model holds: the cost
+ * ceiling. A model with a smaller window gets less (see `DiffBudget.tokens`).
+ */
 export const DIFF_BUDGET_CHARS = 200_000;
+
+/**
+ * How much diff fits: `chars` bounds the cost, `tokens` the model's input
+ * window. Characters alone can't stand for tokens: an SVG patch ran at about
+ * 1.3 characters per token (#2233), so 200k characters of it is ~155k tokens.
+ */
+export interface DiffBudget {
+    chars: number;
+    /** Absent: no window to respect beyond `chars`. */
+    tokens?: number;
+}
 
 const FILE_HEADER = /^(?:=== FILE: (.+?) ===|diff --git a\/\S+ b\/(\S+))$/gm;
 
@@ -31,30 +47,84 @@ const FILE_HEADER = /^(?:=== FILE: (.+?) ===|diff --git a\/\S+ b\/(\S+))$/gm;
  */
 export function fitDiff(
     diff: string,
-    budget = DIFF_BUDGET_CHARS,
+    budget: number | DiffBudget = DIFF_BUDGET_CHARS,
 ): { diff: string; unseenFiles: string[] } {
-    if (diff.length <= budget) {
+    const { chars, tokens = Infinity } =
+        typeof budget === 'number' ? { chars: budget } : budget;
+    const fits = (text: string, usedTokens = 0) =>
+        tokens === Infinity || usedTokens + estimateTextTokens(text) <= tokens;
+
+    if (diff.length <= chars && fits(diff)) {
         return { diff, unseenFiles: [] };
     }
     const chunks = fileChunks(diff);
     if (!chunks.length) {
         return {
-            diff: diff.slice(0, budget),
+            diff: cutToTokens(diff.slice(0, chars), tokens),
             unseenFiles: ['(rest of the diff)'],
         };
     }
     const kept: string[] = [];
     const unseenFiles: string[] = [];
     let used = 0;
+    let usedTokens = 0;
     for (const chunk of chunks) {
-        if (used + chunk.text.length <= budget) {
+        // The character check first: it is free, and it keeps a huge file
+        // from being tokenized only to be left out.
+        if (used + chunk.text.length <= chars && fits(chunk.text, usedTokens)) {
             kept.push(chunk.text);
             used += chunk.text.length;
+            if (tokens !== Infinity) {
+                usedTokens += estimateTextTokens(chunk.text);
+            }
         } else {
             unseenFiles.push(chunk.file);
         }
     }
     return { diff: kept.join(''), unseenFiles };
+}
+
+/** A text without file headers, shortened until it is within `tokens`. */
+function cutToTokens(text: string, tokens: number): string {
+    let cut = text;
+    for (let i = 0; i < 4 && tokens !== Infinity; i++) {
+        const count = estimateTextTokens(cut);
+        if (count <= tokens) {
+            return cut;
+        }
+        cut = cut.slice(0, Math.floor((cut.length * tokens * 0.95) / count));
+    }
+    return tokens === Infinity || estimateTextTokens(cut) <= tokens ? cut : '';
+}
+
+/**
+ * The tokens left for the diff in one judge call: the model's input window,
+ * less a safety margin, the answer it may write, and everything else the call
+ * carries (instructions, task, PR description, the names of files left out).
+ * Zero when nothing is left: the judge then reads no diff and says which
+ * files it could not see, rather than the provider rejecting the call.
+ */
+export function diffTokenBudget(params: {
+    contextWindowTokens: number;
+    /** Every token of the call that is not the diff. */
+    promptTokens: number;
+    outputTokens: number;
+}): number {
+    const usable = Math.floor(
+        params.contextWindowTokens * (1 - WINDOW_SAFETY_MARGIN),
+    );
+    return Math.max(0, usable - params.promptTokens - params.outputTokens);
+}
+
+/**
+ * The counter is o200k_base, not every provider's tokenizer: this much of the
+ * window is kept for the difference.
+ */
+const WINDOW_SAFETY_MARGIN = 0.1;
+
+/** The files the diff changes, in order. */
+export function changedFileNames(diff: string): string[] {
+    return fileChunks(diff).map((chunk) => chunk.file);
 }
 
 /** One file's part of the diff, header included. */
@@ -86,7 +156,31 @@ export const GAP_DIFF_CHARS = 24_000;
 export function diffFor(
     diff: string,
     focus: { files?: string[]; requirement?: string },
-    budget = GAP_DIFF_CHARS,
+    budget: number | DiffBudget = GAP_DIFF_CHARS,
+): string {
+    const { chars, tokens } =
+        typeof budget === 'number' ? { chars: budget } : budget;
+    let room = chars;
+    let picked = diffWithin(diff, focus, room);
+    // Shrink the character room until the pick is within the model's tokens:
+    // the pick keeps its order and its list of files left out.
+    for (let i = 0; i < 4 && tokens !== undefined; i++) {
+        const count = estimateTextTokens(picked);
+        if (count <= tokens) {
+            return picked;
+        }
+        room = Math.floor((room * tokens * 0.95) / count);
+        picked = room > 0 ? diffWithin(diff, focus, room) : '';
+    }
+    return tokens === undefined || estimateTextTokens(picked) <= tokens
+        ? picked
+        : '';
+}
+
+function diffWithin(
+    diff: string,
+    focus: { files?: string[]; requirement?: string },
+    budget: number,
 ): string {
     if (diff.length <= budget) {
         return diff;

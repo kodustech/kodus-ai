@@ -13,7 +13,9 @@ import {
     ValidationErrorType,
 } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
+import { resolveContextWindow } from '@libs/llm/model-context-window';
 import { overrideContext } from '@libs/llm/routing-strategy';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import type { MCPServerConfig } from '@libs/mcp-server/mcp-adapter';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
@@ -38,7 +40,12 @@ import type {
     TaskResolution,
 } from './business-validation.types';
 import { taskPasses } from './check-policy';
-import { IntentJudge, JudgePolicy } from './judge/intent-judge';
+import {
+    ANALYZER_MAX_OUTPUT_TOKENS,
+    IntentJudge,
+    JudgePolicy,
+} from './judge/intent-judge';
+import { buildBusinessRulesAnalysisPrompt } from './judge/analysis-prompt.builder';
 import {
     classifyReply,
     type OpenFinding,
@@ -58,7 +65,12 @@ import {
     type RenderContext,
     renderComment,
 } from './render';
-import { fitDiff } from './pull-request-diff';
+import {
+    changedFileNames,
+    DIFF_BUDGET_CHARS,
+    diffTokenBudget,
+    fitDiff,
+} from './pull-request-diff';
 import {
     AUTO_TASK_SOURCE,
     type BusinessLogicSettings,
@@ -480,7 +492,33 @@ export class BusinessValidationService {
         if (!fullDiff.trim()) {
             return skip('diff_unavailable', messages.diffUnavailableMessage());
         }
-        const { diff, unseenFiles } = fitDiff(fullDiff);
+        const { diff, unseenFiles } = fitDiff(fullDiff, {
+            chars: DIFF_BUDGET_CHARS,
+            tokens: diffTokenBudget({
+                contextWindowTokens: contextWindowOf((await judge()).modelSlot),
+                // The largest call: the task with the most text, and every
+                // changed file named as left out.
+                promptTokens:
+                    estimateTextTokens(this.instructions(request)) +
+                    Math.max(
+                        ...judgeable.map((f) =>
+                            estimateTextTokens(
+                                buildBusinessRulesAnalysisPrompt({
+                                    task: f.task,
+                                    taskText: formatTaskForJudge(f.task),
+                                    taskQuality: gradeTask(f.task),
+                                    diff: '',
+                                    unseenFiles: changedFileNames(fullDiff),
+                                    pullRequestBody: request.pullRequest?.body,
+                                    userLanguage: language,
+                                    teamGuidance: settings.teamGuidance,
+                                }),
+                            ),
+                        ),
+                    ),
+                outputTokens: ANALYZER_MAX_OUTPUT_TOKENS,
+            }),
+        });
 
         const judged = await Promise.all(
             judgeable.map((f) =>
@@ -712,6 +750,7 @@ export class BusinessValidationService {
                 },
                 request.signal,
             ),
+            { contextWindowTokens: contextWindowOf(model) },
         );
     }
 
@@ -1329,4 +1368,15 @@ function verdictLine(check: TaskCheck): string {
         check.passed ? 'passed' : 'failed',
         ...[...counts].map(([state, n]) => `${state}=${n}`),
     ].join(' ');
+}
+
+/**
+ * The input window of the model the judge runs on: the slot's own
+ * `maxInputTokens` when the team set one, else what the model is known to hold.
+ */
+export function contextWindowOf(model: NormalizedModel | undefined): number {
+    return resolveContextWindow({
+        byokMaxInputTokens: model?.maxInputTokens,
+        modelName: model?.model ?? '',
+    });
 }
