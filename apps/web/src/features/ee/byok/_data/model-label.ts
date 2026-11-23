@@ -103,12 +103,20 @@ export function modelLabeler(
         if (!group) byLabel.set(label, (group = []));
         group.push(model);
     }
+    const clash = (a: LabeledId, b: LabeledId) =>
+        a.id !== b.id &&
+        (a.connection === b.connection ||
+            lastSegment(a.id) !== lastSegment(b.id));
+    // Decided per label, so every entry under one label reads the same way.
+    const needsId = new Set<string>();
+    for (const [label, group] of byLabel) {
+        if (group.some((a) => group.some((b) => clash(a, b))))
+            needsId.add(label);
+    }
     const shares = (id: string, connection?: string) =>
-        (byLabel.get(nameOf(id)) ?? []).some(
-            (other) =>
-                other.id !== id &&
-                (other.connection === connection ||
-                    lastSegment(other.id) !== lastSegment(id)),
+        needsId.has(nameOf(id)) ||
+        (byLabel.get(nameOf(id)) ?? []).some((other) =>
+            clash(other, { id, connection }),
         );
     const labelOf = (id: string, connection?: string): string =>
         shares(id, connection) ? `${nameOf(id)} (${id})` : nameOf(id);

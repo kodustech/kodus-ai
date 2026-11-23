@@ -49,4 +49,19 @@ describe("routingModelLabels", () => {
         expect(labels.get("a")).toBe("GPT 4o (openai/gpt-4o)");
         expect(labels.get("b")).toBe("GPT 4o (azure/gpt-4o)");
     });
+
+    it("names the same id on another connection by connection when its label carries an id", () => {
+        const gateway = {
+            credentialId: "gw",
+            providerId: "openai_compatible",
+        } as const;
+        const labels = routingModelLabels([
+            slot("a", "gpt-4o", gateway),
+            slot("b", "azure/gpt-4o", gateway),
+            slot("c", "gpt-4o", { credentialId: "oa", providerId: "openai" }),
+        ]);
+        expect(labels.get("a")).toBe("GPT 4o (gpt-4o) · OpenAI-compatible");
+        expect(labels.get("b")).toBe("GPT 4o (azure/gpt-4o)");
+        expect(labels.get("c")).toBe("GPT 4o (gpt-4o) · OpenAI");
+    });
 });
