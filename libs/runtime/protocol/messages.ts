@@ -1285,6 +1285,11 @@ export const MessageBodySchemas = {
     // Refuse the preview id from now on and close its open streams.
     'preview.unroute': z.strictObject({ previewId: PreviewIdSchema }),
     'cell.revoked': z.strictObject({ reason: z.string().max(512) }),
+    // Seal this host before it is saved as an environment template's image (docs/runtime/host-providers.md §8.2):
+    // the cell, on a fleet host with no claim live, acks and starts the host's seal unit (cell-host.sh seal), which
+    // stops the cell and removes its identity, token file and /tmp. The hub sends it only to a cell whose bound key
+    // is `template:<org>/<env>`; the cell refuses it when it is not a fleet host or a claim is live.
+    'cell.seal': z.strictObject({}),
     // version is set only on the ack of hello: the version the hub chose (§1b).
     // accepts too, and only with names the cell's hello named
     // (HUB_ACCEPTED_FEATURES): the optional fields the cell may send this hub.

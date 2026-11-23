@@ -75,6 +75,7 @@
             "preview.route",
             "preview.unroute",
             "cell.revoked",
+            "cell.seal",
             "ack",
             "nack"
           ]
@@ -4787,6 +4788,12 @@
       "required": [
         "reason"
       ],
+      "additionalProperties": false
+    },
+    "cell.seal": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {},
       "additionalProperties": false
     },
     "ack": {

@@ -53,6 +53,7 @@ const (
 	MessageTypePreviewRoute    MessageType = "preview.route"
 	MessageTypePreviewUnroute  MessageType = "preview.unroute"
 	MessageTypeCellRevoked     MessageType = "cell.revoked"
+	MessageTypeCellSeal        MessageType = "cell.seal"
 	MessageTypeAck             MessageType = "ack"
 	MessageTypeNack            MessageType = "nack"
 )
@@ -1391,6 +1392,8 @@ type CellRevokedBody struct {
 	Reason string `json:"reason"`
 }
 
+type CellSealBody struct{}
+
 type AckBodyCellProtocols struct {
 	Min int64 `json:"min"`
 	Max int64 `json:"max"`
@@ -1482,6 +1485,8 @@ func newBody(t MessageType) (any, bool) {
 		return new(PreviewUnrouteBody), true
 	case MessageTypeCellRevoked:
 		return new(CellRevokedBody), true
+	case MessageTypeCellSeal:
+		return new(CellSealBody), true
 	case MessageTypeAck:
 		return new(AckBody), true
 	case MessageTypeNack:
@@ -1565,6 +1570,8 @@ func bodyType(body any) (MessageType, bool) {
 		return MessageTypePreviewUnroute, true
 	case CellRevokedBody, *CellRevokedBody:
 		return MessageTypeCellRevoked, true
+	case CellSealBody, *CellSealBody:
+		return MessageTypeCellSeal, true
 	case AckBody, *AckBody:
 		return MessageTypeAck, true
 	case NackBody, *NackBody:
