@@ -2,9 +2,13 @@ import {
     BadRequestException,
     ForbiddenException,
     HttpException,
+    InternalServerErrorException,
 } from '@nestjs/common';
 
-import { toIntegrationLinkError } from '../integration-link-error';
+import {
+    isIntegrationLinkRefusal,
+    toIntegrationLinkError,
+} from '../integration-link-error';
 
 const fail = (props: Record<string, unknown>, message = 'host said no') =>
     Object.assign(new Error(message), props);
@@ -112,5 +116,21 @@ describe('toIntegrationLinkError', () => {
         a.cause = b;
 
         expect(toIntegrationLinkError(a, 'GitHub')).toBe(a);
+    });
+});
+
+describe('isIntegrationLinkRefusal', () => {
+    it.each([
+        ['a 400', new BadRequestException('no'), true],
+        ['a 403', new ForbiddenException('no'), true],
+        [
+            'a 500 HttpException',
+            new InternalServerErrorException('misconfigured'),
+            false,
+        ],
+        ['a plain Error', new Error('boom'), false],
+        ['a non-Error value', 'boom', false],
+    ])('%s is a refusal: %s', (_name, err, expected) => {
+        expect(isIntegrationLinkRefusal(err)).toBe(expected);
     });
 });

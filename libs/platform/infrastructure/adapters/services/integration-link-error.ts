@@ -117,3 +117,8 @@ export function toIntegrationLinkError(
 
     return err;
 }
+
+/** A refusal worded for the user (4xx), as opposed to a fault on our side. */
+export function isIntegrationLinkRefusal(err: unknown): err is HttpException {
+    return err instanceof HttpException && err.getStatus() < 500;
+}
