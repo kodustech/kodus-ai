@@ -150,7 +150,7 @@ describe('reviewCommandAccess', () => {
         };
         await expect(
             reviewCommandAccess(
-                service(undefined, [{ id: 'dev', name: 'Dev' }]) as any,
+                service(undefined, [{ id: 'dev', name: 'Rui' }]) as any,
                 dataCenter,
                 org,
                 'ultra',
@@ -185,6 +185,22 @@ describe('reviewCommandAccess', () => {
                 'heavy',
             ),
         ).resolves.toBe('none');
+    });
+
+    it('a Bitbucket actor known only by account_id is unknown, not a non-member', async () => {
+        await expect(
+            reviewCommandAccess(
+                service(undefined, [{ id: 'abc', name: 'Dev' }]) as any,
+                {
+                    platformType: PlatformType.BITBUCKET,
+                    payload: {
+                        actor: { account_id: '557058:x', display_name: 'Dev' },
+                    },
+                },
+                org,
+                'ultra',
+            ),
+        ).resolves.toBe('unknown');
     });
 
     it('is unknown when the member list comes back empty or names no commenter', async () => {

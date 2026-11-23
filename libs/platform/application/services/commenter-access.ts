@@ -220,8 +220,15 @@ export async function commenterCanWrite(
         }
         return canWrite;
     }
-    const id = bareId(sender.id);
-    const login = sender.login?.toLowerCase();
+    // Bitbucket's display name is the user's to choose, so it is matched by
+    // the id its members are listed by only: the Cloud uuid or the Data
+    // Center username, never the `account_id` no member row carries.
+    const bitbucket = params.platformType === PlatformType.BITBUCKET;
+    const id = bitbucket
+        ? bareId(params.payload?.actor?.uuid) ||
+          bareId(params.payload?.actor?.name)
+        : bareId(sender.id);
+    const login = bitbucket ? undefined : sender.login?.toLowerCase();
     if (!id && !login) {
         throw new Error(
             `${params.platformType} named no commenter to check access for`,
@@ -238,14 +245,10 @@ export async function commenterCanWrite(
             `${params.platformType} returned no members to check access against`,
         );
     }
-    // Bitbucket's display name is the user's to choose, and its actor always
-    // carries the id its members are listed by.
-    const byName = !id || params.platformType !== PlatformType.BITBUCKET;
     return members.some(
         (m: { id?: unknown; name?: unknown }) =>
             (!!id && bareId(m.id) === id) ||
-            (byName &&
-                !!login &&
+            (!!login &&
                 typeof m.name === 'string' &&
                 m.name.toLowerCase() === login),
     );

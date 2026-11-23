@@ -451,15 +451,17 @@ describe('ChatWithKodyFromGitUseCase', () => {
     });
 
     it("asks the other platforms for the organization's members, and knows the PR's author", async () => {
-        const getListMembers = jest.fn(async () => [{ id: 7, name: 'Nina' }]);
+        const getListMembers = jest.fn(async () => [
+            { id: 'u7', name: 'Nina' },
+        ]);
         (useCase as any).codeManagementService = { getListMembers };
         const access = (userId: number, authorId = 9) =>
             (useCase as any).senderAccess(
                 {
                     platformType: PlatformType.BITBUCKET,
                     payload: {
-                        actor: { account_id: userId, display_name: 'someone' },
-                        pullrequest: { author: { account_id: authorId } },
+                        actor: { uuid: `{u${userId}}`, display_name: 'Nina' },
+                        pullrequest: { author: { uuid: `{u${authorId}}` } },
                     },
                 },
                 { organizationId: 'org-1' },
