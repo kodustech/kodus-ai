@@ -5,6 +5,8 @@
  * keeping the message structure valid for the AI SDK (no orphaned tool result:
  * every `tool` message stays paired with the assistant turn it answers).
  */
+import { createHash } from 'crypto';
+
 import {
     clampMessagesToBudget,
     compressMessages,
@@ -272,7 +274,12 @@ describe('estimateMessagesTokens — per-run counts', () => {
         } as any;
         estimateMessagesTokens([big, head()], counts);
         expect(counts.size).toBe(2);
-        // A 600k-char head held as a key would stay alive for the whole run.
-        expect([...counts.keys()].every((key) => key.length <= 44)).toBe(true);
+        // A 600k-char head held as a key would stay alive for the whole run,
+        // and a SHA-1 key could be collided by content the PR controls.
+        const sha256 = (msg: unknown) =>
+            createHash('sha256').update(JSON.stringify(msg)).digest('base64');
+        expect([...counts.keys()].sort()).toEqual(
+            [sha256(big), sha256(head())].sort(),
+        );
     });
 });
