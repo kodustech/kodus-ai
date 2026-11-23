@@ -1707,6 +1707,7 @@ async function replayIntentProbes(run: RunScope, ready: ReadySides, t: TestedRun
             prStepIds: steps.filter((x) => x.side === 'pr').map((x) => x.stepId),
             ...(lanes ? { lanes } : {}),
             ...(responseDiff ? { responseDiff } : {}),
+            ...(statusChange ? { statusChange } : {}),
             ...leafChangesOf(leaves ?? leavesOfFinding(decision, steps, cleanLeaf)),
             source: 'intent',
             ...(statedIntents.length ? { statedIntents: cleanStatedIntents(statedIntents, intentRequestOf(ip.probe)) } : {}),

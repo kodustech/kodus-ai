@@ -1,4 +1,5 @@
 import { FakeEnvironmentRuntime, type FakeEnvironment } from '@libs/runtime/environment';
+import { pullRequestRunView } from '@libs/runtime/api/domain/pull-request-runs';
 import { RuntimeRunReportSchema } from '@libs/runtime/run/run-report';
 
 import { shopRunRequest } from '../../e2e/fixtures';
@@ -94,6 +95,28 @@ const seed = (h: ReturnType<typeof harness>) =>
 const reportOf = (published: any[]) => published.filter((p) => p.kind === 'comment' && !p.progress).at(-1)?.report;
 
 describe('intent probes in a Run (docs/runtime/intent-oracle.md)', () => {
+    it('an intent probe whose request answers another status on the PR carries the status change, and an equal status carries none', async () => {
+        const shop: FakeEnvironment = {
+            ...SCENARIOS.shop,
+            probes: {
+                'order-1': { base: () => json(200, order1), pr: () => json(200, order1) },
+                'intent-1': { base: () => json(200, order2), pr: () => json(500, { error: 'internal' }) },
+            },
+        };
+        const h = harness(new FakeEnvironmentRuntime({ ...SCENARIOS, shop }, () => new Date()), [plan(), authored('/orders/2')]);
+        await seed(h);
+        await runRuntimeRun(h.req, h.deps);
+        const probes = (await h.projection.get(h.req.runId))!.probes!;
+        const intent = probes.find((p) => p.probeId === 'intent-1')!;
+        expect(intent.statusChange).toEqual({ base: 200, pr: 500 });
+        expect(pullRequestRunView({ ...(await h.projection.get(h.req.runId))!, findings: [{ ...intent, verdict: 'finding', intent: 'unintended' }] } as any).firstRegression).toMatchObject({ status: { base: 200, pr: 500 } });
+
+        const same = harness(shopWith({ order1Pr: order1, order2Pr: { ...order2, unitPrice: 200, total: 150 } }), [plan(), authored('/orders/2')]);
+        await seed(same);
+        await runRuntimeRun(same.req, same.deps);
+        expect((await same.projection.get(same.req.runId))!.probes!.find((p) => p.probeId === 'intent-1')).not.toHaveProperty('statusChange');
+    });
+
     it("an intent probe of its own request runs on both sides as its own steps, and its mismatch never fails the check (kr-shop #11)", async () => {
         const h = harness(shopWith({ order1Pr: order1, order2Pr: { ...order2, unitPrice: 200, total: 150 } }), [plan(), authored('/orders/2')]);
         await seed(h);

@@ -98,7 +98,7 @@ export async function playKeptChecks(input: KeptPhaseInput): Promise<void> {
 
 /** The played check as a probe verdict of the Run: the gate's, unless main no longer has what it guarded. */
 function verdictOf(input: KeptPhaseInput, check: KeptCheck, kept: Probe, replayed: ReplayResult, stale: KeptCheckStaleReason | undefined, stability: StabilityPolicy): ProbeVerdict {
-    const { steps, lanes, responseDiff } = replayed;
+    const { steps, lanes, responseDiff, statusChange } = replayed;
     const common = {
         probeId: kept.id,
         ...(exercisedOf(kept.spec) ? { exercised: exercisedOf(kept.spec)! } : {}),
@@ -108,6 +108,7 @@ function verdictOf(input: KeptPhaseInput, check: KeptCheck, kept: Probe, replaye
         prStepIds: steps.filter((x) => x.side === 'pr').map((x) => x.stepId),
         ...(lanes ? { lanes } : {}),
         ...(responseDiff ? { responseDiff } : {}),
+        ...(statusChange ? { statusChange } : {}),
         source: KEPT_CHECK_SOURCE,
         keptCheckId: check.keptCheckId,
     };

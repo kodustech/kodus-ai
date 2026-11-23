@@ -1,3 +1,4 @@
+import { pullRequestRunView } from '@libs/runtime/api/domain/pull-request-runs';
 import type { KeptCheck } from '@libs/runtime/contracts/kept-check';
 import { FakeEnvironmentRuntime, type FakeEnvironment } from '@libs/runtime/environment';
 import type { RuntimeRunRequested } from '@libs/runtime/run';
@@ -81,6 +82,16 @@ async function run(opts: { kept?: Answers; checks?: KeptCheck[]; trigger?: Runti
 }
 
 describe('kept checks in a Run', () => {
+    it('a kept check main and the PR answer with another status carries the status change to the PR list, and an equal status carries none', async () => {
+        const changed = await run({ kept: { base: json(200, '{"total":3}'), pr: json(500, '{"error":"internal"}') } });
+        const kept = changed.projection.findings!.find((f) => f.probeId === PROBE_ID)!;
+        expect(kept.statusChange).toEqual({ base: 200, pr: 500 });
+        expect(pullRequestRunView({ ...changed.projection, findings: [kept] } as any).firstRegression).toMatchObject({ status: { base: 200, pr: 500 } });
+
+        const equal = await run({ kept: { base: json(200, '{"total":3}'), pr: json(200, '{"total":4}') } });
+        expect(equal.projection.findings!.find((f) => f.probeId === PROBE_ID)).not.toHaveProperty('statusChange');
+    });
+
     it('a kept check that breaks on a later PR fails the Run as a regression from a kept check', async () => {
         const { result, projection, report, recorded } = await run({ kept: { base: json(200, '{"total":3}'), pr: json(200, '{"total":4}') } });
         expect(result.state).toBe('regression');
