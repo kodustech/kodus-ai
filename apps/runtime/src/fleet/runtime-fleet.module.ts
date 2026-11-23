@@ -22,12 +22,17 @@ import { BoatSetupHost, type HostSealer } from './template/boat-setup-host';
 import { HubHostSealer } from './template/hub-host-sealer';
 import { buildEnvironmentTemplate } from './template/build-template';
 import { RequestingSetupHost, TemplateBuildTrigger, type TemplateSetupRequester, TriggeringTemplateResolver } from './template/template-trigger';
+import { PgSetupCandidates } from './template/setup-candidates-store';
+import { TemplateRebuildPass } from './template/template-rebuild';
 import { PgTemplateSetupRequester } from './template/pg-template-setup-requester';
 import { PgTemplateStore, StoreTemplateResolver } from './template/template-store';
 
 // runtime-fleet (docs/runtime/host-providers.md §4.1): the reconcile loop and
 // the host workflows. It holds the provider credentials and nothing else of
 // value: no Git credential, no product data, no cell identity of its own.
+
+/** How often the fleet looks for default-branch setups that ended with a fingerprint no template holds. */
+const TEMPLATE_REBUILD_INTERVAL_MS = 60_000;
 
 export const FLEET_LOGGER = Symbol('FLEET_LOGGER');
 export const FLEET_TEMPLATES = Symbol('FLEET_TEMPLATES');
@@ -49,7 +54,8 @@ export function providersOf(config: FleetConfig, extra: HostProvider[] = []): Pr
 class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
     private engine?: FleetEngine;
     private reconciler?: FleetReconciler;
-    /** Started by a Run's demand; `onSetupFinished` is what the setup's end calls (a setup completion hook is the missing trigger). */
+    private rebuildTimer?: NodeJS.Timeout;
+    /** Started by a Run's demand and by the rebuild pass (`TemplateRebuildPass`), which finds the setups that ended with a new fingerprint. */
     templateTrigger?: TemplateBuildTrigger;
 
     constructor(
@@ -75,8 +81,8 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
         const boat = this.providers.get('boat');
         if (boat && this.requester && !this.templates) {
             const setups = new PgEnvironmentSetupStore(this.pool);
-            const boatPoolsOf = async (organizationId: string) =>
-                (await store.controlledPools()).pools.filter((p) => p.pool.provider === 'boat' && p.pool.lifecycle === 'perRun' && (!p.pool.admission || p.pool.admission.allowOrgs.includes(organizationId))).map((p) => ({ poolId: p.poolId, pool: p.pool }));
+            const allBoatPools = async () => (await store.controlledPools()).pools.filter((p) => p.pool.provider === 'boat' && p.pool.lifecycle === 'perRun').map((p) => ({ poolId: p.poolId, pool: p.pool }));
+            const boatPoolsOf = async (organizationId: string) => (await allBoatPools()).filter((p) => !p.pool.admission || p.pool.admission.allowOrgs.includes(organizationId));
             const poll = { sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)), attempts: 360, intervalMs: 10_000 };
             const setupHosts = new RequestingSetupHost(
                 new BoatSetupHost({
@@ -104,6 +110,9 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
             });
             templates = new TriggeringTemplateResolver(templates, trigger);
             this.templateTrigger = trigger;
+            const pass = new TemplateRebuildPass(new PgDistributedLocks(this.pool), { setups: new PgSetupCandidates(this.pool), templates: templateStore, boatPools: allBoatPools, trigger, now: () => Date.now(), log });
+            this.rebuildTimer = setInterval(() => void pass.tick(), TEMPLATE_REBUILD_INTERVAL_MS);
+            this.rebuildTimer.unref?.();
         }
         this.engine = new FleetEngine(c, {
             store,
@@ -129,6 +138,7 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
 
     async onApplicationShutdown() {
         this.reconciler?.stop();
+        if (this.rebuildTimer) clearInterval(this.rebuildTimer);
         await this.engine?.shutdown();
         await this.pool.end().catch(() => undefined);
     }

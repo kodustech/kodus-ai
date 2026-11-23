@@ -197,7 +197,7 @@ export type FleetDepsOverrides = Partial<Omit<PerRunHostDeps, 'step' | 'sleep' |
 
 /** runtime_env_templates in memory, as PgTemplateStore. */
 export class InMemoryTemplateStore implements TemplateStore {
-    readonly rows: Array<TemplateRow & { failure?: string; setupHostId?: string }> = [];
+    readonly rows: Array<TemplateRow & { failure?: string; setupHostId?: string; failedAt?: number }> = [];
     private at = 0;
     private readonly readyAt = new Map<TemplateRow, number>();
 
@@ -223,7 +223,11 @@ export class InMemoryTemplateStore implements TemplateStore {
     }
     async fail(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, reason: string) {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
-        if (r?.state === 'building') Object.assign(r, { state: 'failed', failure: reason });
+        if (r?.state === 'building') Object.assign(r, { state: 'failed', failure: reason, failedAt: Date.now() });
+    }
+    async holds(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, failedAfter: Date) {
+        const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
+        return !!r && (r.state === 'ready' || r.state === 'building' || (r.state === 'failed' && (r.failedAt ?? 0) > failedAfter.getTime()));
     }
     async promote(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>) {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint)!;

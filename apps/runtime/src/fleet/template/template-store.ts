@@ -28,6 +28,8 @@ export interface TemplateStore {
     fail(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, reason: string): Promise<void>;
     /** Marks this template ready and every other ready one of its environment and pool replaced; their names. */
     promote(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>): Promise<string[]>;
+    /** Whether this fingerprint needs no build now: a ready or building template holds it, or its build failed after `failedAfter`. */
+    holds(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, failedAfter: Date): Promise<boolean>;
 }
 
 export class PgTemplateStore implements TemplateStore {
@@ -62,6 +64,14 @@ export class PgTemplateStore implements TemplateStore {
 
     async fail(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, reason: string) {
         await this.db.query(`UPDATE runtime.runtime_env_templates SET state = 'failed', failure = $5, updated_at = now() WHERE org_id = $1 AND environment_id = $2 AND pool_id = $3 AND fingerprint = $4 AND state = 'building'`, [t.organizationId, t.environmentId, t.poolId, t.fingerprint, reason]);
+    }
+
+    async holds(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, failedAfter: Date) {
+        const r = await this.db.query(
+            `SELECT 1 FROM runtime.runtime_env_templates WHERE org_id = $1 AND environment_id = $2 AND pool_id = $3 AND fingerprint = $4 AND (state IN ('ready', 'building') OR (state = 'failed' AND updated_at > $5)) LIMIT 1`,
+            [t.organizationId, t.environmentId, t.poolId, t.fingerprint, failedAfter],
+        );
+        return r.rows.length > 0;
     }
 
     async promote(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>) {

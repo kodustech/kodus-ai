@@ -4,6 +4,7 @@ import { ensureRuntimeSchema } from '../../shared/persistence/runtime-schema';
 import { isolatedDatabase } from '../../testing/isolated-database';
 import { PgTemplateSetupRequester } from './pg-template-setup-requester';
 import { templateNameOf } from './template-name';
+import { PgSetupCandidates } from './setup-candidates-store';
 import { PgTemplateStore, StoreTemplateResolver } from './template-store';
 
 // Opt-in: RUNTIME_IT_DATABASE_URL. docs/runtime/host-providers.md §8.2.
@@ -67,5 +68,37 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         expect(await store.buildingSetupHosts()).toContain('tpl-retry');
         await store.promote(row);
         expect(await store.buildingSetupHosts()).not.toContain('tpl-retry');
+    });
+    it('holds a fingerprint while a ready or building template has it, or its build failed after the backoff start', async () => {
+        const store = new PgTemplateStore(pool);
+        const fp = 'f'.repeat(64);
+        const row = { organizationId: 'org-b', environmentId: 'env-b', poolId: 'p', fingerprint: fp, name: templateNameOf('org-b', 'env-b', fp) };
+        const ago = (ms: number) => new Date(Date.now() - ms);
+        expect(await store.holds(row, ago(1_800_000))).toBe(false);
+        await store.begin(row);
+        expect(await store.holds(row, ago(1_800_000))).toBe(true);
+        await store.fail(row, 'build_error');
+        expect(await store.holds(row, ago(1_800_000))).toBe(true);
+        expect(await store.holds(row, new Date(Date.now() + 60_000))).toBe(false);
+        await store.begin(row);
+        await store.promote(row);
+        expect(await store.holds(row, new Date(Date.now() + 60_000))).toBe(true);
+    });
+
+    it("lists the orgs' active setups updated recently, never a template build's own setup", async () => {
+        const insert = (env: string, org: string, key: string, state: string, ageMs: number) =>
+            pool.query(
+                `INSERT INTO runtime.runtime_environment_setups (environment_id, organization_id, repository_id, setup_key, state, requested_at, updated_at, record) VALUES ($1, $2, 'r', $3, $4, now(), now() - ($5 || ' milliseconds')::interval, '{"steps":[],"blockers":[],"refSource":"default_branch"}')`,
+                [env, org, key, state, String(ageMs)],
+            );
+        await insert('c-new', 'org-c', 'k1', 'active', 1000);
+        await insert('c-tpl', 'org-c', 'template:org-c/c-tpl:tpl-1', 'active', 1000);
+        await insert('c-old', 'org-c', 'k2', 'active', 3 * 86_400_000);
+        await insert('c-run', 'org-c', 'k3', 'setting_up', 1000);
+        await insert('c-other', 'org-z', 'k4', 'active', 1000);
+        const since = new Date(Date.now() - 86_400_000);
+        const candidates = new PgSetupCandidates(pool);
+        expect((await candidates.activeSince(since, ['org-c'], 50)).map((r) => r.environmentId)).toEqual(['c-new']);
+        expect((await candidates.activeSince(since, null, 50)).map((r) => r.environmentId).sort()).toEqual(['c-new', 'c-other']);
     });
 });
