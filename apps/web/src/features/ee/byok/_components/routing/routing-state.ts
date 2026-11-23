@@ -1,13 +1,42 @@
 import { TASK_ROUTING_FALLBACK } from "@libs/llm/llm-tasks";
-import type { LLMConfigStatus } from "@services/organizationParameters/fetch";
+import type {
+    LLMConfigStatus,
+    LLMModelStatus,
+} from "@services/organizationParameters/fetch";
 
 import { formatModelLabel, modelLabeler } from "../../_data/model-label";
 import { PROVIDER_LABELS } from "../../_data/provider-labels";
-import type { BYOKRouting, LlmTask } from "../../_types";
+import type { BYOKConfig, BYOKRouting, LlmTask } from "../../_types";
 import { capabilityGate } from "./capability-gate";
 
+/** What `routingModelLabels` reads from a model. */
+type LabeledModel = Pick<
+    LLMModelStatus,
+    "modelId" | "model" | "providerId" | "baseUrl" | "managed"
+>;
+
+/** A stored config's models, as Routing's status lists them. */
+export function routingModelsFromConfig(
+    config?: BYOKConfig | null,
+): LabeledModel[] {
+    const credentials = new Map(
+        (config?.credentials ?? []).map((c) => [c.id, c]),
+    );
+    return (config?.models ?? []).map((entry) => {
+        const credential = credentials.get(entry.credentialId);
+        const baseURL = credential?.settings?.baseURL;
+        return {
+            modelId: entry.id,
+            model: entry.model,
+            providerId: credential?.provider,
+            baseUrl: typeof baseURL === "string" ? baseURL : undefined,
+            managed: credential?.managed,
+        };
+    });
+}
+
 /** Repeated names identify the connection without displaying URL credentials. */
-export function routingModelLabels(models: LLMConfigStatus["models"]) {
+export function routingModelLabels(models: LabeledModel[]) {
     const hostOf = (url?: string) => {
         try {
             return url ? new URL(url).host : undefined;

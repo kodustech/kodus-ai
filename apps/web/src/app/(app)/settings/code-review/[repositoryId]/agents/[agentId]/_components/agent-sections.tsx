@@ -25,13 +25,13 @@ import type {
     CustomAgentUnfollowedCitation,
     KnowledgeItem,
 } from "@services/custom-agents/types";
-import {
-    getBYOK,
-    type LLMConfigStatus,
-} from "@services/organizationParameters/fetch";
+import { getBYOK } from "@services/organizationParameters/fetch";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "src/core/utils/components";
-import { routingModelLabels } from "src/features/ee/byok/_components/routing/routing-state";
+import {
+    routingModelLabels,
+    routingModelsFromConfig,
+} from "src/features/ee/byok/_components/routing/routing-state";
 import type { BYOKConfig } from "src/features/ee/byok/_types";
 
 import { Choice, Field, Section } from "./field";
@@ -472,29 +472,19 @@ export const useByokModels = () => {
         staleTime: 5 * 60 * 1000,
         retry: false,
     });
-    const models = byok.data?.models ?? [];
-    const credentials = byok.data?.credentials ?? [];
     // Named as Routing names them: a pin and its alias by id, one id on two
     // connections by connection.
-    const labels = routingModelLabels(
-        models.map((entry) => {
-            const credential = credentials.find(
-                (c) => c.id === entry.credentialId,
-            );
-            const baseURL = credential?.settings?.baseURL;
-            return {
-                modelId: entry.id,
-                model: entry.model,
-                providerId: credential?.provider,
-                baseUrl: typeof baseURL === "string" ? baseURL : undefined,
-                managed: credential?.managed,
-            } as LLMConfigStatus["models"][number];
-        }),
+    const routable = routingModelsFromConfig(byok.data);
+    const labels = routingModelLabels(routable);
+    const managed = new Set(
+        routable.filter((m) => m.managed).map((m) => m.modelId),
     );
     return {
-        models,
+        models: byok.data?.models ?? [],
         routing: byok.data?.routing,
         isLoading: byok.isLoading,
+        /** The Kodus default: Routing does not offer it as a pick. */
+        isManaged: (id: string) => managed.has(id),
         /** A model's readable name, never its raw id. */
         nameOf: (id?: string) => (id ? labels.get(id) : undefined),
     };
@@ -511,7 +501,11 @@ export const ModelsFields = ({
     onChange: Patch;
 }) => {
     const byok = useByokModels();
-    const { models, routing, nameOf: labelOf } = byok;
+    const { routing, nameOf: labelOf } = byok;
+    // An agent already on the Kodus default keeps it selectable.
+    const models = byok.models.filter(
+        (model) => !byok.isManaged(model.id) || model.id === agent.models?.run,
+    );
     const routed = labelOf(
         routing?.taskOverrides?.customAgent ?? routing?.defaultModelId,
     );

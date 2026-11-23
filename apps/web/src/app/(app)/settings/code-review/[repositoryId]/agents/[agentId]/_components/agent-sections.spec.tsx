@@ -154,7 +154,7 @@ describe("CommentsAndModel", () => {
         expect(screen.queryByText(/accounts\/fireworks/)).toBeNull();
     });
 
-    it("tells apart a pin, its alias, and one id on two connections", async () => {
+    it("tells apart a pin and its alias on two connections, and leaves the Kodus default out", async () => {
         (getBYOK as jest.Mock).mockResolvedValue({
             credentials: [
                 { id: "c-openai", provider: "openai" },
@@ -166,10 +166,10 @@ describe("CommentsAndModel", () => {
                 {
                     id: "m-openrouter",
                     credentialId: "c-openrouter",
-                    model: "gpt-5.4",
+                    model: "openai/gpt-5.4",
                 },
-                // The Kodus default runs the same id; Routing leaves it out of
-                // the comparison, so the pin's label must not change for it.
+                // The Kodus default runs the pin's id. Routing does not offer
+                // it, nor compares against it.
                 {
                     id: "m-env",
                     credentialId: "c-env",
@@ -200,7 +200,11 @@ describe("CommentsAndModel", () => {
         const options = (await screen.findAllByRole("option")).map(
             (o) => o.textContent,
         );
-        expect(new Set(options).size).toBe(options.length);
-        expect(options).toContain("GPT 5.4 (gpt-5.4-2026-03-05)");
+        expect(options).toEqual([
+            "Routing default · GPT 5.4 (gpt-5.4-2026-03-05)",
+            "GPT 5.4 (gpt-5.4)",
+            "GPT 5.4 (openai/gpt-5.4)",
+            "GPT 5.4 (gpt-5.4-2026-03-05)",
+        ]);
     });
 });
