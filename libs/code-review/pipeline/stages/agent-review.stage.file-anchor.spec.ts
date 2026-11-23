@@ -540,11 +540,12 @@ describe('a finding on a file with no hunks (a pure rename)', () => {
         expect(
             inline.some((s: any) => s.relevantFile === 'src/elsewhere.ts'),
         ).toBe(false);
+        // Same check on the list CreateFileCommentsStage posts from: the
+        // out-of-PR finding must not survive in either list, and the no-hunk
+        // one must not either (it is delivered PR-level only).
         expect(
-            (result.validSuggestions ?? []).some(
-                (s: any) => s.relevantFile === RENAMED,
-            ),
-        ).toBe(false);
+            (result.validSuggestions ?? []).map((s: any) => s.relevantFile),
+        ).toEqual([renamedWithPatch]);
     });
 
     // A copy of an unchanged file has no hunks for the same reason.
