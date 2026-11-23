@@ -778,6 +778,7 @@ describe('executeUltraReview', () => {
             expect(calls.merges).toEqual([]);
             expect(out.ultra?.merge?.status).toBe('skipped');
             // No model is named for a merge that never ran.
+            expect(out.ultra?.merge?.modelName).toBeUndefined();
             expect(calls.timeline[0].label).toBe(
                 'Cross-model merge — nothing to merge, 2 comments',
             );
@@ -786,6 +787,24 @@ describe('executeUltraReview', () => {
                 'a2',
                 'rule1',
             ]);
+        });
+
+        it('three models with one finding between them: a success, with no merge model called or named', async () => {
+            const { calls, context, host } = setup({
+                passes: {
+                    a: collected(['a1']),
+                    b: collected([]),
+                    c: collected([]),
+                    auxiliary: collected([]),
+                },
+            });
+            const out = await executeUltraReview(context, host, LIMITS);
+            expect(calls.merges).toEqual([]);
+            expect(out.ultra?.merge).toEqual(
+                expect.objectContaining({ status: 'success', inputCount: 1 }),
+            );
+            expect(out.ultra?.merge?.modelName).toBeUndefined();
+            expect(out.ultra?.outcome).toBe('success');
         });
 
         it("one model's list and the custom agents' are merged", async () => {

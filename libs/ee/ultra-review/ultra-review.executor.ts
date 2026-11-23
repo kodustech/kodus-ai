@@ -260,13 +260,14 @@ async function mergeAcrossModels(
 }> {
     const inputCount = findings.length;
     // One list alone was deduplicated by its own run: nothing to merge.
+    // One finding or none has nothing to merge either, which is no failure.
+    // No merge model is called, so none is named.
     const skipped = streams < 2;
     if (skipped || inputCount <= 1) {
         return {
             merged: findings,
             merge: {
                 status: skipped ? 'skipped' : 'success',
-                modelName: state.mergeModel.modelName,
                 inputCount,
                 outputCount: inputCount,
             },
