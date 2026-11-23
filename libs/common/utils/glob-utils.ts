@@ -146,7 +146,10 @@ export function requiredLiteral(pattern: string): string {
         typeof pattern !== 'string' ||
         pattern.length > MAX_PREFILTERED_PATTERN_LENGTH ||
         pattern.startsWith('!') ||
-        /[()|]/.test(pattern)
+        /[()|]/.test(pattern) ||
+        // An escaped `}` or a `}` inside `[...]` does not close a brace
+        // group, which stripBraceGroups cannot tell apart.
+        (pattern.includes('{') && /[\\[]/.test(pattern))
     ) {
         return '';
     }

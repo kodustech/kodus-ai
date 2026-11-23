@@ -131,7 +131,10 @@ describe('structured tool-result output survives truncation (PR#302 regression)'
     // { type, value } shape and only shrink the inner text.
     function structuredWindow(valueChars: number): ModelMessage[] {
         return [
-            { role: 'user', content: 'Review this diff:\n' + 'x'.repeat(2_000) },
+            {
+                role: 'user',
+                content: 'Review this diff:\n' + 'x'.repeat(2_000),
+            },
             {
                 role: 'assistant',
                 content: [
@@ -178,7 +181,9 @@ describe('structured tool-result output survives truncation (PR#302 regression)'
         const window = structuredWindow(1);
         (window.find((m) => m.role === 'tool')!.content as any[])[0].output = {
             type: 'future-output-type',
-            value: { data: Array.from({ length: 4_000 }, (_, i) => `item${i}`) },
+            value: {
+                data: Array.from({ length: 4_000 }, (_, i) => `item${i}`),
+            },
         };
         const budget = 500;
         const clamped = clampMessagesToBudget(window, budget);
@@ -202,26 +207,34 @@ describe('structured tool-result output survives truncation (PR#302 regression)'
     // reaches budget (#1574). Once truncated the value is no longer valid JSON,
     // so it is re-typed to `text` — a provider-serializable lossy preview.
     it.each([
-        ['object', { files: Array.from({ length: 4_000 }, (_, i) => `f${i}.ts`) }],
+        [
+            'object',
+            { files: Array.from({ length: 4_000 }, (_, i) => `f${i}.ts`) },
+        ],
         ['array', Array.from({ length: 5_000 }, (_, i) => `f${i}.ts`)],
-    ])('shrinks a large json output (%s value) and re-types it to text', (_label, jsonValue) => {
-        const window = structuredWindow(1);
-        (window.find((m) => m.role === 'tool')!.content as any[])[0].output = {
-            type: 'json',
-            value: jsonValue,
-        };
-        const budget = 500;
-        const clamped = clampMessagesToBudget(window, budget);
-        const out = firstToolOutput(clamped);
+    ])(
+        'shrinks a large json output (%s value) and re-types it to text',
+        (_label, jsonValue) => {
+            const window = structuredWindow(1);
+            (
+                window.find((m) => m.role === 'tool')!.content as any[]
+            )[0].output = {
+                type: 'json',
+                value: jsonValue,
+            };
+            const budget = 500;
+            const clamped = clampMessagesToBudget(window, budget);
+            const out = firstToolOutput(clamped);
 
-        // Re-typed to a serializable text preview (no longer a json blob that
-        // lies about being parseable)...
-        expect(out.type).toBe('text');
-        expect(typeof out.value).toBe('string');
-        expect(out.value.endsWith('…[truncated]')).toBe(true);
-        // ...and the hard clamp actually reached budget.
-        expect(estimateMessagesTokens(clamped)).toBeLessThanOrEqual(budget);
-    });
+            // Re-typed to a serializable text preview (no longer a json blob that
+            // lies about being parseable)...
+            expect(out.type).toBe('text');
+            expect(typeof out.value).toBe('string');
+            expect(out.value.endsWith('…[truncated]')).toBe(true);
+            // ...and the hard clamp actually reached budget.
+            expect(estimateMessagesTokens(clamped)).toBeLessThanOrEqual(budget);
+        },
+    );
 });
 
 describe('compressMessages (soft pass) still structurally preserves tool turns', () => {
@@ -230,5 +243,33 @@ describe('compressMessages (soft pass) still structurally preserves tool turns',
         const compressed = compressMessages(msgs, []);
         const toolMsg = compressed.find((m) => m.role === 'tool');
         expect(Array.isArray(toolMsg?.content)).toBe(true);
+    });
+});
+
+describe('estimateMessagesTokens — per-run counts', () => {
+    const head = () =>
+        ({
+            role: 'user',
+            content: 'diff and graph context '.repeat(50),
+        }) as any;
+
+    it('reuses the count of a rebuilt message with the same content', () => {
+        const counts = new Map<string, number>();
+        const first = estimateMessagesTokens([head()], counts);
+        expect(counts.size).toBe(1);
+        // Seed the key with a marker: a lookup returns it, a recount would not.
+        const [key] = counts.keys();
+        counts.set(key, 7);
+        expect(estimateMessagesTokens([head()], counts)).toBe(7);
+        expect(first).toBe(estimateMessagesTokens([head()]));
+    });
+
+    it("keeps each run's counts apart, so runs never evict each other", () => {
+        const runs = Array.from(
+            { length: 20 },
+            () => new Map<string, number>(),
+        );
+        for (const counts of runs) estimateMessagesTokens([head()], counts);
+        expect(runs.every((counts) => counts.size === 1)).toBe(true);
     });
 });

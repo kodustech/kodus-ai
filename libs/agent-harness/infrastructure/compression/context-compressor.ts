@@ -28,7 +28,7 @@
  * next LLM call.
  */
 
-import { estimateValueTokens } from './token-estimator';
+import { estimateTextTokens, estimateValueTokens } from './token-estimator';
 
 /** Trigger compression when context usage crosses this fraction of the window. */
 export const COMPRESSION_THRESHOLD_RATIO = 0.7;
@@ -78,10 +78,49 @@ interface ToolCallRecord {
  * ~1.6× and let the compressor believe it was under budget while the request
  * already overflowed (issue #1574).
  */
-export function estimateMessagesTokens(messages: ModelMessage[]): number {
+/**
+ * Per-run memo of message token counts, keyed by the message as serialized
+ * for counting. A run re-measures the same head (diff plus graph context,
+ * up to millions of chars) on every step and several more times when it
+ * trims rounds; `maybeCompress` rebuilds the message objects each step, so
+ * the serialized text is the stable key. Owned by one run's compressor, so
+ * concurrent runs on a worker never evict each other's heads (a global
+ * budget did, at peak: 4 runs with 2.35M-char heads re-tokenized every
+ * count). Bounded: the oldest key goes once MAX_RUN_COUNTS is reached.
+ */
+export type MessageTokenCounts = Map<string, number>;
+const MAX_RUN_COUNTS = 256;
+
+function serializeForCount(msg: unknown): string {
+    if (typeof msg === 'string') return msg;
+    try {
+        return JSON.stringify(msg) ?? String(msg);
+    } catch {
+        return String(msg);
+    }
+}
+
+export function estimateMessagesTokens(
+    messages: ModelMessage[],
+    counts?: MessageTokenCounts,
+): number {
     let total = 0;
     for (const msg of messages) {
-        total += estimateValueTokens(msg);
+        if (!counts) {
+            total += estimateValueTokens(msg);
+            continue;
+        }
+        // Same count estimateValueTokens gives: the serialized message.
+        const key = serializeForCount(msg);
+        let tokens = counts.get(key);
+        if (tokens === undefined) {
+            tokens = estimateTextTokens(key);
+            if (counts.size >= MAX_RUN_COUNTS) {
+                counts.delete(counts.keys().next().value as string);
+            }
+            counts.set(key, tokens);
+        }
+        total += tokens;
     }
     return total;
 }
@@ -220,7 +259,11 @@ function truncateStructuredValue(
         return { value: v, truncated: false };
     }
     // { type:'content', value:[{type:'text',text},…] } or a bare content-part array
-    const parts = Array.isArray(v) ? v : Array.isArray(v?.value) ? v.value : null;
+    const parts = Array.isArray(v)
+        ? v
+        : Array.isArray(v?.value)
+          ? v.value
+          : null;
     if (parts) {
         let truncated = false;
         const nextParts = parts.map((item: any) => {
@@ -246,7 +289,10 @@ function truncateStructuredValue(
             const serialized = JSON.stringify(v);
             if (serialized.length > maxChars) {
                 return {
-                    value: { type: 'text', value: truncateText(serialized, maxChars) },
+                    value: {
+                        type: 'text',
+                        value: truncateText(serialized, maxChars),
+                    },
                     truncated: true,
                 };
             }
@@ -446,6 +492,7 @@ function groupRounds(messages: ModelMessage[]): ModelMessage[][] {
 function evictOldestRounds(
     messages: ModelMessage[],
     budgetTokens: number,
+    counts?: MessageTokenCounts,
 ): ModelMessage[] {
     const { head, rest } = splitHead(messages);
     const rounds = groupRounds(rest);
@@ -453,10 +500,10 @@ function evictOldestRounds(
         return messages;
     }
 
-    let running = estimateMessagesTokens(head);
+    let running = estimateMessagesTokens(head, counts);
     const keptReversed: ModelMessage[][] = [];
     for (let i = rounds.length - 1; i >= 0; i--) {
-        const rtok = estimateMessagesTokens(rounds[i]);
+        const rtok = estimateMessagesTokens(rounds[i], counts);
         if (keptReversed.length === 0 || running + rtok <= budgetTokens) {
             keptReversed.push(rounds[i]);
             running += rtok;
@@ -479,14 +526,13 @@ function evictOldestRounds(
 function hardTruncateToFit(
     messages: ModelMessage[],
     budgetTokens: number,
+    counts?: MessageTokenCounts,
 ): ModelMessage[] {
     let cap = HARD_CLAMP_MAX_CHARS_PER_RESULT;
     let work = messages;
     for (let i = 0; i < 12; i++) {
-        work = messages.map(
-            (m) => truncateToolMessage(m, cap).msg,
-        );
-        if (estimateMessagesTokens(work) <= budgetTokens) {
+        work = messages.map((m) => truncateToolMessage(m, cap).msg);
+        if (estimateMessagesTokens(work, counts) <= budgetTokens) {
             return work;
         }
         if (cap <= 80) {
@@ -513,11 +559,12 @@ function hardTruncateToFit(
 export function clampMessagesToBudget(
     messages: ModelMessage[],
     budgetTokens: number,
+    counts?: MessageTokenCounts,
 ): ModelMessage[] {
     if (!messages || messages.length === 0 || budgetTokens <= 0) {
         return messages;
     }
-    if (estimateMessagesTokens(messages) <= budgetTokens) {
+    if (estimateMessagesTokens(messages, counts) <= budgetTokens) {
         return messages;
     }
 
@@ -527,16 +574,16 @@ export function clampMessagesToBudget(
             ? truncateToolMessage(m, HARD_CLAMP_MAX_CHARS_PER_RESULT).msg
             : m,
     );
-    if (estimateMessagesTokens(work) <= budgetTokens) {
+    if (estimateMessagesTokens(work, counts) <= budgetTokens) {
         return work;
     }
 
     // Phase 2: evict oldest rounds, preserving head + most-recent rounds.
-    work = evictOldestRounds(work, budgetTokens);
-    if (estimateMessagesTokens(work) <= budgetTokens) {
+    work = evictOldestRounds(work, budgetTokens, counts);
+    if (estimateMessagesTokens(work, counts) <= budgetTokens) {
         return work;
     }
 
     // Phase 3: shrink every remaining message's content until the window fits.
-    return hardTruncateToFit(work, budgetTokens);
+    return hardTruncateToFit(work, budgetTokens, counts);
 }

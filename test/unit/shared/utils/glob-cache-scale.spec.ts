@@ -403,6 +403,9 @@ describe('glob-utils literal prefilter (2026-11-23 stall)', () => {
         ['dist/a.js', ['**/{dist,{build,out}.map}/**']],
         ['build.map/a.js', ['**/{dist,{build,out}.map}/**']],
         ['a', ['{a,{b}c}']],
+        // A `}` that does not close the group: escaped, or inside [...].
+        ['a}c', ['{a\\},b}c']],
+        ['cd', ['{a[}]b,c}d']],
     ])(
         'matches %s against nested brace groups as picomatch does',
         (file, patterns) => {
