@@ -106,6 +106,155 @@ function normalizeFilename(filename: string): string {
 }
 
 /**
+ * PERF: a literal prefilter in front of picomatch.
+ *
+ * Problem: with the ~1,100-pattern default `ignorePaths`, every file runs
+ * ~1,100 picomatch matchers, and each call allocates a result object and
+ * runs `regex.exec`. A Bitbucket PR with 8,319 files held a worker's event
+ * loop for 22s in this loop (StallWatchdog, 2026-11-23 10:58Z), with
+ * `picomatch.test` as the hottest frame.
+ *
+ * Solution: a glob can only match a path that contains the glob's longest
+ * literal run: `**\/*.png` needs `.png`, `**\/[Dd]ebug/**` needs `ebug`. A
+ * pattern runs its matcher only when its literal is in the path, so most of
+ * the list is skipped with a native `String.includes`. picomatch still
+ * decides every match; the prefilter only skips matchers that cannot
+ * return true, so results are unchanged.
+ *
+ * A pattern that can match without its literal gets no prefilter: a
+ * negation (`!x`) or anything with `(`, `)` or `|` (extglob, groups,
+ * alternation). Text inside `{}` and `[]` is a choice, so it never counts
+ * as required. Splitting at more characters than strictly needed only
+ * shortens the literal, which is still required.
+ */
+type PrefilteredPattern = {
+    pattern: string;
+    literal: string;
+    /** Compiled on first use, as the per-pattern loop always did. */
+    matcher?: picomatch.Matcher;
+};
+type CompiledPatternList = (normalizedFilename: string) => boolean;
+
+const LITERAL_SPLIT = /[*?[\]{}()!+@\\/|,^$]/;
+const NON_ASCII = /[^\p{ASCII}]/u;
+
+/** Longer patterns may make picomatch throw; they always run. */
+const MAX_PREFILTERED_PATTERN_LENGTH = 4_096;
+
+/** @internal Exported for testing purposes only */
+export function requiredLiteral(pattern: string): string {
+    if (
+        typeof pattern !== 'string' ||
+        pattern.length > MAX_PREFILTERED_PATTERN_LENGTH ||
+        pattern.startsWith('!') ||
+        /[()|]/.test(pattern)
+    ) {
+        return '';
+    }
+    const withoutChoices = pattern
+        .replace(/\{[^}]*\}/g, '/')
+        .replace(/\[[^\]]*\]/g, '/');
+    let best = '';
+    for (const run of withoutChoices.split(LITERAL_SPLIT)) {
+        if (run.length > best.length) {
+            best = run;
+        }
+    }
+    return best;
+}
+
+function compilePatternList(
+    patterns: string[],
+    caseInsensitive: boolean,
+): CompiledPatternList {
+    const entries: PrefilteredPattern[] = patterns.map((pattern) => {
+        const literal = requiredLiteral(pattern);
+        let folded = literal;
+        if (caseInsensitive) {
+            // Lower-casing is only a safe fold for ASCII; a non-ASCII
+            // literal in a case-insensitive list always runs its matcher.
+            folded = NON_ASCII.test(literal) ? '' : literal.toLowerCase();
+        }
+        return { pattern, literal: folded };
+    });
+
+    return (normalizedFilename: string): boolean => {
+        // A non-ASCII path in a case-insensitive list skips the prefilter,
+        // for the same folding reason as above.
+        const prefilter = !(
+            caseInsensitive && NON_ASCII.test(normalizedFilename)
+        );
+        const haystack = caseInsensitive
+            ? normalizedFilename.toLowerCase()
+            : normalizedFilename;
+        for (const entry of entries) {
+            if (
+                prefilter &&
+                entry.literal !== '' &&
+                !haystack.includes(entry.literal)
+            ) {
+                continue;
+            }
+            // An invalid pattern throws here, when the loop reaches it,
+            // exactly as the per-pattern loop did.
+            entry.matcher ??= getCachedMatcher(entry.pattern, caseInsensitive);
+            if (entry.matcher(normalizedFilename)) {
+                return true;
+            }
+        }
+        return false;
+    };
+}
+
+/** Compiled lists by content, least recently used evicted first. */
+const COMPILED_CASE_SENSITIVE = new Map<string, CompiledPatternList>();
+const COMPILED_CASE_INSENSITIVE = new Map<string, CompiledPatternList>();
+const MAX_COMPILED_LISTS = 256;
+
+function getCompiledPatternList(
+    patterns: string[],
+    caseInsensitive: boolean,
+): CompiledPatternList {
+    const cache = caseInsensitive
+        ? COMPILED_CASE_INSENSITIVE
+        : COMPILED_CASE_SENSITIVE;
+    const key = patterns.join('\u0000');
+    const cached = cache.get(key);
+    if (cached) {
+        // Re-insert: Map order is the LRU order.
+        cache.delete(key);
+        cache.set(key, cached);
+        return cached;
+    }
+    if (cache.size >= MAX_COMPILED_LISTS) {
+        cache.delete(cache.keys().next().value);
+    }
+    const compiled = compilePatternList(patterns, caseInsensitive);
+    cache.set(key, compiled);
+    return compiled;
+}
+
+/**
+ * Builds a matcher for one pattern list, for a loop over many files: the
+ * list is looked up once here instead of once per file. The returned
+ * function answers as `isFileMatchingGlob(filename, patterns)` would for
+ * the list as it was when this was called.
+ */
+export const createGlobMatcher = (
+    patterns: string[],
+    options: { caseInsensitive?: boolean } = {},
+): ((filename: string) => boolean) => {
+    if (!patterns || patterns.length === 0) {
+        return () => false;
+    }
+    const compiled = getCompiledPatternList(
+        [...patterns],
+        Boolean(options.caseInsensitive),
+    );
+    return (filename: string) => compiled(normalizeFilename(filename));
+};
+
+/**
  * Checks if a file matches any of the provided Glob patterns.
  * @param filename Name of the file to be checked.
  * @param patterns Array of Glob patterns.
@@ -119,19 +268,7 @@ export const isFileMatchingGlob = (
         return false;
     }
 
-    const normalizedFilename = normalizeFilename(filename);
-
-    // PERF: Use cached matchers instead of recompiling each time
-    // Before: 150 files × 10 patterns = 1,500 compilations per PR
-    // After:  10 patterns compiled once, reused for all files
-    for (const pattern of patterns) {
-        const matcher = getCachedMatcher(pattern, false);
-        if (matcher(normalizedFilename)) {
-            return true;
-        }
-    }
-
-    return false;
+    return getCompiledPatternList(patterns, false)(normalizeFilename(filename));
 };
 
 /**
@@ -149,16 +286,7 @@ export const isFileMatchingGlobCaseInsensitive = (
         return false;
     }
 
-    const normalizedFilename = normalizeFilename(filename);
-
-    for (const pattern of patterns) {
-        const matcher = getCachedMatcher(pattern, true);
-        if (matcher(normalizedFilename)) {
-            return true;
-        }
-    }
-
-    return false;
+    return getCompiledPatternList(patterns, true)(normalizeFilename(filename));
 };
 
 /**
@@ -168,6 +296,8 @@ export const isFileMatchingGlobCaseInsensitive = (
 export const _clearMatcherCache = (): void => {
     MATCHER_CACHE_CASE_SENSITIVE.clear();
     MATCHER_CACHE_CASE_INSENSITIVE.clear();
+    COMPILED_CASE_SENSITIVE.clear();
+    COMPILED_CASE_INSENSITIVE.clear();
 };
 
 /**
