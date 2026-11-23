@@ -452,12 +452,26 @@ describe('EnvironmentSetupService', () => {
         let tries = 0;
         env.probe = async () => {
             tries++;
-            return { code: 'transport_lost', stepId: 's' } as any;
+            return { code: 'cell_unavailable', cellId: 'cell-1' } as any;
         };
         const rec = await testSetupService({ envForSetup: () => env }, new InMemoryEnvironmentSetupStore()).run(cmd());
         expect(tries).toBe(1);
-        expect(rec.blockers[0]).toMatchObject({ kind: 'not_ready', message: expect.stringContaining('failed (transport_lost)') });
+        expect(rec.blockers[0]).toMatchObject({ kind: 'not_ready', message: expect.stringContaining('failed (cell_unavailable)') });
         expect(rec.blockers[0].message).not.toContain(' after ');
+    });
+
+    // kr-remix on release v1l: a cell that predates the fix answers a port still starting as transport_lost.
+    it('asks again after a lost transport while the app starts: an older cell reads a refused port so', async () => {
+        const { env } = fakeEnv();
+        let tries = 0;
+        env.probe = async () => {
+            tries++;
+            if (tries < 3) return { code: 'transport_lost', stepId: 's' } as any;
+            return { http: { status: 200 }, vmHealth: 'ok' } as any;
+        };
+        const rec = await testSetupService({ envForSetup: () => env }, new InMemoryEnvironmentSetupStore()).run(cmd());
+        expect(rec.state).toBe('active');
+        expect(tries).toBe(3);
     });
 
     it('stops the ready check at health_timeout on the clock, when each try hangs to its own timeout', async () => {

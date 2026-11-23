@@ -42,6 +42,28 @@ describe('ready check', () => {
         expect(probe.mock.calls.map((c: any[]) => c[2])).toEqual(['step-0', 'step-1', 'step-2']);
     });
 
+    // kr-remix on release v1l: a cell that predates the fix reads a port still starting as a lost transport.
+    it('asks again after a lost transport, and stops at once when the cell itself is gone', async () => {
+        const run = async (outs: unknown[]) => {
+            let clock = 0;
+            const probe = jest.fn(async () => outs.shift() as any);
+            const r = await waitUntilReady({
+                env: { probe },
+                claimId: 'c',
+                target: { service: 'app', port: 44100, path: '/', waitSeconds: 60 },
+                who: { id: 'run-ready', purpose: 'p' },
+                stepIdOf: (i) => `step-${i}`,
+                now: () => clock,
+                sleep: async (ms) => {
+                    clock += ms;
+                },
+            });
+            return r;
+        };
+        expect(await run([{ code: 'transport_lost', stepId: 's' }, answered(200)])).toMatchObject({ ready: true, tries: 2 });
+        expect(await run([{ code: 'cell_unavailable', cellId: 'cell-1' }, answered(200)])).toMatchObject({ ready: false, tries: 1 });
+    });
+
     it('at a one-second cadence, an app that comes up is asked within a second of it', async () => {
         let clock = 0;
         const upAt = 80_300; // demo-twenty's app listens again about 80 s after a reset

@@ -91,9 +91,13 @@ export function readyProbe(target: Pick<ReadyTarget, 'service' | 'port' | 'path'
     };
 }
 
-/** The app has not answered yet: nothing listens (the observer cannot reach it) or it answers 5xx while it starts. */
+/**
+ * The app has not answered yet: nothing listens (the observer cannot reach it) or it answers 5xx while it starts.
+ * A lost transport too: a cell that predates the fix reads a port still starting as one (kr-remix, release v1l),
+ * and the caller checks the claim's lease before each try, so a claim that is gone still stops it.
+ */
 export function notAnsweringYet(out: ProbeOutcome): boolean {
-    if (isEnvError(out)) return out.code === 'vm_unhealthy';
+    if (isEnvError(out)) return out.code === 'vm_unhealthy' || out.code === 'transport_lost';
     const status = out.http?.status;
     return !status || status >= 500;
 }
