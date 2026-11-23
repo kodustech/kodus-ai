@@ -773,6 +773,16 @@ How a build or recipe uses it.
      `ui-v<ver>.zip` into `$CACHE/ui-v<ver>/` and `pubsub-emulator-<ver>.zip` into `$CACHE/pubsub-emulator-<ver>/`
      (what `downloadEmulator` does), or the tool downloads them again.
   The file name carries the version, so it must match the firebase-tools the project installed.
+  **Kody does these steps itself** for a repository whose `firebase.json` has an `emulators` block and that installs
+  firebase-tools and starts the emulators: the Dockerfile it writes declares `ARG FIREBASE_EMULATORS_MIRROR` (the cell passes
+  `<mirror>/artifacts/firebase-emulators`, `mirrorBuildArgs.firebase`; Data Connect is the sibling `firebase-dataconnect`
+  entry) and, before its `CMD`, runs a helper (`libs/runtime/api/application/recipe-author/firebase-emulators-fetch-script.ts`,
+  written inline as one base64 line) that asks the installed firebase-tools for its own emulator table
+  (`downloadableEmulators.getDownloadDetails`, the same in 13.x and 14.x), downloads each needed file from the mirror to
+  the cache path firebase-tools names (`FIREBASE_EMULATORS_PATH` or the default), checks size, md5 and, where the version
+  has it, SHA-256, unpacks the zips with firebase-tools' own unzip and marks the binary executable. Any mismatch, a
+  missing file or a 404 stops the build. No version is written in Kody's code. docker-gvisor cells need
+  `-gvisor-mirror-artifacts` to pass the arg.
 - MongoDB over the mirror: the mirror is `http://`, and `mongodb-memory-server` requests with `https` unless
   `MONGOMS_USE_HTTP=1` is set. A step that runs it sets that variable together with `MONGOMS_DOWNLOAD_MIRROR`.
   **Open gap**: the build-arg list (`mirrorBuildArgs.artifacts`) carries only the mirror variable, not

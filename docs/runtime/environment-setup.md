@@ -176,6 +176,16 @@ product with the org's BYOK key, which never reaches the worker.
   `-gvisor-image-transfer tarball` sends a tarball for every build. buildkitd's own log is kept per build
   (`dockercli/builder_log.go`) and summarised in `build.builder_log`, which counts the layers the overlay differ
   could not compute.
+- **Runs like CI:** GitHub Actions always sets `CI=true`, and many tools change behavior on it (a build config that
+  skips lint only under CI, test runners and package managers going non-interactive), so the Runtime does the same.
+  Every image build gets the build arg `CI=true` (`buildmirror.Mirror.Args`, under the names of `mirrorBuildArgs.ci`;
+  Kody's Dockerfiles declare `ARG CI` in each stage that runs something, `declareMirrorBuildArgs`), and every
+  service boots with `CI=true` in its environment (`loadClaimCompose`, `compose.Project.DefaultEnvironment`). A value
+  the project sets itself wins: a build arg of its own, the compose file's `environment`, or the recipe's
+  `services.compose.env`.
+- **Firebase emulators:** firebase-tools has no download-URL override, so for a repository whose `firebase.json` has
+  an `emulators` block, that installs firebase-tools and starts the emulators, Kody's Dockerfile fetches them from the
+  cell mirror in its last stage (`authored-dockerfile-firebase.ts`, `FIREBASE_EMULATORS_MIRROR`; egress-allowlist §17).
 - **Golden data:** when the database's data is made by the database alone, the first boot keeps a copy of its
   volumes and each reset restores it instead of running initdb and the seed again (`dockergvisor/golden.go:25-45`,
   data step `up.go:270-320`).

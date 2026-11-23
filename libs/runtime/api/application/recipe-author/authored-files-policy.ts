@@ -9,6 +9,7 @@ import { redactPatterns } from '@libs/runtime/redaction';
 import { SECRET_NAME } from '@libs/runtime/run/recipe-inference';
 
 import { sanitiseAuthoredCompose } from './authored-compose-sanitiser';
+import { addFirebaseEmulatorFetch, firebaseEmulatorsOf } from './authored-dockerfile-firebase';
 import { declareMirrorBuildArgs } from './authored-dockerfile-mirror';
 import { checkAuthoredRecipe, type AuthoredRecipeCheck } from './authored-recipe-policy';
 import { RepoPathError, repoPath } from './repo-reader';
@@ -1474,14 +1475,32 @@ export async function checkAuthoredSubmission(
     }
     if (errors.length) return withAdjusted({ ok: false, errors });
     // Once accepted (so every error names Kody's own lines), Kody's Dockerfiles install only through the cell's
-    // read-only mirror: each stage that installs declares its build args (declareMirrorBuildArgs, G1).
-    const accepted = [...byPath.values()].map((f) => {
-        if (authoredFileKind(f.path) !== 'dockerfile') return f;
-        const d = declareMirrorBuildArgs(f.path, f.content);
-        if (!d.changes.length || Buffer.byteLength(d.content) > AUTHORED_FILE_LIMITS.fileBytes) return f;
-        adjusted.push(...d.changes);
-        return { path: f.path, content: d.content };
-    });
+    // read-only mirror: each stage that installs declares its build args (declareMirrorBuildArgs, G1), and a
+    // repository that runs Firebase emulators gets them fetched from that mirror (addFirebaseEmulatorFetch, after the
+    // declaration: it reads the stages' RUN lines).
+    const fits = (content: string) => Buffer.byteLength(content) <= AUTHORED_FILE_LIMITS.fileBytes;
+    const evidence = [recipe, ...[...byPath.values()].map((f) => f.content)].join('\n');
+    const accepted: AuthoredFile[] = [];
+    for (const original of byPath.values()) {
+        let f = original;
+        if (authoredFileKind(f.path) === 'dockerfile') {
+            const d = declareMirrorBuildArgs(f.path, f.content);
+            if (d.changes.length && fits(d.content)) {
+                adjusted.push(...d.changes);
+                f = { path: f.path, content: d.content };
+            }
+            const context = buildContexts.get(f.path);
+            const emulators = read && context !== undefined ? await firebaseEmulatorsOf(read, context, evidence) : null;
+            if (emulators) {
+                const fb = addFirebaseEmulatorFetch(f.path, f.content, emulators);
+                if (fb.changes.length && fits(fb.content)) {
+                    adjusted.push(...fb.changes);
+                    f = { path: f.path, content: fb.content };
+                }
+            }
+        }
+        accepted.push(f);
+    }
     return withAdjusted({ ok: true, errors: [], recipe: check.recipe, files: accepted });
 }
 

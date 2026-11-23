@@ -33,6 +33,10 @@ export interface MirrorBuildArgs {
     go: string[];
     /** Tools that download a known build artifact and honor a mirror variable (§17). */
     artifacts: string[];
+    /** The base of the mirror's Firebase emulator downloads, which firebase-tools has no URL override for (§17). */
+    firebase: string[];
+    /** CI=true: a build runs like the project's CI. */
+    ci: string[];
 }
 
 interface EgressListsFile {
@@ -54,6 +58,8 @@ export const MIRROR_BUILD_ARGS: Readonly<MirrorBuildArgs> = Object.freeze({
     pypi: [...lists.mirrorBuildArgs.pypi],
     go: [...lists.mirrorBuildArgs.go],
     artifacts: [...lists.mirrorBuildArgs.artifacts],
+    firebase: [...lists.mirrorBuildArgs.firebase],
+    ci: [...lists.mirrorBuildArgs.ci],
 });
 
 export const RECOMMENDED_EGRESS_VERSION: number = lists.recommended.version;

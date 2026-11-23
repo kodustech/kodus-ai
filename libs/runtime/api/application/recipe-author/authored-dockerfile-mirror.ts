@@ -5,7 +5,8 @@ import { MIRROR_BUILD_ARGS } from '@libs/runtime/protocol/egress-catalog';
 // build args, which a RUN sees only when its stage declares them. So each
 // stage of a Dockerfile Kody writes that installs packages declares the
 // names of its ecosystem, right after its FROM; an ARG with no value stays
-// unset, so a cell without a mirror builds as before.
+// unset, so a cell without a mirror builds as before (CI is the exception: the cell
+// passes CI=true to every build, so each stage with a RUN declares it).
 
 const INSTALLS: Array<{ family: keyof typeof MIRROR_BUILD_ARGS; run: RegExp }> = [
     { family: 'npm', run: /\b(?:npm|npx|pnpm|yarn|corepack)\b/ },
@@ -13,6 +14,8 @@ const INSTALLS: Array<{ family: keyof typeof MIRROR_BUILD_ARGS; run: RegExp }> =
     // Prisma's engines and mongodb-memory-server's binaries download at install or generate time.
     { family: 'artifacts', run: /\bprisma\b|mongodb-memory-server/ },
     { family: 'go', run: /\bgo\s+(?:mod|build|get|install|work|generate|test)\b/ },
+    // The Runtime builds like CI (GitHub Actions always sets CI=true, and tools change behavior on it): every stage with a RUN.
+    { family: 'ci', run: /\S/ },
 ];
 
 const FROM = /^\s*FROM\s/i;

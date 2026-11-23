@@ -368,7 +368,7 @@ CMD ["api"]
             { tool: SUBMIT_RECIPE_TOOL, input: { recipe: RECIPE, files: files(), notes: 'deploy/Dockerfile is a release build' } },
         ]);
         const r = await runGo();
-        expect(r).toMatchObject({ status: 'submitted', recipe: RECIPE, files: files() });
+        expect(r).toMatchObject({ status: 'submitted', recipe: RECIPE, files: files(DOCKERFILE.replace('AS build\n', 'AS build\nARG CI\n')) });
         expect(r.rejected).toHaveLength(1);
         expect(r.rejected[0].join()).toMatch(/runs a script it downloads/);
         // The refusal went back to the model as a tool error it could act on.

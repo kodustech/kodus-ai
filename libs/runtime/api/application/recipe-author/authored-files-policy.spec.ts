@@ -77,7 +77,8 @@ describe('authored files: what is accepted', () => {
     it('accepts a two-stage Dockerfile with cache mounts and the compose file that builds it', async () => {
         const r = await submit(FILES);
         expect(r.errors).toEqual([]);
-        expect(r).toMatchObject({ ok: true, files: FILES });
+        // The cell passes CI=true to every build: the stages that run something declare it.
+        expect(r).toMatchObject({ ok: true, files: [{ path: '.kodus/Dockerfile', content: DOCKERFILE.replace('AS build\n', 'AS build\nARG CI\n') }, FILES[1]] });
     });
 
     it('a recipe without files is checked exactly as before', async () => {
