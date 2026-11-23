@@ -4,8 +4,8 @@ import { boundKeyOfTemplate } from '@libs/runtime/placement/candidate-pools';
 import type { BakeProbe, BakeState } from './boat-setup-host';
 
 // How the environment's setup on its template host ended (docs/runtime/host-providers.md §8.2), read from the
-// environment's setup record through the setup store, never from the host. Only a setup that was requested for the
-// template counts: its command key starts with the template's bound key.
+// environment's setup record through the setup store, never from the host. Only the setup requested for this setup
+// host counts: its command key is the template's bound key and this host's id.
 
 /** The read side of the setup records (runtime.runtime_environment_setups): `PgEnvironmentSetupStore` fits. */
 export interface SetupRecordReader {
@@ -33,7 +33,8 @@ export class SetupRecordBakeProbe implements BakeProbe {
 
     async read(req: { hostId: string; organizationId: string; environmentId: string }): Promise<BakeState> {
         const rec = await this.setups.get(req.environmentId);
-        if (!rec || rec.organizationId !== req.organizationId || !rec.key.startsWith(boundKeyOfTemplate(req.organizationId, req.environmentId))) return { state: 'running' };
+        // Only this host's own setup counts: an earlier attempt's template setup may still be the record (active or blocked).
+        if (!rec || rec.organizationId !== req.organizationId || rec.key !== templateSetupCommandKey(req.organizationId, req.environmentId, req.hostId)) return { state: 'running' };
         if (rec.state === 'setting_up') return { state: 'running' };
         if (rec.state === 'blocked') return { state: 'failed', reason: 'bake_failed' };
         const fingerprint = bakeFingerprintOf(rec);

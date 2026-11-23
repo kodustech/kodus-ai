@@ -4,7 +4,7 @@ import { bakeFingerprintOf, SetupRecordBakeProbe, templateSetupCommandKey } from
 
 const FP = 'b'.repeat(64);
 const req = { hostId: 'tpl-x', organizationId: 'org-1', environmentId: 'env-1' };
-const rec = (over: Partial<EnvironmentSetupRecord>) => ({ environmentId: 'env-1', organizationId: 'org-1', repositoryId: 'r', key: templateSetupCommandKey('org-1', 'env-1', FP), state: 'active', steps: [], blockers: [], refSource: 'default_branch', bakeRefsDigest: FP, ...over }) as EnvironmentSetupRecord;
+const rec = (over: Partial<EnvironmentSetupRecord>) => ({ environmentId: 'env-1', organizationId: 'org-1', repositoryId: 'r', key: templateSetupCommandKey('org-1', 'env-1', 'tpl-x'), state: 'active', steps: [], blockers: [], refSource: 'default_branch', bakeRefsDigest: FP, ...over }) as EnvironmentSetupRecord;
 const probe = (r: EnvironmentSetupRecord | null) => new SetupRecordBakeProbe({ get: async () => r });
 
 describe('reading how the template host\'s setup ended (setup record)', () => {
@@ -12,6 +12,10 @@ describe('reading how the template host\'s setup ended (setup record)', () => {
         expect(await probe(null).read(req)).toEqual({ state: 'running' });
         expect(await probe(rec({ key: 'ordinary-key' })).read(req)).toEqual({ state: 'running' });
         expect(await probe(rec({ state: 'setting_up' })).read(req)).toEqual({ state: 'running' });
+    });
+    it("is running while the record is an earlier attempt's template setup: only this host's own setup counts", async () => {
+        expect(await probe(rec({ key: templateSetupCommandKey('org-1', 'env-1', 'tpl-earlier') })).read(req)).toEqual({ state: 'running' });
+        expect(await probe(rec({ key: templateSetupCommandKey('org-1', 'env-1', 'tpl-earlier'), state: 'blocked' })).read(req)).toEqual({ state: 'running' });
     });
     it('is done with the fingerprint and the default branch when the template setup is active', async () => {
         expect(await probe(rec({})).read(req)).toEqual({ state: 'done', fingerprint: FP, ref: 'default_branch' });
