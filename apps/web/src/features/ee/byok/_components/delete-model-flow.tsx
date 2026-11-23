@@ -8,7 +8,6 @@ import { deleteBYOK } from "@services/organizationParameters/fetch";
 import { AlertTriangleIcon } from "lucide-react";
 import { ConfirmModal } from "src/core/components/ui/confirm-modal";
 
-import { modelLabeler } from "../_data/model-label";
 import type { BYOKConfig, BYOKModelConfig } from "../_types";
 import { groupModelsByProvider } from "../_utils";
 
@@ -171,17 +170,17 @@ export function DeleteRejectionAlert({
 export function useDeleteModel({
     config,
     model,
+    name,
     onDeleted,
 }: {
     config: BYOKConfig | null | undefined;
     model: BYOKModelConfig;
+    /** The name the row shows for this model. */
+    name: string;
     onDeleted?: () => void;
 }): { confirmAndDelete: () => void; rejectionReasons: string[] } {
     const [rejectionReasons, setRejectionReasons] = useState<string[]>([]);
 
-    const name = modelLabeler((config?.models ?? []).map((m) => m.model))(
-        model.model,
-    );
     const copy = deleteConfirmCopy(isLastModel(config, model.id), name);
 
     const confirmAndDelete = () => {

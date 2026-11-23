@@ -8,6 +8,7 @@ import {
 import { hasPermission } from "src/core/utils/permission-map";
 
 import type { OrganizationLicense } from "../subscription/_services/billing/types";
+import { modelLabeler } from "./_data/model-label";
 import { isPlatformFundedProvider } from "./_data/platform-funded";
 import type {
     BYOKConfig,
@@ -102,6 +103,23 @@ export const groupModelsByProvider = (
             credential,
             models: modelsByCredential.get(credential.id) ?? [],
         }));
+};
+
+/** Model ids the AI providers page shows: the Kodus default stays hidden. */
+export const visibleModelIds = (config: BYOKConfig | null | undefined) =>
+    groupModelsByProvider(config).flatMap(({ models }) =>
+        models.map((m) => m.model),
+    );
+
+/** Each shown model's label, by model slot id: a label two shown models
+ *  share carries the id, so a pin and its alias read apart. */
+export const visibleModelLabels = (config: BYOKConfig | null | undefined) => {
+    const labelOf = modelLabeler(visibleModelIds(config));
+    return new Map(
+        groupModelsByProvider(config).flatMap(({ models }) =>
+            models.map((m): [string, string] => [m.id, labelOf(m.model)]),
+        ),
+    );
 };
 
 /**

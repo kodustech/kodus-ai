@@ -77,7 +77,7 @@ import {
     useKodusCreditBalance,
 } from "../_hooks/use-kodus-credit-balance";
 import type { BYOKConfig, BYOKConnectInput } from "../_types";
-import { maskKey } from "../_utils";
+import { maskKey, visibleModelIds } from "../_utils";
 
 const ENDPOINT_NEEDS_KEY_MESSAGE =
     "No key is stored for this endpoint — paste its API key.";
@@ -415,7 +415,7 @@ export function ByokManualPageClient({
     const watchedBaseURL = form.watch("baseURL");
     // Title label: derive from the id — so the header reads "Edit Kimi K2.6" /
     // "Edit Deepseek V4 Pro", never a raw id.
-    const savedModelIds = (existing?.models ?? []).map((m) => m.model);
+    const savedModelIds = visibleModelIds(existing);
     const editLabel = existingConfig?.model
         ? modelLabeler(savedModelIds)(existingConfig.model)
         : "";

@@ -200,6 +200,7 @@ function Harness({
     const { confirmAndDelete, rejectionReasons } = useDeleteModel({
         config,
         model,
+        name: model.model,
         onDeleted,
     });
     return (
