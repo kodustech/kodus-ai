@@ -108,7 +108,8 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
         context: CodeReviewPipelineContext,
         observerContext: PipelineObserverContext,
     ): Promise<void> {
-        // Clean up sandbox to prevent disk space leaks
+        // AgentReviewStage releases the sandbox after its last read (#2628).
+        // This covers a review that never got there; otherwise a no-op.
         if (context.sandboxHandle?.cleanup) {
             try {
                 await context.sandboxHandle.cleanup();
@@ -384,6 +385,18 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
         if (stageName === 'AgentReviewStage' && context.dedupTrace) {
             additionalMetadata = additionalMetadata || {};
             additionalMetadata.dedupTrace = context.dedupTrace;
+        }
+
+        // When the review got, last used and gave back its sandbox (#2628).
+        // With the stage logs' pipeline end, it measures how long the
+        // checkout stays held after its last read.
+        const sandboxUsage =
+            stageName === 'AgentReviewStage'
+                ? context.sandboxHandle?.usage?.()
+                : undefined;
+        if (sandboxUsage) {
+            additionalMetadata = additionalMetadata || {};
+            additionalMetadata.sandboxUsage = sandboxUsage;
         }
 
         // Stage status respects error severity (matches deriveFinalStatus

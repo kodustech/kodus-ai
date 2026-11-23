@@ -1799,6 +1799,185 @@ describe('SandboxLeaseManager', () => {
         );
     });
 
+    // How long a checkout stays held after its last use (#2628)
+    describe('sandbox usage', () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77';
+
+        const acquireCreated = async () => {
+            leaseRepo.upsertAcquire.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'CREATING',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: '',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+            return manager.acquire(prKey, 'review', undefined, {
+                cloneUrl: 'https://github.com/org/repo.git',
+                authToken: 'token',
+                branch: 'feature',
+                platform: 'github' as any,
+            });
+        };
+
+        const releasedWith = (leaseCount: number) =>
+            leaseRepo.decrementLease.mockResolvedValue({
+                _id: prKey,
+                leaseCount,
+                state: 'READY',
+                sandboxId: 'review-sandbox-id',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+        it('stamps the last command and records the release and the provider stop', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+
+            expect(sandbox.usage?.()).toEqual({
+                consumer: 'review',
+                acquiredAt: expect.any(Date),
+            });
+
+            await sandbox.remoteCommands.read('src/a.ts', 1, 10);
+            const firstUsedAt = sandbox.usage?.().firstUsedAt;
+            await sandbox.run('git status');
+            expect(provided.remoteCommands.read).toHaveBeenCalledWith(
+                'src/a.ts',
+                1,
+                10,
+            );
+            const lastUsedAt = sandbox.usage?.().lastUsedAt;
+            expect(firstUsedAt).toBeInstanceOf(Date);
+            expect(sandbox.usage?.().firstUsedAt).toBe(firstUsedAt);
+            expect(lastUsedAt).toBeInstanceOf(Date);
+
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            const usage = sandbox.usage?.();
+            expect(usage?.lastUsedAt).toEqual(lastUsedAt);
+            expect(usage?.releasedAt).toBeInstanceOf(Date);
+            const idleMs =
+                usage!.stopAt!.getTime() - usage!.releasedAt!.getTime();
+            expect(idleMs).toBeGreaterThanOrEqual(29_000);
+            expect(idleMs).toBeLessThanOrEqual(30_000);
+        });
+
+        // The review does not await its release (#2628)
+        it('stamps the release when it starts, before the Mongo writes', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            leaseRepo.decrementLease.mockReturnValueOnce(
+                new Promise(() => {}) as any,
+            );
+
+            void manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(sandbox.usage?.().releasedAt).toBeInstanceOf(Date);
+        });
+
+        it('stops stamping after the release, and logs a use after it once', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            await sandbox.run('git status');
+            const lastUsedAt = sandbox.usage?.().lastUsedAt;
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            const warn = (manager as any).logger.warn as jest.Mock;
+            warn.mockClear();
+
+            await sandbox.run('git log');
+            await sandbox.remoteCommands.read('src/a.ts', 1, 10);
+
+            expect(sandbox.usage?.().lastUsedAt).toBe(lastUsedAt);
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn.mock.calls[0][0].message).toContain(
+                'sandbox used after release',
+            );
+        });
+
+        it('a command still running at the release does not stamp after it', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+            let finish!: (content: string) => void;
+            (provided.readFile as jest.Mock).mockReturnValueOnce(
+                new Promise<string>((resolve) => (finish = resolve)),
+            );
+
+            const reading = sandbox.readFile('src/a.ts');
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            finish('content');
+            await reading;
+
+            expect(sandbox.usage?.().firstUsedAt).toBeInstanceOf(Date);
+            expect(sandbox.usage?.().lastUsedAt).toBeUndefined();
+        });
+
+        it('stamps a command that fails too', async () => {
+            const { sandbox } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+            (provided.readFile as jest.Mock).mockRejectedValueOnce(
+                new Error('ENOENT'),
+            );
+
+            await expect(sandbox.readFile('missing')).rejects.toThrow('ENOENT');
+
+            expect(sandbox.usage?.().lastUsedAt).toBeInstanceOf(Date);
+        });
+
+        // A review releases before publishing: E2B must not hold its comments
+        it("does not wait for E2B's idle timeout to release", async () => {
+            const { leaseId } = await acquireCreated();
+            jest.spyOn(Sandbox, 'setTimeout').mockReturnValueOnce(
+                new Promise(() => {}),
+            );
+
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(Sandbox.setTimeout).toHaveBeenCalledWith(
+                'review-sandbox-id',
+                30_000,
+                { apiKey: 'test-e2b-key' },
+            );
+            expect(leaseRepo.setKillAt).toHaveBeenCalled();
+        });
+
+        it('records no stop when another holder keeps the sandbox', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+
+            releasedWith(1);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(sandbox.usage?.().releasedAt).toBeInstanceOf(Date);
+            expect(sandbox.usage?.().stopAt).toBeUndefined();
+            expect(leaseRepo.setKillAt).not.toHaveBeenCalled();
+        });
+
+        it('hands the null sandbox out as it is', async () => {
+            manager = makeLeaseManager(
+                leaseRepo,
+                makeMockSandboxProvider(false),
+                configService,
+            );
+
+            const { sandbox } = await acquireCreated();
+
+            expect(sandbox.type).toBe('null');
+            expect(sandbox.usage).toBeUndefined();
+        });
+    });
+
     // ─── Test 9: mid-create invalidation kills the sandbox ────────────────
 
     it('kills sandbox when lease was invalidated mid-create (Pitfall 5)', async () => {
