@@ -46,7 +46,16 @@ export interface HubLogLine {
 
 export type HubLog = (level: HubLogLine['level'], msg: string, fields?: Omit<HubLogLine, 'level' | 'msg' | 'replicaId'>) => void;
 
-export type IssuedIdentity = { ok: true; cellId: string; certificate: string; caCertificate: string; expiresAt: string; serial: string };
+export type IssuedIdentity = {
+    ok: true;
+    cellId: string;
+    certificate: string;
+    caCertificate: string;
+    expiresAt: string;
+    serial: string;
+    /** A fleet host's token key (`run:<org>/<run>` or `template:<org>/<env>`): how the cell learns the org it serves. */
+    boundKey?: string;
+};
 
 /** The claim a worker call names, and the tenant it says the claim belongs to (checked against the row). */
 export interface ClaimRef {

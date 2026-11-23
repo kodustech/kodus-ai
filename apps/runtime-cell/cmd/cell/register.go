@@ -205,6 +205,15 @@ func registerFromBootstrap(ctx context.Context, hub, path string, b *bootstrapFi
 		if err := os.WriteFile(ownerFile(p.Cert), []byte("kodus\n"), 0o644); err != nil { //nolint:gosec // G306: not a secret
 			return nil, err
 		}
+		// What the hub bound this host to: a stale file of the template this
+		// disk was copied from must never outlive the registration.
+		if res.BoundKey == "" {
+			if err := os.Remove(boundKeyFile(p.Cert)); err != nil && !os.IsNotExist(err) {
+				return nil, err
+			}
+		} else if err := os.WriteFile(boundKeyFile(p.Cert), []byte(res.BoundKey+"\n"), 0o644); err != nil { //nolint:gosec // G306: not a secret
+			return nil, err
+		}
 	}
 	return res, nil
 }

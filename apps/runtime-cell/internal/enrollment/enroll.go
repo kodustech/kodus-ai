@@ -45,6 +45,9 @@ type CertificateResponse struct {
 	CACertificate string `json:"caCertificate"`
 	ExpiresAt     string `json:"expiresAt"`
 	Serial        string `json:"serial"`
+	// BoundKey is the key a fleet token was bound to (run:<org>/<run> or
+	// template:<org>/<env>); the hub sends it only for a fleet host.
+	BoundKey string `json:"boundKey,omitempty"`
 }
 
 // clockSkew is how far a certificate's NotBefore may be ahead of this clock.

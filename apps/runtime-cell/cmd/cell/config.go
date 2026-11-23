@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -502,6 +503,36 @@ func parseSettings(fs *flag.FlagSet, args []string) (settings, error) {
 // registers every cell that redeems a token as a customer cell, and the hello
 // must say so (the hub refuses a hello whose owner is not the registration's).
 func ownerFile(cert string) string { return filepath.Join(filepath.Dir(cert), "owner") }
+
+// boundKeyFile is what cell register -bootstrap writes next to the
+// certificate for a fleet host: the key the hub bound the host's token to,
+// as the hub answered it over the verified TLS connection.
+func boundKeyFile(cert string) string { return filepath.Join(filepath.Dir(cert), "bound-key") }
+
+// fleetBoundKey matches the keys a fleet host is bound to and captures the org.
+var fleetBoundKey = regexp.MustCompile(`^(?:run|template):([^/\s:]{1,128})/[^/\s]{1,128}$`)
+
+// bakeAdoptOrg is the org whose bake a host made from a template may adopt,
+// or "" (nothing is adopted). Only a fleet host (its seal unit is installed,
+// which nothing but cell-host.sh install --fleet-bootstrap does), enrolled by
+// a fleet token (owner kodus), whose hub-given bound key names an org.
+func bakeAdoptOrg(sealUnit, cert, owner string) string {
+	if owner != string(protocol.CellOwnerKodus) {
+		return ""
+	}
+	if _, err := os.Stat(sealUnit); err != nil {
+		return ""
+	}
+	b, err := os.ReadFile(boundKeyFile(cert))
+	if err != nil || len(b) > 512 {
+		return ""
+	}
+	m := fleetBoundKey.FindStringSubmatch(strings.TrimSpace(string(b)))
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
 
 // enrolledOwner is the owner cell register wrote, or kodus (a managed cell,
 // whose certificate is issued out of band).

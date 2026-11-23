@@ -38,6 +38,9 @@ type fakeEnrollHub struct {
 	ca     *testpki.CA
 	serial int64
 	got    []map[string]string
+	// boundKey is what a fleet registration answers (the hub does for a fleet token).
+	boundKey string
+	fleet    bool
 }
 
 func (h *fakeEnrollHub) sign(w http.ResponseWriter, csrPEM, cellID string) {
@@ -62,11 +65,15 @@ func (h *fakeEnrollHub) sign(w http.ResponseWriter, csrPEM, cellID string) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	answer := map[string]any{
 		"ok": true, "cellId": cellID, "serial": tpl.SerialNumber.String(), "expiresAt": tpl.NotAfter.UTC().Format(time.RFC3339),
 		"certificate":   string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})),
 		"caCertificate": string(h.ca.PEM),
-	})
+	}
+	if h.boundKey != "" && h.fleet {
+		answer["boundKey"] = h.boundKey
+	}
+	_ = json.NewEncoder(w).Encode(answer)
 }
 
 func (h *fakeEnrollHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +101,7 @@ func (h *fakeEnrollHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"code":"registration_refused","reason":"topology_mismatch"}`, http.StatusForbidden)
 			return
 		}
+		h.fleet = strings.HasPrefix(body["token"], "kcf_")
 		h.sign(w, body["csr"], "cell-new")
 	case "/cells/renew":
 		if len(r.TLS.PeerCertificates) == 0 {
@@ -432,5 +440,88 @@ func TestRegisterFromABootstrapFileDeletesIt(t *testing.T) {
 	}
 	if strings.Contains(stdout.String()+stderr.String(), "kcf_fleet-good") {
 		t.Fatal("token printed")
+	}
+}
+
+// A fleet host learns which key the hub bound it to, from the hub's answer,
+// and a registration that carries none removes what a template left behind.
+func TestFleetRegistrationWritesTheBoundKeyTheHubAnswered(t *testing.T) {
+	ca, err := testpki.NewCA("hub-test-ca")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fh := &fakeEnrollHub{t: t, ca: ca, boundKey: "run:org-1/run-9"}
+	srv := httptest.NewUnstartedServer(fh)
+	srv.Config.ErrorLog = log.New(io.Discard, "", 0)
+	serverCert, _ := ca.Issue("runtime-hub", time.Hour, "127.0.0.1")
+	srv.TLS = &tls.Config{Certificates: []tls.Certificate{serverCert}, MinVersion: tls.VersionTLS13}
+	srv.StartTLS()
+	defer srv.Close()
+	dir := t.TempDir()
+	out := filepath.Join(dir, "cell")
+	bootstrap := func() string {
+		b, _ := json.Marshal(map[string]string{"hubUrl": srv.URL, "hubCa": string(ca.PEM), "token": "kcf_fleet-good"})
+		f := filepath.Join(dir, "kodus-enroll.json")
+		if err := os.WriteFile(f, b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	var stdout, stderr bytes.Buffer
+	if code := runEnroll("register", []string{"-bootstrap", bootstrap(), "-out", out}, &stdout, &stderr); code != 0 {
+		t.Fatalf("register: %s", stderr.String())
+	}
+	if b, _ := os.ReadFile(filepath.Join(out, "bound-key")); string(b) != "run:org-1/run-9\n" {
+		t.Fatalf("bound-key says %q", b)
+	}
+	// A second registration on the same disk (a host made from a template)
+	// whose token has no key: the old file does not survive.
+	fh.boundKey = ""
+	if code := runEnroll("register", []string{"-bootstrap", bootstrap(), "-out", out}, &stdout, &stderr); code != 0 {
+		t.Fatalf("register again: %s", stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(out, "bound-key")); !os.IsNotExist(err) {
+		t.Fatalf("a stale bound-key survived a registration without one: %v", err)
+	}
+}
+
+// Bakes are adopted only on a Kodus fleet host, for the org its hub-given key names.
+func TestBakeAdoptOrgNeedsAFleetHostAndAHubGivenKey(t *testing.T) {
+	dir := t.TempDir()
+	cert := filepath.Join(dir, "cert.pem")
+	unit := filepath.Join(dir, "kodus-cell-seal.service")
+	key := func(v string) {
+		if err := os.WriteFile(boundKeyFile(cert), []byte(v), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	key("run:org-1/run-9\n")
+	if got := bakeAdoptOrg(unit, cert, "kodus"); got != "" {
+		t.Fatalf("a host without the seal unit adopted for %q", got)
+	}
+	if err := os.WriteFile(unit, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := bakeAdoptOrg(unit, cert, "kodus"); got != "org-1" {
+		t.Fatalf("a fleet host serving a Run: org %q", got)
+	}
+	if got := bakeAdoptOrg(unit, cert, "customer"); got != "" {
+		t.Fatalf("a customer cell adopted for %q", got)
+	}
+	key("template:org-2/env-1\n")
+	if got := bakeAdoptOrg(unit, cert, "kodus"); got != "org-2" {
+		t.Fatalf("a template host: org %q", got)
+	}
+	for _, bad := range []string{"", "org-1/run", "run:/run", "run:org-1/a/b", "x:org-1/run", "run:org 1/run"} {
+		key(bad)
+		if got := bakeAdoptOrg(unit, cert, "kodus"); got != "" {
+			t.Fatalf("key %q adopted for %q", bad, got)
+		}
+	}
+	if err := os.Remove(boundKeyFile(cert)); err != nil {
+		t.Fatal(err)
+	}
+	if got := bakeAdoptOrg(unit, cert, "kodus"); got != "" {
+		t.Fatalf("no key file adopted for %q", got)
 	}
 }

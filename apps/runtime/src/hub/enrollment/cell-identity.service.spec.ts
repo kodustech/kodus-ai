@@ -94,7 +94,7 @@ describe('fleet host registration', () => {
         const { token, tokenHash } = generateFleetToken();
         await store.fleetLedger.issue({ tokenHash, poolId: 'boat-eu-perrun', hostId: 'host-1', boundKey: 'run:org-a/r-1', ttlMs: 600_000, issuedBy: 'runtime-fleet' });
         const r = await service(store).register(token, undefined, csr());
-        expect(r).toMatchObject({ ok: true });
+        expect(r).toMatchObject({ ok: true, boundKey: 'run:org-a/r-1' });
         const cell = await store.registeredCell((r as { cellId: string }).cellId);
         expect(cell).toMatchObject({ owner: 'kodus', organizationId: null, topology: 'fleet', poolId: 'boat-eu-perrun', hostId: 'host-1', boundKey: 'run:org-a/r-1' });
         expect(await service(store).register(token, undefined, csr())).toEqual({ ok: false, reason: 'unknown_or_used' });

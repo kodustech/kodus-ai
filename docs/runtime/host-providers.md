@@ -610,6 +610,45 @@ Rules:
 - A template never holds an identity: the seal step removes the key, the certificate and the token file before the
   save, and a host made from it registers with its own token.
 
+#### 8.2.1 A Run host uses the template's bake
+
+The template's bakes live in the cell's bake catalog (`state/bakes/catalog.json`), and every generation, image
+(`kodus-bake/<cell>/<org>/<env>`) and volume names the cell id that made it. A Run host is a new cell with a new id on
+a copy of that disk, so it found a catalog "of another cell" and crash-looped at start (`bake recovery: invalid
+catalog`), and the Run failed `host_unavailable`. Two ways to fix it:
+
+| | (a) Re-home on start | (b) Lineage id |
+| --- | --- | --- |
+| What changes | Retag every image to the new cell's names, copy every volume (Docker cannot rename one), rewrite the catalog | Bakes keep their names; the catalog's owner id is the lineage; ownership checks compare it, not the running cell |
+| Cost at start | Copies the seeded data on every Run host: minutes and GB, the thing the template exists to avoid | None |
+| Failure | A half-copied volume set | None new |
+
+**Chosen: the names stay and the catalog is adopted** (a lineage in effect, without a new id: the cell that made the
+bake is the owner, and it is already in the catalog and every name). Safety does not come from the catalog being on
+the disk, which any disk copy carries, but from three checks the cell makes against what the hub told it:
+
+1. **Only on a fleet host.** The seal unit (`kodus-cell-seal.service`, installed only by `cell-host.sh install
+   --fleet-bootstrap`) is present and the cell is owned by Kodus (enrolled with a `kcf_` token). A self-hosted or
+   static cell never adopts: it moves a catalog of another cell aside.
+2. **Only the org the hub bound the host to.** `/cells/register` answers a fleet host with its token's `boundKey`
+   (`run:<org>/<run>` or `template:<org>/<env>`), over the TLS the cell verified against the hub CA. `cell register
+   -bootstrap` writes it next to the certificate (`bound-key`), replacing or removing any file the template left. The
+   org is parsed from it.
+3. **Every generation is checked as before**, against the owner's id (ids, names, labels, volumes), and the generations
+   of any other org are retired, and their images and volumes removed, never used.
+
+A host that does not meet them (or a catalog that fails any check) is never fatal: the catalog is renamed
+`catalog.json.foreign-<unix>` (one kept), the cell starts with an empty catalog and logs
+`bake.catalog.quarantined reason=corrupt|unsafe|unreadable|foreign_cell|foreign_driver|invalid` with the generation
+counts. A generation whose images or volumes are gone is retired at start (`bake.recovery.retired`) instead of
+failing it. At start a Run host from a template logs `bake.catalog.adopted from=<template cell> org=<org> kept=N
+retired=M`, then recovers the bakes of its org as any restarted cell does, and its first claim boots from them. New
+bakes on that host keep the owner's names, so the catalog stays one lineage.
+
+Left over: artifacts a quarantined catalog named (its own cell's or a foreign one's) stay on the disk, because no
+reaper rule lists a bake; the disk is deleted with the Run host. The microVM driver has its own checks (its owner and
+snapshot ids) and does not adopt yet.
+
 ## 9. Adapters
 
 ### 9.1 `static`

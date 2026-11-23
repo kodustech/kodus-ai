@@ -178,7 +178,8 @@ export class CellIdentityService {
         if (!cert) return { ok: false, reason: INVALID_CSR };
         this.pinnedSerialByCell.set(cellId, cert.serial);
         this.log('info', 'cell.registered', { cellId, topology: FLEET_TOPOLOGY, poolId: r.poolId, hostId: r.hostId });
-        return { ok: true, cellId, certificate: cert.certPem, caCertificate: this.ca.certPem, expiresAt: cert.notAfter.toISOString(), serial: cert.serial };
+        // The cell learns its key from the hub, over the TLS it verified, never from its disk: a host made from a template uses it to adopt that template's bake only for this key's org.
+        return { ok: true, cellId, certificate: cert.certPem, caCertificate: this.ca.certPem, expiresAt: cert.notAfter.toISOString(), serial: cert.serial, ...(r.boundKey ? { boundKey: r.boundKey } : {}) };
     }
 
     /** A connected cell trades its valid certificate for a new one; the pin moves to the new serial. */
