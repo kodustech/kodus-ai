@@ -216,14 +216,15 @@ export interface EnvironmentSetupRepair {
     n: number;
     /** The most repairs this setup could make. */
     max: number;
-    /** What stopped the boot Kody rewrote the recipe after, as the catalog classified it. */
-    blocker: { kind: string; signature: string; title: string };
+    /** What stopped the boot Kody rewrote the recipe after, as the catalog classified it; `cause` is its message's cause line, when it has one. */
+    blocker: { kind: string; signature: string; title: string; cause?: string };
     /** The digest of the recipe (and its files) whose boot failed. */
     failedDigest: string;
     /** The digest of Kody's new recipe and files; absent when Kody wrote none. */
     recipeDigest?: string;
-    /** no_token: no fresh download token for the new boot (the cell revoked the last boot's), so Kody was not asked. */
-    outcome: 'writing' | 'booting' | 'booted' | 'blocked' | 'no_recipe' | 'identical' | 'refused' | 'unavailable' | 'budget' | 'no_token';
+    /** no_token: no fresh download token for the new boot (the cell revoked the last boot's), so Kody was not asked.
+     *  same_failure: Kody's last rewrite failed exactly as the recipe it replaced, so Kody was not asked again. */
+    outcome: 'writing' | 'booting' | 'booted' | 'blocked' | 'no_recipe' | 'identical' | 'refused' | 'unavailable' | 'budget' | 'no_token' | 'same_failure';
     at: string;
 }
 

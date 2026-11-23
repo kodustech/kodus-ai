@@ -220,7 +220,8 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
 
     it('stops at the cap: the last boot is the setup verdict, every failed claim released, the failed recipe kept for the next setup', async () => {
         const store = new InMemoryEnvironmentSetupStore();
-        const { env, calls } = fakeEnv({ first: 'not_ready', second: 'not_ready', third: 'not_ready' });
+        // Each boot fails another way: every rewrite made progress, so the cap is what stops it.
+        const { env, calls } = fakeEnv({ first: blockedOn('not_ready', 'setup:not_ready:app:3000/', 'GET / answered 502'), second: blockedOn('not_ready', 'setup:not_ready:app:3000/', 'GET / answered 404'), third: 'not_ready' });
         const a = author(store, submitted(FIRST), submitted(SECOND), submitted(THIRD));
         const rec = await service(store, env, { author: a.client }).run(cmd());
         expect(a.calls).toHaveLength(3);
@@ -231,7 +232,9 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
             [1, 2, 'blocked'],
             [2, 2, 'blocked'],
         ]);
-        expect(calls.filter((c) => c.startsWith('release'))).toEqual(['release claim-1', 'release claim-2', 'release claim-3']);
+        // Three boots; the two that failed before a claim was ready had none to release.
+        expect(calls.filter((c) => c.startsWith('acquire'))).toHaveLength(3);
+        expect(calls.filter((c) => c.startsWith('release'))).toHaveLength(1);
         expect((await store.get('env-1'))?.state).toBe('blocked');
     });
 
@@ -268,9 +271,45 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
         expect(rec.finishedAt).toBeDefined();
     });
 
+    // kr-remix and kr-nocodb on release v1l: three recipes, three boots, the same failure each time.
+    it('a rewrite that fails exactly as the recipe it replaced stops: Kody is not asked a third time', async () => {
+        const store = new InMemoryEnvironmentSetupStore();
+        const { env, calls } = fakeEnv({ first: 'not_ready', second: 'not_ready', third: 'not_ready' });
+        const a = author(store, submitted(FIRST), submitted(SECOND), submitted(THIRD));
+        const rec = await service(store, env, { author: a.client }).run(cmd());
+        expect(a.calls).toHaveLength(2);
+        expect(calls.filter((c) => c.startsWith('acquire'))).toHaveLength(2);
+        expect(calls.filter((c) => c.startsWith('release'))).toEqual(['release claim-1', 'release claim-2']);
+        expect(rec.state).toBe('blocked');
+        expect(rec.recipe?.content).toBe(SECOND);
+        expect(rec.repairs?.map((r) => [r.n, r.outcome])).toEqual([
+            [1, 'blocked'],
+            [2, 'same_failure'],
+        ]);
+        expect(rec.steps.at(-1)).toMatchObject({ name: 'recipe', repair: 2, state: 'failed', detail: expect.stringContaining('the same way') });
+    });
+
+    // kr-nocodb on release v1l: every rewrite's build met the same download; a build that fails on another line is progress.
+    it('two builds compare by the line that names their cause, never by the catalog title every failed build shares', async () => {
+        const build = (cause: string) => blockedOn('toolchain', 'compose_up', `compose_up: dockergvisor: build app: step [9/9] RUN pnpm build failed:\n  ${cause}\nerror: failed to solve: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1`);
+        const nodeDownload = 'WARN  GET https://nodejs.org/download/release/v24.14.0/SHASUMS256.txt error (ECONNRESET). Will retry';
+        const same = fakeEnv({ first: build(nodeDownload), second: build(nodeDownload), third: 'ok' });
+        const sameStore = new InMemoryEnvironmentSetupStore();
+        const stopped = await service(sameStore, same.env, { author: author(sameStore, submitted(FIRST), submitted(SECOND), submitted(THIRD)).client }).run(cmd());
+        expect(stopped.repairs?.map((r) => r.outcome)).toEqual(['blocked', 'same_failure']);
+        expect(stopped.repairs?.[0].blocker.cause).toContain('nodejs.org');
+
+        const other = fakeEnv({ first: build(nodeDownload), second: build('Error: Cannot find module typescript'), third: 'ok' });
+        const otherStore = new InMemoryEnvironmentSetupStore();
+        const went = await service(otherStore, other.env, { author: author(otherStore, submitted(FIRST), submitted(SECOND), submitted(THIRD)).client }).run(cmd());
+        expect(went.repairs?.map((r) => r.outcome)).toEqual(['blocked', 'booted']);
+        expect(went.state).toBe('active');
+    });
+
     it('a rewrite back to a recipe that already failed in this setup stops too', async () => {
         const store = new InMemoryEnvironmentSetupStore();
-        const { env } = fakeEnv({ first: 'not_ready', second: 'not_ready' });
+        // The second boot fails another way, so it is the answer, not the failure, that stops it.
+        const { env } = fakeEnv({ first: 'not_ready', second: blockedOn('not_ready', 'setup:not_ready:app:3000/health', 'GET /health on app:3000 answered 404') });
         const a = author(store, submitted(FIRST), submitted(SECOND), submitted(FIRST));
         const rec = await service(store, env, { author: a.client }).run(cmd());
         expect(rec.repairs?.map((r) => r.outcome)).toEqual(['blocked', 'identical']);

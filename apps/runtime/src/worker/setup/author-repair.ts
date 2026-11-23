@@ -3,6 +3,7 @@ import { RECIPE_PATH } from '@libs/runtime/protocol/recipe';
 import { type EnvironmentSetupRepair, recipeDigest } from '@libs/runtime/run';
 
 import type { RecipeAuthorOutcome } from '../agent/http-recipe-author';
+import { causeLine } from './blocker-message';
 import { repairFailureOf } from './recipe-failure';
 import { adoptRecipe, checkRecipe } from './resolve-recipe';
 import { setupLogger, type SetupRun } from './setup-scope';
@@ -43,7 +44,7 @@ export async function authorRepair(run: SetupRun, n: number): Promise<boolean> {
     const entry: EnvironmentSetupRepair = {
         n,
         max: repairs,
-        blocker: { kind: failedBoot.kind, signature: failure.signature, title: failure.title.slice(0, 200) },
+        blocker: { kind: failedBoot.kind, signature: failure.signature, title: failure.title.slice(0, 200), ...causeOf(blocker.message) },
         failedDigest: failed.digest,
         outcome: 'writing',
         at: await journal.clock(),
@@ -64,6 +65,12 @@ export async function authorRepair(run: SetupRun, n: number): Promise<boolean> {
         await journal.finish(recipeRepair, state, detail);
         return false;
     };
+    // Kody's last rewrite failed exactly as the recipe it replaced: another rewrite would be one more
+    // boot and one more model loop for the same answer (kr-remix and kr-nocodb, release v1l).
+    const previous = rec.repairs.at(-2);
+    if (previous && sameFailure(previous.blocker, entry.blocker)) {
+        return stop('same_failure', 'failed', `Kody's rewrite failed the same way as the recipe it replaced, so it is not asked again: ${entry.blocker.title}`);
+    }
     if (run.tokens.needsFresh) {
         // The cell revoked the tokens the last boot downloaded with: the new boot's are asked
         // first, so Kody never rewrites a recipe no boot could download the repository for.
@@ -99,4 +106,20 @@ export async function authorRepair(run: SetupRun, n: number): Promise<boolean> {
     entry.outcome = 'booting';
     await journal.done(recipeRepair, `written by Kody (repair ${n} of ${repairs}, after the boot failed on ${failure.signature})${detail}`);
     return true;
+}
+
+const causeOf = (message: string) => {
+    const cause = causeLine(message);
+    return cause ? { cause: cause.slice(0, 300) } : {};
+};
+
+/**
+ * The same failure: the same kind and signature, and the same cause line; with no cause line, the same
+ * title, unless the title is the catalog's own words for any failed build, which tell two builds apart
+ * by nothing. Not knowing is never the same: the cap stops it instead.
+ */
+function sameFailure(a: EnvironmentSetupRepair['blocker'], b: EnvironmentSetupRepair['blocker']): boolean {
+    if (a.kind !== b.kind || a.signature !== b.signature) return false;
+    if (a.cause || b.cause) return a.cause === b.cause;
+    return a.signature !== 'compose_up' && a.title === b.title;
 }

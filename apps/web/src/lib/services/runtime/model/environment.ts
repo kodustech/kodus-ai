@@ -400,6 +400,7 @@ export const setupRepairNotes = (
             blocked: `Kody rewrote the setup file after ${cause} ${attempt}. It failed too.`,
             no_recipe: `Kody could not write another setup file after ${cause} ${attempt}.`,
             identical: `Kody gave back a setup file that had already failed ${attempt}.`,
+            same_failure: `Kody's last setup file failed the same way as the one before it, so Kody stopped rewriting ${attempt}.`,
             refused: `Kody's new setup file after ${cause} did not pass the checks ${attempt}.`,
             unavailable: `Kody could not be reached to rewrite the setup file after ${cause} ${attempt}.`,
             budget: `Kody did not rewrite the setup file after ${cause}: the setup's LLM budget is spent ${attempt}.`,
