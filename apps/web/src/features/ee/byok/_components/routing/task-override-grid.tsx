@@ -20,6 +20,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
+import { TruncateStart } from "@components/ui/truncate-start";
 import {
     AlertTriangleIcon,
     BotIcon,
@@ -163,12 +164,10 @@ export const ModelCombobox = ({
                             const selected = model.id === value;
 
                             const label = (
-                                <span
-                                    dir="rtl"
+                                <TruncateStart
                                     title={model.label}
-                                    style={{ textAlign: "left" }}
                                     className={cn(
-                                        "min-w-0 truncate",
+                                        "min-w-0",
                                         !gate.ok
                                             ? "text-text-tertiary"
                                             : selected
@@ -176,7 +175,7 @@ export const ModelCombobox = ({
                                               : undefined,
                                     )}>
                                     {model.label || model.id}
-                                </span>
+                                </TruncateStart>
                             );
 
                             // The CommandItem must be a DIRECT child of the
@@ -335,8 +334,7 @@ export const TaskModelControl = ({
                             <ProviderAvatar
                                 provider={effectiveModel?.provider}
                             />
-                            <span
-                                dir="rtl"
+                            <TruncateStart
                                 title={
                                     isCustom
                                         ? overrideModel
@@ -344,18 +342,17 @@ export const TaskModelControl = ({
                                             : "Unavailable model"
                                         : inheritedOptionLabel
                                 }
-                                style={{ textAlign: "left" }}
                                 className={
                                     isCustom
-                                        ? "text-text-primary truncate"
-                                        : "text-text-tertiary truncate font-normal"
+                                        ? "text-text-primary"
+                                        : "text-text-tertiary font-normal"
                                 }>
                                 {isCustom
                                     ? overrideModel
                                         ? modelLabelFor(models, overrideId)
                                         : "Unavailable model"
                                     : inheritedOptionLabel}
-                            </span>
+                            </TruncateStart>
                         </span>
                     </Button>
                 }

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
 import { Link } from "@components/ui/link";
 import { Spinner } from "@components/ui/spinner";
+import { TruncateStart } from "@components/ui/truncate-start";
 import { ChevronsUpDownIcon } from "lucide-react";
 import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { ProviderAvatar } from "src/features/ee/byok/_components/provider-avatar";
@@ -120,18 +121,13 @@ export function OrganizationModels({
                                                             defaultModel?.provider
                                                         }
                                                     />
-                                                    <span
-                                                        dir="rtl"
+                                                    <TruncateStart
                                                         title={
                                                             defaultModel?.label
-                                                        }
-                                                        style={{
-                                                            textAlign: "left",
-                                                        }}
-                                                        className="truncate">
+                                                        }>
                                                         {defaultModel?.label ??
                                                             "Select a connected model"}
-                                                    </span>
+                                                    </TruncateStart>
                                                 </span>
                                             </Button>
                                         }
@@ -188,20 +184,15 @@ export function OrganizationModels({
                                                             fallbackModel?.provider
                                                         }
                                                     />
-                                                    <span
-                                                        dir="rtl"
+                                                    <TruncateStart
                                                         title={
                                                             fallbackModel?.label
-                                                        }
-                                                        style={{
-                                                            textAlign: "left",
-                                                        }}
-                                                        className="truncate">
+                                                        }>
                                                         {fallbackModel?.label ??
                                                             (routing.fallbackModelId
                                                                 ? "Unavailable model"
                                                                 : "None")}
-                                                    </span>
+                                                    </TruncateStart>
                                                 </span>
                                             </Button>
                                         }

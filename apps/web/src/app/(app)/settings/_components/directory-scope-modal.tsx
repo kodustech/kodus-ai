@@ -23,6 +23,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@components/ui/tooltip";
+import { TruncateStart } from "@components/ui/truncate-start";
 import { useReactQueryInvalidateQueries } from "@hooks/use-invalidate-queries";
 import { PARAMETERS_PATHS } from "@services/parameters";
 import { createOrUpdateCodeReviewParameter } from "@services/parameters/fetch";
@@ -175,11 +176,9 @@ export const DirectoryScopeModal = ({
                                                     className="w-full justify-between gap-1 pr-1">
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <span
-                                                                dir="rtl"
-                                                                className="min-w-0 truncate">
+                                                            <TruncateStart className="min-w-0">
                                                                 {path}
-                                                            </span>
+                                                            </TruncateStart>
                                                         </TooltipTrigger>
                                                         <TooltipPortal>
                                                             <TooltipContent side="left">
