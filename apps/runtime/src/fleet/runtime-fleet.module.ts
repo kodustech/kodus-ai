@@ -1,8 +1,10 @@
-import { DynamicModule, Inject, Injectable, Module, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import { DynamicModule, Inject, Injectable, Module, Optional, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { Pool } from 'pg';
 
 import { FakeHostProvider } from '@libs/runtime/fleet/fake-provider';
 import type { HostProvider } from '@libs/runtime/fleet/host-provider';
+import { cellBaseOf } from '@libs/runtime/fleet/pool';
+import { PgEnvironmentSetupStore } from '@libs/runtime/run/adapters/pg-environment-setup.store';
 
 import { type FleetConfig, RUNTIME_CONFIG, RUNTIME_PG_POOL } from '../shared/config';
 import { RuntimeLogger } from '../shared/observability/logger';
@@ -15,6 +17,10 @@ import { fleetPost, HubFleetClient } from './hub-fleet-client';
 import type { TemplateResolver } from './per-run-host';
 import { BoatHostProvider } from './providers/boat/boat-provider';
 import { ProviderRegistry } from './providers/registry';
+import { SetupRecordBakeProbe } from './template/bake-probe';
+import { BoatSetupHost, type HostSealer } from './template/boat-setup-host';
+import { buildEnvironmentTemplate } from './template/build-template';
+import { RequestingSetupHost, TemplateBuildTrigger, type TemplateSetupRequester, TriggeringTemplateResolver } from './template/template-trigger';
 import { PgTemplateStore, StoreTemplateResolver } from './template/template-store';
 
 // runtime-fleet (docs/runtime/host-providers.md §4.1): the reconcile loop and
@@ -23,6 +29,10 @@ import { PgTemplateStore, StoreTemplateResolver } from './template/template-stor
 
 export const FLEET_LOGGER = Symbol('FLEET_LOGGER');
 export const FLEET_TEMPLATES = Symbol('FLEET_TEMPLATES');
+/** The `HostSealer` that makes a template host's disk safe to save (stops the cell, removes identity, token file and /tmp). Provided by the hub-to-cell seal adapter; absent: no template is built. */
+export const FLEET_HOST_SEALER = Symbol('FLEET_HOST_SEALER');
+/** The `TemplateSetupRequester` that asks the setup request path for an environment's setup on its template host. Absent: no template is built. */
+export const FLEET_TEMPLATE_SETUP_REQUESTER = Symbol('FLEET_TEMPLATE_SETUP_REQUESTER');
 
 /** The providers this config holds: boat when its key is configured, the fake one only in dev. */
 export function providersOf(config: FleetConfig, extra: HostProvider[] = []): ProviderRegistry {
@@ -37,6 +47,8 @@ export function providersOf(config: FleetConfig, extra: HostProvider[] = []): Pr
 class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
     private engine?: FleetEngine;
     private reconciler?: FleetReconciler;
+    /** Started by a Run's demand; `onSetupFinished` is what the setup's end calls (a setup completion hook is the missing trigger). */
+    templateTrigger?: TemplateBuildTrigger;
 
     constructor(
         @Inject(RUNTIME_CONFIG) private readonly config: FleetConfig,
@@ -44,6 +56,8 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
         @Inject(FLEET_LOGGER) private readonly logger: RuntimeLogger,
         @Inject(FLEET_TEMPLATES) private readonly templates: TemplateResolver | null,
         @Inject(ProviderRegistry) private readonly providers: ProviderRegistry,
+        @Optional() @Inject(FLEET_HOST_SEALER) private readonly sealer?: HostSealer | null,
+        @Optional() @Inject(FLEET_TEMPLATE_SETUP_REQUESTER) private readonly requester?: TemplateSetupRequester | null,
     ) {}
 
     async onApplicationBootstrap() {
@@ -53,12 +67,48 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
         const tls = c.tls?.workerCert && c.tls.workerKey ? { cert: c.tls.workerCert, key: c.tls.workerKey, ca: c.tls.ca } : undefined;
         const hub = new HubFleetClient(c.hubUrl, fleetPost({ tls, testOnlyToken: c.testOnlyPlaintext?.fleetToken }));
         const log = (msg: string, fields: Record<string, unknown>) => this.logger.write('info', msg, fields);
+        const templateStore = new PgTemplateStore(this.pool);
+        let templates: TemplateResolver = this.templates ?? new StoreTemplateResolver(templateStore);
+        // The environment template builder runs only where it can seal a host and ask for the setup on it.
+        const boat = this.providers.get('boat');
+        if (boat && this.sealer && this.requester && !this.templates) {
+            const setups = new PgEnvironmentSetupStore(this.pool);
+            const boatPoolsOf = async (organizationId: string) =>
+                (await store.controlledPools()).pools.filter((p) => p.pool.provider === 'boat' && p.pool.lifecycle === 'perRun' && (!p.pool.admission || p.pool.admission.allowOrgs.includes(organizationId))).map((p) => ({ poolId: p.poolId, pool: p.pool }));
+            const poll = { sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)), attempts: 360, intervalMs: 10_000 };
+            const setupHosts = new RequestingSetupHost(
+                new BoatSetupHost({
+                    provider: boat,
+                    hub,
+                    probe: new SetupRecordBakeProbe(setups),
+                    sealer: this.sealer,
+                    poolOf: async (poolId) => (await store.pool(poolId))?.pool,
+                    installation: c.installation,
+                    bootstrap: { hubUrl: c.hubPublicUrl, hubCa: c.hubCa },
+                    poll,
+                }),
+                this.requester,
+            );
+            const trigger = new TemplateBuildTrigger({
+                store: templateStore,
+                setups,
+                poolOf: async (poolId) => {
+                    const p = await store.pool(poolId);
+                    return p ? { poolId, pool: p.pool } : null;
+                },
+                boatPoolsOf,
+                build: (req) => buildEnvironmentTemplate(req, { store: templateStore, provider: boat, setupHosts, cellBase: cellBaseOf(req.pool.hostClass) ?? '', poll }),
+                log,
+            });
+            templates = new TriggeringTemplateResolver(templates, trigger);
+            this.templateTrigger = trigger;
+        }
         this.engine = new FleetEngine(c, {
             store,
             hub,
             providerFor: (k) => this.providers.get(k),
             // A Run host starts from its environment's ready template on its pool (runtime_env_templates).
-            templates: this.templates ?? new StoreTemplateResolver(new PgTemplateStore(this.pool)),
+            templates,
             installation: c.installation,
             bootstrap: { hubUrl: c.hubPublicUrl, hubCa: c.hubCa },
             sealKey: c.secretSealKey,

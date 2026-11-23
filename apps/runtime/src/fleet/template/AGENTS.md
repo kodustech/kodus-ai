@@ -17,11 +17,13 @@ The environment template on boat (docs/runtime/host-providers.md §8.2): a provi
 - Never a PR's code: the bake must report the default branch and the requested fingerprint, or nothing is saved.
 - The saved disk holds no identity: the seal step removes the key, the certificate, the token file and `/tmp` before the save.
 - The setup host is destroyed whatever happens; a failed save keeps the older template.
-- `boat-setup-host.ts` is the live `SetupHostPort`: boot (token bound to `template:<org>/<env>`, `from` the cell base), wait (a `BakeProbe` over the setup records), seal (a `HostSealer` port, then the cell is retired at the hub), destroy. No `HostSealer` or `BakeProbe` is wired in `runtime-fleet.module.ts` yet (sealing a remote host needs a way to run `cell-host.sh seal` there; the hub has no such message), and the hub does not yet place a template-bound setup on the template host. Until both exist, a Run host whose environment has no template starts from its class's cell base (`boat.base`) and builds the environment cold.
+- `boat-setup-host.ts` is the live `SetupHostPort`: boot (token bound to `template:<org>/<env>`, `from` the cell base), wait (`SetupRecordBakeProbe`, `bake-probe.ts`, over the setup record), seal (a `HostSealer` port, then the cell is retired at the hub), destroy. The hub places a setup request that carries `boundKey: template:<org>/<env>` only on the cell bound to that key, and that cell takes nothing else.
+- `template-trigger.ts`: `TemplateBuildTrigger` starts a build on a Run's demand with no ready template (through `TriggeringTemplateResolver`; the Run boots from the cell base meanwhile) and on `onSetupFinished`; one build per environment at a time. `RequestingSetupHost` asks the setup request path for the setup after boot (`TemplateSetupRequester`). `runtime-fleet.module.ts` builds templates only when `FLEET_HOST_SEALER` and `FLEET_TEMPLATE_SETUP_REQUESTER` are provided; otherwise a Run host starts from its class's cell base (`boat.base`) and builds cold.
+- A throw from any build step records the template row `failed` (`build_error`); the setup host is still destroyed.
 - The cell base (`kodus-cell-<release>-<backend>`) is made outside runtime-fleet, once per cell release: the host recipe on a boat sandbox created with no env, `cell preflight` passing, never enrolled, saved; then named in the pool file and applied with `runtime-fleet apply`.
 
 ## Where new code goes
-- Wiring `BoatSetupHost` in `../runtime-fleet.module.ts` once the sealer and the probe exist.
+- The hook that calls `TemplateBuildTrigger.onSetupFinished` when a setup ends.
 
 ## Tests
 - `build-template.spec.ts` and `boat-setup-host.spec.ts` (fakes); `template-store.integration.spec.ts` (real Postgres).
