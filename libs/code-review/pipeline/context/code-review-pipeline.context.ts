@@ -257,6 +257,14 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     businessLogicValidatedAt?: string;
 
     /**
+     * Set by ValidatePrerequisitesStage when the "author has no Kodus
+     * license" notice was posted on the PR. Persisted to
+     * dataExecution.licenseNoticePostedAt so later pushes on the same PR skip
+     * the notice.
+     */
+    licenseNoticePostedAt?: string;
+
+    /**
      * `@kody -v <agent-slug>`: run only that custom agent on this review
      * (#2172). Unset on every other review.
      */

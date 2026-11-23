@@ -891,6 +891,32 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
         }
     }
 
+    async hasPullRequestExecutionWithDataKey(params: {
+        teamAutomationId: string;
+        repositoryId: string;
+        pullRequestNumber: number;
+        key: string;
+    }): Promise<boolean> {
+        return this.automationExecutionRepository
+            .createQueryBuilder('automation_execution')
+            .where(
+                'automation_execution.team_automation_id = :teamAutomationId',
+                { teamAutomationId: params.teamAutomationId },
+            )
+            .andWhere('automation_execution.repositoryId = :repositoryId', {
+                repositoryId: params.repositoryId,
+            })
+            .andWhere(
+                'automation_execution.pullRequestNumber = :pullRequestNumber',
+                { pullRequestNumber: params.pullRequestNumber },
+            )
+            .andWhere(
+                `"automation_execution"."dataExecution"->>:key IS NOT NULL`,
+                { key: params.key },
+            )
+            .getExists();
+    }
+
     async findByPeriodAndTeamAutomationId(
         startDate: Date,
         endDate: Date,

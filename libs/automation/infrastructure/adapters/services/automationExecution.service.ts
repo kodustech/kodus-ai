@@ -60,6 +60,17 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         );
     }
 
+    hasPullRequestExecutionWithDataKey(params: {
+        teamAutomationId: string;
+        repositoryId: string;
+        pullRequestNumber: number;
+        key: string;
+    }): Promise<boolean> {
+        return this.automationExecutionRepository.hasPullRequestExecutionWithDataKey(
+            params,
+        );
+    }
+
     async findOneByOrganizationIdAndIssueId(
         organizationId: string,
         issueId: string,
