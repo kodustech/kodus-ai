@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
 import type {
     ApprovalTeamMembership,
     ApprovalTeamMembershipParams,
@@ -2519,6 +2520,68 @@ export class AzureReposService implements Omit<
                 context: this.getPullRequestReviewComments.name,
                 error,
                 metadata: { params },
+            });
+            return null;
+        }
+    }
+
+    /**
+     * File-level threads only: a PR-level finding is saved under its first
+     * comment's id, which is 1 in every thread and so names no thread.
+     */
+    async getAnsweredReviewThreadRootIds(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<Set<string> | null> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        try {
+            const { orgName, token } = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            const projectId = await this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            const threads =
+                await this.azureReposRequestHelper.getPullRequestComments({
+                    orgName,
+                    token,
+                    projectId,
+                    repositoryId: repository.id,
+                    prId: prNumber,
+                });
+
+            return answeredThreadRootIds(
+                (threads ?? [])
+                    .filter(
+                        (thread) => !thread?.isDeleted && thread?.threadContext,
+                    )
+                    .map((thread) => ({
+                        rootIds: [thread.id],
+                        replies: (thread.comments ?? [])
+                            .filter(
+                                (comment) =>
+                                    !(comment as any)?.isDeleted &&
+                                    comment?.commentType !== 'system',
+                            )
+                            .slice(1)
+                            .map((comment) => ({ body: comment.content })),
+                    })),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read answered review threads for PR#${prNumber}`,
+                context: AzureReposService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                },
             });
             return null;
         }

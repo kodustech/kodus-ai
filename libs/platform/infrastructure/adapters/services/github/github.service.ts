@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
 import { webhookConfigsOfInstance } from '@libs/common/utils/webhooks/webhook-source-host';
 import type {
     ApprovalTeamMembership,
@@ -5467,6 +5468,91 @@ This is an experimental feature that generates committable changes. Review the d
                 },
             });
 
+            return null;
+        }
+    }
+
+    /**
+     * PR-level findings are issue comments on GitHub, which have no threads,
+     * so only review threads are covered.
+     */
+    async getAnsweredReviewThreadRootIds(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<Set<string> | null> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+
+        const query = `
+           query ($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+              repository(owner: $owner, name: $name) {
+                pullRequest(number: $number) {
+                  reviewThreads(first: 100, after: $cursor) {
+                    nodes {
+                      comments(first: 1) {
+                        totalCount
+                        nodes {
+                          fullDatabaseId
+                        }
+                      }
+                    }
+                    pageInfo {
+                      hasNextPage
+                      endCursor
+                    }
+                  }
+                }
+              }
+            }
+        `;
+
+        try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+            const graphql = await this.instanceGraphQL(organizationAndTeamData);
+
+            const variables = {
+                owner: this.ownerOf(repository, githubAuthDetail),
+                name: repository.name,
+                number: prNumber,
+                cursor: null as string | null,
+            };
+
+            const answered = new Set<string>();
+            let hasNextPage = true;
+            while (hasNextPage) {
+                const response: any = await graphql(query, { ...variables });
+                const reviewThreads =
+                    response?.repository?.pullRequest?.reviewThreads;
+
+                const threads = (reviewThreads?.nodes ?? []).map((thread) => ({
+                    // fullDatabaseId is the REST id the posted comment is saved under.
+                    rootIds: [thread?.comments?.nodes?.[0]?.fullDatabaseId],
+                    replies:
+                        (thread?.comments?.totalCount ?? 0) > 1 ? [{}] : [],
+                }));
+                answeredThreadRootIds(threads).forEach((id) =>
+                    answered.add(id),
+                );
+
+                hasNextPage = !!reviewThreads?.pageInfo?.hasNextPage;
+                variables.cursor = reviewThreads?.pageInfo?.endCursor ?? null;
+            }
+
+            return answered;
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read answered review threads for PR#${prNumber}`,
+                context: GithubService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                },
+            });
             return null;
         }
     }

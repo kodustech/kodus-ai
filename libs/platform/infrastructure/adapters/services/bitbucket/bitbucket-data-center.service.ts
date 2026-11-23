@@ -65,6 +65,7 @@ import {
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { formatBitbucketSuggestionBody } from '@libs/common/utils/codeManagement/bitbucket-suggestion-comment';
+import { answeredThreadRootIds } from '@libs/common/utils/codeManagement/answered-review-threads';
 import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
@@ -2726,6 +2727,68 @@ export class BitbucketDataCenterService implements Omit<
                 message: `Error getting review comments for PR #${params.prNumber} in Data Center`,
                 context: BitbucketDataCenterService.name,
                 error,
+            });
+            return null;
+        }
+    }
+
+    async getAnsweredReviewThreadRootIds(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+    }): Promise<Set<string> | null> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        try {
+            const authDetails = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            const repoConfig = await this.getRepoConfig(
+                organizationAndTeamData,
+                repository.id || repository.name,
+            );
+            if (!authDetails || !repoConfig) return null;
+
+            const axiosClient = this.getAxiosInstance(authDetails);
+
+            const response = await axiosClient.get(
+                `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}/activities`,
+                { params: { limit: 1000 } },
+            );
+
+            // Data Center nests a thread's replies under the root comment, a
+            // reply to a reply under its parent.
+            const descendants = (comment: any): any[] =>
+                (comment?.comments ?? []).flatMap((reply: any) => [
+                    reply,
+                    ...descendants(reply),
+                ]);
+
+            return answeredThreadRootIds(
+                (response?.data?.values ?? [])
+                    .filter(
+                        (activity: any) =>
+                            activity?.action === 'COMMENTED' &&
+                            activity?.commentAction === 'ADDED' &&
+                            activity?.comment,
+                    )
+                    .map((activity: any) => ({
+                        rootIds: [activity.comment.id],
+                        replies: descendants(activity.comment).map((reply) => ({
+                            body: reply?.text,
+                        })),
+                    })),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not read answered review threads for PR#${prNumber}`,
+                context: BitbucketDataCenterService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                },
             });
             return null;
         }
