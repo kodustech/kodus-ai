@@ -54,12 +54,13 @@ import {
 } from '@libs/ee/heavy-mode/heavy-mode-plan';
 import type { UltraModel } from '@libs/code-review/domain/ultra-review-state';
 import {
-    isUltraReviewPlanAllowed,
+    ultraReviewPlanAccess,
     resolveUltraTrio,
     ultraTrioRefusal,
 } from '@libs/ee/ultra-review/ultra-review-plan';
 import {
     ULTRA_REVIEW_PLAN_REQUIRED,
+    ULTRA_REVIEW_PLAN_UNREADABLE,
     ultraTrioRefusalMessage,
     ULTRA_REFUSAL_NOT_POSTED,
 } from '@libs/ee/ultra-review/ultra-review-messages';
@@ -453,18 +454,23 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         const askedByCommand =
             context.requestedReviewMode === 'ultra' ||
             !!context.origin?.startsWith('command');
-        const planAllowed = await isUltraReviewPlanAllowed(
+        const planAccess = await ultraReviewPlanAccess(
             this.licenseService,
             context.organizationAndTeamData,
             this.stageName,
         );
-        const trio = planAllowed ? resolveUltraTrio(storedConfig) : undefined;
+        const trio =
+            planAccess === 'allowed'
+                ? resolveUltraTrio(storedConfig)
+                : undefined;
         const trioRefusal = trio ? ultraTrioRefusal(trio) : undefined;
 
         if (!trio || trio.ok !== true) {
             const message = trioRefusal
                 ? ultraTrioRefusalMessage(trioRefusal)
-                : ULTRA_REVIEW_PLAN_REQUIRED;
+                : planAccess === 'unknown'
+                  ? ULTRA_REVIEW_PLAN_UNREADABLE
+                  : ULTRA_REVIEW_PLAN_REQUIRED;
             this.logger.log({
                 message: 'Ultra review refused — the review does not run',
                 context: this.stageName,
@@ -473,8 +479,10 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     prNumber: context.pullRequest?.number,
                     repositoryId: context.repository?.id,
                     askedByCommand,
-                    planAllowed,
-                    reason: trioRefusal?.reason ?? 'plan',
+                    planAccess,
+                    reason:
+                        trioRefusal?.reason ??
+                        (planAccess === 'unknown' ? 'plan_unreadable' : 'plan'),
                 },
             });
             // Settings asking for it: told once per PR, and only when the

@@ -419,6 +419,33 @@ describe('ValidateConfigStage — v2 routing', () => {
             expect(comment()).toContain('was not reviewed');
         });
 
+        it.each([
+            [
+                'the license service is unreachable',
+                { valid: false, unavailable: true },
+            ],
+            ['the plan read throws', new Error('billing down')],
+        ])(
+            'when %s, runs no review for --ultra and says the plan could not be read, not that it lacks Ultra',
+            async (_, outcome) => {
+                if (outcome instanceof Error)
+                    validateOrganizationLicense.mockRejectedValue(outcome);
+                else validateOrganizationLicense.mockResolvedValue(outcome);
+                mockOrganizationParametersService.findByKey.mockResolvedValue({
+                    configValue: trioConfig(),
+                });
+
+                const result = await stage.execute(ultraContext('ultra'));
+
+                expect(result.ultra).toBeUndefined();
+                expect(result.statusInfo?.status).toBe('skipped');
+                expect(comment()).toContain(
+                    "Kody could not read this organization's plan just now",
+                );
+                expect(comment()).not.toContain('is not on one');
+            },
+        );
+
         it('a trio still set after the trial ended runs nothing; the PR is told once, on the first review skipped for it', async () => {
             validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
             mockOrganizationParametersService.findByKey.mockResolvedValue({

@@ -6,7 +6,7 @@ import {
 import type { BYOKConfig } from '@libs/llm/byok-config';
 
 import {
-    isUltraReviewPlanAllowed,
+    ultraReviewPlanAccess,
     isUltraReviewTierAllowed,
     ownModelIds,
     resolveUltraTrio,
@@ -71,7 +71,7 @@ describe('isUltraReviewTierAllowed', () => {
     });
 });
 
-describe('isUltraReviewPlanAllowed', () => {
+describe('ultraReviewPlanAccess', () => {
     const org = { organizationId: 'org', teamId: 'team' };
     const service = (
         result: OrganizationLicenseValidationResult | Error,
@@ -85,20 +85,26 @@ describe('isUltraReviewPlanAllowed', () => {
 
     it('reads the plan on every call, so a trial that ends loses Ultra', async () => {
         const trial = service(license(SubscriptionStatus.TRIAL, 'teams'));
-        expect(await isUltraReviewPlanAllowed(trial, org, 't')).toBe(true);
+        expect(await ultraReviewPlanAccess(trial, org, 't')).toBe('allowed');
         const ended = service(license(SubscriptionStatus.ACTIVE, 'free_byok'));
-        expect(await isUltraReviewPlanAllowed(ended, org, 't')).toBe(false);
+        expect(await ultraReviewPlanAccess(ended, org, 't')).toBe('denied');
     });
 
-    it('fails closed with no service or a license that cannot be read', async () => {
-        expect(await isUltraReviewPlanAllowed(undefined, org, 't')).toBe(false);
+    it('runs no Ultra without a license service', async () => {
+        expect(await ultraReviewPlanAccess(undefined, org, 't')).toBe('denied');
+    });
+
+    it('is unknown, not denied, when the license cannot be read', async () => {
         expect(
-            await isUltraReviewPlanAllowed(
-                service(new Error('down')),
+            await ultraReviewPlanAccess(service(new Error('down')), org, 't'),
+        ).toBe('unknown');
+        expect(
+            await ultraReviewPlanAccess(
+                service({ valid: false, unavailable: true }),
                 org,
                 't',
             ),
-        ).toBe(false);
+        ).toBe('unknown');
     });
 });
 

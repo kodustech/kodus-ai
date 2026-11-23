@@ -722,6 +722,18 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — locked review modes', () 
         }
     });
 
+    it('refuses Ultra when the plan cannot be read, saying so rather than that the plan lacks it', async () => {
+        await expect(
+            buildUseCase(
+                {},
+                {
+                    license: { valid: false, unavailable: true },
+                    byok: trioConfig(['m1', 'm2', 'm3']),
+                },
+            ).save({ reviewMode: 'ultra' }, { source: 'web' }),
+        ).rejects.toThrow("Kody could not read this organization's plan");
+    });
+
     it('refuses Ultra with no three models set for it, saying why', async () => {
         await expect(
             buildUseCase({}, { byok: trioConfig(['m1', 'm2']) }).save(

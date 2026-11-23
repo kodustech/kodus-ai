@@ -43,22 +43,30 @@ export function isUltraReviewTierAllowed(
     });
 }
 
+/** Whether the organization's plan runs Ultra: `unknown` when it could not be read. */
+export type UltraReviewPlanAccess = 'allowed' | 'denied' | 'unknown';
+
 /**
  * Whether the organization's plan runs Ultra, read on every review so a trial
- * that ends loses it. Fails closed: no license service, or a license that
- * cannot be read, runs no Ultra.
+ * that ends loses it. No license service runs no Ultra; a license that cannot
+ * be read is `unknown`, which runs no Ultra either, but is not reported as a
+ * plan without it.
  */
-export async function isUltraReviewPlanAllowed(
+export async function ultraReviewPlanAccess(
     licenseService: ILicenseService | undefined,
     organizationAndTeamData: OrganizationAndTeamData,
     logContext: string,
-): Promise<boolean> {
-    if (!licenseService) return false;
+): Promise<UltraReviewPlanAccess> {
+    if (!licenseService) return 'denied';
     try {
         const license = await licenseService.validateOrganizationLicense(
             organizationAndTeamData,
         );
-        return isUltraReviewTierAllowed(license);
+        // The license service answers a failed read with this flag.
+        if (license?.unavailable === true) {
+            throw new Error('The license service could not be reached');
+        }
+        return isUltraReviewTierAllowed(license) ? 'allowed' : 'denied';
     } catch (error) {
         logger.warn({
             message: 'Could not read the plan for Ultra review',
@@ -69,7 +77,7 @@ export async function isUltraReviewPlanAllowed(
                 teamId: organizationAndTeamData.teamId,
             },
         });
-        return false;
+        return 'unknown';
     }
 }
 

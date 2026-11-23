@@ -40,7 +40,11 @@ const NOT_REVIEWED =
 
 /** Why an Ultra review was refused on the plan. */
 export const ULTRA_REVIEW_PLAN_REQUIRED =
-    'Ultra review is available on the Teams and Enterprise plans, and on a trial with three of your own models, and Kody could not confirm this organization is on one. This pull request was not reviewed. `@kody start-review --balanced` reviews it in Balanced mode.';
+    'Ultra review is available on the Teams and Enterprise plans, and on a trial with three of your own models, and this organization is not on one. This pull request was not reviewed. `@kody start-review --balanced` reviews it in Balanced mode.';
+
+/** Why an Ultra review was refused when the plan could not be read. */
+export const ULTRA_REVIEW_PLAN_UNREADABLE =
+    "Ultra review is available on the Teams and Enterprise plans, and on a trial with three of your own models, and Kody could not read this organization's plan just now. This pull request was not reviewed. Try again in a moment, or `@kody start-review --balanced` reviews it in Balanced mode.";
 
 /** The skip of a refusal whose reply the platform did not take. */
 export const ULTRA_REFUSAL_NOT_POSTED =
@@ -68,10 +72,13 @@ export function ultraTrioRefusalMessage(refusal: UltraTrioRefusal): string {
  * web shows the API's message only on that prefix.
  */
 export function ultraSaveRefusalMessage(
-    refusal: UltraTrioRefusal | 'plan',
+    refusal: UltraTrioRefusal | 'plan' | 'plan_unreadable',
 ): string {
     if (refusal === 'plan') {
-        return 'Ultra review is available on the Teams and Enterprise plans, and on a trial with three of your own models, and Kody could not confirm this organization is on one, so the review mode was not changed.';
+        return 'Ultra review is available on the Teams and Enterprise plans, and on a trial with three of your own models, and this organization is not on one, so the review mode was not changed.';
+    }
+    if (refusal === 'plan_unreadable') {
+        return "Kody could not read this organization's plan just now, so the review mode was not changed. Try again in a moment.";
     }
     switch (refusal.reason) {
         case 'too_few_models':
