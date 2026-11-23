@@ -101,4 +101,20 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         expect((await candidates.activeSince(since, ['org-c'], 50)).map((r) => r.environmentId)).toEqual(['c-new']);
         expect((await candidates.activeSince(since, null, 50)).map((r) => r.environmentId).sort()).toEqual(['c-new', 'c-other']);
     });
+    it('a build left building for hours (its fleet died) is dead: a new build takes it over and it holds nothing', async () => {
+        const store = new PgTemplateStore(pool);
+        const fp = 'f'.repeat(64);
+        const row = { organizationId: 'org-s', environmentId: 'env-s', poolId: 'p', fingerprint: fp, name: templateNameOf('org-s', 'env-s', fp) };
+        await store.begin({ ...row, setupHostId: 'tpl-dead' });
+        expect(await store.holds(row, new Date(Date.now() - 30 * 60_000))).toBe(true);
+        await pool.query(`UPDATE runtime.runtime_env_templates SET updated_at = now() - interval '4 hours' WHERE org_id = 'org-s'`);
+        expect(await store.holds(row, new Date(Date.now() - 30 * 60_000))).toBe(false);
+        expect(await store.buildingSetupHosts()).not.toContain('tpl-dead');
+        await store.begin({ ...row, setupHostId: 'tpl-new' });
+        expect(await store.buildingSetupHosts()).toContain('tpl-new');
+        // A recent building row is never taken over by a second build.
+        await store.begin({ ...row, setupHostId: 'tpl-second' });
+        expect(await store.buildingSetupHosts()).toContain('tpl-new');
+        expect(await store.buildingSetupHosts()).not.toContain('tpl-second');
+    });
 });

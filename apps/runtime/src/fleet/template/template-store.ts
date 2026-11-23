@@ -22,7 +22,8 @@ export interface TemplateStore {
     find(organizationId: string, environmentId: string, poolId: string, fingerprint: string): Promise<TemplateRow | null>;
     readyName(organizationId: string, environmentId: string, poolId: string): Promise<string | null>;
     /** Marks the template building on `setupHostId`, the setup host about to be created (written before it exists). */
-    begin(t: Omit<TemplateRow, 'state'> & { setupHostId?: string }): Promise<void>;
+    /** false: another build holds the row (building, not stale); this one must not boot a host. */
+    begin(t: Omit<TemplateRow, 'state'> & { setupHostId?: string }): Promise<boolean>;
     /** The setup hosts of the templates building now (recently touched): the orphan pass spares them. */
     buildingSetupHosts(): Promise<string[]>;
     fail(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, reason: string): Promise<void>;
@@ -46,11 +47,13 @@ export class PgTemplateStore implements TemplateStore {
     }
 
     async begin(t: Omit<TemplateRow, 'state'> & { setupHostId?: string }) {
-        await this.db.query(
+        const r = await this.db.query(
             `INSERT INTO runtime.runtime_env_templates (org_id, environment_id, pool_id, fingerprint, snapshot_name, state, setup_host_id) VALUES ($1, $2, $3, $4, $5, 'building', $6)
-             ON CONFLICT (org_id, environment_id, pool_id, fingerprint) DO UPDATE SET state = 'building', failure = NULL, setup_key = NULL, setup_requested_at = NULL, setup_host_id = EXCLUDED.setup_host_id, updated_at = now() WHERE runtime_env_templates.state IN ('failed', 'replaced')`,
+             ON CONFLICT (org_id, environment_id, pool_id, fingerprint) DO UPDATE SET state = 'building', failure = NULL, setup_key = NULL, setup_requested_at = NULL, setup_host_id = EXCLUDED.setup_host_id, updated_at = now() WHERE runtime_env_templates.state IN ('failed', 'replaced') OR (runtime_env_templates.state = 'building' AND runtime_env_templates.updated_at < now() - interval '3 hours')
+             RETURNING 1`,
             [t.organizationId, t.environmentId, t.poolId, t.fingerprint, t.name, t.setupHostId ?? null],
         );
+        return (r.rowCount ?? 0) > 0;
     }
 
     async buildingSetupHosts() {
@@ -68,7 +71,7 @@ export class PgTemplateStore implements TemplateStore {
 
     async holds(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, failedAfter: Date) {
         const r = await this.db.query(
-            `SELECT 1 FROM runtime.runtime_env_templates WHERE org_id = $1 AND environment_id = $2 AND pool_id = $3 AND fingerprint = $4 AND (state IN ('ready', 'building') OR (state = 'failed' AND updated_at > $5)) LIMIT 1`,
+            `SELECT 1 FROM runtime.runtime_env_templates WHERE org_id = $1 AND environment_id = $2 AND pool_id = $3 AND fingerprint = $4 AND (state = 'ready' OR (state = 'building' AND updated_at > now() - interval '3 hours') OR (state = 'failed' AND updated_at > $5)) LIMIT 1`,
             [t.organizationId, t.environmentId, t.poolId, t.fingerprint, failedAfter],
         );
         return r.rows.length > 0;

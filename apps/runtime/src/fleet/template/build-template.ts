@@ -47,7 +47,7 @@ export interface BuildTemplateRequest {
 
 export type BuildTemplateResult =
     | { ok: true; name: string; reused: boolean }
-    | { ok: false; reason: 'org_not_admitted' | 'no_images' | 'bake_failed' | 'not_default_branch' | 'fingerprint_mismatch' | 'save_failed' | 'build_error'; cause?: string };
+    | { ok: false; reason: 'org_not_admitted' | 'no_images' | 'already_building' | 'bake_failed' | 'not_default_branch' | 'fingerprint_mismatch' | 'save_failed' | 'build_error'; cause?: string };
 
 /** Why a step threw, safe to log and store: a provider's code, or one of this module's own error words; never a free message. */
 function causeOf(e: unknown): string {
@@ -66,7 +66,7 @@ export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: Bui
     // One host per attempt: the hub enrolls a host id once, so a retry of the same template needs its own.
     const hostId = `tpl-${randomBytes(12).toString('hex')}`;
     // The row names the setup host before it exists: the orphan pass spares it while the template builds.
-    await d.store.begin({ ...key, name, setupHostId: hostId });
+    if (!(await d.store.begin({ ...key, name, setupHostId: hostId }))) return { ok: false, reason: 'already_building' };
     const fail = async (reason: Exclude<BuildTemplateResult, { ok: true }>['reason'], cause?: string) => {
         await d.store.fail(key, cause ? `${reason}:${cause}` : reason);
         return { ok: false as const, reason, ...(cause ? { cause } : {}) };

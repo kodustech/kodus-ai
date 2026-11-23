@@ -217,6 +217,8 @@ export class InMemoryTemplateStore implements TemplateStore {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
         if (!r) this.rows.push({ ...t, state: 'building' });
         else if (r.state === 'failed' || r.state === 'replaced') Object.assign(r, { state: 'building', setupHostId: t.setupHostId });
+        else return false;
+        return true;
     }
     async buildingSetupHosts() {
         return this.rows.filter((r) => r.state === 'building' && r.setupHostId).map((r) => r.setupHostId!);

@@ -118,6 +118,15 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         expect(templateNameOf('a', 'e', FP)).not.toBe(templateNameOf('b', 'e', FP));
     });
 
+    it('a template another build is making now is left to it: no second setup host', async () => {
+        const w = world();
+        await w.store.begin({ organizationId: w.req.organizationId, environmentId: w.req.environmentId, poolId: w.req.poolId, fingerprint: FP, name: templateNameOf(w.req.organizationId, w.req.environmentId, FP), setupHostId: 'tpl-other' });
+        const r = await buildEnvironmentTemplate(w.req, w.deps);
+        expect(r).toEqual({ ok: false, reason: 'already_building' });
+        expect(w.hosts.booted).toEqual([]);
+        expect(w.store.rows.map((x) => [x.state, x.setupHostId])).toEqual([['building', 'tpl-other']]);
+    });
+
     it('records the setup host on the template before the host exists, so no orphan pass destroys it while it builds', async () => {
         const w = world();
         let recordedBeforeBoot: string | undefined;
