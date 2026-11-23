@@ -642,6 +642,66 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
             // E2B path: existing idle-kill logic (unchanged)
             const idleMs = opts?.idleMs ?? IDLE_TIMEOUT_MS;
+
+            // A single-use sandbox (the graph jobs, whose key carries the
+            // jobId) is never joined again: the last release stops compute now
+            // instead of paying the five-minute default idle window.
+            //
+            // The claim and killAt go in one write. claimCleanup only wins
+            // while leaseCount is still <= 0, so a concurrent acquire that
+            // re-upped the count leaves the sandbox to its new holder; and
+            // killAt, which is all the idle-kill cron reads, is never missing
+            // if this process dies between the claim and the kill.
+            if (idleMs <= 0) {
+                const claimed = await this.leaseRepo.claimCleanup(
+                    prKey,
+                    updated.sandboxId,
+                    true,
+                    new Date(),
+                );
+                if (!claimed) {
+                    this.logger.log({
+                        message: `SandboxLeaseManager: single-use release lost the cleanup claim, leaving the sandbox to its holder prKey="${prKey}"`,
+                        context: SandboxLeaseManager.name,
+                        metadata: { prKey, sandboxId: updated.sandboxId },
+                    });
+                    return;
+                }
+
+                const apiKey = this.configService.get<string>('API_E2B_KEY');
+                if (!apiKey) {
+                    return;
+                }
+                try {
+                    await Sandbox.kill(updated.sandboxId, { apiKey });
+                    await this.leaseRepo.completeCleanup(
+                        prKey,
+                        updated.sandboxId,
+                    );
+                    this.logger.log({
+                        message: `SandboxLeaseManager: killed single-use sandbox immediately sandboxId="${updated.sandboxId}" prKey="${prKey}"`,
+                        context: SandboxLeaseManager.name,
+                        metadata: {
+                            prKey,
+                            sandboxId: updated.sandboxId,
+                            idleTimeoutMs: 0,
+                        },
+                    });
+                } catch (err) {
+                    // The claim and killAt stay: findReadyToKill ignores
+                    // cleanupStatus, so the idle-kill cron retries the kill.
+                    // Stamping FAILED would mark this as a failed *local*
+                    // cleanup and reject every later acquire for the key.
+                    this.logger.warn({
+                        message: `SandboxLeaseManager: immediate kill failed, idle-kill cron retries sandboxId="${updated.sandboxId}" prKey="${prKey}"`,
+                        context: SandboxLeaseManager.name,
+                        error: err as Error,
+                        metadata: { prKey, sandboxId: updated.sandboxId },
+                    });
+                }
+                return;
+            }
+
             const killAt = new Date(Date.now() + idleMs);
             await this.leaseRepo.setKillAt(prKey, killAt);
 

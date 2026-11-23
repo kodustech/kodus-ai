@@ -1297,6 +1297,121 @@ describe('SandboxLeaseManager', () => {
         expect(leaseRepo.delete).not.toHaveBeenCalled();
     });
 
+    // ─── Test 9c: single-use release stops compute now (#2626) ────────────
+
+    async function acquireAndReleaseWith(
+        idleMs: number,
+        claim: Record<string, unknown> | null = {
+            _id: 'claimed',
+            leaseCount: 0,
+            state: 'READY',
+            sandboxId: 'graph-sandbox',
+        },
+    ) {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:202';
+
+        leaseRepo.upsertAcquire.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'CREATING',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+        leaseRepo.findByPrKey.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'READY',
+            sandboxId: '',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        const result = await manager.acquire(prKey, 'graph-build');
+
+        leaseRepo.decrementLease.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 0,
+            state: 'READY',
+            sandboxId: 'graph-sandbox',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+        leaseRepo.claimCleanup.mockResolvedValue(
+            claim ? ({ ...claim, _id: prKey } as any) : null,
+        );
+
+        const before = Date.now();
+        await manager.release(result.leaseId, { idleMs });
+
+        return { prKey, before };
+    }
+
+    it('release with idleMs 0 claims the lease with killAt, kills and completes cleanup', async () => {
+        const { prKey, before } = await acquireAndReleaseWith(0);
+
+        // Claim and killAt are one write, and the claim only wins while
+        // leaseCount is still 0.
+        expect(leaseRepo.claimCleanup).toHaveBeenCalledTimes(1);
+        const [claimedKey, claimedSandbox, requireZero, claimedKillAt] = (
+            leaseRepo.claimCleanup as jest.Mock
+        ).mock.calls[0];
+        expect(claimedKey).toBe(prKey);
+        expect(claimedSandbox).toBe('graph-sandbox');
+        expect(requireZero).toBe(true);
+        expect(claimedKillAt).toBeInstanceOf(Date);
+        expect(claimedKillAt.getTime()).toBeGreaterThanOrEqual(before);
+        expect(claimedKillAt.getTime()).toBeLessThanOrEqual(Date.now() + 50);
+
+        expect(Sandbox.kill).toHaveBeenCalledWith('graph-sandbox', {
+            apiKey: 'test-e2b-key',
+        });
+        expect(leaseRepo.completeCleanup).toHaveBeenCalledWith(
+            prKey,
+            'graph-sandbox',
+        );
+        // No idle window to defend: the provider timeout is not what stops it.
+        expect(Sandbox.setTimeout).not.toHaveBeenCalled();
+    });
+
+    it('release with idleMs 0 keeps the claim and killAt when the kill fails', async () => {
+        (Sandbox.kill as jest.Mock).mockRejectedValueOnce(
+            new Error('provider unavailable'),
+        );
+
+        await acquireAndReleaseWith(0);
+
+        // The kill is attempted; the lease stays for the cron to retry.
+        expect(Sandbox.kill).toHaveBeenCalledWith('graph-sandbox', {
+            apiKey: 'test-e2b-key',
+        });
+        expect(leaseRepo.completeCleanup).not.toHaveBeenCalled();
+        expect(leaseRepo.delete).not.toHaveBeenCalled();
+        expect(leaseRepo.retire).not.toHaveBeenCalled();
+        // FAILED is the local-cleanup marker; stamping it would reject every
+        // later acquire for the key.
+        expect(leaseRepo.failCleanup).not.toHaveBeenCalled();
+        const [, , , claimedKillAt] = (leaseRepo.claimCleanup as jest.Mock).mock
+            .calls[0];
+        expect(claimedKillAt.getTime()).toBeLessThanOrEqual(Date.now() + 50);
+    });
+
+    it('release with idleMs 0 leaves the sandbox alone when it loses the cleanup claim', async () => {
+        // A concurrent acquire re-upped leaseCount before the claim: the doc is
+        // no longer single-use, so nothing may be killed or deleted.
+        const { prKey } = await acquireAndReleaseWith(0, null);
+
+        expect(leaseRepo.claimCleanup).toHaveBeenCalledWith(
+            prKey,
+            'graph-sandbox',
+            true,
+            expect.any(Date),
+        );
+        expect(Sandbox.kill).not.toHaveBeenCalled();
+        expect(leaseRepo.completeCleanup).not.toHaveBeenCalled();
+        expect(leaseRepo.failCleanup).not.toHaveBeenCalled();
+        expect(leaseRepo.delete).not.toHaveBeenCalled();
+    });
+
     // ─── Test 9d: acquire clears killAt atomically (warm reuse) ───────────
 
     it('acquire clears killAt on the lease doc so any worker preserves warm reuse', async () => {
@@ -1462,7 +1577,9 @@ describe('SandboxLeaseManager', () => {
                 "git -c http.extraHeader=\"$GIT_AUTH_HEADER\" fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD",
             ),
             expect.objectContaining({
-                envs: expect.objectContaining({ GIT_AUTH_HEADER: expect.any(String) }),
+                envs: expect.objectContaining({
+                    GIT_AUTH_HEADER: expect.any(String),
+                }),
             }),
         );
     });
