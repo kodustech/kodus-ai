@@ -50,6 +50,15 @@ describe('the live setup host on boat (docs/runtime/host-providers.md §8.2)', (
         w.provider.create = async (req) => (classes.push(req.cls), create(req));
         await w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', fingerprint: 'a'.repeat(64), base: 'b' });
         expect(classes).toEqual([expect.objectContaining({ provider: 'boat', boat: expect.objectContaining({ type: 'large', failFast: false }) })]);
+    });
+
+    it('asks for a host it can save: the template is a snapshot of it', async () => {
+        const w = world();
+        const saveable: unknown[] = [];
+        const create = w.provider.create.bind(w.provider);
+        w.provider.create = async (req) => (saveable.push(req.saveable), create(req));
+        await w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', fingerprint: 'a'.repeat(64), base: 'b' });
+        expect(saveable).toEqual([true]);
         expect(pool.hostClass).toMatchObject({ boat: { failFast: true } });
     });
 

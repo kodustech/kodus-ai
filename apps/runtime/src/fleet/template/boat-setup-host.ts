@@ -56,6 +56,7 @@ export class BoatSetupHost implements SetupHostPort {
             from: req.base,
             bootstrap: { ...d.bootstrap, token: minted.token },
             tags: { installation: d.installation, pool: req.poolId, host: req.hostId },
+            saveable: true,
         });
         this.providerIds.set(req.hostId, host.providerId);
         return { providerId: host.providerId };

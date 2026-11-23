@@ -33,6 +33,11 @@ export interface CreateHostRequest {
     from?: string;
     bootstrap: BootstrapPayload;
     tags: HostTags;
+    /**
+     * The host will be saved as an environment template (docs/runtime/host-providers.md §8.2), so the provider must keep
+     * it snapshottable. Only the template setup host sets it: a Run host is never saved.
+     */
+    saveable?: true;
 }
 
 export type ProviderHostState = 'pending' | 'running' | 'stopped' | 'gone' | 'failed';

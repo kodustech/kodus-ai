@@ -66,6 +66,14 @@ describe('the boat adapter', () => {
         });
     });
 
+    it('creates a host with snapshots on only when it is a template setup host to be saved; a Run host stays never-snapshotted', async () => {
+        const { boat, provider } = make();
+        await provider.create({ ...request('tpl-1'), saveable: true });
+        await provider.create(request('host-2'));
+        const bodies = boat.calls.filter((c) => c.method === 'POST' && c.path === '/sandboxes').map((c) => (c.body as { snapshots: boolean }).snapshots);
+        expect(bodies).toEqual([true, false]);
+    });
+
     it("maps boat's sandbox states to the port's", async () => {
         const { boat, provider } = make();
         const h = await provider.create(request());

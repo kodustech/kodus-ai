@@ -79,7 +79,8 @@ export class BoatHostProvider implements HostProvider {
             type: c.type,
             ...(req.from ? { from: req.from } : {}),
             noEnv: c.noEnv,
-            snapshots: c.snapshots,
+            // A Run host is never snapshotted (the class pins it false); only a template setup host is saved.
+            snapshots: req.saveable === true ? true : c.snapshots,
             monitoring: c.monitoring,
             failFast: c.failFast,
             ttlSeconds: c.ttlSeconds,
