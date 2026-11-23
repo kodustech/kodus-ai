@@ -19,6 +19,7 @@
 require('dotenv').config();
 
 import { fork } from 'node:child_process';
+import { createServer, connect, Server, Socket } from 'node:net';
 import { resolve } from 'node:path';
 
 import { DataSource } from 'typeorm';
@@ -354,6 +355,146 @@ const targets = [
                 await lock!.release();
             }, 20_000);
 
+            /**
+             * A TCP relay to the target that can freeze the connections it
+             * already carries: they stay open but nothing moves, the way a
+             * connection looks after a pooler restart or a dropped route.
+             * Connections opened after the freeze relay normally.
+             */
+            const startRelay = async () => {
+                const pairs: [Socket, Socket][] = [];
+                const all: Socket[] = [];
+                const server: Server = createServer((client) => {
+                    const upstream = connect(port, PG_HOST);
+                    client.pipe(upstream);
+                    upstream.pipe(client);
+                    const drop = () => {
+                        client.destroy();
+                        upstream.destroy();
+                    };
+                    client.on('error', drop);
+                    upstream.on('error', drop);
+                    pairs.push([client, upstream]);
+                    all.push(client, upstream);
+                });
+                await new Promise<void>((done) =>
+                    server.listen(0, '127.0.0.1', () => done()),
+                );
+                return {
+                    port: (server.address() as any).port as number,
+                    freezeExisting: () => {
+                        for (const [client, upstream] of pairs.splice(0)) {
+                            client.unpipe(upstream);
+                            upstream.unpipe(client);
+                            client.pause();
+                            upstream.pause();
+                        }
+                    },
+                    close: async () => {
+                        for (const socket of all) socket.destroy();
+                        await new Promise((done) => server.close(done));
+                    },
+                };
+            };
+
+            it('a renewal connection that hangs without an error is replaced, and the lock is kept', async () => {
+                const key = uniqueKey('hung-renewal');
+                const leaseMs = 2_000;
+                const relay = await startRelay();
+                const viaRelay = new DataSource({
+                    type: 'postgres',
+                    host: '127.0.0.1',
+                    port: relay.port,
+                    username: PG_USER,
+                    password: PG_PASSWORD,
+                    database: PG_DB,
+                    entities: [],
+                    extra: { max: 1 },
+                });
+                await viaRelay.initialize();
+                const holder = new DistributedLockService(viaRelay, undefined, {
+                    leaseMs,
+                });
+                try {
+                    const lock = await holder.acquire(key);
+                    expect(lock).not.toBeNull();
+                    // Let the renewal thread open its connection, then freeze it.
+                    await new Promise((r) => setTimeout(r, leaseMs));
+                    relay.freezeExisting();
+                    await new Promise((r) => setTimeout(r, leaseMs * 2.5));
+
+                    expect(await instanceB.acquire(key)).toBeNull();
+                    expect(lock!.isLost()).toBe(false);
+                } finally {
+                    await ThreadLeaseRenewer.stopAll();
+                    await relay.close();
+                    await viaRelay.destroy().catch(() => undefined);
+                    await sources[2].query(
+                        `DELETE FROM "kodus_workflow"."distributed_locks" WHERE lock_key = $1`,
+                        [key],
+                    );
+                }
+            }, 30_000);
+
+            it('a renewal connection the server terminates is reopened, and the lock is kept', async () => {
+                const key = uniqueKey('terminated-renewal');
+                const leaseMs = 2_000;
+                const holder = new DistributedLockService(
+                    sources[0],
+                    undefined,
+                    { leaseMs },
+                );
+                const lock = await holder.acquire(key);
+                expect(lock).not.toBeNull();
+                await new Promise((r) => setTimeout(r, leaseMs));
+
+                // Always on PostgreSQL itself: through PgBouncer this ends
+                // the server side of whatever client the pooler maps.
+                const admin = makeDataSource(PG_PORT, 1);
+                await admin.initialize();
+                await admin.query(
+                    `SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+                      WHERE application_name = 'kodus-lock-renewer'`,
+                );
+                await admin.destroy();
+                await new Promise((r) => setTimeout(r, leaseMs * 2));
+
+                expect(await instanceB.acquire(key)).toBeNull();
+                expect(lock!.isLost()).toBe(false);
+                await lock!.release();
+            }, 30_000);
+
+            it('renews about every third of its lease, not continuously', async () => {
+                const key = uniqueKey('cadence');
+                const leaseMs = 3_000;
+                const holder = new DistributedLockService(
+                    sources[0],
+                    undefined,
+                    { leaseMs },
+                );
+                const lock = await holder.acquire(key);
+                expect(lock).not.toBeNull();
+
+                // Every renewal writes a new row version; count them over
+                // three leases' worth of thirds.
+                const versions = new Set<string>();
+                const until = Date.now() + leaseMs;
+                while (Date.now() < until) {
+                    const [row] = await sources[2].query(
+                        `SELECT ctid::text AS v FROM "kodus_workflow"."distributed_locks" WHERE lock_key = $1`,
+                        [key],
+                    );
+                    versions.add(row.v);
+                    await new Promise((r) => setTimeout(r, 50));
+                }
+                await lock!.release();
+
+                // The acquired version plus about three renewals; a renewer
+                // that ran on every 250ms tick would write about twelve.
+                expect(versions.size).toBeGreaterThanOrEqual(2);
+                expect(versions.size).toBeLessThanOrEqual(6);
+            }, 20_000);
+
             it('a holder whose lease was taken over learns it from the next renewal', async () => {
                 const key = uniqueKey('lost');
                 const holder = new DistributedLockService(
@@ -378,10 +519,17 @@ const targets = [
                 const live = uniqueKey('sweep-live');
                 await repository.tryAcquire(dead, 'dead', 60_000);
                 await repository.tryAcquire(live, 'live', 60_000);
-                await expireLease(dead);
+                // Expired long ago, past the sweep's grace. Other specs'
+                // freshly expired rows stay untouched by this sweep.
+                await sources[2].query(
+                    `UPDATE "kodus_workflow"."distributed_locks"
+                        SET expires_at = now() - interval '2 hours'
+                      WHERE lock_key = $1`,
+                    [dead],
+                );
 
                 expect(
-                    await repository.deleteExpired(0),
+                    await repository.deleteExpired(60 * 60 * 1000),
                 ).toBeGreaterThanOrEqual(1);
 
                 expect(await repository.isHeld(dead)).toBe(false);

@@ -1,6 +1,7 @@
 import {
     describeConnection,
     resolveDirectConnection,
+    resolvePooledConnection,
     resolveSessionConnection,
     resolveSessionTimeouts,
 } from './postgres-connection-env';
@@ -37,10 +38,59 @@ describe('Postgres connection settings', () => {
             ).toMatchObject({ statement_timeout: 30_000 });
         });
 
+        it('accepts any whole number of milliseconds, ignoring surrounding spaces', () => {
+            expect(
+                resolveSessionTimeouts({
+                    DB_STATEMENT_TIMEOUT_MS: ' 45000 ',
+                    DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: '120000',
+                }),
+            ).toEqual({
+                statement_timeout: 45000,
+                idle_in_transaction_session_timeout: 120000,
+            });
+        });
+
+        it('refuses a value that merely ends in digits', () => {
+            expect(() =>
+                resolveSessionTimeouts({ DB_STATEMENT_TIMEOUT_MS: 'x5' }),
+            ).toThrow(/DB_STATEMENT_TIMEOUT_MS/);
+        });
+
         it('refuses a malformed value and names the variable', () => {
             expect(() =>
                 resolveSessionTimeouts({ DB_STATEMENT_TIMEOUT_MS: '30s' }),
             ).toThrow(/DB_STATEMENT_TIMEOUT_MS/);
+        });
+    });
+
+    describe('pooled connection, as the app has always resolved it', () => {
+        it('reads API_PG_DB_URL when DATABASE_URL is unset', () => {
+            expect(
+                resolvePooledConnection({
+                    ...discreteVars,
+                    API_PG_DB_URL: 'postgres://u:p@pooler:6432/kodus_db',
+                }),
+            ).toEqual({ url: 'postgres://u:p@pooler:6432/kodus_db' });
+        });
+
+        it('in production or homolog a missing host stays missing instead of becoming localhost', () => {
+            for (const env of [
+                { API_NODE_ENV: 'production' },
+                { API_DATABASE_ENV: 'production' },
+                { API_DATABASE_ENV: 'homolog', API_NODE_ENV: 'development' },
+            ]) {
+                expect(resolvePooledConnection(env).host).toBeUndefined();
+            }
+        });
+
+        it('elsewhere a missing host means localhost, and API_DATABASE_ENV wins over API_NODE_ENV', () => {
+            expect(
+                resolvePooledConnection({
+                    API_DATABASE_ENV: 'development',
+                    API_NODE_ENV: 'production',
+                }).host,
+            ).toBe('localhost');
+            expect(resolvePooledConnection({}).host).toBe('localhost');
         });
     });
 
@@ -110,6 +160,33 @@ describe('Postgres connection settings', () => {
             ).toBeUndefined();
         });
 
+        it('a direct host uses API_PG_DB_DIRECT_PORT when given', () => {
+            expect(
+                resolveDirectConnection({
+                    ...discreteVars,
+                    API_PG_DB_DIRECT_HOST: 'pg-primary',
+                    API_PG_DB_DIRECT_PORT: '5433',
+                }),
+            ).toMatchObject({ host: 'pg-primary', port: 5433 });
+        });
+
+        it('a direct host cannot borrow credentials from an unparseable DATABASE_URL, and says what to set instead', () => {
+            expect(() =>
+                resolveDirectConnection({
+                    DATABASE_URL: 'not a url',
+                    API_PG_DB_DIRECT_HOST: 'pg-primary',
+                }),
+            ).toThrow(/DATABASE_DIRECT_URL/);
+        });
+
+        it('refuses a direct URL in another scheme', () => {
+            expect(() =>
+                resolveDirectConnection({
+                    DATABASE_DIRECT_URL: 'jdbc:postgresql://db:5432/kodus_db',
+                }),
+            ).toThrow(/DATABASE_DIRECT_URL/);
+        });
+
         it('refuses a DATABASE_DIRECT_URL that is not a postgres:// URL, naming the variable', () => {
             expect(() =>
                 resolveDirectConnection({
@@ -135,5 +212,21 @@ describe('Postgres connection settings', () => {
         ];
         expect(described).toEqual(['db:5432/kodus_db', 'db:5432/kodus_db']);
         expect(described.join(' ')).not.toContain('s3cret');
+    });
+
+    it("describes a connection with no port at PostgreSQL's default port", () => {
+        expect(
+            describeConnection({ url: 'postgres://kodus:s3cret@db/kodus_db' }),
+        ).toBe('db:5432/kodus_db');
+        expect(describeConnection({ host: 'db', database: 'kodus_db' })).toBe(
+            'db:5432/kodus_db',
+        );
+        expect(describeConnection({})).toBe('?:5432/?');
+    });
+
+    it('describes an unparseable URL as such, without echoing it', () => {
+        expect(describeConnection({ url: 'postgres://u:s3cret@' })).toBe(
+            'unparseable connection URL',
+        );
     });
 });
