@@ -66,6 +66,8 @@ type listsFile struct {
 		NPM   []string `json:"npm"`
 		PyPI  []string `json:"pypi"`
 		Go    []string `json:"go"`
+		// Artifacts are the mirror variables of tools that download a known artifact.
+		Artifacts []string `json:"artifacts"`
 	} `json:"mirrorBuildArgs"`
 	Recommended struct {
 		Version int                `json:"version"`
@@ -168,3 +170,8 @@ func MirrorBuildArgNames() (npm, pypi, goproxy []string) {
 	a := lists.MirrorBuildArgs
 	return slices.Clone(a.NPM), slices.Clone(a.PyPI), slices.Clone(a.Go)
 }
+
+// MirrorArtifactBuildArgNames are the build args that point a tool's
+// download of a known build artifact at the mirror's /artifacts/ routes
+// (PRISMA_ENGINES_MIRROR, MONGOMS_DOWNLOAD_MIRROR).
+func MirrorArtifactBuildArgNames() []string { return slices.Clone(lists.MirrorBuildArgs.Artifacts) }

@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/mirror"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/netguard"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/policy"
 )
 
@@ -48,6 +50,28 @@ func TestNoMirrorRouteAnswersASealedClaim(t *testing.T) {
 		h.ServeHTTP(rec, req)
 		if rec.Code != 403 {
 			t.Errorf("%s: %d", path, rec.Code)
+		}
+	}
+}
+
+// The artifact list serves a read-only prefix of hosts that stay on the deny
+// list: the deny list does not learn an exception, and a host of the list is
+// still refused to every claim, over the proxy and the resolver, for any path
+// the mirror does not serve.
+func TestTheArtifactHostsStayOnTheDenyListForEverythingElse(t *testing.T) {
+	deny, err := netguard.NewDenyList(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !deny.Denies("storage.googleapis.com") || !netguard.OnKodusDenyList("storage.googleapis.com", nil) {
+		t.Fatal("the object storage host left the deny list")
+	}
+	if !deny.Denies("other-bucket.storage.googleapis.com") {
+		t.Fatal("a bucket host of the same service left the deny list")
+	}
+	for _, e := range mirror.DefaultArtifacts() {
+		if e.Upstream.Scheme != "https" {
+			t.Errorf("%s: %s", e.ID, e.Upstream)
 		}
 	}
 }

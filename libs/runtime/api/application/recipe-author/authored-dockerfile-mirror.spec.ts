@@ -41,4 +41,10 @@ describe("Kody's Dockerfiles declare the mirror's build args", () => {
         expect(MIRROR_BUILD_ARGS.npm).toEqual(expect.arrayContaining(['npm_config_registry', 'pnpm_config_registry', 'YARN_NPM_REGISTRY_SERVER', 'YARN_UNSAFE_HTTP_WHITELIST']));
         expect(MIRROR_BUILD_ARGS.pypi).toEqual(expect.arrayContaining(['PIP_INDEX_URL', 'PIP_TRUSTED_HOST', 'UV_DEFAULT_INDEX', 'UV_INSECURE_HOST']));
     });
+
+    it('a stage that runs prisma also declares the artifact mirrors (Prisma engines, MongoDB test binaries)', () => {
+        const out = declareMirrorBuildArgs('.kodus/Dockerfile', 'FROM node:22\nRUN npx prisma generate\n');
+        expect(argsOf(out.content)).toEqual([...MIRROR_BUILD_ARGS.npm, 'PRISMA_ENGINES_MIRROR', 'MONGOMS_DOWNLOAD_MIRROR']);
+        expect(MIRROR_BUILD_ARGS.artifacts).toEqual(['PRISMA_ENGINES_MIRROR', 'MONGOMS_DOWNLOAD_MIRROR']);
+    });
 });

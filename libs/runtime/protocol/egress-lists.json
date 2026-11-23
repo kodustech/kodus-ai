@@ -145,10 +145,11 @@
     }
   },
   "mirrorBuildArgs": {
-    "about": "The build args the cell passes every image build with its read-only mirror (docs/runtime/egress-allowlist.md §16): a build reaches registries only through it. A Dockerfile uses one only when it declares the ARG; Kody's recipe author declares them in each stage that installs. npm reads npm_config_*, pnpm pnpm_config_*, Yarn Berry YARN_<SETTING> (with HTTP allowed for the mirror's host), pip PIP_<OPTION>, uv UV_DEFAULT_INDEX and UV_INSECURE_HOST.",
+    "about": "The build args the cell passes every image build with its read-only mirror (docs/runtime/egress-allowlist.md §16): a build reaches registries only through it. A Dockerfile uses one only when it declares the ARG; Kody's recipe author declares them in each stage that installs. npm reads npm_config_*, pnpm pnpm_config_*, Yarn Berry YARN_<SETTING> (with HTTP allowed for the mirror's host), pip PIP_<OPTION>, uv UV_DEFAULT_INDEX and UV_INSECURE_HOST. artifacts are the tools that download a known build artifact (Prisma engines, MongoDB test binaries) and honor a mirror variable: the cell serves only a fixed list of them under /artifacts/ (§17).",
     "npm": ["npm_config_registry", "pnpm_config_registry", "YARN_NPM_REGISTRY_SERVER", "YARN_UNSAFE_HTTP_WHITELIST"],
     "pypi": ["PIP_INDEX_URL", "PIP_TRUSTED_HOST", "UV_DEFAULT_INDEX", "UV_INSECURE_HOST"],
-    "go": ["GOPROXY"]
+    "go": ["GOPROXY"],
+    "artifacts": ["PRISMA_ENGINES_MIRROR", "MONGOMS_DOWNLOAD_MIRROR"]
   },
   "recommended": {
     "version": 2,

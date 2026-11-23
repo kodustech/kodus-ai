@@ -213,6 +213,9 @@ func start(ctx context.Context, g *lifecycle.Group, log *slog.Logger, d *dataPla
 			}
 			mm.Handle("/pypi/", mirror.NewPyPI(idx, files, public, ofClaim))
 		}
+		// Known read-only build artifacts (docs/runtime/egress-allowlist.md
+		// §17): a fixed list, not a flag, so an operator cannot widen it.
+		mm.Handle("/artifacts/", mirror.NewArtifacts(mirror.DefaultArtifacts(), ofClaim))
 		log.Info("mirror.packages.start", "npm", f.npmUpstream != "", "pypi", f.pypiIndex != "", "public", public.String())
 		ml, err := new(net.ListenConfig).Listen(ctx, "tcp", f.mirror)
 		if err != nil {

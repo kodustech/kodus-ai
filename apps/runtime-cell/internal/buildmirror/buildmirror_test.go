@@ -9,13 +9,14 @@ import (
 )
 
 func TestEveryBuildGetsTheMirrorsAndTheProjectsOwnValueWins(t *testing.T) {
-	m := Mirror{GoProxy: "http://mirror.cell.internal:8080/go,off", NPM: "http://mirror.cell.internal:8080/npm/", PyPI: "http://mirror.cell.internal:8080/pypi/simple/"}
+	m := Mirror{GoProxy: "http://mirror.cell.internal:8080/go,off", NPM: "http://mirror.cell.internal:8080/npm/", PyPI: "http://mirror.cell.internal:8080/pypi/simple/", Artifacts: "http://mirror.cell.internal:8080/artifacts/"}
 	got := m.Args(map[string]string{"NODE_ENV": "production"})
 	want := map[string]string{
 		"NODE_ENV": "production", "GOPROXY": m.GoProxy, "npm_config_registry": m.NPM, "pnpm_config_registry": m.NPM,
 		"YARN_NPM_REGISTRY_SERVER": "http://mirror.cell.internal:8080/npm", "YARN_UNSAFE_HTTP_WHITELIST": "mirror.cell.internal",
 		"PIP_INDEX_URL": m.PyPI, "PIP_TRUSTED_HOST": "mirror.cell.internal",
 		"UV_DEFAULT_INDEX": m.PyPI, "UV_INSECURE_HOST": "mirror.cell.internal",
+		"PRISMA_ENGINES_MIRROR": "http://mirror.cell.internal:8080/artifacts/prisma", "MONGOMS_DOWNLOAD_MIRROR": "http://mirror.cell.internal:8080/artifacts/mongodb",
 	}
 	if !maps.Equal(got, want) {
 		t.Fatalf("%v", got)
@@ -36,10 +37,10 @@ func TestEveryBuildGetsTheMirrorsAndTheProjectsOwnValueWins(t *testing.T) {
 // Every name the cell passes is one the shared list gives, the list Kody's
 // recipe author declares in the Dockerfiles it writes.
 func TestTheBuildArgsAreTheSharedListsNames(t *testing.T) {
-	m := Mirror{GoProxy: "http://m:8080/go,off", NPM: "http://m:8080/npm/", PyPI: "http://m:8080/pypi/simple/"}
+	m := Mirror{GoProxy: "http://m:8080/go,off", NPM: "http://m:8080/npm/", PyPI: "http://m:8080/pypi/simple/", Artifacts: "http://m:8080/artifacts/"}
 	npm, pypi, goproxy := netguard.MirrorBuildArgNames()
 	want := map[string]bool{}
-	for _, n := range append(append(npm, pypi...), goproxy...) {
+	for _, n := range append(append(append(npm, pypi...), goproxy...), netguard.MirrorArtifactBuildArgNames()...) {
 		want[n] = true
 	}
 	got := m.Args(nil)
@@ -60,7 +61,7 @@ func TestAMirrorBaseGivesEveryEcosystemUnderTheEgressPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Mirror{GoProxy: "http://mirror.cell.internal:8080/go,off", NPM: "http://mirror.cell.internal:8080/npm/", PyPI: "http://mirror.cell.internal:8080/pypi/simple/", Registry: "mirror.cell.internal:8080"}
+	want := Mirror{GoProxy: "http://mirror.cell.internal:8080/go,off", NPM: "http://mirror.cell.internal:8080/npm/", PyPI: "http://mirror.cell.internal:8080/pypi/simple/", Artifacts: "http://mirror.cell.internal:8080/artifacts/", Registry: "mirror.cell.internal:8080"}
 	if m != want {
 		t.Fatalf("%+v", m)
 	}

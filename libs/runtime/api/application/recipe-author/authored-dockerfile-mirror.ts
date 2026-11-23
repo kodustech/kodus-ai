@@ -10,6 +10,8 @@ import { MIRROR_BUILD_ARGS } from '@libs/runtime/protocol/egress-catalog';
 const INSTALLS: Array<{ family: keyof typeof MIRROR_BUILD_ARGS; run: RegExp }> = [
     { family: 'npm', run: /\b(?:npm|npx|pnpm|yarn|corepack)\b/ },
     { family: 'pypi', run: /\b(?:pip3?|pipx|uv)\b|\bpython3?\s+-m\s+pip\b/ },
+    // Prisma's engines and mongodb-memory-server's binaries download at install or generate time.
+    { family: 'artifacts', run: /\bprisma\b|mongodb-memory-server/ },
     { family: 'go', run: /\bgo\s+(?:mod|build|get|install|work|generate|test)\b/ },
 ];
 

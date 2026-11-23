@@ -24,6 +24,8 @@ type Mirror struct {
 	// NPM and PyPI are the npm registry ("…/npm/") and the PyPI simple
 	// index ("…/pypi/simple/").
 	NPM, PyPI string
+	// Artifacts is the root of the known read-only artifacts ("…/artifacts/").
+	Artifacts string
 	// Registry is the registry mirror (host:port) BuildKit pulls docker.io
 	// images through.
 	Registry string
@@ -45,7 +47,7 @@ func At(base string) (Mirror, error) {
 		return Mirror{}, fmt.Errorf("buildmirror: %q names no port", base)
 	}
 	root := "http://" + u.Host
-	m := Mirror{GoProxy: root + "/go,off", NPM: root + "/npm/", PyPI: root + "/pypi/simple/", Registry: u.Host}
+	m := Mirror{GoProxy: root + "/go,off", NPM: root + "/npm/", PyPI: root + "/pypi/simple/", Artifacts: root + "/artifacts/", Registry: u.Host}
 	if !hostPort.MatchString(m.Registry) {
 		return Mirror{}, fmt.Errorf("buildmirror: registry %q is not host:port", m.Registry)
 	}
@@ -94,6 +96,13 @@ func (m Mirror) Args(project map[string]string) map[string]string {
 		if !ownUV {
 			set("UV_INSECURE_HOST", host)
 		}
+	}
+	if m.Artifacts != "" {
+		// Prisma appends /all_commits/<engine>/<platform>/<file> to its
+		// mirror, mongodb-memory-server /linux/<file>: the entries of
+		// mirror.DefaultArtifacts. A project's own value wins.
+		set("PRISMA_ENGINES_MIRROR", m.Artifacts+"prisma")
+		set("MONGOMS_DOWNLOAD_MIRROR", m.Artifacts+"mongodb")
 	}
 	return args
 }

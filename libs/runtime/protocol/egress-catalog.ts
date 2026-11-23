@@ -31,6 +31,8 @@ export interface MirrorBuildArgs {
     npm: string[];
     pypi: string[];
     go: string[];
+    /** Tools that download a known build artifact and honor a mirror variable (§17). */
+    artifacts: string[];
 }
 
 interface EgressListsFile {
@@ -51,6 +53,7 @@ export const MIRROR_BUILD_ARGS: Readonly<MirrorBuildArgs> = Object.freeze({
     npm: [...lists.mirrorBuildArgs.npm],
     pypi: [...lists.mirrorBuildArgs.pypi],
     go: [...lists.mirrorBuildArgs.go],
+    artifacts: [...lists.mirrorBuildArgs.artifacts],
 });
 
 export const RECOMMENDED_EGRESS_VERSION: number = lists.recommended.version;

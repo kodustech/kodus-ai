@@ -664,6 +664,80 @@ secret value, the builder under runsc on a claim network; all five pass, 126 s):
   injector of this release must run with or before the cell: an older one refuses a policy whose build source is
   also an inspect source (`validateBuild`).
 
+## 17. Known read-only build artifacts (2026-11-23)
+
+**Security change: needs a security code owner's review before merge.**
+
+Problem. Three common downloads failed in the cell: the Firebase emulators (jars and a zip from
+`storage.googleapis.com`, on the fixed deny list on purpose: writable object storage is an exfiltration path), Prisma's
+engines (`binaries.prisma.sh`, fetched inside an image build, which reaches only build passthrough hosts, and this is
+not one) and MongoDB test binaries (`fastdl.mongodb.org`, `mongodb-memory-server`'s postinstall).
+
+Decision. The deny list does not change and no host is allowed. The mirror (§6) serves a **fixed, reviewed list of
+paths**, as it serves npm and PyPI: a machine reaches only `mirror.cell.internal`, and the mirror alone reaches the
+upstream. The list is code (`internal/mirror/artifacts.go` `DefaultArtifacts`), not a flag and not part of the shared
+`egress-lists.json`, so an operator cannot widen it and the API has nothing to approve.
+
+Route. `/artifacts/<id>/<upstream path>`; the path after the id is the upstream path, so a tool's mirror variable is the
+URL up to the id.
+
+| Id | Upstream (https) | Path prefix | Name after the prefix, whole | Cap | Used by |
+|---|---|---|---|---|---|
+| `firebase-emulators` | `storage.googleapis.com` | `/firebase-preview-drop/emulator/` | `[A-Za-z0-9][A-Za-z0-9._-]*\.(jar\|zip)` | 256 MiB | firebase-tools (no mirror variable: see below) |
+| `prisma` | `binaries.prisma.sh` | `/all_commits/` | `<40 hex>/<platform>/<file>.(gz\|sha256\|sig)` | 256 MiB | `PRISMA_ENGINES_MIRROR` |
+| `mongodb` | `fastdl.mongodb.org` | `/linux/` | `mongodb-linux-<...>.tgz` with optional `.sha256` or `.md5` | 512 MiB | `MONGOMS_DOWNLOAD_MIRROR` |
+
+What each request must satisfy, all before anything leaves the cell:
+
+- GET or HEAD. A PUT, POST, DELETE or PATCH is 405.
+- No query or fragment (so no `?uploadType=`, `?name=`, signed-URL parameters or data smuggled in a query), and no `%`,
+  backslash, `//`, `.` or `..` in the path.
+- The path starts with the entry's prefix and the rest matches the entry's pattern whole: it cannot spell a slash
+  (no sub-path, no other object in the bucket, no listing), so another bucket on the same host is not reachable.
+- No `Authorization`, `Cookie` or cloud credential header: only public objects, no private object bought with an
+  identity.
+- From a claim of this cell that is not sealed (the same checks as npm and PyPI).
+- The response is one 200 of the fixed upstream, no redirect followed, `Accept-Encoding: identity`, served as
+  `application/octet-stream` with `nosniff`. Over the cap by `Content-Length` it is refused; over it while streaming
+  the connection is aborted, so a short body never looks whole.
+
+Threat reasoning. The deny list exists because a claim can write to object storage with a key it brings, and the
+proxy sees the host, not the method. The artifact route has no write method, no way to name another path, no
+credential and no query, so the only thing that crosses is a download of a name its pattern accepts. The remaining
+channel is the *name* of a request (a covert channel through which of the allowed names is fetched): a few bits per
+request, bounded by the patterns, and the same as every read-only mirror in §6; and the Prisma pattern admits any 40-hex
+commit and platform, so the number of distinct names is large. We accept it for the same reason as for npm package
+names, and would not for an open path. The deny list still denies `storage.googleapis.com` and every bucket host to
+every claim for everything else (`cmd/egress` `TestTheArtifactHostsStayOnTheDenyListForEverythingElse`).
+
+Pinning. Not by checksum in the cell, deliberately. Each artifact is addressed by the version the tool asks for and
+the tool verifies it (Prisma downloads the `.sha256` next to each engine, `mongodb-memory-server` checks `.md5`/
+`.sha256`, firebase-tools compares each emulator with the hash of its release). A hash list in the cell would have to
+follow every release of three publishers and would fail a build the day one ships a version. What stays closed is the
+path, the method, the size and the source. A recipe that needs a hard pin pins it in its own Dockerfile (`sha256sum -c`).
+
+How a build or recipe uses it.
+
+- Image build: the cell passes `PRISMA_ENGINES_MIRROR=http://mirror.cell.internal:<port>/artifacts/prisma` and
+  `MONGOMS_DOWNLOAD_MIRROR=http://mirror.cell.internal:<port>/artifacts/mongodb` like the npm and PyPI args
+  (`netguard.MirrorArtifactBuildArgNames`, `buildmirror.Mirror.Artifacts`). A Dockerfile Kody writes declares them in
+  each stage that runs `prisma` or `mongodb-memory-server` (`declareMirrorBuildArgs`); a hand-written Dockerfile adds
+  `ARG PRISMA_ENGINES_MIRROR` and `ARG MONGOMS_DOWNLOAD_MIRROR` itself. A project's own value wins.
+- A running service or test step (not a build): set the same variables to the mirror's address in the recipe's
+  environment.
+- Firebase: firebase-tools has no variable for the download URL, so a recipe fetches the jar or zip from
+  `http://mirror.cell.internal:<port>/artifacts/firebase-emulators/firebase-preview-drop/emulator/<file>` into the
+  emulators cache (`~/.cache/firebase/emulators/`, or `FIREBASE_EMULATORS_PATH`) under the name firebase-tools
+  expects, before the emulator starts. The file name carries the version (see firebase-tools' download table).
+
+Not covered, on purpose: any other file of those hosts (Firebase's `dataconnect` and other emulator buckets, Prisma's
+non-engine downloads, MongoDB tools and non-Linux builds), and every host not listed here.
+
+Built: `internal/mirror/artifacts.go` and tests; `cmd/egress/main.go` (`/artifacts/`); `internal/buildmirror`;
+`mirrorBuildArgs.artifacts` in both copies of `egress-lists.json`; `egress-catalog.ts`. To verify on a real cell: that
+the Prisma and `mongodb-memory-server` versions in the customer's lockfile build their URLs from the mirror variable as
+documented here (the paths above are the ones their current releases request).
+
 ## Sources
 
 Vendor and research pages, read 2026-11-13.

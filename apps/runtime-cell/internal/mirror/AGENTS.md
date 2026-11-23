@@ -6,6 +6,7 @@ The cell's read-only pull-through mirror of public registries: Go modules and th
 - Go: `goproxy.go` `GoProxy` (`/go/`: `.info`, `.mod`, `.zip` of a pinned module@version, and the checksum database lookups of pinned ones, tiles and the signed head), `AllowGoRedirect` (the Go proxy's bucket only).
 - Docker Hub: `oci.go` `OCIProxy` (`/v2/`, GET and HEAD), with a digest-addressed cache (`cache.go`, `blobstore.go` `DiskStore`), tag manifests kept `TagTTL` and served stale up to `StaleFor` while the registry fails, one fetch per digest (`flight.go`), and the pull account (`credentials.go` `Credentials`, `LoadCredentials`).
 - npm and PyPI: `packages.go` `PackageProxy` (`NewNPM`, `NewPyPI`), the index rewritten so its file URLs point at the mirror.
+- Known build artifacts: `artifacts.go` `DefaultArtifacts` (the fixed list: Firebase emulators, Prisma engines, MongoDB Linux binaries), `ArtifactProxy` (`/artifacts/<id>/<upstream path>`: GET and HEAD, an exact prefix and name pattern, no query, a size cap, no redirect, no credential).
 - What a checkout pins, as the agent reads it: `gosum.go` `ParseGoSum`, `images.go` `DockerfilePins`, `DockerHubPin`, with their bounds `MaxGoPins`, `MaxImagePins`.
 - The cache's counters: `cachemetrics.go` `CacheMetrics`.
 
@@ -22,6 +23,8 @@ The cell's read-only pull-through mirror of public registries: Go modules and th
 - The pull credentials go only to the token service and print as redacted in every format. They buy a rate limit, never access: with them set, a repository is served (from the cache too) only when an anonymous token grants its pull (`checkPublic`, `publicGrant` reads the token's access claim); a private repository the account can read is refused 403 before anything is fetched or stored. A grant holds for `TagTTL`, and within `StaleFor` while the token service fails; a refusal is never kept.
 - One stored copy is shared by every claim and tenant of the cell; this is safe only because the content is public (checked as above when an account is set; anonymous pulls are public by construction) and addressed by digest.
 
+- Artifacts are a list of exact paths, never a host: a new entry is a PR a security code owner approves (the hosts stay on the deny list for every other path). A name pattern cannot spell a slash, a dot segment, an escape or a query; an over-cap stream is aborted, not shortened.
+
 ## Where new code goes
 - A new ecosystem: a handler here with its fixed upstream and its route under the mirror's mux in `cmd/egress/main.go`, refusing everything a claim did not pin or that is not public.
 
@@ -32,7 +35,7 @@ The cell's read-only pull-through mirror of public registries: Go modules and th
 
 ## Module map
 
-Files (10, tests apart): `blobstore.go`, `cache.go`, `cachemetrics.go`, `credentials.go`, `flight.go`, `goproxy.go`, `gosum.go`, `images.go`, `oci.go`, `packages.go`
+Files (11, tests apart): `artifacts.go`, `blobstore.go`, `cache.go`, `cachemetrics.go`, `credentials.go`, `flight.go`, `goproxy.go`, `gosum.go`, `images.go`, `oci.go`, `packages.go`
 
 Imports these Runtime modules:
 
