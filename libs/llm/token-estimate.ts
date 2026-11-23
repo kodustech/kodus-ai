@@ -70,8 +70,9 @@ function getEncoder(): Tiktoken | null {
  * seconds to every review to answer a question whose input never changed.
  *
  * Bounded on both axes: at most MEMO_MAX_ENTRIES strings, and nothing above
- * MEMO_MAX_CHARS is cached at all (a huge string is both the least likely to
- * repeat and the most expensive to hold in a long-running worker). Insertion
+ * MEMO_MAX_CHARS is cached here (a huge string is the most expensive to hold
+ * in a long-running worker; the few that repeat go to the large memo below,
+ * which is bounded by total characters instead). Insertion
  * order eviction — the planner's access pattern is a sweep, not a hot subset,
  * so LRU bookkeeping would cost more than it saves.
  */
@@ -79,9 +80,65 @@ const MEMO_MAX_ENTRIES = 512;
 const MEMO_MAX_CHARS = 200_000;
 const memo = new Map<string, number>();
 
+/**
+ * Memo for the few HUGE texts that do repeat: the head message of an agent
+ * run (diff plus graph context), which the context compressor re-measures
+ * on every step and several more times when it trims rounds.
+ *
+ * Kept out of the main memo, it was tokenized in full on every count. On
+ * 2026-11-23 a 2,353,179-char graph context cost 1.8s per count and held a
+ * worker's event loop 9.2s in one compression pass (seen as a 9.4s "slow
+ * query" whose reply waited on the loop). This memo makes every count after
+ * the first a lookup.
+ *
+ * Bounded by entries and by total characters, so a long-running worker
+ * holds at most LARGE_MEMO_MAX_TOTAL_CHARS (~16MB of UTF-16) here; the
+ * least recently used text goes first, since one run reuses one head.
+ * A text above LARGE_MEMO_MAX_TOTAL_CHARS on its own is never cached.
+ */
+const LARGE_MEMO_MAX_ENTRIES = 8;
+const LARGE_MEMO_MAX_TOTAL_CHARS = 8_000_000;
+const largeMemo = new Map<string, number>();
+let largeMemoChars = 0;
+
+function rememberLarge(text: string, tokens: number): number {
+    if (text.length > LARGE_MEMO_MAX_TOTAL_CHARS) {
+        return tokens;
+    }
+    while (
+        largeMemo.size > 0 &&
+        (largeMemo.size >= LARGE_MEMO_MAX_ENTRIES ||
+            largeMemoChars + text.length > LARGE_MEMO_MAX_TOTAL_CHARS)
+    ) {
+        const oldest = largeMemo.keys().next().value as string;
+        largeMemo.delete(oldest);
+        largeMemoChars -= oldest.length;
+    }
+    largeMemo.set(text, tokens);
+    largeMemoChars += text.length;
+    return tokens;
+}
+
+function recallLarge(text: string): number | undefined {
+    const hit = largeMemo.get(text);
+    if (hit !== undefined) {
+        // Re-insert: Map order is the LRU order.
+        largeMemo.delete(text);
+        largeMemo.set(text, hit);
+    }
+    return hit;
+}
+
+/** @internal Exported for testing purposes only */
+export function _resetTokenEstimateMemo(): void {
+    memo.clear();
+    largeMemo.clear();
+    largeMemoChars = 0;
+}
+
 function remember(text: string, tokens: number): number {
     if (text.length > MEMO_MAX_CHARS) {
-        return tokens;
+        return rememberLarge(text, tokens);
     }
     if (memo.size >= MEMO_MAX_ENTRIES) {
         const oldest = memo.keys().next().value;
@@ -192,7 +249,10 @@ export function estimateTextTokens(
         return 0;
     }
     const useMemo = options?.cache !== false;
-    const hit = useMemo ? memo.get(text) : undefined;
+    let hit: number | undefined;
+    if (useMemo) {
+        hit = text.length > MEMO_MAX_CHARS ? recallLarge(text) : memo.get(text);
+    }
     if (hit !== undefined) {
         return hit;
     }

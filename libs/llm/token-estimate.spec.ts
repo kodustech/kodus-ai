@@ -229,3 +229,77 @@ describe('estimateTextTokens — fallback arithmetic (Math.ceil, divisor 3)', ()
         });
     }
 });
+
+describe('estimateTextTokens — large-text memo (2026-11-23 9.2s compressor stall)', () => {
+    /** A text above the 200k-char main memo bound, with no long runs. */
+    const huge = (n: number, tag: string) =>
+        `${tag} ${'ab '.repeat(Math.ceil(n / 3))}`.slice(0, n);
+
+    it('tokenizes a repeated 2.35M-char head once', () => {
+        const encode = jest.fn().mockReturnValue([1, 2, 3]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                const head = huge(2_353_179, 'head');
+                expect(estimateTextTokens(head)).toBe(3);
+                // A fresh string with the same content (JSON.stringify of
+                // the same message on the next step) is a hit too.
+                expect(estimateTextTokens(head.slice(0))).toBe(3);
+                expect(estimateTextTokens(`${head}`)).toBe(3);
+                expect(encode).toHaveBeenCalledTimes(1);
+            },
+        );
+    });
+
+    it('still honours cache: false for huge texts', () => {
+        const encode = jest.fn().mockReturnValue([1]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                const text = huge(300_000, 'transient');
+                estimateTextTokens(text, { cache: false });
+                estimateTextTokens(text, { cache: false });
+                expect(encode).toHaveBeenCalledTimes(2);
+            },
+        );
+    });
+
+    it('is bounded by total characters, evicting the least recently used', () => {
+        const encode = jest.fn().mockReturnValue([1]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                const a = huge(3_000_000, 'a');
+                const b = huge(3_000_000, 'b');
+                const c = huge(3_000_000, 'c');
+                estimateTextTokens(a);
+                estimateTextTokens(b);
+                estimateTextTokens(a); // a is now the most recent
+                estimateTextTokens(c); // 9M > 8M: evicts b, not a
+                expect(encode).toHaveBeenCalledTimes(3);
+
+                estimateTextTokens(a);
+                expect(encode).toHaveBeenCalledTimes(3);
+                estimateTextTokens(b);
+                expect(encode).toHaveBeenCalledTimes(4);
+            },
+        );
+    });
+
+    it('never caches a text larger than the whole budget', () => {
+        const encode = jest.fn().mockReturnValue([1]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                const giant = huge(8_000_001, 'giant');
+                estimateTextTokens(giant);
+                estimateTextTokens(giant);
+                expect(encode).toHaveBeenCalledTimes(2);
+            },
+        );
+    });
+});
