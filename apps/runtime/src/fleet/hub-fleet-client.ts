@@ -69,16 +69,30 @@ export class HubFleetClient implements HubFleetPort {
         if (res.status !== 200) throw new Error(`hub fleet retire answered ${res.status}`);
     }
 
-    /** Asks the hub to have the template host's cell seal itself; resolves once the cell acked. A refusal throws with the hub's code. */
+    /** A request whose network failure is a short code (`hub_timeout`, `hub_unreachable`): a template build records it as its cause. */
+    private async call(url: string): Promise<{ status: number; text: string }> {
+        try {
+            return await this.post(url, '{}');
+        } catch (e) {
+            throw new Error((e as Error).message === 'hub request timed out' ? 'hub_timeout' : 'hub_unreachable', { cause: e });
+        }
+    }
+
+    /** Asks the hub to have the template host's cell seal itself; resolves once the cell acked. A refusal throws `seal_refused_<status>`. */
     async seal(hostId: string) {
-        const res = await this.post(`${this.hubInternalUrl}/internal/fleet/hosts/${encodeURIComponent(hostId)}/seal`, '{}');
-        if (res.status !== 200) throw new Error(`hub fleet seal answered ${res.status}: ${res.text.slice(0, 200)}`);
+        const res = await this.call(`${this.hubInternalUrl}/internal/fleet/hosts/${encodeURIComponent(hostId)}/seal`);
+        if (res.status !== 200) throw new Error(`seal_refused_${res.status}`);
     }
 
     async connection(hostId: string): Promise<{ cellId: string | null; connected: boolean }> {
-        const res = await this.post(`${this.hubInternalUrl}/internal/fleet/hosts/${encodeURIComponent(hostId)}/connection`, '{}');
-        if (res.status !== 200) throw new Error(`hub fleet connection answered ${res.status}`);
-        const b = JSON.parse(res.text) as { cellId?: unknown; connected?: unknown };
+        const res = await this.call(`${this.hubInternalUrl}/internal/fleet/hosts/${encodeURIComponent(hostId)}/connection`);
+        if (res.status !== 200) throw new Error(`connection_refused_${res.status}`);
+        let b: { cellId?: unknown; connected?: unknown };
+        try {
+            b = JSON.parse(res.text);
+        } catch {
+            throw new Error('hub_bad_answer');
+        }
         return { cellId: typeof b.cellId === 'string' ? b.cellId : null, connected: b.connected === true };
     }
 }

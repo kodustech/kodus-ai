@@ -6,7 +6,7 @@ import type { HostSealer } from './boat-setup-host';
 // to see it disconnected before the snapshot is taken.
 
 export interface HubSealPort {
-    /** Resolves once the host's cell acked cell.seal; throws when the hub refused (not a template host, claim live, not a fleet install). */
+    /** Resolves once the host's cell acked cell.seal; throws an Error whose message is a short code (`seal_refused_409`, `hub_unreachable`) when the hub refused (not a template host, claim live, not a fleet install) or could not be reached. */
     seal(hostId: string): Promise<void>;
     connection(hostId: string): Promise<{ cellId: string | null; connected: boolean }>;
 }

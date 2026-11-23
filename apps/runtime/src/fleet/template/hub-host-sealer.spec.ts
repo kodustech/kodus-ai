@@ -28,8 +28,8 @@ describe('HubHostSealer', () => {
     });
 
     it('fails without waiting when the hub refuses (a claim is live, not a template host)', async () => {
-        const { calls, sealer } = make([], new Error('hub fleet seal answered 409'));
-        await expect(sealer.seal({ hostId: 'tpl-1', providerId: 'i-1' })).rejects.toThrow('409');
+        const { calls, sealer } = make([], new Error('seal_refused_409'));
+        await expect(sealer.seal({ hostId: 'tpl-1', providerId: 'i-1' })).rejects.toThrow('seal_refused_409');
         expect(calls).toEqual(['seal:tpl-1']);
     });
 });
