@@ -479,63 +479,48 @@ describe('a finding on a file whose diff the host withheld', () => {
  * inline attempt is rejected with 422 ("could not be resolved"). The finding
  * was lost: the retry ladder collapsed it to a single line, that failed too,
  * and the fallback suggestion replaced it. It has to be delivered where it can
- * land, citing the file and the line it talks about.
+ * land, citing the file and the line it talks about — and only that shape may
+ * move, so the routing guards are asserted in the same case.
  */
 describe('a finding on a file with no hunks (a pure rename)', () => {
     const RENAMED = 'src/instrumentation-client.ts';
-    const finding = {
-        relevantFile: RENAMED,
-        relevantLinesStart: 19,
-        relevantLinesEnd: 30,
+    const renamedWithPatch = 'src/renamed-and-edited.ts';
+
+    const findingOn = (file: string, lines: [number, number]) => ({
+        relevantFile: file,
+        relevantLinesStart: lines[0],
+        relevantLinesEnd: lines[1],
         label: 'general',
         severity: 'medium',
         oneSentenceSummary: 'the client instrumentation leaks the session id',
         suggestionContent:
             'the client instrumentation leaks the session id into every event',
         improvedCode: '',
-    };
-
-    it('is delivered PR-level, citing file:line', async () => {
-        const result = await run([finding], {
-            changedFiles: [
-                { filename: 'src/user.ts', patch: PATCH },
-                // Exactly what the files API returns for a pure rename.
-                {
-                    filename: RENAMED,
-                    previous_filename: 'src/instrumentation.ts',
-                    status: 'renamed',
-                },
-            ],
-        });
-
-        expect(result.validSuggestionsByPR).toHaveLength(1);
-        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
-            `\`${RENAMED}:19\``,
-        );
-        expect(inlineSuggestionsOf(result)).toEqual([]);
-        expect(result.validSuggestions ?? []).toEqual([]);
     });
 
-    // A copy of an unchanged file has no hunks for the same reason.
-    it('also covers a file the PR copied unchanged', async () => {
-        const result = await run([finding], {
-            changedFiles: [{ filename: RENAMED, status: 'copied' }],
-        });
-
-        expect(result.validSuggestionsByPR).toHaveLength(1);
-        expect(inlineSuggestionsOf(result)).toEqual([]);
-    });
-
-    // A rename that DOES change content carries a patch, so it keeps its
-    // inline anchor: only the no-hunk shape moves to a PR comment.
-    it('stays inline when the rename changed content', async () => {
+    it('is delivered PR-level, citing file:line, and nothing else moves', async () => {
         const result = await run(
-            [{ ...finding, relevantLinesStart: 11, relevantLinesEnd: 12 }],
+            [
+                // No hunk at all: this is the finding that used to be lost.
+                findingOn(RENAMED, [19, 30]),
+                // A rename that DID change content keeps its inline anchor.
+                findingOn(renamedWithPatch, [11, 12]),
+                // Naming a file the PR does not touch: still discarded, never
+                // promoted to an unanchored PR comment.
+                findingOn('src/elsewhere.ts', [11, 12]),
+            ],
             {
                 changedFiles: [
+                    { filename: 'src/user.ts', patch: PATCH },
+                    // Exactly what the files API returns for a pure rename.
                     {
                         filename: RENAMED,
                         previous_filename: 'src/instrumentation.ts',
+                        status: 'renamed',
+                    },
+                    {
+                        filename: renamedWithPatch,
+                        previous_filename: 'src/renamed.ts',
                         status: 'renamed',
                         patch: PATCH,
                     },
@@ -543,22 +528,32 @@ describe('a finding on a file with no hunks (a pure rename)', () => {
             },
         );
 
-        expect(result.validSuggestionsByPR ?? []).toEqual([]);
-        expect(inlineSuggestionsOf(result).length).toBeGreaterThan(0);
-    });
-
-    // The rename is in the PR; a finding naming a file that is not must still
-    // be discarded rather than leak out as an unanchored PR-level comment.
-    it('does not turn a finding on a file outside the PR into a PR comment', async () => {
-        const result = await run(
-            [{ ...finding, relevantFile: 'src/elsewhere.ts' }],
-            {
-                changedFiles: [{ filename: RENAMED, status: 'renamed' }],
-            },
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            `\`${RENAMED}:19\``,
         );
 
-        expect(result.validSuggestionsByPR ?? []).toEqual([]);
-        expect(result.validSuggestions ?? []).toEqual([]);
+        const inline = inlineSuggestionsOf(result);
+        expect(inline.map((s: any) => s.relevantFile)).toEqual([
+            renamedWithPatch,
+        ]);
+        expect(
+            inline.some((s: any) => s.relevantFile === 'src/elsewhere.ts'),
+        ).toBe(false);
+        expect(
+            (result.validSuggestions ?? []).some(
+                (s: any) => s.relevantFile === RENAMED,
+            ),
+        ).toBe(false);
+    });
+
+    // A copy of an unchanged file has no hunks for the same reason.
+    it('also covers a file the PR copied unchanged', async () => {
+        const result = await run([findingOn(RENAMED, [19, 30])], {
+            changedFiles: [{ filename: RENAMED, status: 'copied' }],
+        });
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
         expect(inlineSuggestionsOf(result)).toEqual([]);
     });
 });

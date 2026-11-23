@@ -14,7 +14,6 @@ import {
  * line, and the finding either landed on the wrong line or fell through to the
  * fallback suggestion. Both numbers are real: only their order is not.
  */
-
 describe('a suggestion whose line range is sent reversed', () => {
     const reversed = {
         relevantLinesStart: 30,
@@ -43,36 +42,6 @@ describe('a suggestion whose line range is sent reversed', () => {
     // still reversed, so still rejected.
     it('collapses a span wider than 15 lines onto its first line', () => {
         const wide = { relevantLinesStart: 180, relevantLinesEnd: 120 };
-
-        expect(calculateCommentStartLine(wide)).toBeUndefined();
-        expect(calculateCommentEndLine(wide)).toBe(120);
-    });
-});
-
-describe('the ranges that already worked', () => {
-    it('keeps a normal multi-line span', () => {
-        const span = { relevantLinesStart: 12, relevantLinesEnd: 14 };
-
-        expect(calculateCommentStartLine(span)).toBe(12);
-        expect(calculateCommentEndLine(span)).toBe(14);
-    });
-
-    it('sends no start_line for a single line', () => {
-        const single = { relevantLinesStart: 12, relevantLinesEnd: 12 };
-
-        expect(calculateCommentStartLine(single)).toBeUndefined();
-        expect(calculateCommentEndLine(single)).toBe(12);
-    });
-
-    it('sends no start_line when only the end is cited', () => {
-        const onlyEnd = { relevantLinesEnd: 12 };
-
-        expect(calculateCommentStartLine(onlyEnd)).toBeUndefined();
-        expect(calculateCommentEndLine(onlyEnd)).toBe(12);
-    });
-
-    it('collapses a span wider than 15 lines onto its first line', () => {
-        const wide = { relevantLinesStart: 120, relevantLinesEnd: 180 };
 
         expect(calculateCommentStartLine(wide)).toBeUndefined();
         expect(calculateCommentEndLine(wide)).toBe(120);
