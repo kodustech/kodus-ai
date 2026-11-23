@@ -5,7 +5,7 @@ The durable record of an environment's baked generations: which exist, which one
 ## Owns
 - A generation's life: `catalog.go` `Catalog.Stage` (recorded, retired and held, before any artifact exists), `Publish` (eligible and current), `Acknowledge` (the driver installed its latest pointer), `Prune` (retire what nothing holds, then remove artifacts through the driver's func).
 - Holds that keep a generation from being dropped while a copy, a tag or a live machine uses it: `Catalog.Hold`. Holds live in memory only.
-- The file itself: `Open` takes an exclusive lock in `Config.Dir`, reads one JSON file and refuses one written by another cell or driver, one with loose permissions, or one past `maxBytes`. Writes go by rename and a directory sync.
+- The file itself: `Open` takes an exclusive lock in `Config.Dir`, reads one JSON file. One written by another cell or driver, with loose permissions, past `maxBytes` or not canonical is never fatal: `Open` renames it `catalog.json.foreign-<unix>` (one kept), calls `Config.Quarantined` and starts empty. `Config.Adopt` (a fleet host told its org, [host-providers.md §8.2.1](../../../../docs/runtime/host-providers.md)) instead keeps another cell's catalog, retires the generations of every other org and leaves `Owner()` as the cell that made them. Writes go by rename and a directory sync.
 - A generation's bake key: `Generation.Key` (`RefsDigest` for several repositories, `SHA` for one), `IsRefsDigest`.
 
 ## Does not own

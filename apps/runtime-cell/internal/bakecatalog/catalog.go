@@ -24,8 +24,10 @@ import (
 	"io"
 	"maps"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -112,19 +114,71 @@ type Config struct {
 	Valid func(g Generation) bool
 	// SyncDir makes a rename in the directory durable; nil syncs it.
 	SyncDir func(dir *os.File) error
+	// Adopt, when set, lets this cell take over a catalog another cell of
+	// the same disk lineage wrote (a host made from a saved template): see
+	// Adoption. Nil refuses every catalog of another cell, as it always did.
+	Adopt *Adoption
+	// Quarantined hears a catalog Open could not accept and moved aside (the
+	// cell then starts with an empty one). Nil: nobody listens.
+	Quarantined func(Quarantine)
+	// Now is the clock of a quarantined file's name; nil is time.Now.
+	Now func() time.Time
 }
+
+// Adoption is the one case a catalog of another cell is kept: the cell was
+// told by the hub which org it serves, and the host is a fleet host whose
+// disk was copied from a template. The caller proves both before it sets it.
+type Adoption struct {
+	// Org is the only org whose generations are kept; the rest are retired
+	// for their artifacts to be removed, never used.
+	Org string
+	// Valid returns the validator of the generations the owner cell made
+	// (the driver's: its names embed the owner's id), or nil when owner is
+	// not a cell id the driver would have named artifacts after.
+	Valid func(owner string) func(g Generation) bool
+}
+
+// Adopted says what taking over a catalog changed.
+type Adopted struct {
+	// From is the cell that wrote the catalog. Names of its generations
+	// embed that id, so it stays the catalog's owner.
+	From string
+	// Kept is how many eligible generations are of the adopted org, Retired
+	// how many generations (eligible or not) are left for removal.
+	Kept, Retired int
+}
+
+// Quarantine reports a catalog moved to File because it could not be used.
+type Quarantine struct {
+	// Reason is corrupt (not what this package writes), unsafe (a link or
+	// loose permissions), unreadable, foreign_driver, foreign_cell or invalid
+	// (a generation the driver would not make).
+	Reason string
+	// File is the name it was moved to.
+	File string
+	// Owner is the cell that wrote it, when it could be read.
+	Owner string
+	// Eligible and Retired are the generations it held, when it could be read.
+	Eligible, Retired int
+}
+
+// quarantinePrefix names a catalog moved aside; at most one is kept.
+const quarantinePrefix = FileName + ".foreign-"
 
 // Catalog is the open catalog of one cell. Its methods are safe for
 // concurrent use.
 type Catalog struct {
-	cfg     Config
-	mu      sync.Mutex
-	root    *os.Root
-	lock    *os.File
-	state   state
-	holds   map[string]int
-	closed  bool
-	syncDir func(*os.File) error
+	cfg      Config
+	owner    string
+	adopted  *Adopted
+	validate func(Generation) bool
+	mu       sync.Mutex
+	root     *os.Root
+	lock     *os.File
+	state    state
+	holds    map[string]int
+	closed   bool
+	syncDir  func(*os.File) error
 	// Previous and current generations survive the gap between publication
 	// and the caller installing its latest pointer (Acknowledge), including
 	// uncertain commits.
@@ -170,6 +224,7 @@ func Open(ctx context.Context, cfg Config) (*Catalog, error) {
 	}
 	// Only the exclusive controller may remove abandoned atomic-write files.
 	// Names and file type are fixed; nothing from a checkout is traversed.
+	// One that cannot be removed is left: nothing ever reads it.
 	dir, err := r.Open(".")
 	if err != nil {
 		return fail(err)
@@ -187,16 +242,7 @@ func Open(ctx context.Context, cfg Config) (*Catalog, error) {
 			if !strings.HasPrefix(entry.Name(), "pending-") || !IsHex(strings.TrimPrefix(entry.Name(), "pending-"), 24) {
 				continue
 			}
-			info, err := r.Lstat(entry.Name())
-			if err != nil {
-				return fail(err)
-			}
-			if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
-				return fail(errors.New("bakecatalog: unsafe pending file"))
-			}
-			if err := r.Remove(entry.Name()); err != nil {
-				return fail(err)
-			}
+			_ = r.Remove(entry.Name())
 		}
 		if errors.Is(err, io.EOF) {
 			break
@@ -207,45 +253,149 @@ func Open(ctx context.Context, cfg Config) (*Catalog, error) {
 		syncDir = func(f *os.File) error { return f.Sync() }
 	}
 	c := &Catalog{
-		cfg: cfg, root: r, lock: lock, holds: map[string]int{}, unconfirmed: map[string]bool{}, syncDir: syncDir,
+		cfg: cfg, owner: cfg.Cell, validate: cfg.Valid, root: r, lock: lock, holds: map[string]int{}, unconfirmed: map[string]bool{}, syncDir: syncDir,
 		state: state{Version: 1, Cell: cfg.Cell, Driver: cfg.Driver, Generations: map[string]Generation{}, Current: map[string]string{}, Retired: map[string]Generation{}},
 	}
+	// A catalog this cell cannot accept never stops it: it is moved aside
+	// and the cell starts with an empty one. The artifacts it named stay
+	// for whoever owns them; a cell never removes what is not its own.
+	quarantine := func(reason string, read *state) (*Catalog, error) {
+		q := Quarantine{Reason: reason}
+		if read != nil {
+			q.Owner, q.Eligible, q.Retired = read.Cell, len(read.Generations), len(read.Retired)
+		}
+		name, err := c.quarantine()
+		if err != nil {
+			return fail(err)
+		}
+		q.File = name
+		if cfg.Quarantined != nil {
+			cfg.Quarantined(q)
+		}
+		return c, nil
+	}
 	f, err := r.OpenFile(FileName, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
-	if err == nil {
-		info, statErr := f.Stat()
-		if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() > maxBytes {
-			_ = f.Close()
-			return fail(errors.New("bakecatalog: unsafe catalog file"))
-		}
-		raw, readErr := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if errors.Is(err, os.ErrNotExist) {
+		return c, nil
+	}
+	if err != nil {
+		return quarantine("unreadable", nil)
+	}
+	info, statErr := f.Stat()
+	if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() > maxBytes {
 		_ = f.Close()
-		if readErr != nil || len(raw) > maxBytes || json.Unmarshal(raw, &c.state) != nil {
-			return fail(errors.New("bakecatalog: invalid catalog"))
+		return quarantine("unsafe", nil)
+	}
+	raw, readErr := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	_ = f.Close()
+	var read state
+	if readErr != nil || len(raw) > maxBytes || json.Unmarshal(raw, &read) != nil {
+		return quarantine("corrupt", nil)
+	}
+	// Only our canonical representation is accepted. This also refuses
+	// duplicate/unknown/case-aliased keys and trailing JSON.
+	if canonical, marshalErr := json.Marshal(read); marshalErr != nil || !bytes.Equal(raw, canonical) {
+		return quarantine("corrupt", nil)
+	}
+	switch {
+	case read.Driver != cfg.Driver:
+		return quarantine("foreign_driver", &read)
+	case read.Cell != cfg.Cell:
+		if cfg.Adopt == nil || cfg.Adopt.Valid == nil || cfg.Adopt.Org == "" {
+			return quarantine("foreign_cell", &read)
 		}
-		canonical, marshalErr := json.Marshal(c.state)
-		// Only our canonical representation is accepted. This also refuses
-		// duplicate/unknown/case-aliased keys and trailing JSON.
-		if marshalErr != nil || !bytes.Equal(raw, canonical) || !c.valid() {
-			return fail(errors.New("bakecatalog: invalid catalog"))
+		validate := cfg.Adopt.Valid(read.Cell)
+		if validate == nil || !wellFormed(read, cfg.Driver, read.Cell, validate) {
+			return quarantine("foreign_cell", &read)
 		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fail(err)
+		c.state, c.owner, c.validate = read, read.Cell, validate
+		c.adopt(cfg.Adopt.Org)
+		if err := c.saveLocked(); err != nil && !errors.Is(err, ErrCommitUncertain) {
+			return fail(err)
+		}
+	case !wellFormed(read, cfg.Driver, cfg.Cell, cfg.Valid):
+		return quarantine("invalid", &read)
+	default:
+		c.state = read
 	}
 	return c, nil
 }
 
-func (c *Catalog) valid() bool {
-	s := c.state
-	if s.Version != 1 || s.Driver != c.cfg.Driver || s.Cell != c.cfg.Cell || s.Generations == nil || s.Current == nil || s.Retired == nil || len(s.Generations)+len(s.Retired) > MaxGenerations || len(s.Current) > MaxGenerations {
+// adopt keeps the generations of org and retires the rest, for the driver to
+// remove their artifacts: the catalog came from another cell's disk and
+// nothing but the org this cell serves is theirs to use.
+func (c *Catalog) adopt(org string) {
+	s := &c.state
+	a := Adopted{From: s.Cell}
+	for id, g := range s.Generations {
+		if g.Org != org {
+			s.Retired[id] = g
+			delete(s.Generations, id)
+			delete(s.Current, scope(g.Org, g.Environment))
+		}
+	}
+	a.Kept, a.Retired = len(s.Generations), len(s.Retired)
+	c.adopted = &a
+}
+
+// Owner is the cell id the catalog's generations are named after: the cell's
+// own, or the one it adopted the catalog from.
+func (c *Catalog) Owner() string { return c.owner }
+
+// Adopted reports whether Open took over another cell's catalog.
+func (c *Catalog) Adopted() (Adopted, bool) {
+	if c.adopted == nil {
+		return Adopted{}, false
+	}
+	return *c.adopted, true
+}
+
+// quarantine moves the unusable catalog to catalog.json.foreign-<unix>, after
+// removing an earlier one: at most one is kept.
+func (c *Catalog) quarantine() (string, error) {
+	dir, err := c.root.Open(".")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = dir.Close() }()
+	names, err := dir.Readdirnames(-1)
+	if err != nil {
+		return "", err
+	}
+	for _, n := range names {
+		if strings.HasPrefix(n, quarantinePrefix) {
+			if err := c.root.Remove(n); err != nil {
+				return "", err
+			}
+		}
+	}
+	now := time.Now
+	if c.cfg.Now != nil {
+		now = c.cfg.Now
+	}
+	name := quarantinePrefix + strconv.FormatInt(now().Unix(), 10)
+	if err := c.root.Rename(FileName, name); err != nil {
+		return "", err
+	}
+	if err := c.syncDir(dir); err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
+// wellFormed is whether s is a catalog of this driver, written by cell, whose
+// every generation validate accepts.
+func wellFormed(s state, driver, cell string, validate func(Generation) bool) bool {
+	if s.Version != 1 || s.Driver != driver || s.Cell != cell || s.Generations == nil || s.Current == nil || s.Retired == nil || len(s.Generations)+len(s.Retired) > MaxGenerations || len(s.Current) > MaxGenerations {
 		return false
 	}
 	for id := range s.Generations {
-		if g := s.Generations[id]; id != g.ID || !c.cfg.Valid(g) {
+		if g := s.Generations[id]; id != g.ID || !validate(g) {
 			return false
 		}
 	}
 	for id := range s.Retired {
-		if g := s.Retired[id]; id != g.ID || !c.cfg.Valid(g) {
+		if g := s.Retired[id]; id != g.ID || !validate(g) {
 			return false
 		}
 		if _, eligible := s.Generations[id]; eligible {
@@ -323,7 +473,7 @@ func (c *Catalog) releaser(id string) func() {
 func (c *Catalog) Hold(id, org, env string) (g Generation, release func(), ok bool) {
 	c.mu.Lock()
 	g, ok = c.state.Generations[id]
-	if c.closed || !ok || g.Cell != c.cfg.Cell || g.Org != org || g.Environment != env {
+	if c.closed || !ok || g.Cell != c.owner || g.Org != org || g.Environment != env {
 		c.mu.Unlock()
 		return Generation{}, nil, false
 	}
@@ -339,7 +489,7 @@ func (c *Catalog) Stage(g Generation) (release func(), err error) {
 	g.Volumes = maps.Clone(g.Volumes)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !c.cfg.Valid(g) || len(c.state.Generations)+len(c.state.Retired) >= MaxGenerations {
+	if !c.validate(g) || len(c.state.Generations)+len(c.state.Retired) >= MaxGenerations {
 		return nil, ErrLimit
 	}
 	old := c.state.Retired
@@ -475,6 +625,31 @@ func (c *Catalog) Prune(remove func(g Generation) error) error {
 		c.mu.Unlock()
 	}
 	return errors.Join(errs...)
+}
+
+// Retire makes an eligible generation retired, for Prune to remove its
+// artifacts: the driver found them gone or not its own. False when id is not
+// eligible or is held.
+func (c *Catalog) Retire(id string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	g, ok := c.state.Generations[id]
+	if c.closed || !ok || c.holds[id] > 0 {
+		return false
+	}
+	old := c.state
+	c.state.Generations, c.state.Retired, c.state.Current = maps.Clone(old.Generations), maps.Clone(old.Retired), maps.Clone(old.Current)
+	delete(c.state.Generations, id)
+	c.state.Retired[id] = g
+	if c.state.Current[scope(g.Org, g.Environment)] == id {
+		delete(c.state.Current, scope(g.Org, g.Environment))
+	}
+	delete(c.unconfirmed, id)
+	if err := c.saveLocked(); err != nil && !errors.Is(err, ErrCommitUncertain) {
+		c.state = old
+		return false
+	}
+	return true
 }
 
 // Lookup is the generation id as the catalog holds it now: eligible, retired
