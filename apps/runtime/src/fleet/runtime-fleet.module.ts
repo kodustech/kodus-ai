@@ -19,6 +19,7 @@ import { BoatHostProvider } from './providers/boat/boat-provider';
 import { ProviderRegistry } from './providers/registry';
 import { SetupRecordBakeProbe } from './template/bake-probe';
 import { BoatSetupHost, type HostSealer } from './template/boat-setup-host';
+import { HubHostSealer } from './template/hub-host-sealer';
 import { buildEnvironmentTemplate } from './template/build-template';
 import { RequestingSetupHost, TemplateBuildTrigger, type TemplateSetupRequester, TriggeringTemplateResolver } from './template/template-trigger';
 import { PgTemplateStore, StoreTemplateResolver } from './template/template-store';
@@ -29,7 +30,7 @@ import { PgTemplateStore, StoreTemplateResolver } from './template/template-stor
 
 export const FLEET_LOGGER = Symbol('FLEET_LOGGER');
 export const FLEET_TEMPLATES = Symbol('FLEET_TEMPLATES');
-/** The `HostSealer` that makes a template host's disk safe to save (stops the cell, removes identity, token file and /tmp). Provided by the hub-to-cell seal adapter; absent: no template is built. */
+/** The `HostSealer` that makes a template host's disk safe to save (stops the cell, removes identity, token file and /tmp). Absent: the hub-to-cell seal adapter (HubHostSealer: cell.seal through the hub's fleet route) is used. */
 export const FLEET_HOST_SEALER = Symbol('FLEET_HOST_SEALER');
 /** The `TemplateSetupRequester` that asks the setup request path for an environment's setup on its template host. Absent: no template is built. */
 export const FLEET_TEMPLATE_SETUP_REQUESTER = Symbol('FLEET_TEMPLATE_SETUP_REQUESTER');
@@ -71,7 +72,7 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
         let templates: TemplateResolver = this.templates ?? new StoreTemplateResolver(templateStore);
         // The environment template builder runs only where it can seal a host and ask for the setup on it.
         const boat = this.providers.get('boat');
-        if (boat && this.sealer && this.requester && !this.templates) {
+        if (boat && this.requester && !this.templates) {
             const setups = new PgEnvironmentSetupStore(this.pool);
             const boatPoolsOf = async (organizationId: string) =>
                 (await store.controlledPools()).pools.filter((p) => p.pool.provider === 'boat' && p.pool.lifecycle === 'perRun' && (!p.pool.admission || p.pool.admission.allowOrgs.includes(organizationId))).map((p) => ({ poolId: p.poolId, pool: p.pool }));
@@ -81,7 +82,7 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
                     provider: boat,
                     hub,
                     probe: new SetupRecordBakeProbe(setups),
-                    sealer: this.sealer,
+                    sealer: this.sealer ?? new HubHostSealer({ hub, poll: { sleep: poll.sleep, attempts: 40, intervalMs: 3_000 } }),
                     poolOf: async (poolId) => (await store.pool(poolId))?.pool,
                     installation: c.installation,
                     bootstrap: { hubUrl: c.hubPublicUrl, hubCa: c.hubCa },

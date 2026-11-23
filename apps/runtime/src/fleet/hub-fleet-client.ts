@@ -68,4 +68,17 @@ export class HubFleetClient implements HubFleetPort {
         const res = await this.post(`${this.hubInternalUrl}/internal/fleet/hosts/${encodeURIComponent(hostId)}/retire`, '{}');
         if (res.status !== 200) throw new Error(`hub fleet retire answered ${res.status}`);
     }
+
+    /** Asks the hub to have the template host's cell seal itself; resolves once the cell acked. A refusal throws with the hub's code. */
+    async seal(hostId: string) {
+        const res = await this.post(`${this.hubInternalUrl}/internal/fleet/hosts/${encodeURIComponent(hostId)}/seal`, '{}');
+        if (res.status !== 200) throw new Error(`hub fleet seal answered ${res.status}: ${res.text.slice(0, 200)}`);
+    }
+
+    async connection(hostId: string): Promise<{ cellId: string | null; connected: boolean }> {
+        const res = await this.post(`${this.hubInternalUrl}/internal/fleet/hosts/${encodeURIComponent(hostId)}/connection`, '{}');
+        if (res.status !== 200) throw new Error(`hub fleet connection answered ${res.status}`);
+        const b = JSON.parse(res.text) as { cellId?: unknown; connected?: unknown };
+        return { cellId: typeof b.cellId === 'string' ? b.cellId : null, connected: b.connected === true };
+    }
 }

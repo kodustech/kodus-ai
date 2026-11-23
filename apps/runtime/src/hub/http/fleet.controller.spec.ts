@@ -65,4 +65,49 @@ describe('the hub fleet routes', () => {
         expect(store.revokedCells).toEqual(['cell-f']);
         expect(await controller.retire({ socket: undefined }, 'host-never')).toEqual({ cellId: null });
     });
+
+    // docs §8.2: only a template's setup host seals itself, on the hub's ask.
+    describe('seal', () => {
+        const register = async (store: InMemoryHubStore, controller: FleetInternalController, hostId: string, boundKey: string) => {
+            const { token } = await controller.mint({ socket: undefined }, { ...body, hostId, boundKey });
+            await store.redeemFleetAndRegister(token, () => ({ cellId: `cell-${hostId}`, organizationId: null, owner: 'kodus', topology: 'fleet', status: 'connected', certificateSerial: 'aa', certificateExpiresAt: new Date().toISOString() }));
+        };
+        const withConnections = (reply: { type: string; body?: unknown } = { type: 'ack' }) => {
+            const sent: Array<{ cellId: string; type: string }> = [];
+            const connections = { get: () => ({}) as never, request: async (cellId: string, type: string) => { sent.push({ cellId, type }); return reply as never; } };
+            const tokens = new InMemoryFleetTokenStore();
+            const store = new InMemoryHubStore({ fleetLedger: new FleetTokenLedger(tokens) });
+            store.hostPools.set('boat-eu-perrun', { provider: 'boat', lifecycle: 'perRun' });
+            const controller = new FleetInternalController(new FleetEnrollment(store, store.fleetLedger, () => undefined, connections));
+            return { store, controller, sent };
+        };
+
+        it('forwards cell.seal to the cell of a template host and answers once it acked', async () => {
+            const { store, controller, sent } = withConnections();
+            await register(store, controller, 'tpl-1', 'template:org-a/env-1');
+            expect(await controller.seal({ socket: undefined }, 'tpl-1')).toEqual({ cellId: 'cell-tpl-1' });
+            expect(sent).toEqual([{ cellId: 'cell-tpl-1', type: 'cell.seal' }]);
+        });
+
+        it('refuses a host whose cell is bound to a Run or to nothing, and never asks its cell', async () => {
+            const { store, controller, sent } = withConnections();
+            await register(store, controller, 'run-1', 'run:org-a/r-1');
+            expect(await status(controller.seal({ socket: undefined }, 'run-1'))).toBe(409);
+            expect(await status(controller.seal({ socket: undefined }, 'host-never'))).toBe(404);
+            expect(sent).toEqual([]);
+        });
+
+        it('refuses when the cell nacks (a claim is live, not a fleet install)', async () => {
+            const { store, controller } = withConnections({ type: 'nack', body: { code: 'claim_live' } });
+            await register(store, controller, 'tpl-1', 'template:org-a/env-1');
+            expect(await status(controller.seal({ socket: undefined }, 'tpl-1'))).toBe(409);
+        });
+
+        it('says whether the host cell is connected, for the wait after the seal', async () => {
+            const { store, controller } = withConnections();
+            await register(store, controller, 'tpl-1', 'template:org-a/env-1');
+            expect(await controller.connection('tpl-1')).toEqual({ cellId: 'cell-tpl-1', connected: true });
+            expect(await controller.connection('host-never')).toEqual({ cellId: null, connected: false });
+        });
+    });
 });

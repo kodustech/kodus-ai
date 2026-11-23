@@ -92,9 +92,9 @@ export const HUB_LOGGER = Symbol('HUB_LOGGER');
         {
             // runtime-fleet's door to cell identity (docs/runtime/host-providers.md §8.1); FleetAuthGuard admits only its CN.
             provide: FleetEnrollment,
-            inject: [RUNTIME_PG_POOL, HUB_LOGGER],
-            useFactory: (pool: Pool, logger: RuntimeLogger) =>
-                new FleetEnrollment(new PgHubStore(pool), new FleetTokenLedger(new PgFleetTokenStore(pool)), (level, msg, fields) => logger.write(level, msg, fields)),
+            inject: [RUNTIME_PG_POOL, HUB_LOGGER, CellHub],
+            useFactory: (pool: Pool, logger: RuntimeLogger, hub: CellHub) =>
+                new FleetEnrollment(new PgHubStore(pool), new FleetTokenLedger(new PgFleetTokenStore(pool)), (level, msg, fields) => logger.write(level, msg, fields), hub.connections),
         },
         WorkerAuthGuard,
         FleetAuthGuard,

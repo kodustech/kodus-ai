@@ -292,6 +292,8 @@ export interface CellRegistryRepository {
     hostPool(poolId: string): Promise<{ provider: string; lifecycle: string } | null>;
     /** Cordons and revokes the cell of a fleet host (its live claims end with it); the cell's id, or null when none registered. */
     retireHostCell(hostId: string, by: string): Promise<string | null>;
+    /** The cell registered for a fleet host, with its bound key and whether it is connected; null when none registered. */
+    fleetHostCell(hostId: string): Promise<{ cellId: string; boundKey: string | null; connected: boolean } | null>;
     /** Moves the pin to a renewed certificate; false when the cell is revoked or unknown. */
     pinCertificate(cellId: string, serial: string, expiresAt: string): Promise<boolean>;
     /**
@@ -816,6 +818,11 @@ export class PgHubStore implements HubStore {
     async hostPool(poolId: string) {
         const r = await this.pool.query(`SELECT provider, lifecycle FROM runtime.runtime_host_pools WHERE pool_id = $1`, [poolId]);
         return r.rows[0] ? { provider: r.rows[0].provider as string, lifecycle: r.rows[0].lifecycle as string } : null;
+    }
+    async fleetHostCell(hostId: string) {
+        const r = await this.pool.query(`SELECT cell_id, bound_key, status FROM runtime.runtime_cells WHERE host_id = $1 AND topology = 'fleet'`, [hostId]);
+        const row = r.rows[0];
+        return row ? { cellId: row.cell_id as string, boundKey: (row.bound_key as string | null) ?? null, connected: row.status === 'connected' } : null;
     }
     async retireHostCell(hostId: string, by: string) {
         const r = await this.pool.query(`SELECT cell_id FROM runtime.runtime_cells WHERE host_id = $1 AND topology = 'fleet'`, [hostId]);

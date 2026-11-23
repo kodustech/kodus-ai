@@ -15,6 +15,8 @@ const MintBody = z.strictObject({
     ttlSeconds: z.number().int().min(60).max(3600),
 });
 
+const SEAL_STATUS = { no_cell: 404, not_template: 409, not_connected: 409, refused: 409 } as const;
+
 const STATUS: Record<'unknown_pool' | 'static_pool' | 'already_registered', number> = { unknown_pool: 404, static_pool: 409, already_registered: 409 };
 
 /**
@@ -40,6 +42,22 @@ export class FleetInternalController {
     async retire(@Req() req: { socket?: unknown }, @Param('hostId') hostId: string) {
         const id = parseBody(HostId, hostId);
         return { cellId: await this.fleet.retire(id, callerOf(req)) };
+    }
+
+    /** Asks the template setup host's connected cell to seal itself; answers once the cell acked (docs §8.2). */
+    @Post('hosts/:hostId/seal')
+    @HttpCode(200)
+    async seal(@Req() req: { socket?: unknown }, @Param('hostId') hostId: string) {
+        const r = await this.fleet.seal(parseBody(HostId, hostId), callerOf(req));
+        if (r.ok === false) throw new HttpException({ code: r.reason, ...(r.code ? { cellCode: r.code } : {}) }, SEAL_STATUS[r.reason]);
+        return { cellId: r.cellId };
+    }
+
+    /** Whether the host's cell is connected: after a seal the fleet waits for it to be gone. */
+    @Post('hosts/:hostId/connection')
+    @HttpCode(200)
+    async connection(@Param('hostId') hostId: string) {
+        return this.fleet.hostConnection(parseBody(HostId, hostId));
     }
 }
 

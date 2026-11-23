@@ -248,6 +248,10 @@ export class InMemoryHubStore implements HubStore {
     async hostPool(poolId: string) {
         return this.hostPools.get(poolId) ?? null;
     }
+    async fleetHostCell(hostId: string) {
+        const c = [...this.cells.values()].find((x) => x.hostId === hostId && x.topology === 'fleet');
+        return c ? { cellId: c.cellId, boundKey: c.boundKey ?? null, connected: c.status === 'connected' } : null;
+    }
     async retireHostCell(hostId: string) {
         const c = [...this.cells.values()].find((x) => x.hostId === hostId && x.topology === 'fleet');
         if (!c) return null;
