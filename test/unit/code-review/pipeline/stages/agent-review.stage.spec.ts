@@ -277,13 +277,11 @@ describe('AgentReviewStage', () => {
                     type: 'e2b' as const,
                     sandboxId: 'mock-sandbox-id',
                     repoDir: '/home/user/repo',
-                    run: jest
-                        .fn()
-                        .mockResolvedValue({
-                            stdout: '',
-                            stderr: '',
-                            exitCode: 0,
-                        }),
+                    run: jest.fn().mockResolvedValue({
+                        stdout: '',
+                        stderr: '',
+                        exitCode: 0,
+                    }),
                     readFile: jest.fn().mockResolvedValue(''),
                     writeFile: jest.fn().mockResolvedValue(undefined),
                 },
@@ -332,13 +330,11 @@ describe('AgentReviewStage', () => {
                     type: 'e2b' as const,
                     sandboxId: 'mock-sandbox-id',
                     repoDir: '/home/user/repo',
-                    run: jest
-                        .fn()
-                        .mockResolvedValue({
-                            stdout: '',
-                            stderr: '',
-                            exitCode: 0,
-                        }),
+                    run: jest.fn().mockResolvedValue({
+                        stdout: '',
+                        stderr: '',
+                        exitCode: 0,
+                    }),
                     readFile: jest.fn().mockResolvedValue(''),
                     writeFile: jest.fn().mockResolvedValue(undefined),
                 },
@@ -457,6 +453,31 @@ describe('AgentReviewStage', () => {
             },
         );
 
+        // Two builds on one checkout overwrite `.kodus-graph/*` and re-clone
+        // `_linked/<slug>` under each other.
+        it("an Ultra review's passes build the call graph and linked repositories once", async () => {
+            const graph = (stage as any).graphContext.generateContextLegacy;
+            const linked = jest.spyOn(
+                stage as any,
+                'resolveLinkedRepoAccessWithGate',
+            );
+            const context = contextWithSandbox(jest.fn());
+            const shared = {};
+
+            await Promise.all(
+                (['native', 'native', 'auxiliary'] as const).map((scope) =>
+                    (stage as any).reviewPass(context, {
+                        scope,
+                        shared,
+                        collect: jest.fn(),
+                    }),
+                ),
+            );
+
+            expect(graph).toHaveBeenCalledTimes(1);
+            expect(linked).toHaveBeenCalledTimes(1);
+        });
+
         it('keeps the review when the release fails', async () => {
             const cleanup = jest
                 .fn()
@@ -516,13 +537,11 @@ describe('AgentReviewStage', () => {
                     type: 'e2b' as const,
                     sandboxId: 'mock-sandbox-id',
                     repoDir: '/home/user/repo',
-                    run: jest
-                        .fn()
-                        .mockResolvedValue({
-                            stdout: '',
-                            stderr: '',
-                            exitCode: 0,
-                        }),
+                    run: jest.fn().mockResolvedValue({
+                        stdout: '',
+                        stderr: '',
+                        exitCode: 0,
+                    }),
                     readFile: jest.fn().mockResolvedValue(''),
                     writeFile: jest.fn().mockResolvedValue(undefined),
                 },

@@ -398,6 +398,28 @@ export interface ReviewPass {
      * the later steps stop before their next model call.
      */
     abandoned?: AbortSignal;
+    /**
+     * What an Ultra review's passes build once between them: they share the
+     * PR's checkout, so a second build would overwrite `.kodus-graph/*` and
+     * re-clone `_linked/<slug>` under a pass already reading them.
+     */
+    shared?: ReviewPassShared;
+}
+
+/** Filled by the first pass that needs each; the others await the same build. */
+export interface ReviewPassShared {
+    callGraph?: Promise<CallGraphBuild>;
+    linkedRepos?: Promise<LinkedRepoGate>;
+}
+
+interface CallGraphBuild {
+    callGraph: string;
+    failed: boolean;
+}
+
+interface LinkedRepoGate {
+    linkedRepoAccess: LinkedRepoAccess | undefined;
+    gateMetadata: CrossRepoGateMetadata | undefined;
 }
 
 /** A pass its caller left behind stops at the next step. */
@@ -1253,54 +1275,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
 
             if (shouldBuildCallGraph) {
-                try {
-                    if (context.sandboxHandle?.run) {
-                        const repo =
-                            await this.repositoryService.findByExternalId(
-                                context.platformType,
-                                String(context.repository?.id || ''),
-                            );
-
-                        const baseBranch =
-                            context.sandboxHandle?.baseBranch ||
-                            context.pullRequest?.base?.ref ||
-                            context.repository?.defaultBranch;
-
-                        if (repo?.astGraphStatus === AstGraphStatus.READY) {
-                            callGraph = await this.graphContext.generateContext(
-                                context.sandboxHandle,
-                                changedFiles,
-                                repo.uuid,
-                                baseBranch,
-                            );
-                        } else {
-                            callGraph =
-                                await this.graphContext.generateContextLegacy(
-                                    context.sandboxHandle,
-                                    changedFiles,
-                                    baseBranch,
-                                );
-                        }
-                    }
-                } catch (err) {
-                    // Without a checkout the graph cannot build; that loss is
-                    // already SANDBOX_UNAVAILABLE.
-                    if (hasCheckout) {
-                        stageWarnings.push(
-                            buildCallGraphFailedWarning({
-                                modelName: effectiveModelName || 'unknown',
-                            }),
-                        );
-                    }
-                    this.logger.warn({
-                        message: `[AGENT] Call graph failed for PR#${prNumber}, proceeding without it`,
-                        context: this.stageName,
-                        error: err,
-                        metadata: {
-                            sandboxType: context.sandboxHandle?.type,
-                            hasSandbox: !!context.sandboxHandle?.run,
-                        },
-                    });
+                const built = await (pass.shared
+                    ? (pass.shared.callGraph ??= this.buildCallGraph(context))
+                    : this.buildCallGraph(context));
+                callGraph = built.callGraph;
+                // Without a checkout the graph cannot build; that loss is
+                // already SANDBOX_UNAVAILABLE.
+                if (built.failed && hasCheckout) {
+                    stageWarnings.push(
+                        buildCallGraphFailedWarning({
+                            modelName: effectiveModelName || 'unknown',
+                        }),
+                    );
                 }
             }
 
@@ -1313,11 +1299,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // Deterministic boundary gate (#1576): only arm linked-repo tools
             // + prompt when the diff touches boundary surface. Config alone is
             // not enough — pure internal refactors stay single-repo.
-            const { linkedRepoAccess, gateMetadata } =
-                await this.resolveLinkedRepoAccessWithGate(
-                    context,
-                    changedFiles,
-                );
+            const { linkedRepoAccess, gateMetadata } = await (pass.shared
+                ? (pass.shared.linkedRepos ??=
+                      this.resolveLinkedRepoAccessWithGate(
+                          context,
+                          changedFiles,
+                      ))
+                : this.resolveLinkedRepoAccessWithGate(context, changedFiles));
             const crossRepoLost = crossRepoUnavailableWarning({
                 configured:
                     context.codeReviewConfig?.linkedRepositories?.length ?? 0,
@@ -3984,6 +3972,51 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 },
             });
             return false;
+        }
+    }
+
+    /** The call graph of the changed files, read from the PR's checkout. */
+    private async buildCallGraph(
+        context: CodeReviewPipelineContext,
+    ): Promise<CallGraphBuild> {
+        const changedFiles = context.changedFiles ?? [];
+        try {
+            if (!context.sandboxHandle?.run) {
+                return { callGraph: '', failed: false };
+            }
+            const repo = await this.repositoryService.findByExternalId(
+                context.platformType,
+                String(context.repository?.id || ''),
+            );
+            const baseBranch =
+                context.sandboxHandle?.baseBranch ||
+                context.pullRequest?.base?.ref ||
+                context.repository?.defaultBranch;
+            const callGraph =
+                repo?.astGraphStatus === AstGraphStatus.READY
+                    ? await this.graphContext.generateContext(
+                          context.sandboxHandle,
+                          changedFiles,
+                          repo.uuid,
+                          baseBranch,
+                      )
+                    : await this.graphContext.generateContextLegacy(
+                          context.sandboxHandle,
+                          changedFiles,
+                          baseBranch,
+                      );
+            return { callGraph, failed: false };
+        } catch (err) {
+            this.logger.warn({
+                message: `[AGENT] Call graph failed for PR#${context.pullRequest?.number}, proceeding without it`,
+                context: this.stageName,
+                error: err,
+                metadata: {
+                    sandboxType: context.sandboxHandle?.type,
+                    hasSandbox: !!context.sandboxHandle?.run,
+                },
+            });
+            return { callGraph: '', failed: true };
         }
     }
 

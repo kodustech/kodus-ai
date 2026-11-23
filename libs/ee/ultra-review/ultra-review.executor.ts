@@ -9,6 +9,7 @@ import type {
 import type {
     ReviewPass,
     ReviewPassCollected,
+    ReviewPassShared,
 } from '@libs/code-review/pipeline/stages/agent-review.stage';
 import type {
     UltraModel,
@@ -412,6 +413,9 @@ export async function executeUltraReview(
         });
     const releaseBase = () =>
         context.sandboxHandle?.cleanup?.().catch(releaseFailed('PR'));
+    // The passes share the PR's checkout: the first to need the call graph
+    // or the linked repositories builds them, the others read that build.
+    const shared: ReviewPassShared = {};
     let auxiliaryRun: Promise<CodeReviewPipelineContext> =
         Promise.resolve(context);
     // Kody Rules and custom agents that did not finish: the review is not
@@ -437,6 +441,7 @@ export async function executeUltraReview(
                     }),
                     {
                         scope: 'auxiliary',
+                        shared,
                         abandoned: leftBehind.signal,
                         collect: (collected) => {
                             if (!abandoned) auxiliary = collected;
@@ -496,6 +501,7 @@ export async function executeUltraReview(
                     ),
                     {
                         scope: 'native',
+                        shared,
                         model,
                         timelineTag: { key: tag, label: model.modelName },
                         abandoned: leftBehind.signal,
