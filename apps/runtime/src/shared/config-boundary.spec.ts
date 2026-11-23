@@ -19,6 +19,8 @@ const READERS: Record<string, string> = {
     'libs/runtime/api/infrastructure/dev-stub-git.adapter.ts': 'devGitStubFile, the dev-only Git stub switch read at module build',
     'libs/runtime-publish/runtime-feature.ts': "kodyRuntimeEnabledInThisProcess, the product process's RUNTIME_ENABLED switch for its crons and controllers",
     'libs/runtime-publish/runtime-publish.module.ts': 'composition root: API_FRONTEND_URL and RUNTIME_PREVIEW_DOMAIN at module build',
+    // Not a read by any Runtime process: the file holds the source of a script that runs inside an image build.
+    'libs/runtime/api/application/recipe-author/firebase-emulators-fetch-script.ts': "the Firebase emulator fetch script's source text, run in the image build (FIREBASE_EMULATORS_MIRROR, FIREBASE_EMULATORS_PATH)",
 };
 
 /** apps/runtime and the Runtime libs, and the Runtime parts of the product API and worker. */
