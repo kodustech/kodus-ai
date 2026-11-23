@@ -90,7 +90,20 @@ describe('reviewCommandAccess', () => {
         ).resolves.toBe('unknown');
     });
 
-    it("reads the organization's members on Bitbucket and Azure Repos", async () => {
+    it('is unknown without an organization to ask with', async () => {
+        const codeManagement = service(true);
+        await expect(
+            reviewCommandAccess(
+                codeManagement as any,
+                github('OWNER'),
+                undefined,
+                'ultra',
+            ),
+        ).resolves.toBe('unknown');
+        expect(codeManagement.userCanWrite).not.toHaveBeenCalled();
+    });
+
+    it("reads the workspace's members on Bitbucket", async () => {
         const bitbucket = {
             platformType: PlatformType.BITBUCKET,
             payload: { actor: { uuid: '{abc}', display_name: 'Dev' } },
@@ -111,6 +124,112 @@ describe('reviewCommandAccess', () => {
                 'ultra',
             ),
         ).resolves.toBe('none');
+    });
+
+    it("does not take a Bitbucket member's display name for their id", async () => {
+        const impostor = {
+            platformType: PlatformType.BITBUCKET,
+            payload: { actor: { uuid: '{zzz}', display_name: 'Maintainer' } },
+        };
+        await expect(
+            reviewCommandAccess(
+                service(undefined, [
+                    { id: '{abc}', name: 'Maintainer' },
+                ]) as any,
+                impostor,
+                org,
+                'ultra',
+            ),
+        ).resolves.toBe('none');
+    });
+
+    it('reads a Bitbucket Data Center actor by its username', async () => {
+        const dataCenter = {
+            platformType: PlatformType.BITBUCKET,
+            payload: { actor: { name: 'dev', id: 7, displayName: 'Dev' } },
+        };
+        await expect(
+            reviewCommandAccess(
+                service(undefined, [{ id: 'dev', name: 'Dev' }]) as any,
+                dataCenter,
+                org,
+                'ultra',
+            ),
+        ).resolves.toBe('write');
+    });
+
+    it("reads the organization's members on Azure Repos", async () => {
+        const azure = (displayName: string) => ({
+            platformType: PlatformType.AZURE_REPOS,
+            payload: {
+                resource: {
+                    comment: { author: { id: 'guid-1', displayName } },
+                    pullRequest: { repository: { id: 'r1', name: 'ledger' } },
+                },
+            },
+        });
+        const members = [{ id: 'aad.descriptor', name: 'Dev' }];
+        await expect(
+            reviewCommandAccess(
+                service(undefined, members) as any,
+                azure('Dev'),
+                org,
+                'heavy',
+            ),
+        ).resolves.toBe('write');
+        await expect(
+            reviewCommandAccess(
+                service(undefined, members) as any,
+                azure('Someone'),
+                org,
+                'heavy',
+            ),
+        ).resolves.toBe('none');
+    });
+
+    it('is unknown when the member list comes back empty or names no commenter', async () => {
+        const bitbucket = {
+            platformType: PlatformType.BITBUCKET,
+            payload: { actor: { uuid: '{abc}' } },
+        };
+        await expect(
+            reviewCommandAccess(
+                service(undefined, []) as any,
+                bitbucket,
+                org,
+                'ultra',
+            ),
+        ).resolves.toBe('unknown');
+        const codeManagement = service(undefined, [{ id: '{abc}' }]);
+        await expect(
+            reviewCommandAccess(
+                codeManagement as any,
+                {
+                    platformType: PlatformType.BITBUCKET,
+                    payload: { actor: {} },
+                },
+                org,
+                'ultra',
+            ),
+        ).resolves.toBe('unknown');
+        expect(codeManagement.getListMembers).not.toHaveBeenCalled();
+    });
+
+    it('asks Bitbucket Cloud for a complete member list', async () => {
+        const codeManagement = service(undefined, [{ id: '{abc}' }]);
+        await reviewCommandAccess(
+            codeManagement as any,
+            {
+                platformType: PlatformType.BITBUCKET,
+                payload: { actor: { uuid: '{abc}' } },
+            },
+            org,
+            'ultra',
+        );
+        expect(codeManagement.getListMembers).toHaveBeenCalledWith(
+            expect.objectContaining({ requireComplete: true }),
+            PlatformType.BITBUCKET,
+        );
     });
 });
 

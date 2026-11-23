@@ -42,13 +42,17 @@ export function eventSenderOf(params: CommentWebhook): {
                 id: params.payload?.user?.id,
             };
         case PlatformType.BITBUCKET:
+            // Data Center names its actor by `name` (the username its member
+            // list is keyed by) and `displayName`.
             return {
                 login:
                     params.payload?.actor?.display_name ||
-                    params.payload?.actor?.nickname,
+                    params.payload?.actor?.nickname ||
+                    params.payload?.actor?.displayName,
                 id:
                     params.payload?.actor?.uuid?.slice(1, -1) ||
-                    params.payload?.actor?.account_id,
+                    params.payload?.actor?.account_id ||
+                    params.payload?.actor?.name,
             };
         case PlatformType.AZURE_REPOS:
             return {
@@ -161,8 +165,9 @@ export function commentRepositoryOf(params: CommentWebhook): CommentRepository {
 /**
  * Whether the comment's author has write access. GitHub and GitLab are asked
  * for the commenter's permission on the repository; the other platforms for
- * the organization's members. Throws when the lookup fails or the platform
- * cannot say, so a caller never reads an unknown as "no access".
+ * the organization's members. Throws when the lookup fails, the member list
+ * comes back empty or the platform cannot say, so a caller never reads an
+ * unknown as "no access".
  */
 export async function commenterCanWrite(
     codeManagementService: Pick<
@@ -215,21 +220,34 @@ export async function commenterCanWrite(
         }
         return canWrite;
     }
-    const members = await codeManagementService.getListMembers(
-        { organizationAndTeamData },
-        params.platformType,
-    );
     const id = bareId(sender.id);
     const login = sender.login?.toLowerCase();
-    return (
-        Array.isArray(members) &&
-        members.some(
-            (m: { id?: unknown; name?: unknown }) =>
-                (!!id && bareId(m.id) === id) ||
-                (!!login &&
-                    typeof m.name === 'string' &&
-                    m.name.toLowerCase() === login),
-        )
+    if (!id && !login) {
+        throw new Error(
+            `${params.platformType} named no commenter to check access for`,
+        );
+    }
+    const members = await codeManagementService.getListMembers(
+        { organizationAndTeamData, requireComplete: true },
+        params.platformType,
+    );
+    // The providers answer a failed read with an empty list: no organization
+    // with an integration has no members.
+    if (!Array.isArray(members) || members.length === 0) {
+        throw new Error(
+            `${params.platformType} returned no members to check access against`,
+        );
+    }
+    // Bitbucket's display name is the user's to choose, and its actor always
+    // carries the id its members are listed by.
+    const byName = !id || params.platformType !== PlatformType.BITBUCKET;
+    return members.some(
+        (m: { id?: unknown; name?: unknown }) =>
+            (!!id && bareId(m.id) === id) ||
+            (byName &&
+                !!login &&
+                typeof m.name === 'string' &&
+                m.name.toLowerCase() === login),
     );
 }
 
@@ -240,8 +258,8 @@ const accessLogger = createLogger('ReviewCommandAccess');
 
 /**
  * The access of who asked for a Heavy or Ultra review by command, the modes
- * that spend the most on the organization's keys. Undefined for any other
- * command: they need none.
+ * that spend the most on the organization's keys: `unknown` when it could not
+ * be read. Undefined for any other command: they need none.
  */
 export async function reviewCommandAccess(
     codeManagementService: Pick<
@@ -253,8 +271,10 @@ export async function reviewCommandAccess(
     requested: string | undefined,
 ): Promise<ReviewCommandAccess | undefined> {
     if (requested !== 'heavy' && requested !== 'ultra') return undefined;
-    if (!organizationAndTeamData) return undefined;
     try {
+        if (!organizationAndTeamData) {
+            throw new Error('No organization to check access with');
+        }
         return (await commenterCanWrite(
             codeManagementService,
             params,
@@ -268,8 +288,8 @@ export async function reviewCommandAccess(
             context: 'ReviewCommandAccess',
             error,
             metadata: {
-                organizationId: organizationAndTeamData.organizationId,
-                teamId: organizationAndTeamData.teamId,
+                organizationId: organizationAndTeamData?.organizationId,
+                teamId: organizationAndTeamData?.teamId,
                 platformType: params.platformType,
             },
         });

@@ -545,6 +545,23 @@ describe('ChatWithKodyFromGitUseCase', () => {
             ),
         ).rejects.toThrow(/could not say/);
 
+        getListMembers.mockResolvedValueOnce([{ id: 9, name: 'Rui' }]);
+        await expect(
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.FORGEJO,
+                    payload: {
+                        sender: { id: 5, login: 'ana' },
+                        comment: { user: { id: 5, login: 'ana' } },
+                        pull_request: { user: { id: 5, login: 'ana' } },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).resolves.toEqual({ isAuthor: true, canWrite: false });
+
+        // An empty list is a read that failed, not nobody.
         getListMembers.mockResolvedValueOnce([]);
         await expect(
             (useCase as any).senderAccess(
@@ -559,7 +576,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 { organizationId: 'org-1' },
                 { id: 'repo-1' },
             ),
-        ).resolves.toMatchObject({ isAuthor: true });
+        ).rejects.toThrow(/no members/);
     });
 
     // A bare `#12` is read from the PR's repository, which needs its owner.
