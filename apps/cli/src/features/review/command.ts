@@ -12,7 +12,12 @@ import {
     checkTrialStatus,
 } from '../../utils/rate-limit.js';
 import { exitWithCode } from '../../utils/cli-exit.js';
-import { cliDebug, cliError, cliInfo } from '../../utils/logger.js';
+import {
+    cliDebug,
+    cliError,
+    cliInfo,
+    cliWarn,
+} from '../../utils/logger.js';
 import { createCommandContext } from '../../utils/command-context.js';
 import {
     buildAgentErrorEnvelope,
@@ -487,7 +492,7 @@ async function reviewAction(
                         options.failOn,
                     );
                     if (failMessage) {
-                        cliInfo(chalk.yellow(failMessage));
+                        cliWarn(chalk.yellow(failMessage));
                     }
                     exitWithCode(1);
                 }
@@ -537,7 +542,7 @@ async function reviewAction(
         if (shouldFailReview(result, options.failOn)) {
             const failMessage = formatFailOnExitMessage(result, options.failOn);
             if (failMessage && !ctx.isAgent) {
-                cliInfo(chalk.yellow(failMessage));
+                cliWarn(chalk.yellow(failMessage));
             }
             exitWithCode(1);
         }
