@@ -28,7 +28,7 @@ import { Controller, useFormContext } from "react-hook-form";
 import { ArrayHelpers } from "src/core/utils/array";
 
 import type { EditKeyForm } from "../_types";
-import { modelLabeler } from "../../../../_data/model-label";
+import { formatModelLabel, modelLabeler } from "../../../../_data/model-label";
 
 /** "$2 in · $10 out / 1M" — only for a catalog that is also a price list. */
 const formatPerMillion = (p: NonNullable<LLMProviderModel["pricing"]>) => {
@@ -247,19 +247,16 @@ const ModelPickerPopover = ({
     const { reset: resetErrorBoundary } = useQueryErrorResetBoundary();
 
     // The label drops a snapshot pin (`-1017`, `-2026-03-05`), so a pinned id
-    // and its alias read the same ("GPT 5.4" twice). Those rows show their id
-    // too, or nobody can tell which one they are picking. Counted over the
-    // full listing: an enabled alias is hidden, yet its pin still reads as it.
-    const sharedNames = useMemo(() => {
-        const seen = new Set<string>();
-        const shared = new Set<string>();
-        for (const m of allModels) {
-            if (seen.has(m.name)) shared.add(m.name);
-            seen.add(m.name);
-        }
-        return shared;
+    // and its alias read the same ("GPT 5.4" twice). Those show their id too,
+    // or nobody can tell which one they are picking. Counted over the full
+    // listing: an enabled alias is hidden, yet its pin still reads as it.
+    const labelOf = useMemo(() => {
+        const names = new Map(allModels.map((m) => [m.id, m.name]));
+        return modelLabeler(
+            allModels.map((m) => m.id),
+            (id) => names.get(id) ?? formatModelLabel(id),
+        );
     }, [allModels]);
-    const selected = models.find((p) => p.id === form.watch("model"));
 
     return (
         <Popover
@@ -291,22 +288,15 @@ const ModelPickerPopover = ({
                                     rightIcon={
                                         <ChevronsUpDownIcon className="-mr-2 opacity-50" />
                                     }>
-                                    {(selected &&
-                                        (sharedNames.has(selected.name)
-                                            ? `${selected.name} (${selected.id})`
-                                            : selected.name)) ??
-                                        // A saved model the endpoint does not
-                                        // list is still the selected one.
-                                        (field.value
-                                            ? modelLabeler([
-                                                  ...allModels.map((m) => m.id),
-                                                  field.value,
-                                              ])(field.value)
-                                            : undefined) ?? (
-                                            <span className="font-normal">
-                                                Select a model
-                                            </span>
-                                        )}
+                                    {/* A saved model the endpoint does not
+                                        list is still the selected one. */}
+                                    {field.value ? (
+                                        labelOf(field.value)
+                                    ) : (
+                                        <span className="font-normal">
+                                            Select a model
+                                        </span>
+                                    )}
                                 </Button>
                             </PopoverTrigger>
                         </FormControl.Input>
@@ -385,7 +375,7 @@ const ModelPickerPopover = ({
                                             </span>
                                         )}
                                     </span>
-                                    {sharedNames.has(r.name) && (
+                                    {labelOf.shares(r.id) && (
                                         <span className="text-text-tertiary truncate text-xs">
                                             {r.id}
                                         </span>
