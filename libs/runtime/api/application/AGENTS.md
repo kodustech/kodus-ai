@@ -34,7 +34,7 @@ The application layer of the product's Runtime API: the services the use cases s
 
 ## Module map
 
-Files (21, tests apart): `asked-runs.ts`, `egress-access.service.ts`, `env-tools.service.ts`, `environment-members.service.ts`, `external-findings.service.ts`, `external-verification-reconciler.ts`, `failure-context.ts`, `llm-run-budget.ts`, `model-input-bytes.ts`, `pool-controller.service.ts`, `recipe-inference.reader.ts`, `run-access.service.ts`, `run-cost.service.ts`, `run-public-view.ts`, `run-request-builder.service.ts`, `runtime-run-enqueuer.service.ts`, `runtime-setup-requester.service.ts`, `runtime-worker-scope.ts`, `secret-sealer.ts`, `setup-token.ts`, `webhook-reconciler.service.ts`
+Files (22, tests apart): `asked-runs.ts`, `egress-access.service.ts`, `env-tools.service.ts`, `environment-members.service.ts`, `external-findings.service.ts`, `external-verification-reconciler.ts`, `failure-context.ts`, `llm-run-budget.ts`, `model-input-bytes.ts`, `pool-controller.service.ts`, `recipe-inference.reader.ts`, `run-access.service.ts`, `run-cost.service.ts`, `run-public-view.ts`, `run-request-builder.service.ts`, `runtime-run-enqueuer.service.ts`, `runtime-setup-requester.service.ts`, `runtime-worker-scope.ts`, `secret-sealer.ts`, `setup-token.ts`, `template-setup-requests.service.ts`, `webhook-reconciler.service.ts`
 
 Imports these Runtime modules:
 
@@ -44,6 +44,7 @@ Imports these Runtime modules:
 - [`libs/runtime/blockers`](../../blockers/AGENTS.md)
 - [`libs/runtime/contracts`](../../contracts/AGENTS.md)
 - [`libs/runtime/environment`](../../environment/AGENTS.md)
+- [`libs/runtime/placement`](../../placement/AGENTS.md)
 - [`libs/runtime/probe`](../../probe/AGENTS.md)
 - [`libs/runtime/protocol`](../../protocol/AGENTS.md)
 - [`libs/runtime/redaction`](../../redaction/AGENTS.md)

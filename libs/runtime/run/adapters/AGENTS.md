@@ -39,6 +39,8 @@ Imports these Runtime modules:
 Imported by:
 
 - [`apps/runtime/src/e2e`](../../../../apps/runtime/src/e2e/AGENTS.md)
+- [`apps/runtime/src/fleet`](../../../../apps/runtime/src/fleet/AGENTS.md)
+- [`apps/runtime/src/fleet/template`](../../../../apps/runtime/src/fleet/template/AGENTS.md)
 - [`apps/runtime/src/hub`](../../../../apps/runtime/src/hub/AGENTS.md)
 - [`apps/runtime/src/hub/claims`](../../../../apps/runtime/src/hub/claims/AGENTS.md)
 - [`apps/runtime/src/shared/admission`](../../../../apps/runtime/src/shared/admission/AGENTS.md)

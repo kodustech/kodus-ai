@@ -52,6 +52,7 @@ Imported by:
 
 - [`apps/runtime/src/edge`](../../edge/AGENTS.md)
 - [`apps/runtime/src/fleet`](../../fleet/AGENTS.md)
+- [`apps/runtime/src/fleet/template`](../../fleet/template/AGENTS.md)
 - [`apps/runtime/src/hub`](../../hub/AGENTS.md)
 - [`apps/runtime/src/shared`](../AGENTS.md)
 - [`apps/runtime/src/shared/admission`](../admission/AGENTS.md)

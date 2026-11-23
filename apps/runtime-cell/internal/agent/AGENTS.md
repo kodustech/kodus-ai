@@ -38,7 +38,7 @@ The cell agent: the application of the cell process ([architecture.md](../../../
 
 ## Module map
 
-Files (45, tests apart): `acquire.go`, `agent.go`, `alerts.go`, `blocker.go`, `browser.go`, `browser_explore.go`, `bundle.go`, `canaries.go`, `compose_boot.go`, `config.go`, `disk_watch.go`, `egress_policy.go`, `egress_sync.go`, `evidence_claim.go`, `exercised.go`, `handle.go`, `hold.go`, `image_policy.go`, `layer_build.go`, `manifest.go`, `memory.go`, `metrics.go`, `observer_sql.go`, `org_purge.go`, `org_secrets.go`, `pending_cleanup.go`, `pool_claims.go`, `prepare.go`, `preview.go`, `progress.go`, `recipe_fakes.go`, `recipe_requirements.go`, `redaction.go`, `release.go`, `run_identity.go`, `sandbox.go`, `sandbox_pool.go`, `session.go`, `settle.go`, `snapshots.go`, … and 5 more
+Files (46, tests apart): `acquire.go`, `agent.go`, `alerts.go`, `blocker.go`, `browser.go`, `browser_explore.go`, `bundle.go`, `canaries.go`, `compose_boot.go`, `config.go`, `disk_watch.go`, `egress_policy.go`, `egress_sync.go`, `evidence_claim.go`, `exercised.go`, `handle.go`, `hold.go`, `host_seal.go`, `image_policy.go`, `layer_build.go`, `manifest.go`, `memory.go`, `metrics.go`, `observer_sql.go`, `org_purge.go`, `org_secrets.go`, `pending_cleanup.go`, `pool_claims.go`, `prepare.go`, `preview.go`, `progress.go`, `recipe_fakes.go`, `recipe_requirements.go`, `redaction.go`, `release.go`, `run_identity.go`, `sandbox.go`, `sandbox_pool.go`, `session.go`, `settle.go`, … and 6 more
 
 Imports these Runtime modules:
 

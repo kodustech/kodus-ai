@@ -41,6 +41,7 @@ Imports these Runtime modules:
 
 - [`apps/runtime/src/hub`](../AGENTS.md)
 - [`apps/runtime/src/hub/ca`](../ca/AGENTS.md)
+- [`apps/runtime/src/hub/gateway`](../gateway/AGENTS.md)
 - [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)
 
 Imported by:

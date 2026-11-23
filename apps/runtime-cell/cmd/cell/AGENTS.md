@@ -37,7 +37,7 @@ The cell binary: the composition root of the cell agent ([architecture.md](../..
 
 ## Module map
 
-Files (17, tests apart): `claim_limits.go`, `config.go`, `disk.go`, `drivers.go`, `localpki.go`, `main.go`, `memory.go`, `microvm.go`, `preflight.go`, `preflight_network.go`, `register.go`, `roots.go`, `sandbox.go`, `serve.go`, `template.go`, `trust.go`, `wire.go`
+Files (18, tests apart): `claim_limits.go`, `config.go`, `disk.go`, `drivers.go`, `host_seal.go`, `localpki.go`, `main.go`, `memory.go`, `microvm.go`, `preflight.go`, `preflight_network.go`, `register.go`, `roots.go`, `sandbox.go`, `serve.go`, `template.go`, `trust.go`, `wire.go`
 
 Imports these Runtime modules:
 

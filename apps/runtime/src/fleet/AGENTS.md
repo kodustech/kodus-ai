@@ -54,6 +54,7 @@ Imports these Runtime modules:
 - [`libs/runtime/contracts`](../../../../libs/runtime/contracts/AGENTS.md)
 - [`libs/runtime/fleet`](../../../../libs/runtime/fleet/AGENTS.md)
 - [`libs/runtime/run`](../../../../libs/runtime/run/AGENTS.md)
+- [`libs/runtime/run/adapters`](../../../../libs/runtime/run/adapters/AGENTS.md)
 
 Imported by:
 

@@ -35,12 +35,16 @@ The environment template on boat (docs/runtime/host-providers.md §8.2): a provi
 
 ## Module map
 
-Files (5, tests apart): `build-template.ts`, `setup-candidates-store.ts`, `template-name.ts`, `template-rebuild.ts`, `template-store.ts`
+Files (10, tests apart): `bake-probe.ts`, `boat-setup-host.ts`, `build-template.ts`, `hub-host-sealer.ts`, `pg-template-setup-requester.ts`, `setup-candidates-store.ts`, `template-name.ts`, `template-rebuild.ts`, `template-store.ts`, `template-trigger.ts`
 
 Imports these Runtime modules:
 
 - [`apps/runtime/src/fleet`](../AGENTS.md)
+- [`apps/runtime/src/shared/persistence`](../../shared/persistence/AGENTS.md)
 - [`libs/runtime/fleet`](../../../../../libs/runtime/fleet/AGENTS.md)
+- [`libs/runtime/placement`](../../../../../libs/runtime/placement/AGENTS.md)
+- [`libs/runtime/run`](../../../../../libs/runtime/run/AGENTS.md)
+- [`libs/runtime/run/adapters`](../../../../../libs/runtime/run/adapters/AGENTS.md)
 
 Imported by:
 

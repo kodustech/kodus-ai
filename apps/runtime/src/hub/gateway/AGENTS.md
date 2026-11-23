@@ -45,6 +45,7 @@ Imported by:
 
 - [`apps/runtime/src/hub`](../AGENTS.md)
 - [`apps/runtime/src/hub/claims`](../claims/AGENTS.md)
+- [`apps/runtime/src/hub/enrollment`](../enrollment/AGENTS.md)
 - [`apps/runtime/src/hub/http`](../http/AGENTS.md)
 
 <!-- module-map:end -->
