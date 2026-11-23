@@ -155,10 +155,19 @@ export class SuggestionService implements ISuggestionService {
         // Each one is read on its own file, and the ones an earlier check
         // found fixed are not read again: this diff no longer shows them.
         const groups = candidates.map((suggestion) => {
-            // A comment with no file of its own is not checked, as before.
-            const locations = suggestion.relevantFile
-                ? suggestionLocations(suggestion)
-                : [];
+            // A comment with no file of its own is not checked, as before. Nor
+            // is a Kody Rule that names a file but cites no line: that shape is
+            // a rule about the PR itself, routed PR-level (#2420), and judging
+            // it against a file's diff measures something the comment never
+            // pointed at. `0` is no line either - the routing stage and the
+            // merge stage both read the field as falsy, so this check has to.
+            const lineLessRule =
+                suggestion.label === 'kody_rules' &&
+                !suggestion.relevantLinesStart;
+            const locations =
+                suggestion.relevantFile && !lineLessRule
+                    ? suggestionLocations(suggestion)
+                    : [];
             const fixed = new Set(
                 locations.length > 1
                     ? (suggestion.implementationCheck?.implementedLocations ??
