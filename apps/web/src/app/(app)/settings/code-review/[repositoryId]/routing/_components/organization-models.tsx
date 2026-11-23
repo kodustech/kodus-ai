@@ -113,7 +113,7 @@ export function OrganizationModels({
                                                 }
                                                 className="w-full justify-between sm:max-w-80"
                                                 rightIcon={
-                                                    <ChevronsUpDownIcon className="opacity-50" />
+                                                    <ChevronsUpDownIcon className="shrink-0 opacity-50" />
                                                 }>
                                                 <span className="flex min-w-0 items-center gap-2">
                                                     <ProviderAvatar
@@ -176,7 +176,7 @@ export function OrganizationModels({
                                                 }
                                                 className="w-full justify-between sm:max-w-80"
                                                 rightIcon={
-                                                    <ChevronsUpDownIcon className="opacity-50" />
+                                                    <ChevronsUpDownIcon className="shrink-0 opacity-50" />
                                                 }>
                                                 <span className="flex min-w-0 items-center gap-2">
                                                     <ProviderAvatar

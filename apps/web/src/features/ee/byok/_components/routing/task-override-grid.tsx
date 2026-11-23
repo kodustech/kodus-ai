@@ -328,7 +328,7 @@ export const TaskModelControl = ({
                         disabled={disabled}
                         className="w-full max-w-full min-w-0 justify-between gap-2 sm:min-w-56"
                         rightIcon={
-                            <ChevronsUpDownIcon className="-mr-1 opacity-50" />
+                            <ChevronsUpDownIcon className="-mr-1 shrink-0 opacity-50" />
                         }>
                         <span className="flex min-w-0 items-center gap-2">
                             <ProviderAvatar
