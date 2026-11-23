@@ -163,11 +163,69 @@ export function commentRepositoryOf(params: CommentWebhook): CommentRepository {
 }
 
 /**
- * Whether the comment's author has write access. GitHub and GitLab are asked
- * for the commenter's permission on the repository; the other platforms for
- * the organization's members. Throws when the lookup fails, the member list
- * comes back empty or the platform cannot say, so a caller never reads an
- * unknown as "no access".
+ * How the code host is asked for one user's permission on the repository:
+ * GitHub, Forgejo and Bitbucket Data Center by login, GitLab by user id.
+ * Undefined where only the organization's members can be read.
+ */
+function permissionQuery(
+    params: CommentWebhook,
+    repository: CommentRepository,
+    sender: { login: string; id?: unknown },
+):
+    | {
+          repository: { id: string; name?: string; owner?: string };
+          login?: string;
+          userId?: string | number;
+      }
+    | undefined {
+    switch (params.platformType) {
+        case PlatformType.GITHUB:
+            return {
+                repository: {
+                    id: String(repository.id),
+                    name: repository.name,
+                    owner: repository.owner,
+                },
+                login: sender.login || undefined,
+            };
+        case PlatformType.GITLAB:
+            // GitLab's listed members include Guests and Reporters.
+            return {
+                repository: { id: String(repository.id) },
+                userId: (sender.id as string | number) || undefined,
+            };
+        case PlatformType.FORGEJO:
+            // An organization's members include read-only teams.
+            return {
+                repository: {
+                    id: String(repository.id),
+                    name: repository.name,
+                },
+                login: sender.login || undefined,
+            };
+        case PlatformType.BITBUCKET: {
+            // Data Center's member list holds only explicit project grants:
+            // ask for the effective permission, groups included.
+            if (params.payload?.isDataCenterEvent !== true) return undefined;
+            const id =
+                params.payload?.pullrequest?.toRef?.repository?.id ??
+                repository.id;
+            return {
+                repository: { id: id == null ? '' : String(id) },
+                login: params.payload?.actor?.name || undefined,
+            };
+        }
+        default:
+            return undefined;
+    }
+}
+
+/**
+ * Whether the comment's author has write access. GitHub, GitLab, Forgejo and
+ * Bitbucket Data Center are asked for the commenter's permission on the
+ * repository; Bitbucket Cloud and Azure Repos for the organization's members.
+ * Throws when the lookup fails, the member list comes back empty or the
+ * platform cannot say, so a caller never reads an unknown as "no access".
  */
 export async function commenterCanWrite(
     codeManagementService: Pick<
@@ -192,25 +250,15 @@ export async function commenterCanWrite(
             return false;
         }
     }
-    if (
-        (params.platformType === PlatformType.GITHUB && sender.login) ||
-        (params.platformType === PlatformType.GITLAB && sender.id)
-    ) {
-        // GitLab's listed members include Guests and Reporters: ask for
-        // the level.
+    const query = permissionQuery(params, repository, sender);
+    if (query) {
+        if (!query.login && query.userId === undefined) {
+            throw new Error(
+                `${params.platformType} named no commenter to check access for`,
+            );
+        }
         const canWrite = await codeManagementService.userCanWrite(
-            {
-                organizationAndTeamData,
-                repository: {
-                    id: String(repository.id),
-                    ...(params.platformType === PlatformType.GITHUB
-                        ? { name: repository.name, owner: repository.owner }
-                        : {}),
-                },
-                ...(params.platformType === PlatformType.GITHUB
-                    ? { login: sender.login }
-                    : { userId: sender.id as string | number }),
-            },
+            { organizationAndTeamData, ...query },
             params.platformType,
         );
         if (canWrite === undefined) {
@@ -221,12 +269,11 @@ export async function commenterCanWrite(
         return canWrite;
     }
     // Bitbucket's display name is the user's to choose, so it is matched by
-    // the id its members are listed by only: the Cloud uuid or the Data
-    // Center username, never the `account_id` no member row carries.
+    // the uuid its members are listed by only, never the `account_id` no
+    // member row carries.
     const bitbucket = params.platformType === PlatformType.BITBUCKET;
     const id = bitbucket
-        ? bareId(params.payload?.actor?.uuid) ||
-          bareId(params.payload?.actor?.name)
+        ? bareId(params.payload?.actor?.uuid)
         : bareId(sender.id);
     const login = bitbucket ? undefined : sender.login?.toLowerCase();
     if (!id && !login) {

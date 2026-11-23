@@ -143,19 +143,64 @@ describe('reviewCommandAccess', () => {
         ).resolves.toBe('none');
     });
 
-    it('reads a Bitbucket Data Center actor by its username', async () => {
+    it('asks Bitbucket Data Center for the effective permission, by username', async () => {
         const dataCenter = {
             platformType: PlatformType.BITBUCKET,
-            payload: { actor: { name: 'dev', id: 7, displayName: 'Dev' } },
+            payload: {
+                isDataCenterEvent: true,
+                actor: { name: 'dev', id: 7, displayName: 'Dev' },
+                pullrequest: { toRef: { repository: { id: 42 } } },
+            },
         };
+        for (const [canWrite, access] of [
+            [true, 'write'],
+            [false, 'none'],
+            [undefined, 'unknown'],
+        ] as const) {
+            const codeManagement = service(canWrite, [{ id: 'dev' }]);
+            await expect(
+                reviewCommandAccess(
+                    codeManagement as any,
+                    dataCenter,
+                    org,
+                    'ultra',
+                ),
+            ).resolves.toBe(access);
+            expect(codeManagement.userCanWrite).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    login: 'dev',
+                    repository: { id: '42' },
+                }),
+                PlatformType.BITBUCKET,
+            );
+            expect(codeManagement.getListMembers).not.toHaveBeenCalled();
+        }
+    });
+
+    it("asks Forgejo for the commenter's permission on the repository", async () => {
+        const codeManagement = service(false, [{ id: 3, name: 'dev' }]);
         await expect(
             reviewCommandAccess(
-                service(undefined, [{ id: 'dev', name: 'Rui' }]) as any,
-                dataCenter,
+                codeManagement as any,
+                {
+                    platformType: PlatformType.FORGEJO,
+                    payload: {
+                        comment: { user: { login: 'dev', id: 3 } },
+                        repository: { id: 9, full_name: 'acme/ledger' },
+                    },
+                },
                 org,
-                'ultra',
+                'heavy',
             ),
-        ).resolves.toBe('write');
+        ).resolves.toBe('none');
+        expect(codeManagement.userCanWrite).toHaveBeenCalledWith(
+            expect.objectContaining({
+                login: 'dev',
+                repository: { id: '9', name: 'acme/ledger' },
+            }),
+            PlatformType.FORGEJO,
+        );
+        expect(codeManagement.getListMembers).not.toHaveBeenCalled();
     });
 
     it("reads the organization's members on Azure Repos", async () => {

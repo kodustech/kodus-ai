@@ -567,7 +567,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
         ).rejects.toThrow(/named no commenter/);
     });
 
-    it("asks GitLab for the commenter's level, never the member list, and knows Forgejo's author", async () => {
+    it("asks GitLab and Forgejo for the commenter's permission, never the member list, and knows Forgejo's author", async () => {
         const getListMembers = jest.fn();
         const userCanWrite = jest.fn(async () => false);
         (useCase as any).codeManagementService = {
@@ -634,7 +634,6 @@ describe('ChatWithKodyFromGitUseCase', () => {
             ),
         ).rejects.toThrow(/could not say/);
 
-        getListMembers.mockResolvedValueOnce([{ id: 9, name: 'Rui' }]);
         await expect(
             (useCase as any).senderAccess(
                 {
@@ -646,20 +645,27 @@ describe('ChatWithKodyFromGitUseCase', () => {
                     },
                 },
                 { organizationId: 'org-1' },
-                { id: 'repo-1' },
+                { id: 'repo-1', name: 'acme/api' },
             ),
         ).resolves.toEqual({ isAuthor: true, canWrite: false });
+        expect(userCanWrite).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                login: 'ana',
+                repository: { id: 'repo-1', name: 'acme/api' },
+            }),
+            PlatformType.FORGEJO,
+        );
+        expect(getListMembers).not.toHaveBeenCalled();
 
-        // An empty list is a read that failed, not nobody.
+        // An empty member list is a read that failed, not nobody.
         getListMembers.mockResolvedValueOnce([]);
         await expect(
             (useCase as any).senderAccess(
                 {
-                    platformType: PlatformType.FORGEJO,
+                    platformType: PlatformType.BITBUCKET,
                     payload: {
-                        sender: { id: 5, login: 'ana' },
-                        comment: { user: { id: 5, login: 'ana' } },
-                        pull_request: { user: { id: 5, login: 'ana' } },
+                        actor: { uuid: '{u5}' },
+                        pullrequest: { author: { uuid: '{u9}' } },
                     },
                 },
                 { organizationId: 'org-1' },
