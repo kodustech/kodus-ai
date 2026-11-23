@@ -390,9 +390,43 @@ describe('glob-utils literal prefilter (2026-11-23 stall)', () => {
         ['!dist/**', ''],
         ['**/@(a|b).js', ''],
         ['**/(foo|bar).js', ''],
+        // Nested brace groups: no alternative may survive as required.
+        ['{a,{b}c}', ''],
+        ['**/{dist,{build,out}.map}', ''],
+        ['src/{a,{b,c}}/x.ts', 'x.ts'],
         ['**/*', ''],
     ])('requires the literal of %s to be %j', (pattern, literal) => {
         expect(requiredLiteral(pattern)).toBe(literal);
+    });
+
+    it.each([
+        ['dist/a.js', ['**/{dist,{build,out}.map}/**']],
+        ['build.map/a.js', ['**/{dist,{build,out}.map}/**']],
+        ['a', ['{a,{b}c}']],
+    ])(
+        'matches %s against nested brace groups as picomatch does',
+        (file, patterns) => {
+            expect(isFileMatchingGlob(file, patterns)).toBe(
+                referenceMatch(file, patterns, false),
+            );
+            expect(isFileMatchingGlob(file, patterns)).toBe(true);
+        },
+    );
+
+    it('keeps cached lists from pinning matchers past the matcher cache bound', () => {
+        // Many distinct lists of distinct patterns: the lists stay cached,
+        // their matchers must still be bounded by the matcher cache.
+        for (let i = 0; i < 300; i++) {
+            const list = Array.from(
+                { length: 30 },
+                (_, j) => `**/pin-${i}-${j}/**`,
+            );
+            isFileMatchingGlob(
+                candidate(list.map(requiredLiteral).join('_')),
+                list,
+            );
+        }
+        expect(_getMatcherCacheSize().caseSensitive).toBeLessThanOrEqual(5_000);
     });
 
     it('skips the matcher of a pattern whose literal is not in the path', () => {

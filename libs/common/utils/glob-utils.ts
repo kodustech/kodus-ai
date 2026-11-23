@@ -127,12 +127,12 @@ function normalizeFilename(filename: string): string {
  * as required. Splitting at more characters than strictly needed only
  * shortens the literal, which is still required.
  */
-type PrefilteredPattern = {
-    pattern: string;
-    literal: string;
-    /** Compiled on first use, as the per-pattern loop always did. */
-    matcher?: picomatch.Matcher;
-};
+/**
+ * A list holds pattern strings, not matchers: matchers stay in the bounded
+ * per-pattern cache above, so cached lists cannot pin compiled matchers past
+ * MAX_CACHE_SIZE.
+ */
+type PrefilteredPattern = { pattern: string; literal: string };
 type CompiledPatternList = (normalizedFilename: string) => boolean;
 
 const LITERAL_SPLIT = /[*?[\]{}()!+@\\/|,^$]/;
@@ -151,9 +151,10 @@ export function requiredLiteral(pattern: string): string {
     ) {
         return '';
     }
-    const withoutChoices = pattern
-        .replace(/\{[^}]*\}/g, '/')
-        .replace(/\[[^\]]*\]/g, '/');
+    const withoutChoices = stripBraceGroups(pattern).replace(
+        /\[[^\]]*\]/g,
+        '/',
+    );
     let best = '';
     for (const run of withoutChoices.split(LITERAL_SPLIT)) {
         if (run.length > best.length) {
@@ -161,6 +162,29 @@ export function requiredLiteral(pattern: string): string {
         }
     }
     return best;
+}
+
+/**
+ * Replaces every `{...}` group, nested ones included, with `/`: text in a
+ * brace group is one alternative among others, so none of it is required.
+ * An unclosed `{` drops the rest of the pattern, which only shortens the
+ * literal (still required). A `/{[^}]*}/` regex stopped at the first `}` and
+ * left an alternative of a nested group in place: `{a,{b}c}` kept `c`.
+ */
+function stripBraceGroups(pattern: string): string {
+    let out = '';
+    let depth = 0;
+    for (const ch of pattern) {
+        if (ch === '{') {
+            if (depth === 0) out += '/';
+            depth++;
+        } else if (ch === '}' && depth > 0) {
+            depth--;
+        } else if (depth === 0) {
+            out += ch;
+        }
+    }
+    return out;
 }
 
 function compilePatternList(
@@ -197,8 +221,12 @@ function compilePatternList(
             }
             // An invalid pattern throws here, when the loop reaches it,
             // exactly as the per-pattern loop did.
-            entry.matcher ??= getCachedMatcher(entry.pattern, caseInsensitive);
-            if (entry.matcher(normalizedFilename)) {
+            if (
+                getCachedMatcher(
+                    entry.pattern,
+                    caseInsensitive,
+                )(normalizedFilename)
+            ) {
                 return true;
             }
         }
@@ -206,10 +234,16 @@ function compilePatternList(
     };
 }
 
-/** Compiled lists by content, least recently used evicted first. */
-const COMPILED_CASE_SENSITIVE = new Map<string, CompiledPatternList>();
-const COMPILED_CASE_INSENSITIVE = new Map<string, CompiledPatternList>();
+/**
+ * Compiled lists by content, least recently used evicted first. Bounded by
+ * lists and by the patterns they hold in total (~45 default lists).
+ */
+type CompiledEntry = { compiled: CompiledPatternList; patterns: number };
+const COMPILED_CASE_SENSITIVE = new Map<string, CompiledEntry>();
+const COMPILED_CASE_INSENSITIVE = new Map<string, CompiledEntry>();
+const COMPILED_PATTERN_TOTALS = { sensitive: 0, insensitive: 0 };
 const MAX_COMPILED_LISTS = 256;
+const MAX_COMPILED_PATTERNS = 50_000;
 
 function getCompiledPatternList(
     patterns: string[],
@@ -218,19 +252,28 @@ function getCompiledPatternList(
     const cache = caseInsensitive
         ? COMPILED_CASE_INSENSITIVE
         : COMPILED_CASE_SENSITIVE;
+    const total = caseInsensitive ? 'insensitive' : 'sensitive';
     const key = patterns.join('\u0000');
     const cached = cache.get(key);
     if (cached) {
         // Re-insert: Map order is the LRU order.
         cache.delete(key);
         cache.set(key, cached);
-        return cached;
+        return cached.compiled;
     }
-    if (cache.size >= MAX_COMPILED_LISTS) {
-        cache.delete(cache.keys().next().value);
+    while (
+        cache.size > 0 &&
+        (cache.size >= MAX_COMPILED_LISTS ||
+            COMPILED_PATTERN_TOTALS[total] + patterns.length >
+                MAX_COMPILED_PATTERNS)
+    ) {
+        const oldestKey = cache.keys().next().value as string;
+        COMPILED_PATTERN_TOTALS[total] -= cache.get(oldestKey)!.patterns;
+        cache.delete(oldestKey);
     }
     const compiled = compilePatternList(patterns, caseInsensitive);
-    cache.set(key, compiled);
+    cache.set(key, { compiled, patterns: patterns.length });
+    COMPILED_PATTERN_TOTALS[total] += patterns.length;
     return compiled;
 }
 
@@ -298,6 +341,8 @@ export const _clearMatcherCache = (): void => {
     MATCHER_CACHE_CASE_INSENSITIVE.clear();
     COMPILED_CASE_SENSITIVE.clear();
     COMPILED_CASE_INSENSITIVE.clear();
+    COMPILED_PATTERN_TOTALS.sensitive = 0;
+    COMPILED_PATTERN_TOTALS.insensitive = 0;
 };
 
 /**

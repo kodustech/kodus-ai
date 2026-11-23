@@ -64,6 +64,21 @@ const UNREACHABLE = new Set([
 ]);
 
 const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
+// CI fails on an unreachable Postgres instead of skipping; compared as a
+// value, like SKIP_INTEGRATION, so CI=false or CI=0 still skips locally.
+const runningInCi = (process.env.CI ?? '').toLowerCase() === 'true';
+
+/** A plan line that filters with an OR of two subplans (the old shape). */
+function hasOrOfSubplans(plan: string): boolean {
+    return plan
+        .split('\n')
+        .some(
+            (line) =>
+                line.includes('Filter:') &&
+                line.includes(' OR ') &&
+                (line.match(/SubPlan/g) ?? []).length >= 2,
+        );
+}
 
 /** The subgraph query before the fix, for comparison. */
 const PREVIOUS_SUBGRAPH_SQL = `WITH changed_nodes AS (
@@ -155,7 +170,7 @@ function normalized(json: string): { nodes: string[]; edges: string[] } {
                 await dataSource.initialize();
             } catch (error) {
                 const code = (error as { code?: string })?.code ?? '';
-                if (UNREACHABLE.has(code) && !process.env.CI) {
+                if (UNREACHABLE.has(code) && !runningInCi) {
                     canRun = false;
                     console.warn(
                         `[integration] Postgres unreachable (${code}): the subgraph query was NOT exercised.`,
@@ -193,9 +208,9 @@ function normalized(json: string): { nodes: string[]; edges: string[] } {
                     file_hash text,
                     CONSTRAINT uq_it_nodes UNIQUE (repo_id, qualified_name)
                 );
-                CREATE INDEX ON ast_nodes (repo_id, qualified_name);
-                CREATE INDEX ON ast_nodes (repo_id, kind);
-                CREATE INDEX ON ast_nodes (repo_id, file_path);
+                CREATE INDEX idx_ast_nodes_repo_qual ON ast_nodes (repo_id, qualified_name);
+                CREATE INDEX idx_ast_nodes_repo_kind ON ast_nodes (repo_id, kind);
+                CREATE INDEX idx_ast_nodes_repo_file ON ast_nodes (repo_id, file_path);
                 CREATE TABLE ast_edges (
                     id BIGSERIAL PRIMARY KEY,
                     repo_id uuid NOT NULL,
@@ -207,10 +222,10 @@ function normalized(json: string): { nodes: string[]; edges: string[] } {
                     confidence real,
                     CONSTRAINT uq_it_edges UNIQUE (repo_id, kind, source_qualified, target_qualified)
                 );
-                CREATE INDEX ON ast_edges (repo_id, file_path);
-                CREATE INDEX ON ast_edges (repo_id, kind);
-                CREATE INDEX ON ast_edges (repo_id, target_qualified);
-                CREATE INDEX ON ast_edges (repo_id, source_qualified);
+                CREATE INDEX idx_ast_edges_repo_file ON ast_edges (repo_id, file_path);
+                CREATE INDEX idx_ast_edges_repo_kind ON ast_edges (repo_id, kind);
+                CREATE INDEX idx_ast_edges_repo_target ON ast_edges (repo_id, target_qualified);
+                CREATE INDEX idx_ast_edges_repo_source ON ast_edges (repo_id, source_qualified);
             `);
 
             // A hand-built graph with every case the query handles...
@@ -226,6 +241,7 @@ function normalized(json: string): { nodes: string[]; edges: string[] } {
                 ['c.ts::C.walk', 'method', 'c.ts'],
                 ['d.ts::caller', 'function', 'd.ts'],
                 ['e.ts::far', 'function', 'e.ts'],
+                ['f.ts::F', 'class', 'f.ts'],
             ];
             const edges: [string, string, string, number | null][] = [
                 // [kind, source, target, confidence]
@@ -238,6 +254,12 @@ function normalized(json: string): { nodes: string[]; edges: string[] } {
                 ['CALLS', 'b.ts::B.go', 'd.ts::caller', null],
                 ['CALLS', 'e.ts::far', 'd.ts::caller', null],
                 ['IMPORTS', 'b.ts::B', 'e.ts::far', 0],
+                // Sibling class C seen from both sides of sibling_edges: an
+                // in-kind edge that targets it (target arm) and out-of-kind
+                // edges from and to it, which the kind filter must drop.
+                ['INHERITS', 'f.ts::F', 'c.ts::C', null],
+                ['CALLS', 'c.ts::C', 'e.ts::far', null],
+                ['IMPORTS', 'e.ts::far', 'c.ts::C', null],
             ];
             for (const repo of [repoId, otherRepoId]) {
                 for (const [qn, kind, file] of nodes) {
@@ -322,8 +344,11 @@ function normalized(json: string): { nodes: string[]; edges: string[] } {
                     'c.ts::C',
                     'c.ts::C.walk',
                     'd.ts::caller',
+                    // Only through the target arm of sibling_edges.
+                    'f.ts::F',
                 ]),
             );
+            // Only through out-of-kind edges of the sibling: filtered out.
             expect(names).not.toContain('e.ts::far');
         });
 
@@ -333,14 +358,26 @@ function normalized(json: string): { nodes: string[]; edges: string[] } {
             await repository.exportSubgraphJsonString(repoId, ['a.ts']);
             const sql = executed.at(-1) as string;
 
-            const plan = (
-                await dataSource.query(`EXPLAIN ${sql}`, [repoId, '', ['a.ts']])
-            )
-                .map((row: Record<string, string>) => row['QUERY PLAN'])
-                .join('\n');
+            const explain = async (query: string) =>
+                (
+                    await dataSource.query(`EXPLAIN ${query}`, [
+                        repoId,
+                        '',
+                        ['a.ts'],
+                    ])
+                )
+                    .map((row: Record<string, string>) => row['QUERY PLAN'])
+                    .join('\n');
 
-            expect(plan).not.toMatch(/SubPlan \d+\) OR \(hashed SubPlan/);
-            expect(plan).toMatch(/idx|ast_edges_repo_(source|target)/);
+            // The guard must recognise the old shape, or it proves nothing.
+            expect(hasOrOfSubplans(await explain(PREVIOUS_SUBGRAPH_SQL))).toBe(
+                true,
+            );
+
+            const plan = await explain(sql);
+            expect(hasOrOfSubplans(plan)).toBe(false);
+            expect(plan).toMatch(/idx_ast_edges_repo_source/);
+            expect(plan).toMatch(/idx_ast_edges_repo_target/);
         });
     },
 );

@@ -262,6 +262,9 @@ describe('estimateTextTokens — large-text memo (2026-11-23 9.2s compressor sta
                 estimateTextTokens(text, { cache: false });
                 estimateTextTokens(text, { cache: false });
                 expect(encode).toHaveBeenCalledTimes(2);
+                // The bypassed calls did not write the memo either.
+                estimateTextTokens(text);
+                expect(encode).toHaveBeenCalledTimes(3);
             },
         );
     });
