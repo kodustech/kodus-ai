@@ -171,22 +171,19 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
             label: 'kody_rules',
             relevantFile: undefined,
             brokenKodyRulesIds: ['rule-logger'],
-            suggestionContent:
-                'The CSV export has no regression test.',
+            suggestionContent: 'The CSV export has no regression test.',
         });
         const repeat = {
             label: 'kody_rules',
             severity: 'high',
             brokenKodyRulesIds: ['rule-logger'],
             oneSentenceSummary: 'Missing export coverage',
-            suggestionContent:
-                'The CSV export has no regression test.',
+            suggestionContent: 'The CSV export has no regression test.',
         };
         const newFinding = {
             ...repeat,
             oneSentenceSummary: 'Missing export coverage',
-            suggestionContent:
-                'The PDF export has no regression test.',
+            suggestionContent: 'The PDF export has no regression test.',
         };
         const { stage, reviewOrchestrator } = makeStage([old]);
         reviewOrchestrator.execute.mockResolvedValue(
@@ -409,7 +406,7 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         expect(JSON.stringify(repeatCall?.[0])).toContain('old-moved');
     });
 
-    it('posts a bug the check does not match, with the revision link its finder chose', async () => {
+    it('posts a linked bug the check calls a consequence, with the revision link its finder chose', async () => {
         const applied = earlier({
             suggestionId: 'old-bug',
             outcome: 'implemented',
@@ -419,6 +416,15 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         reviewOrchestrator.execute.mockResolvedValue(
             envelope([{ ...bugFinding, revisesSuggestionId: 'old-bug' }]),
         );
+        repeatAnswer = {
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'caused_by_earlier',
+                    earlierId: 'old-bug',
+                },
+            ],
+        };
 
         const result = await run(stage, makeContext([applied]));
 
@@ -426,6 +432,34 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         expect(comment.suggestionContent).toMatch(
             /^\*\*Revises an earlier Kody suggestion\*\* on `src\/user\.ts:10`/,
         );
+    });
+
+    it('does not post a finding that asks to undo an applied suggestion, and marks why', async () => {
+        const applied = earlier({
+            suggestionId: 'old-bug',
+            outcome: 'implemented',
+            suggestionContent: 'Return early when user is missing.',
+        });
+        const { stage, reviewOrchestrator } = makeStage([applied]);
+        reviewOrchestrator.execute.mockResolvedValue(
+            envelope([{ ...bugFinding, revisesSuggestionId: 'old-bug' }]),
+        );
+        repeatAnswer = {
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'reverses_earlier',
+                    earlierId: 'old-bug',
+                },
+            ],
+        };
+
+        const result = await run(stage, makeContext([applied]));
+
+        expect(published(result)).toEqual([]);
+        expect(
+            result.discardedSuggestions.map((s: any) => s.priorityStatus),
+        ).toContain('discarded-by-reversal');
     });
 
     it('links a kept finding when the repeat check identifies the earlier suggestion', async () => {

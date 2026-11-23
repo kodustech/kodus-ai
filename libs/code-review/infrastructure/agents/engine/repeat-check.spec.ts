@@ -129,7 +129,7 @@ describe('repeatCandidates', () => {
         ).toEqual(['bug-same-lines']);
     });
 
-    it('a bug finding the finder linked to an earlier comment is not compared with that comment', () => {
+    it('compares a finding with the earlier comment the finder linked it to, first, wherever that comment is', () => {
         const other = earlier({ suggestionId: 'other-bug' });
         const finding: RepeatCheckFinding = {
             label: 'bug',
@@ -138,10 +138,62 @@ describe('repeatCandidates', () => {
         };
         expect(
             repeatCandidates(finding, [
-                earlier({ suggestionId: 'linked-bug' }),
                 other,
+                earlier({
+                    suggestionId: 'linked-bug',
+                    relevantFile: 'src/elsewhere.ts',
+                }),
             ]).map((c) => c.suggestionId),
-        ).toEqual(['other-bug']);
+        ).toEqual(['linked-bug', 'other-bug']);
+    });
+
+    it('offers an applied comment on another file when the finding names what that change added', () => {
+        const applied = earlier({
+            suggestionId: 'drop-archived',
+            relevantFile: 'src/items/list.ts',
+            outcome: 'implemented',
+            existingCode: 'return [...items];',
+            improvedCode: 'return items.filter((i) => !i.archived);',
+            suggestionContent: 'listActive returns archived items too.',
+        });
+        const finding: RepeatCheckFinding = {
+            label: 'bug',
+            relevantFile: 'src/items/report.ts',
+            suggestionContent:
+                'The report sums listActive, so items with archived set never count.',
+        };
+        expect(
+            repeatCandidates(finding, [applied]).map((c) => c.suggestionId),
+        ).toEqual(['drop-archived']);
+    });
+
+    it('does not offer that comment while it is not applied, or for common names alone', () => {
+        const proposal = {
+            suggestionId: 'drop-archived',
+            relevantFile: 'src/items/list.ts',
+            existingCode: 'return [...items];',
+            improvedCode: 'return items.filter((i) => !i.archived);',
+            suggestionContent: 'Drop them.',
+        };
+        const finding: RepeatCheckFinding = {
+            label: 'bug',
+            relevantFile: 'src/items/report.ts',
+            suggestionContent: 'archived items never count in the report.',
+        };
+        expect(
+            repeatCandidates(finding, [
+                earlier({ ...proposal, outcome: 'not_implemented' }),
+            ]),
+        ).toEqual([]);
+        expect(
+            repeatCandidates(
+                {
+                    ...finding,
+                    suggestionContent: 'The filter returns no items.',
+                },
+                [earlier({ ...proposal, outcome: 'implemented' })],
+            ),
+        ).toEqual([]);
     });
 
     it("a rule finding's link is not trusted: rule reposts carry it too", () => {
@@ -481,6 +533,43 @@ describe('checkRepeats', () => {
         ]);
     });
 
+    it('does not post a finding that asks to undo what an earlier comment asked for', async () => {
+        const reversal = {
+            label: 'bug',
+            relevantFile: 'src/retry.ts',
+            revisesSuggestionId: 'bug-old',
+        };
+        const consequence = { label: 'bug', relevantFile: 'src/retry.ts' };
+        runSpy.mockResolvedValue({
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'reverses_earlier',
+                    earlierId: 'bug-old',
+                },
+                {
+                    finding: 1,
+                    verdict: 'caused_by_earlier',
+                    earlierId: 'bug-old',
+                },
+            ],
+        });
+
+        const result = await checkRepeats(
+            [reversal, consequence],
+            [bugComment],
+            { organizationId: 'org-1', byokConfig: slot },
+        );
+
+        expect(result.kept).toEqual([consequence]);
+        expect(result.reversals).toEqual([
+            { finding: reversal, earlier: bugComment, by: 'model' },
+        ]);
+        expect(result.revisions).toEqual([
+            { finding: consequence, earlier: bugComment },
+        ]);
+    });
+
     it("does not link a caused-by verdict to an id absent from that finding's candidates", async () => {
         const unrelated = earlier({
             suggestionId: 'elsewhere',
@@ -596,6 +685,80 @@ describe('checkRepeats', () => {
         expect(result.repeats.map((r) => r.finding)).toEqual([byCode]);
     });
 
+    it('without a verdict, holds a finder-linked finding and an answered point on its lines, and posts the rest', async () => {
+        const answered = earlier({
+            suggestionId: 'answered',
+            relevantFile: 'src/label.ts',
+            relevantLinesStart: 4,
+            relevantLinesEnd: 5,
+            answered: true,
+            suggestionContent:
+                'authorLabel renders undefined for a missing user.',
+        });
+        const linked = {
+            label: 'bug',
+            relevantFile: 'src/other.ts',
+            revisesSuggestionId: 'bug-old',
+        };
+        const reraise = {
+            label: 'bug',
+            relevantFile: 'src/label.ts',
+            relevantLinesStart: 5,
+            relevantLinesEnd: 5,
+            suggestionContent: 'A deleted user prints as "undefined".',
+        };
+        const elsewhere = {
+            label: 'bug',
+            relevantFile: 'src/label.ts',
+            relevantLinesStart: 30,
+            relevantLinesEnd: 31,
+            suggestionContent: 'The cache key ignores the locale.',
+        };
+        runSpy.mockRejectedValue(
+            Object.assign(new Error('aborted'), { name: 'AbortError' }),
+        );
+
+        const result = await checkRepeats(
+            [linked, reraise, elsewhere],
+            [bugComment, answered],
+            { organizationId: 'org-1', byokConfig: slot },
+        );
+
+        expect(result.model).toBe('failed');
+        expect(result.withheld).toEqual([linked, reraise]);
+        expect(result.kept).toEqual([elsewhere]);
+    });
+
+    it('shows the comparison which comments were applied or answered, and the link the finder set', () => {
+        const prompt = buildRepeatCheckPrompt([
+            {
+                finding: {
+                    label: 'bug',
+                    relevantFile: 'src/a.ts',
+                    revisesSuggestionId: 'applied',
+                    suggestionContent: 'Re-admit configs on another host.',
+                },
+                candidates: [
+                    earlier({
+                        suggestionId: 'applied',
+                        outcome: 'implemented',
+                        improvedCode: 'c.hosts.includes(host)',
+                    }),
+                    earlier({ suggestionId: 'answered', answered: true }),
+                ],
+            },
+        ]);
+        expect(prompt).toContain(
+            'The reviewer linked it to earlier comment applied.',
+        );
+        expect(prompt).toContain('Status: the developer applied it');
+        expect(prompt).toContain('Code it proposed:\nc.hosts.includes(host)');
+        expect(prompt).toContain(
+            'Thread: the developer answered it in its thread',
+        );
+        expect(prompt).toContain('- reverses_earlier:');
+    });
+
     it('after two timeouts withholds the repeated CSV claim and delivers the PDF claim under the same PR rule', async () => {
         const old = earlier({
             suggestionId: 'pr-comment-old',
@@ -619,7 +782,7 @@ describe('checkRepeats', () => {
             byokConfig: slot,
         });
         expect(runSpy.mock.calls.map(([call]) => call.timeoutMs)).toEqual([
-            120_000, 25_000,
+            120_000, 60_000,
         ]);
         expect(result.withheld).toEqual([repeat]);
         expect(result.kept).toEqual([different]);
@@ -787,6 +950,28 @@ describe('checkRepeats', () => {
         });
         expect([...peak.values()]).toEqual([4, 4]);
         expect(result.kept).toHaveLength(60);
+    });
+
+    it("runs at low reasoning effort on the team's model, whatever effort the review uses", async () => {
+        runSpy.mockResolvedValue({ verdicts: [] });
+        await checkRepeats(
+            [{ label: 'bug', relevantFile: 'src/retry.ts' }],
+            [bugComment],
+            {
+                organizationId: 'org-1',
+                byokConfig: {
+                    ...slot,
+                    reasoningEffort: 'high',
+                    reasoningConfigOverride: '{"thinking":{}}',
+                } as NormalizedModel,
+            },
+        );
+        expect(runSpy.mock.calls[0][0].byokConfig).toMatchObject({
+            provider: 'openai',
+            model: 'm',
+            reasoningEffort: 'low',
+            reasoningConfigOverride: undefined,
+        });
     });
 
     it('judges ten findings per call', async () => {

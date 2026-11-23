@@ -51,6 +51,10 @@ export function toRecord(suggestion: ISuggestion): PrDecisionRecord {
         label: suggestion.label,
         brokenKodyRulesIds: suggestion.brokenKodyRulesIds,
         existingCode: suggestion.existingCode || undefined,
+        improvedCode: suggestion.improvedCode || undefined,
+        ...(suggestion.comment?.id != null && {
+            commentId: String(suggestion.comment.id),
+        }),
         ...(suggestion.customAgent?.id && {
             customAgentId: suggestion.customAgent.id,
         }),
@@ -87,6 +91,9 @@ export function toRecordFromPrLevel(
             suggestion.fullExplanation || suggestion.suggestionContent,
         label: suggestion.label,
         brokenKodyRulesIds: suggestion.brokenKodyRulesIds,
+        ...(suggestion.comment?.id != null && {
+            commentId: String(suggestion.comment.id),
+        }),
         ...(suggestion.customAgent?.id && {
             customAgentId: suggestion.customAgent.id,
         }),
