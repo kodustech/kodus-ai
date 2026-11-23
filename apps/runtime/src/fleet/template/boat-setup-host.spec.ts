@@ -18,7 +18,7 @@ const pool = parseHostPool({
     hostClass: { kind: 'HostClass', name: 'boat-large-cell', provider: 'boat', boat: { type: 'large' } },
 });
 
-function world(probe: BakeProbe['read'] = async () => ({ state: 'done', fingerprint: FP, ref: 'default_branch' })) {
+function world(probe: BakeProbe['read'] = async () => ({ state: 'done', fingerprint: FP, ref: 'default_branch', cellId: 'cell-tpl' })) {
     const provider = new FakeHostProvider({ installation: 'it', startState: 'running' });
     const minted: Array<{ hostId: string; poolId: string; boundKey: string | null }> = [];
     const retired: string[] = [];
@@ -26,6 +26,8 @@ function world(probe: BakeProbe['read'] = async () => ({ state: 'done', fingerpr
     const hub = {
         mint: async (r: { hostId: string; poolId: string; boundKey: string | null; ttlSeconds: number }) => (minted.push(r), { ok: true as const, token: 'kcf_x' }),
         retire: async (id: string) => void retired.push(id),
+        // The template host's cell, as the hub registered it.
+        connection: async () => ({ cellId: 'cell-tpl', connected: true }),
     };
     const sealer: HostSealer = { seal: async (r) => void sealed.push(r.providerId) };
     const host = new BoatSetupHost({ provider, hub, probe: { read: probe }, sealer, poolOf: async (id) => (id === 'boat-eu-perrun' ? pool : undefined), installation: 'it', bootstrap: { hubUrl: 'h', hubCa: 'c' }, poll: { sleep: async () => undefined, attempts: 3 } });
@@ -70,10 +72,17 @@ describe('the live setup host on boat (docs/runtime/host-providers.md §8.2)', (
     });
 
     it('waits while the setup runs, then reports the fingerprint and ref it baked', async () => {
-        const answers = [{ state: 'running' }, { state: 'running' }, { state: 'done', fingerprint: FP, ref: 'default_branch' }] as const;
+        const answers = [{ state: 'running' }, { state: 'running' }, { state: 'done', fingerprint: FP, ref: 'default_branch', cellId: 'cell-tpl' }] as const;
         let i = 0;
         const w = world(async () => answers[i++]);
         expect(await w.host.waitForBake({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop' })).toEqual({ ok: true, fingerprint: FP, ref: 'default_branch' });
+    });
+
+    it("refuses a bake that ran on another cell than the template host's: saving would keep an empty host", async () => {
+        const elsewhere = world(async () => ({ state: 'done', fingerprint: FP, ref: 'default_branch', cellId: 'cell-dev-1' }));
+        expect(await elsewhere.host.waitForBake({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop' })).toEqual({ ok: false, reason: 'bake_elsewhere' });
+        const unnamed = world(async () => ({ state: 'done', fingerprint: FP, ref: 'default_branch' }));
+        expect(await unnamed.host.waitForBake({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop' })).toEqual({ ok: false, reason: 'bake_elsewhere' });
     });
 
     it('reports a failed setup and a setup that never finishes as failed bakes', async () => {

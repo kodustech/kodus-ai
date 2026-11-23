@@ -18,7 +18,7 @@ describe('reading how the template host\'s setup ended (setup record)', () => {
         expect(await probe(rec({ key: templateSetupCommandKey('org-1', 'env-1', 'tpl-earlier'), state: 'blocked' })).read(req)).toEqual({ state: 'running' });
     });
     it('is done with the fingerprint and the default branch when the template setup is active', async () => {
-        expect(await probe(rec({})).read(req)).toEqual({ state: 'done', fingerprint: FP, ref: 'default_branch' });
+        expect(await probe(rec({ cellId: 'cell-tpl' })).read(req)).toEqual({ state: 'done', fingerprint: FP, ref: 'default_branch', cellId: 'cell-tpl' });
     });
     it('reports another ref when the setup did not boot the default branch', async () => {
         expect(await probe(rec({ refSource: 'dev_override' })).read(req)).toMatchObject({ state: 'done', ref: 'other' });

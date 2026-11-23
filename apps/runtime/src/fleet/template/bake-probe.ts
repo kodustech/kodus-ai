@@ -39,6 +39,6 @@ export class SetupRecordBakeProbe implements BakeProbe {
         if (rec.state === 'blocked') return { state: 'failed', reason: 'bake_failed' };
         const fingerprint = bakeFingerprintOf(rec);
         if (!fingerprint) return { state: 'failed', reason: 'bake_failed' };
-        return { state: 'done', fingerprint, ref: rec.refSource === 'default_branch' ? 'default_branch' : 'other' };
+        return { state: 'done', fingerprint, ref: rec.refSource === 'default_branch' ? 'default_branch' : 'other', ...(rec.cellId ? { cellId: rec.cellId } : {}) };
     }
 }
