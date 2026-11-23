@@ -1,0 +1,167 @@
+---
+title: "コネクションプーラー越しの PostgreSQL"
+description: "PgBouncer などのプーラーを PostgreSQL の前に置いて Kodus を動かす方法。高可用性クラスターを含みます。"
+icon: "database"
+---
+
+Kodus は PgBouncer などのコネクションプーラー越しの PostgreSQL で動作します。
+プールモードは **session と transaction のどちらでも**使えます。CI は変更のたびに、
+Kodus の協調ロックと api・worker 間のイベントブリッジを、transaction モードの
+PgBouncer 1.26 経由で実行しています。
+
+このページでは、プーラー側の設定、Kodus が使う 2 つの接続、結果の確認方法を説明します。
+
+## 2 つの接続
+
+| 接続 | 変数 | 用途 | プーラーを指してよいか |
+| --- | --- | --- | --- |
+| プール接続 | `API_PG_DB_HOST`、`API_PG_DB_PORT`(または `DATABASE_URL`) | api・worker・webhooks が実行するすべてのクエリ | はい |
+| 直接接続 | `API_PG_DB_DIRECT_HOST`、`API_PG_DB_DIRECT_PORT`(または `DATABASE_DIRECT_URL`) | データベースのマイグレーションと、worker から api へライブイベントを運ぶ LISTEN 接続 | **いいえ**: PostgreSQL 本体に届く必要があります |
+
+直接接続は `API_PG_DB_USERNAME`、`API_PG_DB_PASSWORD`、`API_PG_DB_DATABASE`
+を再利用するため、通常はホストだけを変えます。設定しない場合、Kodus はプーラー
+なしのときと同じく、すべてにプール接続を使います。
+
+transaction モードで直接接続が必要な理由:
+
+- **ライブイベント。** LISTEN には開いたままのセッションが必要です。transaction
+  モードのプーラー越しでは接続はできても何も受信しません。その場合、UI のレビュー
+  状況とマージ後のルール同期はポーリング経由になり、最大 10 秒遅れます。
+- **マイグレーション。** 一部のマイグレーションは、セッションの statement timeout
+  を変更してから `CREATE INDEX CONCURRENTLY` でインデックスを作成します。
+  transaction モードでは、この 2 つの文が別々のサーバーセッションで実行されることがあります。
+
+## PgBouncer の設定
+
+```ini
+[pgbouncer]
+pool_mode = transaction
+; Kodus sets these two limits on each connection (PgBouncer 1.20 or later).
+; Without this line PgBouncer refuses every Kodus connection with
+; "unsupported startup parameter: statement_timeout".
+track_extra_parameters = statement_timeout,idle_in_transaction_session_timeout
+; Each Kodus process opens its own pool (api 30, webhooks 30, worker 60
+; by default, plus up to 6 for internal events). Budget for every replica.
+max_client_conn = 1000
+default_pool_size = 40
+```
+
+プーラーがこれらのパラメーターを追跡できない場合(古い PgBouncer や設定できない
+マネージドプーラー)は、Kodus 側で無効にし、データベースのロールに同等の制限を設定します:
+
+```bash
+DB_STATEMENT_TIMEOUT_MS=0
+DB_IDLE_IN_TRANSACTION_TIMEOUT_MS=0
+```
+
+```sql
+ALTER ROLE kodusdev IN DATABASE kodus_db SET idle_in_transaction_session_timeout = '60s';
+```
+
+## Kodus の設定
+
+**api、worker、worker-analytics、webhooks** と、マイグレーションを実行するもの
+(`RUN_MIGRATIONS=true`)に設定します:
+
+```bash
+API_PG_DB_HOST=pgbouncer.internal          # the pooler
+API_PG_DB_PORT=6432
+API_PG_DB_DIRECT_HOST=postgres-primary.internal   # PostgreSQL itself
+API_PG_DB_DIRECT_PORT=5432
+```
+
+接続文字列を使う場合:
+
+```bash
+DATABASE_URL=postgres://kodusdev:...@pgbouncer.internal:6432/kodus_db
+DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus_db
+```
+
+## 自前の PgBouncer やマネージドプーラー
+
+PostgreSQL とプーラーがすでに稼働しているなら、Docker Compose でも Helm
+チャートでも、Kodus をそこへ向けるだけです。次の表で構成を確認してください。
+
+| 構成 | 対応 |
+| --- | --- |
+| プールモード `session` | 直接接続なしで動作します。Kodus の各接続は開いている間サーバー接続を 1 本占有するため、全レプリカの Kodus のプールが収まるサイズにしてください |
+| プールモード `transaction` | 直接接続を設定します（上記） |
+| プールモード `statement` | 非対応です。Kodus は複数の文からなるトランザクションを実行します |
+| プーラーがデータベースを別名で公開している、または Kodus が別ユーザーで接続する | 直接接続のホスト形式は `API_PG_DB_DATABASE` と `API_PG_DB_USERNAME` を再利用しますが、それらは PostgreSQL 上に存在しません。実際の値で `DATABASE_DIRECT_URL` を設定してください |
+| Kodus からプーラーには届くが PostgreSQL には届かない | 同じ PgBouncer に session モードのエントリーを追加し、直接接続として使います（下記） |
+| PgBouncer が 1.20 より古い、または `track_extra_parameters` を設定できないマネージドプーラー | 2 つのタイムアウトを `0` にし、データベースのロールに設定します（上記） |
+| プーラーと PostgreSQL で TLS が異なる | `DATABASE_DIRECT_URL` で直接接続に専用の `sslmode` を指定します（下記） |
+
+**プーラーにしか届かない場合。** PgBouncer では transaction モードのエントリーと並べて
+session モードのエントリーを置けます。Kodus はこれをマイグレーションと、プロセスごとに
+1 本の長時間の LISTEN 接続に使うため、小さなプールで十分です。
+
+```ini
+[databases]
+kodus = host=postgres-primary.internal dbname=kodus_db pool_mode=transaction
+kodus_session = host=postgres-primary.internal dbname=kodus_db pool_mode=session
+```
+
+```bash
+API_PG_DB_HOST=pgbouncer.internal
+API_PG_DB_PORT=6432
+API_PG_DB_DATABASE=kodus
+DATABASE_DIRECT_URL=postgres://kodusdev:...@pgbouncer.internal:6432/kodus_session
+```
+
+**TLS。** `API_DATABASE_DISABLE_SSL` はすべての接続に適用されます。プーラーが平文の TCP で
+PostgreSQL が TLS 必須（またはその逆）の場合は、プーラー経由の設定はそのままにして
+`DATABASE_DIRECT_URL` に `sslmode` を入れてください。その接続では URL の `sslmode` が優先されます。
+Kodus の PostgreSQL ドライバーは `sslmode=require` と `sslmode=prefer` を `verify-full` として
+扱うため、サーバー証明書の検証が通る必要があります（CA は `NODE_EXTRA_CA_CERTS` で追加）。
+証明書を検証せずに暗号化するには `sslmode=no-verify`、平文の TCP には `sslmode=disable` を使います。
+
+**Helm チャート。** `external` モードでは、直接接続の文字列を
+`postgres.external.existingSecret` の Secret に入れ、そのキーを
+`postgres.external.directUrlKey` に指定します。Kodus の全 Pod とマイグレーション Job が
+`DATABASE_DIRECT_URL` として受け取ります。
+
+## 高可用性 PostgreSQL
+
+Kodus は接続ごとに 1 つのホストへ接続し、ホストのリストや
+`target_session_attrs` は受け付けません。両方の接続を、常に**現在のプライマリ**へ
+到達するエンドポイントに向けてください: 仮想 IP、Patroni のヘルスチェック付き
+HAProxy、CloudNativePG の `-rw` サービス、またはプライマリに追従する PgBouncer など。
+Kodus はすべてのコンポーネントから書き込むため、リードレプリカは使用しません。
+
+フェイルオーバー中は実行中のクエリが失敗し、プールは次のリクエストで再接続します。
+協調ロックはデータベースの行なので、データと一緒にフェイルオーバー後も残ります。
+
+## 設定の確認
+
+`kodus-installer` ディレクトリで doctor を実行します: `./scripts/doctor.sh`、
+Kubernetes では `./scripts/doctor-k8s.sh -n <namespace>`
+([Troubleshooting](/ja/how_to_deploy/deploy_kodus/troubleshooting) を参照)。
+このページに関係するのは次の 2 行です:
+
+- `database.locks`: Kodus が協調ロックを取得できること。失敗は通常、マイグレーションが
+  実行されていないことを意味します。
+- `database.listen`: api と worker 間のライブイベントが届くこと。警告は、LISTEN 接続が
+  transaction モードのプーラーを経由していることを意味します。直接接続を設定してください。
+
+api も接続後に結果をログに出力します:
+
+```text
+Cross-process LISTEN verified: notifications reach this process
+```
+
+イベントが届かない場合:
+
+```text
+Cross-process LISTEN is connected but notifications never arrive. ...
+```
+
+## 設定リファレンス
+
+| 変数 | デフォルト | 内容 |
+| --- | --- | --- |
+| `API_PG_DB_DIRECT_HOST` | 未設定 | マイグレーションと LISTEN 用の PostgreSQL ホスト。未設定ならプール接続のホスト |
+| `API_PG_DB_DIRECT_PORT` | `5432` | 直接接続ホストのポート |
+| `DATABASE_DIRECT_URL` | 未設定 | 直接接続の完全な接続文字列。ホスト形式より優先されます |
+| `DB_STATEMENT_TIMEOUT_MS` | `30000` | 1 つの文の最大実行時間。`0` で Kodus は送信しません |
+| `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` | `60000` | アイドル状態のトランザクションの最大時間。`0` で Kodus は送信しません |

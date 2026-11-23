@@ -108,6 +108,8 @@ Para usar seu próprio PostgreSQL ou MongoDB, defina `USE_LOCAL_DB=false` e apon
 
 A API aceita `DATABASE_URL` e `MONGODB_URI`. Ao usar o instalador, mantenha `API_PG_DB_PASSWORD` e `API_MG_DB_PASSWORD` preenchidos. O instalador exige os dois e o Compose ainda sobe os contêineres embutidos.
 
+PostgreSQL atrás do PgBouncer ou de outro connection pooler, ou em cluster de alta disponibilidade? Veja [PostgreSQL atrás de um connection pooler](/pt-BR/how_to_deploy/deploy_kodus/postgres_pooler).
+
 ### Configuração do RabbitMQ
 
 O RabbitMQ é obrigatório. Mantenha a URI sincronizada com o usuário, a senha e o virtual host.
