@@ -873,6 +873,10 @@ describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
         expect(codeManagementService.createIssueComment).toHaveBeenCalledTimes(
             2,
         );
+        const retried: string =
+            codeManagementService.createIssueComment.mock.calls[1][0].body;
+        expect(retried).toContain('## Ultra review did not run as configured');
+        expect(retried).toContain('Automatic approval is held');
     }, 15_000);
 
     it('a failed notice post does not fail the stage', async () => {
