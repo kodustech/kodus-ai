@@ -342,8 +342,8 @@ export const GeneralOrganizationSettingsPage = (props: {
                                     Review mode commands
                                 </FormControl.Label>
                                 <FormControl.Helper className="mt-0 mb-5">
-                                    Anyone who can comment on a pull request can
-                                    start a Heavy or Ultra review with{" "}
+                                    Anyone with write access to the repository
+                                    can start a Heavy or Ultra review with{" "}
                                     <code>@kody review --heavy</code> or{" "}
                                     <code>--ultra</code>. Blocking a command
                                     stops only that command: automatic reviews
