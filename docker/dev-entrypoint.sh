@@ -38,6 +38,57 @@ sed -e "s/__CLOUD_MODE__/${CLOUD_MODE}/g" \
     -e "/declare const/d" \
     libs/ee/configs/environment/environment.template.ts > libs/ee/configs/environment/environment.ts
 
+# ----------------------------------------------------------------
+# Private CA
+# ----------------------------------------------------------------
+# A git host whose certificate is issued by a private CA: Node and git both
+# need to trust it, and neither reads the OS trust store by default (Node
+# reads its own bundled roots; git reads the system bundle). Install the CA
+# into the system store AND point both at it.
+#
+# API_CA_CERT is a path INSIDE the container. The file is mounted by the
+# compose file when the developer configures one; without it this is a
+# no-op.
+# ----------------------------------------------------------------
+CA_CERT_PATH=${API_CA_CERT:-}
+LLM_CA_PATH=${API_LLM_CA_CERT:-}
+
+if [ -n "$CA_CERT_PATH" ] && [ -f "$CA_CERT_PATH" ]; then
+    echo "▶ Installing private CA from $CA_CERT_PATH"
+    mkdir -p /usr/local/share/ca-certificates
+    cp "$CA_CERT_PATH" /usr/local/share/ca-certificates/kodus-gate-ca.crt
+    update-ca-certificates 2>/dev/null | tail -1
+    # git reads the system bundle; NODE_EXTRA_CA_CERTS is set below, once
+    # the bundle of every CA is assembled.
+    export GIT_SSL_CAINFO=/usr/local/share/ca-certificates/kodus-gate-ca.crt
+    export SSL_CERT_FILE=/usr/local/share/ca-certificates/kodus-gate-ca.crt
+fi
+
+# The bundle Node reads (NODE_EXTRA_CA_CERTS points here). It is built from
+# whichever CA files are mounted, and always exists afterwards, so Node
+# never starts with a path that does not resolve.
+BUNDLE=/usr/local/share/ca-certificates/kodus-ca-bundle.crt
+mkdir -p /usr/local/share/ca-certificates
+: > "$BUNDLE"
+
+# The local model server may use its own self-signed certificate.
+if [ -n "$LLM_CA_PATH" ] && [ -f "$LLM_CA_PATH" ]; then
+    echo "▶ Installing the model server's CA from $LLM_CA_PATH"
+    mkdir -p /usr/local/share/ca-certificates
+    cp "$LLM_CA_PATH" /usr/local/share/ca-certificates/kodus-llm-ca.crt
+    update-ca-certificates 2>/dev/null | tail -1
+    # Node takes ONE extra CA file, so the CAs are concatenated into a
+    # bundle it can read.
+    cat /usr/local/share/ca-certificates/kodus-llm-ca.crt >> "$BUNDLE"
+fi
+
+# The git host's CA goes into the bundle too.
+if [ -n "$CA_CERT_PATH" ] && [ -f "$CA_CERT_PATH" ]; then
+    cat /usr/local/share/ca-certificates/kodus-gate-ca.crt >> "$BUNDLE"
+fi
+
+export NODE_EXTRA_CA_CERTS=$BUNDLE
+
 # Fingerprint of dependency manifests used to detect stale node_modules volume.
 DEPS_FINGERPRINT=$(node -e "const fs=require('fs'); const crypto=require('crypto'); const h=crypto.createHash('sha256'); h.update(fs.readFileSync('package.json')); h.update('\\n'); h.update(fs.readFileSync('pnpm-lock.yaml')); process.stdout.write(h.digest('hex'));")
 DEPS_STAMP_FILE="node_modules/.deps-fingerprint"

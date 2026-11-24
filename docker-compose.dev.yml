@@ -33,12 +33,40 @@ x-app-service-template: &app-service-defaults
         # non-interactively, so CI=true lets pnpm skip the confirmation and
         # sync deps instead of aborting with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY.
         - CI=true
+        # A git host whose certificate is issued by a private CA. Node does
+        # not read the OS trust store, so the CA file has to be named here;
+        # it must exist inside the container (the cleanup script removes it).
+        - NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-}
     restart: unless-stopped
     volumes:
         - .:/usr/src/app:delegated
         - node_modules_cache:/usr/src/app/node_modules
         - pnpm_store:/usr/src/app/.pnpm-store
         - logs_data:/usr/src/app/logs
+        # The private CA that issued the local git host's certificate. Mounted
+        # from the host so it survives a container recreation (copying it in
+        # with `docker cp` does not). Node reads it through
+        # NODE_EXTRA_CA_CERTS; it does not read the OS trust store.
+        - ${GATE_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/gate-ca.crt:ro
+        # The local model server's certificate (self-signed, its own CA).
+        - ${LLM_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/llm-ca.crt:ro
+    # A git host on the local network can be addressed by a short name the
+    # host resolves through a DNS search domain (`git-host` ->
+    # `git-host.home`). Docker's embedded resolver does not apply the
+    # host's `search` list, so a container cannot resolve the short name.
+    # Mapping it here makes the name resolvable inside every app service.
+    #
+    # The long form (`host: ip`) is what compose accepts: the short list
+    # form is serialised as `host=ip`, which Docker's --add-host rejects.
+    # GATE_HOST_NAME/GATE_HOST_IP are unset by default, so this adds
+    # nothing unless a developer configures them.
+    extra_hosts:
+        # The git host on the local network (see the note above).
+        - "${GATE_HOST_NAME:-localhost}:${GATE_HOST_IP:-127.0.0.1}"
+        # A local model server, when one is on the same network. The name is
+        # resolved by the host through a DNS search domain, which the
+        # container's resolver does not apply.
+        - "${LLM_HOST_NAME:-localhost}:${LLM_HOST_IP:-127.0.0.1}"
     networks:
         - kodus-backend-services
         - shared-network
@@ -108,6 +136,11 @@ services:
             # switch → manifest drift) without CI=true. Per-service blocks
             # override the anchor's environment list, so it must be set here.
             - CI=true
+            # A git host whose certificate is issued by a private CA. Node
+            # does not read the OS trust store, so the CA file has to be
+            # named here; it must exist inside the container (the cleanup
+            # script removes it).
+            - NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-}
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
             - NODE_OPTIONS=--max-old-space-size=2560 --max-semi-space-size=64
             - DEBUG_PORT=9229
@@ -143,6 +176,11 @@ services:
             - node_modules_cache:/usr/src/app/node_modules:nocopy
             - pnpm_store:/usr/src/app/.pnpm-store
             - logs_data:/usr/src/app/logs
+            # The private CA that issued the local git host's certificate.
+            # The dev entrypoint installs it into the system store and points
+            # Node and git at it.
+            - ${GATE_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/gate-ca.crt:ro
+            - ${LLM_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/llm-ca.crt:ro
         ports:
             # See kodus-api comment on host-side port parametrization for
             # worktree coexistence.
@@ -172,6 +210,11 @@ services:
             # switch → manifest drift) without CI=true. Per-service blocks
             # override the anchor's environment list, so it must be set here.
             - CI=true
+            # A git host whose certificate is issued by a private CA. Node
+            # does not read the OS trust store, so the CA file has to be
+            # named here; it must exist inside the container (the cleanup
+            # script removes it).
+            - NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-}
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
             # V8 heap kept below the 2G container cap (with ~500M headroom
             # for native modules, thread stacks, and Node runtime overhead).
@@ -209,6 +252,11 @@ services:
             - node_modules_cache:/usr/src/app/node_modules:nocopy
             - pnpm_store:/usr/src/app/.pnpm-store
             - logs_data:/usr/src/app/logs
+            # The private CA that issued the local git host's certificate.
+            # The dev entrypoint installs it into the system store and points
+            # Node and git at it.
+            - ${GATE_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/gate-ca.crt:ro
+            - ${LLM_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/llm-ca.crt:ro
         ports:
             # Same image as the code-review worker; host ports offset so all
             # workers can run side by side.
@@ -229,6 +277,11 @@ services:
             start_period: 60s
         environment:
             - CI=true
+            # A git host whose certificate is issued by a private CA. Node
+            # does not read the OS trust store, so the CA file has to be
+            # named here; it must exist inside the container (the cleanup
+            # script removes it).
+            - NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-}
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
             - NODE_OPTIONS=--max-old-space-size=1536 --max-semi-space-size=64
             - DEBUG_PORT=9251
@@ -268,6 +321,11 @@ services:
             - node_modules_cache:/usr/src/app/node_modules:nocopy
             - pnpm_store:/usr/src/app/.pnpm-store
             - logs_data:/usr/src/app/logs
+            # The private CA that issued the local git host's certificate.
+            # The dev entrypoint installs it into the system store and points
+            # Node and git at it.
+            - ${GATE_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/gate-ca.crt:ro
+            - ${LLM_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/llm-ca.crt:ro
         ports:
             # See kodus-api comment on host-side port parametrization for
             # worktree coexistence. Container side is 8001 (same as the
@@ -303,6 +361,11 @@ services:
             # switch → manifest drift) without CI=true. Per-service blocks
             # override the anchor's environment list, so it must be set here.
             - CI=true
+            # A git host whose certificate is issued by a private CA. Node
+            # does not read the OS trust store, so the CA file has to be
+            # named here; it must exist inside the container (the cleanup
+            # script removes it).
+            - NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-}
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
             # V8 heap kept below the 1G container cap. 1536M heap on a
             # 1G cgroup let V8 grow past the limit and triggered silent
@@ -342,6 +405,11 @@ services:
             - node_modules_cache:/usr/src/app/node_modules:nocopy
             - pnpm_store:/usr/src/app/.pnpm-store
             - logs_data:/usr/src/app/logs
+            # The private CA that issued the local git host's certificate.
+            # The dev entrypoint installs it into the system store and points
+            # Node and git at it.
+            - ${GATE_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/gate-ca.crt:ro
+            - ${LLM_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/llm-ca.crt:ro
         ports:
             # See kodus-api comment on host-side port parametrization for
             # worktree coexistence.
@@ -372,6 +440,11 @@ services:
             # switch → manifest drift) without CI=true. Per-service blocks
             # override the anchor's environment list, so it must be set here.
             - CI=true
+            # A git host whose certificate is issued by a private CA. Node
+            # does not read the OS trust store, so the CA file has to be
+            # named here; it must exist inside the container (the cleanup
+            # script removes it).
+            - NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS:-}
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
             # V8 heap kept below the 1G container cap. 4096M heap on a
             # 1G cgroup let V8 grow past the limit and triggered silent
@@ -466,6 +539,11 @@ services:
               required: false
         volumes:
             - ./apps/web:/usr/src/app:delegated
+            # The private CA that issued the local git host's certificate.
+            # The dev entrypoint installs it into the system store and points
+            # Node and git at it.
+            - ${GATE_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/gate-ca.crt:ro
+            - ${LLM_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/llm-ca.crt:ro
             # Mount shared monorepo libs at the location apps/web's
             # tsconfig path `@libs/*` (= "../../libs/*" relative to
             # apps/web baseUrl) resolves to inside the container —
@@ -531,6 +609,11 @@ services:
             - ./apps/try:/usr/src/app:delegated
             - try_node_modules_cache:/usr/src/app/node_modules
             - try_next_cache:/usr/src/app/.next
+            # The private CA that issued the local git host's certificate.
+            # The dev entrypoint installs it into the system store and points
+            # Node and git at it.
+            - ${GATE_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/gate-ca.crt:ro
+            - ${LLM_CA_FILE:-/dev/null}:/usr/local/share/ca-certificates/llm-ca.crt:ro
         restart: unless-stopped
         healthcheck:
             test:
