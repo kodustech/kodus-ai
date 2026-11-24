@@ -168,13 +168,17 @@ describe('estimateTextTokens worstCase', () => {
         enc.free();
     });
 
-    it('counts a long digit run exactly in both modes: o200k cuts it in threes', () => {
+    it('counts a long digit run exactly, and at a token per digit for a limit', () => {
         const enc = get_encoding('o200k_base');
-        for (const text of ['9'.repeat(2_000), '12'.repeat(400)]) {
-            const exact = enc.encode_ordinary(text).length;
-            expect(estimateTextTokens(text)).toBe(exact);
-            expect(estimateTextTokens(text, { worstCase: true })).toBe(exact);
-        }
+        const run = '9'.repeat(2_000);
+        expect(estimateTextTokens(run)).toBe(enc.encode_ordinary(run).length);
+        expect(estimateTextTokens(run, { worstCase: true })).toBe(run.length);
+        // A number in code stays exact: only a run past the limit is held
+        // to a token per digit.
+        const code = 'const total = price(12345) + tax(678);\n'.repeat(60);
+        expect(estimateTextTokens(code, { worstCase: true })).toBe(
+            enc.encode_ordinary(code).length,
+        );
         enc.free();
     });
 

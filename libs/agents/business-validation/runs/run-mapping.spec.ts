@@ -262,4 +262,26 @@ describe('sameResult (#2423)', () => {
         // A stored run without lookups compares by what it names.
         expect(sameResult(unreadable('8', false), unreadable('9'))).toBe(false);
     });
+
+    it('reads a task too thin as the same when only an unrelated mention was added', () => {
+        const thin = (mentions: string[]) =>
+            ({
+                outcome: 'task_too_thin',
+                tasks: [],
+                unseenFiles: [],
+                attempts: [
+                    { reference: 'PAY-1', tracker: 'Jira', status: 'found' },
+                ],
+                references: mentions.map((id) => ({
+                    kind: 'key',
+                    id,
+                    raw: id,
+                    source: 'body',
+                    intent: 'mentions',
+                })),
+            }) as any;
+        expect(sameResult(thin(['PAY-1']), thin(['PAY-1', 'SHA-256']))).toBe(
+            true,
+        );
+    });
 });

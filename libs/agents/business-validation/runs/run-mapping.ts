@@ -81,6 +81,9 @@ export function toRunTasks(result: BusinessValidationResult): RunTask[] {
     return [];
 }
 
+/** Outcomes whose comment names the references it could not read or find. */
+const NAMES_REFERENCES = new Set(['task_required', 'task_missing', 'skipped']);
+
 /** What `sameResult` compares. */
 type ResultFields = Pick<
     NewValidationRun,
@@ -125,13 +128,14 @@ function outlineKey(run: ResultFields): string {
         run.outcome,
         run.skipReason ?? null,
         run.passed ?? null,
-        // A verdict is about its tasks (below): what it looked up, not every
-        // mention the text has, so a description that adds "SHA-256" or
-        // "#2410" changes nothing the author reads. Without a verdict the
-        // comment names the references (none could be read, none found), so
-        // they are the result; a stored run with no lookups still has them.
+        // What it looked up, not every mention the text has: a description
+        // that adds "SHA-256" or "#2410" changes nothing the author reads
+        // (a verdict, or a task too thin, names the tasks it read). Where the
+        // comment names the references instead (none could be read, or the
+        // one asked for was not found), they are the result; a stored run
+        // with no lookups still has them.
         [...new Set((run.attempts ?? []).map((a) => a.reference))].sort(),
-        run.outcome === 'validated'
+        !NAMES_REFERENCES.has(run.outcome)
             ? []
             : [
                   ...new Set(

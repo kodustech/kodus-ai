@@ -263,7 +263,13 @@ function countTokens(enc: Tiktoken, text: string, worstCase = false): number {
     let runNonAscii = 0;
     const flushRun = (runEnd: number) => {
         const length = runEnd - runStart;
-        if (length <= MAX_ENCODED_RUN_CHARS || runKind === Stretch.Digits) {
+        // A long digit run is encoded (o200k cuts it in threes, never one
+        // long piece), except for a limit: some tokenizers spend a token per
+        // digit, and the worst case is held to that.
+        if (
+            length <= MAX_ENCODED_RUN_CHARS ||
+            (runKind === Stretch.Digits && !worstCase)
+        ) {
             return;
         }
         longRuns = true;
@@ -307,10 +313,9 @@ export function estimateTextTokens(
         /**
          * Count what the tokenizer can't (it failed to load, or a run too
          * long to encode) at its worst: a token per ASCII character, three
-         * per other code unit. Digits are counted exactly: o200k splits
-         * them in threes, never one long piece. For a limit the text must
-         * never exceed. Not memoized, so a cached ordinary count never
-         * answers it.
+         * per other code unit, a long digit run included (some tokenizers
+         * spend a token per digit). For a limit the text must never
+         * exceed. Not memoized, so a cached ordinary count never answers it.
          */
         worstCase?: boolean;
     },
