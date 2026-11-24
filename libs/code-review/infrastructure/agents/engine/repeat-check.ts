@@ -494,14 +494,21 @@ function parseVerdicts(
 }
 
 /** Without a verdict, hold a finding the finder linked to an earlier comment
- *  (a revision may be a reversal), a point answered in its thread and raised
+ *  on that comment's file (a revision may be a reversal), a point answered in its thread and raised
  *  on the same lines, and a likely repost. The same rule in a different place,
  *  or a different problem elsewhere, still gets a comment. */
 function heldWithoutVerdict(
     finding: RepeatCheckFinding,
     earlier: PrDecisionRecord,
 ): boolean {
-    if (linkedByFinder(finding, earlier)) return true;
+    // Only on the earlier comment's file: a linked finding elsewhere is most
+    // often a real failure in a consumer, which an unjudged drop would lose.
+    if (
+        linkedByFinder(finding, earlier) &&
+        normalizePath(finding.relevantFile) ===
+            normalizePath(earlier.relevantFile)
+    )
+        return true;
     if (earlier.answered && sameLines(finding, earlier)) return true;
     return plausibleRepeat(finding, earlier);
 }

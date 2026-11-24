@@ -685,7 +685,7 @@ describe('checkRepeats', () => {
         expect(result.repeats.map((r) => r.finding)).toEqual([byCode]);
     });
 
-    it('without a verdict, holds a finder-linked finding and an answered point on its lines, and posts the rest', async () => {
+    it("without a verdict, holds a finder-linked finding on its comment's file and an answered point on its lines, and posts the rest", async () => {
         const answered = earlier({
             suggestionId: 'answered',
             relevantFile: 'src/label.ts',
@@ -697,7 +697,13 @@ describe('checkRepeats', () => {
         });
         const linked = {
             label: 'bug',
-            relevantFile: 'src/other.ts',
+            relevantFile: 'src/retry.ts',
+            relevantLinesStart: 40,
+            revisesSuggestionId: 'bug-old',
+        };
+        const linkedElsewhere = {
+            label: 'bug',
+            relevantFile: 'src/consumer.ts',
             revisesSuggestionId: 'bug-old',
         };
         const reraise = {
@@ -719,14 +725,14 @@ describe('checkRepeats', () => {
         );
 
         const result = await checkRepeats(
-            [linked, reraise, elsewhere],
+            [linked, linkedElsewhere, reraise, elsewhere],
             [bugComment, answered],
             { organizationId: 'org-1', byokConfig: slot },
         );
 
         expect(result.model).toBe('failed');
         expect(result.withheld).toEqual([linked, reraise]);
-        expect(result.kept).toEqual([elsewhere]);
+        expect(result.kept).toEqual([linkedElsewhere, elsewhere]);
     });
 
     it('shows the comparison which comments were applied or answered, and the link the finder set', () => {
