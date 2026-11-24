@@ -246,18 +246,38 @@ export function stripReasoningBlocks(text: string): string | null {
 /**
  * The first markdown code fence: the first ``` that a later ``` closes, with
  * what lies between them (`inner`, tag included). A linear scan: the regex
- * forms (`/```(?:json)?\s*([\s\S]*?)```/`) backtrack over a run of
- * whitespace after an unclosed fence once per character, quadratic in
- * model-generated text.
+ * forms (`/```(?:json)?\s*([\s\S]*?)```/`) backtrack over a run of whitespace
+ * after an unclosed fence once per character, quadratic in model-generated
+ * text.
+ *
+ * The closing marker is found by tracking JSON string literals: when a fenced
+ * payload is JSON whose description quotes a code fence (a finding about a
+ * README, or a summary of a patch), the inner ``` cannot close it, or the
+ * caller validates a truncated object (#2687).
  */
 function firstFence(
     text: string,
 ): { start: number; end: number; inner: string } | null {
     const start = text.indexOf('```');
     if (start < 0) return null;
-    const close = text.indexOf('```', start + 3);
-    if (close < 0) return null;
-    return { start, end: close + 3, inner: text.slice(start + 3, close) };
+    const body = start + 3;
+    let inString = false;
+    let escaped = false;
+    for (let i = body; i < text.length; i++) {
+        const ch = text[i];
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (ch === '\\') escaped = true;
+            else if (ch === '"') inString = false;
+            continue;
+        }
+        if (ch === '"') {
+            inString = true;
+        } else if (text.startsWith('```', i)) {
+            return { start, end: i + 3, inner: text.slice(body, i) };
+        }
+    }
+    return null;
 }
 
 /** A fence's body as the `(?:json)?\s*` prefix leaves it. */

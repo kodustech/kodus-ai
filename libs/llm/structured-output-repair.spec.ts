@@ -185,6 +185,17 @@ describe('extractJsonFromText', () => {
         expect(extractJsonFromText('{"a":1,}')).toBe('{"a":1}');
     });
 
+    it('keeps a fenced JSON value whose description quotes a code fence (#2687)', () => {
+        const description =
+            'Summary.\n```ts\nconst ready = true;\n```\nDetails.';
+        const payload = JSON.stringify({ description });
+        const raw = `\`\`\`json\n${payload}\n\`\`\``;
+
+        const out = extractJsonFromText(raw);
+        expect(out).toBe(payload);
+        expect(JSON.parse(out!)).toEqual({ description });
+    });
+
     it('is string-aware (braces inside strings do not truncate)', () => {
         expect(JSON.parse(extractJsonFromText('x {"msg":"a } b"} y')!)).toEqual(
             { msg: 'a } b' },
