@@ -94,6 +94,11 @@ const suite: RuntimeSuiteRun = {
             durationMs: 90_000,
             tests: [
                 {
+                    title: "keeps the cart",
+                    status: "passed",
+                    attempts: ["passed"],
+                },
+                {
                     title: "applies a discount code",
                     status: "failed",
                     attempts: ["failed", "failed"],
@@ -311,6 +316,14 @@ describe("the e2e suite tab of a Run", () => {
             "e2e/cart.spec.ts",
         ]);
         expect(table.getByText("Regression")).toBeInTheDocument();
+        // A spec's tries show its failed test, not a passing neighbour.
+        expect(
+            table.getAllByLabelText("Tries: failed, failed").length,
+        ).toBeGreaterThan(0);
+        // A spec's tries show its failed test, not a passing neighbour.
+        expect(
+            table.getAllByLabelText("Tries: failed, failed").length,
+        ).toBeGreaterThan(0);
         expect(table.getByText("Flaky")).toBeInTheDocument();
         fireEvent.click(table.getByText("e2e/order.spec.ts"));
         expect(table.getByText("shows the confirmation")).toBeInTheDocument();

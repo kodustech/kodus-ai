@@ -312,12 +312,15 @@ const Attempts = ({ attempts }: { attempts: readonly string[] }) => (
     </span>
 );
 
-/** The tries of a spec as one strip: its test with the most tries (a retried test is the one worth seeing). */
-const triesOf = (r: RuntimeSuiteSpec) =>
-    r.tests.reduce<string[]>(
+/** The tries of a spec as one strip: its test that failed (the one worth seeing), else the one with the most tries. */
+const triesOf = (r: RuntimeSuiteSpec): string[] => {
+    const failed = r.tests.filter((t) => t.attempts.includes("failed"));
+    const pool = failed.length > 0 ? failed : r.tests;
+    return pool.reduce<string[]>(
         (most, t) => (t.attempts.length > most.length ? t.attempts : most),
         [],
     );
+};
 
 const FILTERS: Array<{ value: SpecFilter; label: string }> = [
     { value: "all", label: "All" },

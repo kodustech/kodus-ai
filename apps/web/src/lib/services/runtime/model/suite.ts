@@ -431,7 +431,9 @@ export const suiteTimeSplit = (run: RuntimeSuiteRun): SuiteTimeSplit | null => {
     const marks: Array<[TimeSegment["key"], string, number | undefined]> = [
         [
             "start",
-            "Before the suite's hosts",
+            run.mode === "run"
+                ? "Before the suite started (the Run's own tests)"
+                : "Before the suite started",
             at(list?.requestedAt) ??
                 (Number.isFinite(firstShardAsked)
                     ? firstShardAsked
@@ -462,7 +464,10 @@ export const suiteTimeSplit = (run: RuntimeSuiteRun): SuiteTimeSplit | null => {
             complete
                 ? {
                       key: "results",
-                      label: "Results and cleanup",
+                      label:
+                          run.machine && run.machine.rerunMs > 0
+                              ? "Re-runs of the failures, results and cleanup"
+                              : "Results and cleanup",
                       ms: end - from,
                   }
                 : {
