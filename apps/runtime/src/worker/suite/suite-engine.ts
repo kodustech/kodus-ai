@@ -30,6 +30,7 @@ import {
     type TestResult,
 } from '@libs/runtime/suite';
 
+import { collectCoverage, type CoverageMapRecord, coverageDirOf } from './coverage-collector';
 import { type DetachedOutcome, runDetached } from './detached-exec';
 import type { BaselineSpec, PgSuiteBaselines } from './pg-suite-baselines';
 import type { PgSuiteRuns, SuitePhase, SuiteRunState, SuiteSpecStatus } from './pg-suite-runs';
@@ -90,6 +91,11 @@ export interface SuiteInputs {
     signal?: AbortSignal;
     /** The risk-first order inside a shard (6.1): the specs red on the previous push first, then those that cover the diff. The balance is untouched. */
     order?: { failedBefore: readonly string[]; diffCoverage: Readonly<Record<string, number>> };
+    /**
+     * A baseline collects the files each spec exercises (6.1, D10): each spec runs as a command of its own, alone against the
+     * service, with `NODE_V8_COVERAGE` set, and the map is recorded with the baseline. Ignored in a PR run, which never pays for it.
+     */
+    coverage?: boolean;
 }
 
 /** Whether the environment has a ready template to start a main host from, and a way to ask for a build (9.5). */
@@ -117,6 +123,8 @@ export interface SuiteEngineDeps {
     templates?: SuiteTemplates;
     /** The baselines of main commits: a baseline run records one, a PR run reads the one of its merge base. Absent: none is kept or used. */
     baselines?: Pick<PgSuiteBaselines, 'record' | 'findAmong'>;
+    /** Where a baseline's coverage map is kept; absent: none is kept. */
+    maps?: { record(m: CoverageMapRecord): Promise<{ stored: boolean }> };
 }
 
 /** How long the engine waits for the hosts it asked for before it goes on with the ones that came (design section 5). */
@@ -177,6 +185,8 @@ interface Collector {
     phase: SuitePhase;
     shard: number;
     claimId: string;
+    /** Added to the command's environment (a baseline's coverage directory). */
+    env?: Record<string, string>;
     planned: ReadonlySet<string>;
     done: Map<string, SpecResult>;
     seen: Set<string>;
@@ -212,6 +222,8 @@ interface RunCtx {
     skipped: Set<string>;
     /** What the PR run was judged against: the baseline it could use (7.1) and how far main was ahead of the merge base (8.2). */
     judged?: { baselineSha?: string; baseDrift: number };
+    /** The files each spec exercised, read from its dumps (a baseline with coverage only); a spec whose dumps could not be read is absent. */
+    coverage: Map<string, string[]>;
 }
 
 /** The test's last failed attempt as a signature: what makes two failures "the same". */
@@ -253,6 +265,7 @@ export class SuiteEngine {
             finished: [],
             stop: new AbortController(),
             skipped: new Set(),
+            coverage: new Map(),
         };
         try {
             await this.firstPass(ctx);
@@ -369,10 +382,42 @@ export class SuiteEngine {
         ctx.claims.push(claim.claimId);
         const durations = estimateDurations(inputs.specs, ctx.stats);
         const ordered = orderBin(runnable, { failedBefore: inputs.order?.failedBefore ?? [], diffCoverage: inputs.order?.diffCoverage ?? {}, durations: Object.fromEntries(durations ?? []) });
+        if (this.collectsCoverage(ctx)) return this.driveShardWithCoverage(ctx, shard, claim.claimId, ordered);
         // A crash re-runs what the runner had not reported, once, in the same claim.
         const ran = await this.runSpecs(ctx, { claimId: claim.claimId, shard: shard.shard }, 'shard', ordered, `${req.suiteRunId}-${shard.shard}`, { timeoutMs: inputs.config.shardTimeoutMs, crashRetries: 1, clear: false });
         for (const [spec, r] of ran.done) shard.done.set(spec, r);
         for (const [spec, why] of ran.missing) shard.missing.set(spec, why);
+    }
+
+    /** Only a baseline collects: a PR run never sets `NODE_V8_COVERAGE` and never runs a spec alone for it. */
+    private collectsCoverage(ctx: RunCtx): boolean {
+        return ctx.req.mode === 'baseline' && ctx.inputs.coverage === true;
+    }
+
+    /**
+     * A baseline shard with coverage: each spec is a command of its own, one after the other (a service never sees two specs at
+     * once, so the dumps of a spec are its own), with `NODE_V8_COVERAGE` on a directory of that spec; its dumps are read and
+     * removed when the command ends. The shard's cap is shared by all of them. A spec whose dumps cannot be read has no entry:
+     * the map is then incomplete, never guessed.
+     */
+    private async driveShardWithCoverage(ctx: RunCtx, shard: ShardRun, claimId: string, ordered: readonly string[]): Promise<void> {
+        const { req, inputs } = ctx;
+        const startedAt = this.d.clock.now();
+        for (const [i, spec] of ordered.entries()) {
+            const key = `${req.suiteRunId}-${shard.shard}-c${i}`;
+            const left = inputs.config.shardTimeoutMs - (this.d.clock.now() - startedAt);
+            if (left <= 0) {
+                shard.missing.set(spec, 'not_run');
+                continue;
+            }
+            const dir = coverageDirOf(key);
+            const ran = await this.runSpecs(ctx, { claimId, shard: shard.shard }, 'shard', [spec], key, { timeoutMs: left, crashRetries: 1, clear: false, env: { NODE_V8_COVERAGE: dir } });
+            for (const [s, r] of ran.done) shard.done.set(s, r);
+            for (const [s, why] of ran.missing) shard.missing.set(s, why);
+            if (!ran.done.has(spec)) continue;
+            const files = await collectCoverage(this.d.env, claimId, key, dir);
+            if (files) ctx.coverage.set(spec, files);
+        }
     }
 
     /**
@@ -380,8 +425,8 @@ export class SuiteEngine {
      * reported (`crashRetries` times, in the same claim); a shard past its timeout, a finished command that left a
      * spec out and a runner or host that never reported are `not_run` and `infra`, never a failure.
      */
-    private async runSpecs(ctx: RunCtx, host: { claimId: string; shard: number }, phase: SuitePhase, specs: readonly string[], keyBase: string, o: { timeoutMs: number; crashRetries: number; clear: boolean }): Promise<Ran> {
-        const col: Collector = { phase, shard: host.shard, claimId: host.claimId, planned: new Set(specs), done: new Map(), seen: new Set(), reads: 0 };
+    private async runSpecs(ctx: RunCtx, host: { claimId: string; shard: number }, phase: SuitePhase, specs: readonly string[], keyBase: string, o: { timeoutMs: number; crashRetries: number; clear: boolean; env?: Record<string, string> }): Promise<Ran> {
+        const col: Collector = { phase, shard: host.shard, claimId: host.claimId, ...(o.env ? { env: o.env } : {}), planned: new Set(specs), done: new Map(), seen: new Set(), reads: 0 };
         const missing = new Map<string, 'not_run' | 'infra'>();
         // A re-run starts from an empty results directory: the runner writes the same file names again.
         if (o.clear) await this.clearResults(ctx, host.claimId, keyBase);
@@ -422,7 +467,7 @@ export class SuiteEngine {
             key,
             command: fillSpecs(config, specs),
             ...(config.cwd ? { cwd: config.cwd } : {}),
-            envVars: config.env,
+            envVars: { ...config.env, ...col.env },
             resultsGlob: config.resultsGlob,
             timeoutMs,
             // Only the first pass is cut short by fail fast; the fresh host and the re-runs go on after it.
@@ -693,7 +738,10 @@ export class SuiteEngine {
             ctx.sha,
             firstPass.filter((s) => s.result).map((s) => ({ spec: s.spec, status: s.result!.status, durationMs: s.result!.durationMs })),
         );
-        if (ctx.req.mode === 'baseline') await this.recordBaseline(ctx, firstPass);
+        if (ctx.req.mode === 'baseline') {
+            await this.recordBaseline(ctx, firstPass);
+            await this.recordCoverageMap(ctx, firstPass);
+        }
         const state = this.stateOf(ctx, firstPass, classification);
         await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, state, new Date(this.d.clock.now()), { ...(classification ? { classification } : {}), ...(ctx.judged ? { ...(ctx.judged.baselineSha ? { baselineSha: ctx.judged.baselineSha } : {}), baseDrift: ctx.judged.baseDrift } : {}) });
         return { suiteRunId: ctx.req.suiteRunId, state, replayed: false, firstPass, ...(classification ? { classification } : {}) };
@@ -718,6 +766,22 @@ export class SuiteEngine {
             mainSha: ctx.req.mainSha,
             suiteDigest: this.digestOf(ctx),
             status: firstPass.length > 0 && firstPass.every((s) => s.result) ? 'complete' : 'incomplete',
+            specs,
+            finishedAt: new Date(this.d.clock.now()),
+        });
+    }
+
+    /** The files each spec exercised on main, complete only when every spec of the suite reported and its dumps were read. */
+    private async recordCoverageMap(ctx: RunCtx, firstPass: readonly FirstPassSpec[]): Promise<void> {
+        if (!this.d.maps || !this.collectsCoverage(ctx)) return;
+        const specs: Record<string, string[]> = {};
+        for (const [spec, files] of ctx.coverage) specs[spec] = files;
+        await this.d.maps.record({
+            organizationId: ctx.req.organizationId,
+            environmentId: ctx.req.environmentId,
+            mainSha: ctx.req.mainSha,
+            suiteDigest: this.digestOf(ctx),
+            status: firstPass.length > 0 && firstPass.every((s) => ctx.coverage.has(s.spec)) ? 'complete' : 'incomplete',
             specs,
             finishedAt: new Date(this.d.clock.now()),
         });

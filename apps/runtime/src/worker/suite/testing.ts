@@ -1,5 +1,6 @@
 import type { AcquireRequest, Blocked, Claim, EnvError, ExecRequest, StepResult } from '@libs/runtime/environment';
 
+import type { CoverageMapRecord } from './coverage-collector';
 import { POLL_STATES } from './detached-exec';
 import type { BaselineRecord, PgSuiteBaselines } from './pg-suite-baselines';
 import type { PgSuiteRuns, StoredSuiteResult, SuiteRunEnd, StoredSuiteRun, StoredSuiteShard, SuitePhase, SuiteResultRow, SuiteRunRecord, SuiteRunState, SuiteShardPlan } from './pg-suite-runs';
@@ -166,6 +167,19 @@ export class InMemorySuiteBaselines implements Pick<PgSuiteBaselines, 'record' |
     }
 }
 
+/** The coverage maps of baselines: one per (environment, main sha, suite digest); a complete one replaces an incomplete one and nothing else. */
+export class InMemorySuiteCoverageMaps {
+    readonly rows = new Map<string, CoverageMapRecord>();
+    private key = (e: string, sha: string, digest: string) => `${e}|${sha}|${digest}`;
+    async record(m: CoverageMapRecord) {
+        const k = this.key(m.environmentId, m.mainSha, m.suiteDigest);
+        const held = this.rows.get(k);
+        if (held && !(held.status === 'incomplete' && m.status === 'complete' && held.organizationId === m.organizationId)) return { stored: false };
+        this.rows.set(k, m);
+        return { stored: true };
+    }
+}
+
 /** The fleet's demand rows for a suite run, as the engine sees them: which shards asked for a host, which hosts came. */
 export class FakeSuiteDemand implements SuiteHostDemand {
     readonly requested: number[][] = [];
@@ -197,6 +211,10 @@ export type FakeAttempt = 'pass' | { fail: string } | 'crash';
 export interface FakeSpec {
     /** How long the spec takes (default 20 s). */
     ms?: number;
+    /** The source files the spec exercises on main, as the coverage collector would read them from the V8 dumps of its run (baseline only). */
+    covers?: string[];
+    /** The collector finds no dump for this spec (the runner left none). */
+    noCoverage?: boolean;
     /** What each attempt on that side does, in order; the last one repeats. Default: passes. */
     pr?: FakeAttempt[];
     main?: FakeAttempt[];
@@ -229,7 +247,12 @@ export class FakeSuiteCell {
     readonly claims = new Map<string, { claimId: string; side: string; sha: string; shard?: number; released: boolean; key: string }>();
     readonly acquires: AcquireRequest[] = [];
     /** Starts of the command, by claim (a replay of a start does nothing). */
-    readonly starts: Array<{ claimId: string; specs: string[] }> = [];
+    readonly starts: Array<{ claimId: string; specs: string[]; env: Record<string, string> }> = [];
+    /** The most commands that ran at once on one claim: a service never sees two specs together in a baseline. */
+    maxConcurrentOnClaim = 0;
+    /** The coverage collector's reads: the directory it was asked about. */
+    readonly coverageReads: string[] = [];
+    private readonly coverageDirs = new Map<string, string>();
     readonly released: string[] = [];
     private readonly procs = new Map<string, FakeProcess>();
     private readonly xml = new Map<string, string>();
@@ -271,6 +294,14 @@ export class FakeSuiteCell {
             if (proc) proc.killedAt ??= this.clock.now();
             return ok('');
         }
+        if (req.stepId.endsWith(':cov')) {
+            const dir = /'(\/[^']+)'/.exec(req.command)?.[1] ?? '';
+            this.coverageReads.push(dir);
+            const spec = this.coverageDirs.get(dir);
+            const plan = spec ? this.world.specs[spec] : undefined;
+            if (!plan || plan.noCoverage) return { stepId: req.stepId, exitCode: 1, stdout: '', stderr: 'no coverage dump', truncated: false, durationMs: 1, transport: 'ok' };
+            return ok(JSON.stringify({ files: [...(plan.covers ?? [])].sort() }));
+        }
         if (req.stepId.endsWith(':clear')) {
             for (const [id, p] of this.procs) if (id.startsWith(`${claimId}|`)) p.files = [];
             return ok('');
@@ -297,7 +328,9 @@ export class FakeSuiteCell {
         const id = `${claim.claimId}|${key}`;
         if (this.procs.has(id)) return '';
         const specs = (/--specs "([^"]*)"/.exec(req.command)?.[1] ?? '').split(',').filter(Boolean);
-        this.starts.push({ claimId: claim.claimId, specs });
+        const env = Object.fromEntries([...req.command.matchAll(/^export ([A-Z_][A-Z0-9_]*)='([^']*)'$/gm)].map((m) => [m[1], m[2]]));
+        this.starts.push({ claimId: claim.claimId, specs, env });
+        if (env.NODE_V8_COVERAGE && specs[0]) this.coverageDirs.set(env.NODE_V8_COVERAGE, specs[0]);
         const side = claim.side === 'pr' ? 'pr' : 'main';
         const now = this.clock.now();
         const proc: FakeProcess = { startedAt: now, exitAt: 0, exitCode: 0, files: [] };
@@ -323,6 +356,8 @@ export class FakeSuiteCell {
             proc.files.push({ path, doneAt: t });
         }
         proc.exitAt = t;
+        const live = [...this.procs].filter(([pid, p]) => pid.startsWith(`${claim.claimId}|`) && p.killedAt === undefined && now < p.startedAt + p.exitAt).length;
+        this.maxConcurrentOnClaim = Math.max(this.maxConcurrentOnClaim, live + 1);
         this.procs.set(id, proc);
         return '';
     }
