@@ -14,7 +14,8 @@ import { workspaceShapeError } from '@libs/runtime/contracts/workspace';
 
 import { AUTHORED_FILE_LIMITS, type AuthoredFile, type AuthoredWorkspace, checkAuthoredSubmission } from './authored-files-policy';
 import { directoryExistsCheck, fileExists, modelView, READ_LIMITS, type RepoReader, RepoPathError, repoPath } from './repo-reader';
-import { ciEvidenceBlock } from './ci-evidence';
+import { ciEvidence } from './ci-evidence';
+import { appendSuiteBlock } from './suite-block';
 import { factsBlock, repositoryFacts, workspaceFactsBlock } from './repository-facts';
 import {
     ClearStaleReadsPolicy,
@@ -348,6 +349,8 @@ export type RecipeAuthorResult =
           status: 'submitted';
           recipe: string;
           notes?: string;
+          /** The keys of the `suite:` block Kodus inferred from the repository's CI and appended (e2e-suites.md section 3); absent when no block was written. */
+          suiteInferred?: string[];
           /** Dockerfiles and compose files under .kodus/ the recipe needs, checked with it; absent when it needs none. */
           files?: AuthoredFile[];
           /** What Kodus rewrote in Kody's compose files before the checks passed them (authored-compose-sanitiser.ts). */
@@ -815,7 +818,8 @@ export async function authorRecipe(
     const orgFacts = input.recommendedEgress === false ? `\n${RECOMMENDED_LIST_OFF_FACT}` : '';
     const allFacts = facts ? `${facts}${orgFacts}` : orgFacts ? `Facts (verified, computed before you started; each names its source):${orgFacts}` : '';
     // The primary repository's CI only: a member repository is read when the model asks. No model, no tool call; a failed read leaves it out.
-    const ci = await ciEvidenceBlock(deps.reader).catch(() => '');
+    const ciRead = await ciEvidence(deps.reader).catch(() => ({ block: '' }) as Awaited<ReturnType<typeof ciEvidence>>);
+    const ci = ciRead.block;
     const evidence = [allFacts, ci].filter(Boolean).join('\n\n');
     const head = evidence ? `${recipeAuthorPrompt(input)}\n\n${evidence}` : recipeAuthorPrompt(input);
     const prefetched = prefetch ? await prefetchContext(deps.reader, root, prefetch.maxChars, workspace?.members ?? []) : undefined;
@@ -851,15 +855,19 @@ export async function authorRecipe(
             ? { context: { clearings: clearer?.clearings ?? 0, clearedResults: clearer?.clearedResults ?? 0, prefetched: prefetched?.files ?? [] } }
             : {};
     const base = { usage: run.usage, steps: run.steps.length, rejected: state.rejected, ...report };
-    if (state.accepted)
+    if (state.accepted) {
+        // The suite block comes from the CI evidence, by code, after the checks: the model never writes it.
+        const withSuite = appendSuiteBlock(state.accepted, ciRead);
         return {
             status: 'submitted',
-            recipe: state.accepted,
+            recipe: withSuite.recipe,
+            ...(withSuite.suiteKeys.length ? { suiteInferred: withSuite.suiteKeys } : {}),
             ...(state.notes ? { notes: state.notes } : {}),
             ...(state.files ? { files: state.files } : {}),
             ...(state.adjusted ? { adjusted: state.adjusted } : {}),
             ...base,
         };
+    }
     const reason = state.gaveUp
         ? `Kody found nothing to boot: ${state.notes ?? 'no reason given'}`
         : state.rejected.length >= RECIPE_AUTHOR_LIMITS.maxRejected

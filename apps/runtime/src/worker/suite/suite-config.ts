@@ -1,11 +1,11 @@
-import { type Recipe, SUITE_LIMITS } from '@libs/runtime/protocol/recipe';
+import { DEFAULT_SUITE_RESULTS_GLOB, type Recipe, SUITE_LIMITS } from '@libs/runtime/protocol/recipe';
 
 import type { SuiteConfig } from './suite-engine';
 
 /** The cap of one shard's command when the recipe sets none (docs/runtime/e2e-suites.md section 12.1). */
 export const DEFAULT_SHARD_TIMEOUT_MS = 25 * 60_000;
 /** Where a runner writes its result files when the recipe names no `results.junit`. */
-export const DEFAULT_RESULTS_GLOB = 'results/*.xml';
+export const DEFAULT_RESULTS_GLOB = DEFAULT_SUITE_RESULTS_GLOB;
 
 /** The recipe's suite block as the engine reads it, plus what the rest of the worker reads of it. */
 export interface ResolvedSuite {

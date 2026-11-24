@@ -165,6 +165,8 @@ function resolvedSize(d: {
 /** The suite block (docs/runtime/e2e-suites.md section 3): the repository's own e2e suite, run by the worker. */
 export const SUITE_RUNNERS = ['cypress', 'playwright'] as const;
 export const SUITE_LIMITS = { commandBytes: 1024, env: 16, artifacts: 8, ignore: 32, shards: 16, maxTimeoutSeconds: 7200 } as const;
+/** Where a runner writes its result files when the recipe names no `results.junit`. */
+export const DEFAULT_SUITE_RESULTS_GLOB = 'results/*.xml';
 const RecipeSuiteSchema = z.strictObject({
     runner: z.enum(SUITE_RUNNERS).describe('The runner the repository uses for its e2e tests.'),
     command: z.string().describe('The command a shard runs; {specs} is the comma list of spec files the engine fills. Never --record or --parallel: those need Cypress Cloud.'),

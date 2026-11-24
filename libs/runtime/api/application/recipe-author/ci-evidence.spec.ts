@@ -227,4 +227,11 @@ jobs:
         const r = reader(files);
         expect(await ciEvidenceBlock(r)).toBe((await ciEvidence(r)).block);
     });
+
+    it('flags two jobs that run different suites as ambiguous, and one suite in two jobs as not', async () => {
+        const two = 'jobs:\n  a:\n    steps:\n      - run: npx cypress run --spec "cypress/e2e/**/*.cy.ts"\n  b:\n    steps:\n      - run: npx playwright test\n';
+        expect((await ciEvidence(reader({ '.github/workflows/e2e.yml': two }))).suiteAmbiguous).toBe(true);
+        const same = 'jobs:\n  a:\n    steps:\n      - run: npx cypress run --browser chrome\n  b:\n    steps:\n      - run: npx cypress run --browser chrome --record\n';
+        expect((await ciEvidence(reader({ '.github/workflows/e2e.yml': same }))).suiteAmbiguous).toBeUndefined();
+    });
 });

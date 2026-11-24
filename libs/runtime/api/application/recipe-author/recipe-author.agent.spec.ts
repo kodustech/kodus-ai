@@ -7,6 +7,8 @@ import { MockLanguageModelV3 } from 'ai/test';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
 
+import { parseRecipe } from '@libs/runtime/protocol/recipe';
+
 import { checkAuthoredRecipe, commandProblem } from './authored-recipe-policy';
 import { authorRecipe, FIND_FILES_TOOL, globMatcher, type PreviousAttempt, RECIPE_AUTHOR_LIMITS, SUBMIT_RECIPE_TOOL, submissionKey } from './recipe-author.agent';
 import { isSecretFile, modelView, type RepoReader, repoPath } from './repo-reader';
@@ -181,6 +183,28 @@ function scripted(turns: Turn[]) {
 
 const run = (files = FILES) =>
     authorRecipe({ runner: new AiSdkAgentRunner(undefined), reader: reader(files) }, { runId: 'r1', repositoryName: 'acme/shop', sha: 'a'.repeat(40) });
+
+describe('authorRecipe with an e2e workflow', () => {
+    const WF = 'jobs:\n  cypress:\n    strategy:\n      matrix:\n        containers: [1, 2, 3]\n    steps:\n      - run: npx cypress run --record --parallel\n';
+    const CFG = "export default { e2e: { specPattern: 'cypress/e2e/**/*.cy.ts' } };";
+
+    it('appends the suite block the CI evidence is certain of, and reports its keys', async () => {
+        scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const r = await run({ ...FILES, '.github/workflows/e2e.yml': WF, 'cypress.config.ts': CFG });
+        expect(r).toMatchObject({ status: 'submitted', suiteInferred: expect.arrayContaining(['runner', 'command', 'specs', 'shards']) });
+        const suite = (parseRecipe((r as { recipe: string }).recipe) as { recipe: { suite: { shards: number; command: string } } }).recipe.suite;
+        expect(suite.shards).toBe(3);
+        expect(suite.command).toContain('{specs}');
+        expect(suite.command).not.toMatch(/--record|--parallel/);
+    });
+
+    it('leaves the recipe as the model wrote it when the workflow has no e2e job', async () => {
+        scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const r = await run({ ...FILES, '.github/workflows/ci.yml': 'jobs:\n  t:\n    steps:\n      - run: pnpm test\n' });
+        expect(r).toMatchObject({ status: 'submitted', recipe: GOOD });
+        expect(r).not.toHaveProperty('suiteInferred');
+    });
+});
 
 describe('authorRecipe on the harness', () => {
     it('reads, fixes what the checks refuse, and stops on the accepted recipe', async () => {
