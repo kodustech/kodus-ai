@@ -542,10 +542,15 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                             impact: `${side.what[0].toUpperCase()}${side.what.slice(1)} run on the fallback model.`,
                             fix: `Check the API key, model name and base URL of that model in the BYOK page (user menu > BYOK). Provider said: ${sideOutcome.error}`,
                         });
-                    } else if (
-                        sideOutcome.kind === 'untested' ||
-                        sideOutcome.kind === 'fallback_untested'
-                    ) {
+                    } else if (sideOutcome.kind === 'fallback_untested') {
+                        results.push({
+                            check: 'llm.task_model',
+                            status: 'unknown',
+                            scope,
+                            title: `The model routed to ${side.what} (${sideLabel}) did not answer a test request, and the doctor ran out of time before testing its fallback (${sideOutcome.fallback}).`,
+                            fix: `Check the API key, model name and base URL of that model in the BYOK page (user menu > BYOK). Provider said: ${sideOutcome.error}`,
+                        });
+                    } else if (sideOutcome.kind === 'untested') {
                         results.push({
                             check: 'llm.task_model',
                             status: 'unknown',

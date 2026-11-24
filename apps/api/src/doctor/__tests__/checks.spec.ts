@@ -141,7 +141,7 @@ const dataSource = (
 
 const llmDeps = (over: { byok?: any; fail?: Error } = {}) => ({
     getBYOKConfig: jest.fn(async () => over.byok ?? null),
-    complete: jest.fn(async () => {
+    complete: jest.fn(async (_params?: unknown) => {
         if (over.fail) {
             throw over.fail;
         }
@@ -1388,7 +1388,7 @@ describe('doctor checks — each condition in scope, one at a time', () => {
         });
 
         describe('BYOK fallback and the other tasks a review routes', () => {
-            const byok = (routing: any) => ({
+            const byok = (routing: any): any => ({
                 version: 2,
                 credentials: [
                     { id: 'c-oa', provider: 'openai', apiKey: 'enc-oa' },
@@ -1530,6 +1530,36 @@ describe('doctor checks — each condition in scope, one at a time', () => {
                     results.find((r) => r.check === 'llm.completion'),
                 ).toMatchObject({ status: 'unknown', blocking: true });
                 expect(deps.complete).toHaveBeenCalledTimes(1);
+            });
+
+            it('a side-task model that failed too late to test its fallback keeps the provider error', async () => {
+                let clock = 0;
+                const config = {
+                    ...byok({
+                        defaultModelId: 'm-A',
+                        fallbackModelId: 'm-B',
+                        taskOverrides: { kodyRulesReview: 'm-C' },
+                    }),
+                };
+                config.models = [
+                    ...config.models,
+                    { id: 'm-C', credentialId: 'c-oa', model: 'gpt-4.1-nano' },
+                ];
+                const deps = {
+                    ...llmDeps({ byok: config }),
+                    now: () => clock,
+                };
+                deps.complete.mockImplementation(async ({ slot }: any) => {
+                    if (slot?.model === 'gpt-4.1-nano') {
+                        clock = 60_000;
+                        throw new Error('gpt-4.1-nano: model_not_found');
+                    }
+                });
+                const results = await llmCheck(deps).run(ctx());
+                const line = results.find((r) => r.check === 'llm.task_model');
+                expect(line?.status).toBe('unknown');
+                expect(line?.title).toContain('its fallback');
+                expect(line?.fix).toContain('model_not_found');
             });
 
             it('a task routed to the review model itself is not probed twice', async () => {
