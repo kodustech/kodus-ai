@@ -5,11 +5,13 @@ import {
     balanceSpecs,
     type BaselineEvidence,
     type Classification,
+    BASELINE_MAX_COMMITS_BEHIND,
     classifyFailures,
     errorSignature,
     estimateDurations,
     estimateTotalMs,
     hostsToAsk,
+    needsMainRerun,
     orderBin,
     parseJUnit,
     parseMochawesome,
@@ -17,6 +19,7 @@ import {
     type Rerun,
     shardCount,
     spreadOnto,
+    suiteDigestOf,
     type SpecResult,
     type SpecStats,
     type SuiteFailure,
@@ -26,6 +29,7 @@ import {
 } from '@libs/runtime/suite';
 
 import { type DetachedOutcome, runDetached } from './detached-exec';
+import type { BaselineSpec, PgSuiteBaselines } from './pg-suite-baselines';
 import type { PgSuiteRuns, SuitePhase, SuiteRunState, SuiteSpecStatus } from './pg-suite-runs';
 import type { PgSuiteSpecStats } from './pg-suite-spec-stats';
 import type { SuiteShardHost } from '../../shared/persistence/suite-demand';
@@ -59,12 +63,17 @@ export interface SuiteInputs {
     config: SuiteConfig;
     /** The spec files this run executes, relative to `config.cwd` (the whole suite, or the selection). */
     specs: readonly SuiteSpecFile[];
-    /** Main commits the template is ahead of the PR's merge base (8.2); absent: 0. */
+    /** Main commits the template is ahead of the PR's merge base (8.2); absent: counted from `mainHistory`, else 0. */
     baseDrift?: number;
     /** Specs the PR's diff reaches (the coverage map, entry points): a pass on a main that is ahead only confirms a regression for these. */
     diffReachedSpecs?: readonly string[];
-    /** The baseline of the merge base, when one is usable (9.5). */
-    baseline?: BaselineEvidence;
+    /**
+     * The main branch's commits, its head first (`mainSha`), newest to oldest, at least as far back as the PR's merge base
+     * and the baseline window: how far main is ahead of the merge base (8.2) and how old a baseline is are counted in it.
+     */
+    mainHistory?: readonly string[];
+    /** The digest of the whole suite (the block and the full spec list); absent: of `config` and `specs`. A selection passes the whole suite's. */
+    suiteDigest?: string;
 }
 
 /** Whether the environment has a ready template to start a main host from, and a way to ask for a build (9.5). */
@@ -90,6 +99,8 @@ export interface SuiteEngineDeps {
     headroom?(): Promise<number>;
     /** Absent: a template is taken to be ready. */
     templates?: SuiteTemplates;
+    /** The baselines of main commits: a baseline run records one, a PR run reads the one of its merge base. Absent: none is kept or used. */
+    baselines?: Pick<PgSuiteBaselines, 'record' | 'findAmong'>;
 }
 
 /** How long the engine waits for the hosts it asked for before it goes on with the ones that came (design section 5). */
@@ -468,15 +479,30 @@ export class SuiteEngine {
         const testFailures = failures.filter((f) => f.kind === 'test');
         const plan = planReruns({ specsRun: ran, failures: testFailures });
         const rerunSpecs = new Set(plan.rerunSpecs);
+        const { baseline, baseDrift } = await this.baselineOf(ctx);
 
         let prRerun: Record<string, Rerun> = {};
         let main: Parameters<typeof classifyFailures>[0]['main'] = { state: 'ran', results: {} };
         if (rerunSpecs.size > 0) {
             const wanted = testFailures.filter((f) => rerunSpecs.has(f.spec));
-            // The PR re-run and the main re-run go at the same time (9.3).
-            const [pr, mainSide] = await Promise.all([this.prRerun(ctx, firstPass, [...rerunSpecs]), this.mainRerun(ctx, [...rerunSpecs])]);
-            prRerun = this.rerunsOf(wanted, pr.ran);
-            main = mainSide.state === 'ran' ? { state: 'ran', results: this.rerunsOf(wanted.filter((f) => prRerun[testKey(f.spec, f.title)]?.result === 'failed'), mainSide.ran, mainSide.ran.done.size === 0 && mainSide.ran.missing.size > 0) } : { state: mainSide.state };
+            const usable = !!baseline && baseline.exactMergeBase && baseline.digestMatches && baseline.commitsBehindMain <= BASELINE_MAX_COMMITS_BEHIND;
+            let mainSide: Awaited<ReturnType<SuiteEngine['mainRerun']>>;
+            let mainWanted = wanted;
+            if (usable) {
+                // A baseline that already says what the PR says saves the main run: the PR goes first, main only for the rest (8.1).
+                prRerun = this.rerunsOf(wanted, (await this.prRerun(ctx, firstPass, [...rerunSpecs])).ran);
+                mainWanted = wanted.filter((f) => prRerun[testKey(f.spec, f.title)]?.result === 'failed' && needsMainRerun(f, prRerun[testKey(f.spec, f.title)], baseline));
+                const specs = [...new Set(mainWanted.map((f) => f.spec))];
+                mainSide = specs.length > 0 ? await this.mainRerun(ctx, specs) : { state: 'ran', ran: { done: new Map(), missing: new Map() } };
+                if (specs.length === 0) mainWanted = [];
+            } else {
+                // The PR re-run and the main re-run go at the same time (9.3).
+                const [pr, m] = await Promise.all([this.prRerun(ctx, firstPass, [...rerunSpecs]), this.mainRerun(ctx, [...rerunSpecs])]);
+                prRerun = this.rerunsOf(wanted, pr.ran);
+                mainSide = m;
+                mainWanted = wanted.filter((f) => prRerun[testKey(f.spec, f.title)]?.result === 'failed');
+            }
+            main = mainSide.state === 'ran' ? { state: 'ran', results: this.rerunsOf(mainWanted, mainSide.ran, mainSide.ran.done.size === 0 && mainSide.ran.missing.size > 0) } : { state: mainSide.state };
         }
 
         const classification = classifyFailures({
@@ -485,13 +511,40 @@ export class SuiteEngine {
             prRerun,
             infraRerun,
             main,
-            baseDrift: inputs.baseDrift ?? 0,
+            baseDrift,
             diffReachedSpecs: inputs.diffReachedSpecs ?? [],
-            ...(inputs.baseline ? { baseline: inputs.baseline } : {}),
+            ...(baseline ? { baseline } : {}),
             notRunSpecs,
         });
         if (classification.requestTemplateBuild) await this.d.templates?.requestBuild?.(req.organizationId, req.environmentId).catch(() => undefined);
         return classification;
+    }
+
+    private digestOf(ctx: RunCtx): string {
+        return ctx.inputs.suiteDigest ?? suiteDigestOf(ctx.inputs.config, ctx.inputs.specs.map((s) => s.path));
+    }
+
+    /**
+     * The merge base's baseline as the classifier reads it (7.1, 9.5), and how far main is ahead of the merge base. The
+     * lookup is the merge base first, then its ancestors; the classifier decides whether what it found is evidence (only the
+     * exact merge base, fresh enough). Without a history the drift is what the request says.
+     */
+    private async baselineOf(ctx: RunCtx): Promise<{ baseline?: BaselineEvidence; baseDrift: number }> {
+        const { req, inputs } = ctx;
+        const history = inputs.mainHistory;
+        const at = history && req.mergeBase ? history.indexOf(req.mergeBase) : -1;
+        // A merge base older than the history we hold: main is further ahead than we can count.
+        const baseDrift = inputs.baseDrift ?? (history && req.mergeBase ? (at >= 0 ? at : history.length) : 0);
+        if (!this.d.baselines || !history || at < 0) return { baseDrift };
+        const found = await this.d.baselines.findAmong(req.organizationId, req.environmentId, this.digestOf(ctx), history.slice(at));
+        if (!found) return { baseDrift };
+        const specs: Record<string, { status: 'passed' | 'failed'; errorSignature?: string }> = {};
+        // A skipped spec says nothing about whether it passes.
+        for (const [spec, b] of Object.entries(found.specs)) if (b.status !== 'skipped') specs[spec] = { status: b.status, ...(b.errorSignature ? { errorSignature: b.errorSignature } : {}) };
+        return {
+            baseDrift,
+            baseline: { sha: found.mainSha, exactMergeBase: found.mainSha === req.mergeBase, commitsBehindMain: history.indexOf(found.mainSha), digestMatches: found.suiteDigest === this.digestOf(ctx), specs },
+        };
     }
 
     /** The specs that never reported, once more, on a host of their own that holds the PR build. */
@@ -567,9 +620,28 @@ export class SuiteEngine {
             ctx.sha,
             firstPass.filter((s) => s.result).map((s) => ({ spec: s.spec, status: s.result!.status, durationMs: s.result!.durationMs })),
         );
+        if (ctx.req.mode === 'baseline') await this.recordBaseline(ctx, firstPass);
         const state = this.stateOf(ctx, firstPass, classification);
         await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, state, new Date(this.d.clock.now()));
         return { suiteRunId: ctx.req.suiteRunId, state, replayed: false, firstPass, ...(classification ? { classification } : {}) };
+    }
+
+    /** The whole suite on main, per spec as it ended. Complete only when every spec reported; an incomplete one is no baseline for a lookup. */
+    private async recordBaseline(ctx: RunCtx, firstPass: readonly FirstPassSpec[]): Promise<void> {
+        if (!this.d.baselines) return;
+        const specs: Record<string, BaselineSpec> = {};
+        for (const s of firstPass) {
+            if (s.result) specs[s.spec] = { status: s.result.status, durationMs: s.result.durationMs, ...(s.result.errorSignature ? { errorSignature: s.result.errorSignature } : {}) };
+        }
+        await this.d.baselines.record({
+            organizationId: ctx.req.organizationId,
+            environmentId: ctx.req.environmentId,
+            mainSha: ctx.req.mainSha,
+            suiteDigest: this.digestOf(ctx),
+            status: firstPass.length > 0 && firstPass.every((s) => s.result) ? 'complete' : 'incomplete',
+            specs,
+            finishedAt: new Date(this.d.clock.now()),
+        });
     }
 
     /**

@@ -23,6 +23,7 @@ The environment template on boat (docs/runtime/host-providers.md §8.2): a provi
 - The cell base (`kodus-cell-<release>-<backend>`) is made outside runtime-fleet, once per cell release: the host recipe on a boat sandbox created with no env, `cell preflight` passing, never enrolled, saved; then named in the pool file and applied with `runtime-fleet apply`.
 
 - `template-rebuild.ts` `TemplateRebuildPass`: the fleet cannot hear a setup finish (it runs in runtime-worker), so every minute, under the lock `fleet.template_rebuild`, it reads the active default-branch setups of the last 24 h (`setup-candidates-store.ts` `PgSetupCandidates`), skips template builds' own setups (`template:` key), and calls `onSetupFinished` for those whose fingerprint no template holds on an admitting boat perRun pool (`TemplateStore.holds`: ready, building, or failed in the last 30 min).
+- A template that turns ready (`TemplateBuildTrigger`, a build that ended `ok` and was not `reused`) asks for a baseline suite run of the environment's main commit (`SuiteBaselineRequester`, `PgSuiteBaselineRequests` in `shared/persistence`), only when the setup record's recipe declares a `suite` whose `baseline` is not `false` and names the commit. A request that cannot be recorded is logged (`template.baseline_request_failed`) and never undoes the template. The fleet only records the request; the product turns the queued ones into `RuntimeSuiteRequested`.
 - A build's failure cause is a short code (`causeOf`): the hub client throws `seal_refused_<status>`, `connection_refused_<status>`, `hub_timeout`, `hub_unreachable`, `hub_bad_answer`; the sealer `seal_timeout`.
 
 ## Where new code goes
@@ -43,6 +44,7 @@ Imports these Runtime modules:
 - [`apps/runtime/src/shared/persistence`](../../shared/persistence/AGENTS.md)
 - [`libs/runtime/fleet`](../../../../../libs/runtime/fleet/AGENTS.md)
 - [`libs/runtime/placement`](../../../../../libs/runtime/placement/AGENTS.md)
+- [`libs/runtime/protocol`](../../../../../libs/runtime/protocol/AGENTS.md)
 - [`libs/runtime/run`](../../../../../libs/runtime/run/AGENTS.md)
 - [`libs/runtime/run/adapters`](../../../../../libs/runtime/run/adapters/AGENTS.md)
 

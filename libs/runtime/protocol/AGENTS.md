@@ -47,6 +47,7 @@ Imports these Runtime modules:
 Imported by:
 
 - [`apps/runtime/src/fake-cell`](../../../apps/runtime/src/fake-cell/AGENTS.md)
+- [`apps/runtime/src/fleet/template`](../../../apps/runtime/src/fleet/template/AGENTS.md)
 - [`apps/runtime/src/hub`](../../../apps/runtime/src/hub/AGENTS.md)
 - [`apps/runtime/src/hub/claims`](../../../apps/runtime/src/hub/claims/AGENTS.md)
 - [`apps/runtime/src/hub/gateway`](../../../apps/runtime/src/hub/gateway/AGENTS.md)

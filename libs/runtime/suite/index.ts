@@ -15,3 +15,5 @@ export { FAIL_FAST_BATCH_SHARE, FAIL_FAST_MIN_BATCH, FAIL_FAST_RATIO, failFast, 
 export type { FailFastDecision, FailFastInput, OrderContext } from './order';
 export { hostsToAsk, spreadOnto } from './hosts';
 export type { ShardSpecs } from './hosts';
+export { suiteDigestOf } from './digest';
+export type { DigestedSuite } from './digest';

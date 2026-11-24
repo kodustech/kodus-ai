@@ -26,6 +26,7 @@ import { PgSetupCandidates } from './template/setup-candidates-store';
 import { TemplateRebuildPass } from './template/template-rebuild';
 import { PgTemplateSetupRequester } from './template/pg-template-setup-requester';
 import { PgTemplateStore, StoreTemplateResolver } from './template/template-store';
+import { PgSuiteBaselineRequests } from '../shared/persistence/suite-baseline-requests';
 
 // runtime-fleet (docs/runtime/host-providers.md §4.1): the reconcile loop and
 // the host workflows. It holds the provider credentials and nothing else of
@@ -106,6 +107,8 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
                 },
                 boatPoolsOf,
                 build: (req) => buildEnvironmentTemplate(req, { store: templateStore, provider: boat, setupHosts, cellBase: cellBaseOf(req.pool.hostClass) ?? '', poll }),
+                // A template that turns ready asks for a baseline of its main commit (e2e suites, section 2.1).
+                baselines: new PgSuiteBaselineRequests(this.pool),
                 log,
             });
             templates = new TriggeringTemplateResolver(templates, trigger);

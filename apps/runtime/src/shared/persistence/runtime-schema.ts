@@ -1184,6 +1184,27 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
             PRIMARY KEY (environment_id, spec)
         );`,
     },
+    {
+        version: 52,
+        name: 'the baseline suite runs a template turning ready asks for',
+        // docs/runtime/e2e-suites.md section 2.1. The fleet records the request (it holds no repository credentials); the
+        // product reads the queued ones and issues RuntimeSuiteRequested with `suite_run_id`, so a redelivery finds one run.
+        // One row per (environment, main commit); at most one queued per environment is kept by the writer.
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_suite_baseline_requests (
+            environment_id  text NOT NULL,
+            main_sha        text NOT NULL,
+            organization_id text NOT NULL,
+            repository_id   text NOT NULL,
+            fingerprint     text NOT NULL,
+            suite_run_id    text NOT NULL,
+            state           text NOT NULL DEFAULT 'queued',
+            requested_at    timestamptz NOT NULL DEFAULT now(),
+            started_at      timestamptz,
+            updated_at      timestamptz NOT NULL DEFAULT now(),
+            PRIMARY KEY (environment_id, main_sha)
+        );
+        CREATE INDEX IF NOT EXISTS runtime_suite_baseline_requests_queued_idx ON runtime.runtime_suite_baseline_requests (requested_at) WHERE state = 'queued';`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */
@@ -1318,6 +1339,8 @@ export async function applyRetention(pool: Pick<Pool, 'query'>, days = 30, batch
         ['runtime_suite_results', older('recorded_at'), days],
         ['runtime_suite_shards', older('updated_at'), days],
         ['runtime_suite_runs', `finished_at IS NOT NULL AND ${older('updated_at')}`, days],
+        // A baseline request that started is history once its run's rows are gone.
+        ['runtime_suite_baseline_requests', `state = 'started' AND ${older('updated_at')}`, days],
     ] as const) {
         removed += await deleteInBatches(pool, table, where, value, batch);
     }

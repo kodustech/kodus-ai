@@ -1,4 +1,5 @@
 import type { HostPool } from '@libs/runtime/fleet/pool';
+import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import type { EnvironmentSetupRecord } from '@libs/runtime/run';
 
 import type { TemplateResolver } from '../per-run-host';
@@ -16,6 +17,15 @@ export interface TemplateSetupRequester {
     request(req: { organizationId: string; environmentId: string; poolId: string; fingerprint: string; key: string; boundKey: string }): Promise<void>;
 }
 
+/**
+ * Records that an environment's main commit wants a baseline suite run (docs/runtime/e2e-suites.md section 2.1). The
+ * fleet process holds no repository credentials, so it cannot produce the command itself: the product reads the
+ * recorded requests and issues `RuntimeSuiteRequested`, as it does for a template's setup.
+ */
+export interface SuiteBaselineRequester {
+    request(req: { organizationId: string; environmentId: string; repositoryId: string; mainSha: string; fingerprint: string }): Promise<void>;
+}
+
 export interface TemplateTriggerDeps {
     store: Pick<TemplateStore, 'find' | 'readyName'>;
     /** The environment's latest setup record. */
@@ -25,7 +35,17 @@ export interface TemplateTriggerDeps {
     /** The boat perRun pools that may build templates for the org. */
     boatPoolsOf(organizationId: string): Promise<Array<{ poolId: string; pool: HostPool }>>;
     build(req: BuildTemplateRequest): Promise<BuildTemplateResult>;
+    /** Absent: no baseline is asked for when a template turns ready. */
+    baselines?: SuiteBaselineRequester;
     log?(msg: string, fields: Record<string, unknown>): void;
+}
+
+/** The environment's own recipe declares a suite whose baseline is not turned off (`suite.baseline: false`); a recipe that does not parse declares none. */
+function wantsBaseline(rec: EnvironmentSetupRecord): boolean {
+    const content = rec.recipe?.content;
+    if (!content) return false;
+    const parsed = parseRecipe(content);
+    return parsed.ok && !!parsed.recipe.suite && parsed.recipe.suite.baseline !== false;
 }
 
 export class TemplateBuildTrigger {
@@ -55,6 +75,16 @@ export class TemplateBuildTrigger {
         }
     }
 
+    private async requestBaseline(req: Parameters<SuiteBaselineRequester['request']>[0]): Promise<void> {
+        if (!this.d.baselines) return;
+        try {
+            await this.d.baselines.request(req);
+        } catch (e) {
+            // The template stays; the next main commit asks again.
+            this.d.log?.('template.baseline_request_failed', { environmentId: req.environmentId, error: (e as Error).message });
+        }
+    }
+
     private async start(organizationId: string, environmentId: string, poolId: string, pool: HostPool): Promise<void> {
         const key = `${organizationId}/${environmentId}`;
         if (this.inflight.has(key)) return;
@@ -66,7 +96,11 @@ export class TemplateBuildTrigger {
         this.inflight.add(key);
         void this.d
             .build({ organizationId, environmentId, poolId, pool, fingerprint })
-            .then((r) => this.d.log?.('template.built', { environmentId, poolId, ok: r.ok, ...(r.ok === false ? { reason: r.reason, ...(r.cause ? { cause: r.cause } : {}) } : {}) }))
+            .then(async (r) => {
+                this.d.log?.('template.built', { environmentId, poolId, ok: r.ok, ...(r.ok === false ? { reason: r.reason, ...(r.cause ? { cause: r.cause } : {}) } : {}) });
+                // A template that turned ready now (not one that was already there) holds a main commit nobody ran the suite on.
+                if (r.ok && !r.reused && rec.sha && wantsBaseline(rec)) await this.requestBaseline({ organizationId, environmentId, repositoryId: rec.repositoryId, mainSha: rec.sha, fingerprint });
+            })
             .catch((e) => this.d.log?.('template.build_error', { environmentId, poolId, error: (e as Error).message }))
             .finally(() => this.inflight.delete(key));
     }

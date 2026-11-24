@@ -28,6 +28,72 @@ function world(rec: EnvironmentSetupRecord | null = record()) {
     return { store, builds, trigger, release };
 }
 
+// docs/runtime/e2e-suites.md section 2.1: when a template turns ready, the environment's main commit gets a baseline
+// suite run. The fleet only records the request (it holds no repository credentials); the product issues the command.
+describe('when a template turns ready', () => {
+    const recipeOf = (suite: string): Partial<EnvironmentSetupRecord> => ({ recipe: { path: '.kodus/workspace.yaml', sha: 'd'.repeat(40), state: 'found', content: `version: 1\n${suite}` } });
+    const SUITE = 'suite:\n  runner: cypress\n  command: npx cypress run --spec "{specs}"\n  specs: "cypress/e2e/**/*.cy.ts"\n';
+    const withSuite = (over: Partial<EnvironmentSetupRecord> = {}) => record({ sha: 'd'.repeat(40), repositoryId: 'repo-9', ...recipeOf(SUITE), ...over });
+    function readyWorld(result: { ok: true; name: string; reused: boolean } | { ok: false; reason: 'bake_failed' }, rec: EnvironmentSetupRecord = withSuite()) {
+        const asked: any[] = [];
+        let fail = false;
+        const logs: string[] = [];
+        const trigger = new TemplateBuildTrigger({
+            store: new InMemoryTemplateStore(),
+            setups: { get: async () => rec },
+            poolOf: async (poolId) => ({ poolId, pool }),
+            boatPoolsOf: async () => [{ poolId: 'p', pool }],
+            build: async () => result as any,
+            baselines: { request: async (r) => (fail ? Promise.reject(new Error('db down')) : void asked.push(r)) },
+            log: (m) => void logs.push(m),
+        });
+        return { asked, trigger, logs, breakStore: () => (fail = true) };
+    }
+    const settle = () => new Promise((r) => setImmediate(r));
+
+    it("asks for a baseline of the environment's main commit, of the fingerprint the template holds", async () => {
+        const w = readyWorld({ ok: true, name: 'n', reused: false });
+        await w.trigger.onSetupFinished(withSuite());
+        await settle();
+        expect(w.asked).toEqual([{ organizationId: 'org-1', environmentId: 'env-1', repositoryId: 'repo-9', mainSha: 'd'.repeat(40), fingerprint: FP }]);
+    });
+
+    it('asks for nothing when the template was already there, or the build failed', async () => {
+        const reused = readyWorld({ ok: true, name: 'n', reused: true });
+        await reused.trigger.onSetupFinished(record());
+        const failed = readyWorld({ ok: false, reason: 'bake_failed' });
+        await failed.trigger.onSetupFinished(record());
+        await settle();
+        expect([...reused.asked, ...failed.asked]).toEqual([]);
+    });
+
+    it('never lets a request that could not be recorded undo the template, and says so', async () => {
+        const w = readyWorld({ ok: true, name: 'n', reused: false });
+        w.breakStore();
+        await w.trigger.onSetupFinished(withSuite());
+        await settle();
+        expect(w.logs).toContain('template.baseline_request_failed');
+    });
+
+    it('asks for nothing when the setup does not name the main commit', async () => {
+        const w = readyWorld({ ok: true, name: 'n', reused: false }, withSuite({ sha: undefined }));
+        await w.trigger.onSetupFinished(withSuite());
+        await settle();
+        expect(w.asked).toEqual([]);
+    });
+
+    it('asks for nothing for an environment whose recipe declares no suite, or one that turned its baseline off', async () => {
+        const none = readyWorld({ ok: true, name: 'n', reused: false }, withSuite({ recipe: { path: 'p', sha: 'd'.repeat(40), state: 'found', content: 'version: 1\n' } }));
+        await none.trigger.onSetupFinished(withSuite());
+        const off = readyWorld({ ok: true, name: 'n', reused: false }, withSuite(recipeOf(`${SUITE}  baseline: false\n`)));
+        await off.trigger.onSetupFinished(withSuite());
+        const broken = readyWorld({ ok: true, name: 'n', reused: false }, withSuite(recipeOf('suite: {')));
+        await broken.trigger.onSetupFinished(withSuite());
+        await settle();
+        expect([...none.asked, ...off.asked, ...broken.asked]).toEqual([]);
+    });
+});
+
 describe('when an environment template is built', () => {
     it('starts one build, without waiting for it, when a Run has demand and the environment has no ready template', async () => {
         const w = world();

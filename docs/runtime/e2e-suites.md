@@ -130,6 +130,7 @@ disk). A host boots in 10 to 20 s with main's build ready (`host-providers.md` 8
   shard gets `suite:<org>/<suiteRunId>/<shard>`, with the same one-to-one host lifecycle (`runPerRunHost`,
   `per-run-host.ts:105`). A demand row per shard (`runtime_pool_demand`), N rows per suite run, so N hosts start in
   parallel. The shard host is kept for the re-run (step 6 of 2.2) and ends with the suite run.
+- **Extra hosts of a run (built).** Beside the plan's shards `0..N-1` a suite run has at most two more hosts, both demand rows of the same run so `PgSuiteDemand.status` and `end` cover them: shard index 62, the fresh host an infra or unrun spec is retried on (PR side), and shard index 63, the template host of the main re-run (`base` side at the template's sha). The main host's bound key is therefore `suite:<org>/<suiteRun>/63`, not `template:<org>/<env>` (that key serves only the template's own setup and takes nothing else); the fleet makes the host from the environment's template because it resolves a template by environment whatever the bound key.
 - **Template.** `TemplateResolver.resolve` returns the environment's ready template; without one the host boots from
   the cell base and the shard builds cold (section 12). The demand also triggers a template build
   (`TemplateBuildTrigger.onDemand`, `template-trigger.ts:34`), so the next suite run is warm.

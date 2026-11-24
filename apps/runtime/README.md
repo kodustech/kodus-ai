@@ -149,6 +149,7 @@ The Runtime has its own Postgres database, migrated by `ensureRuntimeSchema` (`s
 | `runtime_runs` | Worker, from the DBOS step of each transition (`libs/runtime/run/adapters/pg-run-projection.store.ts`): the Run projection. Read by the API and the product worker with the read-only role. |
 | `runtime_environment_setups`, `runtime_lessons` | Worker (setup workflow, learn loop, an admin's promote or retire): the latest setup of each environment and the lessons. Read by the API with the read-only role. |
 | `runtime_suite_runs`, `runtime_suite_shards`, `runtime_suite_results`, `runtime_suite_baselines`, `runtime_suite_spec_stats` | Worker (`worker/suite`): the e2e suite's runs, per-spec results, main baselines and spec durations. Read by the API with the read-only role. |
+| `runtime_suite_baseline_requests` | Fleet (`fleet/template`, when a template turns ready): the baseline suite run an environment's main commit wants, one queued per environment. The product reads it with the read-only role and issues the command. |
 | DBOS system tables | DBOS, inside the worker. |
 
 The Runtime uses no Mongo. The projection write is not in the same transaction as the DBOS step's checkpoint: a step (`DBOS.runStep`) also calls the hub over HTTP, and DBOS records its output on its own connection after the step returns. The write is an idempotent merge, so a step replayed after a crash writes the same fields again.

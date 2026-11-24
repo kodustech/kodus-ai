@@ -32,7 +32,9 @@ BEGIN
       'runtime_kept_check_results',
       -- The e2e suite's runs, shards, results, baselines and spec durations (v51; docs/runtime/e2e-suites.md): the suite
       -- page and the environment's suite settings. Results hold redacted errors cut to the evidence limits, never a secret.
-      'runtime_suite_runs', 'runtime_suite_shards', 'runtime_suite_results', 'runtime_suite_baselines', 'runtime_suite_spec_stats'
+      'runtime_suite_runs', 'runtime_suite_shards', 'runtime_suite_results', 'runtime_suite_baselines', 'runtime_suite_spec_stats',
+      -- The baseline suite runs a template turning ready asks for (v52): the product reads the queued ones and issues the command.
+      'runtime_suite_baseline_requests'
     ] LOOP
       IF to_regclass(format('runtime.%I', t)) IS NOT NULL THEN
         EXECUTE format('GRANT SELECT ON runtime.%I TO kodus_runtime_reader', t);
