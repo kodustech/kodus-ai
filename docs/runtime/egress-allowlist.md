@@ -785,10 +785,8 @@ How a build or recipe uses it.
   `-gvisor-mirror-artifacts` to pass the arg.
 - MongoDB over the mirror: the mirror is `http://`, and `mongodb-memory-server` requests with `https` unless
   `MONGOMS_USE_HTTP=1` is set. A step that runs it sets that variable together with `MONGOMS_DOWNLOAD_MIRROR`.
-  **Open gap**: the build-arg list (`mirrorBuildArgs.artifacts`) carries only the mirror variable, not
-  `MONGOMS_USE_HTTP`, so a build-time `mongodb-memory-server` postinstall over the mirror fails the TLS handshake until
-  the Dockerfile sets `ENV MONGOMS_USE_HTTP=1` itself or the list gains that name (a change of `egress-lists.json` in
-  both copies and of `MIRROR_BUILD_ARGS`).
+  The cell passes `MONGOMS_USE_HTTP=1` with the mirror variable (`buildmirror.Mirror.Args`, `mirrorBuildArgs.artifacts` in both
+  copies of `egress-lists.json`), and a Dockerfile Kody writes declares it, so a build-time postinstall works over the mirror.
 
 Not covered, on purpose: any other file of those hosts (other emulator buckets and the Data Connect macOS and Windows
 binaries, Prisma's non-engine downloads and `.sig` files, MongoDB tools, `.sha256` files and non-Linux builds), and every
