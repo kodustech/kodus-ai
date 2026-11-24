@@ -148,3 +148,56 @@ func hostOf(raw string) string {
 	}
 	return ""
 }
+
+// DeclareArgs is a Dockerfile with ARG name declared in each stage, right
+// after its FROM (and the FROM's continuation lines), for every name the
+// stage does not declare yet. A build arg reaches a RUN only when its stage
+// declares it, and a team's own Dockerfile does not declare the mirror's: so
+// its prisma generate, mongodb-memory-server or Cypress install went to the
+// publisher and was refused. An ARG with no value declares nothing else: it
+// takes the value the cell passes. The text is otherwise unchanged.
+func DeclareArgs(dockerfile []byte, names []string) []byte {
+	if len(names) == 0 {
+		return dockerfile
+	}
+	lines := strings.Split(string(dockerfile), "\n")
+	isFrom := func(l string) bool {
+		f := strings.Fields(l)
+		return len(f) > 0 && strings.EqualFold(f[0], "FROM")
+	}
+	declared := func(stage []string) map[string]bool {
+		out := map[string]bool{}
+		for _, l := range stage {
+			f := strings.Fields(l)
+			if len(f) < 2 || !strings.EqualFold(f[0], "ARG") {
+				continue
+			}
+			for _, a := range f[1:] {
+				out[strings.SplitN(a, "=", 2)[0]] = true
+			}
+		}
+		return out
+	}
+	var out []string
+	for i := 0; i < len(lines); i++ {
+		out = append(out, lines[i])
+		if !isFrom(lines[i]) {
+			continue
+		}
+		for strings.HasSuffix(strings.TrimRight(lines[i], " \t\r"), "\\") && i+1 < len(lines) {
+			i++
+			out = append(out, lines[i])
+		}
+		end := i + 1
+		for end < len(lines) && !isFrom(lines[end]) {
+			end++
+		}
+		have := declared(lines[i+1 : end])
+		for _, n := range names {
+			if !have[n] {
+				out = append(out, "ARG "+n)
+			}
+		}
+	}
+	return []byte(strings.Join(out, "\n"))
+}

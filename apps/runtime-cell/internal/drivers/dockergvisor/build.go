@@ -262,9 +262,13 @@ func (d *Driver) buildRun(ctx context.Context, ref driver.MachineRef, b sandbox.
 		return dockercli.BuildRun{}, "", err
 	}
 	mem, cpus := d.limits(ref.MachineID)
+	dockerfileDir, err := declaredDockerfile(b, args, out)
+	if err != nil {
+		return dockercli.BuildRun{}, "", err
+	}
 	run := dockercli.BuildRun{
-		CgroupParent: parent,
-		Image:        d.cfg.BuilderImage, Runtime: d.cfg.Runtime, Network: network, Address: builderAddress(subnet).String(), Resolv: resolv,
+		CgroupParent: parent, DockerfileDir: dockerfileDir,
+		Image: d.cfg.BuilderImage, Runtime: d.cfg.Runtime, Network: network, Address: builderAddress(subnet).String(), Resolv: resolv,
 		Context: b.Context, Dockerfile: b.Dockerfile, Target: b.Target, Args: args, Tag: tag, Out: out,
 		PidsLimit: d.cfg.PidsLimit, MemLimit: mem, CPUs: cpus, RegistryMirror: d.cfg.MirrorRegistry, DiskSize: d.cfg.ContainerDiskSize,
 		Labels: toLabels(map[string]string{driver.TagCell: d.cfg.CellID, driver.TagClaim: ref.Tags[driver.TagClaim], driver.TagHardExpires: ref.Tags[driver.TagHardExpires]}),
@@ -274,6 +278,48 @@ func (d *Driver) buildRun(ctx context.Context, ref driver.MachineRef, b sandbox.
 		run.CABundle, run.Secrets = d.cfg.Trust.Bundle, askedSecrets(secrets, b.Secrets)
 	}
 	return run, mem, nil
+}
+
+// dockerfileSuffix names the directory beside a build's out that holds its
+// Dockerfile with the mirror's build args declared (declaredDockerfile).
+const dockerfileSuffix = ".dockerfile"
+
+// declaredDockerfile writes the build's Dockerfile with the mirror's build
+// args declared in every stage (buildmirror.DeclareArgs) beside out, and
+// returns its directory: a team's own Dockerfile then reaches the mirror's
+// Prisma engines, MongoDB binaries and Cypress app as Kody's does. Empty when
+// the cell adds no arg, or the Dockerfile is not a plain file of the context
+// (the build then reads the context's, as before).
+func declaredDockerfile(b sandbox.Build, args map[string]string, out string) (string, error) {
+	var names []string
+	for k := range args {
+		if _, own := b.Args[k]; !own {
+			names = append(names, k)
+		}
+	}
+	if len(names) == 0 || b.Dockerfile == "" || filepath.IsAbs(b.Dockerfile) || strings.Contains(b.Dockerfile, "..") {
+		return "", nil
+	}
+	sort.Strings(names)
+	src := filepath.Join(b.Context, b.Dockerfile)
+	if fi, err := os.Lstat(src); err != nil || !fi.Mode().IsRegular() || fi.Size() > 1<<20 {
+		return "", nil
+	}
+	text, err := os.ReadFile(src)
+	if err != nil {
+		return "", nil
+	}
+	dir := out + dockerfileSuffix
+	if err := os.RemoveAll(dir); err != nil {
+		return "", fmt.Errorf("dockergvisor: build %s: %w", b.Service, err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("dockergvisor: build %s: %w", b.Service, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, filepath.Base(b.Dockerfile)), buildmirror.DeclareArgs(text, names), 0o644); err != nil {
+		return "", fmt.Errorf("dockergvisor: build %s: %w", b.Service, err)
+	}
+	return dir, nil
 }
 
 // askedSecrets are the claim's secrets a build asked for (sandbox.Build
@@ -455,6 +501,7 @@ func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sa
 	defer func() {
 		at := d.clock.Now()
 		_ = os.RemoveAll(out)
+		_ = os.RemoveAll(out + dockerfileSuffix)
 		*late = append(*late, since(PhaseCleanOut, at))
 	}()
 	// The registry path (registry.go): the build pushes to a registry of its

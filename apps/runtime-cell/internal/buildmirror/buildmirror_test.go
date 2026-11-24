@@ -102,3 +102,20 @@ func TestTheRegistryConfigPullsDockerHubThroughTheMirrorOverHTTP(t *testing.T) {
 		t.Fatal("a value that breaks out of the TOML string was taken")
 	}
 }
+
+// A team's own Dockerfile declares none of the mirror's args, so its prisma generate went to binaries.prisma.sh and was
+// refused (a synthetic monorepo on dev, 24/11): every stage gets the ones it lacks, after its FROM, and nothing else moves.
+func TestDeclareArgsAddsTheMissingMirrorArgsToEveryStage(t *testing.T) {
+	in := "# syntax=docker/dockerfile:1\nFROM node:22 AS deps\nARG CI\nRUN npm ci\n\nFROM node:22-slim \\\n    AS run\nCOPY --from=deps /app /app\n"
+	got := string(DeclareArgs([]byte(in), []string{"CI", "PRISMA_ENGINES_MIRROR"}))
+	want := "# syntax=docker/dockerfile:1\nFROM node:22 AS deps\nARG PRISMA_ENGINES_MIRROR\nARG CI\nRUN npm ci\n\nFROM node:22-slim \\\n    AS run\nARG CI\nARG PRISMA_ENGINES_MIRROR\nCOPY --from=deps /app /app\n"
+	if got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+	if string(DeclareArgs([]byte(in), nil)) != in {
+		t.Fatal("no names changed the file")
+	}
+	if got := string(DeclareArgs([]byte("FROM scratch\nARG PRISMA_ENGINES_MIRROR=x\n"), []string{"PRISMA_ENGINES_MIRROR"})); got != "FROM scratch\nARG PRISMA_ENGINES_MIRROR=x\n" {
+		t.Fatalf("a stage's own declaration was doubled: %q", got)
+	}
+}

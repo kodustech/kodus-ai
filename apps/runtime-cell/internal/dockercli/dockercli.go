@@ -805,7 +805,12 @@ type BuildRun struct {
 	// CgroupParent places the builder under the claim's aggregate budget.
 	CgroupParent                string
 	Context, Dockerfile, Target string
-	Args                        map[string]string
+	// DockerfileDir, when set, holds the Dockerfile the build reads instead of
+	// the context's (named filepath.Base(Dockerfile)): the context's with the
+	// mirror's build args declared (buildmirror.DeclareArgs). The context stays
+	// as the checkout has it.
+	DockerfileDir string
+	Args          map[string]string
 	// Tag names the image in the tarball; Out is a directory the builder's
 	// user (uid 1000) can write.
 	Tag, Out string
@@ -993,8 +998,13 @@ func (c CLI) RunBuild(ctx context.Context, b BuildRun) error {
 		args = append(args, "--cpus", b.CPUs)
 	}
 	args = append(args, labelArgs(b.Labels)...)
+	dockerfileDir, filename := "/ctx", b.Dockerfile
+	if b.DockerfileDir != "" {
+		args = append(args, "-v", b.DockerfileDir+":/dockerfile:ro")
+		dockerfileDir, filename = "/dockerfile", filepath.Base(b.Dockerfile)
+	}
 	args = append(args, "--entrypoint", "buildctl-daemonless.sh", b.Image, "build", "--progress", "plain", "--frontend", "dockerfile.v0",
-		"--local", "context=/ctx", "--local", "dockerfile=/ctx", "--opt", "filename="+b.Dockerfile)
+		"--local", "context=/ctx", "--local", "dockerfile="+dockerfileDir, "--opt", "filename="+filename)
 	if b.Target != "" {
 		args = append(args, "--opt", "target="+b.Target)
 	}
