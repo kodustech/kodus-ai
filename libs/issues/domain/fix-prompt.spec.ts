@@ -28,7 +28,7 @@ const scanFinding: FixPromptIssue = {
         ],
         reproduction: {
             path: 'src/orders/idor.repro.spec.ts',
-            content: 'it("reads another user\'s order", () => {});',
+            content: 'it("reads another user\'s order", async () => { expect(await read("b")).toBeDefined(); });',
             command: 'npx jest src/orders/idor.repro.spec.ts',
             executed: true,
             reproduced: true,
@@ -188,5 +188,59 @@ describe('fix prompt untrusted fields', () => {
     it('bounds a large model description before building the prompt', () => {
         const prompt = buildFixPrompt([{...scanFinding, description: 'a'.repeat(100_000)}]);
         expect(prompt.length).toBeLessThan(20_000);
+    });
+});
+
+describe('buildFixPrompt: what the scan could not settle', () => {
+    it('names the assumption the finding depends on', () => {
+        const prompt = buildFixPrompt([
+            {
+                ...scanFinding,
+                evidence: {
+                    ...scanFinding.evidence!,
+                    assumption: 'the orders API is reachable by other tenants',
+                },
+            },
+        ]);
+        expect(prompt).toContain('What the finding depends on');
+        expect(prompt).toContain('the orders API is reachable by other tenants');
+    });
+
+    it('says a test that could not run in the sandbox did not reproduce anything', () => {
+        const prompt = buildFixPrompt([
+            {
+                ...scanFinding,
+                evidence: {
+                    ...scanFinding.evidence!,
+                    reproduction: {
+                        ...scanFinding.evidence!.reproduction!,
+                        reproduced: undefined,
+                        inconclusive: true,
+                        exitCode: 127,
+                    },
+                },
+            },
+        ]);
+        expect(prompt).toContain('could not run in the isolated sandbox');
+        expect(prompt).not.toContain('exited successfully');
+    });
+
+    it('hands over no placeholder test', () => {
+        const prompt = buildFixPrompt([
+            {
+                ...scanFinding,
+                evidence: {
+                    ...scanFinding.evidence!,
+                    reproduction: {
+                        ...scanFinding.evidence!.reproduction!,
+                        content: 'PLACEHOLDER',
+                        reproduced: false,
+                    },
+                },
+            },
+        ]);
+        expect(prompt).not.toContain('Reproduction test path');
+        expect(prompt).not.toContain('PLACEHOLDER');
+        expect(prompt).toContain('Add or update a test');
     });
 });

@@ -51,8 +51,12 @@ export type IssueSecurityDetails = {
             executed: boolean;
             exitCode?: number;
             reproduced?: boolean;
+            /** It ran but could not exercise the code (missing dependency or runner). */
+            inconclusive?: boolean;
             output?: string;
         };
+        /** The deployment or configuration fact the finding depends on. */
+        assumption?: string;
     };
 };
 

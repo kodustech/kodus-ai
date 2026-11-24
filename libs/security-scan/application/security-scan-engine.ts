@@ -13,6 +13,7 @@ import { redactSecrets } from '@libs/llm/review-error-diagnostics';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { runWithUsageMeter, type UsageMeter } from '@libs/llm/usage-meter';
 import { cweFamily, cweId } from '@libs/issues/domain/scan-fingerprint';
+import { isPlaceholderTest } from '@libs/issues/domain/reproduction';
 import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
 import type {
     AgentLoopInput,
@@ -842,7 +843,11 @@ export class SecurityScanEngine {
                     vulnClass,
                 },
             });
-            return { keep: true, rationale: 'verification failed', judged: false };
+            return {
+                keep: true,
+                rationale: 'verification failed',
+                judged: false,
+            };
         }
     }
 
@@ -1659,7 +1664,12 @@ export class SecurityScanEngine {
                 organizationId: params.organizationId,
             });
             const path = repro.path.replace(/^\.?\//, '');
-            if (!path || path.includes('..') || !repro.command.trim()) {
+            if (
+                !path ||
+                path.includes('..') ||
+                !repro.command.trim() ||
+                isPlaceholderTest(repro.content, repro.command)
+            ) {
                 return;
             }
             const record: NonNullable<ScanFinding['reproduction']> = {
@@ -1800,17 +1810,23 @@ export class SecurityScanEngine {
             ) {
                 return;
             }
+            const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+            const inconclusive =
+                result.exitCode !== 0 &&
+                couldNotExercise(result.exitCode, output);
             Object.assign(record, {
                 executed: true,
                 exitCode: result.exitCode,
-                reproduced: result.exitCode === 0,
+                // A test that could not even start says nothing about the
+                // finding: neither reproduced nor refuted.
+                ...(inconclusive
+                    ? { inconclusive: true }
+                    : { reproduced: result.exitCode === 0 }),
                 // Shown to whoever reads the issue. The sandbox holds no
                 // credential the command can read (the clone token lives only
                 // in the fetch's environment, the proxy's config is root-only),
                 // so this is a floor under what a repository could plant.
-                output: redactSecrets(
-                    `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim(),
-                ).slice(-4000),
+                output: redactSecrets(output.trim()).slice(-4000),
             });
         } finally {
             // Nothing it started outlives the test: a process left behind
@@ -2094,6 +2110,18 @@ export class SecurityScanEngine {
         }
         return parts.join('\n\n').slice(0, 6000);
     }
+}
+
+/**
+ * A run that failed before it reached the code: the runner or a dependency
+ * is missing (the sandbox has no network to install one), or the command
+ * was cut by its timeout.
+ */
+export function couldNotExercise(exitCode: number, output: string): boolean {
+    if ([124, 126, 127].includes(exitCode)) return true;
+    return /EAI_AGAIN|ENOTFOUND|getaddrinfo|ECONNREFUSED registry|Cannot find module|ERR_MODULE_NOT_FOUND|ModuleNotFoundError|No module named|command not found|: not found|npm ERR! code E|ERR_PNPM_|Could not resolve dependencies|cannot find package|go: downloading|no required module provides package|Could not find artifact|ClassNotFoundException/i.test(
+        output,
+    );
 }
 
 /** "OWASP A03:2021 / CWE-89" is CWE-89: the number after "CWE", not the first. */

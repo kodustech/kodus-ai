@@ -243,7 +243,7 @@ function fakeLlm(plan?: any) {
         if (req.runName.endsWith('-repro')) {
             return {
                 path: 'src/orders/idor.repro.spec.ts',
-                content: 'test("idor", () => {})',
+                content: 'test("idor", async () => { expect(await readOrder("other-user")).toBeDefined(); })',
                 command: 'npx jest src/orders/idor.repro.spec.ts',
             };
         }
@@ -1113,7 +1113,7 @@ describe('SecurityScanEngine', () => {
             req.runName.endsWith('-repro')
                 ? {
                       path: 'src/orders/orders.service.ts',
-                      content: 'test("idor", () => {})',
+                      content: 'test("idor", async () => { expect(await readOrder("other-user")).toBeDefined(); })',
                       command: 'npx jest src/orders/orders.service.ts',
                   }
                 : answer(req),
@@ -3259,5 +3259,86 @@ describe('independent verification of each finding', () => {
 
         expect(result.findings).toHaveLength(1);
         expect(verify).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('reproduction results that say nothing about the finding', () => {
+    it('records a test that could not install its dependencies as inconclusive, not as not reproduced', async () => {
+        const sandbox = fakeSandbox('e2b');
+        const run = sandbox.run.getMockImplementation()!;
+        sandbox.run.mockImplementation(async (command: string) =>
+            command.includes('npx jest')
+                ? Promise.reject(
+                      Object.assign(new Error('exit status 1'), {
+                          exitCode: 1,
+                          stdout: '',
+                          stderr: 'npm ERR! code EAI_AGAIN\nnpm ERR! request to https://registry.npmjs.org/jest failed',
+                      }),
+                  )
+                : run(command),
+        );
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        const reproduction = result.findings[0].reproduction!;
+        expect(reproduction).toEqual(
+            expect.objectContaining({ executed: true, exitCode: 1, inconclusive: true }),
+        );
+        expect(reproduction.reproduced).toBeUndefined();
+    });
+
+    it('attaches no test when the model wrote a placeholder', async () => {
+        const llm = fakeLlm({ units: [] });
+        const base = llm.getMockImplementation()!;
+        llm.mockImplementation(async (req: any) =>
+            req.runName.endsWith('-repro')
+                ? { path: 'src/orders/x.spec.ts', content: 'PLACEHOLDER', command: 'npx jest src/orders/x.spec.ts' }
+                : base(req),
+        );
+        const sandbox = fakeSandbox('e2b');
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+            ),
+            llm,
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings[0].reproduction).toBeUndefined();
+        const commands = sandbox.run.mock.calls.map((c: any[]) => asRepro(c[0]) ?? (c[0] as string));
+        expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
+    });
+});
+
+describe('couldNotExercise', () => {
+    const { couldNotExercise } = jest.requireActual('./security-scan-engine');
+    it.each([
+        [127, 'sh: jest: not found'],
+        [124, ''],
+        [1, 'Error: Cannot find module "supertest"'],
+        [1, "ModuleNotFoundError: No module named 'flask'"],
+        [1, 'npm ERR! code EAI_AGAIN'],
+    ])('reads exit %s with %j as a test that never reached the code', (code, output) => {
+        expect(couldNotExercise(code, output)).toBe(true);
+    });
+    it('reads an assertion failure as a real outcome', () => {
+        expect(couldNotExercise(1, 'FAIL: expected 403, got 200')).toBe(false);
     });
 });

@@ -49,6 +49,8 @@ export type SecurityScan = {
         reopened: number;
         dismissed: number;
         resolved: number;
+        /** Findings the independent check refuted: never reported. */
+        refuted?: number;
     };
     modelName?: string;
     error?: string;

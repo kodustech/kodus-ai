@@ -110,13 +110,21 @@ export const IssueSecurityEvidence = ({
     const evidence = issue.security?.evidence;
     const attackPath = evidence?.attackPath ?? [];
     const reproduction = evidence?.reproduction;
+    const assumption = evidence?.assumption?.trim();
 
-    if (attackPath.length === 0 && !reproduction) return null;
+    if (attackPath.length === 0 && !reproduction && !assumption) return null;
 
     const status = reproduction ? reproductionStatus(reproduction) : undefined;
 
     return (
         <div className="mt-10 flex flex-col gap-10 px-6">
+            {assumption && (
+                <div className="flex flex-col gap-2 text-sm">
+                    <Heading variant="h3">Depends on</Heading>
+                    <p className="text-text-secondary">{assumption}</p>
+                </div>
+            )}
+
             {attackPath.length > 0 && (
                 <div>
                     <Heading variant="h3" className="mb-2">

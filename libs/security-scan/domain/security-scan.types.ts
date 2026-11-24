@@ -198,6 +198,11 @@ export interface ScanFinding {
         executed: boolean;
         exitCode?: number;
         reproduced?: boolean;
+        /**
+         * It ran but could not exercise the code: a dependency it could not
+         * install offline, a runner the sandbox lacks. No verdict either way.
+         */
+        inconclusive?: boolean;
         output?: string;
     };
 }

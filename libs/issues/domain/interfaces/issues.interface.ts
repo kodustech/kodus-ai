@@ -33,6 +33,11 @@ export interface IIssueReproduction {
     exitCode?: number;
     /** True only when the test ran and its result shows the vulnerability. */
     reproduced?: boolean;
+    /**
+     * It ran but could not exercise the code (a dependency it could not
+     * install offline, a missing runner): no verdict either way.
+     */
+    inconclusive?: boolean;
     output?: string;
 }
 
