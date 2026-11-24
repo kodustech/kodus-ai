@@ -46,6 +46,10 @@ import {
     PreviewAllRepositoriesUseCase,
     SetRepositorySelectionUseCase,
 } from '@libs/platform/application/use-cases/codeManagement/repository-selection.use-cases';
+import {
+    GetFixedEgressIpUseCase,
+    SetFixedEgressIpUseCase,
+} from '@libs/platform/application/use-cases/codeManagement/egress-fixed-ip.use-cases';
 import { SearchCodeManagementUsersUseCase } from '@libs/platform/application/use-cases/codeManagement/search-code-management-users.use-case';
 import { GetCurrentCodeManagementUserUseCase } from '@libs/platform/application/use-cases/codeManagement/get-current-code-management-user.use-case';
 import { FinishOnboardingDTO } from '@libs/platform/dtos/finish-onboarding.dto';
@@ -103,6 +107,8 @@ export class CodeManagementController {
         private readonly getRepositorySelectionUseCase: GetRepositorySelectionUseCase,
         private readonly setRepositorySelectionUseCase: SetRepositorySelectionUseCase,
         private readonly previewAllRepositoriesUseCase: PreviewAllRepositoriesUseCase,
+        private readonly getFixedEgressIpUseCase: GetFixedEgressIpUseCase,
+        private readonly setFixedEgressIpUseCase: SetFixedEgressIpUseCase,
     ) {}
 
     @Get('/area-risk-map')
@@ -321,6 +327,55 @@ export class CodeManagementController {
             },
             mode: body.mode,
             includeForksAndMirrors: body.includeForksAndMirrors,
+            actorUserId: this.request?.user?.uuid,
+        });
+    }
+
+    @Get('/fixed-egress-ip')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Get the fixed outbound IP setting',
+        description:
+            "Whether the team's review sandboxes reach its Git host from Kodus's fixed IP, whether its plan includes that, and the IP to allowlist.",
+    })
+    @ApiQuery({ name: 'teamId', required: true })
+    public async getFixedEgressIp(@Query() query: { teamId: string }) {
+        return this.getFixedEgressIpUseCase.execute({
+            organizationAndTeamData: {
+                organizationId: this.request?.user?.organization?.uuid,
+                teamId: query.teamId,
+            },
+        });
+    }
+
+    @Put('/fixed-egress-ip')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Turn the fixed outbound IP on or off',
+        description:
+            "Sends the team's review sandboxes to its Git host from Kodus's fixed IP, for hosts behind an IP allowlist. Turning it on needs the Teams or Enterprise plan (or a trial).",
+    })
+    public async setFixedEgressIp(
+        @Body() body: { teamId: string; enabled: boolean },
+    ) {
+        return this.setFixedEgressIpUseCase.execute({
+            organizationAndTeamData: {
+                organizationId: this.request?.user?.organization?.uuid,
+                teamId: body.teamId,
+            },
+            enabled: body.enabled,
             actorUserId: this.request?.user?.uuid,
         });
     }

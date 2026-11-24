@@ -4,6 +4,11 @@ import { CacheService } from '@libs/core/cache/cache.service';
 import { GlobalParametersKey } from '@libs/core/domain/enums/global-parameters-key.enum';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 
+import {
+    LICENSE_SERVICE_TOKEN,
+    SubscriptionStatus,
+} from '@libs/ee/license/interfaces/license.interface';
+import { FixedEgressIpPlanRequiredError } from '@libs/sandbox/domain/egress-plan';
 import { INTEGRATION_CONFIG_SERVICE_TOKEN } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { GLOBAL_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/global-parameters/contracts/global-parameters.service.contract';
 
@@ -17,6 +22,27 @@ const ORG = '11111111-1111-4111-8111-111111111111';
 const TEAM = '22222222-2222-4222-8222-222222222222';
 const INTEGRATION = '33333333-3333-4333-8333-333333333333';
 const scope = { organizationId: ORG, teamId: TEAM };
+
+const LICENSES = {
+    teams: {
+        valid: true,
+        subscriptionStatus: SubscriptionStatus.ACTIVE,
+        planType: 'teams_byok',
+    },
+    enterprise: {
+        valid: true,
+        subscriptionStatus: SubscriptionStatus.ACTIVE,
+        planType: 'enterprise',
+    },
+    trial: { valid: true, subscriptionStatus: SubscriptionStatus.TRIAL },
+    free: {
+        valid: true,
+        subscriptionStatus: SubscriptionStatus.ACTIVE,
+        planType: 'free_byok',
+    },
+    expired: { valid: false, subscriptionStatus: SubscriptionStatus.EXPIRED },
+    unavailable: { valid: false, unavailable: true },
+} as const;
 
 /** In-memory stand-in for the process cache (CacheService). */
 const memoryCache = () => {
@@ -39,6 +65,9 @@ const build = (opts: {
     rolloutError?: Error;
     writeError?: Error;
     repositoriesIntegration?: string | null;
+    /** The organization's license; absent = no license service. */
+    license?: keyof typeof LICENSES;
+    licenseError?: Error;
 }) => {
     const globalParameters = {
         findByKey: jest.fn(async (key: GlobalParametersKey) => {
@@ -72,12 +101,28 @@ const build = (opts: {
         }),
     };
     const cache = memoryCache();
+    const licenseService =
+        opts.license || opts.licenseError
+            ? {
+                  validateOrganizationLicense: jest.fn(async () => {
+                      if (opts.licenseError) throw opts.licenseError;
+                      return { ...LICENSES[opts.license!] };
+                  }),
+              }
+            : undefined;
     const service = new SandboxEgressPolicyService(
         globalParameters as any,
         integrationConfigs as any,
         cache as any,
+        licenseService as any,
     );
-    return { service, globalParameters, integrationConfigs, cache };
+    return {
+        service,
+        globalParameters,
+        integrationConfigs,
+        cache,
+        licenseService,
+    };
 };
 
 describe('SandboxEgressPolicyService.route', () => {
@@ -159,6 +204,172 @@ describe('SandboxEgressPolicyService.route', () => {
     });
 });
 
+describe('SandboxEgressPolicyService.route by plan', () => {
+    const marked = { required: true, source: 'manual' };
+    const on = { directByDefault: true };
+
+    it('sends a free organization direct even when its team has the fixed IP on', async () => {
+        const { service } = build({
+            rollout: on,
+            marker: marked,
+            license: 'free',
+        });
+        await expect(service.route(scope)).resolves.toBe('direct');
+    });
+
+    it('sends an organization whose subscription expired direct', async () => {
+        const { service } = build({
+            rollout: on,
+            marker: marked,
+            license: 'expired',
+        });
+        await expect(service.route(scope)).resolves.toBe('direct');
+    });
+
+    it('keeps the fixed IP for a team that turned it on, on Teams, Enterprise or a trial', async () => {
+        for (const license of ['teams', 'enterprise', 'trial'] as const) {
+            const { service } = build({ rollout: on, marker: marked, license });
+            await expect(service.route(scope)).resolves.toBe('fixed_ip');
+        }
+    });
+
+    it('sends a paying team that never turned the fixed IP on direct', async () => {
+        const { service } = build({ rollout: on, license: 'teams' });
+        await expect(service.route(scope)).resolves.toBe('direct');
+    });
+
+    it('keeps the team marker when billing cannot answer', async () => {
+        for (const opts of [
+            { license: 'unavailable' as const },
+            { licenseError: new Error('billing down') },
+        ]) {
+            const { service } = build({ rollout: on, marker: marked, ...opts });
+            await expect(service.route(scope)).resolves.toBe('fixed_ip');
+        }
+    });
+
+    it('asks billing once per organization and answers from cache after', async () => {
+        const { service, licenseService } = build({
+            rollout: on,
+            license: 'free',
+        });
+        await service.route(scope);
+        await service.route(scope);
+        expect(
+            licenseService!.validateOrganizationLicense,
+        ).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks billing again on the next sandbox when it could not answer', async () => {
+        const { service, licenseService } = build({
+            rollout: on,
+            license: 'unavailable',
+        });
+        await service.route(scope);
+        await service.route(scope);
+        expect(
+            licenseService!.validateOrganizationLicense,
+        ).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not ask billing while direct egress is not rolled out', async () => {
+        const { service, licenseService } = build({ license: 'free' });
+        await expect(service.route(scope)).resolves.toBe('fixed_ip');
+        expect(
+            licenseService!.validateOrganizationLicense,
+        ).not.toHaveBeenCalled();
+    });
+});
+
+describe('SandboxEgressPolicyService fixed IP setting', () => {
+    const on = { directByDefault: true, fixedIp: '203.0.113.10' };
+
+    it('turns the fixed IP on for a paying team and routes it there at once', async () => {
+        const { service, integrationConfigs } = build({
+            rollout: on,
+            license: 'teams',
+        });
+        await expect(service.route(scope)).resolves.toBe('direct');
+
+        const setting = await service.setFixedIp(scope, true, 'user-1');
+
+        expect(integrationConfigs.createOrUpdateConfig).toHaveBeenCalledWith(
+            IntegrationConfigKey.EGRESS_FIXED_IP,
+            expect.objectContaining({
+                required: true,
+                source: 'manual',
+                updatedBy: 'user-1',
+            }),
+            INTEGRATION,
+            { organizationId: ORG, teamId: TEAM },
+        );
+        expect(setting).toEqual(
+            expect.objectContaining({
+                allowedByPlan: true,
+                fixedIp: '203.0.113.10',
+            }),
+        );
+        await expect(service.route(scope)).resolves.toBe('fixed_ip');
+    });
+
+    it('refuses to turn it on for a free organization and stores nothing', async () => {
+        const { service, integrationConfigs } = build({
+            rollout: on,
+            license: 'free',
+        });
+        await expect(service.setFixedIp(scope, true)).rejects.toBeInstanceOf(
+            FixedEgressIpPlanRequiredError,
+        );
+        expect(integrationConfigs.createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('lets a team that left a paid plan turn it off', async () => {
+        const { service, integrationConfigs } = build({
+            rollout: on,
+            license: 'free',
+        });
+        await service.setFixedIp(scope, false);
+        expect(integrationConfigs.createOrUpdateConfig).toHaveBeenCalledWith(
+            IntegrationConfigKey.EGRESS_FIXED_IP,
+            expect.objectContaining({ required: false, source: 'manual' }),
+            INTEGRATION,
+            expect.anything(),
+        );
+    });
+
+    it('shows a downgraded team as off, though its marker is still stored', async () => {
+        const { service } = build({
+            rollout: on,
+            license: 'free',
+            marker: { required: true, source: 'manual' },
+        });
+        await expect(service.getFixedIpSetting(scope)).resolves.toEqual(
+            expect.objectContaining({ allowedByPlan: false, enabled: false }),
+        );
+    });
+
+    it('shows a fixed IP the clone fallback turned on, and why', async () => {
+        const { service } = build({
+            rollout: on,
+            license: 'enterprise',
+            marker: {
+                required: true,
+                source: 'clone_fallback',
+                reason: 'ip_allow_list',
+                detectedAt: new Date().toISOString(),
+            },
+        });
+        await expect(service.getFixedIpSetting(scope)).resolves.toEqual(
+            expect.objectContaining({
+                enabled: true,
+                source: 'clone_fallback',
+                reason: 'ip_allow_list',
+                fixedIp: '203.0.113.10',
+            }),
+        );
+    });
+});
+
 describe('markerHolds', () => {
     const DAY = 24 * 60 * 60_000;
     const now = Date.parse('2026-11-17T12:00:00Z');
@@ -237,6 +448,45 @@ describe('SandboxEgressPolicyService under Nest', () => {
 
         expect(cache.addToCache).toHaveBeenCalled();
         expect(findOne).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('SandboxEgressPolicyService under Nest, with billing', () => {
+    it('gets the license service injected, so a free organization leaves direct', async () => {
+        const validateOrganizationLicense = jest.fn(async () => ({
+            ...LICENSES.free,
+        }));
+        const moduleRef = await Test.createTestingModule({
+            providers: [
+                SandboxEgressPolicyService,
+                { provide: CacheService, useValue: memoryCache() },
+                {
+                    provide: INTEGRATION_CONFIG_SERVICE_TOKEN,
+                    useValue: {
+                        findOne: jest.fn(async () => ({
+                            configValue: { required: true, source: 'manual' },
+                        })),
+                        createOrUpdateConfig: jest.fn(),
+                    },
+                },
+                {
+                    provide: GLOBAL_PARAMETERS_SERVICE_TOKEN,
+                    useValue: {
+                        findByKey: async () => ({
+                            configValue: { directByDefault: true },
+                        }),
+                    },
+                },
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: { validateOrganizationLicense },
+                },
+            ],
+        }).compile();
+        const service = moduleRef.get(SandboxEgressPolicyService);
+
+        await expect(service.route(scope)).resolves.toBe('direct');
+        expect(validateOrganizationLicense).toHaveBeenCalled();
     });
 });
 
@@ -333,6 +583,14 @@ describe('parseEgressRollout', () => {
         expect(
             parseEgressRollout({ directByDefault: true }).directByDefault,
         ).toBe(true);
+    });
+
+    it('keeps the fixed IP to show when it is a non-empty string', () => {
+        expect(parseEgressRollout({ fixedIp: ' 203.0.113.10 ' }).fixedIp).toBe(
+            '203.0.113.10',
+        );
+        expect(parseEgressRollout({ fixedIp: '' }).fixedIp).toBeUndefined();
+        expect(parseEgressRollout({ fixedIp: 7 }).fixedIp).toBeUndefined();
     });
 
     it('keeps only string organization ids', () => {

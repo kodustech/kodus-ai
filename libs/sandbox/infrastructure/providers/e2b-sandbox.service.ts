@@ -26,6 +26,7 @@ import {
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { hasParentDirSegment } from './path-segments';
+import { FIXED_EGRESS_IP_PLAN_REQUIRED } from '@libs/sandbox/domain/egress-plan';
 import { readWithinRootCommand } from './read-within-root';
 import type {
     EgressRoute,
@@ -87,6 +88,24 @@ export function fixedIpReasonFrom(error: unknown): FixedIpReason {
         return 'unreachable';
     }
     return 'other';
+}
+
+/**
+ * A direct clone of a team whose plan has no fixed outbound IP failed in a
+ * way a firewall that only accepts our IP would cause. The original error
+ * is kept as `cause`.
+ */
+export class FixedEgressIpUnavailableError extends Error {
+    constructor(
+        readonly reason: FixedIpReason,
+        options?: { cause?: unknown },
+    ) {
+        super(
+            `Kodus could not clone the repository from its shared network (${reason}). ${FIXED_EGRESS_IP_PLAN_REQUIRED}`,
+            options,
+        );
+        this.name = 'FixedEgressIpUnavailableError';
+    }
 }
 
 const TIMEOUTS = {
@@ -797,7 +816,10 @@ export class E2BSandboxService implements ISandboxProvider {
      * Clones on the route the sandbox is on. A direct clone that cannot
      * reach the host, or that the host refuses, is put back on the fixed IP
      * and tried once more; when that works, the team's Git host needs our
-     * IP, and the team is marked so its next sandboxes start on it.
+     * IP, and the team is marked so its next sandboxes start on it. Only a
+     * plan that includes the fixed IP gets that second try: any other team
+     * gets the failure, said in terms of the plan when it looks like a
+     * firewall.
      */
     private async cloneWithEgressFallback(
         sandbox: Sandbox,
@@ -826,6 +848,13 @@ export class E2BSandboxService implements ISandboxProvider {
             }
         } else {
             reason = 'unreachable';
+        }
+
+        if (!(await this.mayFallBackToFixedIp(params))) {
+            if (reason === 'other' && directError) throw directError;
+            throw new FixedEgressIpUnavailableError(reason, {
+                cause: directError,
+            });
         }
 
         if (!(await this.useFixedIpEgress(sandbox))) {
@@ -859,6 +888,23 @@ export class E2BSandboxService implements ISandboxProvider {
                     reason,
                 )
                 .catch(() => undefined);
+        }
+    }
+
+    /** Whether the team's plan lets a failed direct clone retry through the
+     * fixed IP. A doubt keeps the retry: it costs bytes, never the review. */
+    private async mayFallBackToFixedIp(
+        params: CreateSandboxParams,
+    ): Promise<boolean> {
+        const { organizationId, teamId } = params;
+        if (!this.egressPolicy || !organizationId || !teamId) return true;
+        try {
+            return await this.egressPolicy.fixedIpAllowed({
+                organizationId,
+                teamId,
+            });
+        } catch {
+            return true;
         }
     }
 

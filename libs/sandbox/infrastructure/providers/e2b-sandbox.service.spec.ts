@@ -29,6 +29,7 @@ import { CommandExitError, Sandbox } from 'e2b';
 import {
     E2BSandboxService,
     buildE2BRemoteCommands,
+    FixedEgressIpUnavailableError,
     fixedIpReasonFrom,
     syncE2BSandboxRepo,
 } from './e2b-sandbox.service';
@@ -1235,7 +1236,7 @@ describe('E2BSandboxService egress route', () => {
      * boots it. `onProxy` follows the iptables commands the service runs.
      */
     const fakeSandbox = (opts: {
-        directClone?: 'ok' | 'refused';
+        directClone?: 'ok' | 'refused' | 'bad-credentials';
         proxyClone?: 'ok' | 'fails';
         reachable?: boolean;
         reachCheck?: 'sandbox-error';
@@ -1266,6 +1267,11 @@ describe('E2BSandboxService egress route', () => {
                 const outcome = onProxy
                     ? (opts.proxyClone ?? 'ok')
                     : (opts.directClone ?? 'ok');
+                if (outcome === 'bad-credentials') {
+                    throw exitError(
+                        "fatal: Authentication failed for 'https://github.com/acme/api.git/'",
+                    );
+                }
                 if (outcome !== 'ok') throw exitError(IP_BLOCK);
             }
             return { stdout: '', stderr: '', exitCode: 0 };
@@ -1279,9 +1285,12 @@ describe('E2BSandboxService egress route', () => {
         return { sbx, log };
     };
 
-    const policy = (route: 'direct' | 'fixed_ip') => ({
+    const policy = (route: 'direct' | 'fixed_ip', paidPlan: boolean) => ({
         route: jest.fn().mockResolvedValue(route),
+        fixedIpAllowed: jest.fn().mockResolvedValue(paidPlan),
         markFixedIpRequired: jest.fn().mockResolvedValue(undefined),
+        getFixedIpSetting: jest.fn(),
+        setFixedIp: jest.fn(),
     });
 
     const create = async (opts: {
@@ -1290,6 +1299,8 @@ describe('E2BSandboxService egress route', () => {
         template?: boolean;
         scoped?: boolean;
         gitProxyMisconfigured?: boolean;
+        /** The organization's plan includes the fixed IP (default: yes). */
+        paidPlan?: boolean;
     }) => {
         const { sbx, log } = fakeSandbox(opts.sandbox ?? {});
         (Sandbox as any).create = jest.fn().mockResolvedValue(sbx);
@@ -1307,7 +1318,7 @@ describe('E2BSandboxService egress route', () => {
                     }),
                 })[key],
         };
-        const egress = policy(opts.route);
+        const egress = policy(opts.route, opts.paidPlan !== false);
         const service = new E2BSandboxService(config as any, egress);
         const result = service.createSandboxWithRepo({
             cloneUrl: 'https://github.com/acme/api.git',
@@ -1422,6 +1433,48 @@ describe('E2BSandboxService egress route', () => {
         expect(clones(log).map((c) => c.onProxy)).toEqual([true]);
         expect(log.some((l) => l.cmd.includes('/dev/tcp/'))).toBe(false);
         expect(egress.markFixedIpRequired).not.toHaveBeenCalled();
+    });
+
+    it('never sends a team whose plan has no fixed IP back to the proxy when its Git host refuses the direct clone', async () => {
+        const { result, log, egress } = await create({
+            route: 'direct',
+            paidPlan: false,
+            sandbox: { directClone: 'refused' },
+        });
+        const error = await result.catch((e) => e);
+        expect(error).toBeInstanceOf(FixedEgressIpUnavailableError);
+        expect(error.message).toContain('Teams and Enterprise');
+        expect(error.reason).toBe('ip_allow_list');
+        expect(clones(log).map((c) => c.onProxy)).toEqual([false]);
+        expect(
+            log.some((l) => l.cmd.includes('iptables -t nat -A OUTPUT')),
+        ).toBe(false);
+        expect(egress.markFixedIpRequired).not.toHaveBeenCalled();
+    });
+
+    it('tells a team whose plan has no fixed IP why, when its Git host cannot be reached direct', async () => {
+        const { result, log } = await create({
+            route: 'direct',
+            paidPlan: false,
+            sandbox: { reachable: false },
+        });
+        const error = await result.catch((e) => e);
+        expect(error).toBeInstanceOf(FixedEgressIpUnavailableError);
+        expect(error.reason).toBe('unreachable');
+        expect(clones(log)).toHaveLength(0);
+    });
+
+    it('gives a team whose plan has no fixed IP the clone error itself when it does not look like a firewall', async () => {
+        const { result } = await create({
+            route: 'direct',
+            paidPlan: false,
+            sandbox: { directClone: 'bad-credentials' },
+        });
+        const error = await result.catch((e) => e);
+        expect(error).not.toBeInstanceOf(FixedEgressIpUnavailableError);
+        expect(String(error?.stderr ?? error?.message)).toContain(
+            'Authentication failed',
+        );
     });
 
     it('keeps the fixed IP, without asking, for a sandbox that does not say which team it serves', async () => {

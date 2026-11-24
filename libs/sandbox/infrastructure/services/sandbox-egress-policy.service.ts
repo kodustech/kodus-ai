@@ -5,6 +5,10 @@ import { GlobalParametersKey } from '@libs/core/domain/enums/global-parameters-k
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { createLogger } from '@libs/core/log/logger';
 import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
+import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
@@ -12,6 +16,11 @@ import {
     GLOBAL_PARAMETERS_SERVICE_TOKEN,
     IGlobalParametersService,
 } from '@libs/organization/domain/global-parameters/contracts/global-parameters.service.contract';
+import {
+    FixedEgressIpNoIntegrationError,
+    FixedEgressIpPlanRequiredError,
+    isFixedEgressIpPlanAllowed,
+} from '@libs/sandbox/domain/egress-plan';
 
 /**
  * How a sandbox reaches the internet.
@@ -34,8 +43,14 @@ export type FixedIpReason =
 export interface EgressFixedIpMarker {
     required: boolean;
     reason?: FixedIpReason;
+    /**
+     * `manual`: the team turned the fixed outbound IP on or off in Git
+     * settings. `clone_fallback`: a direct clone failed and the same clone
+     * through the proxy worked.
+     */
     source?: 'clone_fallback' | 'manual';
     detectedAt?: string;
+    updatedBy?: string;
 }
 
 /**
@@ -43,19 +58,49 @@ export interface EgressFixedIpMarker {
  * leaves direct, which is the behavior before this existed.
  *
  *   { "directOrganizationIds": ["<org uuid>"] }   // rollout to a few orgs
- *   { "directByDefault": true }                   // every org not marked
+ *   { "directByDefault": true }                   // every org
+ *   { "fixedIp": "203.0.113.10" }                 // the IP Git settings shows
+ *
+ * Inside the rollout a sandbox leaves direct unless its organization's plan
+ * includes the fixed outbound IP (Teams, Enterprise, trial) AND its team has
+ * it on: turned on in Git settings, or found needed by the clone fallback.
  */
 export interface EgressRollout {
     directByDefault: boolean;
     directOrganizationIds: string[];
+    fixedIp?: string;
+}
+
+/** What Git settings shows and changes for a team. */
+export interface FixedEgressIpSetting {
+    /** The organization's plan includes the fixed outbound IP. */
+    allowedByPlan: boolean;
+    /** The team's sandboxes go through the fixed IP. */
+    enabled: boolean;
+    /** Who turned it on: the team, or the clone fallback. */
+    source?: EgressFixedIpMarker['source'];
+    reason?: FixedIpReason;
+    updatedAt?: string;
+    /** The IP the team's Git host must accept. */
+    fixedIp?: string;
 }
 
 export interface ISandboxEgressPolicy {
     route(scope: EgressScope | undefined): Promise<EgressRoute>;
+    /** Whether the organization's plan includes the fixed outbound IP. */
+    fixedIpAllowed(scope: EgressScope): Promise<boolean>;
     markFixedIpRequired(
         scope: EgressScope,
         reason: FixedIpReason,
     ): Promise<void>;
+    /** The team's setting as Git settings shows it. */
+    getFixedIpSetting(scope: EgressScope): Promise<FixedEgressIpSetting>;
+    /** Turns the team's fixed outbound IP on or off by hand. */
+    setFixedIp(
+        scope: EgressScope,
+        enabled: boolean,
+        actorUserId?: string,
+    ): Promise<FixedEgressIpSetting>;
 }
 
 export const SANDBOX_EGRESS_POLICY_TOKEN = Symbol(
@@ -96,15 +141,23 @@ export const FIXED_IP_MARKER_TTL_MS: Record<FixedIpReason, number> = {
 
 const markerCacheKey = (scope: EgressScope) =>
     `sandbox-egress:fixed-ip:${scope.organizationId}:${scope.teamId}`;
+/** A plan answer is reused this long: an upgrade or a downgrade reaches the
+ * route within it. */
+const PLAN_TTL_MS = 10 * 60_000;
+const planCacheKey = (scope: EgressScope) =>
+    `sandbox-egress:plan:${scope.organizationId}`;
 
 /**
  * Decides, per team, whether a sandbox needs the fixed egress IP.
  *
- * Every doubt resolves to `fixed_ip`, which is what every sandbox did before:
- * no team to look up, rollout off or unreadable, marker unreadable. A team
- * is marked by the clone fallback (E2BSandboxService) when its direct clone
- * failed and the same clone through the proxy worked, so a marker is proof,
- * not a guess.
+ * Outside the rollout every sandbox keeps the fixed IP, which is what they
+ * all did before. Inside it, the fixed IP is a paid-plan feature the team
+ * turns on: an organization whose plan does not include it always leaves
+ * direct, a paying team leaves direct unless it is marked. A team is marked
+ * by hand in Git settings, or by the clone fallback (E2BSandboxService) when
+ * its direct clone failed and the same clone through the proxy worked.
+ * A doubt about the marker resolves to `fixed_ip`; a doubt about the plan
+ * (billing could not answer) keeps the team's marker.
  */
 @Injectable()
 export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
@@ -140,6 +193,12 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
             CacheService,
             'getFromCache' | 'addToCache'
         >,
+        @Optional()
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService?: Pick<
+            ILicenseService,
+            'validateOrganizationLicense'
+        >,
     ) {}
 
     async route(scope: EgressScope | undefined): Promise<EgressRoute> {
@@ -153,6 +212,8 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
         ) {
             return 'fixed_ip';
         }
+
+        if (!(await this.fixedIpAllowed(scope))) return 'direct';
 
         try {
             return (await this.requiresFixedIp(scope)) ? 'fixed_ip' : 'direct';
@@ -168,6 +229,85 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
         }
     }
 
+    async fixedIpAllowed(scope: EgressScope): Promise<boolean> {
+        const key = planCacheKey(scope);
+        const cached = await this.cache
+            ?.getFromCache<{ allowed: boolean }>(key)
+            .catch(() => null);
+        if (cached && typeof cached.allowed === 'boolean') {
+            return cached.allowed;
+        }
+        const { allowed, definitive } = await this.readPlan(scope);
+        if (definitive) {
+            await this.cache
+                ?.addToCache(key, { allowed }, PLAN_TTL_MS)
+                .catch(() => undefined);
+        }
+        return allowed;
+    }
+
+    /** The team's fixed outbound IP as Git settings shows it, read fresh. */
+    async getFixedIpSetting(scope: EgressScope): Promise<FixedEgressIpSetting> {
+        const [{ allowed }, config, rollout] = await Promise.all([
+            this.readPlan(scope),
+            this.integrationConfigs?.findOne({
+                team: { uuid: scope.teamId },
+                configKey: IntegrationConfigKey.EGRESS_FIXED_IP,
+            }),
+            this.readRollout(),
+        ]);
+        const marker = config?.configValue as EgressFixedIpMarker | undefined;
+        const holds = markerHolds(marker, Date.now());
+        return {
+            allowedByPlan: allowed,
+            enabled: allowed && holds,
+            ...(holds && marker?.source ? { source: marker.source } : {}),
+            ...(holds && marker?.reason ? { reason: marker.reason } : {}),
+            ...(marker?.detectedAt ? { updatedAt: marker.detectedAt } : {}),
+            ...(rollout.fixedIp ? { fixedIp: rollout.fixedIp } : {}),
+        };
+    }
+
+    /**
+     * Turns the team's fixed outbound IP on or off by hand. A manual marker
+     * never expires. Turning it on needs a plan that includes it; turning it
+     * off never does, so a team that left a paid plan can still clear it.
+     * This process routes the team the new way at once; other workers
+     * within the marker cache window.
+     */
+    async setFixedIp(
+        scope: EgressScope,
+        enabled: boolean,
+        actorUserId?: string,
+    ): Promise<FixedEgressIpSetting> {
+        if (enabled && !(await this.readPlan(scope)).allowed) {
+            throw new FixedEgressIpPlanRequiredError();
+        }
+        const integrationId = await this.codeManagementIntegrationId(scope);
+        if (!integrationId) throw new FixedEgressIpNoIntegrationError();
+
+        const marker: EgressFixedIpMarker = {
+            required: enabled,
+            source: 'manual',
+            detectedAt: new Date().toISOString(),
+            ...(actorUserId ? { updatedBy: actorUserId } : {}),
+        };
+        await this.integrationConfigs!.createOrUpdateConfig(
+            IntegrationConfigKey.EGRESS_FIXED_IP,
+            marker,
+            integrationId,
+            { organizationId: scope.organizationId, teamId: scope.teamId },
+        );
+        this.markedAt.set(markerCacheKey(scope), ++this.markSeq);
+        await this.cacheMarker(scope, enabled);
+        this.logger.log({
+            message: `[egress] fixed outbound IP turned ${enabled ? 'on' : 'off'} in Git settings`,
+            context: SandboxEgressPolicyService.name,
+            metadata: { ...scope, enabled, actorUserId },
+        });
+        return this.getFixedIpSetting(scope);
+    }
+
     async markFixedIpRequired(
         scope: EgressScope,
         reason: FixedIpReason,
@@ -179,13 +319,7 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
 
         try {
             if (!this.integrationConfigs) return;
-            // The team's code management integration is the one holding its
-            // repository list.
-            const repositories = await this.integrationConfigs.findOne({
-                team: { uuid: scope.teamId },
-                configKey: IntegrationConfigKey.REPOSITORIES,
-            });
-            const integrationId = repositories?.integration?.uuid;
+            const integrationId = await this.codeManagementIntegrationId(scope);
             if (!integrationId) {
                 this.logger.warn({
                     message:
@@ -224,6 +358,50 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
                 error,
                 metadata: { ...scope, reason },
             });
+        }
+    }
+
+    /** The team's code management integration: the one holding its
+     * repository list. */
+    private async codeManagementIntegrationId(
+        scope: EgressScope,
+    ): Promise<string | undefined> {
+        const repositories = await this.integrationConfigs?.findOne({
+            team: { uuid: scope.teamId },
+            configKey: IntegrationConfigKey.REPOSITORIES,
+        });
+        return repositories?.integration?.uuid;
+    }
+
+    /**
+     * The plan answer, uncached. `definitive` is false when billing could
+     * not answer: that read keeps the fixed IP and is not reused.
+     */
+    private async readPlan(
+        scope: EgressScope,
+    ): Promise<{ allowed: boolean; definitive: boolean }> {
+        // No license service (tests, an install without billing): the plan
+        // never takes a team's fixed IP away.
+        if (!this.licenseService) return { allowed: true, definitive: false };
+        try {
+            const license =
+                await this.licenseService.validateOrganizationLicense({
+                    organizationId: scope.organizationId,
+                    teamId: scope.teamId,
+                });
+            return {
+                allowed: isFixedEgressIpPlanAllowed(license),
+                definitive: !license?.unavailable,
+            };
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not read the license for the fixed outbound IP; keeping the team marker',
+                context: SandboxEgressPolicyService.name,
+                error,
+                metadata: { ...scope },
+            });
+            return { allowed: true, definitive: false };
         }
     }
 
@@ -300,9 +478,14 @@ export function parseEgressRollout(value: unknown): EgressRollout {
               (id): id is string => typeof id === 'string' && id.length > 0,
           )
         : [];
+    const fixedIp =
+        typeof v.fixedIp === 'string' && v.fixedIp.trim()
+            ? v.fixedIp.trim()
+            : undefined;
     return {
         directByDefault: v.directByDefault === true,
         directOrganizationIds: ids,
+        ...(fixedIp ? { fixedIp } : {}),
     };
 }
 
