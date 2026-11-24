@@ -10,6 +10,7 @@ import {
     ICodeAreaRiskMapService,
 } from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { repositoryReaderAtHead } from '@libs/platform/application/services/repository-reader-at-head';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     approvalPathsOf,
@@ -313,6 +314,15 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                 language: config.languageResultPrompt,
                 areaMap,
                 modelSlot: config.resolvedModelSlot,
+                reader: repositoryReaderAtHead(this.codeManagement, {
+                    organizationAndTeamData,
+                    repository,
+                    pullRequest: {
+                        number: pullRequest.number,
+                        headRef: livePr?.head?.ref,
+                    },
+                    platformType: context.platformType,
+                }),
             });
         }
         const sharedVeto =

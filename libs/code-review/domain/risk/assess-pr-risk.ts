@@ -11,6 +11,7 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import { assessChangeRisk } from './assess-change-risk';
 import { approvalPathsOf } from '../approval/approval-decision';
 import type { RiskAssessmentResult, RiskSnapshot } from './risk-assessment';
+import type { RiskRepositoryReader } from './risk-second-look';
 
 export { approvalRiskOutputSchema as prRiskOutputSchema } from './assess-change-risk';
 
@@ -27,6 +28,8 @@ export interface AssessPrRiskInput {
     language?: string;
     areaMap?: CodeAreaRiskMap | null;
     modelSlot?: NormalizedModel;
+    /** The repository at the PR head, for the second look at a medium rating. */
+    reader?: RiskRepositoryReader;
 }
 
 export function applicableRiskCriteria(
@@ -113,6 +116,7 @@ export async function assessPrRisk(
         language: input.language,
         areaMap: input.areaMap,
         modelSlot: input.modelSlot,
+        reader: input.reader,
         trace: {
             baseSha: input.baseSha,
             assessmentKey: snapshot.assessmentKey,

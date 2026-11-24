@@ -49,7 +49,7 @@ import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/del
 import type { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 
-import { withRepositoryReader } from './business-logic-repository-reader';
+import { withRepositoryReader } from './repository-reader-at-head';
 
 /** The PR a door acts on, so its files can pick the directory's settings. */
 export interface PullRequestScope {

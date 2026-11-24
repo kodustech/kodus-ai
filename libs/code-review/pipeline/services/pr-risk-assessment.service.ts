@@ -13,6 +13,7 @@ import {
     IConditionalApprovalAccessService,
 } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { repositoryReaderAtHead } from '@libs/platform/application/services/repository-reader-at-head';
 import {
     assessPrRisk,
     prRiskSnapshot,
@@ -193,6 +194,15 @@ export class PrRiskAssessmentService {
                 language: context.codeReviewConfig.languageResultPrompt,
                 areaMap,
                 modelSlot: slot,
+                // Read only when a medium rating gets its second look.
+                reader: repositoryReaderAtHead(this.codeManagement, {
+                    organizationAndTeamData,
+                    repository,
+                    pullRequest: {
+                        number: pullRequest.number,
+                        headRef: live?.head?.ref,
+                    },
+                }),
             };
             if (
                 matchesRiskSnapshot(
