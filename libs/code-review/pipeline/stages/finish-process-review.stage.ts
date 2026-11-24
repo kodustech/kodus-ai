@@ -363,7 +363,7 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                 suggestionIds: criticalComments
                     .map(
                         (comment) =>
-                            comment.comment.suggestion?.id ??
+                            comment.comment.suggestion?.id ||
                             comment.codeReviewFeedbackData?.suggestionId,
                     )
                     .filter((id): id is string => !!id),

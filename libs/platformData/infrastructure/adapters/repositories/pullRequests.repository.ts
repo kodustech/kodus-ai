@@ -299,12 +299,29 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     'kodyChangeRequest.suggestionIds': {
                         $each: request.suggestionIds,
                     },
-                    ...(request.summaryCommentId
-                        ? {
-                              'kodyChangeRequest.summaryCommentIds':
-                                  request.summaryCommentId,
-                          }
-                        : {}),
+                },
+            },
+        );
+        return result.matchedCount > 0;
+    }
+
+    async addKodyChangeRequestSummary(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+        summaryCommentId: string,
+    ): Promise<boolean> {
+        const result = await this.pullRequestsModel.updateOne(
+            {
+                organizationId,
+                'repository.id': repositoryId,
+                'number': prNumber,
+                'kodyChangeRequest.requestedAt': requestedAt,
+            },
+            {
+                $addToSet: {
+                    'kodyChangeRequest.summaryCommentIds': summaryCommentId,
                 },
             },
         );

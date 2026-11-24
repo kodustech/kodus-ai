@@ -29,12 +29,11 @@ export interface IApprovalReasonDeliveryFailure {
     reviewedBaseSha?: string;
 }
 
-/** A request as it is recorded: one summary at a time, added to the ones on record. */
+/** A request as it is recorded, added to the ones on record. */
 export interface KodyChangeRequestRecord {
     requestedAt: string;
     commentIds: string[];
     suggestionIds: string[];
-    summaryCommentId?: string;
 }
 
 /** A suggestion behind Kody's change request, as the PR stores it. */

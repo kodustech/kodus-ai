@@ -36,6 +36,7 @@ export class OwnChangeRequestService {
      * Remembers a request about to be made, and the findings behind it.
      * Answers when it was recorded, or null when it was not: a request with
      * no record could never be taken back, so the caller does not make it.
+     * A finding with no suggestion id still counts through its comment.
      */
     async record(input: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -44,7 +45,9 @@ export class OwnChangeRequestService {
         suggestionIds: string[];
         commentIds: string[];
     }): Promise<string | null> {
-        if (!input.suggestionIds.length) return null;
+        if (!input.suggestionIds.length && !input.commentIds.length) {
+            return null;
+        }
         const requestedAt = new Date().toISOString();
         try {
             const recorded = await this.pullRequests.recordKodyChangeRequest(
@@ -82,7 +85,10 @@ export class OwnChangeRequestService {
         return null;
     }
 
-    /** Adds the summary the host keeps open next to a recorded request. */
+    /**
+     * Adds the summary the host keeps open next to a recorded request, while
+     * that record is still the one made at `requestedAt`.
+     */
     async recordSummary(input: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string };
@@ -90,16 +96,12 @@ export class OwnChangeRequestService {
         requestedAt: string;
         summaryCommentId: string;
     }): Promise<void> {
-        await this.pullRequests.recordKodyChangeRequest(
+        await this.pullRequests.addKodyChangeRequestSummary(
             input.organizationAndTeamData.organizationId,
             input.repository.id,
             input.prNumber,
-            {
-                requestedAt: input.requestedAt,
-                commentIds: [],
-                suggestionIds: [],
-                summaryCommentId: input.summaryCommentId,
-            },
+            input.requestedAt,
+            input.summaryCommentId,
         );
     }
 

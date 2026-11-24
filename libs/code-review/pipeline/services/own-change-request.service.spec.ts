@@ -55,6 +55,7 @@ describe('OwnChangeRequestService', () => {
             clearKodyChangeRequest: jest.fn().mockResolvedValue(true),
             hasOpenKodyChangeRequest: jest.fn().mockResolvedValue(true),
             findKodyChangeRequestFindings: jest.fn().mockResolvedValue([]),
+            addKodyChangeRequestSummary: jest.fn().mockResolvedValue(true),
         };
         const isReviewRunning = jest.fn().mockResolvedValue(false);
         const service = new OwnChangeRequestService(
@@ -428,6 +429,18 @@ describe('OwnChangeRequestService', () => {
             await expect(service.record(input)).resolves.toBeNull();
         });
 
+        it('writes a request whose findings only have comment ids', async () => {
+            const { service } = build();
+
+            await expect(
+                service.record({
+                    ...request,
+                    suggestionIds: [],
+                    commentIds: ['11'],
+                }),
+            ).resolves.toBe('2026-11-11T17:23:13.000Z');
+        });
+
         it('writes nothing for a request with no finding behind it', async () => {
             const { service, pullRequests } = build();
 
@@ -451,17 +464,16 @@ describe('OwnChangeRequestService', () => {
                 summaryCommentId: 'd-1',
             });
 
-            expect(pullRequests.recordKodyChangeRequest).toHaveBeenCalledWith(
+            expect(
+                pullRequests.addKodyChangeRequestSummary,
+            ).toHaveBeenCalledWith(
                 'org-1',
                 'repo-1',
                 7,
-                {
-                    requestedAt: '2026-11-11T17:23:13.000Z',
-                    commentIds: [],
-                    suggestionIds: [],
-                    summaryCommentId: 'd-1',
-                },
+                '2026-11-11T17:23:13.000Z',
+                'd-1',
             );
+            expect(pullRequests.recordKodyChangeRequest).not.toHaveBeenCalled();
         });
     });
 });

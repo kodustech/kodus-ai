@@ -306,6 +306,17 @@ export interface IPullRequestsRepository {
         request: KodyChangeRequestRecord,
     ): Promise<boolean>;
     /**
+     * Adds a summary comment to the request made at `requestedAt`; a record
+     * cleared or replaced since then is left alone.
+     */
+    addKodyChangeRequestSummary(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+        summaryCommentId: string,
+    ): Promise<boolean>;
+    /**
      * Forgets the request read at `requestedAt`. One made since then stays:
      * it is a different request, over findings the reader did not see.
      */

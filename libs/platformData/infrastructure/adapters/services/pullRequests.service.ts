@@ -170,6 +170,22 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    addKodyChangeRequestSummary(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+        summaryCommentId: string,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.addKodyChangeRequestSummary(
+            organizationId,
+            repositoryId,
+            prNumber,
+            requestedAt,
+            summaryCommentId,
+        );
+    }
+
     clearKodyChangeRequest(
         organizationId: string,
         repositoryId: string,

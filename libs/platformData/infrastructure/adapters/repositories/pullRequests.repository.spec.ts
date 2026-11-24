@@ -62,7 +62,6 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                     requestedAt: T1,
                     commentIds: ['101', '102'],
                     suggestionIds: ['s-1', 's-2'],
-                    summaryCommentId: 'd-1',
                 }),
             ).resolves.toBe(true);
 
@@ -73,12 +72,11 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                     'kodyChangeRequest.suggestionIds': {
                         $each: ['s-1', 's-2'],
                     },
-                    'kodyChangeRequest.summaryCommentIds': 'd-1',
                 },
             });
         });
 
-        it('adds no summary when the host left none, and says when no PR matched', async () => {
+        it('says when no PR matched', async () => {
             model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 0 });
 
             await expect(
@@ -88,11 +86,39 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                     suggestionIds: ['s-1'],
                 }),
             ).resolves.toBe(false);
+        });
 
-            expect(model.updateOne.mock.calls[0][1].$addToSet).toEqual({
-                'kodyChangeRequest.commentIds': { $each: ['101'] },
-                'kodyChangeRequest.suggestionIds': { $each: ['s-1'] },
-            });
+        it('adds a summary only to the request made at that time', async () => {
+            model.updateOne = jest
+                .fn()
+                .mockResolvedValueOnce({ matchedCount: 1 })
+                .mockResolvedValueOnce({ matchedCount: 0 });
+
+            await expect(
+                repo.addKodyChangeRequestSummary(
+                    'org-A',
+                    'repo-alpha',
+                    7,
+                    T1,
+                    'd-1',
+                ),
+            ).resolves.toBe(true);
+            await expect(
+                repo.addKodyChangeRequestSummary(
+                    'org-A',
+                    'repo-alpha',
+                    7,
+                    T1,
+                    'd-1',
+                ),
+            ).resolves.toBe(false);
+
+            expect(model.updateOne).toHaveBeenCalledWith(
+                { ...target, 'kodyChangeRequest.requestedAt': T1 },
+                {
+                    $addToSet: { 'kodyChangeRequest.summaryCommentIds': 'd-1' },
+                },
+            );
         });
 
         it('forgets only the request it was handed, by unsetting the field', async () => {
