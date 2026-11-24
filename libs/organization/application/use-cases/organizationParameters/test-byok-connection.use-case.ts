@@ -12,6 +12,10 @@ import {
     describeUnreachedKeys,
 } from '@libs/llm/override-reachability';
 import { LLM_ERROR_TAG, LLM_SUCCESS_TAG } from '@libs/llm/log-tags';
+import {
+    ipLiteral,
+    isPrivateOrReservedIp,
+} from '@libs/llm/gateway-address-guard';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { encrypt } from '@libs/common/utils/crypto';
 import { validateModelTuning } from '@libs/llm/validate-model-tuning';
@@ -51,9 +55,9 @@ function assertSafeRegion(region: string): void {
  *     authenticated caller from probing internal infra, the cloud
  *     metadata service (169.254.169.254), or localhost services.
  *
- * There is a small TOCTOU window between the lookup and the actual
- * axios.get — acceptable for a one-shot test probe that doesn't leak
- * response bodies back to the user.
+ * This vouches only for what the host resolves to NOW. A review call re-checks
+ * the address when it connects (`gatewayGuardedFetch`, applied in
+ * `buildModelFromSlot`), so a host whose answer changes later is refused then.
  */
 export async function assertSafeOpenAICompatibleUrl(
     rawUrl: string,
@@ -81,9 +85,14 @@ export async function assertSafeOpenAICompatibleUrl(
     if (hygiene) {
         throw new BadRequestException(hygiene);
     }
+    // An IP literal is the address itself; a bracketed IPv6 one is not a name
+    // the resolver knows, so it is judged as written instead of looked up.
+    const literal = ipLiteral(parsed.hostname);
     let addresses: Array<{ address: string; family: number }>;
     try {
-        addresses = await lookup(parsed.hostname, { all: true });
+        addresses = literal
+            ? [{ address: literal, family: literal.includes(':') ? 6 : 4 }]
+            : await lookup(parsed.hostname, { all: true });
     } catch {
         throw new BadRequestException(
             `Couldn't resolve host "${parsed.hostname}". Check the base URL.`,
@@ -96,26 +105,6 @@ export async function assertSafeOpenAICompatibleUrl(
             );
         }
     }
-}
-
-function isPrivateOrReservedIp(ip: string): boolean {
-    // IPv4
-    if (ip === '0.0.0.0' || ip.startsWith('127.')) return true; // loopback / unspecified
-    if (ip.startsWith('10.')) return true; // RFC1918
-    if (ip.startsWith('192.168.')) return true; // RFC1918
-    if (ip.startsWith('169.254.')) return true; // link-local (incl. cloud metadata)
-    if (ip.startsWith('100.64.')) return true; // CGNAT
-    const m172 = ip.match(/^172\.(\d+)\./);
-    if (m172) {
-        const n = parseInt(m172[1], 10);
-        if (n >= 16 && n <= 31) return true; // RFC1918
-    }
-    // IPv6
-    const lower = ip.toLowerCase();
-    if (lower === '::1' || lower === '::') return true;
-    if (/^f[cd][0-9a-f]{2}:/i.test(lower)) return true; // fc00::/7 ULA
-    if (/^fe[89ab][0-9a-f]:/i.test(lower)) return true; // fe80::/10 link-local
-    return false;
 }
 
 /** A 404 whose message says the requested MODEL is missing (OpenAI's
@@ -288,7 +277,9 @@ export class TestByokConnectionUseCase {
             // rather than on each of the six success returns keeps the next one
             // honest by default — an unstamped pass would silently read as the
             // weaker catalog check on the screen.
-            return result.ok ? { verifiedBy: 'probe' as const, ...result } : result;
+            return result.ok
+                ? { verifiedBy: 'probe' as const, ...result }
+                : result;
         } catch (err) {
             this.logger.warn({
                 message: `${LLM_ERROR_TAG} BYOK connection test rejected: provider=${input?.provider} model=${input?.model ?? '(none)'} — ${(err as Error)?.message ?? 'invalid request'}`,
@@ -536,7 +527,8 @@ export class TestByokConnectionUseCase {
         return versioned
             ? {
                   ...result,
-                  message: `${result.message ?? ''} The base URL has no API version, and OpenAI-protocol gateways usually serve under /v1: try ${versioned}.`.trim(),
+                  message:
+                      `${result.message ?? ''} The base URL has no API version, and OpenAI-protocol gateways usually serve under /v1: try ${versioned}.`.trim(),
               }
             : result;
     }

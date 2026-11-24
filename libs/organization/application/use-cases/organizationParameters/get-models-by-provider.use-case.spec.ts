@@ -555,6 +555,21 @@ describe('GetModelsByProviderUseCase — native OpenAI behind a custom base URL 
         expect(assertSafeOpenAICompatibleUrl).toHaveBeenCalledWith(PROXY);
     });
 
+    it('re-checks the proxy address when the socket resolves it', async () => {
+        const useCase = buildUseCase(null);
+
+        await useCase.execute(
+            'openai',
+            { organizationId: 'org-1' },
+            { apiKey: 'proxy-key', baseURL: PROXY },
+        );
+
+        // The socket resolves the host through the gateway guard's lookup
+        // (gateway-address-guard.spec covers what it refuses).
+        const [, cfg] = mockedAxios.get.mock.calls[0];
+        expect(typeof (cfg as any).lookup).toBe('function');
+    });
+
     it('lists a saved proxy credential against its own endpoint, never api.openai.com', async () => {
         const useCase = buildUseCase(savedProxy);
 

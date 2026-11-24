@@ -18,6 +18,7 @@ import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/commo
 import axios from 'axios';
 
 import { resolveByokSlot } from './byok-credentials.util';
+import { gatewayLookup } from '@libs/llm/gateway-address-guard';
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 
 export interface ModelResponse {
@@ -276,8 +277,12 @@ export class GetModelsByProviderUseCase {
                         awsRegion,
                     }),
                     // A user-supplied endpoint: never follow redirects (a public URL
-                    // could 302 onto a private IP / metadata endpoint past the guard).
-                    ...(targetsUserEndpoint ? { maxRedirects: 0 } : {}),
+                    // could 302 onto a private IP / metadata endpoint past the guard),
+                    // and judge the address again when the socket resolves it, since
+                    // the guard above saw only what the host answered a moment ago.
+                    ...(targetsUserEndpoint
+                        ? { maxRedirects: 0, lookup: gatewayLookup() as any }
+                        : {}),
                     ...(listing.timeoutMs
                         ? { timeout: listing.timeoutMs }
                         : {}),
