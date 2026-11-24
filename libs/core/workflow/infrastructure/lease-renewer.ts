@@ -289,8 +289,6 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
                 renewSql: RENEW_LEASE_SQL,
             },
         });
-        // Never keeps the process alive on its own.
-        worker.unref();
         worker.on('message', (message: any) => this.onMessage(message));
         worker.on('error', (error: unknown) => {
             this.logger.error({
@@ -315,6 +313,9 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
                 });
             }
         });
+        // Never keeps the process alive on its own. After the listeners:
+        // adding a 'message' listener refs the port again.
+        worker.unref();
         this.worker = worker;
         for (const id of this.tracked.keys()) this.post(id);
     }

@@ -155,6 +155,29 @@ describe('DistributedLockService', () => {
         expect(leases.deleteExpired).toHaveBeenCalledTimes(2);
     });
 
+    it('a graceful shutdown hands back only the locks still held, not the ones already released', async () => {
+        for (let i = 0; i < 5; i++) {
+            const lock = await instanceA.acquire(`job-${i}`);
+            await lock!.release();
+        }
+        const stillHeld = await instanceA.acquire('still-held');
+        const release = jest.spyOn(leases, 'release');
+
+        await instanceA.onModuleDestroy();
+
+        expect(release).toHaveBeenCalledTimes(1);
+        expect(release).toHaveBeenCalledWith('still-held', stillHeld!.holder);
+    });
+
+    it('after shutdown the sweeper stops', async () => {
+        instanceA.onModuleInit();
+        await instanceA.onModuleDestroy();
+
+        await jest.advanceTimersByTimeAsync(60 * 60_000);
+
+        expect(leases.deleteExpired).not.toHaveBeenCalled();
+    });
+
     it('a sweep that fails is retried next cycle, without an unhandled rejection', async () => {
         instanceA.onModuleInit();
         leases.deleteExpired.mockRejectedValueOnce(

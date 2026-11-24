@@ -1,4 +1,4 @@
-import { renewalConnectionConfig } from './lease-renewer';
+import { ThreadLeaseRenewer, renewalConnectionConfig } from './lease-renewer';
 
 describe('renewal thread connection', () => {
     it('uses the same TLS settings as the app pool (managed Postgres that requires TLS)', () => {
@@ -69,5 +69,21 @@ describe('renewal thread connection', () => {
             connectionTimeoutMillis: 10_000,
             statement_timeout: 5000,
         });
+    });
+});
+
+describe('renewal thread', () => {
+    afterEach(async () => {
+        await ThreadLeaseRenewer.stopAll();
+    });
+
+    it('is one per process and connection, shared by every service instance', () => {
+        const options = { host: 'db', port: 5432, database: 'kodus_db' };
+        const first = ThreadLeaseRenewer.for(options);
+
+        expect(ThreadLeaseRenewer.for({ ...options })).toBe(first);
+        expect(ThreadLeaseRenewer.for({ ...options, host: 'other' })).not.toBe(
+            first,
+        );
     });
 });

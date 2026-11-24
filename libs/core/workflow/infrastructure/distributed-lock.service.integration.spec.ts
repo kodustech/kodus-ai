@@ -495,6 +495,39 @@ const targets = [
                 expect(versions.size).toBeLessThanOrEqual(6);
             }, 20_000);
 
+            it('the renewal thread never keeps a finished process alive', async () => {
+                const child = fork(
+                    resolve(__dirname, '__tests__/exiting-holder.fixture.ts'),
+                    [],
+                    {
+                        execArgv: [
+                            '-r',
+                            'ts-node/register/transpile-only',
+                            '-r',
+                            'tsconfig-paths/register',
+                        ],
+                        env: {
+                            ...process.env,
+                            LOCK_IT_HOST: PG_HOST,
+                            LOCK_IT_PORT: String(port),
+                            LOCK_IT_USER: PG_USER,
+                            LOCK_IT_PASSWORD: PG_PASSWORD,
+                            LOCK_IT_DB: PG_DB,
+                        },
+                    },
+                );
+                const exited = await new Promise<boolean>((done) => {
+                    const timer = setTimeout(() => done(false), 30_000);
+                    child.once('exit', () => {
+                        clearTimeout(timer);
+                        done(true);
+                    });
+                });
+                if (!exited) child.kill('SIGKILL');
+
+                expect(exited).toBe(true);
+            }, 45_000);
+
             it('a holder whose lease was taken over learns it from the next renewal', async () => {
                 const key = uniqueKey('lost');
                 const holder = new DistributedLockService(
