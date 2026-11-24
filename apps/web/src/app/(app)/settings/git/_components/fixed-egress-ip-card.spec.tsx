@@ -67,13 +67,44 @@ describe("FixedEgressIpCard", () => {
         expect(screen.queryByRole("switch")).not.toBeInTheDocument();
     });
 
-    it("stays hidden on a self-hosted install even when the read failed", () => {
+    it("is never shown on a self-hosted install, whether its read worked or failed", () => {
         mockDeployment.selfHosted = true;
-        const none = { available: false, allowedByPlan: false, enabled: false };
-        const { container } = render(
-            <FixedEgressIpCard initialSetting={none} loadFailed />,
+        for (const loadFailed of [false, true]) {
+            const { container, unmount } = render(
+                <FixedEgressIpCard
+                    initialSetting={paid}
+                    loadFailed={loadFailed}
+                />,
+            );
+            expect(container).toBeEmptyDOMElement();
+            unmount();
+        }
+    });
+
+    it("says the plan could not be confirmed and cannot be turned on, without the plans link", () => {
+        render(
+            <FixedEgressIpCard
+                initialSetting={{ ...paid, planUnconfirmed: true }}
+            />,
         );
-        expect(container).toBeEmptyDOMElement();
+        expect(
+            screen.getByText(/could not confirm your plan/i),
+        ).toBeInTheDocument();
+        expect(screen.getByRole("switch")).toBeDisabled();
+        expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    });
+
+    it("still lets a team turn it off while the plan cannot be confirmed", () => {
+        render(
+            <FixedEgressIpCard
+                initialSetting={{
+                    ...paid,
+                    enabled: true,
+                    planUnconfirmed: true,
+                }}
+            />,
+        );
+        expect(screen.getByRole("switch")).toBeEnabled();
     });
 
     it("cannot be turned on from a plan without it, and points to the plans", () => {

@@ -344,6 +344,16 @@ describe('SandboxEgressPolicyService fixed IP setting', () => {
         }
     });
 
+    it('says the plan is unconfirmed while billing cannot answer, and not once it does', async () => {
+        const down = build({ rollout: on, license: 'unavailable' });
+        await expect(down.service.getFixedIpSetting(scope)).resolves.toEqual(
+            expect.objectContaining({ planUnconfirmed: true }),
+        );
+        const up = build({ rollout: on, license: 'teams' });
+        const setting = await up.service.getFixedIpSetting(scope);
+        expect(setting.planUnconfirmed).toBeUndefined();
+    });
+
     it('lets a team turn it off while billing cannot say the plan', async () => {
         const { service, integrationConfigs } = build({
             rollout: on,

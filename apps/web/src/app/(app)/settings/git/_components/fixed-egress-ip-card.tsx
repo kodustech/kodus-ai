@@ -59,8 +59,11 @@ export const FixedEgressIpCard = ({
         setSetting(initialSetting);
     }
 
-    // A self-hosted install never shows the card, read or not.
-    if (loadFailed && !isSelfHosted) {
+    // The feature does not exist on a self-hosted install (it reaches Git
+    // from its own network), which the deployment itself says; that is not
+    // a read result, so it comes before both the failed and the empty read.
+    if (isSelfHosted) return null;
+    if (loadFailed) {
         return (
             <Card className="mb-4">
                 <CardHeader className="space-y-2">
@@ -127,7 +130,12 @@ export const FixedEgressIpCard = ({
                         your Git host from a shared network.
                     </CardDescription>
 
-                    {!setting.allowedByPlan ? (
+                    {setting.planUnconfirmed && !setting.enabled ? (
+                        <p className="text-text-secondary text-sm">
+                            Kodus could not confirm your plan right now, so this
+                            cannot be turned on yet. Try again in a few minutes.
+                        </p>
+                    ) : !setting.allowedByPlan ? (
                         <p className="text-text-secondary text-sm">
                             {availabilityLine()}{" "}
                             <Link href={cta.href} className="underline">
@@ -170,7 +178,9 @@ export const FixedEgressIpCard = ({
                     disabled={
                         !canEdit ||
                         saving ||
-                        (!setting.allowedByPlan && !setting.enabled)
+                        (!setting.enabled &&
+                            (!setting.allowedByPlan ||
+                                Boolean(setting.planUnconfirmed)))
                     }
                     loading={saving}
                     onCheckedChange={(checked) => {

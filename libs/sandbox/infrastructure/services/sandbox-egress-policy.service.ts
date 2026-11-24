@@ -76,6 +76,12 @@ export interface EgressRollout {
 export interface FixedEgressIpSetting {
     /** The organization's plan includes the fixed outbound IP. */
     allowedByPlan: boolean;
+    /**
+     * Billing was asked and could not answer: `allowedByPlan` is the routing
+     * fallback, not a confirmed plan, and turning the IP on is refused until
+     * billing answers. Absent when the plan was read.
+     */
+    planUnconfirmed?: boolean;
     /** The team's sandboxes go through the fixed IP. */
     enabled: boolean;
     /** Who turned it on: the team, or the clone fallback. */
@@ -249,7 +255,7 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
 
     /** The team's fixed outbound IP as Git settings shows it, read fresh. */
     async getFixedIpSetting(scope: EgressScope): Promise<FixedEgressIpSetting> {
-        const [{ allowed }, config, rollout] = await Promise.all([
+        const [{ allowed, failed }, config, rollout] = await Promise.all([
             this.readPlan(scope),
             this.integrationConfigs?.findOne({
                 team: { uuid: scope.teamId },
@@ -261,6 +267,7 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
         const holds = markerHolds(marker, Date.now());
         return {
             allowedByPlan: allowed,
+            ...(failed ? { planUnconfirmed: true } : {}),
             enabled: allowed && holds,
             ...(holds && marker?.source ? { source: marker.source } : {}),
             ...(holds && marker?.reason ? { reason: marker.reason } : {}),

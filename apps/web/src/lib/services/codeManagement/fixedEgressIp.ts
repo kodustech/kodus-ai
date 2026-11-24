@@ -9,6 +9,8 @@ export type FixedEgressIp = {
     available: boolean;
     /** The organization's plan includes the fixed outbound IP. */
     allowedByPlan: boolean;
+    /** Billing could not confirm the plan: turning it on is refused for now. */
+    planUnconfirmed?: boolean;
     /** The team's review sandboxes reach its Git host from the fixed IP. */
     enabled: boolean;
     /** `clone_fallback` when Kodus turned it on after a refused clone. */
