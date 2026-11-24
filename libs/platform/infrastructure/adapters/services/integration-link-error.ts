@@ -102,13 +102,14 @@ function hostAnswer(
     return undefined;
 }
 
+/** A header's value, or undefined when absent (fetch's `get` answers null). */
 function header(headers: Headers | undefined, name: string): unknown {
     if (!headers) {
         return undefined;
     }
-    return typeof headers.get === 'function'
-        ? headers.get(name)
-        : headers[name];
+    const value =
+        typeof headers.get === 'function' ? headers.get(name) : headers[name];
+    return value ?? undefined;
 }
 
 /**

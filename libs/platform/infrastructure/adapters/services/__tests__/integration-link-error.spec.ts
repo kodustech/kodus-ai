@@ -120,6 +120,24 @@ describe('toIntegrationLinkError', () => {
         },
     );
 
+    it('keeps a 403 whose fetch Response headers carry no rate limit as a refusal', () => {
+        const mapped = toIntegrationLinkError(
+            fail({
+                cause: {
+                    response: {
+                        status: 403,
+                        headers: new Headers({
+                            'content-type': 'application/json',
+                        }),
+                    },
+                },
+            }),
+            'GitLab',
+        );
+
+        expect(mapped).toBeInstanceOf(BadRequestException);
+    });
+
     it('keeps a 403 with rate-limit room left as a refusal', () => {
         const mapped = toIntegrationLinkError(
             fail({
