@@ -390,6 +390,14 @@ function extractFromText(
     return matches.sort((a, b) => a.index - b.index).map((m) => m.reference);
 }
 
+/** Git hosts whose own paths can end in `/browse/<name>`. */
+const GIT_HOSTS = new Set([
+    'github.com',
+    'gitlab.com',
+    'bitbucket.org',
+    'dev.azure.com',
+]);
+
 function fromUrl(url: string, source: ReferenceSource): Candidate | undefined {
     let parsed: URL;
     try {
@@ -473,11 +481,16 @@ function fromUrl(url: string, source: ReferenceSource): Candidate | undefined {
     // task (#2422) while the same key in prose was read. It is read as that
     // key, with no host: such a Jira is often connected as a custom plugin,
     // which a `jira` host would turn away.
-    const jiraKey =
-        path.match(/\/browse\/([A-Za-z][A-Za-z0-9_]*-\d+)\/?$/)?.[1] ??
-        path.match(
-            /\/projects\/[^/]+\/issues\/([A-Za-z][A-Za-z0-9_]*-\d+)\/?$/,
-        )?.[1];
+    // A Git host's own `/browse/` (Bitbucket Server's `…/repos/web/browse/…`)
+    // is a file or a branch, not a Jira issue.
+    const gitHost =
+        GIT_HOSTS.has(host) || /\/repos\/[^/]+\/browse\//.test(path);
+    const jiraKey = gitHost
+        ? undefined
+        : (path.match(/\/browse\/([A-Za-z][A-Za-z0-9_]*-\d+)\/?$/)?.[1] ??
+          path.match(
+              /\/projects\/[^/]+\/issues\/([A-Za-z][A-Za-z0-9_]*-\d+)\/?$/,
+          )?.[1]);
     if (jiraKey) {
         return {
             kind: 'key',

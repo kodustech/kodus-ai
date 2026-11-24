@@ -1,12 +1,12 @@
-import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
+import {
+    ContextWindowCompressor,
+    DEFAULT_SAFETY_MARGIN_RATIO,
+} from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
 import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compression/token-estimator';
 import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { declaredAnswerTokens } from '@libs/llm/model-invocation';
 import { slotContextWindow } from '@libs/llm/slot-window';
-
-/** The compressor's own margin for tokenizer drift (its default share). */
-const MARGIN_SHARE = 0.08;
 
 /**
  * Keeps every step of a conversation within its model's window (#2233). A
@@ -37,7 +37,8 @@ export async function conversationCompression(params: {
                 params.systemPrompt,
                 params.tools,
             ),
-            safetyMarginTokens: Math.ceil(window * MARGIN_SHARE) + answer,
+            safetyMarginTokens:
+                Math.ceil(window * DEFAULT_SAFETY_MARGIN_RATIO) + answer,
         }),
     );
 }

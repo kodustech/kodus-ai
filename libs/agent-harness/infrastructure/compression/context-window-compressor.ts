@@ -39,7 +39,7 @@ import {
  * Fraction of the window kept free by default for the model's own response plus
  * drift between our tokenizer and the provider's exact count. Overridable.
  */
-const DEFAULT_SAFETY_MARGIN_RATIO = 0.08;
+export const DEFAULT_SAFETY_MARGIN_RATIO = 0.08;
 
 export interface ContextWindowCompressorOptions {
     /**

@@ -59,6 +59,7 @@ import {
     type AgentLoopSecrets,
     type VerificationTraceSummary,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import { slotContextWindow } from '@libs/llm/slot-window';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
 // buildAgentAnomalies is review-specific (anomaly summary shapes) — lives in its
@@ -364,6 +365,11 @@ export async function runAgentLoopViaCore(
               }),
               verifyModelId: verifySlot.model ?? 'resolved',
               verifyFallbackModelId: verifySlot.fallback?.model,
+              // Its own window: the check model's, not the finder's (#2233).
+              verifyCompressor: new ContextWindowCompressor(
+                  slotContextWindow(verifySlot),
+                  { overheadTokens },
+              ),
               verifyProviderOptions: buildProviderOptions(
                   `${input.agentName ?? 'finder'}/verify`,
                   input.telemetryMetadata,

@@ -1,4 +1,4 @@
-import { buildRun, detectAuthor } from './run-mapping';
+import { buildRun, detectAuthor, sameResult } from './run-mapping';
 
 describe('detectAuthor', () => {
     it('names the coding agent from a Co-Authored-By trailer', () => {
@@ -68,5 +68,62 @@ describe('buildRun: a PR waiting on its tracker (UC-22)', () => {
         const run = buildRun(request('cli'), skipped as any);
         expect(run.pendingRecheck).toBeUndefined();
         expect(run.pendingSince).toBeUndefined();
+    });
+});
+
+describe('sameResult (#2423)', () => {
+    const run = (
+        over: Record<string, unknown> = {},
+        task: Record<string, unknown> = {},
+    ) =>
+        ({
+            outcome: 'validated',
+            passed: false,
+            unseenFiles: [],
+            tasks: [
+                {
+                    tracker: 'Linear',
+                    id: 'SAA-96',
+                    passed: false,
+                    readAt: '2026-10-05T12:00:00.000Z',
+                    requirements: [
+                        {
+                            requirement: 'Order persists',
+                            state: 'missing',
+                            evidence: [],
+                            confidence: 'high',
+                        },
+                    ],
+                    outOfScope: [],
+                    ...task,
+                },
+            ],
+            ...over,
+        }) as any;
+
+    it('reads a new push with the same verdict, in other words, as the same result', () => {
+        const reworded = run(
+            { headSha: 'b'.repeat(40) },
+            {
+                requirements: [
+                    {
+                        requirement: 'The order is saved',
+                        state: 'missing',
+                        evidence: [],
+                        confidence: 'high',
+                    },
+                ],
+            },
+        );
+        expect(sameResult(run({ headSha: 'a'.repeat(40) }), reworded)).toBe(
+            true,
+        );
+    });
+
+    it('reads a change of scope or of the files the judge could not see as a change', () => {
+        expect(sameResult(run(), run({}, { scopeMismatch: true }))).toBe(false);
+        expect(sameResult(run(), run({ unseenFiles: ['icons/a.svg'] }))).toBe(
+            false,
+        );
     });
 });

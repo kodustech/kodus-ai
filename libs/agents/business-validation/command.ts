@@ -53,7 +53,13 @@ export function replyFor(
     if (changed === false) {
         return `Business logic re-checked: same result as before${verdict ? `, ${verdict}` : ''}. The Kody · Business Logic comment on this pull request shows it.`;
     }
-    return `Business logic re-checked${changed ? `: the result changed${verdict ? `, ${verdict}` : ''}` : ''}. The Kody · Business Logic comment on this pull request is updated.`;
+    // Unknown (no earlier run to compare with): the comment was edited, and
+    // nothing is claimed about the result.
+    const news =
+        changed === true
+            ? `: the result changed${verdict ? `, ${verdict}` : ''}`
+            : '';
+    return `Business logic re-checked${news}. The Kody · Business Logic comment on this pull request is updated.`;
 }
 
 /** Text given to the command that is not a reference is the task itself. */

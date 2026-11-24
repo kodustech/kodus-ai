@@ -1,5 +1,8 @@
 import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
-import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
+import {
+    ContextWindowCompressor,
+    DEFAULT_SAFETY_MARGIN_RATIO,
+} from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
 import {
     estimateOverheadTokens,
     estimateValueTokens,
@@ -57,7 +60,7 @@ const READ_WINDOW_SHARE = 0.2;
 /** Past this share of the window, the first message can't be kept whole. */
 const HEAD_WINDOW_SHARE = 0.5;
 /** The compressor's own margin for tokenizer drift (its default). */
-const COMPRESSOR_MARGIN_SHARE = 0.08;
+const COMPRESSOR_MARGIN_SHARE = DEFAULT_SAFETY_MARGIN_RATIO;
 /** The answer each step asks for: kept out of the compressor's budget. */
 const GAP_CHECK_OUTPUT_TOKENS = 800;
 export const GAP_CHECK_ANSWER = GAP_CHECK_OUTPUT_TOKENS;

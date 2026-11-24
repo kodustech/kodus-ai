@@ -80,26 +80,29 @@ export function toRunTasks(result: BusinessValidationResult): RunTask[] {
     return [];
 }
 
+/** What `sameResult` compares. */
+type ResultFields = Pick<
+    NewValidationRun,
+    'outcome' | 'skipReason' | 'passed' | 'tasks' | 'unseenFiles'
+>;
+
 /**
  * Whether two runs reached the same result, as the author reads it: the
- * outcome, each task's verdict, and how many of its requirements and
- * out-of-scope changes stand in each state, accepted or not. Wording is left
- * out: the judge restates a requirement in other words from one run to the
- * next, and that is not a change the author has to act on.
+ * outcome, each task's verdict and scope, how many of its requirements and
+ * out-of-scope changes stand in each state, accepted or not, and the files
+ * the judge could not see. Wording is left out: the judge restates a
+ * requirement in other words from one run to the next, and that is not a
+ * change the author has to act on. So is the commit: a new push with the
+ * same verdict is the same result (#2423).
  */
 export function sameResult(
-    previous: Pick<
-        NewValidationRun,
-        'outcome' | 'skipReason' | 'passed' | 'tasks'
-    >,
-    next: Pick<NewValidationRun, 'outcome' | 'skipReason' | 'passed' | 'tasks'>,
+    previous: ResultFields,
+    next: ResultFields,
 ): boolean {
     return resultKey(previous) === resultKey(next);
 }
 
-function resultKey(
-    run: Pick<NewValidationRun, 'outcome' | 'skipReason' | 'passed' | 'tasks'>,
-): string {
+function resultKey(run: ResultFields): string {
     return JSON.stringify([
         run.outcome,
         run.skipReason ?? null,
@@ -109,6 +112,7 @@ function resultKey(
                 task.tracker,
                 task.id,
                 task.passed,
+                task.scopeMismatch ?? false,
                 (task.requirements ?? [])
                     .map((r) => `${r.state}:${r.accepted ? 1 : 0}`)
                     .sort(),
@@ -117,6 +121,7 @@ function resultKey(
                     .sort(),
             ])
             .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+        [...(run.unseenFiles ?? [])].sort(),
     ]);
 }
 

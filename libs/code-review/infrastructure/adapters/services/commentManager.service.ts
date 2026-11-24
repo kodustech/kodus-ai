@@ -3471,7 +3471,13 @@ ${reviewOptions}
             let file = changed;
             let fileTokens = fits(file);
             if (fileTokens > availableTokens - 1) {
-                file = cutFileToTokens(file, availableTokens - 2);
+                const cut = cutFileToTokens(file, availableTokens - 2);
+                if (!cut) {
+                    // Not even its name fits one call: no summary can be
+                    // sent whole.
+                    return null;
+                }
+                file = cut;
                 fileTokens = fits(file);
             }
 
@@ -3523,23 +3529,30 @@ function worstTokens(text: string): number {
     return estimateTextTokens(text, { worstCase: true });
 }
 
-/** Marks a patch cut to fit one summary call. */
-const CUT_NOTE =
-    '\n… (cut: the rest of this file does not fit the model window)';
+/**
+ * A summary entry: the file as the code host gave it, and whether its patch
+ * was cut to fit one call. The cut is said in its own field, never inside the
+ * patch, which is the author's text and could say the same words.
+ */
+type SummaryFile = Partial<FileChange> & { patchTruncated?: true };
 
 /**
  * The file with its patch cut until the whole entry is within `tokens`; its
  * name and status stay, so the summary still knows the file changed.
+ * Undefined when not even the entry without its patch fits.
  */
 function cutFileToTokens(
     file: Partial<FileChange>,
     tokens: number,
-): Partial<FileChange> {
+): SummaryFile | undefined {
     const patch = typeof file.patch === 'string' ? file.patch : '';
-    const entry = (cut: string) => ({ ...file, patch: cut });
     let length = patch.length;
     for (let i = 0; i < 8 && length > 0; i++) {
-        const cut = entry(patch.slice(0, length) + CUT_NOTE);
+        const cut: SummaryFile = {
+            ...file,
+            patch: wholeCharacters(patch, length),
+            patchTruncated: true,
+        };
         const count = worstTokens(JSON.stringify(cut));
         if (count <= tokens) {
             return cut;
@@ -3547,5 +3560,18 @@ function cutFileToTokens(
         length = Math.floor((length * tokens * 0.9) / count);
     }
     const { patch: _dropped, ...rest } = file;
-    return { ...rest, patch: CUT_NOTE.trim() };
+    const named: SummaryFile = { ...rest, patchTruncated: true };
+    return worstTokens(JSON.stringify(named)) <= tokens ? named : undefined;
+}
+
+/**
+ * The first `end` code units, without ending on a high surrogate: a lone one
+ * is escaped by JSON.stringify and the provider rejects what it decodes to.
+ */
+function wholeCharacters(text: string, end: number): string {
+    if (end >= text.length) {
+        return text;
+    }
+    const last = text.charCodeAt(end - 1);
+    return text.slice(0, last >= 0xd800 && last <= 0xdbff ? end - 1 : end);
 }

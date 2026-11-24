@@ -53,6 +53,12 @@ describe('replyFor', () => {
         expect(reply).toMatch(/is updated/);
     });
 
+    it('claims nothing about the result when there was no earlier run to compare with', () => {
+        const reply = replyFor(validated, 'updated', undefined);
+        expect(reply).toMatch(/is updated/);
+        expect(reply).not.toMatch(/changed|same result/);
+    });
+
     it('says the result is the same, not that anything was updated, when nothing changed (#2423)', () => {
         const reply = replyFor(
             { ...validated, passed: false },

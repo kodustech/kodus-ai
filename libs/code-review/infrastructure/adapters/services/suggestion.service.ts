@@ -59,6 +59,7 @@ import {
     resolvesSuggestionThread,
     statusesAtOrAbove,
 } from '@libs/platformData/domain/pullRequests/implementation-status';
+import { declaredAnswerTokens } from '@libs/llm/model-invocation';
 import { slotContextWindow } from '@libs/llm/slot-window';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 import {
@@ -68,7 +69,10 @@ import {
 import type { ChangedFilesSource } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import pLimit from 'p-limit';
 
-/** Share of the model's context window one file's prompt may take. */
+/**
+ * Share of the model's context window one file's prompt may take when the
+ * slot sets no answer limit: the rest is kept for the answer.
+ */
 const IMPLEMENTATION_CHECK_PROMPT_SHARE = 0.75;
 /** Files of one PR checked at the same time. */
 const IMPLEMENTATION_CHECK_CONCURRENCY = 4;
@@ -301,11 +305,20 @@ export class SuggestionService implements ISuggestionService {
                     LLM_TASK.codeReview,
                 );
             // The smaller of the slot's and its fallback's window (LLM.run
-            // re-sends the call to the fallback), else the env model's.
-            const maxPromptTokens = Math.floor(
-                slotContextWindow(byokConfig ?? undefined) *
-                    IMPLEMENTATION_CHECK_PROMPT_SHARE,
-            );
+            // re-sends the call to the fallback), else the env model's, less
+            // the answer: what the slot's own limit makes the call declare,
+            // else the quarter of the window it always kept.
+            const window = slotContextWindow(byokConfig ?? undefined);
+            const answerTokens =
+                byokConfig?.maxOutputTokens && byokConfig.maxOutputTokens > 0
+                    ? await declaredAnswerTokens(
+                          byokConfig,
+                          byokConfig.maxOutputTokens,
+                      )
+                    : Math.ceil(
+                          window * (1 - IMPLEMENTATION_CHECK_PROMPT_SHARE),
+                      );
+            const maxPromptTokens = Math.max(0, window - answerTokens);
 
             const requests = [...byFile].map(([filename, asks]) => ({
                 file: { filename, patch: patches.get(filename) },

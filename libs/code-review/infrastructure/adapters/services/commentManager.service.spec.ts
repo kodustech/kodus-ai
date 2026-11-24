@@ -568,6 +568,73 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 }
             });
 
+            it('never splits a character when it cuts a file', async () => {
+                // Where the cut lands depends on the length: every offset
+                // puts it on each side of a pair at least once.
+                for (const lead of [
+                    '+',
+                    '++',
+                    '+++',
+                    '++++',
+                    '+++++',
+                    '++++++',
+                ]) {
+                    capturedPrompts.length = 0;
+                    await summarize(
+                        {
+                            provider: 'openai_compatible',
+                            model: 'local-open-weights',
+                            maxInputTokens: 16_000,
+                        },
+                        [
+                            {
+                                filename: 'docs/emoji.md',
+                                patch: `${lead}${'😀'.repeat(40_000 + lead.length * 7)}`,
+                                status: 'added',
+                            },
+                        ],
+                    );
+                    const users = capturedPrompts.filter(
+                        (p) => p.role === 'user',
+                    );
+                    expect(users.length).toBeGreaterThan(0);
+                    for (const { prompt } of users) {
+                        // A lone high surrogate is invalid in the request
+                        // body: raw, or as the escape JSON.stringify writes.
+                        expect(prompt).not.toMatch(
+                            /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/,
+                        );
+                        expect(prompt).not.toMatch(
+                            /\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f][0-9a-f]{2})/i,
+                        );
+                    }
+                }
+            });
+
+            it('says a file was cut in its own field, not inside the patch the author wrote', async () => {
+                await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 16_000,
+                    },
+                    [
+                        {
+                            filename: 'fixtures/catalog.json',
+                            patch: dense(60_000, 11),
+                            status: 'added',
+                        },
+                    ],
+                );
+                const users = capturedPrompts.filter((p) => p.role === 'user');
+                expect(
+                    users.some((p) =>
+                        p.prompt.includes('"patchTruncated":true'),
+                    ),
+                ).toBe(true);
+                expect(users.some((p) => /\(cut:/.test(p.prompt))).toBe(false);
+            });
+
             it('asks the model nothing when the prompt alone leaves no room', async () => {
                 const result = await summarize(
                     {

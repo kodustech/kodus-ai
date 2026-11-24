@@ -208,8 +208,7 @@ describe("runFinderWithVerify within the model's window (#2233)", () => {
             compressor: new ContextWindowCompressor(16_000),
         });
         const runner = new AiSdkAgentRunner(undefined);
-        const verifyRunner = new AiSdkAgentRunner(undefined);
-        const verifyRun = jest.spyOn(verifyRunner, 'run');
+        const run = jest.spyOn(runner, 'run');
 
         await runFinderWithVerify(
             {
@@ -218,13 +217,15 @@ describe("runFinderWithVerify within the model's window (#2233)", () => {
                 modelId: 'mock',
                 tools,
                 skipHeavyPasses: true,
-                verifyRunner,
             },
             { prompt: 'review' },
             ctx,
         );
 
-        expect(verifyRun).toHaveBeenCalled();
+        const verifyRuns = run.mock.calls.filter(
+            ([spec]) => spec.phase === 'verify',
+        );
+        expect(verifyRuns.length).toBeGreaterThan(0);
         const read = (i: number) => [
             {
                 role: 'assistant',
@@ -263,7 +264,7 @@ describe("runFinderWithVerify within the model's window (#2233)", () => {
         expect(estimateTextTokens(JSON.stringify(messages))).toBeGreaterThan(
             16_000,
         );
-        for (const [spec] of verifyRun.mock.calls) {
+        for (const [spec] of verifyRuns) {
             const directives = await Promise.all(
                 spec.policies.map((p) =>
                     p.prepareStep?.({ messages, stepNumber: 8 } as any),
@@ -274,6 +275,87 @@ describe("runFinderWithVerify within the model's window (#2233)", () => {
             expect(
                 estimateTextTokens(JSON.stringify(sent)),
             ).toBeLessThanOrEqual(16_000);
+        }
+    });
+});
+
+describe('runFinderWithVerify on a check model of its own (#2233)', () => {
+    it("shortens each verify run to the check model's window, not the finder's", async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+            compressor: new ContextWindowCompressor(64_000),
+        });
+        const verifyRunner = new AiSdkAgentRunner(undefined);
+        const verifyRun = jest.spyOn(verifyRunner, 'run');
+
+        await runFinderWithVerify(
+            {
+                runner: new AiSdkAgentRunner(undefined),
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                skipHeavyPasses: true,
+                verifyRunner,
+                verifyModelId: 'small-check-model',
+                verifyCompressor: new ContextWindowCompressor(8_000),
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(verifyRun).toHaveBeenCalled();
+        const messages = [
+            { role: 'user', content: 'verify the finding' },
+            ...Array.from({ length: 6 }, (_, i) => [
+                {
+                    role: 'assistant',
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: `r${i}`,
+                            toolName: 'readFile',
+                            input: { path: `src/f${i}.ts` },
+                        },
+                    ],
+                },
+                {
+                    role: 'tool',
+                    content: [
+                        {
+                            type: 'tool-result',
+                            toolCallId: `r${i}`,
+                            toolName: 'readFile',
+                            output: {
+                                type: 'text',
+                                value: Array.from(
+                                    { length: 300 },
+                                    (_, line) =>
+                                        `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                                ).join('\n'),
+                            },
+                        },
+                    ],
+                },
+            ]).flat(),
+        ];
+        const before = estimateTextTokens(JSON.stringify(messages));
+        expect(before).toBeGreaterThan(8_000);
+        expect(before).toBeLessThan(64_000 * 0.7);
+        for (const [spec] of verifyRun.mock.calls) {
+            const directives = await Promise.all(
+                spec.policies.map((p) =>
+                    p.prepareStep?.({ messages, stepNumber: 6 } as any),
+                ),
+            );
+            const sent = directives.find((d) => d?.messages)?.messages;
+            expect(sent).toBeDefined();
+            expect(
+                estimateTextTokens(JSON.stringify(sent)),
+            ).toBeLessThanOrEqual(8_000);
         }
     });
 });

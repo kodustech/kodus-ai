@@ -27,24 +27,31 @@ export function slotContextWindow(slot: NormalizedModel | undefined): number {
 }
 
 /**
- * `slotContextWindow` when the slot or the model table knows it; undefined
- * when only the default guess would answer. For a caller that had no limit at
- * all before: a guessed window would split or skip calls a larger model takes.
+ * `slotContextWindow` when the slot or the model table knows the primary's
+ * window; undefined when only the default guess would answer it. For a
+ * caller that had no limit at all before: a guessed window would split or
+ * skip calls a larger model takes. A fallback whose window is unknown caps a
+ * known primary at the default guess: the call may go to it, and sizing it
+ * for the primary alone is the overflow #2233 is about.
  */
 export function knownSlotContextWindow(
     slot: NormalizedModel | undefined,
 ): number | undefined {
-    const known = (model: Omit<NormalizedModel, 'fallback'> | undefined) => {
-        const resolved = resolveContextWindowWithSource({
+    const resolve = (model: Omit<NormalizedModel, 'fallback'> | undefined) =>
+        resolveContextWindowWithSource({
             byokMaxInputTokens: model?.maxInputTokens,
             modelName: model ? (model.model ?? '') : getModelId(undefined),
         });
-        return resolved.source === 'default' ? undefined : resolved.tokens;
-    };
-    const primary = known(slot);
-    const fallback = slot?.fallback ? known(slot.fallback) : undefined;
-    if (primary === undefined) {
-        return fallback;
+    const primary = resolve(slot);
+    if (primary.source === 'default') {
+        // The primary's window is a guess: the fallback's, when it is known,
+        // is the only limit anyone knows.
+        const fallback = slot?.fallback ? resolve(slot.fallback) : undefined;
+        return fallback && fallback.source !== 'default'
+            ? fallback.tokens
+            : undefined;
     }
-    return fallback === undefined ? primary : Math.min(primary, fallback);
+    return slot?.fallback
+        ? Math.min(primary.tokens, resolve(slot.fallback).tokens)
+        : primary.tokens;
 }

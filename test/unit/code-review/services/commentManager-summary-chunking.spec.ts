@@ -303,21 +303,38 @@ describe('CommentManagerService – chunkChangedFilesForSummary', () => {
     // -----------------------------------------------------------------
 
     describe('edge cases', () => {
-        it('should return all files best-effort when budget is consumed by fixed parts', () => {
-            // Very large prompt, tiny maxInputTokens
-            const hugePrompt = 'x'.repeat(10000); // ≈ 2857 tokens
+        it('should return null when the fixed parts alone use the budget (#2233)', () => {
+            // Very large prompt, tiny maxInputTokens: no call can fit, and
+            // sending the files anyway is a request the provider rejects.
+            const hugePrompt = 'x'.repeat(10000);
             const files = [makeFile('a.ts', 100)];
 
             const result = serviceAny.chunkChangedFilesForSummary(
                 files,
                 hugePrompt,
                 SHORT_PREFIX,
-                1000, // effectiveBudget = 900, but fixedTokens ≈ 2907 > 900
+                1000,
             );
 
-            // availableTokens <= 0 → return all files best-effort
-            expect(result).toHaveLength(1);
-            expect(result[0]).toBe(files);
+            expect(result).toBeNull();
+        });
+
+        it('should return null when a file does not fit even without its patch', () => {
+            const result = serviceAny.chunkChangedFilesForSummary(
+                [
+                    makeFile('a.ts', 100),
+                    {
+                        filename: 'x'.repeat(20_000),
+                        patch: '+ y',
+                        status: 'added',
+                    },
+                ],
+                SHORT_PROMPT,
+                SHORT_PREFIX,
+                3000,
+            );
+
+            expect(result).toBeNull();
         });
 
         it('should handle empty changedFiles array', () => {

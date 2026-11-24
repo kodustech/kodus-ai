@@ -451,6 +451,30 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
         ]);
     });
 
+    it("keeps room for the slot's own answer limit, not a flat quarter of the window", async () => {
+        permissionValidationService.resolveTaskSlot.mockResolvedValue({
+            provider: 'openai_compatible',
+            model: 'local-open-weights',
+            maxInputTokens: 16_000,
+            maxOutputTokens: 1_000,
+        });
+        // About 13k tokens: over three quarters of the window, within what
+        // a 1k answer leaves.
+        const patch = Array.from(
+            { length: 1_250 },
+            (_, line) => `+export const value${line} = compute(${line});`,
+        ).join('\n');
+
+        await check(
+            [sent('s-1', 'app/values.ts')],
+            [{ filename: 'app/values.ts', patch }],
+        );
+
+        expect(
+            aiAnalysisService.checkSuggestionImplementation,
+        ).toHaveBeenCalledTimes(1);
+    });
+
     it("sizes the check by the fallback's window when it is the smaller one", async () => {
         permissionValidationService.resolveTaskSlot.mockResolvedValue({
             provider: 'openai',

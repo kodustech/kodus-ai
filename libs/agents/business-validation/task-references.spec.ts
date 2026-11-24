@@ -130,10 +130,14 @@ describe('extractTaskReferences', () => {
         ]);
     });
 
-    it('reads no task from a link that only shares a word with a Jira path', () => {
+    it("reads no task from a link that only shares a word with a Jira path, or a Git host's own /browse/", () => {
         expect(
             ids({
-                body: 'https://docs.acme.com/browse/catalog and https://acme.com/projects/web/issues',
+                body: [
+                    'https://docs.acme.com/browse/catalog and https://acme.com/projects/web/issues',
+                    'https://bitbucket.org/acme/web/browse/PAY-123',
+                    'https://bitbucket.acme.com/projects/PAY/repos/web/browse/PAY-123',
+                ].join('\n'),
             }),
         ).toEqual([]);
     });

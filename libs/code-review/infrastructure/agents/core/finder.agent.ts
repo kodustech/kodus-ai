@@ -762,6 +762,9 @@ export interface RunFinderWithVerifyParams {
     verifyFallbackModelId?: string;
     /** Provider options built for `verifyRunner`'s model. */
     verifyProviderOptions?: Readonly<Record<string, unknown>>;
+    /** The window guard for `verifyRunner`'s model, sized to its own window:
+     *  the finder's would budget a different model (#2233). */
+    verifyCompressor?: Compressor;
     /** Verify concurrency (default 4). */
     concurrency?: number;
     /** Provider options (reasoning/thinking config) forwarded to verifier runs. */
@@ -1131,11 +1134,15 @@ export async function runFinderWithVerify(
     const hv2 = await verifyFindings(
         {
             ...params,
-            // The finder's own window guard: a verify run reads and re-sends
-            // files on up to ten steps (#2233).
-            compression: params.finderSpec.policies.find(
-                (p) => p.name === 'compression',
-            ),
+            // A verify run reads and re-sends files on up to ten steps
+            // (#2233): the finder's window guard when it runs on the finder's
+            // model, its own when it runs on a check model.
+            compression: params.verifyRunner
+                ? params.verifyCompressor &&
+                  new CompressionPolicy(params.verifyCompressor)
+                : params.finderSpec.policies.find(
+                      (p) => p.name === 'compression',
+                  ),
             runner: verify.runner,
             modelId: verify.modelId,
             fallbackModelId: verify.fallbackModelId,
