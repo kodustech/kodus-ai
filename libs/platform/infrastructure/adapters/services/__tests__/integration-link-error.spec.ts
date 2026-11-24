@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 
 import {
+    causeChain,
     isIntegrationLinkRefusal,
     logIntegrationLinkFailure,
     toIntegrationLinkError,
@@ -117,6 +118,27 @@ describe('toIntegrationLinkError', () => {
         a.cause = b;
 
         expect(toIntegrationLinkError(a, 'GitHub')).toBe(a);
+        // Without the guard the walk would revisit a and b up to the depth cap.
+        expect(causeChain(a)).toEqual([a, b]);
+    });
+
+    it('finds a host 401 under a wrapper error', () => {
+        const refused = fail({ status: 401 });
+        const err = fail({ cause: fail({ cause: refused }) }, 'retry failed');
+
+        const mapped = toIntegrationLinkError(err, 'GitHub') as HttpException;
+
+        expect(mapped).toBeInstanceOf(BadRequestException);
+        expect(mapped.message).toBe(
+            'GitHub did not accept the credentials (401). Check the token and try again.',
+        );
+        expect(mapped.cause).toBe(err);
+    });
+
+    it('takes the first status in the chain, so a 500 over a 401 stays a fault', () => {
+        const err = fail({ status: 500, cause: fail({ status: 401 }) });
+
+        expect(toIntegrationLinkError(err, 'GitHub')).toBe(err);
     });
 });
 

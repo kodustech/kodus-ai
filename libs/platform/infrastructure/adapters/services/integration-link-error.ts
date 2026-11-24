@@ -32,7 +32,8 @@ type ErrorLike = {
     cause?: unknown;
 };
 
-function causeChain(err: unknown): ErrorLike[] {
+/** The error and its causes, stopping at a loop or at MAX_CAUSE_DEPTH. */
+export function causeChain(err: unknown): ErrorLike[] {
     const chain: ErrorLike[] = [];
     let current: unknown = err;
     while (
@@ -59,14 +60,19 @@ function unreachableHostCode(chain: ErrorLike[]): string | undefined {
     return undefined;
 }
 
-/** octokit and bitbucket set `status`, axios `response.status`, gitbeaker `cause.response.status`. */
-function hostStatus(err: ErrorLike): number | undefined {
-    const candidates = [
-        err.status,
-        err.response?.status,
-        (err.cause as ErrorLike | undefined)?.response?.status,
-    ];
-    return candidates.find((s): s is number => typeof s === 'number');
+/**
+ * The first status any link of the chain carries: octokit and bitbucket set
+ * `status`, axios `response.status`, gitbeaker a cause with `response.status`.
+ */
+function hostStatus(chain: ErrorLike[]): number | undefined {
+    for (const link of chain) {
+        for (const status of [link.status, link.response?.status]) {
+            if (typeof status === 'number') {
+                return status;
+            }
+        }
+    }
+    return undefined;
 }
 
 function refusalMessage(provider: string, status: number): string | undefined {
@@ -110,7 +116,7 @@ export function toIntegrationLinkError(
         );
     }
 
-    const status = hostStatus(chain[0]);
+    const status = hostStatus(chain);
     const message = status ? refusalMessage(provider, status) : undefined;
     if (message) {
         return new BadRequestException(message, { cause: err });
