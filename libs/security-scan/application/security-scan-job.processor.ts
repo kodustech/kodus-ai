@@ -64,7 +64,7 @@ import {
 import {
     consolidateOpenIssues,
     occurrenceOf,
-    type RootCauseCall,
+    rootCauseCallOn,
 } from './scan-consolidation';
 import { LLM } from '@libs/llm/llm';
 import { runWithUsageMeter } from '@libs/llm/usage-meter';
@@ -902,15 +902,11 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 return 0;
             }
             const stopAt = Date.now() + CONSOLIDATION_WINDOW_MS;
-            const call: RootCauseCall = (request) =>
-                LLM.run({
-                    byokConfig: model.slot,
-                    schema: request.schema,
-                    system: request.system,
-                    user: request.user,
-                    runName: request.runName,
-                    organizationId: scan.organizationId,
-                }) as Promise<{ sameAs: string; reason: string }>;
+            const call = rootCauseCallOn(
+                LLM.run.bind(LLM),
+                model.slot,
+                scan.organizationId,
+            );
             const { absorbed, compared } = await runWithUsageMeter(
                 meter,
                 () =>

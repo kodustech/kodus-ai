@@ -9,6 +9,8 @@
 import { z } from 'zod';
 
 import { createLogger } from '@libs/core/log/logger';
+import type { LLM } from '@libs/llm/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import { rootCauseCandidates } from '../domain/root-cause';
 import {
@@ -36,6 +38,26 @@ export type RootCauseCall = (request: {
     schema: typeof ROOT_CAUSE_SCHEMA;
     runName: string;
 }) => Promise<z.infer<typeof ROOT_CAUSE_SCHEMA> | undefined>;
+
+/**
+ * The comparison as the end of a scan asks it: one structured request on the
+ * scan's own model (no failover, as every scan request). Shared with the eval.
+ */
+export function rootCauseCallOn(
+    llm: typeof LLM.run,
+    slot: NormalizedModel,
+    organizationId: string,
+): RootCauseCall {
+    return (request) =>
+        llm({
+            byokConfig: slot,
+            schema: request.schema,
+            system: request.system,
+            user: request.user,
+            runName: request.runName,
+            organizationId,
+        }) as Promise<z.infer<typeof ROOT_CAUSE_SCHEMA>>;
+}
 
 /**
  * The reported finding `finding` is the same problem as, or null. Asks the

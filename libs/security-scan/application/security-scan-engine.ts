@@ -842,6 +842,44 @@ export class SecurityScanEngine {
         );
     }
 
+    /**
+     * The independent check alone, on a finding already reported: what a
+     * scan runs for it, in a unit of its own file and class. The verifier's
+     * eval calls it (evals/security-scan/own-scan.js).
+     */
+    async verifyReported(
+        params: SecurityScanEngineParams,
+        finding: ScanFinding,
+    ) {
+        const unit: ScanUnit = {
+            id: `verify:${finding.filePath}`,
+            file: finding.filePath,
+            relatedFiles: [],
+            language: finding.language,
+            classes: [finding.vulnerabilityClass],
+            priority: 0,
+            reasons: [],
+        };
+        const signal = params.signal ?? new AbortController().signal;
+        return runWithUsageMeter(
+            params.meter,
+            () =>
+                this.verifyFinding(
+                    params,
+                    unit,
+                    finding.vulnerabilityClass,
+                    [],
+                    finding,
+                    signal,
+                ),
+            {
+                organizationId: params.organizationId,
+                teamId: params.teamId,
+                repositoryId: params.repositoryId,
+            },
+        );
+    }
+
     private async verifyFinding(
         params: SecurityScanEngineParams,
         unit: ScanUnit,
