@@ -138,15 +138,13 @@ describe('SecurityScanSchedulesUseCase', () => {
             expect.objectContaining({
                 cadence: 'weekly',
                 mode: 'incremental',
-                enabled: true,
                 nextRunAt: '2026-11-25T03:00:00.000Z',
             }),
         );
     });
 
-    it('keeps a paused schedule paused when it is saved without saying', async () => {
+    it('leaves the stored state alone when saved without saying, without reading it first', async () => {
         const { useCase, schedules } = setup();
-        schedules.find.mockResolvedValue(schedule({ enabled: false }));
         const input = {
             organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
             repositoryId: 'repo-1',
@@ -155,11 +153,11 @@ describe('SecurityScanSchedulesUseCase', () => {
         };
 
         await useCase.save(input);
-        await useCase.save({ ...input, enabled: true });
+        await useCase.save({ ...input, enabled: false });
 
-        expect(schedules.find).toHaveBeenCalledWith('org-1', repositoryKey);
-        expect(schedules.save.mock.calls[0][2]).toMatchObject({ enabled: false });
-        expect(schedules.save.mock.calls[1][2]).toMatchObject({ enabled: true });
+        expect(schedules.find).not.toHaveBeenCalled();
+        expect(schedules.save.mock.calls[0][2].enabled).toBeUndefined();
+        expect(schedules.save.mock.calls[1][2]).toMatchObject({ enabled: false });
     });
 
     it('refuses a schedule without a spend limit', async () => {

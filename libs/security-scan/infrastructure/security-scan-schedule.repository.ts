@@ -12,17 +12,16 @@ export const SECURITY_SCAN_SCHEDULE_REPOSITORY_TOKEN = Symbol.for(
 
 export type SecurityScanScheduleSettings = Pick<
     SecurityScanSchedule,
-    | 'cadence'
-    | 'budget'
-    | 'mode'
-    | 'modelId'
-    | 'exportTo'
-    | 'enabled'
-    | 'teamId'
-> & { nextRunAt: string; createdBy?: SecurityScanSchedule['createdBy'] };
+    'cadence' | 'budget' | 'mode' | 'modelId' | 'exportTo' | 'teamId'
+> & {
+    nextRunAt: string;
+    createdBy?: SecurityScanSchedule['createdBy'];
+    /** Omitted: an existing schedule keeps its state, a new one is enabled. */
+    enabled?: boolean;
+};
 
 export interface ISecurityScanScheduleRepository {
-    /** The repository's schedule, created or replaced. */
+    /** The repository's schedule, created or replaced, in one write. */
     save(
         organizationId: string,
         repository: ScanRepositoryKey,
@@ -86,7 +85,9 @@ export class SecurityScanScheduleRepository implements ISecurityScanScheduleRepo
                             cadence: settings.cadence,
                             budget: settings.budget,
                             mode: settings.mode,
-                            enabled: settings.enabled,
+                            ...(settings.enabled !== undefined
+                                ? { enabled: settings.enabled }
+                                : {}),
                             nextRunAt: new Date(settings.nextRunAt),
                             ...(settings.modelId
                                 ? { modelId: settings.modelId }
@@ -98,6 +99,10 @@ export class SecurityScanScheduleRepository implements ISecurityScanScheduleRepo
                                 ? { createdBy: settings.createdBy }
                                 : {}),
                         },
+                        // Saved without saying, a schedule keeps its state.
+                        ...(settings.enabled === undefined
+                            ? { $setOnInsert: { enabled: true } }
+                            : {}),
                         // Back to the Deep scan routing when no model is picked;
                         // no export when none is set.
                         ...(settings.modelId && settings.exportTo
