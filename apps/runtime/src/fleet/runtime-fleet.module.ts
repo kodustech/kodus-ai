@@ -21,12 +21,12 @@ import { SetupRecordBakeProbe } from './template/bake-probe';
 import { BoatSetupHost, type HostSealer } from './template/boat-setup-host';
 import { HubHostSealer } from './template/hub-host-sealer';
 import { buildEnvironmentTemplate } from './template/build-template';
-import { RequestingSetupHost, TemplateBuildTrigger, type TemplateSetupRequester, TriggeringTemplateResolver } from './template/template-trigger';
+import { fleetTemplateTrigger } from './template/fleet-template-trigger';
+import { RequestingSetupHost, type TemplateBuildTrigger, type TemplateSetupRequester, TriggeringTemplateResolver } from './template/template-trigger';
 import { PgSetupCandidates } from './template/setup-candidates-store';
 import { TemplateRebuildPass } from './template/template-rebuild';
 import { PgTemplateSetupRequester } from './template/pg-template-setup-requester';
 import { PgTemplateStore, StoreTemplateResolver } from './template/template-store';
-import { PgSuiteBaselineRequests } from '../shared/persistence/suite-baseline-requests';
 
 // runtime-fleet (docs/runtime/host-providers.md §4.1): the reconcile loop and
 // the host workflows. It holds the provider credentials and nothing else of
@@ -81,7 +81,8 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
         // The environment template builder runs only where it can seal a host and ask for the setup on it.
         const boat = this.providers.get('boat');
         if (boat && this.requester && !this.templates) {
-            const setups = new PgTemplateSetupStore(this.pool);
+            // A template build's own setup record (runtime_template_setups, by setup key): only the bake probe reads it.
+            const templateSetups = new PgTemplateSetupStore(this.pool);
             const allBoatPools = async () => (await store.controlledPools()).pools.filter((p) => p.pool.provider === 'boat' && p.pool.lifecycle === 'perRun').map((p) => ({ poolId: p.poolId, pool: p.pool }));
             const boatPoolsOf = async (organizationId: string) => (await allBoatPools()).filter((p) => !p.pool.admission || p.pool.admission.allowOrgs.includes(organizationId));
             const poll = { sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)), attempts: 360, intervalMs: 10_000 };
@@ -89,7 +90,7 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
                 new BoatSetupHost({
                     provider: boat,
                     hub,
-                    probe: new SetupRecordBakeProbe(setups),
+                    probe: new SetupRecordBakeProbe(templateSetups),
                     sealer: this.sealer ?? new HubHostSealer({ hub, poll: { sleep: poll.sleep, attempts: 40, intervalMs: 3_000 } }),
                     poolOf: async (poolId) => (await store.pool(poolId))?.pool,
                     installation: c.installation,
@@ -98,17 +99,14 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
                 }),
                 this.requester,
             );
-            const trigger = new TemplateBuildTrigger({
+            const trigger = fleetTemplateTrigger(this.pool, {
                 store: templateStore,
-                setups,
                 poolOf: async (poolId) => {
                     const p = await store.pool(poolId);
                     return p ? { poolId, pool: p.pool } : null;
                 },
                 boatPoolsOf,
                 build: (req) => buildEnvironmentTemplate(req, { store: templateStore, provider: boat, setupHosts, cellBase: cellBaseOf(req.pool.hostClass) ?? '', poll }),
-                // A template that turns ready asks for a baseline of its main commit (e2e suites, section 2.1).
-                baselines: new PgSuiteBaselineRequests(this.pool),
                 log,
             });
             templates = new TriggeringTemplateResolver(templates, trigger);

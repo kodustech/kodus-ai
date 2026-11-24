@@ -16,7 +16,7 @@ function world(rec: EnvironmentSetupRecord | null = record()) {
     const gate = new Promise<void>((r) => (release = r));
     const trigger = new TemplateBuildTrigger({
         store,
-        setups: { get: async () => rec },
+        environmentSetups: { get: async () => rec },
         poolOf: async (poolId) => ({ poolId, pool }),
         boatPoolsOf: async () => [{ poolId: 'p', pool }],
         build: async (req) => {
@@ -40,7 +40,7 @@ describe('when a template turns ready', () => {
         const logs: string[] = [];
         const trigger = new TemplateBuildTrigger({
             store: new InMemoryTemplateStore(),
-            setups: { get: async () => rec },
+            environmentSetups: { get: async () => rec },
             poolOf: async (poolId) => ({ poolId, pool }),
             boatPoolsOf: async () => [{ poolId: 'p', pool }],
             build: async () => result as any,

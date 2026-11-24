@@ -28,8 +28,8 @@ export interface SuiteBaselineRequester {
 
 export interface TemplateTriggerDeps {
     store: Pick<TemplateStore, 'find' | 'readyName'>;
-    /** The environment's latest setup record. */
-    setups: { get(environmentId: string): Promise<EnvironmentSetupRecord | null> };
+    /** The environment's own latest setup, by environment id (runtime_environment_setups); never a template build's setup record. */
+    environmentSetups: { get(environmentId: string): Promise<EnvironmentSetupRecord | null> };
     /** The pool a Run's demand is on. */
     poolOf(poolId: string): Promise<{ poolId: string; pool: HostPool } | null>;
     /** The boat perRun pools that may build templates for the org. */
@@ -88,7 +88,7 @@ export class TemplateBuildTrigger {
     private async start(organizationId: string, environmentId: string, poolId: string, pool: HostPool): Promise<void> {
         const key = `${organizationId}/${environmentId}`;
         if (this.inflight.has(key)) return;
-        const rec = await this.d.setups.get(environmentId);
+        const rec = await this.d.environmentSetups.get(environmentId);
         // Only what the environment's active default-branch setup baked can be templated.
         if (!rec || rec.organizationId !== organizationId || rec.state !== 'active' || rec.refSource !== 'default_branch') return;
         const fingerprint = bakeFingerprintOf(rec);
