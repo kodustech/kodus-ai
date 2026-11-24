@@ -348,8 +348,15 @@ export class CodeManagementController {
             'Returns members from the connected code platform. A "unavailable" status means the platform could not be reached and the empty list must not be read as an empty organization.',
     })
     @ApiQuery({ name: 'teamId', required: true })
-    public async getOrganizationMembers(@Query() query: { teamId: string }) {
-        return this.getCodeManagementMemberListUseCase.execute(query.teamId);
+    @ApiQuery({ name: 'connectionId', required: false })
+    public async getOrganizationMembers(
+        @Query() query: { teamId: string; connectionId?: string },
+    ) {
+        return this.getCodeManagementMemberListUseCase.execute(
+            query.teamId,
+            {},
+            query.connectionId || undefined,
+        );
     }
 
     @Get('/organization-members/labels')
@@ -396,11 +403,13 @@ export class CodeManagementController {
             'Clears the cached members list and re-fetches from the code platform.',
     })
     @ApiQuery({ name: 'teamId', required: true })
+    @ApiQuery({ name: 'connectionId', required: false })
     public async refreshOrganizationMembers(
-        @Query() query: { teamId: string },
+        @Query() query: { teamId: string; connectionId?: string },
     ) {
         return this.getCodeManagementMemberListUseCase.refreshMembers(
             query.teamId,
+            query.connectionId || undefined,
         );
     }
 

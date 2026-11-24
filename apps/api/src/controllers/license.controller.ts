@@ -198,7 +198,9 @@ export class LicenseController {
         description:
             'Return all users who have ever been assigned a license seat (active and inactive).',
     })
-    public async usersWithLicense() {
+    public async usersWithLicense(
+        @Query('connectionId') connectionId?: string,
+    ) {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
@@ -209,6 +211,7 @@ export class LicenseController {
 
         return this.licenseService.getAllUsersEverWithLicense({
             organizationId,
+            ...(connectionId ? { integrationId: connectionId } : {}),
         });
     }
 
@@ -229,6 +232,7 @@ export class LicenseController {
         @Body()
         body: {
             teamId?: string;
+            connectionId?: string;
             users: Array<{
                 gitId: string;
                 gitTool: string;
@@ -249,6 +253,7 @@ export class LicenseController {
         const orgData = {
             organizationId,
             teamId: body.teamId,
+            ...(body.connectionId ? { integrationId: body.connectionId } : {}),
         };
 
         const successful: any[] = [];
@@ -299,9 +304,15 @@ export class LicenseController {
         description:
             'Lists the git ids holding a seat while no longer belonging to the git organization. Returns a "members_unavailable" status when the code platform could not be reached.',
     })
-    public async removableSeats(@Query('teamId') teamId?: string) {
+    public async removableSeats(
+        @Query('teamId') teamId?: string,
+        @Query('connectionId') connectionId?: string,
+    ) {
         return this.pruneRemovedLicenseSeatsUseCase.execute({
-            organizationAndTeamData: this.resolveOrganizationAndTeamData(teamId),
+            organizationAndTeamData: this.resolveOrganizationAndTeamData(
+                teamId,
+                connectionId,
+            ),
             dryRun: true,
         });
     }
@@ -320,11 +331,13 @@ export class LicenseController {
             'Releases the seats of users who no longer belong to the git organization. Never runs when the member list could not be confirmed.',
     })
     public async pruneSeats(
-        @Body() body: { teamId?: string; gitIds?: string[] },
+        @Body()
+        body: { teamId?: string; connectionId?: string; gitIds?: string[] },
     ) {
         return this.pruneRemovedLicenseSeatsUseCase.execute({
             organizationAndTeamData: this.resolveOrganizationAndTeamData(
                 body?.teamId,
+                body?.connectionId,
             ),
             gitIds: body?.gitIds,
         });
@@ -358,7 +371,10 @@ export class LicenseController {
         });
     }
 
-    private resolveOrganizationAndTeamData(teamId?: string) {
+    private resolveOrganizationAndTeamData(
+        teamId?: string,
+        connectionId?: string,
+    ) {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
@@ -367,6 +383,10 @@ export class LicenseController {
             );
         }
 
-        return { organizationId, teamId };
+        return {
+            organizationId,
+            teamId,
+            ...(connectionId ? { integrationId: connectionId } : {}),
+        };
     }
 }
