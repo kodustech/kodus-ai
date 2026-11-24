@@ -1,3 +1,4 @@
+import { SUITE_ARTIFACT_BUDGET_BYTES } from '@libs/runtime/contracts/evidence';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 import { type EnvironmentRuntime, isBlocked } from '@libs/runtime/environment';
 import type { EnvError, StepResult } from '@libs/runtime/environment';
@@ -35,6 +36,8 @@ import { type DetachedOutcome, runDetached } from './detached-exec';
 import type { BaselineSpec, PgSuiteBaselines } from './pg-suite-baselines';
 import type { PgSuiteRuns, SuitePhase, SuiteRunState, SuiteSpecStatus } from './pg-suite-runs';
 import type { PgSuiteSpecStats } from './pg-suite-spec-stats';
+import type { SuiteArtifactKeeper } from './suite-artifacts';
+import type { Canary } from '../canary/canary';
 import type { SuiteShardHost } from '../../shared/persistence/suite-demand';
 
 export type { SuiteShardHost };
@@ -58,6 +61,8 @@ export interface SuiteConfig {
     shardTimeoutMs: number;
     /** `suite.shards`: a ceiling. */
     maxShards: number;
+    /** `suite.results.artifacts`: the directories the runner writes screenshots, videos and traces to; the artifacts of failed specs are kept from them. */
+    artifacts?: readonly string[];
     /** `suite.gate`: `strict` fails the run on any unclassified failure; default leaves it neutral (D4). */
     gate?: 'default' | 'strict';
 }
@@ -96,6 +101,10 @@ export interface SuiteInputs {
      * service, with `NODE_V8_COVERAGE` set, and the map is recorded with the baseline. Ignored in a PR run, which never pays for it.
      */
     coverage?: boolean;
+    /** The Run's canaries when the suite is a stage of a Run: one in an artifact halts the suite (section 13). */
+    canaries?: readonly Canary[];
+    /** The bytes of artifacts the run keeps in all; absent: `SUITE_ARTIFACT_BUDGET_BYTES` (200 MiB). */
+    artifactBudgetBytes?: number;
 }
 
 /** Whether the environment has a ready template to start a main host from, and a way to ask for a build (9.5). */
@@ -113,7 +122,7 @@ export interface SuiteHostDemand {
 
 export interface SuiteEngineDeps {
     env: Pick<EnvironmentRuntime, 'acquire' | 'exec' | 'release'>;
-    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults'>;
+    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'recordArtifacts'>;
     stats: Pick<PgSuiteSpecStats, 'read' | 'record'>;
     demand: SuiteHostDemand;
     clock: { now(): number; sleep(ms: number): Promise<void> };
@@ -125,6 +134,8 @@ export interface SuiteEngineDeps {
     baselines?: Pick<PgSuiteBaselines, 'record' | 'findAmong'>;
     /** Where a baseline's coverage map is kept; absent: none is kept. */
     maps?: { record(m: CoverageMapRecord): Promise<{ stored: boolean }> };
+    /** Keeps the artifacts of failed specs as evidence; absent: none are kept. */
+    artifacts?: Pick<SuiteArtifactKeeper, 'keep'>;
 }
 
 /** How long the engine waits for the hosts it asked for before it goes on with the ones that came (design section 5). */
@@ -156,6 +167,8 @@ export interface SuiteOutcome {
     state: SuiteRunState;
     /** The run was already finished when asked again: nothing ran. */
     replayed: boolean;
+    /** A canary was found in an artifact: the suite stopped, and a Run that holds it halts (section 13). */
+    leaked?: boolean;
     firstPass: FirstPassSpec[];
     /** Whose fault each red test is (9.3); absent for a baseline, which is never classified. */
     classification?: Classification;
@@ -224,6 +237,11 @@ interface RunCtx {
     judged?: { baselineSha?: string; baseDrift: number };
     /** The files each spec exercised, read from its dumps (a baseline with coverage only); a spec whose dumps could not be read is absent. */
     coverage: Map<string, string[]>;
+    /** The artifact bytes kept so far, and the chain that keeps shards' reservations in order. */
+    artifactBytes: number;
+    artifactChain: Promise<void>;
+    /** A canary was found in an artifact. */
+    leaked: boolean;
 }
 
 /** The test's last failed attempt as a signature: what makes two failures "the same". */
@@ -266,10 +284,15 @@ export class SuiteEngine {
             stop: new AbortController(),
             skipped: new Set(),
             coverage: new Map(),
+            artifactBytes: 0,
+            artifactChain: Promise.resolve(),
+            leaked: false,
         };
         try {
             await this.firstPass(ctx);
             const firstPass = this.firstPassOf(ctx);
+            // A canary in an artifact halts the suite: nothing is re-run or judged.
+            if (ctx.leaked) return await this.concludeLeaked(ctx, firstPass);
             // Cancelled: what ran is stored as it ran; nothing is re-run or judged.
             if (this.cancelled(ctx)) return await this.concludeCancelled(ctx, firstPass);
             const classification = req.mode === 'baseline' ? undefined : await this.rerunPhase(ctx, firstPass);
@@ -302,9 +325,54 @@ export class SuiteEngine {
         if (plan.length === 0) {
             for (const p of runs[0].planned) runs[0].missing.set(p, 'infra');
         } else {
-            await Promise.all(runs.map((r) => this.driveShard(ctx, r)));
+            await Promise.all(runs.map(async (r) => {
+                await this.driveShard(ctx, r);
+                await this.keepArtifacts(ctx, r);
+            }));
         }
         await this.recordMissing(ctx);
+    }
+
+    /**
+     * The artifacts of the shard's failed specs (7, D8), read while the shard's claim is still held and before a re-run can
+     * overwrite them: a PR run only, and only when the recipe names the directories. Shards take the budget in turn. A keeper that
+     * fails loses the artifacts, never the result. A canary found stops every shard's command and ends the run (13).
+     */
+    private keepArtifacts(ctx: RunCtx, shard: ShardRun): Promise<void> {
+        const keeper = this.d.artifacts;
+        const dirs = ctx.inputs.config.artifacts ?? [];
+        const failed = [...shard.done].filter(([, r]) => r.status === 'failed').map(([spec]) => spec);
+        if (!keeper || dirs.length === 0 || ctx.req.mode === 'baseline' || !shard.claimId || failed.length === 0) return Promise.resolve();
+        const claimId = shard.claimId;
+        const turn = ctx.artifactChain.then(async () => {
+            const remaining = (ctx.inputs.artifactBudgetBytes ?? SUITE_ARTIFACT_BUDGET_BYTES) - ctx.artifactBytes;
+            const kept = await keeper
+                .keep({
+                    organizationId: ctx.req.organizationId,
+                    suiteRunId: ctx.req.suiteRunId,
+                    side: ctx.side,
+                    shard: shard.shard,
+                    claimId,
+                    ...(ctx.inputs.config.cwd ? { cwd: ctx.inputs.config.cwd } : {}),
+                    dirs,
+                    specs: shard.planned,
+                    failed,
+                    remainingBytes: Math.max(0, remaining),
+                    ...(ctx.inputs.canaries?.length ? { canaries: ctx.inputs.canaries } : {}),
+                })
+                .catch(() => undefined);
+            if (!kept) return;
+            ctx.artifactBytes += kept.keptBytes;
+            const bySpec = new Map<string, Array<{ name: string; key: string; contentType: string; bytes: number }>>();
+            for (const a of kept.artifacts) bySpec.set(a.spec, [...(bySpec.get(a.spec) ?? []), { name: a.name, key: a.key, contentType: a.contentType, bytes: a.bytes }]);
+            if (bySpec.size > 0) await this.d.runs.recordArtifacts(ctx.req.organizationId, ctx.req.suiteRunId, { phase: 'shard', shard: shard.shard }, [...bySpec].map(([spec, artifacts]) => ({ spec, artifacts }))).catch(() => undefined);
+            if (kept.leaked) {
+                ctx.leaked = true;
+                ctx.stop.abort();
+            }
+        });
+        ctx.artifactChain = turn.catch(() => undefined);
+        return turn;
     }
 
     private async requestDemand(ctx: RunCtx, shards: readonly number[]): Promise<void> {
@@ -745,6 +813,12 @@ export class SuiteEngine {
         const state = this.stateOf(ctx, firstPass, classification);
         await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, state, new Date(this.d.clock.now()), { ...(classification ? { classification } : {}), ...(ctx.judged ? { ...(ctx.judged.baselineSha ? { baselineSha: ctx.judged.baselineSha } : {}), baseDrift: ctx.judged.baseDrift } : {}) });
         return { suiteRunId: ctx.req.suiteRunId, state, replayed: false, firstPass, ...(classification ? { classification } : {}) };
+    }
+
+    /** A canary in an artifact ends the suite `failed` (a security event, never green or neutral): no classification, no baseline, no durations. */
+    private async concludeLeaked(ctx: RunCtx, firstPass: FirstPassSpec[]): Promise<SuiteOutcome> {
+        await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, 'failed', new Date(this.d.clock.now()));
+        return { suiteRunId: ctx.req.suiteRunId, state: 'failed', replayed: false, firstPass, leaked: true };
     }
 
     /** A cancelled suite ends `cancelled`: no classification, no baseline, no durations (a cut-short spec says nothing of how long it takes). */

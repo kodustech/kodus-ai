@@ -79,6 +79,19 @@ describe('the suite as a stage of the Run', () => {
         expect(thrown.result.state).toBe('partly_tested');
     });
 
+    it('a canary found in an artifact of the suite halts the Run, as a canary anywhere else does', async () => {
+        const { result, check } = await run(stageOf({ status: 'ran', state: 'failed', leaked: true }));
+        expect(result.state).toBe('halted');
+        expect(check?.check?.conclusion).not.toBe('success');
+    });
+
+    it('hands the stage the Run\'s canaries, so the artifacts it keeps are watched for them', async () => {
+        const stage = stageOf({ status: 'ran', state: 'passed' });
+        await run(stage);
+        const opts = (stage.calls[0] as { opts: { canaries?: unknown[] } }).opts;
+        expect(opts.canaries?.length).toBeGreaterThan(0);
+    });
+
     it('an environment with no suite leaves the Run alone', async () => {
         expect((await run(stageOf({ status: 'off' }))).result.state).toBe('no_regressions');
     });

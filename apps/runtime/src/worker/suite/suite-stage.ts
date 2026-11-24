@@ -3,6 +3,7 @@ import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-comm
 import type { RuntimeRunRequested, SuiteStageResult } from '@libs/runtime/run';
 
 import type { SuiteStage } from '../run/ports';
+import type { Canary } from '../canary/canary';
 import type { PgSuiteRuns } from './pg-suite-runs';
 import type { SuiteService, SuiteStep } from './suite-service';
 
@@ -20,7 +21,7 @@ export class SuiteRunStage implements SuiteStage {
         private readonly runs: Pick<PgSuiteRuns, 'get'>,
     ) {}
 
-    async run(req: RuntimeRunRequested, step: SuiteStep, opts: { deadlineAt?: string; cancellationSignal?: () => AbortSignal | undefined } = {}): Promise<SuiteStageResult> {
+    async run(req: RuntimeRunRequested, step: SuiteStep, opts: { deadlineAt?: string; cancellationSignal?: () => AbortSignal | undefined; canaries?: readonly Canary[] } = {}): Promise<SuiteStageResult> {
         const s = req.suite;
         if (!s) return { status: 'off' };
         const cmd: RuntimeSuiteRequested = {
@@ -54,6 +55,6 @@ export class SuiteRunStage implements SuiteStage {
             const run = await this.runs.get(req.organizationId, result.suiteRunId);
             return { state: run?.state ?? result.state, ...(run?.classification ? { classification: run.classification } : {}) };
         });
-        return { status: 'ran', state: stored.state as NonNullable<SuiteStageResult['state']>, ...(stored.classification ? { classification: stored.classification } : {}) };
+        return { status: 'ran', state: stored.state as NonNullable<SuiteStageResult['state']>, ...(stored.classification ? { classification: stored.classification } : {}), ...(result.leaked ? { leaked: true } : {}) };
     }
 }

@@ -68,9 +68,19 @@ export interface SuiteResultRow {
     tests: unknown[];
 }
 
+/** One artifact kept for a failed spec: the evidence key it was written under (`suite-artifact`) and what it is. */
+export interface SuiteArtifactRef {
+    name: string;
+    key: string;
+    contentType: string;
+    bytes: number;
+}
+
 export interface StoredSuiteResult extends SuiteResultRow {
     phase: SuitePhase;
     shard: number;
+    /** The artifacts kept for a failed spec (docs section 7); absent when none were. */
+    artifacts?: SuiteArtifactRef[];
 }
 
 const runOf = (x: Record<string, any>): StoredSuiteRun => ({
@@ -167,11 +177,22 @@ export class PgSuiteRuns {
         );
     }
 
+    /** Adds the kept artifacts to the results already recorded for these specs (a spec with no row is left alone). */
+    async recordArtifacts(organizationId: string, suiteRunId: string, from: { phase: SuitePhase; shard: number }, rows: ReadonlyArray<{ spec: string; artifacts: readonly SuiteArtifactRef[] }>): Promise<void> {
+        if (rows.length === 0) return;
+        await this.pool.query(
+            `UPDATE runtime.runtime_suite_results t SET artifacts = r.artifacts
+               FROM jsonb_to_recordset($4::jsonb) AS r(spec text, artifacts jsonb)
+              WHERE t.suite_run_id = $1 AND t.organization_id = $2 AND t.phase = $3 AND t.spec = r.spec`,
+            [suiteRunId, organizationId, from.phase, JSON.stringify(rows.map((x) => ({ spec: x.spec, artifacts: x.artifacts })))],
+        );
+    }
+
     async results(organizationId: string, suiteRunId: string): Promise<StoredSuiteResult[]> {
         const r = await this.pool.query(
-            `SELECT phase, shard, spec, status, duration_ms, error_signature, tests FROM runtime.runtime_suite_results WHERE organization_id = $1 AND suite_run_id = $2 ORDER BY phase, spec`,
+            `SELECT phase, shard, spec, status, duration_ms, error_signature, tests, artifacts FROM runtime.runtime_suite_results WHERE organization_id = $1 AND suite_run_id = $2 ORDER BY phase, spec`,
             [organizationId, suiteRunId],
         );
-        return r.rows.map((x) => ({ phase: x.phase, shard: x.shard, spec: x.spec, status: x.status, durationMs: x.duration_ms, ...(x.error_signature ? { errorSignature: x.error_signature } : {}), tests: x.tests }));
+        return r.rows.map((x) => ({ phase: x.phase, shard: x.shard, spec: x.spec, status: x.status, durationMs: x.duration_ms, ...(x.error_signature ? { errorSignature: x.error_signature } : {}), tests: x.tests, ...(x.artifacts ? { artifacts: x.artifacts } : {}) }));
     }
 }

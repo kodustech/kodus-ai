@@ -249,7 +249,7 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                             // Run mode: the same suite service, as a stage of the Run (docs/runtime/e2e-suites.md section 10.2).
                             suite: (factory) => {
                                 const runs = new PgSuiteRuns(pool);
-                                return new SuiteRunStage(buildSuiteService({ pool, deps: factory, setups, runs, amqp, maxHosts: config.suiteMaxHosts }), runs);
+                                return new SuiteRunStage(buildSuiteService({ pool, deps: factory, setups, runs, amqp, maxHosts: config.suiteMaxHosts, ...(store ? { evidence: store } : {}) }), runs);
                             },
                         });
                     },
@@ -304,9 +304,9 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                 {
                     // The e2e suite's workflow body (docs/runtime/e2e-suites.md section 11): the recipe's suite block, the spec list, the engine.
                     provide: SUITE_SERVICE,
-                    inject: [RUNTIME_PG_POOL, RUN_DEPS_FACTORY, ENVIRONMENT_SETUP_STORE, SUITE_RUNS, AmqpConnection],
-                    useFactory: (pool: Pool, deps: RunDependenciesFactory, setups: EnvironmentSetupStore, runs: PgSuiteRuns, amqp: AmqpConnection) =>
-                        buildSuiteService({ pool, deps, setups, runs, amqp, maxHosts: config.suiteMaxHosts }),
+                    inject: [RUNTIME_PG_POOL, RUN_DEPS_FACTORY, ENVIRONMENT_SETUP_STORE, SUITE_RUNS, AmqpConnection, EVIDENCE_STORE],
+                    useFactory: (pool: Pool, deps: RunDependenciesFactory, setups: EnvironmentSetupStore, runs: PgSuiteRuns, amqp: AmqpConnection, evidence: EvidenceStore) =>
+                        buildSuiteService({ pool, deps, setups, runs, amqp, maxHosts: config.suiteMaxHosts, evidence }),
                 },
                 { provide: ORGANIZATION_PURGE_STORE, inject: [RUNTIME_PG_POOL], useFactory: (pool: Pool) => new PgOrganizationPurgeStore(pool) },
                 { provide: CLAIM_RELEASER, inject: [HUB_CLIENT], useFactory: (hub: HubClient) => new HubClaimReleaser(hub) },

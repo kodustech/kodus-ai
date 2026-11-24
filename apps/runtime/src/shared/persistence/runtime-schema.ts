@@ -1238,6 +1238,13 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         );
         CREATE INDEX IF NOT EXISTS runtime_suite_coverage_maps_env_idx ON runtime.runtime_suite_coverage_maps (organization_id, environment_id, finished_at DESC);`,
     },
+    {
+        version: 56,
+        name: 'the artifacts kept for the failed specs of a suite run',
+        // docs/runtime/e2e-suites.md section 7: per failed spec the files kept as evidence (name, evidence key, content type, bytes), so the
+        // suite page can open them by key. The objects live in the evidence store under the run's `suite-artifact` keys and follow its TTL.
+        sql: `ALTER TABLE runtime.runtime_suite_results ADD COLUMN IF NOT EXISTS artifacts jsonb;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

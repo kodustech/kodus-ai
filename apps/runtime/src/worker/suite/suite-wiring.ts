@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 
 import type { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 
+import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
 import { PgEnvTemplates } from '../../shared/persistence/env-templates';
 import { PgHostPoolReader } from '../../shared/persistence/host-pools';
 import { PgSuiteBaselineRequests } from '../../shared/persistence/suite-baseline-requests';
@@ -29,6 +30,8 @@ export function buildSuiteService(d: {
     amqp: Pick<AmqpConnection, 'publish'>;
     /** RUNTIME_SUITE_MAX_HOSTS: the hosts one suite run asks for at most. */
     maxHosts: number;
+    /** The evidence store the artifacts of failed specs are written to; absent: none are kept. */
+    evidence?: Pick<EvidenceStore, 'put'>;
 }): SuiteService {
     const templates = new PgEnvTemplates(d.pool);
     const pools = new PgHostPoolReader(d.pool);
@@ -41,6 +44,7 @@ export function buildSuiteService(d: {
         stats: new PgSuiteSpecStats(d.pool),
         baselines: new PgSuiteBaselines(d.pool),
         maps: new PgSuiteCoverageMaps(d.pool),
+        ...(d.evidence ? { evidence: d.evidence } : {}),
         templates: { hasReady: (organizationId, environmentId) => templates.hasReady(organizationId, environmentId) },
         headroom: async () => d.maxHosts,
         baselineRequests: new PgSuiteBaselineRequests(d.pool),

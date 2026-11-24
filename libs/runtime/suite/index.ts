@@ -23,3 +23,5 @@ export { ANNOTATION_MESSAGE_MAX, ANNOTATION_PAGE, ANNOTATION_TITLE_MAX, ANNOTATI
 export type { SuiteAnnotation, SuiteCheckConclusion, SuiteReport, SuiteReportInput, SuiteReportState, SuiteSelectionReport, SuiteUnavailableReason } from './report';
 export { planSuiteRun } from './plan';
 export type { SuitePlan, SuitePlanInput } from './plan';
+export { artifactOwner, planArtifacts } from './artifacts';
+export type { ArtifactDropReason, ArtifactFile, ArtifactPlan } from './artifacts';

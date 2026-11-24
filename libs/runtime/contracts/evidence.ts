@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 
 // Evidence lives in the cell object store at {orgId}/{runId}/{side}/{stepId}/{type}
 // (§8). The key is always built here, on the server, from the Run the caller
@@ -36,9 +36,10 @@ export const EVIDENCE_UPLOAD_TYPES = [
 export type EvidenceUploadType = (typeof EVIDENCE_UPLOAD_TYPES)[number];
 
 /** `input`: a file the dev's agent sent into an env session (env_upload), kept for the cell to read. */
-export type EvidenceType = 'output' | 'screenshot' | 'proxy_log' | 'app_log' | 'input' | EvidenceUploadType;
+/** `suite-artifact`: a file of a failed spec of an e2e suite run, written by the worker (docs/runtime/e2e-suites.md section 7); a cell never gets a grant for it. */
+export type EvidenceType = 'output' | 'screenshot' | 'proxy_log' | 'app_log' | 'input' | 'suite-artifact' | EvidenceUploadType;
 /** Every type a key may name: the worker's own and the uploaded ones. */
-export const EVIDENCE_TYPES: readonly EvidenceType[] = [...new Set<EvidenceType>(['output', 'screenshot', 'video', 'trace', 'har', 'proxy_log', 'app_log', 'input', ...EVIDENCE_UPLOAD_TYPES])];
+export const EVIDENCE_TYPES: readonly EvidenceType[] = [...new Set<EvidenceType>(['output', 'screenshot', 'video', 'trace', 'har', 'proxy_log', 'app_log', 'input', 'suite-artifact', ...EVIDENCE_UPLOAD_TYPES])];
 
 /** The only content types evidence is stored as; an upload of any other is refused. */
 export const EVIDENCE_CONTENT_TYPES = ['application/json', 'text/plain', 'image/png', 'video/webm', 'application/zip'] as const;
@@ -66,6 +67,40 @@ export function evidenceUploadLimit(type: EvidenceUploadType): { contentType: Ev
             return { contentType: 'application/json', maxBytes: 10 * MIB };
     }
     throw new InvalidEvidenceKeyError('invalid upload type');
+}
+
+/** The most artifact bytes one suite run keeps, all specs and shards together (docs/runtime/e2e-suites.md section 7). */
+export const SUITE_ARTIFACT_BUDGET_BYTES = 200 * MIB;
+
+const SUITE_ARTIFACT_KINDS: Record<string, { contentType: EvidenceContentType; maxBytes: number }> = {
+    png: { contentType: 'image/png', maxBytes: 2 * MIB },
+    webm: { contentType: 'video/webm', maxBytes: 20 * MIB },
+    zip: { contentType: 'application/zip', maxBytes: 20 * MIB },
+    log: { contentType: 'text/plain', maxBytes: 256 * KIB },
+    txt: { contentType: 'text/plain', maxBytes: 256 * KIB },
+    json: { contentType: 'application/json', maxBytes: 1 * MIB },
+};
+
+/** The content type and byte ceiling of a suite artifact by its file extension; undefined for a kind the evidence does not hold (an mp4, no extension). */
+export function suiteArtifactLimit(path: string): { contentType: EvidenceContentType; maxBytes: number } | undefined {
+    const ext = /\.([A-Za-z0-9]+)$/.exec(path)?.[1]?.toLowerCase();
+    return ext ? SUITE_ARTIFACT_KINDS[ext] : undefined;
+}
+
+/**
+ * The key of one artifact of a suite run: the evidence key of the run, where the "step" is derived from the shard, the spec and the
+ * file, so the same file is the same object (a replay overwrites it) and the key stays the canonical five parts every store
+ * and the organization purge already handle.
+ */
+export function suiteArtifactKey(input: { organizationId: string; suiteRunId: string; side: 'base' | 'pr'; shard: number; spec: string; name: string }): string {
+    const h = createHash('sha256').update(JSON.stringify(['suite-artifact', input.shard, input.spec, input.name])).digest();
+    // A version-5 shaped uuid from the first 16 bytes, the shape every evidence key's step id has.
+    const b = Buffer.from(h.subarray(0, 16));
+    b[6] = (b[6] & 0x0f) | 0x50;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const x = b.toString('hex');
+    const stepId = `${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20)}`;
+    return evidenceKey({ organizationId: input.organizationId, runId: input.suiteRunId, side: input.side, stepId, type: 'suite-artifact' });
 }
 
 export const isEvidenceUploadType = (t: string): t is EvidenceUploadType => (EVIDENCE_UPLOAD_TYPES as readonly string[]).includes(t);

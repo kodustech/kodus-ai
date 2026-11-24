@@ -69,6 +69,22 @@ const run: SuiteRunRecord = {
         expect(await store.results('org-b', run.suiteRunId)).toEqual([]);
     });
 
+    it('keeps the artifacts of a failed spec beside its result, only for the row of that phase, and reads them back', async () => {
+        await store.create(run);
+        const failed = { spec: 'a.cy.ts', status: 'failed' as const, durationMs: 900, tests: [] };
+        await store.recordResults('org-a', run.suiteRunId, { phase: 'shard', shard: 0 }, [failed, { spec: 'b.cy.ts', status: 'passed', durationMs: 100, tests: [] }]);
+        const artifacts = [{ name: 'cypress/screenshots/a.cy.ts/fail.png', key: 'org-a/run/pr/step/suite-artifact', contentType: 'image/png', bytes: 42 }];
+        await store.recordArtifacts('org-a', run.suiteRunId, { phase: 'shard', shard: 0 }, [{ spec: 'a.cy.ts', artifacts }, { spec: 'gone.cy.ts', artifacts }]);
+        // Another organization's id changes nothing.
+        await store.recordArtifacts('org-b', run.suiteRunId, { phase: 'shard', shard: 0 }, [{ spec: 'b.cy.ts', artifacts }]);
+        const got = await store.results('org-a', run.suiteRunId);
+        expect(got.find((r) => r.spec === 'a.cy.ts')?.artifacts).toEqual(artifacts);
+        expect(got.find((r) => r.spec === 'b.cy.ts')?.artifacts).toBeUndefined();
+        // Reporting the spec again keeps what was kept for it.
+        await store.recordResults('org-a', run.suiteRunId, { phase: 'shard', shard: 0 }, [failed]);
+        expect((await store.results('org-a', run.suiteRunId)).find((r) => r.spec === 'a.cy.ts')?.artifacts).toEqual(artifacts);
+    });
+
     it('ends a run once: the first conclusion stays', async () => {
         await store.create(run);
         await store.finish('org-a', run.suiteRunId, 'passed', new Date('2026-11-23T12:20:00.000Z'));

@@ -94,6 +94,7 @@ Imported by:
 - [`libs/runtime/protocol`](../protocol/AGENTS.md)
 - [`libs/runtime/protocol/scripts`](../protocol/scripts/AGENTS.md)
 - [`libs/runtime/run`](../run/AGENTS.md)
+- [`libs/runtime/suite`](../suite/AGENTS.md)
 - [`libs/runtime/telemetry`](../telemetry/AGENTS.md)
 
 <!-- module-map:end -->

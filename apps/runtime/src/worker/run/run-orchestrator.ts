@@ -1924,7 +1924,10 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
     }
     ctx.dependencyChangeUntested = t.dependency.length > 0 && !verdicts.some((v) => t.dependency.some((d) => d.id === v.entryPoint));
     // The repository's own e2e suite, after the probes: its regressions are findings, its undecided failures hold a green Run back.
-    const suite = suiteVerdictParts(await suiteStage(run));
+    const stage = await suiteStage(run, canaries);
+    // A canary in an artifact the suite kept is a sighting like any other: the Run halts.
+    if (stage?.leaked) leak ??= 'exec_output';
+    const suite = suiteVerdictParts(stage);
     if (suite.findings.length) probes = [...probes, ...redactDeep(suite.findings, canaries)];
     const exercised = await exercisedOnPr(run, pr);
     // Every kept check of the request has an outcome, from the final verdicts (after intent): a halt leaves the rest skipped.
@@ -1997,13 +2000,13 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
  * that has the stage, and never after a halt. It runs inside the Run's workflow with the Run's step runner. A stage that fails
  * is a suite that did not run, never a Run that errored; a cancellation goes on up.
  */
-async function suiteStage(run: RunScope): Promise<SuiteStageResult | undefined> {
+async function suiteStage(run: RunScope, canaries: Canary[]): Promise<SuiteStageResult | undefined> {
     const { deps, req, ctx } = run;
     if (!deps.suite || !req.suite || ctx.stoppedEarly) return undefined;
     try {
         // The suite shares the Run's 45 minutes (design 12.1): it ends in time for the verdict and the publish that follow it.
         const deadlineAt = run.roomAt ? new Date(Date.parse(run.roomAt) + RUN_TIMEOUT_MS - SUITE_STAGE_MARGIN_MS).toISOString() : undefined;
-        return await deps.suite.run(req, deps.step, { ...(deadlineAt ? { deadlineAt } : {}), ...(deps.cancellationSignal ? { cancellationSignal: deps.cancellationSignal } : {}) });
+        return await deps.suite.run(req, deps.step, { ...(deadlineAt ? { deadlineAt } : {}), ...(deps.cancellationSignal ? { cancellationSignal: deps.cancellationSignal } : {}), ...(canaries.length ? { canaries } : {}) });
     } catch (e) {
         if (isCancellation(e)) throw e;
         return { status: 'unavailable' };

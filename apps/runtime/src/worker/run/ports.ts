@@ -7,7 +7,7 @@ import type { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
 import type { RuntimeAgent } from '../agent/runtime-agent';
-import type { CanaryVault } from '../canary/canary';
+import type { Canary, CanaryVault } from '../canary/canary';
 import type { StatedIntentAuthor } from '../intent/intent-author';
 import type { FindingIntentClassifier } from '../intent/intent-classifier';
 import type { EvidenceUploads } from './run-evidence';
@@ -153,9 +153,9 @@ export interface KeptCheckResults {
 export interface SuiteStage {
     /**
      * Runs the suite the Run's request carries (`req.suite`) through the same engine as CI mode, inside the Run's workflow
-     * with its step runner, and says how it ended. `deadlineAt` is when the suite must be over so the Run keeps its own 45 minutes; `cancellationSignal` (read inside the step that runs the engine) aborts when the Run is stopped, which stops the suite and releases what it holds. Throws only a cancellation; anything else the stage turns into `unavailable`.
+     * with its step runner, and says how it ended. `deadlineAt` is when the suite must be over so the Run keeps its own 45 minutes; `canaries` are the Run's, watched in the artifacts the suite keeps; `cancellationSignal` (read inside the step that runs the engine) aborts when the Run is stopped, which stops the suite and releases what it holds. Throws only a cancellation; anything else the stage turns into `unavailable`.
      */
-    run(req: RuntimeRunRequested, step: StepRunner, opts?: { deadlineAt?: string; cancellationSignal?: () => AbortSignal | undefined }): Promise<SuiteStageResult>;
+    run(req: RuntimeRunRequested, step: StepRunner, opts?: { deadlineAt?: string; cancellationSignal?: () => AbortSignal | undefined; canaries?: readonly Canary[] }): Promise<SuiteStageResult>;
 }
 
 export interface RunDeps {

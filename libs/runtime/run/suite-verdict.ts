@@ -33,6 +33,8 @@ export interface SuiteStageResult {
     /** The suite run's state when it ran. */
     state?: 'passed' | 'failed' | 'neutral' | 'timed_out' | 'cancelled' | 'errored';
     classification?: Classification;
+    /** A canary was found in an artifact the suite kept: the Run halts as it does for a canary anywhere else. */
+    leaked?: boolean;
 }
 
 /** The suite's part of the verdict: findings, the failures left undecided, and whether the suite did not run or finish. */

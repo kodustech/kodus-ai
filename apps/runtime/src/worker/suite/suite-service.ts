@@ -5,6 +5,8 @@ import { type CoverageMapInput, MAP_MAX_COMMITS_BEHIND, type PreviousSuiteRun, p
 
 import type { PgSuiteBaselineRequests } from '../../shared/persistence/suite-baseline-requests';
 import type { CoverageMapRecord } from './coverage-collector';
+import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
+import type { Canary } from '../canary/canary';
 import type { PgSuiteBaselines } from './pg-suite-baselines';
 import type { StoredCoverageMap } from './pg-suite-coverage-maps';
 import type { PgSuiteRuns, SuiteRunState } from './pg-suite-runs';
@@ -16,6 +18,7 @@ import { suiteConfigOf, type ResolvedSuite } from './suite-config';
 import type { SuiteEnvironment } from './suite-environment';
 import { type SuiteHostDemand, SuiteEngine, type SuiteTemplates } from './suite-engine';
 import { TemplateSpecLister } from './spec-lister';
+import { ExecArtifactSource, SuiteArtifactKeeper } from './suite-artifacts';
 import type { SuitePublisher } from './suite-publisher';
 
 export const SUITE_SERVICE = Symbol('SUITE_SERVICE');
@@ -43,10 +46,12 @@ export interface SuiteServiceDeps {
     setups: Pick<EnvironmentSetupStore, 'get'>;
     environment(ctx: SuiteEnvironmentContext): SuiteEnvironment;
     demand(scope: { organizationId: string; suiteRunId: string }): SuiteHostDemand;
-    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'latestForPr'>;
+    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'recordArtifacts' | 'latestForPr'>;
     stats: Pick<PgSuiteSpecStats, 'read' | 'record'>;
     baselines?: Pick<PgSuiteBaselines, 'record' | 'findAmong'>;
     templates?: SuiteTemplates;
+    /** Where the artifacts of failed specs are written (the evidence store); absent: none are kept. */
+    evidence?: Pick<EvidenceStore, 'put'>;
     /**
      * The coverage maps of baselines (`PgSuiteCoverageMaps`): a baseline records one, a PR run reads the environment's newest complete
      * one. Absent: a baseline collects no coverage and every PR run is the whole suite with the reason `map_missing`.
@@ -62,7 +67,7 @@ export interface SuiteServiceDeps {
 
 export type SuiteServiceResult =
     /** The engine ran (or had run: `replayed`); `state` is the run's. */
-    | { status: 'ran'; suiteRunId: string; state: SuiteRunState; replayed: boolean }
+    | { status: 'ran'; suiteRunId: string; state: SuiteRunState; replayed: boolean; /** A canary was found in an artifact (the Run that holds the suite halts). */ leaked?: boolean }
     /** The environment has no suite to run: no run row. */
     | { status: 'off'; reason: 'no_suite' | 'baseline_disabled' }
     /** The run could not start; it ended neutral, with the reason. */
@@ -83,7 +88,7 @@ interface Started {
 export class SuiteService {
     constructor(private readonly d: SuiteServiceDeps) {}
 
-    async run(cmd: RuntimeSuiteRequested, step: SuiteStep, opts: { deadlineAt?: string; cancellationSignal?: () => AbortSignal | undefined } = {}): Promise<SuiteServiceResult> {
+    async run(cmd: RuntimeSuiteRequested, step: SuiteStep, opts: { deadlineAt?: string; cancellationSignal?: () => AbortSignal | undefined; canaries?: readonly Canary[] } = {}): Promise<SuiteServiceResult> {
         const started = await step('suite:start', () => this.start(cmd));
         if ('status' in started) return started;
         // Publish steps retry (run-engine.service.ts `isPublishStep`): a broker that restarts never ends the suite without its check.
@@ -93,7 +98,7 @@ export class SuiteService {
         try {
             if (publisher) await step('publish:suite-started', () => publisher.started(cmd));
             const result = await step('suite:run', async () => {
-                const out = await this.runEngine(cmd, started, opts.deadlineAt ? Date.parse(opts.deadlineAt) : undefined, opts.cancellationSignal?.());
+                const out = await this.runEngine(cmd, started, opts.deadlineAt ? Date.parse(opts.deadlineAt) : undefined, opts.cancellationSignal?.(), opts.canaries);
                 // A cancelled workflow runs no step after this one, so its check is closed here, cancelled, never left in progress.
                 if (publisher && out.status === 'ran' && out.state === 'cancelled') {
                     await publisher.finished(cmd, out, suite).catch(() => undefined);
@@ -122,7 +127,7 @@ export class SuiteService {
         return { suite, imageId: setup.imageId ?? 'latest', expose: setup.expose ?? [] };
     }
 
-    private async runEngine(cmd: RuntimeSuiteRequested, s: Started, deadlineAt?: number, signal?: AbortSignal): Promise<SuiteServiceResult> {
+    private async runEngine(cmd: RuntimeSuiteRequested, s: Started, deadlineAt?: number, signal?: AbortSignal, canaries?: readonly Canary[]): Promise<SuiteServiceResult> {
         const { runs, clock } = this.d;
         const held = await runs.get(cmd.organizationId, cmd.suiteRunId);
         if (held?.finishedAt) return { status: 'ran', suiteRunId: cmd.suiteRunId, state: held.state, replayed: true };
@@ -172,6 +177,7 @@ export class SuiteService {
             clock,
             ...(this.d.baselines ? { baselines: this.d.baselines } : {}),
             ...(this.d.maps ? { maps: this.d.maps } : {}),
+            ...(this.d.evidence ? { artifacts: new SuiteArtifactKeeper({ source: new ExecArtifactSource(env, `art-${cmd.suiteRunId}`), store: this.d.evidence }) } : {}),
             ...(this.d.templates ? { templates: this.d.templates } : {}),
             ...(this.d.headroom ? { headroom: this.d.headroom } : {}),
         });
@@ -181,6 +187,7 @@ export class SuiteService {
             mainHistory: mainHistoryOf(cmd),
             ...(deadlineAt !== undefined && Number.isFinite(deadlineAt) ? { deadlineAt } : {}),
             ...(signal ? { signal } : {}),
+            ...(canaries?.length ? { canaries } : {}),
             // A retry or a selection runs part of the suite; the digest that keys a baseline is the whole suite's.
             suiteDigest: digest,
             selection: cmd.specs ? { mode: 'selected', selected: specs.length, total: whole.length } : plan.selection,
@@ -188,7 +195,7 @@ export class SuiteService {
             // Only a baseline pays for coverage, and only where a map store keeps it.
             ...(cmd.mode === 'baseline' && this.d.maps ? { coverage: true } : {}),
         });
-        return { status: 'ran', suiteRunId: cmd.suiteRunId, state: out.state, replayed: out.replayed };
+        return { status: 'ran', suiteRunId: cmd.suiteRunId, state: out.state, replayed: out.replayed, ...(out.leaked ? { leaked: true } : {}) };
     }
 
     /**

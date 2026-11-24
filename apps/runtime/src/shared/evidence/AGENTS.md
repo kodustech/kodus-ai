@@ -49,5 +49,6 @@ Imported by:
 - [`apps/runtime/src/worker/env-session`](../../worker/env-session/AGENTS.md)
 - [`apps/runtime/src/worker/evidence`](../../worker/evidence/AGENTS.md)
 - [`apps/runtime/src/worker/run`](../../worker/run/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../../worker/suite/AGENTS.md)
 
 <!-- module-map:end -->

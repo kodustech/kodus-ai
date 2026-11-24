@@ -37,11 +37,11 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 
 ## Module map
 
-Files (15, tests apart): `balance.ts`, `classifier.ts`, `digest.ts`, `error-signature.ts`, `hosts.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `plan.ts`, `report.ts`, `repush.ts`, `select.ts`, `spec-list.ts`, `types.ts`
+Files (16, tests apart): `artifacts.ts`, `balance.ts`, `classifier.ts`, `digest.ts`, `error-signature.ts`, `hosts.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `plan.ts`, `report.ts`, `repush.ts`, `select.ts`, `spec-list.ts`, `types.ts`
 
 Imports these Runtime modules:
 
-- none
+- [`libs/runtime/contracts`](../contracts/AGENTS.md)
 
 Imported by:
 

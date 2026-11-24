@@ -31,6 +31,7 @@ export function suiteConfigOf(recipe: Pick<Recipe, 'suite'>): ResolvedSuite | un
             resultsGlob: s.results?.junit ?? DEFAULT_RESULTS_GLOB,
             shardTimeoutMs: s.timeoutSeconds?.shard !== undefined ? s.timeoutSeconds.shard * 1000 : DEFAULT_SHARD_TIMEOUT_MS,
             maxShards: s.shards ?? SUITE_LIMITS.shards,
+            ...(s.results?.artifacts.length ? { artifacts: s.results.artifacts } : {}),
             gate: s.gate,
         },
         specsGlob: s.specs,

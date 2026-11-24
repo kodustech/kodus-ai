@@ -4,6 +4,8 @@ import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-comm
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import { suiteDigestOf } from '@libs/runtime/suite';
 
+import { InMemoryEvidenceStore } from '../../shared/evidence/testing';
+
 import { suiteConfigOf } from './suite-config';
 import { FakeSuiteCell, FakeSuiteDemand, InMemorySuiteBaselines, InMemorySuiteCoverageMaps, InMemorySuiteRuns, InMemorySuiteSpecStats, SuiteClock, type FakeSuiteWorld } from './testing';
 import { SuiteService, type SuiteServiceDeps } from './suite-service';
@@ -34,7 +36,7 @@ const request = (over: Partial<RuntimeSuiteRequested> = {}): RuntimeSuiteRequest
 
 const cancelError = () => Object.assign(new Error('workflow cancelled'), { name: 'DBOSWorkflowCancelledError' });
 
-function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any; maps?: InMemorySuiteCoverageMaps } = {}) {
+function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any; maps?: InMemorySuiteCoverageMaps; evidence?: InMemoryEvidenceStore; shots?: Record<string, Buffer> } = {}) {
     const published: string[] = [];
     const finishedStates: string[] = [];
     const clock = new SuiteClock();
@@ -47,8 +49,17 @@ function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuit
     const env = {
         acquire: (r: AcquireRequest) => cell.acquire(r),
         release: (c: string) => cell.release(c),
-        exec: async (c: string, r: ExecRequest) => (r.stepId.endsWith('-list') ? { stepId: r.stepId, exitCode: 0, stdout: listing, stderr: '', truncated: false, durationMs: 1, transport: 'ok' as const } : cell.exec(c, r)),
+        exec: async (c: string, r: ExecRequest) => {
+            // The artifact keeper's reads: the files the runner left for the failed spec.
+            if (r.stepId.includes(':art-list:')) return { stepId: r.stepId, exitCode: 0, stdout: Object.entries(over.shots ?? {}).map(([p, b]) => `${b.length} ${p}`).join('\n') + '\n', stderr: '', truncated: false, durationMs: 1, transport: 'ok' as const };
+            if (r.stepId.includes(':art-read:')) {
+                const file = Object.entries(over.shots ?? {}).find(([p]) => r.command.includes(p));
+                return { stepId: r.stepId, exitCode: 0, stdout: file ? file[1].toString('hex') : '', stderr: '', truncated: false, durationMs: 1, transport: 'ok' as const };
+            }
+            return exec2(c, r);
+        },
     };
+    const exec2 = async (c: string, r: ExecRequest) => (r.stepId.endsWith('-list') ? { stepId: r.stepId, exitCode: 0, stdout: listing, stderr: '', truncated: false, durationMs: 1, transport: 'ok' as const } : cell.exec(c, r));
     const runs = new InMemorySuiteRuns(clock);
     const baselines = new InMemorySuiteBaselines();
     const demand = new FakeSuiteDemand(clock);
@@ -62,6 +73,7 @@ function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuit
         runs,
         stats: new InMemorySuiteSpecStats(),
         baselines,
+        ...(over.evidence ? { evidence: over.evidence } : {}),
         templates: { hasReady: async () => over.ready ?? true },
         baselineRequests: { markStarted: async (_o, _e, sha) => void baselineStarted.push(sha) },
         clock,
@@ -208,6 +220,16 @@ describe('running a suite as a workflow', () => {
         const off = world({ recipe: null, publisher: true });
         await off.service.run(request(), passthrough);
         expect(off.published).toEqual([]);
+    });
+
+    it('keeps the artifacts of a failed spec as evidence and records them on its result, the recipe naming the directory', async () => {
+        const evidence = new InMemoryEvidenceStore();
+        const shot = Buffer.from([0x89, 0x50, 0x4e, 0x47, 9, 8, 7]);
+        const w = world({ evidence, recipe: `${RECIPE}  results:\n    artifacts: ["cypress/screenshots"]\n`, specs: { 'cypress/e2e/a.cy.ts': { pr: [{ fail: 'boom' }] }, 'cypress/e2e/b.cy.ts': {} }, shots: { 'cypress/screenshots/cypress/e2e/a.cy.ts/fail.png': shot } });
+        await w.service.run(request(), passthrough);
+        expect([...evidence.objects.values()]).toEqual([{ body: shot, contentType: 'image/png' }]);
+        const row = (await w.runs.results(ORG, 'sr-1')).find((r) => r.spec === 'cypress/e2e/a.cy.ts' && r.phase === 'shard');
+        expect(row?.artifacts).toMatchObject([{ name: 'cypress/screenshots/cypress/e2e/a.cy.ts/fail.png', contentType: 'image/png', bytes: shot.length }]);
     });
 
     describe('which specs run (docs section 6.1)', () => {

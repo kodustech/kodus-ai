@@ -3,7 +3,7 @@ import type { AcquireRequest, Blocked, Claim, EnvError, ExecRequest, StepResult 
 import type { CoverageMapRecord } from './coverage-collector';
 import { POLL_STATES } from './detached-exec';
 import type { BaselineRecord, PgSuiteBaselines } from './pg-suite-baselines';
-import type { PgSuiteRuns, StoredSuiteResult, SuiteRunEnd, StoredSuiteRun, StoredSuiteShard, SuitePhase, SuiteResultRow, SuiteRunRecord, SuiteRunState, SuiteShardPlan } from './pg-suite-runs';
+import type { PgSuiteRuns, StoredSuiteResult, SuiteArtifactRef, SuiteRunEnd, StoredSuiteRun, StoredSuiteShard, SuitePhase, SuiteResultRow, SuiteRunRecord, SuiteRunState, SuiteShardPlan } from './pg-suite-runs';
 import { STATS_WINDOW, type PgSuiteSpecStats, type SpecObservation } from './pg-suite-spec-stats';
 import type { SuiteHostDemand, SuiteShardHost } from './suite-engine';
 
@@ -78,7 +78,7 @@ const ok = (stepId: string, stdout: string): StepResult => ({ stepId, exitCode: 
 
 // ---- in-memory twins of the stores (the same public methods, the same rules the integration specs hold the Postgres ones to)
 
-export class InMemorySuiteRuns implements Pick<PgSuiteRuns, 'create' | 'get' | 'latestForPr' | 'finish' | 'savePlan' | 'shards' | 'recordResults' | 'results'> {
+export class InMemorySuiteRuns implements Pick<PgSuiteRuns, 'create' | 'get' | 'latestForPr' | 'finish' | 'savePlan' | 'shards' | 'recordResults' | 'recordArtifacts' | 'results'> {
     readonly runs = new Map<string, StoredSuiteRun>();
     private readonly plans = new Map<string, Map<number, StoredSuiteShard>>();
     private readonly rows = new Map<string, StoredSuiteResult & { organizationId: string; suiteRunId: string; at: number }>();
@@ -112,6 +112,12 @@ export class InMemorySuiteRuns implements Pick<PgSuiteRuns, 'create' | 'get' | '
     }
     async recordResults(organizationId: string, suiteRunId: string, from: { phase: SuitePhase; shard: number }, results: readonly SuiteResultRow[]) {
         for (const r of results) this.rows.set(`${suiteRunId}|${from.phase}|${r.spec}`, { ...r, phase: from.phase, shard: from.shard, organizationId, suiteRunId, at: this.clock.now() });
+    }
+    async recordArtifacts(organizationId: string, suiteRunId: string, from: { phase: SuitePhase; shard: number }, rows: ReadonlyArray<{ spec: string; artifacts: readonly SuiteArtifactRef[] }>) {
+        for (const x of rows) {
+            const row = this.rows.get(`${suiteRunId}|${from.phase}|${x.spec}`);
+            if (row && row.organizationId === organizationId) row.artifacts = [...x.artifacts];
+        }
     }
     async results(organizationId: string, suiteRunId: string): Promise<StoredSuiteResult[]> {
         return [...this.rows.values()]
