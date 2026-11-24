@@ -1,4 +1,5 @@
 import { assessApprovalRisk } from '../approval/assess-approval-risk';
+import { unshownCodePath } from './assess-change-risk';
 import { LLM } from '@libs/llm/llm';
 import {
     applicableRiskCriteria,
@@ -373,6 +374,9 @@ it.each([
     ['test_email.py', 'added', 4000, 0],
     ['pkg/email_test.go', 'added', 4000, 0],
     ['src/EmailServiceTest.java', 'added', 4000, 0],
+    ['src/URLTest.java', 'added', 4000, 0],
+    ['src/Foo.Test.cs', 'added', 4000, 0],
+    ['src/TestHelper.cs', 'added', 4000, 0],
 ])(
     'judges a PR whose unshown file %s cannot hide code, and tells the model it was not shown',
     async (filename, status, additions, deletions) => {
@@ -423,7 +427,12 @@ it('names the old path when a rename moved unshown code out of a code path', asy
     expect(LLM.run).not.toHaveBeenCalled();
 });
 
-it.each(['src/Contest.java', 'src/auth_TEST.go', 'src/Fastest.cs'])(
+it.each([
+    'src/Contest.java',
+    'src/auth_TEST.go',
+    'src/Fastest.cs',
+    'src/Testimonial.java',
+])(
     'treats %s as code: test names compare with case, as toolchains do',
     async (filename) => {
         expect(
@@ -440,6 +449,14 @@ it.each(['src/Contest.java', 'src/auth_TEST.go', 'src/Fastest.cs'])(
         expect(LLM.run).not.toHaveBeenCalled();
     },
 );
+
+it('reads a non-string previous path as absent instead of throwing', () => {
+    expect(
+        unshownCodePath([
+            { filename: 'public/logo.png', previous_filename: 42 },
+        ] as any),
+    ).toBeUndefined();
+});
 
 it('holds a patch-less file with a blank name', async () => {
     expect(

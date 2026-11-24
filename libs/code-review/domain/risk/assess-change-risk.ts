@@ -46,7 +46,7 @@ const logger = createLogger('AssessApprovalRisk');
 const JUDGEABLE_EXTENSION =
     /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|icns|tiff?|svg|pdf|mp3|mp4|m4a|mov|webm|ogg|oga|wav|flac|woff2?|ttf|otf|eot|md|mdx|markdown|rst|adoc|txt|csv|tsv|json|jsonl|ndjson|snap)$/i;
 const JUDGEABLE_NAME =
-    /(?:^|\/)(?:yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Gemfile\.lock|composer\.lock|go\.sum|mix\.lock|pubspec\.lock|Podfile\.lock)$|(?:^|\/)(?:__tests__|__snapshots__|__fixtures__|tests?|specs?|fixtures?|testdata)\/|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]*[a-z0-9]Tests?\.(?:cs|java))$/;
+    /(?:^|\/)(?:yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Gemfile\.lock|composer\.lock|go\.sum|mix\.lock|pubspec\.lock|Podfile\.lock)$|(?:^|\/)(?:__tests__|__snapshots__|__fixtures__|tests?|specs?|fixtures?|testdata)\/|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java)|Test[A-Z][^/]*\.(?:cs|java))$/;
 
 const hasDiff = (file: FileChange) =>
     typeof file.patch === 'string' && !!file.patch.trim();
@@ -62,7 +62,10 @@ export function unshownCodePath(files: FileChange[]): string | undefined {
         if (typeof file.filename !== 'string' || !file.filename.trim())
             return '(unnamed file)';
         const path = [file.filename, file.previous_filename]
-            .filter((path): path is string => !!path?.trim())
+            .filter(
+                (path): path is string =>
+                    typeof path === 'string' && !!path.trim(),
+            )
             .find(
                 (path) =>
                     !JUDGEABLE_EXTENSION.test(path) &&
