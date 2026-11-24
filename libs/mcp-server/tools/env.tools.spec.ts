@@ -1,5 +1,6 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import request from 'supertest';
 
 import { toMcpAuthInfo, type McpPrincipal } from '../auth/mcp-principal';
@@ -27,6 +28,8 @@ function app(
     );
     const a = express();
     a.use(express.json());
+    // The real route sits behind the API's limiter; the test app keeps one too.
+    a.use(rateLimit({ windowMs: 60_000, limit: 1_000 }));
     a.post('/mcp/env', (req, res, next) => {
         if (principal) (req as any).auth = toMcpAuthInfo('kodus_x', principal);
         mcp.handleRequest(req.body, res).catch(next);

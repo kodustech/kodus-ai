@@ -397,7 +397,7 @@ describe('PublishRuntimeRequestUseCase', () => {
             const [run] = [...t.checks.runs.values()];
             expect(run.conclusion).toBe(CheckConclusion.SUCCESS);
             expect(run.output.title).toBe('No regressions in what was tested');
-            expect(JSON.stringify(run)).not.toMatch(/<img|<script>/);
+            expect(JSON.stringify(run)).not.toMatch(/<img|<script\b/i);
         });
     });
 

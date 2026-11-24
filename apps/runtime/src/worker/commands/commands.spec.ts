@@ -265,7 +265,7 @@ describe('command routes', () => {
         }
         expect(runtimeOutboxMessage(RuntimeEventName.RunCancelRequested, { organizationId: 'org-a', repositoryId: '42', prNumber: 7, reason: 'pr_closed' }, 'm').routingKey).toBe(RUNTIME_RUN_ROUTING_KEY);
         // Both queues bind what their routing keys publish.
-        expect(RUNTIME_CONTROL_ROUTING_KEY).toMatch(new RegExp(`^${RUNTIME_CONTROL_BINDING.replace(/\./g, '\\.').replace('*', '[^.]+')}$`));
+        expect(RUNTIME_CONTROL_ROUTING_KEY).toMatch(new RegExp(`^${RUNTIME_CONTROL_BINDING.replace(/[\\^$.|?+()[\]{}]/g, '\\$&').replaceAll('*', '[^.]+')}$`));
     });
 
     it('one rule decides the lane: what the outbox routes to the Run queue is what the Run consumer accepts', () => {

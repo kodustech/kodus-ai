@@ -210,8 +210,9 @@ export function resolveSpecifier(spec: string, from: string, ctx: ResolveContext
             .sort((x, y) => y.p.pattern.indexOf('*') - x.p.pattern.indexOf('*'));
         for (const { p, rest } of hits) {
             for (const t of p.targets) {
-                // A function, so a `$&` or `$'` in the matched part stays literal; TypeScript allows one `*` per target.
-                const target = inRepo(t.replace('*', () => rest));
+                // TypeScript allows one `*` per target; spliced, so a `$&` in the matched part stays literal.
+                const star = t.indexOf('*');
+                const target = inRepo(star < 0 ? t : t.slice(0, star) + rest + t.slice(star + 1));
                 const file = target === undefined ? undefined : fileFor(target, ctx.files);
                 if (file) return file;
             }

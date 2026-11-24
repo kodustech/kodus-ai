@@ -984,7 +984,7 @@ describe('why a Run is partly tested', () => {
         const line = body.split('\n').find((l) => l.includes('evil.test'))!;
         expect(line).toContain('`a ](https://evil.test) <img src=x> @everyone <script>x</script>`');
         expect(line.split('`')).toHaveLength(3);
-        expect(body).not.toMatch(/^<script>/m);
+        expect(body).not.toMatch(/^<script\b/im);
     });
 });
 

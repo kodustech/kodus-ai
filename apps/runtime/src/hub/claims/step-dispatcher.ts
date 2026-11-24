@@ -174,7 +174,10 @@ export class StepDispatcher {
         // The callers' timeouts are bounded by the protocol schemas; this keeps
         // the timer sane whatever reaches it (Node fires a delay past 2^31-1 ms,
         // or a NaN, at once).
-        const delay = Number.isFinite(waitMs) ? Math.min(Math.max(0, waitMs), MAX_STEP_WAIT_MS) : MAX_STEP_WAIT_MS;
+        // Written as comparisons, not Math.min, so a NaN also falls to the ceiling.
+        let delay = waitMs;
+        if (!(delay <= MAX_STEP_WAIT_MS)) delay = MAX_STEP_WAIT_MS;
+        if (delay < 0) delay = 0;
         return new Promise<StepOutcome | 'timeout'>((resolve) => {
             const timer = setTimeout(() => {
                 conn.steps.delete(stepId);
