@@ -16,8 +16,10 @@
     }
 }
 
+/* Radix parts say open with data-state; a native <details> or <dialog> with the open attribute. */
 @custom-variant open {
-    &[data-state="open"] {
+    &[data-state="open"],
+    &[open] {
         @slot;
     }
 }
