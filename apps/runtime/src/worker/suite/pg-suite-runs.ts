@@ -119,6 +119,17 @@ export class PgSuiteRuns {
         return r.rows[0] ? runOf(r.rows[0]) : null;
     }
 
+    /** The PR's suite runs that have not ended (a baseline is no PR's), except those of `keepHead`: what a newer push or a closed PR cancels. */
+    async livePullRequestRuns(organizationId: string, repositoryId: string, prNumber: number, keepHead?: string): Promise<Array<{ suiteRunId: string; mode: SuiteMode }>> {
+        const r = await this.pool.query(
+            `SELECT suite_run_id, mode FROM runtime.runtime_suite_runs
+             WHERE organization_id = $1 AND repository_id = $2 AND pr_number = $3 AND finished_at IS NULL AND mode <> 'baseline' AND ($4::text IS NULL OR pr_sha IS DISTINCT FROM $4)
+             ORDER BY requested_at`,
+            [organizationId, repositoryId, prNumber, keepHead ?? null],
+        );
+        return r.rows.map((x) => ({ suiteRunId: x.suite_run_id, mode: x.mode }));
+    }
+
     /** The first conclusion stays: a run that ended is never moved again. */
     async finish(organizationId: string, suiteRunId: string, state: SuiteRunState, at: Date, end: SuiteRunEnd = {}): Promise<void> {
         await this.pool.query(

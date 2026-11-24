@@ -20,7 +20,7 @@ export class SuiteRunStage implements SuiteStage {
         private readonly runs: Pick<PgSuiteRuns, 'get'>,
     ) {}
 
-    async run(req: RuntimeRunRequested, step: SuiteStep, opts: { deadlineAt?: string } = {}): Promise<SuiteStageResult> {
+    async run(req: RuntimeRunRequested, step: SuiteStep, opts: { deadlineAt?: string; cancellationSignal?: () => AbortSignal | undefined } = {}): Promise<SuiteStageResult> {
         const s = req.suite;
         if (!s) return { status: 'off' };
         const cmd: RuntimeSuiteRequested = {

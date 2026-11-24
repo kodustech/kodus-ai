@@ -53,6 +53,27 @@ export class SuitePublisher {
         await this.requester.request({ ...this.envelope(cmd, 'final'), check: { status: 'completed', conclusion: suiteConclusionOf(report.state) }, report });
     }
 
+    /** The check of a suite that was cancelled before it had a stored run to report from (a cancel between the opening of the check and the engine): closed cancelled, with no results. */
+    async cancelled(cmd: RuntimeSuiteRequested): Promise<void> {
+        if (cmd.mode === 'baseline') return;
+        await this.requester.request({
+            ...this.envelope(cmd, 'final'),
+            check: { status: 'completed', conclusion: suiteConclusionOf('cancelled') },
+            report: {
+                state: 'cancelled',
+                mode: cmd.mode,
+                mainSha: cmd.mainSha,
+                ...(cmd.prSha ? { prSha: cmd.prSha } : {}),
+                selection: { mode: 'full', total: 0 },
+                totals: ZERO,
+                classes: NO_CLASSES,
+                annotations: [],
+                annotationsOmitted: 0,
+                requestedAt: cmd.requestedAt,
+            },
+        });
+    }
+
     private envelope(cmd: RuntimeSuiteRequested, phase: 'running' | 'final') {
         return { suiteRunId: cmd.suiteRunId, targetId: cmd.targetId ?? cmd.suiteRunId, attempt: 1, key: suitePublishKey(cmd.suiteRunId, phase), correlationId: `suite-${cmd.suiteRunId}` };
     }

@@ -191,7 +191,7 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
         const suite = this.suite;
         if (suite) {
             // The suite's steps are the service's own (`suite:start`, `suite:run`): a replay takes what it journalled.
-            this.suiteWorkflow = DBOS.registerWorkflow(async (cmd: RuntimeSuiteRequested) => suite.run(cmd, dbosStep), { name: SUITE_WORKFLOW });
+            this.suiteWorkflow = DBOS.registerWorkflow(async (cmd: RuntimeSuiteRequested) => suite.run(cmd, dbosStep, { cancellationSignal: () => DBOS.stepStatus?.cancelSignal }), { name: SUITE_WORKFLOW });
         }
         if (this.config.durableAdmission) {
             this.admissionWorkflow = DBOS.registerWorkflow(async (ref: AdmissionRef, generation: number) => this.admission!.attempt(ref, generation, {
@@ -312,6 +312,11 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
             enqueueOptions: { queuePartitionKey: cmd.organizationId },
         })(cmd);
         return handle.workflowID;
+    }
+
+    /** Cancels a suite run's workflow: its step's cancel signal aborts, so the engine stops its commands and releases its claims and demand. */
+    async cancelSuite(suiteRunId: string): Promise<void> {
+        if ((await DBOS.getWorkflowStatus(suiteWorkflowId(suiteRunId))) !== null) await DBOS.cancelWorkflow(suiteWorkflowId(suiteRunId));
     }
 
     /** Delivers a fork approval to the waiting gate, once per approval key. */

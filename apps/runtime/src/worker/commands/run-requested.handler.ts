@@ -46,6 +46,11 @@ const prTitleOf = (req: RuntimeRunRequested): Pick<RuntimeRunProjection, 'prTitl
     return prTitle ? { prTitle } : {};
 };
 
+/** What the cancel of a PR asks of the suite engine: stop the suite runs of the PR that are for another head. */
+export interface SuiteCancelPort {
+    cancelPullRequest(input: { organizationId: string; repositoryId: string; prNumber: number; keepHead?: string }): Promise<number>;
+}
+
 /** One lock per PR: the start/supersede decision runs on one worker at a time, cluster-wide. */
 export const prLockKey = (r: { organizationId: string; repositoryId: string; prNumber: number }) => `run:${r.organizationId}:${r.repositoryId}:${r.prNumber}`;
 
@@ -240,6 +245,8 @@ export class RunCancelRequestedHandler implements CommandHandler {
         /** The PR's sessions, removed when it closes (pr-sessions.ts); absent: they go at SessionTTL. */
         private readonly sessions?: { forget(orgId: string, pr: { repositoryId: string; prNumber: number }): Promise<unknown> },
         private readonly log?: (msg: string, meta: Record<string, unknown>) => void,
+        /** The PR's running e2e suites, cancelled with its Runs; absent: a suite ends on its own. */
+        private readonly suites?: SuiteCancelPort,
     ) {}
 
     async handle(body: Record<string, unknown>, delivery?: RunDeliveryContext): Promise<HandlerResult> {
@@ -272,6 +279,11 @@ export class RunCancelRequestedHandler implements CommandHandler {
                 );
             }
         });
+        // The suites of the PR that run for another head (all of them when it closed) are cancelled too; a failure here never fails the Runs' cancel.
+        if (this.suites) {
+            const input = { organizationId: c.organizationId, repositoryId: c.repositoryId, prNumber: c.prNumber, ...(c.reason === 'superseded' ? { keepHead: c.headSha } : {}) };
+            await this.suites.cancelPullRequest(input).catch((e) => this.log?.('suite.cancel_failed', { organizationId: c.organizationId, prNumber: c.prNumber, error: (e as Error).message }));
+        }
         // The pull request closed: none of its Runs' previews stays open.
         if (c.reason === 'pr_closed') await expirePreviews(this.previews, this.logger, { organizationId: c.organizationId, repositoryId: c.repositoryId, prNumber: c.prNumber, why: 'pr_closed' });
     }

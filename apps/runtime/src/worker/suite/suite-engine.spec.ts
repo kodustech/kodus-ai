@@ -213,4 +213,40 @@ describe('the first pass of a suite run', () => {
             expect(Object.values(statusOf(out)).filter((s) => s === 'failed')).toHaveLength(10);
         });
     });
+
+    describe('cancelling a running suite', () => {
+        const names = ['a.cy.ts', 'b.cy.ts', 'c.cy.ts', 'd.cy.ts'];
+
+        it('stops every command, releases every claim, ends the demand and closes the run cancelled: no re-run, no classification, no regression', async () => {
+            const w = world({ specs: Object.fromEntries(names.map((n) => [n, { ms: 10 * MIN, ...(n === 'a.cy.ts' ? { pr: [{ fail: 'boom' }] } : {}) }])) }, { maxShards: 2 });
+            const stop = new AbortController();
+            const started = w.clock.now();
+            // A newer push arrives while the shards run.
+            const sleep = w.clock.sleep;
+            let polls = 0;
+            w.clock.sleep = async (ms) => {
+                await sleep(ms);
+                if (++polls === 4) stop.abort();
+            };
+            const out = await w.engine.run(request(), { ...w.inputs(names), signal: stop.signal });
+            expect(out.state).toBe('cancelled');
+            expect(out.classification).toBeUndefined();
+            expect((await w.runs.get(ORG, 'sr-1'))?.state).toBe('cancelled');
+            expect([...w.cell.claims.values()].every((c) => c.released)).toBe(true);
+            expect(w.demand.ended).toBe(1);
+            // Nothing after the cancel: no re-run of the red spec, no fresh host, no main host.
+            expect(w.cell.acquires.map((a) => a.shard).sort()).toEqual([0, 1]);
+            expect(w.clock.now() - started).toBeLessThan(5 * MIN);
+        });
+
+        it('a cancel before the hosts came takes no claim at all', async () => {
+            const w = world({ specs: { 'a.cy.ts': {} } }, { maxShards: 1 });
+            const stop = new AbortController();
+            stop.abort();
+            const out = await w.engine.run(request(), { ...w.inputs(['a.cy.ts']), signal: stop.signal });
+            expect(out.state).toBe('cancelled');
+            expect(w.cell.starts).toEqual([]);
+            expect(w.demand.ended).toBe(1);
+        });
+    });
 });

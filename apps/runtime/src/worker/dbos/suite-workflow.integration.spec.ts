@@ -16,8 +16,20 @@ const url = database.url;
 const skip = !url || process.env.SKIP_INTEGRATION === 'true';
 
 const bodies: string[] = [];
+/** The suite run ids whose long step saw the workflow's cancel signal abort, and the ones that waited to be cancelled. */
+const sawCancel: string[] = [];
+const waiting = new Set<string>();
 const suite = {
-    run: async (cmd: RuntimeSuiteRequested, step: <T>(name: string, fn: () => Promise<T>) => Promise<T>) => {
+    run: async (cmd: RuntimeSuiteRequested, step: <T>(name: string, fn: () => Promise<T>) => Promise<T>, opts: { cancellationSignal?: () => AbortSignal | undefined } = {}) => {
+        if (cmd.key.startsWith('cancel-')) {
+            return step('suite:run', async () => {
+                const signal = opts.cancellationSignal?.();
+                waiting.add(cmd.suiteRunId);
+                await new Promise<void>((resolve) => (signal?.aborted ? resolve() : signal?.addEventListener('abort', () => resolve())));
+                sawCancel.push(cmd.suiteRunId);
+                return { status: 'ran', suiteRunId: cmd.suiteRunId, state: 'cancelled', replayed: false };
+            });
+        }
         const started = await step('suite:start', async () => ({ at: 1 }));
         bodies.push(`${cmd.suiteRunId}:${started.at}`);
         return step('suite:run', async () => ({ status: 'ran', suiteRunId: cmd.suiteRunId, state: 'passed', replayed: false }));
@@ -73,6 +85,19 @@ const cmd = (id: string): RuntimeSuiteRequested => ({
         expect(status?.workflowName).toBe(SUITE_WORKFLOW);
         expect(status?.queueName).toBe('runtime-suites');
         expect((await DBOS.listWorkflowSteps(first as string))!.map((s) => s.name)).toEqual(expect.arrayContaining(['suite:start', 'suite:run']));
+    }, 60_000);
+
+    it('cancelling a running suite run aborts the cancel signal its long step reads, so the engine can stop and release', async () => {
+        const id = '0b5c2f6e-6f1d-4c53-9a43-1d1f5f3a9c21';
+        const workflowId = (await engine.startSuite({ ...cmd(id), key: 'cancel-1' })) as string;
+        for (let i = 0; i < 100 && !waiting.has(id); i++) await new Promise((r) => setTimeout(r, 100));
+        expect(waiting.has(id)).toBe(true);
+        await engine.cancelSuite(id);
+        for (let i = 0; i < 100 && !sawCancel.includes(id); i++) await new Promise((r) => setTimeout(r, 100));
+        expect(sawCancel).toContain(id);
+        expect((await DBOS.getWorkflowStatus(workflowId))?.status).toBe('CANCELLED');
+        // A suite that was never started has nothing to cancel.
+        await expect(engine.cancelSuite('0b5c2f6e-6f1d-4c53-9a43-1d1f5f3a9c99')).resolves.toBeUndefined();
     }, 60_000);
 
     it('has no suite to start when the worker has no suite service', async () => {

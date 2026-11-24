@@ -2003,7 +2003,7 @@ async function suiteStage(run: RunScope): Promise<SuiteStageResult | undefined> 
     try {
         // The suite shares the Run's 45 minutes (design 12.1): it ends in time for the verdict and the publish that follow it.
         const deadlineAt = run.roomAt ? new Date(Date.parse(run.roomAt) + RUN_TIMEOUT_MS - SUITE_STAGE_MARGIN_MS).toISOString() : undefined;
-        return await deps.suite.run(req, deps.step, deadlineAt ? { deadlineAt } : undefined);
+        return await deps.suite.run(req, deps.step, { ...(deadlineAt ? { deadlineAt } : {}), ...(deps.cancellationSignal ? { cancellationSignal: deps.cancellationSignal } : {}) });
     } catch (e) {
         if (isCancellation(e)) throw e;
         return { status: 'unavailable' };

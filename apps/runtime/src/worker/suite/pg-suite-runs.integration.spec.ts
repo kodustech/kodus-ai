@@ -110,4 +110,20 @@ const run: SuiteRunRecord = {
         await store.create({ ...run, suiteRunId: '0b5c2f6e-6f1d-4c53-9a43-1d1f5f3a9c12' });
         expect((await store.get('org-a', '0b5c2f6e-6f1d-4c53-9a43-1d1f5f3a9c12'))?.selection).toBeUndefined();
     });
+
+    it('lists the live runs of one PR in one repository of one organization, except those of the head it keeps, and never a baseline or a finished run', async () => {
+        const other = (suiteRunId: string, over: Partial<SuiteRunRecord>) => store.create({ ...run, suiteRunId, ...over });
+        await other('r-old', { prSha: 'a'.repeat(40) });
+        await other('r-new', { prSha: 'c'.repeat(40) });
+        await other('r-done', { prSha: 'd'.repeat(40) });
+        await store.finish('org-a', 'r-done', 'passed', new Date());
+        await other('r-baseline', { mode: 'baseline', prNumber: undefined, prSha: undefined, mergeBase: undefined });
+        await other('r-pr8', { prNumber: 8 });
+        await other('r-repo2', { repositoryId: 'repo-2' });
+        await other('r-org-b', { organizationId: 'org-b' });
+        const ids = async (keep?: string) => (await store.livePullRequestRuns('org-a', 'repo-1', 7, keep)).map((r) => r.suiteRunId).sort();
+        expect(await ids('c'.repeat(40))).toEqual(['r-old']);
+        // A closed PR keeps nothing.
+        expect(await ids()).toEqual(['r-new', 'r-old']);
+    });
 });

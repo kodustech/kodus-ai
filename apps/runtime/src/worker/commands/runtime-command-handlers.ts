@@ -36,8 +36,9 @@ import {
 } from './command-handlers';
 import { OrganizationPurgeRequestedHandler } from './organization-purge.handler';
 import type { RunEngine } from './run-engine.port';
-import { type PullRequestPreviews, RunCancelRequestedHandler, RunRequestedHandler } from './run-requested.handler';
+import { type PullRequestPreviews, RunCancelRequestedHandler, RunRequestedHandler, type SuiteCancelPort } from './run-requested.handler';
 import { SUITE_RUNS } from '../suite/suite-service';
+import { type LiveSuiteRuns, SuiteCanceller } from '../suite/suite-canceller';
 import { SuiteRequestedHandler, type SuiteStarter } from './suite-requested.handler';
 import { SuiteRetriedHandler, type SuiteRetryRuns } from './suite-retried.handler';
 
@@ -79,6 +80,8 @@ export interface CommandHandlerDeps {
     suites?: SuiteStarter;
     /** The suite runs a retry reads: with it and `suites`, `runtime.suite.retried` is handled too. */
     suiteRuns?: SuiteRetryRuns;
+    /** Cancels the PR's running suites with its Runs (a new head, the PR closed); absent: they end on their own. */
+    suiteCancel?: SuiteCancelPort;
     warn?: (msg: string, meta: Record<string, unknown>) => void;
 }
 
@@ -86,7 +89,7 @@ export function runtimeCommandHandlers(deps: CommandHandlerDeps): CommandHandler
     const { engine, projection, commands, admissions, locks, previews } = deps;
     return [
         new RunRequestedHandler(engine, projection, commands, locks, admissions, deps.setups, { healthPath: deps.healthPath, ...(previews ? { previews } : {}) }),
-        new RunCancelRequestedHandler(engine, projection, locks, admissions, previews, deps.prSessions, deps.warn),
+        new RunCancelRequestedHandler(engine, projection, locks, admissions, previews, deps.prSessions, deps.warn, deps.suiteCancel),
         new ForkApprovedHandler(projection, commands, engine),
         new EgressApprovedHandler(commands, deps.egress),
         new EgressRevokedHandler(commands, deps.egress),
@@ -150,7 +153,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
         releaser: ClaimReleaser,
         evidence: EvidenceStore | null,
         cells: CellDataPurger,
-        suiteRuns: SuiteRetryRuns,
+        suiteRuns: SuiteRetryRuns & LiveSuiteRuns,
     ) => {
         const logger = new Logger('RuntimeCommandConsumer');
         return runtimeCommandHandlers({
@@ -171,6 +174,8 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
             // The suite workflow is the engine's; a retry reads the runs it left.
             suites: { start: async (cmd) => (engine.startSuite ? engine.startSuite(cmd) : false) },
             suiteRuns,
+            // A new head or a closed PR cancels the suites of the PR that are for another head, as it cancels its Runs.
+            suiteCancel: new SuiteCanceller(suiteRuns, { cancelSuite: async (id) => void (await engine.cancelSuite?.(id)) }),
             warn: (msg, meta) => logger.warn({ msg, ...meta }),
         });
     },

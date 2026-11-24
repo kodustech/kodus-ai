@@ -26,9 +26,10 @@ const classification = (...tests: ClassifiedTest[]): Classification => ({ tests,
 
 const withSuite = (req: RuntimeRunRequested): RuntimeRunRequested => ({ ...req, suite: { mainSha: 'c'.repeat(40), repoToken: sealSecret('ghs_s0', devSealKey(), req.runId), moreRepoTokens: [sealSecret('ghs_s1', devSealKey(), req.runId)], changedFiles: ['src/a.ts'] } });
 
-async function run(stage: SuiteStage | undefined, opts: { suite?: boolean } = {}) {
+async function run(stage: SuiteStage | undefined, opts: { suite?: boolean; cancellationSignal?: () => AbortSignal | undefined } = {}) {
     const h = inMemoryRunDeps({ env: shop() });
     if (stage) h.deps.suite = stage;
+    if (opts.cancellationSignal) h.deps.cancellationSignal = opts.cancellationSignal;
     const base = shopRunRequest();
     const req = opts.suite === false ? base : withSuite(base);
     await h.projection.upsert(req.runId, { attempt: req.attempt, correlationId: req.correlationId, organizationId: req.organizationId, teamId: req.teamId, repositoryId: req.repository.id, repositoryName: req.repository.name, prNumber: req.pullRequest.number, headSha: req.pullRequest.headSha, baseSha: req.pullRequest.baseSha, environmentId: req.environment.environmentId, imageId: req.environment.imageId, state: 'queued', requestedAt: req.requestedAt });
@@ -93,5 +94,13 @@ describe('the suite as a stage of the Run', () => {
         const { projection } = await run(stage);
         const [call] = stage.calls as Array<{ opts: { deadlineAt: string } }>;
         expect(Date.parse(call.opts.deadlineAt)).toBe(Date.parse(projection.bootingAt!) + 40 * 60_000);
+    });
+
+    it("hands the stage the Run's cancel signal, so stopping the Run (a newer push) stops the suite", async () => {
+        const stage = stageOf({ status: 'ran', state: 'passed' });
+        const signal = new AbortController().signal;
+        await run(stage, { cancellationSignal: () => signal });
+        const [call] = stage.calls as Array<{ opts: { cancellationSignal: () => AbortSignal | undefined } }>;
+        expect(call.opts.cancellationSignal()).toBe(signal);
     });
 });

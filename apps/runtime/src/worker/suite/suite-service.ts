@@ -8,6 +8,7 @@ import type { PgSuiteBaselines } from './pg-suite-baselines';
 import type { PgSuiteRuns, SuiteRunState } from './pg-suite-runs';
 import type { PgSuiteSpecStats } from './pg-suite-spec-stats';
 import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
+import { isCancellation } from '../workflow-cancellation';
 import { mainHistoryOf } from './suite-adapters';
 import { suiteConfigOf, type ResolvedSuite } from './suite-config';
 import type { SuiteEnvironment } from './suite-environment';
@@ -51,7 +52,7 @@ export interface SuiteServiceDeps {
     baselineRequests?: Pick<PgSuiteBaselineRequests, 'markStarted'>;
     clock: { now(): number; sleep(ms: number): Promise<void> };
     /** The suite's check: opened when the run starts, closed with its conclusion. Absent: nothing is published. */
-    publisher?: Pick<SuitePublisher, 'started' | 'finished'>;
+    publisher?: Pick<SuitePublisher, 'started' | 'finished' | 'cancelled'>;
 }
 
 export type SuiteServiceResult =
@@ -77,15 +78,31 @@ interface Started {
 export class SuiteService {
     constructor(private readonly d: SuiteServiceDeps) {}
 
-    async run(cmd: RuntimeSuiteRequested, step: SuiteStep, opts: { deadlineAt?: string } = {}): Promise<SuiteServiceResult> {
+    async run(cmd: RuntimeSuiteRequested, step: SuiteStep, opts: { deadlineAt?: string; cancellationSignal?: () => AbortSignal | undefined } = {}): Promise<SuiteServiceResult> {
         const started = await step('suite:start', () => this.start(cmd));
         if ('status' in started) return started;
         // Publish steps retry (run-engine.service.ts `isPublishStep`): a broker that restarts never ends the suite without its check.
         const publisher = this.d.publisher;
-        if (publisher) await step('publish:suite-started', () => publisher.started(cmd));
-        const result = await step('suite:run', () => this.runEngine(cmd, started, opts.deadlineAt ? Date.parse(opts.deadlineAt) : undefined));
-        if (publisher) await step('publish:suite-final', () => publisher.finished(cmd, result, { ...(started.suite.config.cwd ? { cwd: started.suite.config.cwd } : {}) }));
-        return result;
+        const suite = { ...(started.suite.config.cwd ? { cwd: started.suite.config.cwd } : {}) };
+        let closed = false;
+        try {
+            if (publisher) await step('publish:suite-started', () => publisher.started(cmd));
+            const result = await step('suite:run', async () => {
+                const out = await this.runEngine(cmd, started, opts.deadlineAt ? Date.parse(opts.deadlineAt) : undefined, opts.cancellationSignal?.());
+                // A cancelled workflow runs no step after this one, so its check is closed here, cancelled, never left in progress.
+                if (publisher && out.status === 'ran' && out.state === 'cancelled') {
+                    await publisher.finished(cmd, out, suite).catch(() => undefined);
+                    closed = true;
+                }
+                return out;
+            });
+            if (publisher && !closed) await step('publish:suite-final', () => publisher.finished(cmd, result, suite));
+            return result;
+        } catch (e) {
+            // The workflow was cancelled (a newer push, the PR closed, the Run stopped) before the engine could close the check.
+            if (publisher && !closed && isCancellation(e)) await publisher.cancelled(cmd).catch(() => undefined);
+            throw e;
+        }
     }
 
     private async start(cmd: RuntimeSuiteRequested): Promise<Started | Extract<SuiteServiceResult, { status: 'off' }>> {
@@ -100,7 +117,7 @@ export class SuiteService {
         return { suite, imageId: setup.imageId ?? 'latest', expose: setup.expose ?? [] };
     }
 
-    private async runEngine(cmd: RuntimeSuiteRequested, s: Started, deadlineAt?: number): Promise<SuiteServiceResult> {
+    private async runEngine(cmd: RuntimeSuiteRequested, s: Started, deadlineAt?: number, signal?: AbortSignal): Promise<SuiteServiceResult> {
         const { runs, clock } = this.d;
         const held = await runs.get(cmd.organizationId, cmd.suiteRunId);
         if (held?.finishedAt) return { status: 'ran', suiteRunId: cmd.suiteRunId, state: held.state, replayed: true };
@@ -157,6 +174,7 @@ export class SuiteService {
             specs,
             mainHistory: mainHistoryOf(cmd),
             ...(deadlineAt !== undefined && Number.isFinite(deadlineAt) ? { deadlineAt } : {}),
+            ...(signal ? { signal } : {}),
             // A retry or a selection runs part of the suite; the digest that keys a baseline is the whole suite's.
             suiteDigest: digest,
             selection: cmd.specs ? { mode: 'selected', selected: specs.length, total: whole.length } : plan.selection,

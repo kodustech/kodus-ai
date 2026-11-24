@@ -32,8 +32,11 @@ const request = (over: Partial<RuntimeSuiteRequested> = {}): RuntimeSuiteRequest
     requestedAt: '2026-11-23T12:00:00.000Z', key: 'sr-1', repoToken: 'sealed:v1:t0', moreRepoTokens: ['sealed:v1:t1', 'sealed:v1:t2', 'sealed:v1:t3', 'sealed:v1:t4'], ...over,
 });
 
+const cancelError = () => Object.assign(new Error('workflow cancelled'), { name: 'DBOSWorkflowCancelledError' });
+
 function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any } = {}) {
     const published: string[] = [];
+    const finishedStates: string[] = [];
     const clock = new SuiteClock();
     const main = over.main ?? ['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts'];
     const specs = over.specs ?? Object.fromEntries(main.map((p) => [p.replace(/^apps\/dashboard\//, ''), {}]));
@@ -63,9 +66,9 @@ function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuit
         baselineRequests: { markStarted: async (_o, _e, sha) => void baselineStarted.push(sha) },
         clock,
         ...(over.map ? { maps: { newest: async () => over.map } } : {}),
-        ...(over.publisher ? { publisher: { started: async (c) => void published.push(`started:${c.mode}`), finished: async (_c, r, s) => void published.push(`finished:${r.status}:${s.cwd}`) } } : {}),
+        ...(over.publisher ? { publisher: { started: async (c) => void published.push(`started:${c.mode}`), finished: async (_c, r, s) => void (published.push(`finished:${r.status}:${s.cwd}`), 'state' in r && finishedStates.push(r.state)), cancelled: async () => void published.push('cancelled') } } : {}),
     };
-    return { service: new SuiteService(deps), clockNow: () => clock.now(), cell, runs, baselines, demand, tokens, baselineStarted, published };
+    return { service: new SuiteService(deps), finishedStates, clockNow: () => clock.now(), cell, runs, baselines, demand, tokens, baselineStarted, published };
 }
 
 describe('running a suite as a workflow', () => {
@@ -92,6 +95,27 @@ describe('running a suite as a workflow', () => {
         const out = await w.service.run(request(), passthrough, { deadlineAt });
         expect(out).toMatchObject({ status: 'ran', state: 'neutral' });
         expect(w.clockNow()).toBeLessThanOrEqual(Date.parse(deadlineAt) + 2 * 60_000);
+    });
+
+    it('a cancelled suite closes its check cancelled inside its own step (the workflow runs no step after a cancel) and the run ends cancelled', async () => {
+        const w = world({ publisher: true });
+        const stop = new AbortController();
+        stop.abort();
+        const out = await w.service.run(request(), passthrough, { cancellationSignal: () => stop.signal });
+        expect(out).toMatchObject({ status: 'ran', state: 'cancelled' });
+        expect((await w.runs.get(ORG, 'sr-1'))?.state).toBe('cancelled');
+        expect(w.finishedStates).toContain('cancelled');
+        expect(w.cell.claims.size).toBe(w.cell.released.length);
+    });
+
+    it('a workflow cancelled after its check opened closes the check too, and the cancel goes on up', async () => {
+        const w = world({ publisher: true });
+        const step = async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
+            if (name === 'suite:run') throw cancelError();
+            return fn();
+        };
+        await expect(w.service.run(request(), step)).rejects.toMatchObject({ name: 'DBOSWorkflowCancelledError' });
+        expect(w.published).toEqual(['started:ci', 'cancelled']);
     });
 
     it('a baseline is the whole suite on main, recorded for the baseline request, which is marked started', async () => {

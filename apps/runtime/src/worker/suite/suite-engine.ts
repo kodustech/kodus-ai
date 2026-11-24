@@ -83,6 +83,11 @@ export interface SuiteInputs {
      * the Run's 45 minutes (design 12.1), so no wait, command or re-run goes past it; what did not run is `not_run`. Absent: only the recipe's own caps.
      */
     deadlineAt?: number;
+    /**
+     * Aborted when the suite is cancelled (a newer push on the PR, the PR closed, the Run stopped): every command is stopped, no
+     * claim is taken after it, nothing is re-run or classified, and the run ends `cancelled` with its claims and demand released.
+     */
+    signal?: AbortSignal;
     /** The risk-first order inside a shard (6.1): the specs red on the previous push first, then those that cover the diff. The balance is untouched. */
     order?: { failedBefore: readonly string[]; diffCoverage: Readonly<Record<string, number>> };
 }
@@ -252,7 +257,10 @@ export class SuiteEngine {
         try {
             await this.firstPass(ctx);
             const firstPass = this.firstPassOf(ctx);
+            // Cancelled: what ran is stored as it ran; nothing is re-run or judged.
+            if (this.cancelled(ctx)) return await this.concludeCancelled(ctx, firstPass);
             const classification = req.mode === 'baseline' ? undefined : await this.rerunPhase(ctx, firstPass);
+            if (this.cancelled(ctx)) return await this.concludeCancelled(ctx, firstPass);
             return await this.conclude(ctx, firstPass, classification);
         } finally {
             await this.cleanup(ctx);
@@ -303,6 +311,7 @@ export class SuiteEngine {
         for (;;) {
             const status = await this.d.demand.status();
             const state = (s: number) => status.find((h) => h.shard === s)?.state ?? 'starting';
+            if (ctx.inputs.signal?.aborted) return [];
             if (asked.every((s) => state(s) !== 'starting') || clock.now() >= deadline) return asked.filter((s) => state(s) === 'ready');
             await clock.sleep(HOST_POLL_MS);
             await this.keepDemand(ctx);
@@ -314,7 +323,7 @@ export class SuiteEngine {
         const { req } = ctx;
         ctx.demandShards.add(shard);
         await this.requestDemand(ctx, [shard]);
-        if (!(await this.waitForHosts(ctx, [shard])).includes(shard)) return undefined;
+        if (!(await this.waitForHosts(ctx, [shard])).includes(shard) || this.cancelled(ctx)) return undefined;
         const claim = await this.d.env.acquire({
             organizationId: req.organizationId,
             environmentId: req.environmentId,
@@ -338,7 +347,7 @@ export class SuiteEngine {
         for (const s of shard.planned) if (!SPEC_SAFE.test(s)) shard.missing.set(s, 'not_run');
         if (runnable.length === 0) return;
         // Fail fast stopped the first pass before this shard got its host: no claim, nothing runs.
-        if (ctx.stop.signal.aborted) {
+        if (ctx.stop.signal.aborted || this.cancelled(ctx)) {
             for (const s of runnable) shard.missing.set(s, 'not_run');
             return;
         }
@@ -417,7 +426,7 @@ export class SuiteEngine {
             resultsGlob: config.resultsGlob,
             timeoutMs,
             // Only the first pass is cut short by fail fast; the fresh host and the re-runs go on after it.
-            ...(this.failsFast(ctx, col) ? { signal: ctx.stop.signal } : {}),
+            ...this.signalOf(ctx, col),
             now: this.d.clock.now,
             sleep: this.d.clock.sleep,
             onPoll: async (p) => {
@@ -457,6 +466,16 @@ export class SuiteEngine {
         if (fresh.length === 0) return;
         await this.d.runs.recordResults(ctx.req.organizationId, ctx.req.suiteRunId, { phase: col.phase, shard: col.shard }, fresh.map((r) => ({ spec: r.spec, status: r.status, durationMs: r.durationMs, ...(r.errorSignature ? { errorSignature: r.errorSignature } : {}), tests: r.tests })));
         this.checkFailFast(ctx, col);
+    }
+
+    private cancelled(ctx: RunCtx): boolean {
+        return !!ctx.inputs.signal?.aborted;
+    }
+
+    /** What stops a command: the cancel of the whole suite, and, in the first pass of a PR run, fail fast. */
+    private signalOf(ctx: RunCtx, col: Pick<Collector, 'phase' | 'shard'>): { signal?: AbortSignal } {
+        const signals = [ctx.inputs.signal, this.failsFast(ctx, col) ? ctx.stop.signal : undefined].filter((x): x is AbortSignal => !!x);
+        return signals.length === 0 ? {} : { signal: signals.length === 1 ? signals[0] : AbortSignal.any(signals) };
     }
 
     /** Fail fast reads the first pass of a PR run's shards only: not the fresh host, the re-runs, or a baseline (which must be complete). */
@@ -678,6 +697,12 @@ export class SuiteEngine {
         const state = this.stateOf(ctx, firstPass, classification);
         await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, state, new Date(this.d.clock.now()), { ...(classification ? { classification } : {}), ...(ctx.judged ? { ...(ctx.judged.baselineSha ? { baselineSha: ctx.judged.baselineSha } : {}), baseDrift: ctx.judged.baseDrift } : {}) });
         return { suiteRunId: ctx.req.suiteRunId, state, replayed: false, firstPass, ...(classification ? { classification } : {}) };
+    }
+
+    /** A cancelled suite ends `cancelled`: no classification, no baseline, no durations (a cut-short spec says nothing of how long it takes). */
+    private async concludeCancelled(ctx: RunCtx, firstPass: FirstPassSpec[]): Promise<SuiteOutcome> {
+        await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, 'cancelled', new Date(this.d.clock.now()));
+        return { suiteRunId: ctx.req.suiteRunId, state: 'cancelled', replayed: false, firstPass };
     }
 
     /** The whole suite on main, per spec as it ended. Complete only when every spec reported; an incomplete one is no baseline for a lookup. */

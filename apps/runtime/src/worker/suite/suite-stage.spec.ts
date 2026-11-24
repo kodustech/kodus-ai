@@ -60,6 +60,13 @@ describe('the suite stage of a Run', () => {
         expect(w.seen[0].opts).toEqual({ deadlineAt: '2026-11-23T12:40:00.000Z' });
     });
 
+    it("hands the service the Run's cancel signal", async () => {
+        const w = await world({ status: 'ran', suiteRunId: 's', state: 'cancelled' as never, replayed: false });
+        const signal = new AbortController().signal;
+        await w.stage.run(withSuite(), passthrough, { cancellationSignal: () => signal });
+        expect(w.seen[0].opts.cancellationSignal()).toBe(signal);
+    });
+
     it('answers the state of the run and the classification it stored', async () => {
         const classification = { tests: [{ spec: 'a.cy.ts', title: 't', class: 'regression', blocks: true, finding: true, baseDrift: 0 }], massFailure: false, requestTemplateBuild: false };
         const w = await world({ status: 'ran', suiteRunId: 's', state: 'failed', replayed: false }, classification);
