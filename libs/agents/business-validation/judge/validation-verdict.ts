@@ -74,7 +74,7 @@ export const VALIDATION_RESULT_SCHEMA: JSONSchema = {
                     },
                     source: {
                         type: 'string',
-                        description: 'Where in the task, e.g. "AC #2".',
+                        description: 'Where in the task, e.g. "AC02".',
                     },
                     state: { type: 'string', enum: [...REQUIREMENT_STATES] },
                     kind: { type: 'string', enum: [...REQUIREMENT_KINDS] },

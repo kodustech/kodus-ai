@@ -21,6 +21,7 @@ import { createOrUpdateOrganizationParameter } from "@services/organizationParam
 import {
     OrganizationParametersAutoJoinConfig,
     OrganizationParametersConfigKey,
+    OrganizationParametersReviewCommandModesConfig,
     Timezone,
 } from "@services/parameters/types";
 import { Controller, useForm } from "react-hook-form";
@@ -40,6 +41,10 @@ const createSettingsSchema = (userDomain: string) =>
             autoJoinConfig: z.object({
                 enabled: z.boolean(),
                 domains: z.array(z.string()),
+            }),
+            reviewCommandModes: z.object({
+                heavyBlocked: z.boolean(),
+                ultraBlocked: z.boolean(),
             }),
         })
         .superRefine((data, ctx) => {
@@ -87,6 +92,8 @@ export const GeneralOrganizationSettingsPage = (props: {
     email: string;
     timezone: Timezone;
     autoJoinConfig: OrganizationParametersAutoJoinConfig;
+    /** Undefined when they could not be read: shown unknown, never saved. */
+    reviewCommandModes?: Required<OrganizationParametersReviewCommandModesConfig>;
 }) => {
     const router = useRouter();
     const userDomain = props.email.split("@")[1];
@@ -97,6 +104,10 @@ export const GeneralOrganizationSettingsPage = (props: {
         defaultValues: {
             timezone: props.timezone,
             autoJoinConfig: props.autoJoinConfig,
+            reviewCommandModes: props.reviewCommandModes ?? {
+                heavyBlocked: false,
+                ultraBlocked: false,
+            },
         },
     });
 
@@ -132,6 +143,21 @@ export const GeneralOrganizationSettingsPage = (props: {
                     );
                 }
 
+                if (
+                    props.reviewCommandModes &&
+                    (data.reviewCommandModes.heavyBlocked !==
+                        props.reviewCommandModes.heavyBlocked ||
+                        data.reviewCommandModes.ultraBlocked !==
+                            props.reviewCommandModes.ultraBlocked)
+                ) {
+                    promises.push(
+                        createOrUpdateOrganizationParameter(
+                            OrganizationParametersConfigKey.REVIEW_COMMAND_MODES_CONFIG,
+                            data.reviewCommandModes,
+                        ),
+                    );
+                }
+
                 if (promises.length === 0) return;
 
                 await Promise.all(promises);
@@ -159,8 +185,9 @@ export const GeneralOrganizationSettingsPage = (props: {
                     <Page.TitleContainer>
                         <Page.Title>General settings</Page.Title>
                         <Page.Description>
-                            Your organization&apos;s timezone and who can join
-                            it automatically.
+                            Your organization&apos;s timezone, who can join it
+                            automatically, and which review modes a PR comment
+                            can start.
                         </Page.Description>
                     </Page.TitleContainer>
                     <Page.SaveActions
@@ -304,6 +331,68 @@ export const GeneralOrganizationSettingsPage = (props: {
                                         );
                                     }}
                                 />
+                            </FormControl.Root>
+                        </CardHeader>
+                    </Card>
+
+                    <Card color="lv1" className="w-md">
+                        <CardHeader>
+                            <FormControl.Root className="flex flex-col">
+                                <FormControl.Label className="mb-0 text-base font-bold">
+                                    Review mode commands
+                                </FormControl.Label>
+                                <FormControl.Helper className="mt-0 mb-5">
+                                    Anyone with write access to the repository
+                                    can start a Heavy or Ultra review with{" "}
+                                    <code>@kody review --heavy</code> or{" "}
+                                    <code>--ultra</code>. Blocking a command
+                                    stops only that command: automatic reviews
+                                    keep the mode set in Routing.
+                                </FormControl.Helper>
+
+                                {!props.reviewCommandModes && (
+                                    <p
+                                        role="alert"
+                                        className="text-danger mb-3 text-sm">
+                                        These settings could not be loaded.
+                                        Reload the page to try again.
+                                    </p>
+                                )}
+
+                                <div className="flex flex-col gap-3">
+                                    {(
+                                        [
+                                            ["heavyBlocked", "Heavy"],
+                                            ["ultraBlocked", "Ultra"],
+                                        ] as const
+                                    ).map(([key, mode]) => (
+                                        <Controller
+                                            key={key}
+                                            name={`reviewCommandModes.${key}`}
+                                            control={control}
+                                            render={({ field }) => (
+                                                <div className="flex items-center gap-3">
+                                                    <Switch
+                                                        id={field.name}
+                                                        disabled={
+                                                            !props.reviewCommandModes
+                                                        }
+                                                        checked={field.value}
+                                                        onCheckedChange={
+                                                            field.onChange
+                                                        }
+                                                    />
+                                                    <Label
+                                                        htmlFor={field.name}
+                                                        className="text-sm font-medium">
+                                                        Block {mode} review by
+                                                        command
+                                                    </Label>
+                                                </div>
+                                            )}
+                                        />
+                                    ))}
+                                </div>
                             </FormControl.Root>
                         </CardHeader>
                     </Card>

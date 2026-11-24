@@ -269,6 +269,78 @@ describe('FetchChangedFilesStage', () => {
         expect(result.changedFiles).toHaveLength(2000);
     });
 
+    describe('a PR far above the ceiling (2026-11-23: 8,319 files held the event loop 22s)', () => {
+        const bigPr = (count: number) =>
+            Array.from({ length: count }, (_, i) => ({
+                filename:
+                    i % 3 === 0 ? `assets/img${i}.png` : `src/mod${i}/f${i}.ts`,
+                status: i % 7 === 0 ? 'removed' : 'modified',
+                additions: 1,
+                patch: '',
+            }));
+
+        it('lets other work run while it matches ignorePaths', async () => {
+            context.codeReviewConfig.ignorePaths = ['**/*.png'];
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                bigPr(8319),
+            );
+            let otherWorkRan = false;
+            setImmediate(() => {
+                otherWorkRan = true;
+            });
+            // Without a yield the whole split runs in microtasks, before
+            // any setImmediate callback.
+            let ranBeforeSkip = false;
+            const warn = jest
+                .spyOn((stage as any).logger, 'warn')
+                .mockImplementation(() => {
+                    ranBeforeSkip = otherWorkRan;
+                });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo.message).toContain('Limit: 2000');
+            expect(ranBeforeSkip).toBe(true);
+            warn.mockRestore();
+        });
+
+        it('yields once every 500 files', async () => {
+            const spy = jest.spyOn(global, 'setImmediate');
+            try {
+                await (stage as any).splitIgnoredFiles(bigPr(1500), [
+                    '**/*.png',
+                ]);
+                // At files 500 and 1,000.
+                expect(spy).toHaveBeenCalledTimes(2);
+            } finally {
+                spy.mockRestore();
+            }
+        });
+
+        it('splits reviewed and ignored files as before, in order', async () => {
+            context.codeReviewConfig.ignorePaths = ['**/*.png'];
+            const files = bigPr(1500);
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files,
+            );
+            mockPullRequestManagerService.enrichFilesWithContent.mockImplementation(
+                async (_o, _r, _p, kept) => kept,
+            );
+
+            const result = await stage.execute(context);
+
+            const isIgnored = (f: { filename: string; status: string }) =>
+                f.status === 'removed' || f.filename.endsWith('.png');
+            expect(result.changedFiles.map((f) => f.filename)).toEqual(
+                files.filter((f) => !isIgnored(f)).map((f) => f.filename),
+            );
+            expect(result.ignoredFiles).toEqual(
+                files.filter(isIgnored).map((f) => f.filename),
+            );
+        });
+    });
+
     it('keeps files with no patch or a patch it cannot number, instead of failing the stage', async () => {
         const binary = { filename: 'binary.png', status: 'added' };
         const files = [

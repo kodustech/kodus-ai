@@ -49,6 +49,18 @@ function decomposePrKey(prKey: string): {
     };
 }
 
+/**
+ * The states a joiner may extend: a sandbox that is up, or being created.
+ * An INVALIDATED lease keeps its expiry.
+ */
+const EXTENDABLE_LEASE_STATES = ['READY', 'CREATING'];
+/**
+ * No join pushes a lease still CREATING past this long after it was created,
+ * so one stuck there (its worker died) is still reaped, however often it is
+ * joined. Above the longest lease asked for (an Ultra run's, 80 min).
+ */
+export const MAX_LEASE_LIFETIME_MS = 90 * 60 * 1000;
+
 @Injectable()
 export class SandboxLeaseRepository {
     constructor(
@@ -99,6 +111,35 @@ export class SandboxLeaseRepository {
             },
             { upsert: true, new: true },
         );
+
+        // A joiner that needs longer (an Ultra review's Kody Rules on the
+        // PR's lease) pushes the expiry out; the reaper kills by this date, in
+        // use or not. A lease still CREATING goes no further than
+        // MAX_LEASE_LIFETIME_MS after it was created, so one stuck there is
+        // still reaped.
+        const target = new Date(
+            doc.state === 'CREATING'
+                ? Math.min(
+                      expiresAt.getTime(),
+                      new Date(doc.createdAt).getTime() + MAX_LEASE_LIFETIME_MS,
+                  )
+                : expiresAt.getTime(),
+        );
+        if (
+            EXTENDABLE_LEASE_STATES.includes(doc.state) &&
+            doc.expiresAt < target
+        ) {
+            const extended = await this.leaseModel.findOneAndUpdate(
+                {
+                    _id: prKey,
+                    state: { $in: EXTENDABLE_LEASE_STATES },
+                    expiresAt: { $lt: target },
+                },
+                { $set: { expiresAt: target } },
+                { new: true },
+            );
+            if (extended) return extended;
+        }
 
         return doc;
     }
@@ -344,6 +385,7 @@ export class SandboxLeaseRepository {
         prKey: string,
         expectedSandboxId: string,
         requireLeaseCountZero = false,
+        killAt?: Date,
     ): Promise<SandboxLeaseModel | null> {
         const filter: Record<string, unknown> = {
             _id: prKey,
@@ -366,6 +408,10 @@ export class SandboxLeaseRepository {
                         cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
                         cleanupRetryAt: null,
                         cleanupStartedAt: new Date(),
+                        // Written with the claim, so a crash between the two
+                        // cannot strand a claimed lease with no killAt (the
+                        // idle-kill cron only reads killAt).
+                        ...(killAt ? { killAt } : {}),
                     },
                     $inc: { cleanupAttempts: 1 },
                 },

@@ -189,7 +189,7 @@ export interface PullRequestExecution {
     status: "open" | "closed" | "merged";
     merged: boolean;
     /** The mode this execution reviewed in; absent when it reviewed nothing. */
-    reviewMode?: "balanced" | "heavy";
+    reviewMode?: "balanced" | "heavy" | "ultra";
     url: string;
     baseBranchRef: string;
     headBranchRef: string;

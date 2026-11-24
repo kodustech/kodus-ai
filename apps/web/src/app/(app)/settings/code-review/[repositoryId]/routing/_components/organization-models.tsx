@@ -15,6 +15,7 @@ import {
     TaskOverrideGrid,
 } from "src/features/ee/byok/_components/routing/task-override-grid";
 import type { LlmTask } from "src/features/ee/byok/_types";
+import { UltraModelsRow } from "src/features/ee/ultra-review/ultra-models-row";
 
 import type { OrganizationRoutingController } from "./use-organization-routing";
 
@@ -38,10 +39,12 @@ const otherTasks: LlmTask[] = [
 export function OrganizationModels({
     controller,
     heavyAllowed,
+    ultraAllowed = false,
     canEdit,
 }: {
     controller: OrganizationRoutingController;
     heavyAllowed: boolean;
+    ultraAllowed?: boolean;
     canEdit: boolean;
 }) {
     const { pool, routing } = controller;
@@ -254,6 +257,14 @@ export function OrganizationModels({
                                         )}
                                     </div>
                                 ))}
+                                <UltraModelsRow
+                                    pool={pool}
+                                    ultraModelIds={routing.ultraModelIds}
+                                    fallbackModelId={routing.fallbackModelId}
+                                    planAllowed={ultraAllowed}
+                                    editable={editable}
+                                    onSelect={controller.setUltraModel}
+                                />
                             </div>
                             {single && (
                                 <p className="text-text-secondary mt-3 text-sm">

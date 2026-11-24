@@ -5,6 +5,7 @@ import { getOrganizationId } from "@services/organizations/fetch";
 import {
     OrganizationParametersAutoJoinConfig,
     OrganizationParametersConfigKey,
+    OrganizationParametersReviewCommandModesConfig,
     Timezone,
 } from "@services/parameters/types";
 import { auth } from "src/core/config/auth";
@@ -77,14 +78,46 @@ export default async function OrganizationSettingsPage() {
         }
     };
 
-    // Both parameter loads are independent of each other.
-    await Promise.all([loadTimezone(), loadAutoJoin()]);
+    // Nothing stored leaves both commands on; no row is created for it.
+    // Undefined when the read failed: the page shows the switches unknown.
+    const loadReviewCommandModes = async (): Promise<
+        OrganizationParametersReviewCommandModesConfig | undefined
+    > => {
+        try {
+            const result = await getOrganizationParameterByKey<{
+                configValue: OrganizationParametersReviewCommandModesConfig;
+            }>({
+                key: OrganizationParametersConfigKey.REVIEW_COMMAND_MODES_CONFIG,
+            });
+            return result?.configValue ?? {};
+        } catch (error: unknown) {
+            // Only "not stored" means both commands are on; a failed read
+            // must not show them on, nor take the rest of the page down.
+            if (error instanceof TypedFetchError && error.statusCode === 404) {
+                return {};
+            }
+            return undefined;
+        }
+    };
+
+    // The parameter loads are independent of each other.
+    const [, , reviewCommandModes] = await Promise.all([
+        loadTimezone(),
+        loadAutoJoin(),
+        loadReviewCommandModes(),
+    ]);
 
     return (
         <GeneralOrganizationSettingsPage
             email={email}
             timezone={timezoneConfigValue}
             autoJoinConfig={autoJoinConfigValue}
+            reviewCommandModes={
+                reviewCommandModes && {
+                    heavyBlocked: reviewCommandModes.heavyBlocked === true,
+                    ultraBlocked: reviewCommandModes.ultraBlocked === true,
+                }
+            }
         />
     );
 }

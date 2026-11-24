@@ -400,6 +400,21 @@ describe('AutomationCodeReviewService', () => {
                 }),
             );
         });
+
+        it('records the no-license notice on a skipped run, so the next push stays quiet (#2594)', () => {
+            const postedAt = '2026-11-22T12:00:00.000Z';
+            expect(
+                build({
+                    lastAnalyzedCommit: undefined,
+                    licenseNoticePostedAt: postedAt,
+                }),
+            ).toEqual(
+                expect.objectContaining({ licenseNoticePostedAt: postedAt }),
+            );
+            expect(build({ lastAnalyzedCommit: undefined })).not.toHaveProperty(
+                'licenseNoticePostedAt',
+            );
+        });
     });
 
     describe('when the review finishes', () => {

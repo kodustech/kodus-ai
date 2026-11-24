@@ -37,12 +37,33 @@ import {
     shouldReviewBranches,
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { routeCodeReviewModel } from './route-code-review-model';
-import { resolveRiskReviewMode } from '@libs/code-review/domain/review-mode';
+import {
+    resolveRiskReviewMode,
+    type ReviewRoutingReason,
+} from '@libs/code-review/domain/review-mode';
 import { riskSnapshotMismatch } from '@libs/code-review/domain/risk/risk-assessment';
+import {
+    blockedCommandMode,
+    reviewCommandAccessMessage,
+    reviewCommandBlockedMessage,
+    type ReviewCommandModesConfig,
+} from '@libs/code-review/domain/review-command-modes';
 import {
     HEAVY_MODE_PLAN_REQUIRED,
     isHeavyModePlanAllowed,
 } from '@libs/ee/heavy-mode/heavy-mode-plan';
+import type { UltraModel } from '@libs/code-review/domain/ultra-review-state';
+import {
+    ultraReviewPlanAccess,
+    resolveUltraTrio,
+    ultraTrioRefusal,
+} from '@libs/ee/ultra-review/ultra-review-plan';
+import {
+    ULTRA_REVIEW_PLAN_REQUIRED,
+    ULTRA_REVIEW_PLAN_UNREADABLE,
+    ultraTrioRefusalMessage,
+    ULTRA_REFUSAL_NOT_POSTED,
+} from '@libs/ee/ultra-review/ultra-review-messages';
 import { unknownCustomAgentReply } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import {
     CUSTOM_AGENTS_BETA_REQUIRED,
@@ -175,6 +196,9 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 }
             }
 
+            const commandBlocked = await this.refuseCommandMode(context);
+            if (commandBlocked) return commandBlocked;
+
             // Shared risk must be known before selecting the review model.
             // The early cadence/access checks still run before paying for it.
             if (context.codeReviewConfig.riskAssessmentActive !== true) {
@@ -271,6 +295,30 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             currentHeadSha: context.pullRequest.head?.sha ?? '',
             heavyAllowed: true,
         });
+        let routingReason: ReviewRoutingReason;
+        if (context.codeReviewConfig?.reviewMode === 'fast') {
+            routingReason = 'default';
+        } else if (context.requestedReviewMode) {
+            routingReason = 'requested';
+        } else if (risk?.status === 'assessed') {
+            routingReason = risk.riskIdentified
+                ? 'risk-found'
+                : 'no-risk-found';
+        } else {
+            routingReason =
+                risk?.status === 'unavailable' || staleRisk
+                    ? 'risk-unavailable'
+                    : 'default';
+        }
+        // `@kody -v <slug>` runs one custom agent alone, whatever the mode.
+        if (selectedMode === 'ultra' && !context.onlyCustomAgent) {
+            return this.resolveUltraRouting(
+                this.updateContext(context, (draft) => {
+                    draft.reviewRoutingReason = routingReason;
+                }),
+                byokConfig?.configValue,
+            );
+        }
         const heavy =
             selectedMode === 'heavy' && (await this.heavyModeAllowed(context));
 
@@ -317,22 +365,10 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
 
         context = this.updateContext(context, (draft) => {
             draft.heavy = heavy;
-            if (selectedMode === 'heavy' && !heavy) {
-                draft.reviewRoutingReason = 'heavy-unavailable';
-            } else if (context.codeReviewConfig?.reviewMode === 'fast') {
-                draft.reviewRoutingReason = 'default';
-            } else if (context.requestedReviewMode) {
-                draft.reviewRoutingReason = 'requested';
-            } else if (risk?.status === 'assessed') {
-                draft.reviewRoutingReason = risk.riskIdentified
-                    ? 'risk-found'
-                    : 'no-risk-found';
-            } else {
-                draft.reviewRoutingReason =
-                    risk?.status === 'unavailable' || staleRisk
-                        ? 'risk-unavailable'
-                        : 'default';
-            }
+            draft.reviewRoutingReason =
+                selectedMode === 'heavy' && !heavy
+                    ? 'heavy-unavailable'
+                    : routingReason;
             // Materialize the routed model into the resolved slot the pipeline
             // threads downstream (the handle stages read their limit/telemetry
             // metadata off).
@@ -340,6 +376,250 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             draft.codeReviewConfig.byokConfig = routed.resolvedModelSlot;
         });
         return context;
+    }
+
+    /**
+     * `--heavy` or `--ultra` on an organization that turned that command off,
+     * or from someone without write access to the repository: no review
+     * runs, whatever the settings, and the PR is told why.
+     */
+    private async refuseCommandMode(
+        context: CodeReviewPipelineContext,
+    ): Promise<CodeReviewPipelineContext | undefined> {
+        if (!context.requestedReviewMode) return undefined;
+        const stored = await this.organizationParametersService.findByKey(
+            OrganizationParametersKey.REVIEW_COMMAND_MODES_CONFIG,
+            context.organizationAndTeamData,
+        );
+        const blocked = blockedCommandMode(
+            context.requestedReviewMode,
+            stored?.configValue as ReviewCommandModesConfig | undefined,
+        );
+        const requested = context.requestedReviewMode;
+        // Not read (a job enqueued before the check, or no organization to
+        // ask with) is refused like a lookup that failed.
+        const access = context.requestedReviewModeAccess ?? 'unknown';
+        const withoutAccess =
+            !blocked &&
+            (requested === 'heavy' || requested === 'ultra') &&
+            (access === 'none' || access === 'unknown')
+                ? { mode: requested, access }
+                : undefined;
+        if (!blocked && !withoutAccess) return undefined;
+
+        this.logger.log({
+            message: blocked
+                ? `${blocked} review asked by command, turned off for the organization — the review does not run`
+                : `${withoutAccess!.mode} review asked by command by someone without write access (${withoutAccess!.access}) — the review does not run`,
+            context: this.stageName,
+            metadata: {
+                organizationAndTeamData: context.organizationAndTeamData,
+                prNumber: context.pullRequest?.number,
+                repositoryId: context.repository?.id,
+            },
+        });
+        const message = blocked
+            ? reviewCommandBlockedMessage(blocked)
+            : reviewCommandAccessMessage(
+                  withoutAccess!.mode,
+                  withoutAccess!.access,
+              );
+        const told = await this.replyToReviewCommand(context, message);
+        return this.updateContext(context, (draft) => {
+            draft.statusInfo = {
+                status: AutomationStatus.SKIPPED,
+                message,
+            };
+            if (!draft.pipelineMetadata) draft.pipelineMetadata = {};
+            // A reply the platform refused leaves the usual skip reaction.
+            draft.pipelineMetadata.notificationHandled = told;
+        });
+    }
+
+    /**
+     * An Ultra review: the plan and the org's three models, read on every
+     * review. Refused, no review runs and the PR is told why: always when a
+     * command asked for it, on the PR's first review when settings did (later
+     * pushes skip with the same reason on the Pull Requests screen). Allowed,
+     * the review's own slot is the org's `codeReview` model, which Kody Rules,
+     * the summary and the other single-model steps inherit; each Ultra model
+     * is forced on its own run (AgentReviewStage).
+     */
+    private async resolveUltraRouting(
+        context: CodeReviewPipelineContext,
+        storedConfig: unknown,
+    ): Promise<CodeReviewPipelineContext> {
+        // Any command gets the reason: `--ultra`, or a plain start-review
+        // on settings that ask for Ultra.
+        const askedByCommand =
+            context.requestedReviewMode === 'ultra' ||
+            !!context.origin?.startsWith('command');
+        const planAccess = await ultraReviewPlanAccess(
+            this.licenseService,
+            context.organizationAndTeamData,
+            this.stageName,
+        );
+        const trio =
+            planAccess === 'allowed'
+                ? resolveUltraTrio(storedConfig)
+                : undefined;
+        const trioRefusal = trio ? ultraTrioRefusal(trio) : undefined;
+
+        if (!trio || trio.ok !== true) {
+            const message = trioRefusal
+                ? ultraTrioRefusalMessage(trioRefusal)
+                : planAccess === 'unknown'
+                  ? ULTRA_REVIEW_PLAN_UNREADABLE
+                  : ULTRA_REVIEW_PLAN_REQUIRED;
+            this.logger.log({
+                message: 'Ultra review refused — the review does not run',
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    repositoryId: context.repository?.id,
+                    askedByCommand,
+                    planAccess,
+                    reason:
+                        trioRefusal?.reason ??
+                        (planAccess === 'unknown' ? 'plan_unreadable' : 'plan'),
+                },
+            });
+            // Settings asking for it: told once per PR, and only when the
+            // review would otherwise have run. One that would not (a draft, a
+            // skipped branch) skips as any review would, so the reason is not
+            // recorded as told and goes out once the PR is ready. A reply the
+            // platform did not take is not recorded as told either.
+            let recorded = message;
+            if (askedByCommand) {
+                if (!(await this.replyToReviewCommand(context, message))) {
+                    recorded = ULTRA_REFUSAL_NOT_POSTED;
+                }
+            } else if (!(await this.wasSkippedFor(context, message))) {
+                const cadence = await this.evaluateReviewCadence(context);
+                if (!cadence.shouldProcess) {
+                    return this.updateContext(context, (draft) => {
+                        draft.statusInfo = {
+                            status: AutomationStatus.SKIPPED,
+                            message: cadence.reason,
+                        };
+                        if (cadence.shouldSaveSkipped) {
+                            draft.automaticReviewStatus =
+                                cadence.automaticReviewStatus;
+                        }
+                    });
+                }
+                if (!(await this.replyToReviewCommand(context, message))) {
+                    recorded = ULTRA_REFUSAL_NOT_POSTED;
+                }
+            }
+            return this.updateContext(context, (draft) => {
+                draft.statusInfo = {
+                    status: AutomationStatus.SKIPPED,
+                    message: recorded,
+                };
+                if (!draft.pipelineMetadata) draft.pipelineMetadata = {};
+                // A reply the platform refused leaves the usual skip
+                // reaction on the PR.
+                draft.pipelineMetadata.notificationHandled =
+                    recorded !== ULTRA_REFUSAL_NOT_POSTED;
+            });
+        }
+
+        // A model on Kodus credits with none left counts as failed: the
+        // fallback takes its place, like any model that cannot run. A
+        // fallback with none left is not used.
+        const creditsExhausted = async (model: UltraModel) =>
+            !!(await this.permissionValidationService.gateKodusCreditsForSlot(
+                model.slot,
+                context.organizationAndTeamData,
+                this.stageName,
+            ));
+        const models: UltraModel[] = [];
+        const unavailable = [...(trio.unavailable ?? [])];
+        const exhausted: string[] = [];
+        for (const model of trio.models) {
+            if (await creditsExhausted(model)) {
+                exhausted.push(model.modelId);
+                unavailable.push({
+                    position: model.position as 1 | 2 | 3,
+                    modelId: model.modelId,
+                    reason: 'Its Kodus credits are exhausted.',
+                });
+            } else {
+                models.push(model);
+            }
+        }
+        const fallback =
+            trio.fallback && !(await creditsExhausted(trio.fallback))
+                ? trio.fallback
+                : undefined;
+        if (trio.fallback && !fallback) exhausted.push(trio.fallback.modelId);
+        if (exhausted.length) {
+            this.logger.warn({
+                message: 'Ultra review models out of Kodus credits',
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    repositoryId: context.repository?.id,
+                    models: exhausted,
+                },
+            });
+        }
+        // No model left with credits, the fallback included: skip as a
+        // Balanced review out of credits does, with the same comment, rather
+        // than spend on Kody Rules for a review with no model.
+        if (!models.length && !fallback && exhausted.length) {
+            // Handled only when the platform took the comment; otherwise the
+            // usual skip notification still runs.
+            const told =
+                context.pipelineMetadata?.showStatusFeedback !== false &&
+                !!(await this.codeManagementService
+                    .createIssueComment({
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                        repository: context.repository,
+                        prNumber: context.pullRequest?.number,
+                        body: KODUS_CREDITS_EXHAUSTED_COMMENT,
+                    })
+                    .catch(() => null));
+            return this.updateContext(context, (draft) => {
+                draft.statusInfo = {
+                    status: AutomationStatus.SKIPPED,
+                    message: StageMessageHelper.skippedWithReason(
+                        PipelineReasons.PREREQUISITES.CREDITS_EXHAUSTED,
+                    ),
+                };
+                if (!draft.pipelineMetadata) draft.pipelineMetadata = {};
+                if (told) draft.pipelineMetadata.notificationHandled = true;
+            });
+        }
+
+        // The merge model is one that can still run: the trio's pick, else
+        // the first left of the three, else the fallback.
+        const mergeModel = models.some(
+            (m) => m.modelId === trio.mergeModel.modelId,
+        )
+            ? trio.mergeModel
+            : (models[0] ?? fallback ?? trio.mergeModel);
+
+        // Kody Rules, the summary and the other single-model steps run on the
+        // org's default model, which the prerequisites already checked for
+        // credits; a repository's model override applies to Balanced and
+        // Heavy only.
+        const routed = routeCodeReviewModel(storedConfig, {}, false);
+        return this.updateContext(context, (draft) => {
+            draft.heavy = false;
+            draft.ultra = {
+                models,
+                ...(unavailable.length && { unavailable }),
+                ...(fallback && { fallback }),
+                mergeModel,
+            };
+            draft.codeReviewConfig.resolvedModelSlot = routed.resolvedModelSlot;
+            draft.codeReviewConfig.byokConfig = routed.resolvedModelSlot;
+        });
     }
 
     /**
@@ -594,6 +874,27 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         };
     }
 
+    /**
+     * An earlier review of this PR was skipped with this same message. An
+     * unreadable answer is not "never told": it throws, and the review skips
+     * on the config error without posting the refusal again.
+     */
+    private async wasSkippedFor(
+        context: CodeReviewPipelineContext,
+        message: string,
+    ): Promise<boolean> {
+        return !!(await this.automationExecutionService.findLatestExecutionByFilters(
+            {
+                status: AutomationStatus.SKIPPED,
+                errorMessage: message,
+                teamAutomation: { uuid: context.teamAutomationId },
+                pullRequestNumber: context.pullRequest.number,
+                repositoryId: context?.repository?.id,
+            },
+            { rethrow: true },
+        ));
+    }
+
     private async hasExistingSuccessfulReview(
         context: CodeReviewPipelineContext,
     ): Promise<boolean> {
@@ -716,17 +1017,20 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         return false;
     }
 
+    /** Whether the platform took the reply (some return null on failure). */
     private async replyToReviewCommand(
         context: CodeReviewPipelineContext,
         body: string,
-    ): Promise<void> {
+    ): Promise<boolean> {
         try {
-            await this.codeManagementService.createSingleIssueComment({
-                organizationAndTeamData: context.organizationAndTeamData,
-                repository: context.repository,
-                prNumber: context.pullRequest.number,
-                body,
-            });
+            return !!(await this.codeManagementService.createSingleIssueComment(
+                {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repository: context.repository,
+                    prNumber: context.pullRequest.number,
+                    body,
+                },
+            ));
         } catch (error) {
             this.logger.error({
                 message: `Failed to reply to the review command on PR #${context.pullRequest?.number}`,
@@ -741,6 +1045,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     prNumber: context.pullRequest?.number,
                 },
             });
+            return false;
         }
     }
 

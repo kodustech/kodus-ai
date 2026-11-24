@@ -26,6 +26,13 @@ import {
     groupModelsByProvider,
     hasVisibleModels,
 } from "src/features/ee/byok/_utils";
+import {
+    isUltraTrioSet,
+    ULTRA_MODEL_COUNT,
+    ultraModelResolver,
+    ultraModelUsable,
+    ultraTrioError,
+} from "src/features/ee/ultra-review/plan";
 
 type Edit = { baseline: BYOKRouting; routing: BYOKRouting };
 
@@ -34,11 +41,14 @@ export function useOrganizationRouting({
     enabled,
     canEdit,
     status,
+    ultraInUse = false,
 }: {
     teamId?: string;
     enabled: boolean;
     canEdit: boolean;
     status: LLMConfigStatus | null;
+    /** A review mode here is Ultra: the trio cannot be cleared. */
+    ultraInUse?: boolean;
 }) {
     const queryClient = useQueryClient();
     const queryKey = ["organization-routing", teamId, enabled] as const;
@@ -104,13 +114,40 @@ export function useOrganizationRouting({
                     ? undefined
                     : current.fallbackModelId,
         }));
+    /** Picks Model `index + 1` of the Ultra trio; no id clears the slot. */
+    const setUltraModel = (index: number, id?: string) =>
+        setRouting((current) => {
+            const slots = Array.from(
+                { length: ULTRA_MODEL_COUNT },
+                (_, i) => current.ultraModelIds?.[i] ?? "",
+            );
+            slots[index] = id ?? "";
+            return { ...current, ultraModelIds: slots };
+        });
+    const modelOf = ultraModelResolver(query.data?.models);
+    // Whether each model still runs is in the status, not the BYOK config.
+    const usable = ultraModelUsable(status?.models);
+    // By its ids, as the API counts it: reordering the slots is no edit.
+    const trioIds = (ids?: string[]) =>
+        [...new Set((ids ?? []).filter(Boolean))].sort().join();
+    const trioEdited =
+        trioIds(saved.ultraModelIds) !== trioIds(routing.ultraModelIds);
     const validationError =
         dirty &&
         !pool.some(
             (model) => model.id === routing.defaultModelId && !model.disabled,
         )
             ? "Select a connected default model."
-            : undefined;
+            : dirty
+              ? ultraTrioError(
+                    routing.ultraModelIds,
+                    ultraInUse,
+                    modelOf,
+                    // A model that stopped running blocks only a trio being
+                    // edited: the API saves the rest of the models with it.
+                    trioEdited ? usable : undefined,
+                )
+              : undefined;
 
     useUnsavedChangesGuard({
         id: `organization-routing-${teamId}`,
@@ -155,6 +192,9 @@ export function useOrganizationRouting({
                         edit.baseline.taskOverrides?.[task as LlmTask] !== id,
                 )
                 .map(([, id]) => id),
+            ...(edit.routing.ultraModelIds ?? []).filter(
+                (id, i) => edit.baseline.ultraModelIds?.[i] !== id,
+            ),
         ].filter((id): id is string => !!id);
         const freshModelIds = new Set(fresh.models.map((model) => model.id));
         if (changedIds.some((id) => !freshModelIds.has(id)))
@@ -170,10 +210,21 @@ export function useOrganizationRouting({
             throw new RoutingSettingsError(
                 "A selected provider is unavailable. Reconnect it or choose another model.",
             );
-        await createOrUpdateOrganizationParameter(
-            OrganizationParametersConfigKey.BYOK_CONFIG,
-            buildByokBlob(fresh, { kind: "routing", routing: next }),
-        );
+        try {
+            await createOrUpdateOrganizationParameter(
+                OrganizationParametersConfigKey.BYOK_CONFIG,
+                buildByokBlob(fresh, { kind: "routing", routing: next }),
+            );
+        } catch (error) {
+            // The API's own refusal of a trio change: it names the scopes
+            // still on Ultra, which this page cannot see.
+            const message = (
+                error as { response?: { data?: { message?: unknown } } }
+            )?.response?.data?.message;
+            if (typeof message === "string" && message.startsWith("Ultra"))
+                throw new RoutingSettingsError(message);
+            throw error;
+        }
         queryClient.setQueryData(queryKey, { ...fresh, routing: next });
         setEdit(null);
         return true;
@@ -202,6 +253,15 @@ export function useOrganizationRouting({
             };
         },
         routing,
+        /**
+         * The saved trio is being broken by this edit. Counted as the API's
+         * guard counts a trio: by its ids, one model through two providers
+         * once, whether or not each still runs.
+         */
+        breaksUltraTrio:
+            dirty &&
+            isUltraTrioSet(saved.ultraModelIds, modelOf) &&
+            !isUltraTrioSet(routing.ultraModelIds, modelOf),
         pool,
         dirty,
         validationError,
@@ -214,6 +274,7 @@ export function useOrganizationRouting({
         setTask,
         setFallback: (id?: string) =>
             setRouting((current) => ({ ...current, fallbackModelId: id })),
+        setUltraModel,
         reset: () => setEdit(null),
         save,
     };

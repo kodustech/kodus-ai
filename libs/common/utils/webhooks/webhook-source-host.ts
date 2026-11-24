@@ -159,11 +159,14 @@ export function webhookConfigsOfInstance<T>(
  * integration. Renaming or moving the repository keeps the host. A config
  * whose listed repository URL is on another host is on another instance,
  * since the instance builds that URL, and never takes it, even when it is
- * the only one with that id. Its integration host alone does not tell:
- * Kodus may reach the instance at another address, such as a docker service
- * name or an IP. Among the configs that list no repository URL, one that
- * keeps the same `owner/repo` under that id takes it, and otherwise those
- * that store no host at all, as before.
+ * the only one with that id, unless it keeps the same `owner/repo` under
+ * that id on a host the sending one is under, or under it: the same server
+ * under another name, such as a custom HTTP clone URL
+ * (`devops.gitlab.acme.com` listed, events from `gitlab.acme.com`). Its integration host alone does not tell: Kodus
+ * may reach the instance at another address, such as a docker service name
+ * or an IP. Among the configs that list no repository URL, one that keeps
+ * the same `owner/repo` under that id takes it, and otherwise those that
+ * store no host at all, as before.
  */
 export function instanceConfigsForWebhook<T>(
     configs: T[] | null | undefined,
@@ -182,25 +185,42 @@ export function instanceConfigsForWebhook<T>(
         return onHost;
     }
 
+    const fullName = normalizeFullName(source?.repositoryFullName);
+    const listsSameRepository = (config: T) => {
+        const listed = listedRepositoryOf(config, repositoryId);
+        return (
+            !!fullName &&
+            !!listed &&
+            normalizeFullName(
+                listed?.fullName ?? listed?.full_name ?? listed?.name,
+            ) === fullName
+        );
+    };
+
+    // The same server under another name: a config that keeps the same
+    // owner/repo on a host the sending one is under, or that is under it.
+    const sameServer = host
+        ? candidates.filter(
+              (config) =>
+                  configHostsOf(config, repositoryId).some((configHost) =>
+                      sameServerName(configHost, host),
+                  ) && listsSameRepository(config),
+          )
+        : [];
+
     const unlisted = candidates.filter(
         (config) => !listedHostOf(config, repositoryId),
     );
+    const sameRepository = repositoryId
+        ? unlisted.filter(listsSameRepository)
+        : [];
 
-    const fullName = normalizeFullName(source?.repositoryFullName);
-    const sameRepository =
-        fullName && repositoryId
-            ? unlisted.filter((config) => {
-                  const listed = listedRepositoryOf(config, repositoryId);
-                  return (
-                      !!listed &&
-                      normalizeFullName(
-                          listed?.fullName ?? listed?.full_name ?? listed?.name,
-                      ) === fullName
-                  );
-              })
-            : [];
-    if (sameRepository.length) {
-        return sameRepository;
+    const matched = [
+        ...sameServer,
+        ...sameRepository.filter((config) => !sameServer.includes(config)),
+    ];
+    if (matched.length) {
+        return matched;
     }
 
     // Data written before configs stored any host: nothing tells them
@@ -271,6 +291,16 @@ function configHostsOf(config: any, repositoryId: string): string[] {
         listedHostOf(config, repositoryId),
         normalizeHost(storedHostOf(config)),
     ].filter((host): host is string => !!host);
+}
+
+/**
+ * Whether two hosts can name the same server: the same host, or one under
+ * the other (`devops.gitlab.acme.com` and `gitlab.acme.com`). Sibling hosts
+ * (`gitlab-a.acme.com`, `gitlab-b.acme.com`) are separate servers, as are
+ * tenants of one hosting domain.
+ */
+function sameServerName(a: string, b: string): boolean {
+    return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
 }
 
 /** The host of the repository URL a config lists under that id. */
