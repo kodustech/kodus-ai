@@ -9,7 +9,7 @@
  * No LangChain runtime dependency: the bedrock config is
  * typed structurally, not via NormalizedByokConfig.
  */
-import type { LanguageModel } from 'ai';
+import { wrapLanguageModel, type LanguageModel } from 'ai';
 import { createVertex } from '@ai-sdk/google-vertex';
 import { createVertexAnthropic } from '@ai-sdk/google-vertex/anthropic';
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
@@ -132,6 +132,57 @@ export interface BedrockCredentials {
  * Emits a clear auth error at call time when credentials are missing (the
  * test-byok endpoint already catches empty fields before save).
  */
+/** Whether `text` parses as JSON (the json tool's input always does). */
+const parsesAsJson = (text: unknown): boolean => {
+    if (typeof text !== 'string') return false;
+    try {
+        JSON.parse(text);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+/**
+ * When Bedrock answers through the forced `json` tool, `@ai-sdk/amazon-bedrock`
+ * emits the tool input as one more text part AFTER the model's own text, and
+ * the SDK joins them: a prose example the model wrote first (`If nothing is
+ * wrong I would return {"violations":[]}`) then beat the tool answer and
+ * shipped as an empty review. The tool input is the answer, as
+ * `@ai-sdk/anthropic` treats it (it drops the text): keep only the last text
+ * part that is JSON, which is the tool's (the turn ends at the tool call).
+ */
+function keepJsonToolAnswerOnly(model: LanguageModel): LanguageModel {
+    return wrapLanguageModel({
+        model: model as any,
+        middleware: {
+            specificationVersion: 'v3',
+            wrapGenerate: async ({ doGenerate }: any) => {
+                const result = await doGenerate();
+                const fromTool =
+                    result?.providerMetadata?.bedrock
+                        ?.isJsonResponseFromTool === true;
+                if (!fromTool || !Array.isArray(result.content)) {
+                    return result;
+                }
+                const toolIndex = result.content.findLastIndex(
+                    (p: any) => p?.type === 'text' && parsesAsJson(p.text),
+                );
+                if (toolIndex < 0) {
+                    return result;
+                }
+                return {
+                    ...result,
+                    content: result.content.filter(
+                        (p: any, i: number) =>
+                            p?.type !== 'text' || i === toolIndex,
+                    ),
+                };
+            },
+        } as any,
+    }) as LanguageModel;
+}
+
 export function bedrockModelFromCredentials(
     config: BedrockCredentials | undefined,
     modelId: string,
@@ -139,10 +190,12 @@ export function bedrockModelFromCredentials(
     const region = config?.awsRegion?.trim() || 'us-east-1';
 
     if (byokAuthKind('amazon_bedrock', config) === 'bedrock-bearer') {
-        return createAmazonBedrock({
-            region,
-            apiKey: decrypt(config!.awsBearerToken!),
-        })(modelId);
+        return keepJsonToolAnswerOnly(
+            createAmazonBedrock({
+                region,
+                apiKey: decrypt(config!.awsBearerToken!),
+            })(modelId),
+        );
     }
 
     const accessKeyId = config?.awsAccessKeyId
@@ -155,10 +208,12 @@ export function bedrockModelFromCredentials(
         ? decrypt(config.awsSessionToken)
         : undefined;
 
-    return createAmazonBedrock({
-        region,
-        accessKeyId,
-        secretAccessKey,
-        sessionToken,
-    })(modelId);
+    return keepJsonToolAnswerOnly(
+        createAmazonBedrock({
+            region,
+            accessKeyId,
+            secretAccessKey,
+            sessionToken,
+        })(modelId),
+    );
 }

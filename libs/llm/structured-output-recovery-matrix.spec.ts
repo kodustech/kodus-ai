@@ -707,6 +707,20 @@ describe.each(ROWS)('$id', (row) => {
             );
             expectSeen(run, { kind: 'answer', value: FINDINGS });
         });
+
+        it('a schema-valid example in the prose before the forced tool call never replaces the tool answer', async () => {
+            // Bedrock emits the json tool's input as one more text part after
+            // the model's own text: the prose example came first and shipped
+            // as an empty review.
+            const run = await withStubbedModel(
+                () => ({
+                    text: 'If nothing is wrong I would return {"violations":[]}.',
+                    toolInput: FINDINGS,
+                }),
+                () => structuredCall(row.slot),
+            );
+            expectSeen(run, { kind: 'answer', value: FINDINGS });
+        });
     }
 });
 

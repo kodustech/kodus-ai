@@ -257,11 +257,8 @@ describe('bedrockModelFromCredentials', () => {
         expect(settings.accessKeyId).toBe('');
         expect(settings.secretAccessKey).toBe('');
         expect(settings.sessionToken).toBeUndefined();
-        expect(model).toEqual({
-            sdk: 'bedrock',
-            modelId: 'model-x',
-            settings: expect.objectContaining({ region: 'us-east-1' }),
-        });
+        // Wrapped (keepJsonToolAnswerOnly), the model id is the SDK's.
+        expect((model as any).modelId).toBe('model-x');
     });
 
     it('defaults region to "us-east-1" when awsRegion is whitespace only', () => {
@@ -345,7 +342,9 @@ describe('bedrockModelFromCredentials', () => {
         );
 
         expect(decryptMock).not.toHaveBeenCalledWith(undefined);
-        expect(settingsFor(createAmazonBedrockMock).sessionToken).toBeUndefined();
+        expect(
+            settingsFor(createAmazonBedrockMock).sessionToken,
+        ).toBeUndefined();
     });
 
     it('SigV4: missing access key yields empty string (not decrypted)', () => {
@@ -365,5 +364,66 @@ describe('bedrockModelFromCredentials', () => {
             'anthropic.claude-3',
         );
         expect((model as any).modelId).toBe('anthropic.claude-3');
+    });
+});
+
+describe('bedrockModelFromCredentials — the forced json tool is the answer', () => {
+    const generateWith = async (result: unknown) => {
+        createAmazonBedrockMock.mockImplementationOnce(
+            () => (modelId: string) => ({
+                specificationVersion: 'v3',
+                provider: 'amazon-bedrock',
+                modelId,
+                supportedUrls: {},
+                doGenerate: jest.fn(async () => result),
+                doStream: jest.fn(),
+            }),
+        );
+        const model: any = bedrockModelFromCredentials(undefined, 'm');
+        return model.doGenerate({ prompt: [] });
+    };
+    const findings = '{"violations":[{"body":"bug","line":12}]}';
+    const meta = { bedrock: { isJsonResponseFromTool: true } };
+
+    it('drops the prose text parts, keeping the tool input', async () => {
+        const out = await generateWith({
+            content: [
+                { type: 'reasoning', text: 'thinking' },
+                {
+                    type: 'text',
+                    text: 'If nothing is wrong I would return {"violations":[]}.',
+                },
+                { type: 'text', text: '{"violations":[]}' },
+                { type: 'text', text: findings },
+            ],
+            providerMetadata: meta,
+        });
+        expect(out.content).toEqual([
+            { type: 'reasoning', text: 'thinking' },
+            { type: 'text', text: findings },
+        ]);
+    });
+
+    it('leaves a reply that did not come from the json tool untouched', async () => {
+        const content = [
+            { type: 'text', text: 'If nothing is wrong I would return {}.' },
+            { type: 'text', text: findings },
+        ];
+        const out = await generateWith({ content, providerMetadata: {} });
+        expect(out.content).toBe(content);
+    });
+
+    it("leaves an agent's ordinary tool call and its text untouched", async () => {
+        const content = [
+            { type: 'text', text: 'Reading the file.' },
+            {
+                type: 'tool-call',
+                toolCallId: 't1',
+                toolName: 'readFile',
+                input: '{"path":"a.ts"}',
+            },
+        ];
+        const out = await generateWith({ content });
+        expect(out.content).toBe(content);
     });
 });
