@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 
 import { Action, ResourceType } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import type { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
@@ -20,6 +20,7 @@ import {
 import { environmentRepositoryIds, RuntimeEnvironmentMembers } from '../environment-members.service';
 import type { RuntimeAuthorization } from '../run-access.service';
 import { RuntimePoolController } from '../pool-controller.service';
+import { RuntimeSuiteSelection } from '../suite-selection.service';
 import { orgOf, validId } from './environment-view';
 
 /**
@@ -31,8 +32,15 @@ import { orgOf, validId } from './environment-view';
  * (a whole number up to the plan's ceiling, or null for the plan's default).
  * A pool change goes to the Runtime through the outbox: the worker asks the
  * environment's cell.
+ *
+ * The e2e suite (docs/runtime/e2e-suites.md section 13): `suiteCi` (run on every
+ * push as a CI check; null follows the deployment's default) is this
+ * environment's own setting. `suiteSelection` (run only the specs the change
+ * reaches) is the Runtime's state, so it goes through the outbox and is never a
+ * product column. The suite's gate and shard ceiling are the recipe's
+ * (`suite.gate`, `suite.shards`): read-only in Settings, edited in the file.
  */
-const SETTINGS_KEYS: readonly string[] = ['diagnosticHold', 'machineSize', 'forkPullRequests', 'poolSize', 'poolPolicy', 'previewSecrets'];
+const SETTINGS_KEYS: readonly string[] = ['diagnosticHold', 'machineSize', 'forkPullRequests', 'poolSize', 'poolPolicy', 'previewSecrets', 'suiteCi', 'suiteSelection'];
 
 @Injectable()
 export class UpdateEnvironmentSettingsUseCase {
@@ -47,6 +55,9 @@ export class UpdateEnvironmentSettingsUseCase {
         // Required by Nest; made without it (the older tests), only the environment's own repository is checked.
         @Inject(RuntimeEnvironmentMembers)
         private readonly members?: RuntimeEnvironmentMembers,
+        // Without it (the older tests) the selection switch is refused.
+        @Optional() @Inject(RuntimeSuiteSelection)
+        private readonly suiteSelection?: RuntimeSuiteSelection,
     ) {}
 
     async execute(input: { user: Partial<IUser>; environmentId: string; body: unknown }): Promise<ProductEnvironment> {
@@ -62,6 +73,8 @@ export class UpdateEnvironmentSettingsUseCase {
             poolSize?: unknown;
             poolPolicy?: unknown;
             previewSecrets?: unknown;
+            suiteCi?: unknown;
+            suiteSelection?: unknown;
         } | null;
         const keys = body ? Object.keys(body) : [];
         if (
@@ -70,10 +83,12 @@ export class UpdateEnvironmentSettingsUseCase {
             ('diagnosticHold' in body! && typeof body!.diagnosticHold !== 'boolean') ||
             ('machineSize' in body! && body!.machineSize !== null && !isMachineSizePreset(body!.machineSize)) ||
             ('forkPullRequests' in body! && !isForkPullRequestPolicy(body!.forkPullRequests)) ||
-            ('previewSecrets' in body! && !(PREVIEW_SECRETS as readonly unknown[]).includes(body!.previewSecrets))
+            ('previewSecrets' in body! && !(PREVIEW_SECRETS as readonly unknown[]).includes(body!.previewSecrets)) ||
+            ('suiteCi' in body! && body!.suiteCi !== null && typeof body!.suiteCi !== 'boolean') ||
+            ('suiteSelection' in body! && typeof body!.suiteSelection !== 'boolean')
         ) {
             throw new BadRequestException(
-                "Body must be { diagnosticHold?: boolean, machineSize?: 'small' | 'medium' | 'large' | null, forkPullRequests?: 'skip' | 'require_approval' | 'run', poolSize?: number | null, poolPolicy?: object | null, previewSecrets?: 'none' | 'run' }",
+                "Body must be { diagnosticHold?: boolean, machineSize?: 'small' | 'medium' | 'large' | null, forkPullRequests?: 'skip' | 'require_approval' | 'run', poolSize?: number | null, poolPolicy?: object | null, previewSecrets?: 'none' | 'run', suiteCi?: boolean | null, suiteSelection?: boolean }",
             );
         }
         let poolPolicy: PoolPolicy | null | undefined;
@@ -116,8 +131,14 @@ export class UpdateEnvironmentSettingsUseCase {
             ...(poolSize !== undefined ? { poolSize } : {}),
             ...(poolPolicy !== undefined ? { poolPolicy } : {}),
             ...(body!.previewSecrets === 'none' || body!.previewSecrets === 'run' ? { previewSecrets: body!.previewSecrets } : {}),
+            ...('suiteCi' in body! ? { suiteCi: body!.suiteCi as boolean | null } : {}),
         };
+        if (typeof body!.suiteSelection === 'boolean' && !this.suiteSelection) throw new BadRequestException('Spec selection cannot be changed here');
         await this.environments.updateSettings(organizationId, env.environmentId, settings);
+        if (typeof body!.suiteSelection === 'boolean') {
+            // The Runtime's state: asked through the outbox, never written from here.
+            await this.suiteSelection!.set({ user: input.user, organizationId, environmentId: env.environmentId, selection: body!.suiteSelection ? 'on' : 'off' });
+        }
         const out: ProductEnvironment = { ...env, ...settings };
         if (poolSize !== undefined || poolPolicy !== undefined) {
             // The size the policy wants now goes to the cell; the scheduler keeps it there.

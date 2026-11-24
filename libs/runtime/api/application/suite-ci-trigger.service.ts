@@ -11,7 +11,7 @@ const CI_EVENTS: ReadonlySet<RuntimePullRequestObserved['event']> = new Set(['op
 
 /**
  * CI mode's trigger (docs/runtime/e2e-suites.md section 11): the PR's own events, read by the Run trigger, ask for the suite of
- * the environment the repository is the primary of. Off unless `RUNTIME_SUITE_CI=true`. It never throws and never changes what
+ * the environment the repository is the primary of. Whether it runs is the environment's own switch (`suiteCi`); where that is not set, `RUNTIME_SUITE_CI=true` is the default (off otherwise). It never throws and never changes what
  * the Run trigger decided: a suite that cannot be asked for is logged.
  */
 @Injectable()
@@ -25,11 +25,12 @@ export class RuntimeSuiteCiTrigger {
     ) {}
 
     async onPullRequest(ev: RuntimePullRequestObserved): Promise<SuiteCiOutcome | { status: 'skipped'; reason: 'disabled' | 'event' | 'no_environment' | 'failed' }> {
-        if (!this.config.suiteCi) return { status: 'skipped', reason: 'disabled' };
         if (!CI_EVENTS.has(ev.event)) return { status: 'skipped', reason: 'event' };
         try {
             const environment = await this.environments.findByRepository(ev.organizationId, ev.repository.id);
             if (!environment) return { status: 'skipped', reason: 'no_environment' };
+            // The environment's own switch (Settings, e2e suite) wins; where it is not set the deployment's default decides.
+            if (!(environment.suiteCi ?? this.config.suiteCi)) return { status: 'skipped', reason: 'disabled' };
             return await this.requester.requestCi({ environment, prNumber: ev.prNumber });
         } catch (error) {
             this.logger.warn({ message: 'Runtime suite CI trigger failed', context: RuntimeSuiteCiTrigger.name, error: error instanceof Error ? error : undefined, metadata: { organizationId: ev.organizationId, repositoryId: ev.repository.id, prNumber: ev.prNumber } });

@@ -45,6 +45,18 @@ describe('the CI trigger', () => {
         expect(await world({ env: null }).trigger.onPullRequest(event())).toEqual({ status: 'skipped', reason: 'no_environment' });
     });
 
+    it('follows the environment\'s own switch over the deployment\'s default: on where the deployment is off, off where it is on, and the default when the switch is not set', async () => {
+        const onHere = world({ suiteCi: false, env: { ...environment, suiteCi: true } });
+        expect(await onHere.trigger.onPullRequest(event())).toMatchObject({ status: 'requested' });
+        const offHere = world({ suiteCi: true, env: { ...environment, suiteCi: false } });
+        expect(await offHere.trigger.onPullRequest(event())).toEqual({ status: 'skipped', reason: 'disabled' });
+        expect(offHere.asked).toEqual([]);
+        for (const unset of [undefined, null]) {
+            expect(await world({ suiteCi: true, env: { ...environment, suiteCi: unset } }).trigger.onPullRequest(event())).toMatchObject({ status: 'requested' });
+            expect(await world({ suiteCi: false, env: { ...environment, suiteCi: unset } }).trigger.onPullRequest(event())).toEqual({ status: 'skipped', reason: 'disabled' });
+        }
+    });
+
     it('never throws: a suite that cannot be asked for is logged, and the Run trigger goes on', async () => {
         const w = world();
         w.requester.requestCi.mockRejectedValueOnce(new Error('git down'));

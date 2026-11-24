@@ -7,6 +7,7 @@ import { planReuseKey } from '../worker/run/plan-reuse';
 import { setupLearnScopeId } from '@libs/runtime/run/environment-setup';
 import { lessonIdFor } from '@libs/runtime/blockers/lessons';
 import { environmentPreviewIdFor, previewIdFor } from '@libs/runtime/contracts/preview';
+import { suiteRunIdOfRun } from '@libs/runtime/contracts/derive-id';
 import { memberImageKey, refsDigest } from '@libs/runtime/contracts/workspace';
 import { canonicalExternalJSON } from '@libs/runtime/api/domain/external-findings';
 import { recipeAuthorCallKey, recipeAuthorFingerprint } from '@libs/runtime/api/application/use-cases/recipe-author.use-case';
@@ -27,6 +28,10 @@ describe('derived ids keep the values shipped releases stored', () => {
         expect(setupCorrelationId('setup-key-1')).toBe('4dd782c6-783d-48ce-87ec-7a0a85676fc4');
         expect(setupLearnScopeId('setup-key-1')).toBe('a91be10c-c897-458c-80f2-7d081d743bda');
         expect(lessonIdFor('org-a', 'repo-1', 'missing_env:DATABASE_URL', 'fix-1')).toBe('ed7ae236cd36e70d26af24c82f633277');
+    });
+
+    it('keeps the suite run id of a Run: the worker stores it and the Run page reads it', () => {
+        expect(suiteRunIdOfRun('org-a', 'run-1')).toBe('5bd1ff8e-e939-5ba4-a147-8269cfaaa2fc');
     });
 
     it('keeps the preview ids', () => {

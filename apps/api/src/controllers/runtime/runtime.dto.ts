@@ -201,6 +201,22 @@ export class UpdateEnvironmentSettingsDto {
             "The organization's secrets in this environment's previews: none (the default), or the same as its Runs (owner only; never on a fork's pull request).",
     })
     previewSecrets?: 'none' | 'run';
+
+    @IsOptional()
+    @IsBoolean()
+    @ApiPropertyOptional({
+        type: Boolean,
+        nullable: true,
+        description: "Run the repository's e2e suite on every push as a CI check; null follows the deployment's default.",
+    })
+    suiteCi?: boolean | null;
+
+    @IsOptional()
+    @IsBoolean()
+    @ApiPropertyOptional({
+        description: 'Run only the specs the change reaches (true) or the whole suite on every pull request (false). The Runtime applies it; the stored state is read from GET /runtime/environments/:id/suite.',
+    })
+    suiteSelection?: boolean;
 }
 
 export class ApplyBlockerFixDto {
@@ -481,6 +497,20 @@ export class RunEvidenceQueryDto {
     @MaxLength(32)
     @ApiPropertyOptional()
     type?: string;
+}
+
+export class SuiteArtifactQueryDto {
+    @IsString()
+    @IsNotEmpty()
+    @MaxLength(512)
+    @ApiProperty({ description: 'The spec file the artifact was kept for, as the suite page names it.' })
+    spec: string;
+
+    @IsString()
+    @IsNotEmpty()
+    @MaxLength(256)
+    @ApiProperty({ description: 'The artifact file name, as the suite page names it.' })
+    name: string;
 }
 
 export class SetTeamCliKeyRepositoriesDto {

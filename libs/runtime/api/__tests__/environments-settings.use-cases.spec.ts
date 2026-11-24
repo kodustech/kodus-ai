@@ -38,6 +38,7 @@ import { RuntimeCommandName } from '@libs/runtime/contracts/runtime-commands';
 import { effectivePoolSize, type PoolUsage } from '../domain/pool';
 import { RuntimePoolController } from '../application/pool-controller.service';
 import { RuntimeEnvironmentMembers } from '../application/environment-members.service';
+import { RuntimeSuiteSelection } from '../application/suite-selection.service';
 import { clock, config, FakeOutbox, InMemoryEnvironmentRepositories, NOW, ORG, OTHER_ORG, OTHER_REPO, REPO, realAuthorization, run, storeWith, TEAM, user, openSealed } from './fixtures';
 
 class InMemoryEnvironments implements ProductEnvironmentStore {
@@ -665,6 +666,46 @@ describe("Secrets in an environment's previews (docs/runtime/preview-urls.md §7
         await expect(update.execute({ user: repoAdmin, environmentId: env.environmentId, body: { previewSecrets: 'run' } })).rejects.toBeInstanceOf(ForbiddenException);
         await expect(update.execute({ user: owner, environmentId: env.environmentId, body: { previewSecrets: 'run' } })).resolves.toMatchObject({ previewSecrets: 'run' });
         expect(await s.get.execute({ user: owner, environmentId: env.environmentId })).toMatchObject({ previewSecrets: 'run' });
+    });
+});
+
+describe("The e2e suite's settings (docs/runtime/e2e-suites.md section 13)", () => {
+    const updateOf = (s: Awaited<ReturnType<typeof setup>>) =>
+        new UpdateEnvironmentSettingsUseCase(s.environments, realAuthorization([REPO]), config(), new RuntimePoolController(s.environments, config(), s.outbox, clock), undefined, new RuntimeSuiteSelection(s.outbox as any, clock));
+
+    it('"run on every push" is the environment\'s own switch: true, false, or null for the deployment\'s default, and nothing else', async () => {
+        const s = await setup();
+        const env = await s.create.execute({ user: owner, repositoryId: REPO });
+        const update = updateOf(s);
+        await expect(update.execute({ user: owner, environmentId: env.environmentId, body: { suiteCi: true } })).resolves.toMatchObject({ suiteCi: true });
+        expect(s.environments.settingsWrites.at(-1)).toEqual({ suiteCi: true });
+        await expect(update.execute({ user: owner, environmentId: env.environmentId, body: { suiteCi: null } })).resolves.toMatchObject({ suiteCi: null });
+        for (const bad of [{ suiteCi: 'yes' }, { suiteCi: 1 }]) await expect(update.execute({ user: owner, environmentId: env.environmentId, body: bad })).rejects.toBeInstanceOf(BadRequestException);
+        await expect(update.execute({ user: contributor, environmentId: env.environmentId, body: { suiteCi: true } })).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('"run only the specs the change reaches" is the Runtime\'s state: the switch asks the worker through the outbox and writes no product column', async () => {
+        const s = await setup();
+        const env = await s.create.execute({ user: owner, repositoryId: REPO });
+        const before = s.outbox.rows.length;
+        const update = updateOf(s);
+        await update.execute({ user: owner, environmentId: env.environmentId, body: { suiteSelection: false } });
+        const rows = s.outbox.rows.slice(before).filter((r: any) => r.payload.event_name === 'runtime.suite.selection_changed');
+        expect(rows).toHaveLength(1);
+        expect(rows[0].payload.payload).toMatchObject({ organizationId: ORG, environmentId: env.environmentId, selection: 'off', requestedBy: { userId: owner.uuid } });
+        // Nothing of it in the product's settings row.
+        expect(s.environments.settingsWrites.every((w) => !('suiteSelection' in w))).toBe(true);
+        await update.execute({ user: owner, environmentId: env.environmentId, body: { suiteSelection: true } });
+        expect(s.outbox.rows.at(-1)!.payload.payload.selection).toBe('on');
+        await expect(update.execute({ user: owner, environmentId: env.environmentId, body: { suiteSelection: 'off' } })).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('a refused change asks the Runtime for nothing', async () => {
+        const s = await setup();
+        const env = await s.create.execute({ user: owner, repositoryId: REPO });
+        const before = s.outbox.rows.length;
+        await expect(updateOf(s).execute({ user: contributor, environmentId: env.environmentId, body: { suiteSelection: false } })).rejects.toBeInstanceOf(ForbiddenException);
+        expect(s.outbox.rows.length).toBe(before);
     });
 });
 

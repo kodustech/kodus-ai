@@ -27,6 +27,8 @@ import {
     type UsageSandboxOperations,
 } from '../../domain/usage-report';
 import { RUNTIME_PREVIEW_AUDIT_READER, type RuntimePreviewAuditReader } from '../../domain/previews';
+import { RUNTIME_SUITE_READER, type RuntimeSuiteReader } from '../../domain/suite';
+import { suiteUsageView } from '../../domain/suite-view';
 import { RuntimeRunCostService } from '../run-cost.service';
 import { orgOf, validId } from './environment-view';
 
@@ -68,6 +70,9 @@ export class GetRuntimeUsageReportUseCase {
         @Optional()
         @Inject(RUNTIME_PREVIEW_AUDIT_READER)
         private readonly previewAudit?: Pick<RuntimePreviewAuditReader, 'sessionsOfMonth'>,
+        @Optional()
+        @Inject(RUNTIME_SUITE_READER)
+        private readonly suite?: Pick<RuntimeSuiteReader, 'usageOfMonth'>,
     ) {}
 
     async execute(input: { user: Partial<IUser>; query?: RuntimeUsageReportQuery }): Promise<RuntimeUsageReport> {
@@ -81,7 +86,7 @@ export class GetRuntimeUsageReportUseCase {
             ...(optionalId(q.environmentId, 'environmentId') ? { environmentId: q.environmentId as string } : {}),
         };
 
-        const [{ runs, total }, { claims, truncated }, spend, sandboxOperations, previewSessions, ownHostPrice] = await Promise.all([
+        const [{ runs, total }, { claims, truncated }, spend, sandboxOperations, previewSessions, ownHostPrice, suite] = await Promise.all([
             this.reader.runsOfMonth(organizationId, month, filters, USAGE_REPORT_MAX_RUNS),
             this.reader.claimsOfMonth(organizationId, month, filters, USAGE_REPORT_MAX_CLAIMS),
             this.spendOfMonth(organizationId, month),
@@ -90,6 +95,7 @@ export class GetRuntimeUsageReportUseCase {
             this.previewAudit?.sessionsOfMonth(organizationId, month).catch(() => undefined),
             // The org's own hosts at the price per host-hour it set; none or unreadable: they stay unpriced.
             this.costs.ownHostPriceOf(organizationId),
+            this.suiteOfMonth(organizationId, month, filters),
         ]);
         const claimsOfRun = new Map<string, RunClaimUsage[]>();
         for (const c of claims) if (c.runId && c.consumer === 'runtime') claimsOfRun.set(c.runId, [...(claimsOfRun.get(c.runId) ?? []), c]);
@@ -106,7 +112,7 @@ export class GetRuntimeUsageReportUseCase {
             { claims: claimsOfRun, ownHostPrices: new Map([[organizationId, ownHostPrice]]) },
         );
         const cellPrices = this.config.cellPrices ?? {};
-        return buildUsageReport({
+        const report = buildUsageReport({
             organizationId,
             month,
             filters,
@@ -123,12 +129,29 @@ export class GetRuntimeUsageReportUseCase {
             ...(this.config.machineUnitPrices ? { unitPrices: this.config.machineUnitPrices } : {}),
             now,
         });
+        return suite ? { ...report, suite } : report;
     }
 
     /** The report's Runs as CSV, and the file name it downloads as. */
     async csv(input: { user: Partial<IUser>; query?: RuntimeUsageReportQuery }): Promise<{ filename: string; body: string }> {
         const report = await this.execute(input);
         return { filename: `kody-runtime-usage-${report.month}.csv`, body: usageReportCsv(report) };
+    }
+
+    /** The e2e suite's month; none under a filter, and none where the tables cannot be read (the report still answers). */
+    private async suiteOfMonth(organizationId: string, month: { start: Date; end: Date }, filters: UsageReportFilters) {
+        if (!this.suite || filters.repositoryId || filters.environmentId) return undefined;
+        try {
+            return suiteUsageView(await this.suite.usageOfMonth(organizationId, month));
+        } catch (e) {
+            this.logger.warn({
+                message: 'Runtime usage report: the e2e suite tables could not be read; the suite lines are left out',
+                context: GetRuntimeUsageReportUseCase.name,
+                error: e instanceof Error ? e : undefined,
+                metadata: { organizationId },
+            });
+            return undefined;
+        }
     }
 
     /** The org's sandbox operations of the month; unreadable (a reader without the audit grant): undefined, the count is null. */

@@ -1,4 +1,4 @@
-import { sha256, uuidV5From } from '@libs/runtime/contracts/derive-id';
+import { suiteRunIdOfRun } from '@libs/runtime/contracts/derive-id';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 import type { RuntimeRunRequested, SuiteStageResult } from '@libs/runtime/run';
 
@@ -25,7 +25,7 @@ export class SuiteRunStage implements SuiteStage {
         const s = req.suite;
         if (!s) return { status: 'off' };
         const cmd: RuntimeSuiteRequested = {
-            suiteRunId: uuidV5From(sha256(`suite-run:${req.organizationId}:${req.runId}`)),
+            suiteRunId: suiteRunIdOfRun(req.organizationId, req.runId),
             organizationId: req.organizationId,
             environmentId: req.environment.environmentId,
             repositoryId: req.repository.id,

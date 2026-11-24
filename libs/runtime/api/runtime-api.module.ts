@@ -197,6 +197,11 @@ import { RuntimeExternalSubmissionModel, RuntimeExternalMessageModel } from './i
 import { TypeOrmExternalFindingsStore } from './infrastructure/typeorm-external-findings.store';
 import { PgSuiteBaselineReader } from './infrastructure/pg-suite-baseline.reader';
 import { PgSuiteShadowReader } from './infrastructure/pg-suite-shadow.reader';
+import { PgSuiteReader } from './infrastructure/pg-suite.reader';
+import { RUNTIME_SUITE_READER } from './domain/suite';
+import { RuntimeSuiteRetrier } from './application/suite-retrier.service';
+import { RuntimeSuiteSelection } from './application/suite-selection.service';
+import { GetRuntimeEnvironmentSuiteUseCase, GetRuntimeRunSuiteArtifactUseCase, GetRuntimeRunSuiteUseCase, ResumeSuiteSelectionUseCase, RetryRuntimeRunSuiteUseCase } from './application/use-cases/suite.use-cases';
 import { RuntimeSuiteShadowRequests } from './application/suite-shadow-requests.service';
 import { PgTemplateSetupReader } from './infrastructure/pg-template-setup.reader';
 import { RuntimeSuiteBaselineRequests } from './application/suite-baseline-requests.service';
@@ -233,6 +238,11 @@ const useCases = [
     GetRuntimeRunEvidenceUseCase,
     GetRuntimeRunReproductionUseCase,
     RunRuntimeAgainUseCase,
+    GetRuntimeRunSuiteUseCase,
+    RetryRuntimeRunSuiteUseCase,
+    GetRuntimeRunSuiteArtifactUseCase,
+    GetRuntimeEnvironmentSuiteUseCase,
+    ResumeSuiteSelectionUseCase,
     ApproveForkRunUseCase,
     ApproveEgressUseCase,
     RevokeEgressUseCase,
@@ -379,6 +389,14 @@ const useCases = [
             useFactory: (db: RuntimeReadDb) => new PgSuiteShadowReader(db),
         },
         RuntimeSuiteShadowRequests,
+        // The e2e suite's tables for the Run page, Settings and the usage report (read only, docs/runtime/e2e-suites.md section 13).
+        {
+            provide: RUNTIME_SUITE_READER,
+            inject: [RuntimeReadDb],
+            useFactory: (db: RuntimeReadDb) => new PgSuiteReader(db, db.reports),
+        },
+        RuntimeSuiteRetrier,
+        RuntimeSuiteSelection,
         RuntimeSuiteInputs,
         RuntimeSuiteRequester,
         RuntimeSuiteCiTrigger,

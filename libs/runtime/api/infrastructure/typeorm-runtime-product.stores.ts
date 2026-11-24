@@ -61,6 +61,7 @@ const toEnvironment = (m: RuntimeEnvironmentModel): ProductEnvironment => ({
     // A value no policy names any more reads as the safe default.
     forkPullRequests: forkPolicyOf(m.forkPullRequests),
     previewSecrets: m.previewSecrets === 'run' ? 'run' : 'none',
+    suiteCi: typeof m.suiteCi === 'boolean' ? m.suiteCi : null,
     poolPolicy: m.poolPolicy ?? null,
     poolActivityAt: m.poolActivityAt ? new Date(m.poolActivityAt).toISOString() : null,
     poolAppliedSize: m.poolAppliedSize ?? null,

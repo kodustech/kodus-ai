@@ -1,15 +1,9 @@
-import { BadRequestException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
 import type { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 
-import {
-    EVIDENCE_MAX_TTL_SECONDS,
-    evidenceKey,
-    InvalidEvidenceKeyError,
-    signEvidenceUrl,
-    type SignedEvidenceUrl,
-} from '@libs/runtime/contracts/evidence';
-import { presignEvidenceRead } from '@libs/runtime/contracts/evidence-s3';
+import { evidenceKey, InvalidEvidenceKeyError, type SignedEvidenceUrl } from '@libs/runtime/contracts/evidence';
+import { signedEvidenceUrlOf } from '../evidence-url';
 import { RUNTIME_API_CONFIG, RUNTIME_CLOCK, type Clock, type RuntimeApiConfig } from '../../domain/ports';
 import { RuntimeRunAccessService } from '../run-access.service';
 
@@ -49,22 +43,6 @@ export class GetRuntimeRunEvidenceUseCase {
             if (e instanceof InvalidEvidenceKeyError) throw new BadRequestException(e.message);
             throw e;
         }
-        const ttlSeconds = Math.min(this.config.evidenceTtlSeconds, EVIDENCE_MAX_TTL_SECONDS);
-        if (this.config.evidenceStore === 's3') {
-            if (!this.config.evidenceS3) throw new ServiceUnavailableException('Runtime evidence bucket is not configured');
-            // A presigned GET of the bucket: always an attachment of the type's content type (evidence-s3.ts).
-            return { ...presignEvidenceRead(this.config.evidenceS3, { key, ttlSeconds, now: this.now() }), key };
-        }
-        if (!this.config.evidenceBaseUrl || !this.config.evidenceSigningSecret) {
-            throw new ServiceUnavailableException('Runtime evidence server is not configured');
-        }
-        const signed = signEvidenceUrl({
-            baseUrl: this.config.evidenceBaseUrl,
-            key,
-            secret: this.config.evidenceSigningSecret,
-            ttlSeconds,
-            now: this.now(),
-        });
-        return { ...signed, key };
+        return signedEvidenceUrlOf(this.config, key, this.now());
     }
 }

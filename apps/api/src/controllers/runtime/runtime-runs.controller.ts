@@ -17,10 +17,11 @@ import { GetRuntimeRunUseCase } from '@libs/runtime/api/application/use-cases/ge
 import { ListRuntimeRunsUseCase } from '@libs/runtime/api/application/use-cases/list-runs.use-case';
 import { ReadRuntimeRunStreamUseCase } from '@libs/runtime/api/application/use-cases/read-run-stream.use-case';
 import { RunRuntimeAgainUseCase } from '@libs/runtime/api/application/use-cases/run-again.use-case';
+import { GetRuntimeRunSuiteArtifactUseCase, GetRuntimeRunSuiteUseCase, RetryRuntimeRunSuiteUseCase } from '@libs/runtime/api/application/use-cases/suite.use-cases';
 import { RUNTIME_PRINCIPAL, RuntimeReaderAuthGuard } from '@libs/runtime/api/infrastructure/runtime-reader.guard';
 
 import { ApiStandardResponses } from '../../docs/api-standard-responses.decorator';
-import { FindingFeedbackDto, FindingIntentDto, ListRuntimeRunsQueryDto, ReadRunStreamQueryDto, RunAgainDto, RunEvidenceQueryDto } from './runtime.dto';
+import { FindingFeedbackDto, FindingIntentDto, ListRuntimeRunsQueryDto, ReadRunStreamQueryDto, RunAgainDto, RunEvidenceQueryDto, SuiteArtifactQueryDto } from './runtime.dto';
 import { RuntimeReleaseGuard } from './runtime-release.guard';
 
 /**
@@ -42,6 +43,9 @@ export class RuntimeRunsController {
         private readonly setFeedbackUseCase: SetFindingFeedbackUseCase,
         private readonly getReproductionUseCase: GetRuntimeRunReproductionUseCase,
         private readonly setIntentUseCase: SetFindingIntentUseCase,
+        private readonly getSuiteUseCase: GetRuntimeRunSuiteUseCase,
+        private readonly retrySuiteUseCase: RetryRuntimeRunSuiteUseCase,
+        private readonly suiteArtifactUseCase: GetRuntimeRunSuiteArtifactUseCase,
     ) {}
 
     @Get()
@@ -84,6 +88,37 @@ export class RuntimeRunsController {
     getReproduction(@Req() req: UserRequest, @Res({ passthrough: true }) res: Response, @Param('id') id: string, @Param('probeId') probeId: string) {
         res.setHeader('Cache-Control', 'private, no-store');
         return this.getReproductionUseCase.execute({ principal: { kind: 'user', user: req.user }, runId: id, probeId });
+    }
+
+    @Get(':id/suite')
+    @ApiBearerAuth('jwt')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(checkPermissions({ action: Action.Read, resource: ResourceType.RuntimeRun }))
+    @ApiOperation({ summary: "Get a Run's e2e suite", description: "The Run page's e2e suite tab: how the specs were chosen, the failed tests by whose fault they are, the shards. 404 when the Run has no suite." })
+    getSuite(@Req() req: UserRequest, @Param('id') id: string) {
+        return this.getSuiteUseCase.execute({ user: req.user, runId: id });
+    }
+
+    @Post(':id/suite/retry')
+    @HttpCode(202)
+    @ApiBearerAuth('jwt')
+    @UseGuards(PolicyGuard)
+    // It starts the repository's tests again: gated like "Run again" (repo scope), and the product mints the tokens.
+    @CheckPolicies(checkPermissions({ action: Action.Create, resource: ResourceType.RuntimeRun }))
+    @ApiOperation({ summary: 'Re-run the failed specs', description: "A suite run of the specs that did not pass, through the outbox (RuntimeSuiteRetried, scope failed). Conflict while the suite runs or when nothing is left to run." })
+    retrySuite(@Req() req: UserRequest, @Param('id') id: string) {
+        return this.retrySuiteUseCase.execute({ user: req.user, runId: id });
+    }
+
+    @Get(':id/suite/artifacts')
+    @ApiBearerAuth('jwt')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(checkPermissions({ action: Action.Read, resource: ResourceType.RuntimeRun }))
+    @ApiOperation({ summary: 'Get a suite artifact URL', description: 'Signed URL of at most 5 minutes for a file kept for a failed spec (trace, screenshot, log). The key is the one the suite run stored, never one the caller names.' })
+    @ApiOkResponse({ description: '{ url, expiresAt, key }' })
+    async getSuiteArtifact(@Req() req: UserRequest, @Res({ passthrough: true }) res: Response, @Param('id') id: string, @Query() query: SuiteArtifactQueryDto) {
+        res.setHeader('Cache-Control', 'private, no-store');
+        return this.suiteArtifactUseCase.execute({ user: req.user, runId: id, spec: query.spec, name: query.name });
     }
 
     @Get(':id')

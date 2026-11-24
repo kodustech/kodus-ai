@@ -1,3 +1,5 @@
+import type { RuntimeSuiteUsage } from '@libs/runtime/contracts/views/suite';
+
 import { type LlmSpendTotals, RUNTIME_LLM_AGENTS, type RuntimeLlmAgent, type RuntimeLlmSpendRow, sumLlmSpend } from './llm-spend';
 import {
     type CellHostPrice,
@@ -213,6 +215,11 @@ export interface RuntimeUsageReport {
      * filter, or when the preview activity cannot be read here).
      */
     previews: { starts: number; heldMinutes: number; sessions: number | null };
+    /**
+     * The e2e suite's month (docs/runtime/e2e-suites.md section 13): runs and machine minutes by kind, and what selection saved where a shadow run
+     * measured it. Absent under a filter (a suite run is the environment's, not a repository's) and where the suite tables cannot be read.
+     */
+    suite?: RuntimeSuiteUsage;
     wallTime: { runs: DurationStats; setups: DurationStats; sandboxSessions: DurationStats | null };
     machine: {
         total: MachineUsage;

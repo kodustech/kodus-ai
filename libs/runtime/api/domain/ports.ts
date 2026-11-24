@@ -710,6 +710,8 @@ export interface ProductEnvironment {
     poolUsage?: PoolUsage | null;
     /** The org's secrets in this environment's previews; absent: none (decision 4). */
     previewSecrets?: PreviewSecrets;
+    /** Run the e2e suite on every push as a CI check (docs/runtime/e2e-suites.md section 11); null or absent: the deployment's default (`RUNTIME_SUITE_CI`). */
+    suiteCi?: boolean | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -722,6 +724,7 @@ export type ProductEnvironmentSettings = Partial<{
     poolSize: number | null;
     poolPolicy: PoolPolicy | null;
     previewSecrets: PreviewSecrets;
+    suiteCi: boolean | null;
 }>;
 
 /** Every read and write names the org: another org's environment reads as absent and is never written. */

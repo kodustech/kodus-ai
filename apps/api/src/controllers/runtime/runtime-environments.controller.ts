@@ -20,6 +20,7 @@ import { ProposeInferredRecipeUseCase } from '@libs/runtime/api/application/use-
 import { ListEnvironmentLessonsUseCase, UpdateEnvironmentLessonUseCase } from '@libs/runtime/api/application/use-cases/lessons.use-cases';
 import { SimulateRuntimeRunUseCase } from '@libs/runtime/api/application/use-cases/simulate.use-case';
 import { EnvironmentRepositoriesUseCase } from '@libs/runtime/api/application/use-cases/environment-repositories.use-cases';
+import { GetRuntimeEnvironmentSuiteUseCase, ResumeSuiteSelectionUseCase } from '@libs/runtime/api/application/use-cases/suite.use-cases';
 
 import { ApiStandardResponses } from '../../docs/api-standard-responses.decorator';
 import {
@@ -56,6 +57,8 @@ export class RuntimeEnvironmentsController {
         private readonly simulateRunUseCase: SimulateRuntimeRunUseCase,
         private readonly repositoriesUseCase: EnvironmentRepositoriesUseCase,
         private readonly listStatusesUseCase: ListEnvironmentStatusesUseCase,
+        private readonly environmentSuiteUseCase: GetRuntimeEnvironmentSuiteUseCase,
+        private readonly resumeSuiteSelectionUseCase: ResumeSuiteSelectionUseCase,
     ) {}
 
     @Get()
@@ -154,13 +157,28 @@ export class RuntimeEnvironmentsController {
     @CheckPolicies(checkPermissions({ action: Action.Manage, resource: ResourceType.RuntimeEnvironment }))
     @ApiOperation({
         summary: 'Update environment settings',
-        description: "The diagnostic hold (a failed default-branch setup kept alive until its hard TTL, never a PR), the machine size (a preset, null for the cell's default), what a PR from a fork does (skip, require_approval, run) and the warm pool size (up to the plan's ceiling, null for its default).",
+        description: "The diagnostic hold (a failed default-branch setup kept alive until its hard TTL, never a PR), the machine size (a preset, null for the cell's default), what a PR from a fork does (skip, require_approval, run) and the warm pool size (up to the plan's ceiling, null for its default). The e2e suite: suiteCi (run on every push as a CI check; null follows the deployment's default) and suiteSelection (run only the specs the change reaches; the Runtime applies it).",
     })
     updateEnvironmentSettings(@Req() req: UserRequest, @Param('id') id: string, @Body() body: UpdateEnvironmentSettingsDto) {
         // Only the fields sent: an absent field is left as it is, a null pool size is the plan's default.
         // The validated DTO carries every declared field, undefined when not sent: those are absent.
-        const fields = Object.fromEntries((['diagnosticHold', 'machineSize', 'forkPullRequests', 'poolSize', 'poolPolicy', 'previewSecrets'] as const).filter((k) => body[k] !== undefined).map((k) => [k, body[k]]));
+        const fields = Object.fromEntries((['diagnosticHold', 'machineSize', 'forkPullRequests', 'poolSize', 'poolPolicy', 'previewSecrets', 'suiteCi', 'suiteSelection'] as const).filter((k) => body[k] !== undefined).map((k) => [k, body[k]]));
         return this.updateEnvironmentSettingsUseCase.execute({ user: req.user, environmentId: id, body: fields });
+    }
+
+    @Get(':id/suite')
+    @CheckPolicies(checkPermissions({ action: Action.Read, resource: ResourceType.RuntimeEnvironment }))
+    @ApiOperation({ summary: "Get an environment's e2e suite", description: "Settings, e2e suite: what the recipe declares (read-only here: the gate and the shard ceiling are edited in .kodus/workspace.yaml), the last baseline, whether spec selection is on or paused by the shadow check, and whether the suite runs on every push." })
+    getEnvironmentSuite(@Req() req: UserRequest, @Param('id') id: string) {
+        return this.environmentSuiteUseCase.execute({ user: req.user, environmentId: id });
+    }
+
+    @Post(':id/suite/selection/resume')
+    @HttpCode(202)
+    @CheckPolicies(checkPermissions({ action: Action.Manage, resource: ResourceType.RuntimeEnvironment }))
+    @ApiOperation({ summary: 'Resume spec selection', description: 'Asks the Runtime, through the outbox, to turn spec selection on again after the shadow check paused it. The Runtime owns that state; nothing is written to it from here.' })
+    resumeSuiteSelection(@Req() req: UserRequest, @Param('id') id: string) {
+        return this.resumeSuiteSelectionUseCase.execute({ user: req.user, environmentId: id });
     }
 
     @Post(':id/simulate')

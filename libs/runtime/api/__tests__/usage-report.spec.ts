@@ -245,6 +245,35 @@ describe('the Runtime usage report of a month', () => {
         expect(cellReads).toBe(1);
     });
 
+    describe('the e2e suite lines (docs/runtime/e2e-suites.md section 13)', () => {
+        const baseReader = {
+            runsOfMonth: async () => ({ runs: [], total: 0 }),
+            claimsOfMonth: async () => ({ claims: [], truncated: false }),
+            sandboxOperationsOfMonth: async () => ({ total: 0, refused: 0, failed: 0, durationMs: 0 }),
+        };
+        const suiteRows = { rows: [{ mode: 'ci' as const, runs: 3, firstPassMs: 30 * 60_000, rerunMs: 6 * 60_000, withRerun: 1, unmeasured: 0 }], savings: null };
+        const costs = () => new RuntimeRunCostService(() => NOW);
+        const execute = (suite: unknown, query: Record<string, string> = { month: '2026-11' }) =>
+            new GetRuntimeUsageReportUseCase(baseReader as any, costs(), {}, () => NOW, undefined, undefined, suite as any).execute({ user: { organization: { uuid: ORG } }, query });
+
+        it('adds a line per kind with the runs and machine minutes of the month', async () => {
+            const r = await execute({ usageOfMonth: async () => suiteRows });
+            expect(r.suite?.lines).toEqual([
+                { kind: 'pr', runs: 3, minutes: 30 },
+                { kind: 'rerun', runs: 1, minutes: 6 },
+            ]);
+        });
+
+        it('has none under a repository or environment filter (a suite run is the environment\'s, not one repository\'s) and when the suite tables cannot be read', async () => {
+            const asked: unknown[] = [];
+            const reader = { usageOfMonth: async (...a: unknown[]) => (asked.push(a), suiteRows) };
+            expect((await execute(reader, { month: '2026-11', environmentId: 'env-1' })).suite).toBeUndefined();
+            expect(asked).toEqual([]);
+            expect((await execute({ usageOfMonth: async () => { throw new Error('permission denied for table runtime_suite_runs'); } })).suite).toBeUndefined();
+            expect((await execute(undefined)).suite).toBeUndefined();
+        });
+    });
+
     it('has a preview row: its starts and held minutes from the preview claims, and the sessions viewers opened', () => {
         const r = report({
             runs: [],

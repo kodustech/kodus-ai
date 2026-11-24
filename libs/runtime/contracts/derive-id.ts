@@ -57,6 +57,12 @@ export function uuidV5From(digest: Buffer): string {
 }
 
 /**
+ * The suite run a Run's e2e stage is (docs/runtime/e2e-suites.md section 10.2): the worker names it when the stage starts, and the
+ * product reads the Run's suite under the same id. One derivation for both, so a Run page never looks for a suite the engine named otherwise.
+ */
+export const suiteRunIdOfRun = (organizationId: string, runId: string): string => uuidV5From(sha256(`suite-run:${organizationId}:${runId}`));
+
+/**
  * A UUID-shaped id from a hex digest, the setup ids' layout: the version
  * nibble replaced by 4 and the variant nibble by 8 (not uuidV5From's masking;
  * both are shipped).

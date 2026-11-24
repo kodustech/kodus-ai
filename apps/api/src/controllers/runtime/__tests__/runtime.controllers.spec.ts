@@ -22,6 +22,11 @@ import { RequestPullRequestRunUseCase } from '@libs/runtime/api/application/use-
 import { RUNTIME_ENVIRONMENT_REPOSITORY_STORE, RUNTIME_ENVIRONMENT_SETUP_READER } from '@libs/runtime/api/domain/ports';
 import { RUNTIME_PULL_REQUEST_RUNS_READER } from '@libs/runtime/api/domain/pull-request-runs';
 import { RuntimeRunAccessService } from '@libs/runtime/api/application/run-access.service';
+import { RuntimeSuiteRetrier } from '@libs/runtime/api/application/suite-retrier.service';
+import { RuntimeSuiteSelection } from '@libs/runtime/api/application/suite-selection.service';
+import { GetRuntimeEnvironmentSuiteUseCase, GetRuntimeRunSuiteArtifactUseCase, GetRuntimeRunSuiteUseCase, ResumeSuiteSelectionUseCase, RetryRuntimeRunSuiteUseCase } from '@libs/runtime/api/application/use-cases/suite.use-cases';
+import { RUNTIME_SUITE_READER } from '@libs/runtime/api/domain/suite';
+import { suiteRunIdOfRun } from '@libs/runtime/contracts/derive-id';
 import { RuntimeRunRequestBuilder } from '@libs/runtime/api/application/run-request-builder.service';
 import { RuntimeRunEnqueuer } from '@libs/runtime/api/application/runtime-run-enqueuer.service';
 import { RuntimeSetupRequester } from '@libs/runtime/api/application/runtime-setup-requester.service';
@@ -289,6 +294,31 @@ describe('Runtime controllers over HTTP', () => {
                 SetTeamCliKeyRepositoriesUseCase,
                 { provide: EventEmitter2, useValue: audit },
                 RuntimeRunAccessService,
+                GetRuntimeRunSuiteUseCase,
+                RetryRuntimeRunSuiteUseCase,
+                GetRuntimeRunSuiteArtifactUseCase,
+                GetRuntimeEnvironmentSuiteUseCase,
+                ResumeSuiteSelectionUseCase,
+                RuntimeSuiteSelection,
+                { provide: RuntimeSuiteRetrier, useValue: { retryFailed: async () => ({ suiteRunId: 'retry-1' }) } },
+                {
+                    // One finished suite of the caller's org for the finished Run; nothing for any other Run or organization.
+                    provide: RUNTIME_SUITE_READER,
+                    useValue: {
+                        get: async (org: string, id: string) =>
+                            org === ORG && id === suiteRunIdOfRun(ORG, done.runId)
+                                ? {
+                                      run: { suiteRunId: id, organizationId: ORG, environmentId: 'env-1', repositoryId: REPO, mode: 'run', state: 'failed', mainSha: 'd'.repeat(40), requestedAt: NOW.toISOString(), finishedAt: NOW.toISOString() },
+                                      shards: [],
+                                      results: [{ phase: 'shard', shard: 0, spec: 'a.spec.ts', status: 'failed', durationMs: 1, tests: [], artifacts: [] }],
+                                  }
+                                : null,
+                        selectionState: async () => ({ off: false, fullPrsLeft: 0 }),
+                        lastBaseline: async () => null,
+                        lastMiss: async () => null,
+                        usageOfMonth: async () => ({ rows: [], savings: null }),
+                    },
+                },
                 RuntimeEnvironmentMembers,
                 EnvironmentRepositoriesUseCase,
                 { provide: RUNTIME_ENVIRONMENT_REPOSITORY_STORE, useValue: new InMemoryEnvironmentRepositories() },
@@ -656,6 +686,38 @@ describe('Runtime controllers over HTTP', () => {
         expect((await as('contributor').get(`/runtime/runs?repositoryId=${REPO}&prNumber=7`).expect(200)).body).toHaveLength(2);
         expect((await as('contributor').get(`/runtime/runs?repositoryId=${REPO}&prNumber=8`).expect(200)).body).toEqual([]);
         await as('contributor').get('/runtime/runs?prNumber=7').expect(400);
+    });
+
+    it('GET /runtime/runs/:id/suite: any reader of the org, another org\'s Run and a Run with no suite are 404', async () => {
+        const res = await as('contributor').get(`/runtime/runs/${done.runId}/suite`).expect(200);
+        expect(res.body).toMatchObject({ suiteRunId: suiteRunIdOfRun(ORG, done.runId), state: 'failed', canRetry: true });
+        await as('outsider').get(`/runtime/runs/${done.runId}/suite`).expect(404);
+        await as('contributor').get(`/runtime/runs/${live.runId}/suite`).expect(404);
+        await as('billing_manager').get(`/runtime/runs/${done.runId}/suite`).expect(403);
+    });
+
+    it('POST /runtime/runs/:id/suite/retry: who may run the Run again, 202 with the retry\'s id, another org\'s Run is 404', async () => {
+        await as('contributor').post(`/runtime/runs/${done.runId}/suite/retry`).send({}).expect(403);
+        await as('repo_admin').post(`/runtime/runs/${otherRepo.runId}/suite/retry`).send({}).expect(403);
+        await as('outsider').post(`/runtime/runs/${done.runId}/suite/retry`).send({}).expect(404);
+        const res = await as('owner').post(`/runtime/runs/${done.runId}/suite/retry`).send({}).expect(202);
+        expect(res.body).toEqual({ suiteRunId: 'retry-1', state: 'queued' });
+    });
+
+    it('GET /runtime/runs/:id/suite/artifacts: names the spec and the file, never a key', async () => {
+        await as('owner').get(`/runtime/runs/${done.runId}/suite/artifacts`).expect(400);
+        await as('owner').get(`/runtime/runs/${done.runId}/suite/artifacts?spec=a.spec.ts&name=trace.zip`).expect(404);
+        await as('outsider').get(`/runtime/runs/${done.runId}/suite/artifacts?spec=a.spec.ts&name=trace.zip`).expect(404);
+    });
+
+    it('GET /runtime/environments/:id/suite and POST .../suite/selection/resume: readers read, only who manages the environment resumes, unknown is 404', async () => {
+        await as('contributor').get('/runtime/environments/env-x/suite').expect(404);
+        await as('billing_manager').get('/runtime/environments/env-x/suite').expect(403);
+        await as('contributor').post('/runtime/environments/env-x/suite/selection/resume').send({}).expect(403);
+        await as('repo_admin').post('/runtime/environments/env-x/suite/selection/resume').send({}).expect(403);
+        await as('owner').post('/runtime/environments/env-x/suite/selection/resume').send({}).expect(404);
+        await as('owner').patch('/runtime/environments/env-x/settings').send({ suiteCi: 'sometimes' }).expect(400);
+        await as('owner').patch('/runtime/environments/env-x/settings').send({ suiteCi: true, suiteSelection: false }).expect(404);
     });
 
     it('POST /runtime/environments/:id/simulate: repo admins only, unknown environment is 404', async () => {

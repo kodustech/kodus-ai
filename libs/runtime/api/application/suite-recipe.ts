@@ -1,5 +1,5 @@
 import { RUNTIME_RECIPE_MAX_BYTES, RUNTIME_RECIPE_PATHS } from '@libs/runtime/contracts/runtime-commands';
-import { parseRecipe, SUITE_LIMITS } from '@libs/runtime/protocol/recipe';
+import { parseRecipe, SUITE_LIMITS, type RecipeSuite } from '@libs/runtime/protocol/recipe';
 
 import type { RuntimeGitPort } from '../domain/ports';
 
@@ -13,12 +13,22 @@ export async function suiteOfRecipeAt(
     repo: { organizationId: string; teamId: string; repositoryId: string; repositoryName: string },
     sha: string,
 ): Promise<{ shards: number; baseline: boolean } | undefined> {
+    const suite = await suiteDeclarationAt(git, repo, sha);
+    return suite ? { shards: suite.shards ?? SUITE_LIMITS.shards, baseline: suite.baseline } : undefined;
+}
+
+/** The whole suite block the recipe declares at `sha` (what Settings shows read-only), by the same rules: the first recipe found wins; none, or an invalid one, declares no suite. */
+export async function suiteDeclarationAt(
+    git: Pick<RuntimeGitPort, 'readFileAtCommit'>,
+    repo: { organizationId: string; teamId: string; repositoryId: string; repositoryName: string },
+    sha: string,
+): Promise<RecipeSuite | undefined> {
     for (const path of RUNTIME_RECIPE_PATHS) {
         const content = await git.readFileAtCommit({ ...repo, path, sha, maxBytes: RUNTIME_RECIPE_MAX_BYTES });
         if (content === null || content === 'unsupported_platform') continue;
         const parsed = parseRecipe(content);
         if (parsed.ok === false || !parsed.recipe.suite) return undefined;
-        return { shards: parsed.recipe.suite.shards ?? SUITE_LIMITS.shards, baseline: parsed.recipe.suite.baseline };
+        return parsed.recipe.suite;
     }
     return undefined;
 }

@@ -69,6 +69,10 @@ export class RuntimeEnvironmentModel extends CoreModel {
     /** The org's secrets in this environment's previews (contracts/preview.ts PREVIEW_SECRETS): none, or the same as its Runs. */
     @Column({ name: 'preview_secrets', type: 'varchar', length: 8, default: 'none' })
     previewSecrets: PreviewSecrets;
+
+    /** Run the e2e suite on every push as a CI check (docs/runtime/e2e-suites.md section 11); null: the deployment's default (RUNTIME_SUITE_CI). */
+    @Column({ name: 'suite_ci', type: 'boolean', nullable: true })
+    suiteCi: boolean | null;
 }
 
 /**
