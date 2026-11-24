@@ -18,7 +18,7 @@ jest.mock('@libs/ee/configs/environment', () => ({
  */
 describe('PermissionValidationService — the gate for another task', () => {
     const orgTeam = {
-        organizationId: '7f5bc971-76c2-4586-a624-84a7a98c696c',
+        organizationId: '0a1b2c3d-0000-4000-8000-00000000c0de',
         teamId: 'team-1',
     } as any;
     const RUNTIME = {

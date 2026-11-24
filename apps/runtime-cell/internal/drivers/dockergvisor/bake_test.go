@@ -97,7 +97,7 @@ func TestBakeKeepsTheSetupMachinesImagesPastItsRelease(t *testing.T) {
 // claim.ready and pool.target carry the id; the protocol takes 128
 // characters, and real org and environment ids are UUIDs.
 func TestBakeImageIDFitsTheProtocolWithUUIDs(t *testing.T) {
-	const org, env, sha = "7f5bc971-76c2-4586-a624-84a7a98c696c", "dec0de00-0e00-4000-8000-0000000000e1", "0f0fdb512016b3f16eb39102e6deff8b6034f837"
+	const org, env, sha = "0a1b2c3d-0000-4000-8000-00000000c0de", "dec0de00-0e00-4000-8000-0000000000e1", "0f0fdb512016b3f16eb39102e6deff8b6034f837"
 	id := bakeImageID("cell-dev-1", org, env, sha)
 	if len(id) > 128 || !strings.HasSuffix(id, "@"+sha) {
 		t.Fatalf("%q (%d)", id, len(id))
