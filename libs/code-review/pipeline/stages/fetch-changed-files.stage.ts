@@ -10,7 +10,7 @@ import {
     PULL_REQUEST_MANAGER_SERVICE_TOKEN,
 } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
-import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
+import { createGlobMatcher } from '@libs/common/utils/glob-utils';
 import { buildPatchLineLimitWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
     convertToUnifiedDiffWithLineNumbers,
@@ -44,6 +44,8 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
     /** Higher ceiling for the agent engine, which chunks by token budget.
      *  Still bounded to prevent abuse (huge auto-generated PRs). */
     private static readonly AGENT_MAX_FILES = 2000;
+    /** Files matched against `ignorePaths` between event-loop yields. */
+    private static readonly SPLIT_YIELD_EVERY = 500;
 
     constructor(
         @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
@@ -103,18 +105,8 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
         }
 
         const ignorePaths = context.codeReviewConfig.ignorePaths || [];
-        const filteredFiles =
-            filesToProcess?.filter(
-                (file) =>
-                    file.status !== 'removed' &&
-                    !isFileMatchingGlob(file.filename, ignorePaths),
-            ) || [];
-        const ignoredList =
-            filesToProcess?.filter(
-                (file) =>
-                    file.status === 'removed' ||
-                    isFileMatchingGlob(file.filename, ignorePaths),
-            ) || [];
+        const { kept: filteredFiles, ignored: ignoredList } =
+            await this.splitIgnoredFiles(filesToProcess || [], ignorePaths);
         const filesToAnalyze = filteredFiles;
         // Ignored files a custom agent still reviews (#2172): they keep a
         // review alive on their own and count toward its ceiling.
@@ -290,6 +282,38 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
         return ignoredFileChanges.map(
             (file) => enriched.get(file.filename) ?? file,
         );
+    }
+
+    /**
+     * Splits the PR's files into the ones to review and the ignored ones
+     * (removed, or matching `ignorePaths`), in one pass and in order.
+     *
+     * The default `ignorePaths` has ~1,100 patterns, so this is the one
+     * per-file loop here that costs real CPU: an 8,319-file PR held the
+     * event loop for 22s on the two passes it used to take (2026-11-23).
+     * One pass, a matcher built once, and a yield every
+     * SPLIT_YIELD_EVERY files keep the other jobs on this worker running
+     * and the health check answered, however large the PR.
+     */
+    private async splitIgnoredFiles(
+        files: FileChange[],
+        ignorePaths: string[],
+    ): Promise<{ kept: FileChange[]; ignored: FileChange[] }> {
+        const isIgnored = createGlobMatcher(ignorePaths);
+        const kept: FileChange[] = [];
+        const ignored: FileChange[] = [];
+        for (let i = 0; i < files.length; i++) {
+            if (i > 0 && i % FetchChangedFilesStage.SPLIT_YIELD_EVERY === 0) {
+                await new Promise<void>((resolve) => setImmediate(resolve));
+            }
+            const file = files[i];
+            if (file.status === 'removed' || isIgnored(file.filename)) {
+                ignored.push(file);
+            } else {
+                kept.push(file);
+            }
+        }
+        return { kept, ignored };
     }
 
     private validateFiles(

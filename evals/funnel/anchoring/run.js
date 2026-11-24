@@ -60,7 +60,14 @@ main({
                 });
                 offset += agent.candidates.length;
             }
-            const out = stage.anchorSuggestionsToDiff(mapped, context.changedFiles, frozen.kodyRules || [], []);
+            const out = stage.anchorSuggestionsToDiff(
+                mapped,
+                context.changedFiles,
+                frozen.kodyRules || [],
+                [],
+                {},
+                new Set(context.changedFiles.map((f) => f.filename)),
+            );
             const kept = new Set(out.map((s) => s.evalIndex));
             nearMisses(mapped.filter((s) => !kept.has(s.evalIndex)), context.changedFiles);
             return kept;

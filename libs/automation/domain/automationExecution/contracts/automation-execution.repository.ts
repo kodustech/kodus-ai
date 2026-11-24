@@ -82,7 +82,15 @@ export interface IAutomationExecutionRepository {
     }>;
     findLatestExecutionByFilters(
         filters?: Partial<any>,
+        /** A failed read throws instead of reading as "none found". */
+        options?: { rethrow?: boolean },
     ): Promise<AutomationExecutionEntity | null>;
+    hasPullRequestExecutionWithDataKey(params: {
+        teamAutomationId: string;
+        repositoryId: string;
+        pullRequestNumber: number;
+        key: string;
+    }): Promise<boolean>;
     findStaleInProgress(
         cutoffDate: Date,
         limit?: number,

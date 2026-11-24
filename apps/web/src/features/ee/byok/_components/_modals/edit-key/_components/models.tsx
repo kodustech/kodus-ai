@@ -28,7 +28,7 @@ import { Controller, useFormContext } from "react-hook-form";
 import { ArrayHelpers } from "src/core/utils/array";
 
 import type { EditKeyForm } from "../_types";
-import { formatModelLabel } from "../../../../_data/model-label";
+import { formatModelLabel, modelLabeler } from "../../../../_data/model-label";
 
 /** "$2 in · $10 out / 1M" — only for a catalog that is also a price list. */
 const formatPerMillion = (p: NonNullable<LLMProviderModel["pricing"]>) => {
@@ -42,6 +42,7 @@ export const ByokModelSelect = ({
     credentialStored = false,
     credentialId,
     lockedInUse = false,
+    lockedLabel,
 }: {
     /** Model ids to hide from the dropdown — e.g. models already enabled on this
      *  provider, so "Add model" never offers a duplicate. */
@@ -58,6 +59,9 @@ export const ByokModelSelect = ({
      *  fallback / a per-agent override). Swapping its id would silently change
      *  what runs, so the model field is read-only — tuning stays editable. */
     lockedInUse?: boolean;
+    /** The locked model's name as the page title shows it, so a model whose
+     *  label another saved one shares reads with its id. */
+    lockedLabel?: string;
 } = {}) => {
     const form = useFormContext<EditKeyForm>();
     const provider = form.watch("provider");
@@ -99,7 +103,7 @@ export const ByokModelSelect = ({
     // In use in Routing → the model identity is frozen. Show it read-only with a
     // hint pointing at where to change it, instead of the editable picker.
     if (lockedInUse) {
-        return <ModelLockedField />;
+        return <ModelLockedField label={lockedLabel} />;
     }
 
     if (manual) {
@@ -137,12 +141,11 @@ export const ByokManualModelInput = () => <ModelInput />;
  * surface the current model with a lock affordance and tell the user where to
  * change it. Tuning fields around it stay editable.
  */
-const ModelLockedField = () => {
+const ModelLockedField = ({ label: given }: { label?: string }) => {
     const form = useFormContext<EditKeyForm>();
     const model = form.watch("model");
-    // Show the friendly label (derived from the id) — never the raw id — to match
-    // the dropdown and the page title.
-    const label = formatModelLabel(model);
+    // The friendly label, as the page title shows it.
+    const label = given || formatModelLabel(model);
 
     return (
         <FormControl.Root>
@@ -244,19 +247,16 @@ const ModelPickerPopover = ({
     const { reset: resetErrorBoundary } = useQueryErrorResetBoundary();
 
     // The label drops a snapshot pin (`-1017`, `-2026-03-05`), so a pinned id
-    // and its alias read the same ("GPT 5.4" twice). Those rows show their id
-    // too, or nobody can tell which one they are picking. Counted over the
-    // full listing: an enabled alias is hidden, yet its pin still reads as it.
-    const sharedNames = useMemo(() => {
-        const seen = new Set<string>();
-        const shared = new Set<string>();
-        for (const m of allModels) {
-            if (seen.has(m.name)) shared.add(m.name);
-            seen.add(m.name);
-        }
-        return shared;
+    // and its alias read the same ("GPT 5.4" twice). Those show their id too,
+    // or nobody can tell which one they are picking. Counted over the full
+    // listing: an enabled alias is hidden, yet its pin still reads as it.
+    const labelOf = useMemo(() => {
+        const names = new Map(allModels.map((m) => [m.id, m.name]));
+        return modelLabeler(
+            allModels.map((m) => m.id),
+            (id) => names.get(id) ?? formatModelLabel(id),
+        );
     }, [allModels]);
-    const selected = models.find((p) => p.id === form.watch("model"));
 
     return (
         <Popover
@@ -288,19 +288,15 @@ const ModelPickerPopover = ({
                                     rightIcon={
                                         <ChevronsUpDownIcon className="-mr-2 opacity-50" />
                                     }>
-                                    {(selected &&
-                                        (sharedNames.has(selected.name)
-                                            ? `${selected.name} (${selected.id})`
-                                            : selected.name)) ??
-                                        // A saved model the endpoint does not
-                                        // list is still the selected one.
-                                        (field.value
-                                            ? formatModelLabel(field.value)
-                                            : undefined) ?? (
-                                            <span className="font-normal">
-                                                Select a model
-                                            </span>
-                                        )}
+                                    {/* A saved model the endpoint does not
+                                        list is still the selected one. */}
+                                    {field.value ? (
+                                        labelOf(field.value)
+                                    ) : (
+                                        <span className="font-normal">
+                                            Select a model
+                                        </span>
+                                    )}
                                 </Button>
                             </PopoverTrigger>
                         </FormControl.Input>
@@ -379,7 +375,7 @@ const ModelPickerPopover = ({
                                             </span>
                                         )}
                                     </span>
-                                    {sharedNames.has(r.name) && (
+                                    {labelOf.shares(r.id) && (
                                         <span className="text-text-tertiary truncate text-xs">
                                             {r.id}
                                         </span>
@@ -513,9 +509,7 @@ const ModelSelectLive = ({
     const urlSettled = (typedBaseURL ?? "") === rawBaseURL;
 
     const typedAwsBearerRaw = (form.watch("awsBearerToken") ?? "").trim();
-    const typedAwsAccessKeyIdRaw = (
-        form.watch("awsAccessKeyId") ?? ""
-    ).trim();
+    const typedAwsAccessKeyIdRaw = (form.watch("awsAccessKeyId") ?? "").trim();
     const typedAwsSecretRaw = (form.watch("awsSecretAccessKey") ?? "").trim();
     const typedAwsRegionRaw = (form.watch("awsRegion") ?? "").trim();
     const typedAwsBearer = useDebouncedValue(typedAwsBearerRaw, 700);

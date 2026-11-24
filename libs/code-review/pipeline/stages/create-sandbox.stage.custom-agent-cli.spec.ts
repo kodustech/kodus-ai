@@ -5,7 +5,10 @@ jest.mock(
 
 import { provisionCustomAgentClis } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 
+import { ULTRA_RUN_LEASE_TTL_MS } from '@libs/ee/ultra-review/ultra-review.executor';
+
 import { CreateSandboxStage } from './create-sandbox.stage';
+import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
 const provision = provisionCustomAgentClis as jest.Mock;
 
@@ -63,7 +66,7 @@ function build(params: { sandboxType: 'e2b' | 'local' }) {
         changedFiles: [{ filename: 'src/app.ts' }],
         codeReviewConfig: { customAgents: [agent] },
     };
-    return { stage, context, featureGate };
+    return { stage, context, featureGate, leaseManager };
 }
 
 describe('CreateSandboxStage custom agent CLIs', () => {
@@ -156,5 +159,53 @@ describe('CreateSandboxStage on a PR whose changed files are all ignored', () =>
 
         expect(result.sandboxHandle).toBeUndefined();
         expect(provision).not.toHaveBeenCalled();
+    });
+});
+
+describe('CreateSandboxStage lease on an Ultra review', () => {
+    beforeEach(() => {
+        provision.mockReset();
+        provision.mockResolvedValue(undefined);
+    });
+
+    it("keeps the PR's sandbox as long as the Ultra models run; another review keeps the default", async () => {
+        const ultra = build({ sandboxType: 'e2b' });
+        ultra.context.ultra = { models: [] };
+        await (ultra.stage as any).executeStage(ultra.context);
+        expect(ultra.leaseManager.acquire.mock.calls[0][2]).toBe(
+            ULTRA_RUN_LEASE_TTL_MS,
+        );
+
+        const balanced = build({ sandboxType: 'e2b' });
+        await (balanced.stage as any).executeStage(balanced.context);
+        expect(balanced.leaseManager.acquire.mock.calls[0][2]).toBeUndefined();
+    });
+
+    it('a release is never repeated, even after one that threw: a second decrement could free a sandbox in use', async () => {
+        const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
+        leaseManager.release.mockRejectedValueOnce(new Error('mongo blip'));
+        const sandbox = (await (stage as any).executeStage(context))
+            .sandboxHandle as SandboxInstance;
+        await expect(sandbox!.cleanup!()).rejects.toThrow('mongo blip');
+        await expect(sandbox!.cleanup!()).rejects.toThrow('mongo blip');
+        expect(leaseManager.release).toHaveBeenCalledTimes(1);
+    });
+
+    it('a cleanup called while the release is in flight waits for that release', async () => {
+        const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
+        let settle!: () => void;
+        leaseManager.release.mockReturnValueOnce(
+            new Promise<void>((resolve) => (settle = resolve)),
+        );
+        const sandbox = (await (stage as any).executeStage(context))
+            .sandboxHandle as SandboxInstance;
+        let secondDone = false;
+        void sandbox!.cleanup!();
+        const second = sandbox!.cleanup!().then(() => (secondDone = true));
+        await Promise.resolve();
+        expect(secondDone).toBe(false);
+        settle();
+        await second;
+        expect(leaseManager.release).toHaveBeenCalledTimes(1);
     });
 });

@@ -65,7 +65,7 @@ Submit the result by calling the `submitValidation` tool exactly once. If you ca
   "requirements": [
     {
       "requirement": "quoted from the task",
-      "source": "AC #1",
+      "source": "AC01",
       "state": "met | partial | missing | check_manually",
       "kind": "behavior | visual | flow",
       "topic": "empty_and_error_states | permissions | default_values | validation | audit_and_logging | data_and_persistence | notifications | ui_and_copy | integrations | performance | other",

@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 export default function RegisterPage() {
     return (
         <Page.Root className="mx-auto flex max-h-screen flex-row overflow-hidden p-6">
-            <div className="bg-card-lv1 flex flex-10 flex-col justify-center gap-10 rounded-3xl p-12">
+            <div className="bg-card-lv1 hidden flex-10 flex-col justify-center gap-10 rounded-3xl p-12 md:flex">
                 <SvgKodus className="h-8 min-h-8" />
 
                 <div className="flex flex-1 flex-col justify-center gap-10">
@@ -51,6 +51,8 @@ export default function RegisterPage() {
             <div className="flex flex-14 flex-col justify-center overflow-auto">
                 <ScrollArea type="auto">
                     <div className="flex flex-col items-center gap-10 py-10">
+                        <SvgKodus className="h-8 min-h-8 md:hidden" />
+
                         <Suspense>
                             <div className="max-w-96">
                                 <RegisterPageContent />

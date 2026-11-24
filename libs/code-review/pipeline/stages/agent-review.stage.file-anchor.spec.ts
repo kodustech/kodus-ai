@@ -376,6 +376,56 @@ describe('a kody_rules finding with a line but no file goes PR-level, not discar
             /:0/,
         );
     });
+
+    // #2420: the file IS in the PR and has a real patch, but the rule cited no
+    // line (a rule about the PR itself, such as the title). The anchor pass
+    // used to fill in the file's first hunk, so the PR-level routing below saw
+    // a line and posted the finding inline on an unrelated changed line.
+    it('keeps a line-less finding on a file with a real patch at PR level instead of snapping it to the first hunk', async () => {
+        const result = await run([
+            ruleFinding({
+                relevantLinesStart: undefined,
+                relevantLinesEnd: undefined,
+                brokenKodyRulesIds: ['rule-about-the-pr'],
+                oneSentenceSummary:
+                    'PR title does not follow the required scope pattern',
+            }),
+        ]);
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(inlineSuggestionsOf(result)).toEqual([]);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/user.ts`',
+        );
+        // The snap would have cited the first hunk (line 10); no line was given.
+        expect(result.validSuggestionsByPR[0].suggestionContent).not.toMatch(
+            /src\/user\.ts:/,
+        );
+    });
+
+    // The input that made the first revision's `!isFileAnchored` exemption
+    // wrong: a rule that declared it needs enclosing scope, citing no line at
+    // all, on a file with a real patch. Snapping filled in the first hunk, so
+    // the finding posted inline on a line it never cited.
+    it('routes a line-less finding from a context-needing rule to PR level, not to the first hunk', async () => {
+        const result = await run([
+            ruleFinding({
+                relevantFile: 'src/user.ts',
+                relevantLinesStart: undefined,
+                relevantLinesEnd: undefined,
+                brokenKodyRulesIds: [CONTEXT_RULE],
+            }),
+        ]);
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(inlineSuggestionsOf(result)).toEqual([]);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            '`src/user.ts`',
+        );
+        expect(result.validSuggestionsByPR[0].suggestionContent).not.toMatch(
+            /src\/user\.ts:/,
+        );
+    });
 });
 
 /**
@@ -469,5 +519,92 @@ describe('a finding on a file whose diff the host withheld', () => {
                 relevantLinesStart: 11,
             });
         }
+    });
+});
+
+/**
+ * #2671 — a file moved without a content change has no hunks.
+ *
+ * GitHub reports a 100% similarity rename with no `patch` at all, so every
+ * inline attempt is rejected with 422 ("could not be resolved"). The finding
+ * was lost: the retry ladder collapsed it to a single line, that failed too,
+ * and the fallback suggestion replaced it. It has to be delivered where it can
+ * land, citing the file and the line it talks about — and only that shape may
+ * move, so the routing guards are asserted in the same case.
+ */
+describe('a finding on a file with no hunks (a pure rename)', () => {
+    const RENAMED = 'src/instrumentation-client.ts';
+    const renamedWithPatch = 'src/renamed-and-edited.ts';
+
+    const findingOn = (file: string, lines: [number, number]) => ({
+        relevantFile: file,
+        relevantLinesStart: lines[0],
+        relevantLinesEnd: lines[1],
+        label: 'general',
+        severity: 'medium',
+        oneSentenceSummary: 'the client instrumentation leaks the session id',
+        suggestionContent:
+            'the client instrumentation leaks the session id into every event',
+        improvedCode: '',
+    });
+
+    it('is delivered PR-level, citing file:line, and nothing else moves', async () => {
+        const result = await run(
+            [
+                // No hunk at all: this is the finding that used to be lost.
+                findingOn(RENAMED, [19, 30]),
+                // A rename that DID change content keeps its inline anchor.
+                findingOn(renamedWithPatch, [11, 12]),
+                // Naming a file the PR does not touch: still discarded, never
+                // promoted to an unanchored PR comment.
+                findingOn('src/elsewhere.ts', [11, 12]),
+            ],
+            {
+                changedFiles: [
+                    { filename: 'src/user.ts', patch: PATCH },
+                    // Exactly what the files API returns for a pure rename.
+                    {
+                        filename: RENAMED,
+                        previous_filename: 'src/instrumentation.ts',
+                        status: 'renamed',
+                    },
+                    {
+                        filename: renamedWithPatch,
+                        previous_filename: 'src/renamed.ts',
+                        status: 'renamed',
+                        patch: PATCH,
+                    },
+                ],
+            },
+        );
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            `\`${RENAMED}:19\``,
+        );
+
+        const inline = inlineSuggestionsOf(result);
+        expect(inline.map((s: any) => s.relevantFile)).toEqual([
+            renamedWithPatch,
+        ]);
+        expect(
+            inline.some((s: any) => s.relevantFile === 'src/elsewhere.ts'),
+        ).toBe(false);
+        // Same check on the list CreateFileCommentsStage posts from: the
+        // out-of-PR finding must not survive in either list, and the no-hunk
+        // one must not either (it is delivered PR-level only).
+        expect(
+            (result.validSuggestions ?? []).map((s: any) => s.relevantFile),
+        ).toEqual([renamedWithPatch]);
+    });
+
+    // A copy of an unchanged file has no hunks for the same reason.
+    it('also covers a file the PR copied unchanged', async () => {
+        const result = await run([findingOn(RENAMED, [19, 30])], {
+            changedFiles: [{ filename: RENAMED, status: 'copied' }],
+        });
+
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(inlineSuggestionsOf(result)).toEqual([]);
     });
 });

@@ -861,14 +861,15 @@ export type BusinessLogicConfig = {
 
 /**
  * How deep a review goes. `balanced` (the default) runs the generalist;
- * `heavy` adds the M3 lenses and routes the `codeReviewHeavy` model. Both are
- * set in General settings. `fast` is only set by the CLI's `--fast`, and
+ * `heavy` adds the M3 lenses and routes the `codeReviewHeavy` model; `ultra`
+ * runs the heavy review on each of the org's three Ultra models and merges
+ * them (libs/ee/ultra-review). All three are set in settings. `fast` is only set by the CLI's `--fast`, and
  * `deep` by nothing today (#2367).
  */
-export type ReviewMode = 'fast' | 'balanced' | 'heavy' | 'deep';
+export type ReviewMode = 'fast' | 'balanced' | 'heavy' | 'ultra' | 'deep';
 
 /** The review modes a team can pick in settings or in kodus-config.yml. */
-export const SELECTABLE_REVIEW_MODES = ['balanced', 'heavy'] as const;
+export const SELECTABLE_REVIEW_MODES = ['balanced', 'heavy', 'ultra'] as const;
 
 export type CodeReviewConfig = {
     ignorePaths: string[];
@@ -884,6 +885,16 @@ export type CodeReviewConfig = {
     approvalPolicySource?: 'legacy' | 'named';
     riskAssessmentSource?: 'legacy' | 'independent';
     reviewOptions: ReviewOptions;
+
+    /**
+     * How Kody takes part in the conversation on a pull request (#2576).
+     * `implicitReplies: false` makes Kody answer an unmentioned reply in its
+     * own review thread only when someone writes `@kody`; the default keeps
+     * the classifier deciding, as it has since #1946.
+     */
+    conversation?: {
+        implicitReplies?: boolean;
+    };
 
     /** How the PR is checked against the task it references (Business Logic). */
     businessLogic?: BusinessLogicConfig;

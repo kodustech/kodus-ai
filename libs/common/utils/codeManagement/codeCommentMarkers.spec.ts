@@ -541,3 +541,35 @@ describe('review flags inside prose', () => {
         expect(parseReviewDirective(text)).toBe('check the --force-push path');
     });
 });
+
+describe('--ultra', () => {
+    it('reads --ultra in any position, over --heavy and --balanced', () => {
+        expect(requestedReviewModeOf('@kody review --ultra')).toBe('ultra');
+        expect(requestedReviewModeOf('@kody start-review auth --ultra')).toBe(
+            'ultra',
+        );
+        expect(requestedReviewModeOf('@kody review --heavy --ultra')).toBe(
+            'ultra',
+        );
+        expect(requestedReviewModeOf('@mybot review --ultra', 'mybot')).toBe(
+            'ultra',
+        );
+    });
+
+    it('does not read a bare ultra or --ultra-fast as the flag', () => {
+        expect(
+            requestedReviewModeOf('@kody review ultra careful please'),
+        ).toBeUndefined();
+        expect(
+            requestedReviewModeOf('@kody review the --ultra-fast path'),
+        ).toBeUndefined();
+    });
+
+    it('leaves --ultra out of the review directive and keeps --force', () => {
+        expect(parseReviewDirective('@kody review --ultra')).toBeUndefined();
+        expect(
+            parseReviewDirective('@kody review --ultra --force the auth flow'),
+        ).toBe('the auth flow');
+        expect(isForceReviewCommand('@kody review --ultra --force')).toBe(true);
+    });
+});

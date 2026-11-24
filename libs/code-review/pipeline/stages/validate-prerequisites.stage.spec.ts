@@ -20,8 +20,12 @@ import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-au
 import { USER_SERVICE_TOKEN } from '@libs/identity/domain/user/contracts/user.service.contract';
 import { CODE_BASE_CONFIG_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
+import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
-import { ValidatePrerequisitesStage } from './validate-prerequisites.stage';
+import {
+    USER_NO_LICENSE_NOTICE,
+    ValidatePrerequisitesStage,
+} from './validate-prerequisites.stage';
 
 // The trial is provisioned cloud-only (the stage early-returns unless
 // environment.API_CLOUD_MODE). Force cloud mode on so the trial path runs.
@@ -60,6 +64,9 @@ describe('ValidatePrerequisitesStage', () => {
     };
     let mockCodeBaseConfigService: { getConfig: jest.Mock };
     let mockPullRequestManagerService: { getChangedFilesMetadata: jest.Mock };
+    let mockAutomationExecutionService: {
+        hasPullRequestExecutionWithDataKey: jest.Mock;
+    };
     let mockCodeManagementService: {
         addReactionToPR: jest.Mock;
         addReactionToComment: jest.Mock;
@@ -157,9 +164,19 @@ describe('ValidatePrerequisitesStage', () => {
                 .mockResolvedValue([{ filename: 'src/a.ts' }]),
         };
 
+        mockAutomationExecutionService = {
+            hasPullRequestExecutionWithDataKey: jest
+                .fn()
+                .mockResolvedValue(false),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ValidatePrerequisitesStage,
+                {
+                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+                    useValue: mockAutomationExecutionService,
+                },
                 {
                     provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
                     useValue: mockCodeBaseConfigService,
@@ -1025,6 +1042,205 @@ describe('ValidatePrerequisitesStage', () => {
             await stage.execute(makeContext());
 
             expect(mockCodeBaseConfigService.getConfig).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('no-license notice', () => {
+        const failNoSeat = (reason = 'NO_AVAILABLE_LICENSES') => {
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.USER_NOT_LICENSED,
+                },
+            );
+            mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
+                shouldProceed: false,
+                reason,
+            });
+            mockParametersService.findByKey.mockResolvedValue(undefined);
+        };
+
+        it('reacts and posts the notice on the first skip, recording when', async () => {
+            failNoSeat();
+            mockCodeManagementService.createIssueComment.mockResolvedValue({
+                id: 1,
+            });
+
+            const result = await stage.execute(makeContext());
+
+            expect(
+                mockCodeManagementService.addReactionToPR,
+            ).toHaveBeenCalled();
+            expect(
+                mockAutomationExecutionService.hasPullRequestExecutionWithDataKey,
+            ).toHaveBeenCalledWith({
+                teamAutomationId: 'automation-1',
+                repositoryId: 'repo-1',
+                pullRequestNumber: 42,
+                key: 'licenseNoticePostedAt',
+            });
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    prNumber: 42,
+                    body: USER_NO_LICENSE_NOTICE,
+                }),
+            );
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.licenseNoticePostedAt).toEqual(expect.any(String));
+        });
+
+        it('posts the notice on the first skip only, keeping the reaction on later runs', async () => {
+            failNoSeat();
+            mockCodeManagementService.createIssueComment.mockResolvedValue({
+                id: 1,
+            });
+
+            const first = await stage.execute(makeContext());
+            expect(first.licenseNoticePostedAt).toEqual(expect.any(String));
+
+            // The next run finds the notice the first one persisted.
+            mockAutomationExecutionService.hasPullRequestExecutionWithDataKey.mockResolvedValue(
+                true,
+            );
+            const second = await stage.execute(makeContext());
+
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockCodeManagementService.addReactionToPR,
+            ).toHaveBeenCalledTimes(2);
+            expect(second.licenseNoticePostedAt).toBeUndefined();
+        });
+
+        it.each([PlatformType.AZURE_REPOS, PlatformType.BITBUCKET])(
+            'posts only the notice on %s, without the old reaction comment',
+            async (platformType) => {
+                failNoSeat();
+                mockCodeManagementService.createIssueComment.mockResolvedValue({
+                    id: 1,
+                });
+
+                await stage.execute(makeContext({ platformType }));
+
+                expect(
+                    mockCodeManagementService.createIssueComment,
+                ).toHaveBeenCalledTimes(1);
+                expect(
+                    mockCodeManagementService.createIssueComment,
+                ).toHaveBeenCalledWith(
+                    expect.objectContaining({ body: USER_NO_LICENSE_NOTICE }),
+                );
+                expect(
+                    mockCodeManagementService.addReactionToPR,
+                ).not.toHaveBeenCalled();
+            },
+        );
+
+        it('answers a Bitbucket command in its thread', async () => {
+            failNoSeat();
+            mockCodeManagementService.createResponseToComment.mockResolvedValue(
+                { id: 2 },
+            );
+
+            const result = await stage.execute(
+                makeContext({
+                    platformType: PlatformType.BITBUCKET,
+                    triggerCommentId: '77',
+                    origin: 'command',
+                }),
+            );
+
+            expect(
+                mockCodeManagementService.createResponseToComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    inReplyToId: 77,
+                    body: USER_NO_LICENSE_NOTICE,
+                }),
+            );
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).not.toHaveBeenCalled();
+            expect(result.licenseNoticePostedAt).toEqual(expect.any(String));
+        });
+
+        it('does not record the notice when the provider did not post it', async () => {
+            failNoSeat();
+            mockCodeManagementService.createIssueComment.mockResolvedValue(
+                null,
+            );
+
+            const result = await stage.execute(makeContext());
+
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).toHaveBeenCalled();
+            expect(result.licenseNoticePostedAt).toBeUndefined();
+        });
+
+        it('still posts the notice when the earlier-notice lookup fails', async () => {
+            failNoSeat();
+            mockAutomationExecutionService.hasPullRequestExecutionWithDataKey.mockRejectedValue(
+                new Error('db down'),
+            );
+            mockCodeManagementService.createIssueComment.mockResolvedValue({
+                id: 1,
+            });
+
+            const result = await stage.execute(makeContext());
+
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ body: USER_NO_LICENSE_NOTICE }),
+            );
+            expect(result.licenseNoticePostedAt).toEqual(expect.any(String));
+        });
+
+        it.each(['IGNORED_USER', 'NOT_ALLOWED_USER'])(
+            'stays silent for a %s author',
+            async (reason) => {
+                failNoSeat(reason);
+
+                const result = await stage.execute(makeContext());
+
+                expect(
+                    mockCodeManagementService.addReactionToPR,
+                ).not.toHaveBeenCalled();
+                expect(
+                    mockCodeManagementService.createIssueComment,
+                ).not.toHaveBeenCalled();
+                expect(result.licenseNoticePostedAt).toBeUndefined();
+            },
+        );
+
+        it('posts nothing when auto-assign gives the author a seat', async () => {
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.USER_NOT_LICENSED,
+                },
+            );
+            mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
+                shouldProceed: true,
+                reason: 'ASSIGNED',
+            });
+
+            const result = await stage.execute(makeContext());
+
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).not.toHaveBeenCalled();
+            expect(
+                mockCodeManagementService.addReactionToPR,
+            ).not.toHaveBeenCalled();
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+            expect(result.licenseNoticePostedAt).toBeUndefined();
         });
     });
 });

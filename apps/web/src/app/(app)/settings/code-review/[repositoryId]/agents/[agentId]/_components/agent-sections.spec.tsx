@@ -149,8 +149,62 @@ describe("CommentsAndModel", () => {
         await waitFor(() =>
             expect(
                 screen.getByRole("combobox", { name: "Model" }),
-            ).toHaveTextContent("Routing default (GLM 5.3 Flash)"),
+            ).toHaveTextContent("Routing default · GLM 5.3 Flash"),
         );
         expect(screen.queryByText(/accounts\/fireworks/)).toBeNull();
+    });
+
+    it("tells apart a pin and its alias on two connections, and leaves the Kodus default out", async () => {
+        (getBYOK as jest.Mock).mockResolvedValue({
+            credentials: [
+                { id: "c-openai", provider: "openai" },
+                { id: "c-openrouter", provider: "openrouter" },
+                { id: "c-env", provider: "openai", managed: true },
+            ],
+            models: [
+                { id: "m-openai", credentialId: "c-openai", model: "gpt-5.4" },
+                {
+                    id: "m-openrouter",
+                    credentialId: "c-openrouter",
+                    model: "openai/gpt-5.4",
+                },
+                // The Kodus default runs the pin's id. Routing does not offer
+                // it, nor compares against it.
+                {
+                    id: "m-env",
+                    credentialId: "c-env",
+                    model: "gpt-5.4-2026-03-05",
+                },
+                {
+                    id: "m-pin",
+                    credentialId: "c-openai",
+                    model: "gpt-5.4-2026-03-05",
+                },
+            ],
+            routing: { defaultModelId: "m-pin" },
+        });
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <CommentsAndModel agent={agent} canEdit onChange={jest.fn()} />
+            </QueryClientProvider>,
+        );
+        const trigger = screen.getByRole("combobox", { name: "Model" });
+        await waitFor(() =>
+            expect(trigger).toHaveTextContent(
+                "Routing default · GPT 5.4 (gpt-5.4-2026-03-05)",
+            ),
+        );
+        // Radix Select scrolls the picked option into view; jsdom has no layout.
+        Element.prototype.scrollIntoView = jest.fn();
+        fireEvent.click(trigger);
+        const options = (await screen.findAllByRole("option")).map(
+            (o) => o.textContent,
+        );
+        expect(options).toEqual([
+            "Routing default · GPT 5.4 (gpt-5.4-2026-03-05)",
+            "GPT 5.4 (gpt-5.4)",
+            "GPT 5.4 (openai/gpt-5.4)",
+            "GPT 5.4 (gpt-5.4-2026-03-05)",
+        ]);
     });
 });

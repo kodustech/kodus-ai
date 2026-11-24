@@ -15,9 +15,11 @@ import {
     ISandboxProvider,
     SandboxInstance,
     SandboxRunOptions,
+    SandboxUsage,
     SANDBOX_PROVIDER_TOKEN,
     toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Sandbox } from 'e2b';
@@ -186,6 +188,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      */
     private readonly leaseIdToPrKey = new Map<string, string>();
 
+    /** How each held lease used its sandbox, until its release (see trackUse). */
+    private readonly leaseIdToUse = new Map<string, SandboxUsage>();
+
     /**
      * Fails sandbox creation fast while the infrastructure is degraded —
      * see SandboxCreateCircuitBreaker. Per process, like leaseIdToPrKey.
@@ -296,7 +301,14 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 );
                 if (slot)
                     this.leaseIdToSlot.set(result.leaseId, { prKey, slot });
-                return result;
+                return {
+                    ...result,
+                    sandbox: this.trackUse(
+                        result.sandbox,
+                        result.leaseId,
+                        consumer,
+                    ),
+                };
             } catch (err) {
                 if (slot) this.dropSlot(prKey, slot);
                 throw err;
@@ -667,7 +679,8 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * provider keeps `lifecycle: { onTimeout: 'pause' }`, so even if Mongo
      * is briefly unavailable for the cron, E2B itself pauses the sandbox
      * at the same idleMs window — billing stops; the reaper TTL pass picks
-     * up the orphaned doc later.
+     * up the orphaned doc later. That call is fired, not awaited, so a
+     * release costs the Mongo writes only.
      *
      * Callers choose `idleMs` based on the flow: review uses 30s because
      * @kody arrives within seconds or much later; conversation uses the
@@ -692,13 +705,35 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             return;
         }
 
+        // Stamped before the Mongo writes: a caller that does not wait for the
+        // release (the review, #2628) still records when it gave it back.
+        const use = this.leaseIdToUse.get(leaseId);
+        this.leaseIdToUse.delete(leaseId);
+        if (use) use.releasedAt = new Date();
+
         const updated = await this.leaseRepo.decrementLease(prKey);
         this.leaseIdToPrKey.delete(leaseId);
 
         this.logger.log({
             message: `SandboxLeaseManager: released leaseId="${leaseId}" prKey="${prKey}" leaseCount=${updated?.leaseCount ?? 'unknown'}`,
             context: SandboxLeaseManager.name,
-            metadata: { leaseId, prKey, leaseCount: updated?.leaseCount },
+            metadata: {
+                leaseId,
+                prKey,
+                leaseCount: updated?.leaseCount,
+                consumer: use?.consumer,
+                heldMs: use?.releasedAt
+                    ? use.releasedAt.getTime() - use.acquiredAt.getTime()
+                    : undefined,
+                // Both unset when the holder never ran a command on the sandbox
+                acquireToFirstUseMs: use?.firstUsedAt
+                    ? use.firstUsedAt.getTime() - use.acquiredAt.getTime()
+                    : undefined,
+                lastUseToReleaseMs:
+                    use?.lastUsedAt && use.releasedAt
+                        ? use.releasedAt.getTime() - use.lastUsedAt.getTime()
+                        : undefined,
+            },
         });
 
         if (updated && updated.leaseCount <= 0 && updated.sandboxId) {
@@ -712,6 +747,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 if (claimed) {
                     try {
                         await deleteImmediateSandbox(updated.sandboxId);
+                        if (use) use.stopAt = new Date();
                         await this.leaseRepo.completeCleanup(
                             prKey,
                             updated.sandboxId,
@@ -746,8 +782,69 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
             // E2B path: existing idle-kill logic (unchanged)
             const idleMs = opts?.idleMs ?? IDLE_TIMEOUT_MS;
+
+            // A single-use sandbox (the graph jobs, whose key carries the
+            // jobId) is never joined again: the last release stops compute now
+            // instead of paying the five-minute default idle window.
+            //
+            // The claim and killAt go in one write. claimCleanup only wins
+            // while leaseCount is still <= 0, so a concurrent acquire that
+            // re-upped the count leaves the sandbox to its new holder; and
+            // killAt, which is all the idle-kill cron reads, is never missing
+            // if this process dies between the claim and the kill.
+            if (idleMs <= 0) {
+                const claimed = await this.leaseRepo.claimCleanup(
+                    prKey,
+                    updated.sandboxId,
+                    true,
+                    new Date(),
+                );
+                if (!claimed) {
+                    this.logger.log({
+                        message: `SandboxLeaseManager: single-use release lost the cleanup claim, leaving the sandbox to its holder prKey="${prKey}"`,
+                        context: SandboxLeaseManager.name,
+                        metadata: { prKey, sandboxId: updated.sandboxId },
+                    });
+                    return;
+                }
+
+                const apiKey = this.configService.get<string>('API_E2B_KEY');
+                if (!apiKey) {
+                    return;
+                }
+                try {
+                    await Sandbox.kill(updated.sandboxId, { apiKey });
+                    await this.leaseRepo.completeCleanup(
+                        prKey,
+                        updated.sandboxId,
+                    );
+                    this.logger.log({
+                        message: `SandboxLeaseManager: killed single-use sandbox immediately sandboxId="${updated.sandboxId}" prKey="${prKey}"`,
+                        context: SandboxLeaseManager.name,
+                        metadata: {
+                            prKey,
+                            sandboxId: updated.sandboxId,
+                            idleTimeoutMs: 0,
+                        },
+                    });
+                } catch (err) {
+                    // The claim and killAt stay: findReadyToKill ignores
+                    // cleanupStatus, so the idle-kill cron retries the kill.
+                    // Stamping FAILED would mark this as a failed *local*
+                    // cleanup and reject every later acquire for the key.
+                    this.logger.warn({
+                        message: `SandboxLeaseManager: immediate kill failed, idle-kill cron retries sandboxId="${updated.sandboxId}" prKey="${prKey}"`,
+                        context: SandboxLeaseManager.name,
+                        error: err as Error,
+                        metadata: { prKey, sandboxId: updated.sandboxId },
+                    });
+                }
+                return;
+            }
+
             const killAt = new Date(Date.now() + idleMs);
             await this.leaseRepo.setKillAt(prKey, killAt);
+            if (use) use.stopAt = killAt;
 
             this.logger.log({
                 message: `SandboxLeaseManager: scheduled idle-kill at ${killAt.toISOString()} for sandboxId="${updated.sandboxId}"`,
@@ -760,19 +857,20 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 },
             });
 
+            // Not awaited: the lease is already released, and a review that
+            // releases before publishing must not wait on E2B (60s request
+            // timeout) to post its comments (#2628).
             const apiKey = this.configService.get<string>('API_E2B_KEY');
+            const sandboxId = updated.sandboxId;
             if (apiKey) {
-                try {
-                    await Sandbox.setTimeout(updated.sandboxId, idleMs, {
-                        apiKey,
-                    });
-                } catch (err) {
-                    this.logger.warn({
-                        message: `SandboxLeaseManager: failed to set E2B-side idle timeout on sandboxId="${updated.sandboxId}" (kill cron is the primary path)`,
-                        context: SandboxLeaseManager.name,
-                        error: err,
-                    });
-                }
+                void Sandbox.setTimeout(sandboxId, idleMs, { apiKey }).catch(
+                    (err) =>
+                        this.logger.warn({
+                            message: `SandboxLeaseManager: failed to set E2B-side idle timeout on sandboxId="${sandboxId}" (kill cron is the primary path)`,
+                            context: SandboxLeaseManager.name,
+                            error: err,
+                        }),
+                );
             }
         }
     }
@@ -1458,6 +1556,78 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         });
 
         return { sandbox, leaseId, sandboxId, wasCreated: false };
+    }
+
+    /**
+     * Stamp the commands the lease's holder runs on its sandbox: when the
+     * first one starts and when the last one settles before the release. A
+     * release can then tell how long the sandbox stayed held before its first
+     * use and after its last (#2628). The null sandbox runs nothing and is
+     * handed out as it is.
+     */
+    private trackUse(
+        sandbox: SandboxInstance,
+        leaseId: string,
+        consumer: string,
+    ): SandboxInstance {
+        if (sandbox.type === 'null') return sandbox;
+
+        const use: SandboxUsage = { consumer, acquiredAt: new Date() };
+        this.leaseIdToUse.set(leaseId, use);
+
+        // After the release nothing is stamped, so the usage never shows a use
+        // after it; a command started then is still run, and logged once.
+        let warnedUseAfterRelease = false;
+        const stamped =
+            <A extends unknown[], R>(command: (...args: A) => Promise<R>) =>
+            async (...args: A): Promise<R> => {
+                if (use.releasedAt) {
+                    if (!warnedUseAfterRelease) {
+                        warnedUseAfterRelease = true;
+                        this.logger.warn({
+                            message: `SandboxLeaseManager: sandbox used after release consumer="${consumer}" leaseId="${leaseId}"`,
+                            context: SandboxLeaseManager.name,
+                            metadata: {
+                                leaseId,
+                                consumer,
+                                releasedAt: use.releasedAt,
+                            },
+                        });
+                    }
+                    return command(...args);
+                }
+                use.firstUsedAt ??= new Date();
+                try {
+                    return await command(...args);
+                } finally {
+                    if (!use.releasedAt) use.lastUsedAt = new Date();
+                }
+            };
+
+        // Every repository tool is one of these, so each one is stamped,
+        // including a tool added later. Callers tell a missing command by its
+        // absence (`sandbox?.run`), so only the ones present are wrapped.
+        const remoteCommands =
+            sandbox.remoteCommands &&
+            (Object.fromEntries(
+                Object.entries(sandbox.remoteCommands).map(
+                    ([name, command]) => [
+                        name,
+                        typeof command === 'function'
+                            ? stamped(command)
+                            : command,
+                    ],
+                ),
+            ) as unknown as RemoteCommands);
+
+        return {
+            ...sandbox,
+            remoteCommands,
+            run: sandbox.run && stamped(sandbox.run),
+            readFile: sandbox.readFile && stamped(sandbox.readFile),
+            writeFile: sandbox.writeFile && stamped(sandbox.writeFile),
+            usage: () => ({ ...use }),
+        };
     }
 
     /**

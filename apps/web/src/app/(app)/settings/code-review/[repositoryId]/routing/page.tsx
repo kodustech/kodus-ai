@@ -61,6 +61,7 @@ import { useOrganizationRouting } from "./_components/use-organization-routing";
 import {
     modeLabel,
     useReviewRouting,
+    useUltraModeInUse,
     type Mode,
 } from "./_components/use-review-routing";
 
@@ -75,6 +76,7 @@ function ModeRow({
     disabled,
     description,
     modelFor,
+    routing,
 }: {
     label: string;
     name: ModeField;
@@ -82,9 +84,10 @@ function ModeRow({
     disabled: boolean;
     description?: string;
     modelFor?: (mode: Mode) => string;
+    /** The page's routing, with the trio being edited on it. */
+    routing: ReturnType<typeof useReviewRouting>;
 }) {
     const form = useFormContext<CodeReviewFormType>();
-    const routing = useReviewRouting();
     return (
         <Controller
             name={name}
@@ -137,6 +140,19 @@ function ModeRow({
                                                 ? " · Teams/Enterprise"
                                                 : ""}
                                         </SelectItem>
+                                        <SelectItem
+                                            value="ultra"
+                                            disabled={
+                                                !routing.ultraAllowed ||
+                                                !routing.ultraSet
+                                            }>
+                                            Ultra
+                                            {!routing.ultraAllowed
+                                                ? " · Teams/Enterprise"
+                                                : !routing.ultraSet
+                                                  ? " · set up 3 models"
+                                                  : ""}
+                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <p className="text-text-secondary text-sm break-words">
@@ -147,6 +163,17 @@ function ModeRow({
                                         <p className="text-text-secondary text-xs">
                                             Heavy requires Teams or Enterprise.
                                             Reviews use Balanced.
+                                        </p>
+                                    )}
+                                {(field.value ?? fallback) === "ultra" &&
+                                    (!routing.ultraAllowed ||
+                                        !routing.ultraSet) && (
+                                        <p className="text-warning text-xs">
+                                            {!routing.ultraAllowed
+                                                ? "Ultra requires Teams or Enterprise, or a trial with three of your own models."
+                                                : "Ultra needs three different models under Models."}{" "}
+                                            Reviews in this mode do not run
+                                            until then.
                                         </p>
                                     )}
                             </div>
@@ -201,7 +228,9 @@ function RoutingSettings() {
         isReleasedTo("kodyRuntime", useFeatureFlags()) &&
         canEdit &&
         !directoryId;
+    const ultraInUse = useUltraModeInUse();
     const organization = useOrganizationRouting({
+        ultraInUse,
         teamId,
         enabled: globalScope && canReadModels && hasConnectedProvider,
         canEdit:
@@ -222,7 +251,8 @@ function RoutingSettings() {
             } catch {
                 return;
             }
-            if (!/^(default|fallback|task:[a-zA-Z]+)$/.test(anchor)) return;
+            if (!/^(default|fallback|ultra|task:[a-zA-Z]+)$/.test(anchor))
+                return;
             const element = [
                 ...document.querySelectorAll<HTMLElement>(
                     "[data-routing-anchor]",
@@ -267,6 +297,7 @@ function RoutingSettings() {
         let modelsSaved = false;
         let checkingSavedModels = false;
         let providerDisconnected = false;
+        let reviewSavedFirst = false;
         setSaving(true);
         try {
             const freshStatus = await refreshStatus();
@@ -294,6 +325,45 @@ function RoutingSettings() {
             ) {
                 if (!(await confirmOffCatalogModelSave(model))) return;
             }
+            // A trio cleared together with a mode change away from Ultra:
+            // the mode goes first, or the stored config would be Ultra with
+            // no models if the second save failed (the API refuses it too).
+            // Only a mode edit goes first: one of the model override alone
+            // would leave the stored mode Ultra and be reported as saved.
+            const modeFirst =
+                !!(dirtyFields.reviewMode || dirtyFields.riskReviewRouting) &&
+                organization.breaksUltraTrio;
+            const saveReview = () =>
+                reviewDirty
+                    ? saveSettings(data, {
+                          prepare: (current) => {
+                              const config = unformatConfig(current);
+                              return {
+                                  savedFormData: current,
+                                  codeReviewConfig: {
+                                      reviewMode:
+                                          config.reviewMode ?? "balanced",
+                                      riskReviewRouting:
+                                          config.riskReviewRouting,
+                                      ...(dirtyFields.byokModelId
+                                          ? { byokModelId: config.byokModelId }
+                                          : {}),
+                                  },
+                              };
+                          },
+                      })
+                    : Promise.resolve(undefined);
+            let result = modeFirst ? await saveReview() : undefined;
+            if (modeFirst) reviewSavedFirst = true;
+            if (modeFirst && result?.centralizedPr) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        result.centralizedPr,
+                        "Routing change proposed. Clear the Ultra models once it is merged.",
+                    ),
+                );
+                return;
+            }
             modelsSaved = await organization.save(freshStatus);
             if (modelsSaved) {
                 checkingSavedModels = true;
@@ -306,23 +376,7 @@ function RoutingSettings() {
                     );
                 }
             }
-            const result = reviewDirty
-                ? await saveSettings(data, {
-                      prepare: (current) => {
-                          const config = unformatConfig(current);
-                          return {
-                              savedFormData: current,
-                              codeReviewConfig: {
-                                  reviewMode: config.reviewMode ?? "balanced",
-                                  riskReviewRouting: config.riskReviewRouting,
-                                  ...(dirtyFields.byokModelId
-                                      ? { byokModelId: config.byokModelId }
-                                      : {}),
-                              },
-                          };
-                      },
-                  })
-                : undefined;
+            if (!modeFirst) result = await saveReview();
             if (reviewDirty && !result?.centralizedPr) {
                 await queryClient.invalidateQueries({
                     queryKey: ["routing-model-overrides", teamId],
@@ -341,14 +395,31 @@ function RoutingSettings() {
             );
         } catch (error) {
             const reviewError = reviewSettingsSaveErrorMessage(error);
+            // The mode went first and is saved; only the models failed.
+            if (reviewSavedFirst && !modelsSaved) {
+                await queryClient.invalidateQueries({
+                    queryKey: ["routing-model-overrides", teamId],
+                });
+                toast({
+                    description: `Review mode saved. Models were not saved: ${
+                        error instanceof RoutingSettingsError
+                            ? error.message
+                            : "try again."
+                    }`,
+                    variant: "danger",
+                });
+                return;
+            }
+            // Saved first, the review settings are not left unsaved here.
+            const reviewUnsaved = reviewDirty && !reviewSavedFirst;
             toast({
                 description: modelsSaved
                     ? providerDisconnected
-                        ? reviewDirty
+                        ? reviewUnsaved
                             ? "Models saved. Connect an AI provider to save review settings."
                             : "Models saved. Connect an AI provider to continue."
                         : checkingSavedModels
-                          ? reviewDirty
+                          ? reviewUnsaved
                               ? "Models saved. Could not verify provider status. Review settings are still unsaved."
                               : "Models saved. Refresh provider status to continue."
                           : `Models saved. ${reviewError ?? "Review settings could not be saved. Try again."}`
@@ -491,6 +562,7 @@ function RoutingSettings() {
                     <OrganizationModels
                         controller={organization}
                         heavyAllowed={routing.heavyAllowed}
+                        ultraAllowed={routing.ultraAllowed}
                         canEdit={canEditModels}
                     />
                 ) : (
@@ -574,6 +646,7 @@ function RoutingSettings() {
                             {routing.active ? (
                                 <>
                                     <ModeRow
+                                        routing={routing}
                                         label="No risk found"
                                         name="riskReviewRouting.noRisk.value"
                                         fallback="balanced"
@@ -585,6 +658,7 @@ function RoutingSettings() {
                                         modelFor={routing.modelFor}
                                     />
                                     <ModeRow
+                                        routing={routing}
                                         label="Risk found"
                                         name="riskReviewRouting.riskFound.value"
                                         fallback="heavy"
@@ -598,6 +672,7 @@ function RoutingSettings() {
                                 </>
                             ) : (
                                 <ModeRow
+                                    routing={routing}
                                     label="All PRs"
                                     name="reviewMode.value"
                                     fallback="balanced"
@@ -610,9 +685,43 @@ function RoutingSettings() {
                                 />
                             )}
                         </div>
+                        {/* A route stored on Ultra with risk assessment off
+                            still counts (the API refuses clearing the trio
+                            over it), so it shows here and can be changed. */}
+                        {!routing.active && routing.ultraRouteSaved && (
+                            <div className="border-card-lv3 divide-card-lv3 divide-y border-t">
+                                <ModeRow
+                                    routing={routing}
+                                    label="No risk found"
+                                    description="Runs when risk assessment is on."
+                                    name="riskReviewRouting.noRisk.value"
+                                    fallback="balanced"
+                                    disabled={
+                                        !canEdit ||
+                                        !!isCheckingProvider ||
+                                        saving
+                                    }
+                                    modelFor={routing.modelFor}
+                                />
+                                <ModeRow
+                                    routing={routing}
+                                    label="Risk found"
+                                    description="Runs when risk assessment is on."
+                                    name="riskReviewRouting.riskFound.value"
+                                    fallback="heavy"
+                                    disabled={
+                                        !canEdit ||
+                                        !!isCheckingProvider ||
+                                        saving
+                                    }
+                                    modelFor={routing.modelFor}
+                                />
+                            </div>
+                        )}
                         {routing.active && (
                             <div className="border-card-lv3 border-t">
                                 <ModeRow
+                                    routing={routing}
                                     label="Risk assessment unavailable"
                                     description="Uses the default review mode. Automatic approval stays blocked."
                                     name="reviewMode.value"
@@ -631,8 +740,9 @@ function RoutingSettings() {
                                 Manual commands
                             </summary>
                             <p className="text-text-secondary mt-3 leading-6">
-                                An explicit <code>--heavy</code> or{" "}
-                                <code>--balanced</code> command takes priority.
+                                An explicit <code>--heavy</code>,{" "}
+                                <code>--balanced</code> or <code>--ultra</code>{" "}
+                                command takes priority.
                             </p>
                         </details>
                     </CardContent>

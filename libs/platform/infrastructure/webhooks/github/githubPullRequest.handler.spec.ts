@@ -320,6 +320,30 @@ describe('GitHubPullRequestHandler', () => {
             expect(codeManagementPayload.onlyCustomAgent).toBeUndefined();
         });
 
+        it('carries whether the author of a --ultra command can write', async () => {
+            const stranger = comment('@kody start-review --ultra');
+            (stranger.payload.comment as any).author_association = 'NONE';
+            (stranger.payload.sender as any).login = 'someone';
+            await handler.execute(stranger as any);
+
+            const [{ codeManagementPayload }] =
+                enqueueCodeReviewJobUseCase.execute.mock.calls[0];
+            expect(codeManagementPayload.requestedReviewMode).toBe('ultra');
+            expect(codeManagementPayload.requestedReviewModeAccess).toBe(
+                'none',
+            );
+        });
+
+        it('reads no access for a command that needs none', async () => {
+            await handler.execute(comment('@kody start-review') as any);
+
+            const [{ codeManagementPayload }] =
+                enqueueCodeReviewJobUseCase.execute.mock.calls[0];
+            expect(
+                codeManagementPayload.requestedReviewModeAccess,
+            ).toBeUndefined();
+        });
+
         it('reads the commented pull request from the repository owner', async () => {
             await handler.execute(comment('@kody start-review') as any);
 

@@ -520,6 +520,88 @@ it('preserves the other legacy route when only one canonical route is edited', a
     });
 });
 
+it('keeps an Ultra default mode as the no-risk route when only the other route is edited', async () => {
+    const { run, save, stored } = setup(true);
+    stored.repositories[0].configs = { reviewMode: 'ultra' };
+    await run(
+        { riskReviewRouting: { riskFound: 'balanced' } },
+        { repositoryId: 'repo' },
+    );
+    const saved = save.mock.calls[0][1].repositories[0].configs;
+    expect(
+        resolveReviewSettings(
+            getDefaultKodusConfigFile(),
+            stored.configs,
+            saved,
+        ).riskReviewRouting,
+    ).toMatchObject({ noRisk: 'ultra', riskFound: 'balanced' });
+});
+
+it('keeps an Ultra default mode as the risk-found route when only the no-risk route is edited', async () => {
+    const { run, save, stored } = setup(true);
+    stored.repositories[0].configs = { reviewMode: 'ultra' };
+    await run(
+        { riskReviewRouting: { noRisk: 'balanced' } },
+        { repositoryId: 'repo' },
+    );
+    const saved = save.mock.calls[0][1].repositories[0].configs;
+    expect(
+        resolveReviewSettings(
+            getDefaultKodusConfigFile(),
+            stored.configs,
+            saved,
+        ).riskReviewRouting,
+    ).toMatchObject({ noRisk: 'balanced', riskFound: 'ultra' });
+});
+
+it('an Ultra default mode does not overwrite a risk-found route the scope inherits', async () => {
+    const { run, save, stored } = setup(true);
+    Object.assign(stored.configs, {
+        riskReviewRouting: { riskFound: 'balanced' },
+    });
+    stored.repositories[0].configs = { reviewMode: 'ultra' };
+    await run(
+        { riskReviewRouting: { noRisk: 'heavy' } },
+        { repositoryId: 'repo' },
+    );
+    const saved = save.mock.calls[0][1].repositories[0].configs;
+    expect(saved.riskReviewRouting).toEqual({ noRisk: 'heavy' });
+});
+
+it.each([
+    [
+        'a repo on Ultra under a global that sets only the no-risk route',
+        { riskReviewRouting: { noRisk: 'balanced' } },
+        { reviewMode: 'ultra' },
+        'ultra',
+    ],
+    [
+        'a repo on Balanced under a global on Ultra',
+        { reviewMode: 'ultra' },
+        { reviewMode: 'balanced' },
+        'heavy',
+    ],
+])(
+    'editing the no-risk route keeps the risk-found route the legacy mode ran: %s',
+    async (_, global, repo, riskFound) => {
+        const { run, save, stored } = setup(true);
+        Object.assign(stored.configs, global);
+        stored.repositories[0].configs = repo as any;
+        await run(
+            { riskReviewRouting: { noRisk: 'heavy' } },
+            { repositoryId: 'repo' },
+        );
+        const saved = save.mock.calls[0][1].repositories[0].configs;
+        expect(
+            resolveReviewSettings(
+                getDefaultKodusConfigFile(),
+                stored.configs,
+                saved,
+            ).riskReviewRouting,
+        ).toMatchObject({ noRisk: 'heavy', riskFound });
+    },
+);
+
 it.each(['edit', 'restore'])(
     'preserves an inherited canonical route when migrating the other legacy route: %s',
     async (action) => {

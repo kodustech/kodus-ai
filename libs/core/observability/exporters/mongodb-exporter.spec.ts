@@ -1,3 +1,17 @@
+// The global setup stub silences the logger with `createLogger` alone, which
+// leaves `deepSanitize` undefined. These cases drive `_pushLog`, so this file
+// keeps the real sanitizer and only replaces the logger itself.
+jest.mock('@libs/core/log/logger', () => ({
+    ...jest.requireActual('@libs/core/log/logger'),
+    createLogger: () => ({
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        info: jest.fn(),
+    }),
+}));
+
 import { MongoDBExporter } from './mongodb-exporter';
 
 function buildLog(message: string, payloadSize = 0): any {
@@ -260,5 +274,100 @@ describe('MongoDBExporter indexes', () => {
         expect(telemetry.createIndex.mock.calls).toEqual([
             [{ correlationId: 1 }],
         ]);
+    });
+});
+
+/**
+ * #2639: 61% of error rows stored `metadata.organizationId: "unknown"`, and
+ * ~28,600 of them carried the organization one level deeper, inside the
+ * `params` the code-management services log. `SimpleLogger` flattens that
+ * `metadata` into the processor context, so the exporter receives `{ params }`.
+ */
+describe('MongoDBExporter organization attribution', () => {
+    const originalLogLevel = process.env.API_LOG_LEVEL;
+
+    beforeEach(() => {
+        process.env.API_LOG_LEVEL = 'info';
+    });
+
+    afterAll(() => {
+        process.env.API_LOG_LEVEL = originalLogLevel;
+    });
+
+    const logged = (context: Record<string, any>) => {
+        const exporter = new MongoDBExporter({
+            batchSize: 500,
+            flushIntervalMs: 60_000,
+            bucketKeys: ['organizationId', 'teamId', 'tenantId'],
+        });
+
+        (exporter as any)._pushLog(
+            'error',
+            'Error to get default branch',
+            'BitbucketCloudService',
+            context,
+        );
+
+        return (exporter as any).logBuffer[0];
+    };
+
+    it('reads the pair from the params a service logs', () => {
+        // The shape `SimpleLogger` produces for
+        // `logger.error({ metadata: { params } })`: metadata is flattened.
+        const entry = logged({
+            component: 'BitbucketCloudService',
+            params: {
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+            },
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-1');
+        expect(entry.metadata.teamId).toBe('team-1');
+        expect(entry.metadata.tenantId).toBe('org-1');
+    });
+
+    it('reads a pair set at the top level', () => {
+        const entry = logged({
+            component: 'AzureReposService',
+            organizationAndTeamData: {
+                organizationId: 'org-2',
+                teamId: 'team-2',
+            },
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-2');
+        expect(entry.metadata.teamId).toBe('team-2');
+    });
+
+    it('still says unknown when no shape carries the pair', () => {
+        const entry = logged({
+            component: 'BitbucketCloudService',
+            params: { repository: { id: 'repo-1' } },
+        });
+
+        expect(entry.metadata.organizationId).toBe('unknown');
+        expect(entry.metadata.teamId).toBe('unknown');
+    });
+
+    it('still redacts credentials on the way to the buffer', () => {
+        // The real `deepSanitize` runs here; the logger mock only silences
+        // `createLogger`, so a redaction regression cannot hide behind it.
+        const entry = logged({
+            component: 'BitbucketCloudService',
+            params: {
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                password: 'hunter2',
+                token: 'pat-secret',
+            },
+        });
+
+        expect(JSON.stringify(entry.attributes)).not.toContain('hunter2');
+        expect(JSON.stringify(entry.attributes)).not.toContain('pat-secret');
     });
 });
