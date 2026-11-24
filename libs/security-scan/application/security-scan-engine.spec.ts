@@ -2166,6 +2166,8 @@ describe('SecurityScanEngine: across slices and units', () => {
             expect.objectContaining({ state: 'done' }),
             [],
             [expect.objectContaining({ fingerprint: 'fp-earlier' })],
+            // No blobs listed by the fake checkout: no conclusion recorded.
+            [],
         );
     });
 
@@ -2555,6 +2557,7 @@ describe('SecurityScanEngine: across slices and units', () => {
             expect.objectContaining({ state: 'done' }),
             [expect.objectContaining({ occurrenceOf: 'fp-carried' })],
             [],
+            [],
         );
     });
 });
@@ -2900,5 +2903,140 @@ describe('couldNotExercise', () => {
     });
     it('reads an assertion failure as a real outcome', () => {
         expect(couldNotExercise(1, 'FAIL: expected 403, got 200')).toBe(false);
+    });
+});
+
+describe('incremental scans', () => {
+    const BLOBS: Record<string, string> = Object.fromEntries(
+        Object.keys(FILES).map((f, i) => [f, `blob${i}`]),
+    );
+    /** A checkout that lists each tracked file's blob. */
+    function stagedSandbox(blobs = BLOBS) {
+        const sandbox = fakeSandbox();
+        const run = sandbox.run.getMockImplementation()!;
+        sandbox.run.mockImplementation(async (command: string, opts: any) =>
+            command.includes('ls-files -s -z')
+                ? {
+                      exitCode: 0,
+                      stdout: Object.entries(blobs)
+                          .map(([f, b]) => `100644 ${b} 0\t${f}`)
+                          .join('\0'),
+                  }
+                : run(command, opts),
+        );
+        return sandbox;
+    }
+    const controller = 'src/orders/orders.controller.ts';
+    const ledger = (evidenceBlob = BLOBS['src/orders/orders.service.ts']) => [
+        {
+            filePath: controller,
+            vulnerabilityClass: 'authz',
+            blob: BLOBS[controller],
+            evidence: [{ file: 'src/orders/orders.service.ts', blob: evidenceBlob }],
+        },
+    ];
+    const filesLensed = (runLens: jest.Mock) =>
+        runLens.mock.calls.map(
+            ([input]: any) => /Start from this file:\n`{3,}\n(.+)\n/.exec(input.userPrompt)![1],
+        );
+
+    it('does not read again a file whose conclusion still holds', async () => {
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: stagedSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            mode: 'incremental',
+            coverage: ledger(),
+        } as any);
+
+        expect(filesLensed(runLens)).not.toContain(controller);
+        expect(result.units.map((u) => u.file)).not.toContain(controller);
+        expect(result.unchangedFiles).toBe(1);
+    });
+
+    it('reads it again when a file its conclusion leaned on changed', async () => {
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: stagedSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            mode: 'incremental',
+            coverage: ledger('an-older-blob'),
+        } as any);
+
+        expect(filesLensed(runLens)).toContain(controller);
+        expect(result.unchangedFiles).toBe(0);
+    });
+
+    it('reads everything again in a full scan', async () => {
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: stagedSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            mode: 'full',
+            coverage: ledger(),
+        } as any);
+
+        expect(filesLensed(runLens)).toContain(controller);
+        expect(result.unchangedFiles).toBeUndefined();
+    });
+
+    it('records each class read to the end, tied to the blobs of what the lens read', async () => {
+        const runLens = jest.fn(async (input: any) => {
+            await bill(1000, 100, input.usageRunName);
+            return {
+                findings: { reasoning: '', suggestions: [] },
+                finishReason: 'completed',
+                toolCalls: [
+                    { tool: 'readFile', args: { path: 'src/orders/orders.service.ts' } },
+                    { tool: 'grep', args: { pattern: 'x' } },
+                ],
+            } as any;
+        });
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({
+                units: [{ file: controller, relatedFiles: [], classes: ['authz'], priority: 90, reason: '' }],
+            }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+        const onUnitDone = jest.fn(async (..._args: any[]) => undefined);
+
+        await engine.run({
+            ...baseParams(),
+            sandbox: stagedSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            maxUnits: 1,
+            onUnitDone,
+        } as any);
+
+        const covered = onUnitDone.mock.calls.flatMap((c) => c[3] ?? []);
+        const authz = covered.find((e: any) => e.filePath === controller && e.vulnerabilityClass === 'authz');
+        expect(authz).toEqual({
+            filePath: controller,
+            vulnerabilityClass: 'authz',
+            blob: BLOBS[controller],
+            evidence: [{ file: 'src/orders/orders.service.ts', blob: BLOBS['src/orders/orders.service.ts'] }],
+        });
     });
 });

@@ -1,4 +1,5 @@
 import type { VulnClass } from './surface/surface.types';
+import type { SecurityScanMode } from './coverage-ledger';
 
 export enum SecurityScanStatus {
     QUEUED = 'queued',
@@ -111,6 +112,11 @@ export interface SecurityScanCoverage {
      */
     mapFailedLanguages?: string[];
     filesBeyondPlan?: number;
+    /**
+     * Incremental scans: candidate files left out because what an earlier
+     * scan concluded about them still holds (nothing they read changed).
+     */
+    unchangedFiles?: number;
 }
 
 export interface SecurityScanRecord {
@@ -154,6 +160,18 @@ export interface SecurityScanRecord {
     outcome?: SecurityScanOutcomeCounts;
     /** Model the scan ran on, as `provider:model`. */
     modelName?: string;
+    /**
+     * The model the person picked for this scan (a model of the org's BYOK
+     * config); the deep scan routing's when unset.
+     */
+    modelId?: string;
+    /**
+     * `incremental` skips what earlier scans concluded and still holds;
+     * `full` reads everything again. Scans before it existed are `full`.
+     */
+    mode?: SecurityScanMode;
+    /** The schedule that started it, when a schedule did. */
+    scheduleId?: string;
     requestedBy?: { userId?: string; email?: string };
     error?: string;
     startedAt?: string;

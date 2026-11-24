@@ -70,6 +70,8 @@ function setup(engineResult: any, scan = scanRecord()) {
         update: jest.fn(async (..._args: unknown[]) => scan),
         claim: jest.fn(async (..._args: unknown[]) => scan as any),
         recordUnit: jest.fn(async (..._args: unknown[]) => true),
+        findCoverage: jest.fn(async (..._args: unknown[]) => [] as any[]),
+        recordCoverage: jest.fn(async (..._args: unknown[]) => undefined),
     };
     const jobRepository = {
         findOne: jest.fn(async () => ({
@@ -124,8 +126,8 @@ function setup(engineResult: any, scan = scanRecord()) {
     (SecurityScanEngine as unknown as jest.Mock).mockImplementation(() => ({
         run: jest.fn(async (params: any) => {
             await params.onPlanned?.([], ['typescript']);
-            for (const [progress, findings, sighted] of engineResult.unitEvents ?? []) {
-                await params.onUnitDone(progress, findings, sighted);
+            for (const [progress, findings, sighted, covered] of engineResult.unitEvents ?? []) {
+                await params.onUnitDone(progress, findings, sighted, covered);
             }
             return engineResult.result;
         }),
@@ -1288,5 +1290,76 @@ describe('SecurityScanJobProcessor: one issue per root cause', () => {
         await processor.process('job-1');
 
         expect(lastUpdate(scans).status).toBe(SecurityScanStatus.COMPLETED);
+    });
+});
+
+describe('SecurityScanJobProcessor: incremental scans', () => {
+    const entry = {
+        filePath: 'src/orders.controller.ts',
+        vulnerabilityClass: 'authz',
+        blob: 'b1',
+        evidence: [],
+    };
+
+    it('hands the engine what earlier scans concluded, and records what this one concludes', async () => {
+        const { processor, scans } = setup(
+            {
+                unitEvents: [[{ unitId: 'u1', state: 'done', findings: 0 }, [], [], [entry]]],
+                result: finishedResult({ findings: [], unchangedFiles: 12 }),
+            },
+            scanRecord({ mode: 'incremental' }) as any,
+        );
+        scans.findCoverage.mockResolvedValue([{ ...entry, blob: 'b0' }]);
+
+        await processor.process('job-1');
+
+        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
+        const params = engine.run.mock.calls[0][0];
+        expect(params.mode).toBe('incremental');
+        expect(params.coverage).toEqual([{ ...entry, blob: 'b0' }]);
+        expect(scans.findCoverage).toHaveBeenCalledWith('org-1', {
+            platform: 'GITHUB',
+            host: 'github.com',
+            id: 'repo-1',
+        });
+        expect(scans.recordCoverage).toHaveBeenCalledWith(
+            'org-1',
+            expect.objectContaining({ id: 'repo-1' }),
+            [
+                expect.objectContaining({
+                    ...entry,
+                    scanId: 'scan-1',
+                    commitSha: 'abc123',
+                    modelName: 'openai_compatible:deepseek-v4-flash',
+                }),
+            ],
+        );
+        expect(lastUpdate(scans).coverage.unchangedFiles).toBe(12);
+    });
+
+    it('reads no earlier conclusion in a full scan', async () => {
+        const { processor, scans } = setup({ unitEvents: [], result: finishedResult({ findings: [] }) });
+
+        await processor.process('job-1');
+
+        const engine = (SecurityScanEngine as unknown as jest.Mock).mock.results.at(-1)!.value;
+        expect(engine.run.mock.calls[0][0].mode).toBe('full');
+        expect(scans.findCoverage).not.toHaveBeenCalled();
+    });
+
+    it('runs the scan on the model picked for it', async () => {
+        const { processor } = setup(
+            { unitEvents: [], result: finishedResult({ findings: [] }) },
+            scanRecord({ modelId: 'model-42' }) as any,
+        );
+
+        await processor.process('job-1');
+
+        expect(resolveReviewAgentModel).toHaveBeenLastCalledWith(
+            expect.anything(),
+            expect.anything(),
+            'securityScan',
+            'model-42',
+        );
     });
 });

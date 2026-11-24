@@ -5,6 +5,8 @@ import { KodusCreditChargeModelSchema } from '@libs/analytics/infrastructure/ada
 import { IssuesSchema } from '@libs/issues/infrastructure/adapters/repositories/schemas/issues.model';
 import { PullRequestsSchema } from '@libs/platformData/infrastructure/adapters/repositories/schemas/pullRequests.model';
 import { SecurityScanSchema } from '@libs/security-scan/infrastructure/security-scan.model';
+import { SecurityScanCoverageSchema } from '@libs/security-scan/infrastructure/security-scan-coverage.model';
+import { SecurityScanScheduleSchema } from '@libs/security-scan/infrastructure/security-scan-schedule.model';
 
 import { RELEASE_INDEXES } from './ensure-release-indexes';
 
@@ -18,6 +20,8 @@ const SCHEMAS: Schema[] = [
     IssuesSchema,
     PullRequestsSchema,
     SecurityScanSchema,
+    SecurityScanCoverageSchema,
+    SecurityScanScheduleSchema,
 ];
 
 // The rules each index exists to enforce, written out: the schemas and the
@@ -39,6 +43,9 @@ const EXPECTED_RULES: Record<string, Record<string, unknown>> = {
         unique: true,
         partialFilterExpression: { activeKey: { $exists: true } },
     },
+    repository_file_class_unique: { unique: true },
+    enabled_next_run: {},
+    one_schedule_per_repository: { unique: true },
 };
 
 describe('RELEASE_INDEXES', () => {

@@ -17,6 +17,14 @@ import {
     SecurityScanSchema,
 } from './infrastructure/security-scan.model';
 import {
+    SecurityScanCoverageModel,
+    SecurityScanCoverageSchema,
+} from './infrastructure/security-scan-coverage.model';
+import {
+    SecurityScanScheduleModel,
+    SecurityScanScheduleSchema,
+} from './infrastructure/security-scan-schedule.model';
+import {
     SECURITY_SCAN_REPOSITORY_TOKEN,
     SecurityScanRepository,
 } from './infrastructure/security-scan.repository';
@@ -34,6 +42,14 @@ import {
     imports: [
         MongooseModule.forFeature([
             { name: SecurityScanModel.name, schema: SecurityScanSchema },
+            {
+                name: SecurityScanCoverageModel.name,
+                schema: SecurityScanCoverageSchema,
+            },
+            {
+                name: SecurityScanScheduleModel.name,
+                schema: SecurityScanScheduleSchema,
+            },
         ]),
         SandboxModule,
         forwardRef(() => PlatformModule),

@@ -50,6 +50,13 @@ import {
 } from '../domain/scan-units';
 import { admitFindingPath } from '../domain/finding-path';
 import {
+    coverageEntryOf,
+    parseStagedListing,
+    unchangedFiles,
+    type CoverageEntry,
+    type SecurityScanMode,
+} from '../domain/coverage-ledger';
+import {
     SCAN_CHECKOUT_TAMPERED_MESSAGE,
     SCAN_CHECKOUT_UNVERIFIED_MESSAGE,
     SCAN_MAP_FAILED_MESSAGE,
@@ -149,6 +156,15 @@ export interface SecurityScanEngineParams {
      * finding is folded into another.
      */
     identify?: (finding: ScanFinding) => string;
+    /**
+     * `incremental`: a candidate file whose every recorded conclusion still
+     * holds (`coverage`: its blob and its evidence files' blobs unchanged)
+     * is left out of the plan, so the scan spends only on what changed or
+     * was never read. `full` reads everything again. Default `full`.
+     */
+    mode?: SecurityScanMode;
+    /** What earlier scans concluded per file and class, tied to blobs. */
+    coverage?: CoverageEntry[];
     /** Write and run a reproduction test for each finding (needs E2B). */
     reproduce: boolean;
     onPlanned?: (units: ScanUnit[], languages: string[]) => Promise<void>;
@@ -160,6 +176,11 @@ export interface SecurityScanEngineParams {
          * again, so seen by this scan (once each, by fingerprint).
          */
         sighted?: ScanReportedFinding[],
+        /**
+         * The conclusions this unit reached, one per class read to the end,
+         * tied to the blobs they read: what a later incremental scan skips.
+         */
+        covered?: CoverageEntry[],
     ) => Promise<void>;
 }
 
@@ -188,6 +209,11 @@ export interface SecurityScanEngineResult {
     mapFailedLanguages?: string[];
     /** Candidate files the plan's limit left out: this scan never reads them. */
     filesBeyondPlan?: number;
+    /**
+     * Set by the run that made the plan in incremental mode: candidate files
+     * left out because what an earlier scan concluded about them still holds.
+     */
+    unchangedFiles?: number;
     surfaceErrors?: SurfaceMap['errors'];
 }
 
@@ -336,6 +362,14 @@ export class SecurityScanEngine {
             params.sandbox,
         );
         const existingFiles = new Set(listing);
+        // Each tracked file's blob: what a conclusion is tied to.
+        const blobs = await this.blobsOf(params.sandbox);
+        const unchanged =
+            params.mode === 'incremental' &&
+            params.coverage?.length &&
+            blobs.size
+                ? unchangedFiles(params.coverage, blobs)
+                : new Set<string>();
         const languages = detectLanguages(listing);
 
         // Collected on every run, a continuation too: the lenses read its
@@ -383,7 +417,11 @@ export class SecurityScanEngine {
 
         let units = params.units;
         let planGaps:
-            | { mapFailedLanguages: string[]; filesBeyondPlan: number }
+            | {
+                  mapFailedLanguages: string[];
+                  filesBeyondPlan: number;
+                  unchangedFiles?: number;
+              }
             | undefined;
         if (!units?.length) {
             // A search that failed beside others that worked leaves a map
@@ -408,26 +446,45 @@ export class SecurityScanEngine {
                     },
                 });
             }
+            // What an earlier scan concluded and still holds is not read
+            // again: the plan, the planner's additions and the revisits of
+            // open findings hold only files that changed or were never read.
+            const toRead = unchanged.size
+                ? withoutFiles(surface, unchanged)
+                : surface;
+            const readable = unchanged.size
+                ? new Set(listing.filter((f) => !unchanged.has(f)))
+                : existingFiles;
             units = withRevisits(
                 await this.plan(
                     params,
-                    surface,
-                    listing,
-                    existingFiles,
+                    toRead,
+                    listing.filter((f) => readable.has(f)),
+                    readable,
                     languages,
                 ),
-                params.revisit ?? [],
-                existingFiles,
+                (params.revisit ?? []).filter(
+                    (r) => !unchanged.has(r.filePath),
+                ),
+                readable,
             );
             // Candidates the plan does not hold: past its limit, or crowded
             // out by files the planner added. Only files a lens would read
             // count; an auth check alone is no candidate.
             const planned = new Set(units.map((u) => u.file));
-            planGaps.filesBeyondPlan = rankCandidates(
+            const candidates = rankCandidates(
                 surface,
                 Infinity,
                 listing.filter(isSourceFile),
-            ).filter((c) => !planned.has(c.file)).length;
+            );
+            planGaps.filesBeyondPlan = candidates.filter(
+                (c) => !planned.has(c.file) && !unchanged.has(c.file),
+            ).length;
+            if (params.mode === 'incremental') {
+                planGaps.unchangedFiles = candidates.filter((c) =>
+                    unchanged.has(c.file),
+                ).length;
+            }
             await params.onPlanned?.(units, languages);
         }
 
@@ -615,10 +672,29 @@ export class SecurityScanEngine {
                 );
             }
             findings.push(...result.findings);
+            // Only a class read to the end is a conclusion that holds.
+            const covered = blobs.size
+                ? (result.examinedClasses ?? [])
+                      .map((vulnerabilityClass) =>
+                          coverageEntryOf({
+                              file: unit.file,
+                              vulnerabilityClass,
+                              evidence: [
+                                  ...unit.relatedFiles,
+                                  ...(result.readByClass?.[
+                                      vulnerabilityClass
+                                  ] ?? []),
+                              ],
+                              blobs,
+                          }),
+                      )
+                      .filter((e): e is CoverageEntry => !!e)
+                : [];
             await params.onUnitDone?.(
                 unitProgress,
                 result.findings,
                 withFingerprint(sighted),
+                covered,
             );
         };
 
@@ -915,7 +991,6 @@ export class SecurityScanEngine {
         return fresh;
     }
 
-
     /**
      * Every file, never cut: a finding is kept only when its file is listed,
      * so a cut would drop real findings in the files past it, mark them
@@ -942,6 +1017,23 @@ export class SecurityScanEngine {
             .map((l) => l.replace(/^\.\//, ''))
             .filter((l) => l && !l.startsWith('Error:'));
         return { files, complete: tracked };
+    }
+
+    /**
+     * Each tracked file's blob at the checkout, empty when git cannot list
+     * them: then no conclusion is tied to content, and none is skipped.
+     */
+    private async blobsOf(
+        sandbox: SandboxInstance,
+    ): Promise<Map<string, string>> {
+        const staged = await sandbox
+            .run(`git -C ${sandbox.repoDir} ls-files -s -z`, {
+                timeoutMs: 60_000,
+            })
+            .catch(() => undefined);
+        return staged?.exitCode === 0 && staged.stdout
+            ? parseStagedListing(staged.stdout)
+            : new Map();
     }
 
     private async plan(
@@ -1033,9 +1125,12 @@ export class SecurityScanEngine {
         const examinedBefore = resume?.lensesExamined ?? [];
         // Earlier findings one of this unit's repeated.
         const sighted: ScanReportedFinding[] = [];
+        // The files each class's lens read: the evidence its conclusion holds on.
+        const readByClass: Partial<Record<VulnClass, string[]>> = {};
         const progressSoFar = () => ({
             sighted,
             refuted,
+            readByClass,
             lensesRun: [...ran],
             lensesExamined: [
                 ...new Set([
@@ -1122,6 +1217,12 @@ export class SecurityScanEngine {
                     });
                     output = await run();
                 }
+                readByClass[vulnClass] = [
+                    ...new Set([
+                        ...(readByClass[vulnClass] ?? []),
+                        ...filesRead(output),
+                    ]),
+                ];
                 if (
                     signal.aborted ||
                     (params.deadlineAt !== undefined &&
@@ -1326,9 +1427,10 @@ export class SecurityScanEngine {
                 examinedClasses,
                 sighted,
                 refuted,
+                readByClass,
             };
         }
-        return { findings, examinedClasses, sighted, refuted };
+        return { findings, examinedClasses, sighted, refuted, readByClass };
     }
 
     private lensInput(
@@ -2162,6 +2264,34 @@ function withFingerprint(
     return [...byFingerprint.values()];
 }
 
+/** The surface without these files: what an incremental plan may hold. */
+function withoutFiles(
+    surface: SurfaceMap,
+    files: ReadonlySet<string>,
+): SurfaceMap {
+    return {
+        ...surface,
+        hits: surface.hits.filter((h) => !files.has(h.file)),
+        files: Object.fromEntries(
+            Object.entries(surface.files).filter(([file]) => !files.has(file)),
+        ),
+    };
+}
+
+/** The repository files a lens run read with its readFile tool. */
+function filesRead(output: AgentLoopOutput): string[] {
+    const read: string[] = [];
+    for (const call of output?.toolCalls ?? []) {
+        if ((call.toolName ?? call.tool) !== 'readFile') continue;
+        const args = (call.args ?? {}) as Record<string, unknown>;
+        const file = args.path ?? args.filePath ?? args.file;
+        if (typeof file === 'string' && file.trim()) {
+            read.push(file.trim().replace(/^\.?\//, ''));
+        }
+    }
+    return read;
+}
+
 function sampleListing(listing: string[], limit: number): string[] {
     if (listing.length <= limit) {
         return listing;
@@ -2181,6 +2311,8 @@ export interface RefutedFinding {
 
 interface AuditResult {
     findings: ScanFinding[];
+    /** The files each class's lens read. */
+    readByClass?: Partial<Record<VulnClass, string[]>>;
     /** Findings the independent check refuted: not reported. */
     refuted?: RefutedFinding[];
     /** Earlier findings one of the unit's repeated, so dropped. */

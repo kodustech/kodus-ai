@@ -72,6 +72,39 @@ export const RELEASE_INDEX = {
             partialFilterExpression: { activeKey: { $exists: true } },
         },
     },
+    // One recorded conclusion per repository, file and class: an
+    // incremental deep scan reads them all for its repository.
+    scanCoveragePerArea: {
+        collection: 'security_scan_coverage',
+        key: {
+            'organizationId': 1,
+            'repository.platform': 1,
+            'repository.host': 1,
+            'repository.id': 1,
+            'filePath': 1,
+            'vulnerabilityClass': 1,
+        },
+        options: {
+            name: 'repository_file_class_unique',
+            unique: true,
+        },
+    },
+    // Schedules due to run, read by the deep-scan schedule cron.
+    scanSchedulesDue: {
+        collection: 'security_scan_schedules',
+        key: { enabled: 1, nextRunAt: 1 },
+        options: { name: 'enabled_next_run' },
+    },
+    oneScanSchedulePerRepository: {
+        collection: 'security_scan_schedules',
+        key: {
+            'organizationId': 1,
+            'repository.platform': 1,
+            'repository.host': 1,
+            'repository.id': 1,
+        },
+        options: { name: 'one_schedule_per_repository', unique: true },
+    },
 } satisfies Record<string, ReleaseIndex>;
 
 export const RELEASE_INDEXES: ReleaseIndex[] = Object.values(RELEASE_INDEX);

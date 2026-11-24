@@ -309,6 +309,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             pricingResolver: this.pricingResolver,
             pricingOverrides: (await this.spendLimitConfig.getConfig(orgTeam))
                 ?.modelPricing,
+            modelId: scan.modelId,
         });
 
         // The organization's model may have been disconnected since the start.
@@ -431,6 +432,11 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             });
         }
 
+        const repositoryKey = {
+            platform: scan.repository.platform,
+            host: scan.repository.host ?? '',
+            id: scan.repository.id,
+        };
         const owners = new ScanOwnerResolver(sandbox, {
             cloneUrl: cloneParams.url,
             branch,
@@ -500,6 +506,15 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             progress: scan.progress,
             reported: scan.reported,
             identify: (finding) => ownFingerprintOf(scan, finding),
+            mode: scan.mode ?? 'full',
+            // Read whenever a plan is made: a continuation holds its plan.
+            coverage:
+                scan.mode === 'incremental' && (firstJob || !scan.units?.length)
+                    ? await this.scans.findCoverage(
+                          scan.organizationId,
+                          repositoryKey,
+                      )
+                    : undefined,
             // The same bug found again keeps the issue it is, whichever
             // place this scan's dedup would keep.
             known: (
@@ -549,7 +564,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     coverage: liveCoverage,
                 });
             },
-            onUnitDone: async (progress, findings, sightedAll) => {
+            onUnitDone: async (progress, findings, sightedAll, covered) => {
                 // Writes nothing once this job lost the scan: timed out (the
                 // scan failed, its sandbox gone, the slice still running in
                 // the background) or claimed by another job. A later scan
@@ -581,6 +596,19 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     counts.reopened += reopened;
                     counts.stillOpen += stillOpen;
                 }
+                // What this unit concluded, for a later incremental scan.
+                if (covered?.length) {
+                    await this.scans.recordCoverage(
+                        scan.organizationId,
+                        repositoryKey,
+                        covered.map((entry) => ({
+                            ...entry,
+                            scanId: scan.uuid,
+                            commitSha,
+                            modelName: model.modelName,
+                        })),
+                    );
+                }
                 for (const finding of findings) {
                     signal?.throwIfAborted();
                     const outcome = await this.storeFinding(
@@ -602,7 +630,8 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         .clearIssuesCache(scan.organizationId)
                         .catch(() => undefined);
                 }
-                counts.refuted = (counts.refuted ?? 0) + (progress.refuted ?? 0);
+                counts.refuted =
+                    (counts.refuted ?? 0) + (progress.refuted ?? 0);
                 const earlier = unitStates.get(progress.unitId);
                 if (earlier) {
                     tally(earlier.state, -1);
@@ -698,6 +727,14 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 [],
             filesBeyondPlan:
                 result.filesBeyondPlan ?? scan.coverage?.filesBeyondPlan ?? 0,
+            ...((result.unchangedFiles ?? scan.coverage?.unchangedFiles) !==
+            undefined
+                ? {
+                      unchangedFiles:
+                          result.unchangedFiles ??
+                          scan.coverage?.unchangedFiles,
+                  }
+                : {}),
         };
 
         if (!result.finished && !result.stoppedByBudget && !signal?.aborted) {
@@ -845,13 +882,13 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             return 0;
         }
         try {
-            const open = (await this.issuesService.findOpenScanFindings(scope)).map(
-                (f) => ({
-                    ...f,
-                    vulnerabilityClass: f.vulnerabilityClass as VulnClass,
-                    severity: f.severity as ScanFinding['severity'],
-                }),
-            );
+            const open = (
+                await this.issuesService.findOpenScanFindings(scope)
+            ).map((f) => ({
+                ...f,
+                vulnerabilityClass: f.vulnerabilityClass as VulnClass,
+                severity: f.severity as ScanFinding['severity'],
+            }));
             const subjects = new Set(
                 open
                     .filter(
