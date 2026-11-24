@@ -52,6 +52,7 @@ import {
 } from './write-authorization';
 import { WriteGatePolicy } from './write-gate.policy';
 import { WriteTruthPolicy } from './write-truth.policy';
+import { conversationCompression } from './conversation-window';
 import {
     buildSystemPrompt,
     buildUserPrompt,
@@ -244,18 +245,28 @@ export class ConversationAgentProvider {
                 ? (e) => void this.byokErrorCounter!.record(e)
                 : undefined,
         });
+        const systemPrompt = buildSystemPrompt(userLanguage);
+        const registry = new AiSdkToolRegistry(tools);
         const spec: AgentSpec = {
             id: 'conversation',
             agentName: 'ConversationalAgent',
             runName: 'conversationAgent',
             phase: 'conversation',
             spanName: 'ConversationalAgent::conversationAgent',
-            systemPrompt: buildSystemPrompt(userLanguage),
-            tools: new AiSdkToolRegistry(tools),
+            systemPrompt,
+            tools: registry,
             resultToolName: CONVERSATION_DECISION_TOOL,
             policies: [
                 new WriteGatePolicy(prompt, writeAuthorization),
                 new WriteTruthPolicy(writeToolPredicate(mcp.metadata)),
+                // A PR diff a tool read is re-sent on every step: without
+                // this, one large PR overflowed the model's window (#2233).
+                await conversationCompression({
+                    slot,
+                    systemPrompt,
+                    tools: registry.list(),
+                    answerTokens: this.maxOutputTokensFallback,
+                }),
             ],
             maxSteps: CONVERSATION_MAX_STEPS,
             // Conversation keeps its own max-output default when the slot omits one.

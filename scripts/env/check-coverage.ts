@@ -40,6 +40,13 @@ const ALLOWLIST: Array<{ pattern: RegExp; reason: string }> = [
         reason: 'apps/cli (standalone CLI tool, not the main runtime)',
     },
     {
+        // A misspelling of KODUS_LICENSE_KEY that our own provisioning once
+        // used. The self-hosted doctor reads it only to tell the admin the
+        // license sits under the wrong name; it must never be a real var.
+        pattern: /^API_KODUS_LICENSE_KEY$/,
+        reason: 'wrong name the self-hosted doctor detects (not runtime config)',
+    },
+    {
         // *_TEST_* vars are read by scripts/dev/test-emails.ts and similar
         // local test helpers, not by the runtime.
         pattern: /_TEST_/,

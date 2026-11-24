@@ -544,7 +544,11 @@ function matchByMessage(lower: string): LlmErrorCategory {
         // OpenAI: "Your input exceeds the context window of this model."
         lower.includes('exceeds the context window') ||
         // A gateway that caps the body: "The total text input size exceeds 8 MB".
-        lower.includes('input size exceeds')
+        lower.includes('input size exceeds') ||
+        // Anthropic: "prompt is too long: 212345 tokens > 200000 maximum", and
+        // "input length and `max_tokens` exceed context limit: …".
+        lower.includes('prompt is too long') ||
+        lower.includes('exceed context limit')
     ) {
         return LlmErrorCategory.CONTEXT_OVERFLOW;
     }

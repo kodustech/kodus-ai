@@ -390,6 +390,14 @@ function extractFromText(
     return matches.sort((a, b) => a.index - b.index).map((m) => m.reference);
 }
 
+/** Git hosts whose own paths can end in `/browse/<name>`. */
+const GIT_HOSTS = new Set([
+    'github.com',
+    'gitlab.com',
+    'bitbucket.org',
+    'dev.azure.com',
+]);
+
 function fromUrl(url: string, source: ReferenceSource): Candidate | undefined {
     let parsed: URL;
     try {
@@ -464,6 +472,33 @@ function fromUrl(url: string, source: ReferenceSource): Candidate | undefined {
         return id
             ? { kind: 'page', id: id.toLowerCase(), raw: url, source, url }
             : undefined;
+    }
+
+    // Jira Server and Data Center live on the company's own host
+    // (`tracker.acme.com`, `acme.com/jira`), where a host rule can't find
+    // them; `/browse/KEY-1` and `/projects/<P>/issues/KEY-1` are Jira's own
+    // paths whatever the host. Left unread, the PR was told it references no
+    // task (#2422) while the same key in prose was read. It is read as that
+    // key, with no host: such a Jira is often connected as a custom plugin,
+    // which a `jira` host would turn away.
+    // A Git host's own `/browse/` (Bitbucket Server's `…/repos/web/browse/…`)
+    // is a file or a branch, not a Jira issue.
+    const gitHost =
+        GIT_HOSTS.has(host) || /\/repos\/[^/]+\/browse\//.test(path);
+    const jiraKey = gitHost
+        ? undefined
+        : (path.match(/\/browse\/([A-Za-z][A-Za-z0-9_]*-\d+)\/?$/)?.[1] ??
+          path.match(
+              /\/projects\/[^/]+\/issues\/([A-Za-z][A-Za-z0-9_]*-\d+)\/?$/,
+          )?.[1]);
+    if (jiraKey) {
+        return {
+            kind: 'key',
+            id: jiraKey.toUpperCase(),
+            raw: url,
+            source,
+            url,
+        };
     }
 
     // GitHub, GitLab (`/-/issues/`), Bitbucket, Forgejo: …/<owner>/<repo>/issues/<n>.

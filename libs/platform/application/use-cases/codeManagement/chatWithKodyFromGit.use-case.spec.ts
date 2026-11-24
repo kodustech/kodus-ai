@@ -754,6 +754,33 @@ describe('ChatWithKodyFromGitUseCase', () => {
             }),
         );
         expect(response).toContain('comment on this pull request is updated');
+
+        // A re-check that lands on the same verdict says so (#2423).
+        businessValidationService.validate.mockResolvedValueOnce({
+            outcome,
+            references: [],
+            attempts: [],
+            trackers: ['Linear'],
+        });
+        publisher.publish.mockResolvedValueOnce({
+            outcome,
+            comment: 'updated',
+            changed: false,
+        });
+        const again = await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: {
+                userQuestion: '@kody -v business-logic',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                pullRequest: { pullRequestNumber: 132 },
+            },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            thread: undefined,
+        });
+        expect(again).toContain('same result as before');
+        expect(again).not.toContain('updated');
     });
 
     it('does not say the comment was updated when the command posts the first one', async () => {

@@ -29,7 +29,10 @@ import {
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 
-import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
+import {
+    ContextWindowCompressor,
+    DEFAULT_SAFETY_MARGIN_RATIO,
+} from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
 import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
 import { OverflowRecoveringRunner } from './overflow-recovering-runner';
 import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compression/token-estimator';
@@ -59,6 +62,8 @@ import {
     type AgentLoopSecrets,
     type VerificationTraceSummary,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import { declaredAnswerTokens } from '@libs/llm/model-invocation';
+import { slotContextWindow, slotInputRoom } from '@libs/llm/slot-window';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
 // buildAgentAnomalies is review-specific (anomaly summary shapes) — lives in its
@@ -351,6 +356,42 @@ export async function runAgentLoopViaCore(
         !!verifySlot &&
         (verifySlot.provider !== secrets.byokConfig?.provider ||
             verifySlot.model !== secrets.byokConfig?.model);
+    // The check model's compressor keeps, beside the drift margin, what each
+    // attempt declares as its answer (its own limit, or what its adapter
+    // sends with none): a wide batch of reads plus a 64k answer overflowed.
+    // LLM.run re-sends a failed call to the slot's fallback with its own
+    // window and limit, so the room is the smaller of the two attempts'.
+    // The reasoning a verify run sends: the slot's own effort, with no
+    // default added (the finder and verify pass their options themselves).
+    const verifyOptionsFor = (slot: Parameters<typeof slotContextWindow>[0]) =>
+        buildProviderOptions(
+            `${input.agentName ?? 'finder'}/verify`,
+            input.telemetryMetadata,
+            {
+                reasoningEffort: slot?.reasoningEffort,
+                reasoningConfigOverride: slot?.reasoningConfigOverride,
+                byokProvider: slot?.provider,
+                modelName: slot?.model,
+                openrouterProviderOrder: slot?.openrouterProviderOrder,
+                openrouterAllowFallbacks: slot?.openrouterAllowFallbacks,
+            },
+        );
+    const verifyWindow = verifyOnOwnModel ? slotContextWindow(verifySlot) : 0;
+    const verifyRoom = verifyOnOwnModel
+        ? await slotInputRoom(
+              verifySlot,
+              async (slot) =>
+                  (await declaredAnswerTokens(
+                      slot,
+                      slot?.maxOutputTokens && slot.maxOutputTokens > 0
+                          ? slot.maxOutputTokens
+                          : undefined,
+                      // The run is configured once: its fallback attempt
+                      // sends these same options (agent-loop-call.ts).
+                      { providerOptions: verifyOptionsFor(verifySlot) },
+                  )) ?? 0,
+          )
+        : 0;
     const ownVerify = verifyOnOwnModel
         ? {
               verifyRunner: new AiSdkAgentRunner(verifySlot, {
@@ -364,21 +405,14 @@ export async function runAgentLoopViaCore(
               }),
               verifyModelId: verifySlot.model ?? 'resolved',
               verifyFallbackModelId: verifySlot.fallback?.model,
-              verifyProviderOptions: buildProviderOptions(
-                  `${input.agentName ?? 'finder'}/verify`,
-                  input.telemetryMetadata,
-                  {
-                      reasoningEffort: verifySlot.reasoningEffort,
-                      reasoningConfigOverride:
-                          verifySlot.reasoningConfigOverride,
-                      byokProvider: verifySlot.provider,
-                      modelName: verifySlot.model,
-                      openrouterProviderOrder:
-                          verifySlot.openrouterProviderOrder,
-                      openrouterAllowFallbacks:
-                          verifySlot.openrouterAllowFallbacks,
-                  },
-              ),
+              // Its own window: the check model's, not the finder's (#2233).
+              verifyCompressor: new ContextWindowCompressor(verifyWindow, {
+                  overheadTokens,
+                  safetyMarginTokens:
+                      Math.ceil(verifyWindow * DEFAULT_SAFETY_MARGIN_RATIO) +
+                      (verifyWindow - verifyRoom),
+              }),
+              verifyProviderOptions: verifyOptionsFor(verifySlot),
           }
         : {};
 
