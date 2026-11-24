@@ -9,6 +9,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 - `classifier.ts`: the re-run classifier of section 9. `planReruns` (mass failure over 25%, the 40-spec budget, infra specs to one fresh-host retry) before the re-runs; `classifyFailures` after them (`flaky`, `regression`, `pre_existing`, `pre_existing_changed`, `regression_unconfirmed` under base drift, the baseline fallbacks of 9.5, `unclassified` with its reason); `needsMainRerun` (a spec red everywhere in the exact baseline skips the main run). Only a `regression` blocks or becomes a finding.
 - `select.ts` `select` (section 6.1): the specs a PR's changed files reach through the stored coverage map, the importer walk and the workspace closure, or the whole suite with a reason (`FullReason`: manifest, lockfile, config, shared routing, a file no spec covers, map missing, stale or of another digest, a noise file, a forced run). `suite.ignore` globs never override the net; unknown never selects nothing.
 - `repush.ts` `planRepush`: a new push on the same PR runs what was red before (minus `pre_existing`) plus what the delta reaches; a green previous run and an empty delta run none; a delta in the safety net escalates to full; a rebase selects again from the new merge base.
+- `order.ts`: `orderBin` / `orderBins` (inside a shard: failed before, then specs covering the diff by number of changed files, then the rest longest first; the balance is untouched) and `failFast` (more than 25% of the first `max(5, 10%)` specs failed: stop the first pass and name the rest `not_run`; the classifier then sees a mass failure).
 
 ## Does not own
 - Storing results, baselines and durations, the shard hosts, the detached command and its polling, publishing: later steps of the build plan (section 17), in the runtime-worker and `libs/runtime-publish`.
@@ -30,7 +31,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 
 ## Module map
 
-Files (9, tests apart): `balance.ts`, `classifier.ts`, `error-signature.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `repush.ts`, `select.ts`, `types.ts`
+Files (10, tests apart): `balance.ts`, `classifier.ts`, `error-signature.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `repush.ts`, `select.ts`, `types.ts`
 
 Imports these Runtime modules:
 

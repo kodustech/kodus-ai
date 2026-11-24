@@ -11,3 +11,5 @@ export { IMPORTER_WALK, MAP_MAX_AGE_MS, MAP_MAX_COMMITS_BEHIND, NOISE_SHARE, sel
 export type { CoverageMapInput, FullReason, SelectInput, Selection } from './select';
 export { planRepush } from './repush';
 export type { PreviousSuiteRun, RepushInput, RepushPlan } from './repush';
+export { FAIL_FAST_BATCH_SHARE, FAIL_FAST_MIN_BATCH, FAIL_FAST_RATIO, failFast, orderBin, orderBins } from './order';
+export type { FailFastDecision, FailFastInput, OrderContext } from './order';
