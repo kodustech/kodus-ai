@@ -73,9 +73,9 @@ export const configEnvCheck: DoctorCheck = {
         } else if (webNodeEnv !== 'self-hosted') {
             results.push({
                 check: 'env.web_node_env',
-                status: 'warn',
+                status: 'info',
                 title: 'The web app is not running in self-hosted mode.',
-                impact: 'Settings pages behave as in Kodus Cloud: some self-hosted options are hidden and the update banner is off.',
+                impact: 'Settings pages behave as in Kodus Cloud: some self-hosted options are hidden and the update banner is off. Reviews are not affected.',
                 fix: `Set WEB_NODE_ENV=self-hosted (now "${webNodeEnv}") and restart the web service.`,
             });
         } else {
@@ -200,11 +200,15 @@ export const configEnvCheck: DoctorCheck = {
             });
         }
 
+        // Names read by the email providers (smtp-email.provider.ts,
+        // resend-email.provider.ts), not the SMTP_* the docs once used.
         const emailProvider = (
             env.API_NOTIFICATION_EMAIL_PROVIDER ?? 'resend'
         ).toLowerCase();
         const emailConfigured =
-            emailProvider === 'smtp' ? !!env.SMTP_HOST : !!env.RESEND_API_KEY;
+            emailProvider === 'smtp'
+                ? !!env.API_SMTP_HOST
+                : !!env.RESEND_API_KEY;
         if (!emailConfigured) {
             results.push({
                 check: 'advisory.email',
@@ -213,8 +217,8 @@ export const configEnvCheck: DoctorCheck = {
                 impact: 'Invites, password resets and notifications are not sent.',
                 fix:
                     emailProvider === 'smtp'
-                        ? 'Optional: set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS and SMTP_FROM.'
-                        : 'Optional: set RESEND_API_KEY, or API_NOTIFICATION_EMAIL_PROVIDER=smtp with the SMTP_* variables.',
+                        ? 'Optional: set API_SMTP_HOST, API_SMTP_PORT, API_SMTP_USER, API_SMTP_PASS and API_SMTP_FROM.'
+                        : 'Optional: set RESEND_API_KEY, or API_NOTIFICATION_EMAIL_PROVIDER=smtp with the API_SMTP_* variables.',
             });
         } else {
             results.push({
