@@ -75,7 +75,7 @@ describe('GetFixedEgressIpUseCase', () => {
         );
     });
 
-    it("never reads another organization's team", async () => {
+    it("never reads another organization's team, and shows nothing for it", async () => {
         const policy = policyWith();
         const integrations = integrationsOf({ 'org-2': 'team-of-org-2' });
         await expect(
@@ -85,7 +85,7 @@ describe('GetFixedEgressIpUseCase', () => {
                     teamId: 'team-of-org-2',
                 },
             }),
-        ).rejects.toBeInstanceOf(BadRequestException);
+        ).resolves.toEqual(expect.objectContaining({ available: false }));
         expect(policy.getFixedIpSetting).not.toHaveBeenCalled();
     });
 
@@ -101,6 +101,16 @@ describe('GetFixedEgressIpUseCase', () => {
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
         expect(integrations.findOne).not.toHaveBeenCalled();
+    });
+
+    it('shows a team without an active git integration as not available, not as a failed read', async () => {
+        const policy = policyWith();
+        await expect(
+            new GetFixedEgressIpUseCase(policy, integrationsOf({})).execute({
+                organizationAndTeamData,
+            }),
+        ).resolves.toEqual(expect.objectContaining({ available: false }));
+        expect(policy.getFixedIpSetting).not.toHaveBeenCalled();
     });
 
     it('does not offer the setting while direct egress is not rolled out to the organization', async () => {

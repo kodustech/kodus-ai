@@ -51,11 +51,13 @@ const scopeOf = ({ organizationId, teamId }: OrganizationAndTeamData) => ({
  * caller's organization: a team uuid from another organization finds none,
  * so its setting is neither read nor written. A missing team is refused
  * before any lookup (an unfiltered query would match any tenant's row).
+ * `undefined` when the team has no active integration: a definite answer
+ * (nothing to hold the setting), not a failed read.
  */
 async function teamIntegrationId(
     integrationService: Pick<IIntegrationService, 'findOne'>,
     { organizationId, teamId }: OrganizationAndTeamData,
-): Promise<string> {
+): Promise<string | undefined> {
     if (!organizationId || !teamId) {
         throw new BadRequestException('`teamId` is required.');
     }
@@ -65,12 +67,7 @@ async function teamIntegrationId(
         integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
         status: true,
     });
-    if (!integration?.uuid) {
-        throw new BadRequestException(
-            new FixedEgressIpNoIntegrationError().message,
-        );
-    }
-    return integration.uuid;
+    return integration?.uuid || undefined;
 }
 
 @Injectable()
@@ -93,6 +90,9 @@ export class GetFixedEgressIpUseCase {
             this.integrationService,
             params.organizationAndTeamData,
         );
+        // No active integration in the caller's organization (another
+        // organization's team included): nothing to show or change.
+        if (!integrationId) return NOT_AVAILABLE;
         const setting = await this.egressPolicy.getFixedIpSetting(
             scopeOf(params.organizationAndTeamData),
             integrationId,
@@ -131,6 +131,11 @@ export class SetFixedEgressIpUseCase {
             this.integrationService,
             params.organizationAndTeamData,
         );
+        if (!integrationId) {
+            throw new BadRequestException(
+                new FixedEgressIpNoIntegrationError().message,
+            );
+        }
         try {
             const setting = await this.egressPolicy.setFixedIp(
                 scopeOf(params.organizationAndTeamData),

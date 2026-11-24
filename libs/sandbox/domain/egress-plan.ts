@@ -1,7 +1,4 @@
-import {
-    OrganizationLicenseValidationResult,
-    SubscriptionStatus,
-} from '@libs/ee/license/interfaces/license.interface';
+import type { OrganizationLicenseValidationResult } from '@libs/ee/license/interfaces/license.interface';
 import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
 
 /**
@@ -25,16 +22,9 @@ export function isFixedEgressIpPlanAllowed(
     license: OrganizationLicenseValidationResult | null | undefined,
 ): boolean {
     if (license?.unavailable) return true;
-    if (license?.subscriptionStatus === SubscriptionStatus.PAYMENT_FAILED) {
-        const plan =
-            typeof license.planType === 'string'
-                ? license.planType.toLowerCase()
-                : '';
-        return ['teams', 'enterprise'].some(
-            (tier) => plan === tier || plan.startsWith(`${tier}_`),
-        );
-    }
-    return isTeamsOrEnterpriseTierAllowed(license);
+    return isTeamsOrEnterpriseTierAllowed(license, {
+        allowPaymentFailed: true,
+    });
 }
 
 /** Turning the fixed outbound IP on for a team whose plan does not include it. */

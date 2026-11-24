@@ -32,17 +32,29 @@ const isTier = (plan: string, tier: SelfHostedTier) =>
 /**
  * `selfHostedTiers` names the key tiers that run the feature self-hosted:
  * Enterprise only by default, as above; heavy mode also lets a Teams key run
- * it.
+ * it. `allowPaymentFailed` keeps a Teams or Enterprise plan whose payment
+ * failed (billing still collecting, whatever `valid` says) for a feature that
+ * must not cut a paying customer off over a bounced card; off by default.
  */
 export function isTeamsOrEnterpriseTierAllowed(
     license: OrganizationLicenseValidationResult | null | undefined,
-    options: { selfHostedTiers?: readonly SelfHostedTier[] } = {},
+    options: {
+        selfHostedTiers?: readonly SelfHostedTier[];
+        allowPaymentFailed?: boolean;
+    } = {},
 ): boolean {
-    if (!license || !license.valid) return false;
+    if (!license) return false;
     const rawPlan = license.planType;
     const plan = typeof rawPlan === 'string' ? rawPlan.toLowerCase() : '';
     const isTeams = isTier(plan, 'teams');
     const isEnterprise = isTier(plan, 'enterprise');
+    if (
+        options.allowPaymentFailed &&
+        license.subscriptionStatus === SubscriptionStatus.PAYMENT_FAILED
+    ) {
+        return isTeams || isEnterprise;
+    }
+    if (!license.valid) return false;
     const selfHostedTiers = options.selfHostedTiers ?? ['enterprise'];
 
     switch (license.subscriptionStatus) {

@@ -932,7 +932,17 @@ export class E2BSandboxService implements ISandboxProvider {
                 organizationId,
                 teamId,
             });
-        } catch {
+        } catch (error) {
+            // The policy already answers a billing outage itself (it keeps
+            // the retry, like routing keeps the marker); landing here is an
+            // unexpected failure of the policy, recorded as such.
+            this.logger.warn({
+                message:
+                    '[egress] could not decide the fixed IP fallback; retrying through the fixed IP',
+                context: E2BSandboxService.name,
+                error,
+                metadata: { organizationId, teamId },
+            });
             return 'allowed';
         }
     }
