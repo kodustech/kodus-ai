@@ -398,7 +398,7 @@ describe("RunVerdictSummary", () => {
             });
             render(<RunVerdictSummary {...props(run)} />);
             expect(fact()).toHaveTextContent(
-                /^Changed lines exercised: not measured \(no source map\)\.$/,
+                /^Changed lines exercised: not measurable for a bundled build without source maps\.$/,
             );
         });
 

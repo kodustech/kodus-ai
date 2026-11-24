@@ -150,7 +150,7 @@ const exercisedSentence = (
         ];
     }
     if (exercised.reason === "no_source_map")
-        return ["Changed lines exercised: not measured (no source map)."];
+        return ["Changed lines exercised: not measurable for a bundled build without source maps."];
     return [
         exercised.language
             ? `Changed lines exercised: not measured for ${exercised.language}.`

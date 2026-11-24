@@ -82,7 +82,7 @@ describe('coverage that could not be attributed to the changed files', () => {
     it('is not measured, with the reason, when no changed file mapped', () => {
         const s = exercisedSummaryOf({ language: 'node', files: [unknown('server/api/orders.ts', 2)] }, 0.5);
         expect(s).toMatchObject({ measured: false, reason: 'no_source_map' });
-        expect(exercisedFact(s)).toBe('Changed lines exercised: not measured (no source map)');
+        expect(exercisedFact(s)).toBe('Changed lines exercised: not measurable for a bundled build without source maps');
         expect(exercisedShortfall(s)).toBeUndefined();
     });
 

@@ -74,8 +74,8 @@ base/PR comparison is unaffected. The flush is one signal and a bounded wait; ma
   `exercised_lines` feature): the verdict is unchanged and the fact reads "not measured for <language>".
 - Nothing attributed: when no changed line was attributed to its source (every measured file ran 0) and some changed
   file could not be mapped (`not_loaded_unproven`, `unmapped_source`; a production build with no source maps), the
-  summary is not measured with `reason: no_source_map` and the fact reads "not measured (no source map)", never
-  "0 of N". A real 0 (every file mapped, lines not hit) still reads "0 of N".
+  summary is not measured with `reason: no_source_map` and the fact reads "not measurable for a bundled build without source maps", never
+  "0 of N". A real 0 (every file mapped, lines not hit) still reads "0 of N". A bundled build (a script under `.output`, `dist`, `.nuxt`, ...) that ran without a source map entry makes every changed file nothing mapped to `unmapped_source` even when another file mapped: it may be inside the bundle.
 - The rule never upgrades a verdict and never changes `regressions` or a halted Run.
 
 ## 8. Order of the full plan

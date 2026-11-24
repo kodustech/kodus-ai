@@ -143,6 +143,7 @@ func MeasureContext(ctx context.Context, files []File, coverages []*Coverage, re
 	for _, cov := range coverages {
 		for _, s := range cov.Result {
 			if !m.relevant(s.URL, cov.SourceMapCache) {
+				m.noteOpaque(s.URL, cov.SourceMapCache)
 				continue
 			}
 			if err := m.add(s, cov.SourceMapCache); err != nil {
@@ -165,6 +166,35 @@ type measurer struct {
 	broken []bool
 	texts  map[int]checkoutText
 	paint  int
+	// opaque: a script of a build output (.output, dist, ...) ran with no source map: a changed file may be
+	// bundled inside it, where nothing can see it. "Nothing mapped to it" is then no proof it did not run.
+	opaque bool
+}
+
+// buildDirs are the directories bundlers write production code to.
+var buildDirs = map[string]bool{".output": true, ".nuxt": true, ".next": true, "dist": true, "build": true, "out": true}
+
+// noteOpaque records a script that is bundled output and has no source map entry.
+func (m *measurer) noteOpaque(scriptURL string, smc map[string]SourceMap) {
+	if sm, has := smc[scriptURL]; has && sm.Data != nil {
+		return
+	}
+	u, err := url.Parse(scriptURL)
+	if err != nil || u.Scheme != "file" {
+		return
+	}
+	segs := strings.Split(u.Path, "/")
+	for _, seg := range segs {
+		if seg == "node_modules" {
+			return
+		}
+	}
+	for _, seg := range segs[:len(segs)-1] {
+		if buildDirs[seg] {
+			m.opaque = true
+			return
+		}
+	}
 }
 
 // checkoutText is a changed file as the checkout holds it.
@@ -414,6 +444,9 @@ func (m *measurer) results(anyCoverage bool) []Result {
 				}
 			}
 		case m.broken[i]:
+			out[i].Reason = ReasonUnmappedSource
+		case proven && m.opaque:
+			// The mapping works for other files, but this one may sit inside a bundle without a source map.
 			out[i].Reason = ReasonUnmappedSource
 		case proven:
 			out[i].Measured = true

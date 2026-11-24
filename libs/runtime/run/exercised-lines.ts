@@ -57,6 +57,6 @@ export function exercisedShortfall(s: ExercisedSummary | undefined): string | un
 export function exercisedFact(s: ExercisedSummary | undefined): string | undefined {
     if (!s) return undefined;
     if (s.measured) return `Changed lines exercised: ${s.exercised} of ${s.changed}`;
-    if (s.reason === 'no_source_map') return 'Changed lines exercised: not measured (no source map)';
+    if (s.reason === 'no_source_map') return 'Changed lines exercised: not measurable for a bundled build without source maps';
     return s.language ? `Changed lines exercised: not measured for ${s.language}` : 'Changed lines exercised: not measured';
 }
