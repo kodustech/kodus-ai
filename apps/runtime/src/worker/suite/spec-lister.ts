@@ -4,7 +4,7 @@ import { isBlocked } from '@libs/runtime/environment';
 import type { SuiteSpecFile } from '@libs/runtime/suite';
 
 import type { SuiteEnvironment } from './suite-environment';
-import { acquireSuiteClaim, HOST_WAIT_MS, type SuiteHostDemand, type SuiteTemplates } from './suite-engine';
+import { acquireSuiteClaim, HOST_WAIT_MS, type SuiteHostDemand } from './suite-engine';
 
 /** The demand row and claim of the spec listing: beside the plan's shards 0..N-1 and the fresh (62) and main (63) hosts. */
 export const LIST_HOST_SHARD = 61;
@@ -20,15 +20,16 @@ export type SpecListing = { status: 'listed'; specs: SuiteSpecFile[] } | { statu
 export interface SpecListerDeps {
     env: SuiteEnvironment;
     demand: SuiteHostDemand;
-    templates?: Pick<SuiteTemplates, 'hasReady'>;
     clock: { now(): number; sleep(ms: number): Promise<void> };
 }
 
 /**
- * The spec files of main's checkout (docs/runtime/e2e-suites.md section 3: "the engine lists it"), read on a template host:
+ * The spec files of main's checkout (docs/runtime/e2e-suites.md section 3: "the engine lists it"), read on a suite host:
  * a short claim at main's commit, no PR build, one `find` under the glob's fixed directory (never node_modules). The list
- * is main's; the PR's added and removed specs are applied on top of it (`specListOf`). No template, no host or a listing
- * that did not finish is `unavailable`, never a guess at the specs.
+ * is main's; the PR's added and removed specs are applied on top of it (`specListOf`). The host starts from the
+ * environment's template, or with none ready from the cell base and builds main cold (section 5, "Template"): the PR side
+ * runs either way, only the main re-run waits for a template (suite-engine.ts mainRerun). No host or a listing that did
+ * not finish is `unavailable`, never a guess at the specs.
  */
 export class TemplateSpecLister {
     constructor(private readonly d: SpecListerDeps) {}
@@ -36,7 +37,6 @@ export class TemplateSpecLister {
     async list(run: { organizationId: string; environmentId: string; suiteRunId: string; mainSha: string }, suite: { cwd?: string; specsGlob: string }): Promise<SpecListing> {
         const root = picomatch.scan(suite.specsGlob).base || '.';
         if (!SAFE_DIR.test(root)) return { status: 'unavailable', reason: 'list_failed' };
-        if (this.d.templates && !(await this.d.templates.hasReady(run.organizationId, run.environmentId))) return { status: 'unavailable', reason: 'template_missing' };
         await this.d.demand.request({ organizationId: run.organizationId, environmentId: run.environmentId, suiteRunId: run.suiteRunId, shards: [LIST_HOST_SHARD] });
         if (!(await this.hostCame(run))) return { status: 'unavailable', reason: 'no_host' };
         const claim = await acquireSuiteClaim(this.d.env, {

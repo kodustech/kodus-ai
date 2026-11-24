@@ -49,7 +49,7 @@ export class SuiteRunStage implements SuiteStage {
         };
         const result = await this.service.run(cmd, step, opts);
         if (result.status === 'off') return { status: 'off' };
-        if (result.status === 'unavailable') return { status: 'unavailable' };
+        if (result.status === 'unavailable') return { status: 'unavailable', reason: result.reason };
         // The classification is read once, in a step, so a replay of the Run sees what the first read saw.
         const stored = await step('suite:stage-result', async () => {
             const run = await this.runs.get(req.organizationId, result.suiteRunId);

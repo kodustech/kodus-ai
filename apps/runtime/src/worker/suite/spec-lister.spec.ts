@@ -27,8 +27,7 @@ function world(over: { stdout?: string; exec?: Partial<StepResult>; ready?: bool
         },
         release: async (c: string) => void released.push(c),
     };
-    const templates = { hasReady: async () => over.ready ?? true };
-    return { lister: new TemplateSpecLister({ env, demand, templates, clock }), demand, acquired, commands, released };
+    return { lister: new TemplateSpecLister({ env, demand, clock }), demand, acquired, commands, released };
 }
 
 describe('listing the spec files of a suite on a template host of main', () => {
@@ -58,12 +57,6 @@ describe('listing the spec files of a suite on a template host of main', () => {
         expect(w.commands[0]).not.toHaveProperty('cwd');
     });
 
-    it('says the template is missing, and asks for nothing, when no template is ready', async () => {
-        const w = world({ ready: false });
-        expect(await w.lister.list(ref, { specsGlob: 'e2e/**/*.ts' })).toEqual({ status: 'unavailable', reason: 'template_missing' });
-        expect(w.acquired).toEqual([]);
-        expect(w.demand.requested).toEqual([]);
-    });
 
     it('says no host came when the fleet failed the host or the claim is blocked, and never lists a half answer', async () => {
         const failed = world();

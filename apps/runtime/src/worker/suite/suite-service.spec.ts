@@ -167,12 +167,13 @@ describe('running a suite as a workflow', () => {
         }
     });
 
-    it('with no ready template the run ends neutral and says why, since nothing can list the specs', async () => {
+    // e2e-suites.md section 5 "Template": with none ready the hosts boot the cell base and build cold; the PR side runs. Every
+    // suite of kr-shop #47 and #49 on dev ended "could not run" while the template was rebuilt on a new cell base (24/11).
+    it('with no ready template the PR side still runs, on hosts that build cold; only the main re-run waits for one', async () => {
         const w = world({ ready: false });
         const out = await w.service.run(request(), passthrough);
-        expect(out).toMatchObject({ status: 'unavailable', reason: 'template_missing', state: 'neutral' });
-        expect((await w.runs.get(ORG, 'sr-1'))?.state).toBe('neutral');
-        expect(w.demand.ended).toBe(1);
+        expect(out).not.toMatchObject({ status: 'unavailable' });
+        expect(w.cell.acquires.length).toBeGreaterThan(0);
     });
 
     it('hands the environment every sealed token of the command, the first one first', async () => {
@@ -215,8 +216,8 @@ describe('running a suite as a workflow', () => {
     });
 
     it('publishes the reason a run could not start, and nothing for an environment with no suite', async () => {
-        const unavailable = world({ ready: false, publisher: true });
-        await unavailable.service.run(request(), passthrough);
+        const unavailable = world({ publisher: true });
+        await unavailable.service.run(request({ repositoryFullName: undefined }), passthrough);
         expect(unavailable.published).toEqual(['started:ci', 'finished:unavailable:apps/dashboard']);
         const off = world({ recipe: null, publisher: true });
         await off.service.run(request(), passthrough);
@@ -464,7 +465,7 @@ describe('the shadow check of selection', () => {
         it('a shadow that could not run is no evidence: it is completed inconclusive and the brake stays where it was', async () => {
             const shadow = kit();
             await queue(shadow, 1);
-            await w(shadow, { ready: false }).service.run(shadowOf(1), passthrough);
+            await w(shadow).service.run({ ...shadowOf(1), repositoryFullName: undefined }, passthrough);
             expect(await shadow.shadows.get(ORG, 'sh-1')).toMatchObject({ state: 'done', misses: [], conclusive: false });
             expect(await shadow.selection.read(ORG, ENV)).toEqual({ off: false, fullPrsLeft: 0 });
         });

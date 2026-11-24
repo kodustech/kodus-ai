@@ -2053,7 +2053,9 @@ function startSuiteStage(run: RunScope): void {
                 });
             } catch (e) {
                 if (isCancellation(e)) throw e;
-                return { status: 'unavailable' };
+                // The Run goes on without its suite; the cause is the one place it is said.
+                deps.log?.warn({ msg: 'run.suite_stage_failed', runId: req.runId, error: safeFailure(e) });
+                return { status: 'unavailable', reason: 'stage_failed' };
             }
         })
         // A cancellation reaches the workflow where the stage is joined; nothing is an unhandled rejection meanwhile.

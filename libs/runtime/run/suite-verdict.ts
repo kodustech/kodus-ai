@@ -30,6 +30,8 @@ export const suiteUnclassifiedCount = (classification: Classification | undefine
 export interface SuiteStageResult {
     /** `off`: the environment has no suite to run. `unavailable`: it could not start. */
     status: 'ran' | 'unavailable' | 'off';
+    /** Why it could not start (the engine's words: no_host, list_failed...), or `stage_failed` when the stage threw. */
+    reason?: string;
     /** The suite run's state when it ran. */
     state?: 'passed' | 'failed' | 'neutral' | 'timed_out' | 'cancelled' | 'errored';
     classification?: Classification;

@@ -83,7 +83,7 @@ describe('the suite stage of a Run', () => {
     });
 
     it('answers unavailable when the suite could not start, and off when the environment has none', async () => {
-        expect(await (await world({ status: 'unavailable', suiteRunId: 's', state: 'neutral', reason: 'template_missing' })).stage.run(withSuite(), passthrough)).toEqual({ status: 'unavailable' });
+        expect(await (await world({ status: 'unavailable', suiteRunId: 's', state: 'neutral', reason: 'template_missing' })).stage.run(withSuite(), passthrough)).toEqual({ status: 'unavailable', reason: 'template_missing' });
         expect(await (await world({ status: 'off', reason: 'no_suite' })).stage.run(withSuite(), passthrough)).toEqual({ status: 'off' });
     });
 });

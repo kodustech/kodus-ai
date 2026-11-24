@@ -176,7 +176,7 @@ export class SuiteService {
             tokens,
         });
         const demand = this.d.demand({ organizationId: cmd.organizationId, suiteRunId: cmd.suiteRunId });
-        const listing = await new TemplateSpecLister({ env, demand, ...(this.d.templates ? { templates: this.d.templates } : {}), clock }).list(
+        const listing = await new TemplateSpecLister({ env, demand, clock }).list(
             { organizationId: cmd.organizationId, environmentId: cmd.environmentId, suiteRunId: cmd.suiteRunId, mainSha: cmd.mainSha },
             { ...(s.suite.config.cwd ? { cwd: s.suite.config.cwd } : {}), specsGlob: s.suite.specsGlob },
         );
