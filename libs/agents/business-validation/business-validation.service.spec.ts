@@ -888,6 +888,19 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
         expect(worst(calls[0].text) + 32_000).toBeLessThanOrEqual(64_000);
     });
 
+    it('still reads code when the slot allows an answer as large as its window', async () => {
+        const { outcome, calls } = await judgeCalls(
+            {
+                model: 'local-open-weights',
+                maxInputTokens: 32_000,
+                maxOutputTokens: 32_000,
+            },
+            { diff: codePr },
+        );
+        expect(outcome.kind).toBe('validated');
+        expect(calls[0].diff.length).toBeGreaterThan(0);
+    });
+
     it('sizes the call for a fallback with a smaller window than the primary', async () => {
         const { calls } = await judgeCalls({
             model: 'big-window',
@@ -928,6 +941,18 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
             kind: 'skipped',
             reason: 'too_large_for_model',
         });
-        expect(outcome.message).toContain('32,000 tokens');
+        expect(outcome.message).toContain('32000 tokens');
+    });
+});
+
+describe('legacyOutcomeLabels', () => {
+    it('records a run too large for the model as an unknown task context, not a missing one', () => {
+        expect(
+            legacyOutcomeLabels({
+                kind: 'skipped',
+                reason: 'too_large_for_model',
+                message: '',
+            } as any).taskContextStatus,
+        ).toBe('unknown');
     });
 });

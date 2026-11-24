@@ -40,7 +40,11 @@ import type {
 } from './business-validation.types';
 import { taskPasses } from './check-policy';
 import { IntentJudge, JudgePolicy } from './judge/intent-judge';
-import { analyzerOutputTokens, judgeWindow } from './judge/model-window';
+import {
+    analyzerOutputTokens,
+    judgeWindow,
+    reservedOutputTokens,
+} from './judge/model-window';
 import { buildBusinessRulesAnalysisPrompt } from './judge/analysis-prompt.builder';
 import {
     classifyReply,
@@ -48,7 +52,11 @@ import {
     type ReplyIntent,
 } from './judge/reply-classifier';
 import { settleVerdict } from './judge/settle-verdict';
-import { createGapCheck, type GapCheck } from './judge/gap-check';
+import {
+    createGapCheck,
+    GAP_CHECK_ANSWER,
+    type GapCheck,
+} from './judge/gap-check';
 import { deriveStatus } from './judge/validation-verdict';
 import type {
     RequirementVerdict,
@@ -766,7 +774,10 @@ export class BusinessValidationService {
                 },
                 request.signal,
             ),
-            { contextWindowTokens: judgeWindow(model) },
+            {
+                contextWindowTokens: judgeWindow(model),
+                outputTokens: reservedOutputTokens(model, GAP_CHECK_ANSWER),
+            },
         );
     }
 
@@ -1354,7 +1365,8 @@ export function legacyOutcomeLabels(outcome: BusinessValidationOutcome): {
                 mode: 'limitation_response',
                 taskContextStatus:
                     outcome.reason === 'diff_unavailable' ||
-                    outcome.reason === 'judge_failed'
+                    outcome.reason === 'judge_failed' ||
+                    outcome.reason === 'too_large_for_model'
                         ? 'unknown'
                         : 'missing',
                 prDiffStatus:

@@ -408,8 +408,12 @@ function metNames(
     labels: Map<string, number>,
 ): string[] {
     const names = met.map((r) => metLabel(r, labels));
+    const byName = new Map<string, RequirementVerdict[]>();
+    names.forEach((name, i) => {
+        byName.set(name, [...(byName.get(name) ?? []), met[i]]);
+    });
     return names.map((name, i) => {
-        const twins = met.filter((_, j) => names[j] === name);
+        const twins = byName.get(name)!;
         if (twins.length < 2) {
             return name;
         }

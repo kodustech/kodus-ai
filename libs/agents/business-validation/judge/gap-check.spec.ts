@@ -432,6 +432,93 @@ describe("createGapCheck within the model's window (#2233)", () => {
         expect(worst(output)).toBeLessThanOrEqual(16_000 * 0.2);
     });
 
+    it('stops a read of many long lines at a fifth of a small window and says where to read on', async () => {
+        let output = '';
+        await createGapCheck(
+            async (spec) => {
+                output = String(
+                    (
+                        await spec.tools
+                            .get('read_file')!
+                            .execute({ path: 'src/strings.ts' }, {} as any)
+                    ).output,
+                );
+            },
+            { contextWindowTokens: 16_000 },
+        )({
+            ...input,
+            reader: {
+                listFiles: async () => [],
+                readFile: async () =>
+                    Array.from(
+                        { length: 400 },
+                        (_, i) =>
+                            `export const label${i} = '${'value word '.repeat(40)}';`,
+                    ).join('\n'),
+            },
+        });
+        expect(output).toContain('(read on with fromLine');
+        expect(worst(output)).toBeLessThanOrEqual(16_000 * 0.2 + 20);
+    });
+
+    it("keeps room for the slot's own answer limit when it shortens the files read", async () => {
+        let spec: AgentSpec | undefined;
+        await createGapCheck(
+            async (s) => {
+                spec = s;
+            },
+            { contextWindowTokens: 16_000, outputTokens: 8_000 },
+        )(input);
+        // One recent read under the compressor's soft threshold: only the
+        // answer room decides whether it is shortened before the call.
+        const messages = [
+            { role: 'user', content: 'the prompt' },
+            {
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: 'c0',
+                        toolName: 'read_file',
+                        input: { path: 'src/values.ts' },
+                    },
+                ],
+            },
+            {
+                role: 'tool',
+                content: [
+                    {
+                        type: 'tool-result',
+                        toolCallId: 'c0',
+                        toolName: 'read_file',
+                        output: {
+                            type: 'text',
+                            value: Array.from(
+                                { length: 800 },
+                                (_, line) =>
+                                    `${line + 1}: export const v${line} = load('${line}');`,
+                            ).join('\n'),
+                        },
+                    },
+                ],
+            },
+        ];
+        const directives = (
+            await Promise.all(
+                spec!.policies.map((p) =>
+                    p.prepareStep?.({ messages, stepNumber: 2 } as any),
+                ),
+            )
+        ).find((d) => d?.messages);
+        const sent = directives?.messages ?? messages;
+        const overhead =
+            worst(spec!.systemPrompt ?? '') +
+            worst(JSON.stringify(spec!.tools.list()));
+        expect(worst(textOf(sent)) + overhead + 8_000).toBeLessThanOrEqual(
+            16_000,
+        );
+    });
+
     it('skips the second look when the task alone would take half of a small window', async () => {
         let ran = false;
         const settled = await createGapCheck(

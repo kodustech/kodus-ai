@@ -224,9 +224,12 @@ describe('cuts that stay within the window and stay valid text', () => {
             return last >= 0xd800 && last <= 0xdbff;
         };
         const emoji = '+' + '😀'.repeat(50_000);
-        const { diff: sent } = fitDiff(emoji, { chars: 200_000, tokens: 777 });
-        expect(sent.length).toBeGreaterThan(0);
-        expect(isLoneHigh(sent)).toBe(false);
+        // Budgets whose proportional cut lands on either half of a pair.
+        const cuts = Array.from({ length: 60 }, (_, i) => 700 + i).map(
+            (tokens) => fitDiff(emoji, { chars: 200_000, tokens }).diff,
+        );
+        expect(cuts.every((cut) => cut.length > 0)).toBe(true);
+        expect(cuts.filter(isLoneHigh)).toEqual([]);
         expect(isLoneHigh(sliceWhole('a😀', 2))).toBe(false);
     });
 });

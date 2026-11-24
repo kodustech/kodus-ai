@@ -55,8 +55,9 @@ const READ_WINDOW_SHARE = 0.2;
 const HEAD_WINDOW_SHARE = 0.5;
 /** The compressor's own margin for tokenizer drift (its default). */
 const COMPRESSOR_MARGIN_SHARE = 0.08;
-/** The answer each step may write: kept out of the compressor's budget. */
+/** The answer each step asks for: kept out of the compressor's budget. */
 const GAP_CHECK_OUTPUT_TOKENS = 800;
+export const GAP_CHECK_ANSWER = GAP_CHECK_OUTPUT_TOKENS;
 
 /**
  * A second look at one requirement the diff alone left open, by an agent that
@@ -78,9 +79,19 @@ export function createGapCheck(
     options: {
         /** The model's input window; absent, no window is enforced. */
         contextWindowTokens?: number;
+        /**
+         * The answer room the call really keeps: the slot's own
+         * `maxOutputTokens` is sent whatever the agent asks. At least the
+         * 800 tokens it asks for.
+         */
+        outputTokens?: number;
     } = {},
 ): GapCheck {
     const contextWindow = options.contextWindowTokens;
+    const answerRoom = Math.max(
+        GAP_CHECK_OUTPUT_TOKENS,
+        options.outputTokens ?? 0,
+    );
     return async (input) => {
         const read = new Map<string, string[]>();
         // The lines the agent was shown: a citation must be one of them.
@@ -330,7 +341,7 @@ export function createGapCheck(
                                               contextWindow *
                                                   COMPRESSOR_MARGIN_SHARE,
                                           ) +
-                                          GAP_CHECK_OUTPUT_TOKENS +
+                                          answerRoom +
                                           undercount,
                                   }),
                               ),

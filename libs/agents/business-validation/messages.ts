@@ -54,13 +54,16 @@ This pull request doesn't reference a task. Reference it in the title, descripti
 }
 
 /** No task referenced, and the repository's settings ask for one. */
+/** How to name the task, for every message that asks for one. */
+const REFERENCE_A_TASK = `Reference the task in the title, description or branch (\`PROJ-123\`, \`Closes #123\` or a link) and comment ${RERUN}.`;
+
 export function taskRequiredMessage(): string {
     return `## 🤔 Which task is this?
 
 This pull request doesn't reference a task, and this repository asks for one so Kody can check the PR against it.
 
 ### 💡 Next step
-Reference the task in the title, description or branch (\`PROJ-123\`, \`Closes #123\` or a link) and comment ${RERUN}.`;
+${REFERENCE_A_TASK}`;
 }
 
 export function noTrackerMessage(
@@ -138,7 +141,7 @@ export function taskRequiredNotFoundMessage(
 This repository asks for a task so Kody can check the PR against it, and none was found: I looked for ${tried.join(', ')}.
 
 ### 💡 Next step
-Reference the task in the title, description or branch (\`PROJ-123\`, \`Closes #123\` or a link) and comment ${RERUN}. If ${tried.length > 1 ? 'one of these is' : 'that is'} the task, check that the Kodus connection can see its project.`;
+${REFERENCE_A_TASK} If ${tried.length > 1 ? 'one of these is' : 'that is'} the task, check that the Kodus connection can see its project.`;
 }
 
 export function trackerUnavailableMessage(
@@ -160,7 +163,7 @@ I found the task, but I couldn't load the pull request diff, so I can't compare 
 export function tooLargeForModelMessage(contextWindowTokens: number): string {
     return `## 🤔 Too large for the model
 
-The task, the pull request description and this PR's changes don't fit the input window of the model that checks business logic (${contextWindowTokens.toLocaleString('en-US')} tokens): not one changed file fits beside the task. Nothing was checked. A model with a larger window in the Business Logic settings, or a shorter task, lets Kody read the code.`;
+The task, the pull request description and this PR's changes don't fit the input window of the model that checks business logic (${contextWindowTokens} tokens): not one changed file fits beside the task. Nothing was checked. A model with a larger window in the Business Logic settings, or a shorter task, lets Kody read the code.`;
 }
 
 export function judgeFailedMessage(): string {
