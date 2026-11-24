@@ -147,6 +147,22 @@ describe("FixedEgressIpCard", () => {
         );
     });
 
+    it("says the IP is not used until the setting is on, and in use once it is", async () => {
+        setMock.mockResolvedValue({ ...paid, enabled: true });
+        render(<FixedEgressIpCard initialSetting={paid} />);
+
+        expect(screen.getByText("Not in use")).toBeInTheDocument();
+        expect(
+            screen.getByText(/uses this IP only while Fixed outbound IP is on/),
+        ).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole("switch"));
+        await waitFor(() =>
+            expect(screen.getByText("In use")).toBeInTheDocument(),
+        );
+        expect(screen.queryByText("Not in use")).not.toBeInTheDocument();
+    });
+
     it("says why when the API refuses, and stays off", async () => {
         setMock.mockRejectedValue({
             response: {

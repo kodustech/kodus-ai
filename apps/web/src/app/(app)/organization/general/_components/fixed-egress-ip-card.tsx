@@ -157,10 +157,11 @@ export const FixedEgressIpCard = ({
                 title="Fixed outbound IP"
                 description={
                     <>
-                        Kody clones your repositories from one fixed IP instead
-                        of a shared network. Turn it on when your Git host only
-                        accepts allowlisted IPs, such as a self-managed GitLab
-                        behind a firewall. Applies to every team.
+                        Off by default: Kody reaches your Git host from a shared
+                        network whose IPs change. Turn it on when your Git host
+                        only accepts allowlisted IPs, such as a self-managed
+                        GitLab behind a firewall. Only then does Kody clone, for
+                        every team, from the fixed IP below.
                     </>
                 }
                 control={
@@ -185,8 +186,24 @@ export const FixedEgressIpCard = ({
 
             {showIp && (
                 <SettingsRow
-                    title="IP to allowlist"
-                    description="Add it to your Git host's allowlist before you turn this on."
+                    title={
+                        <span className="flex items-center gap-2">
+                            IP to allowlist
+                            <span
+                                className={
+                                    setting.enabled
+                                        ? "bg-success/10 text-success rounded-full px-2 py-0.5 text-xs font-medium"
+                                        : "bg-card-lv3 text-text-secondary rounded-full px-2 py-0.5 text-xs font-medium"
+                                }>
+                                {setting.enabled ? "In use" : "Not in use"}
+                            </span>
+                        </span>
+                    }
+                    description={
+                        setting.enabled
+                            ? "Kody clones from this IP now. Keep it on your Git host's allowlist."
+                            : "Kody uses this IP only while Fixed outbound IP is on. Allowlist it on your Git host, then turn it on."
+                    }
                     control={
                         <div className="bg-card-lv1 flex items-center gap-1 rounded-lg py-1 pr-1 pl-3">
                             <code className="text-text-primary font-mono text-sm">
