@@ -207,6 +207,9 @@ describe('recent reviews (#2066)', () => {
             'No pull request was reviewed in the last 7 days.',
         );
         expect(line(allSkipped, 'reviews.none')?.status).toBe('info');
+        expect(line(allSkipped, 'reviews.none')?.fix).toBe(
+            'Every pull request of the window was skipped: see the "skipped by your settings" line.',
+        );
         expect(line(allSkipped, 'reviews.skipped')).toMatchObject({
             status: 'skip',
             title: '3 pull request(s) in the last 7 days were skipped by your settings (3 draft).',
@@ -264,6 +267,20 @@ describe('recent reviews (#2066)', () => {
             });
             expect(line(results, 'reviews.not_run')?.fix).toContain(
                 'kodus-config.yml',
+            );
+        });
+
+        it('a window skipped only for seats points at the seat line', async () => {
+            const results = await recentReviewsCheck(
+                deps({
+                    list: runs(
+                        1,
+                        skippedFor('User Not Licensed — Assign seat to user'),
+                    ),
+                }),
+            ).run(ctx());
+            expect(line(results, 'reviews.none')?.fix).toBe(
+                'Every pull request of the window was skipped: see the seat line.',
             );
         });
 

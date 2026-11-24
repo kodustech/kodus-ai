@@ -489,13 +489,20 @@ export function recentReviewsCheck(deps: ReviewRunsDeps): DoctorCheck {
                 }
 
                 if (!attempted) {
+                    const seen = [
+                        skips.some((s) => s.reason.kind === 'seat') &&
+                            'the seat line',
+                        onPurpose.length &&
+                            'the "skipped by your settings" line',
+                        unclear.length && 'the "were skipped" line',
+                    ].filter(Boolean);
                     results.push({
                         check: 'reviews.none',
                         status: 'info',
                         scope,
                         title: `No pull request was reviewed in the last ${RECENT_DAYS} days.`,
                         fix: skips.length
-                            ? 'Every pull request of the window was skipped: see the skip lines.'
+                            ? `Every pull request of the window was skipped: see ${seen.join(' and ')}.`
                             : 'If pull requests were opened, check the webhook lines above.',
                     });
                     continue;
