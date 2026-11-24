@@ -371,6 +371,86 @@
             "cell": "refuse: services.needs: at most 9 repositories",
             "runo": "unvalidated",
             "why": "Pins TS/Go cell parsing of services.needs only; Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-suite.yaml": {
+            "cell": "accept",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-suite-command-at-limit.yaml": {
+            "cell": "accept",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/kody-suite-env-at-limit.yaml": {
+            "cell": "accept",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-unknown-key.yaml": {
+            "cell": "refuse: bogusflag",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-record.yaml": {
+            "cell": "refuse: suite.command: --record needs Cypress Cloud",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-parallel.yaml": {
+            "cell": "refuse: suite.command: --parallel needs Cypress Cloud",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-no-specs-placeholder.yaml": {
+            "cell": "refuse: suite.command: a cypress command needs {specs}",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-command-too-long.yaml": {
+            "cell": "refuse: suite.command: at most 1024 bytes",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-env-too-many.yaml": {
+            "cell": "refuse: suite.env: at most 16 entries",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-secret-env.yaml": {
+            "cell": "refuse: suite.env.SESSION_TOKEN looks like a secret",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-runner.yaml": {
+            "cell": "refuse: suite.runner",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-cwd-outside.yaml": {
+            "cell": "refuse: suite.cwd: \"../elsewhere\" must be a path inside the repo",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-service-and-image.yaml": {
+            "cell": "refuse: suite: service and image together; use one",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-timeout-zero.yaml": {
+            "cell": "refuse: suite.timeout.shard",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-unknown-nested.yaml": {
+            "cell": "refuse: html",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-too-many-artifacts.yaml": {
+            "cell": "refuse: suite.results.artifacts: at most 8 paths",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
         }
     }
 }

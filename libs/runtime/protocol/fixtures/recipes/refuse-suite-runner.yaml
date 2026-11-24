@@ -1,0 +1,5 @@
+version: 1
+suite:
+  runner: jest
+  command: npx jest {specs}
+  specs: "tests/**/*.test.ts"

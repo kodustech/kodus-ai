@@ -7,7 +7,7 @@ The environment recipe, `.kodus/workspace.yaml`: how a checkout boots, in the fo
 - Boot questions: `HealthTimeout` (capped at `MaxHealthTimeout`), `PublicHTTP`, `SeedsData`, `ResetStrategy`, `HasBootSteps`, `Unapplied` (keys no cell acts on: `flags`, `llm`, `ui`).
 - The rules every cell enforces: `validate.go` `validate` (paths inside the repo, no secrets in `services.compose.env` except Kodus test values, no control env names: `isControlEnv` over the embedded `recipe-control-env.json`).
 - Other repositories beside this one: `needs.go` `DeclaredNeeds`, `Need`, `AliasOf`, `NeedsConflict`, `MaxNeeds`.
-- Declared local fakes: `fakes.go` `FakeServices`, `RequirePinnedFakes`. Resources and egress hosts: `resources.go` `SizeRequirement`, `EgressRequirements`. Named validations: `validation.go` `ValidationChecks`.
+- Declared local fakes: `fakes.go` `FakeServices`, `RequirePinnedFakes`. Resources and egress hosts: `resources.go` `SizeRequirement`, `EgressRequirements`. Named validations: `validation.go` `ValidationChecks`. The `suite:` block (the repository's own e2e suite, which the worker runs; the cell only holds the same verdicts and does not list it as unapplied): `suite.go` `checkSuite`.
 
 ## Does not own
 - Laying the recipe over the checkout and the authored files: `internal/agent/checkout`.
@@ -32,7 +32,7 @@ The environment recipe, `.kodus/workspace.yaml`: how a checkout boots, in the fo
 
 ## Module map
 
-Files (6, tests apart): `fakes.go`, `needs.go`, `recipe.go`, `resources.go`, `validate.go`, `validation.go`
+Files (7, tests apart): `fakes.go`, `needs.go`, `recipe.go`, `resources.go`, `suite.go`, `validate.go`, `validation.go`
 
 Imports these Runtime modules:
 

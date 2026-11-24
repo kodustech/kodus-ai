@@ -1,0 +1,6 @@
+version: 1
+suite:
+  runner: playwright
+  command: npx playwright test {specs}
+  specs: "tests/**/*.spec.ts"
+  results: { junit: "r/*.xml", html: "report" }

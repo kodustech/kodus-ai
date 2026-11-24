@@ -1,0 +1,6 @@
+version: 1
+suite:
+  runner: cypress
+  command: npx cypress run --spec "{specs}"
+  specs: "cypress/e2e/**/*.cy.ts"
+  bogusflag: true

@@ -1,0 +1,15 @@
+version: 1
+services:
+  compose:
+    files: [docker-compose.yml]
+suite:
+  runner: cypress
+  command: npx cypress run --browser chrome --spec "{specs}"
+  cwd: apps/dashboard
+  specs: "cypress/e2e/**/*.cy.ts"
+  shards: 3
+  service: e2e
+  timeout: { shard: 25m, spec: 5m, total: 40m }
+  env: { BASE_URL: "http://web:3000" }
+  results: { junit: "results/*.xml", artifacts: [cypress/screenshots, cypress/videos] }
+  baseline: true

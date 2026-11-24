@@ -104,6 +104,7 @@ func (r *Recipe) validate() error {
 		checkExposedPorts,
 		checkHealth,
 		checkData,
+		checkSuite,
 	} {
 		if err := check(r); err != nil {
 			return err

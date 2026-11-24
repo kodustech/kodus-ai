@@ -1,4 +1,6 @@
-import { CI_EVIDENCE_MAX_CHARS, ciEvidenceBlock } from './ci-evidence';
+import { parseRecipe } from '@libs/runtime/protocol/recipe';
+
+import { CI_EVIDENCE_MAX_CHARS, ciEvidence, ciEvidenceBlock } from './ci-evidence';
 import type { RepoReader } from './repo-reader';
 
 function reader(files: Record<string, string>): RepoReader {
@@ -108,5 +110,121 @@ jobs:
         const block = await ciEvidenceBlock(reader({ '.github/workflows/e2e.yml': `jobs:\n${jobs}\n` }));
         expect(block.length).toBeGreaterThan(0);
         expect(block.length).toBeLessThanOrEqual(CI_EVIDENCE_MAX_CHARS);
+    });
+});
+
+// docs/runtime/e2e-suites.md section 3: the structured candidate for the recipe's suite block.
+const CYPRESS_MATRIX = `
+name: E2E
+jobs:
+  cypress:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        containers: [1, 2, 3]
+    env:
+      CYPRESS_RECORD_KEY: \${{ secrets.CYPRESS_RECORD_KEY }}
+      BASE_URL: http://localhost:3000
+      STRIPE_API_KEY: sk-live-abcdefghijklmnop12345
+      DEPLOY_TOKEN: \${{ secrets.DEPLOY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: pnpm install
+      - run: pnpm --filter dashboard build
+      - name: Cypress
+        working-directory: apps/dashboard
+        run: npx cypress run --browser chrome --record --parallel --key \${{ secrets.CYPRESS_RECORD_KEY }} --group "ci" --spec "cypress/e2e/**/*.cy.ts"
+`;
+const CYPRESS_CONFIG = `import { defineConfig } from 'cypress';
+export default defineConfig({ component: { specPattern: 'src/**/*.cy.tsx' }, e2e: { baseUrl: 'http://localhost:3000', specPattern: 'cypress/e2e/**/*.cy.ts' } });`;
+
+describe('ciEvidence suiteCandidate', () => {
+    const files = { '.github/workflows/e2e.yml': CYPRESS_MATRIX, 'apps/dashboard/cypress.config.ts': CYPRESS_CONFIG };
+
+    it('reads the runner, the matrix size, the directory and the spec glob from a cypress job', async () => {
+        const { suiteCandidate } = await ciEvidence(reader(files));
+        expect(suiteCandidate).toMatchObject({ runner: 'cypress', matrixSize: 3, cwd: 'apps/dashboard', specs: 'cypress/e2e/**/*.cy.ts', origin: 'inferred' });
+    });
+
+    it('strips the Cypress Cloud flags and keeps the rest of the command, with the spec list as {specs}', async () => {
+        const { suiteCandidate } = await ciEvidence(reader(files));
+        expect(suiteCandidate!.command).toBe('npx cypress run --browser chrome --spec "{specs}"');
+        expect(suiteCandidate!.strippedFlags).toEqual(expect.arrayContaining(['--record', '--parallel', '--key', '--group', 'CYPRESS_RECORD_KEY']));
+    });
+
+    it('carries env and secret names only, never a value, and never the Cloud record key', async () => {
+        const { suiteCandidate, block } = await ciEvidence(reader(files));
+        expect(suiteCandidate!.envNames).toEqual(expect.arrayContaining(['BASE_URL', 'STRIPE_API_KEY', 'DEPLOY_TOKEN']));
+        expect(suiteCandidate!.envNames).not.toContain('CYPRESS_RECORD_KEY');
+        expect(suiteCandidate!.secretNames.sort()).toEqual(['DEPLOY_TOKEN', 'STRIPE_API_KEY']);
+        for (const leaked of ['sk-live-abcdefghijklmnop12345', 'secrets.', 'localhost:3000']) {
+            expect(JSON.stringify(suiteCandidate)).not.toContain(leaked);
+            expect(block).not.toContain('sk-live-abcdefghijklmnop12345');
+        }
+    });
+
+    it('gives a command the recipe schema accepts as a suite block', async () => {
+        const { suiteCandidate: c } = await ciEvidence(reader(files));
+        const text = `version: 1\nsuite:\n  runner: ${c!.runner}\n  command: ${JSON.stringify(c!.command)}\n  cwd: ${c!.cwd}\n  specs: ${JSON.stringify(c!.specs)}\n  shards: ${c!.matrixSize}\n`;
+        expect(parseRecipe(text)).toMatchObject({ ok: true });
+    });
+
+    it('falls back to the runner default glob, not a guess, when no config states one', async () => {
+        const { suiteCandidate } = await ciEvidence(reader({ '.github/workflows/e2e.yml': CYPRESS_MATRIX }));
+        expect(suiteCandidate!.specs).toBeUndefined();
+    });
+
+    it('reads a playwright job, drops --shard and takes testDir from its config', async () => {
+        const wf = `
+jobs:
+  pw:
+    strategy:
+      matrix:
+        shard: [1, 2]
+    steps:
+      - run: npx playwright test --shard=\${{ matrix.shard }}/2 --project=chromium
+`;
+        const { suiteCandidate } = await ciEvidence(
+            reader({ '.github/workflows/pw.yml': wf, 'playwright.config.ts': "export default { testDir: './e2e', retries: 2 };" }),
+        );
+        expect(suiteCandidate).toMatchObject({ runner: 'playwright', command: 'npx playwright test --project=chromium {specs}', matrixSize: 2, specs: 'e2e/**/*.{spec,test}.{js,ts,mjs,cjs}' });
+    });
+
+    it('reads the cypress GitHub action, with its record and parallel inputs stripped', async () => {
+        const wf = `
+jobs:
+  e2e:
+    steps:
+      - uses: cypress-io/github-action@v6
+        with:
+          command: npx cypress run --browser chrome
+          record: true
+          parallel: true
+`;
+        const { suiteCandidate } = await ciEvidence(reader({ '.github/workflows/e2e.yml': wf }));
+        expect(suiteCandidate).toMatchObject({ runner: 'cypress', command: 'npx cypress run --browser chrome --spec "{specs}"' });
+        expect(suiteCandidate!.strippedFlags).toEqual(expect.arrayContaining(['record', 'parallel']));
+    });
+
+    it('drops an inline variable from the command and names it', async () => {
+        const wf = 'jobs:\n  e2e:\n    steps:\n      - run: API_TOKEN=abc123xyz pnpm cypress run\n';
+        const { suiteCandidate } = await ciEvidence(reader({ '.github/workflows/e2e.yml': wf }));
+        expect(suiteCandidate!.command).toBe('pnpm cypress run --spec "{specs}"');
+        expect(suiteCandidate!.envNames).toContain('API_TOKEN');
+        expect(JSON.stringify(suiteCandidate)).not.toContain('abc123xyz');
+    });
+
+    it('is absent when no job runs cypress or playwright directly (no guess)', async () => {
+        const wf = 'jobs:\n  integration:\n    steps:\n      - run: pnpm test:e2e\n';
+        const { suiteCandidate, block } = await ciEvidence(reader({ '.github/workflows/e2e.yml': wf }));
+        expect(suiteCandidate).toBeUndefined();
+        expect(block).toContain('pnpm test:e2e');
+    });
+
+    it('is absent for a repository with no workflow, and ciEvidenceBlock is still the same text', async () => {
+        expect(await ciEvidence(reader({ 'README.md': '' }))).toEqual({ block: '' });
+        const r = reader(files);
+        expect(await ciEvidenceBlock(r)).toBe((await ciEvidence(r)).block);
     });
 });

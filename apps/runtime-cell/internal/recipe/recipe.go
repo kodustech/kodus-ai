@@ -62,6 +62,10 @@ type Recipe struct {
 	LLM      yaml.Node        `yaml:"llm"`
 	Egress   yaml.Node        `yaml:"egress"`
 	UI       yaml.Node        `yaml:"ui"`
+	// Suite is the repository's own e2e suite (docs/runtime/e2e-suites.md
+	// section 3). The worker runs it; the cell validates it (suite.go) and
+	// does nothing else with it, so it is not in Unapplied.
+	Suite yaml.Node `yaml:"suite"`
 	// Expose is Runo's: how a developer's VM is reached from outside
 	// (mode, domain, hostname). Nothing in a cell is reachable from
 	// outside, so the cell reads it and does nothing with it; the ports the

@@ -162,6 +162,29 @@ function resolvedSize(d: {
     };
 }
 
+/** The suite block (docs/runtime/e2e-suites.md section 3): the repository's own e2e suite, run by the worker. */
+export const SUITE_RUNNERS = ['cypress', 'playwright'] as const;
+export const SUITE_LIMITS = { commandBytes: 1024, env: 16, artifacts: 8, ignore: 32, shards: 16, maxTimeoutSeconds: 7200 } as const;
+const RecipeSuiteSchema = z.strictObject({
+    runner: z.enum(SUITE_RUNNERS).describe('The runner the repository uses for its e2e tests.'),
+    command: z.string().describe('The command a shard runs; {specs} is the comma list of spec files the engine fills. Never --record or --parallel: those need Cypress Cloud.'),
+    cwd: z.string().max(512).optional().describe('Where the command runs, relative to the repository root.'),
+    specs: z.string().max(512).describe('Glob of the spec files, relative to cwd.'),
+    shards: z.number().int().min(1).max(SUITE_LIMITS.shards).optional().describe('A ceiling on the hosts the suite is spread over.'),
+    service: z.string().max(128).optional().describe('The compose service the command runs in; or image.'),
+    image: z.string().max(256).optional().describe('An image the command runs in, instead of service.'),
+    timeout: z.strictObject({ shard: duration.optional(), spec: duration.optional(), total: duration.optional() }).optional(),
+    env: z.record(z.string(), scalar).optional().describe('Plain values only; secrets stay in the environment sealed secrets.'),
+    results: z
+        .strictObject({ junit: z.string().max(512).optional(), artifacts: z.array(z.string().max(512)).optional() })
+        .optional()
+        .describe('Where the runner writes its JUnit files, and the artifact paths to keep for failed specs.'),
+    baseline: z.boolean().optional().describe('False: no run on main (a repository whose suite only runs in CI mode).'),
+    ignore: z.array(z.string().max(512)).max(SUITE_LIMITS.ignore).optional().describe('Globs of files that never select specs (docs, assets).'),
+    retries: z.strictObject({ main: z.number().int().min(1).max(2).optional() }).optional(),
+    gate: z.enum(['default', 'strict']).optional().describe('strict: any unclassified failure fails the check.'),
+});
+
 export const RecipeSchema = z.strictObject({
     version: z.literal(1),
     setup: z.array(z.string()).optional(),
@@ -198,6 +221,7 @@ export const RecipeSchema = z.strictObject({
     llm: z.unknown().optional(),
     egress: recipeEgress.optional(),
     ui: z.unknown().optional(),
+    suite: RecipeSuiteSchema.optional(),
     expose: z.unknown().optional().describe("Runo's: how its VM is reached from outside; a cell ignores it."),
 });
 export type RecipeDoc = z.infer<typeof RecipeSchema>;
@@ -220,6 +244,8 @@ export interface Recipe {
     size?: RecipeSize;
     egressAllow?: string[];
     fakes?: RecipeFake[];
+    /** The e2e suite the worker runs (the cell ignores it); absent when the recipe declares none. */
+    suite?: RecipeSuite;
     /** A cell capability requirement only; the public Expose shape stays unchanged. */
     seededSQL?: true;
     /** services.needs with every alias resolved; absent when the recipe needs no other repository. */
@@ -230,6 +256,24 @@ export interface Recipe {
      * as if they were absent, so the setup says so. Absent when there is none.
      */
     unapplied?: string[];
+}
+
+/** The suite block resolved: durations in seconds, defaults filled. */
+export interface RecipeSuite {
+    runner: (typeof SUITE_RUNNERS)[number];
+    command: string;
+    cwd?: string;
+    specs: string;
+    shards?: number;
+    service?: string;
+    image?: string;
+    timeoutSeconds?: { shard?: number; spec?: number; total?: number };
+    env: Record<string, string>;
+    results?: { junit?: string; artifacts: string[] };
+    baseline: boolean;
+    ignore: string[];
+    retriesMain?: number;
+    gate: 'default' | 'strict';
 }
 
 /** One other repository a recipe boots beside its own, its alias resolved. */
@@ -359,6 +403,36 @@ export function recipeNeedsConflict(needs: readonly RecipeNeed[] | undefined, pr
     return undefined;
 }
 
+// A flag that needs Cypress Cloud, whose secret a shard is never given. `--record-video` is not one.
+const CLOUD_FLAGS: Record<(typeof SUITE_RUNNERS)[number], readonly string[]> = {
+    cypress: ['--record', '--parallel', '--key', '--ci-build-id'],
+    playwright: ['--record', '--parallel'],
+};
+
+/** Why a suite block is refused, or undefined (the cell enforces the same in suite.go). */
+function suiteRules(s: RecipeSuite): string | undefined {
+    if (Buffer.byteLength(s.command, 'utf8') > SUITE_LIMITS.commandBytes) return `suite.command: at most ${SUITE_LIMITS.commandBytes} bytes`;
+    for (const flag of CLOUD_FLAGS[s.runner]) {
+        if (new RegExp(`(^|\\s)${flag}(?=[=\\s]|$)`).test(s.command)) return `suite.command: ${flag} needs Cypress Cloud; a shard is given no record key`;
+    }
+    if (s.runner === 'cypress' && !s.command.includes('{specs}')) return 'suite.command: a cypress command needs {specs}';
+    if (Object.keys(s.env).length > SUITE_LIMITS.env) return `suite.env: at most ${SUITE_LIMITS.env} entries`;
+    const env = recipeEnvironmentError(s.env, 'suite.env');
+    if (env) return env;
+    if ('CYPRESS_RECORD_KEY' in s.env) return 'suite.env.CYPRESS_RECORD_KEY needs Cypress Cloud; a shard is given no record key';
+    if (s.cwd !== undefined && !insideRepo(s.cwd)) return `suite.cwd: ${JSON.stringify(s.cwd)} must be a path inside the repo`;
+    if (!insideRepo(s.specs)) return `suite.specs: ${JSON.stringify(s.specs)} must be a path inside the repo`;
+    if (s.service !== undefined && !NAME.test(s.service)) return `suite.service: bad service ${JSON.stringify(s.service)}`;
+    if (s.service !== undefined && s.image !== undefined) return 'suite: service and image together; use one';
+    for (const [k, v] of Object.entries(s.timeoutSeconds ?? {})) {
+        if (!(v > 0 && v <= SUITE_LIMITS.maxTimeoutSeconds)) return `suite.timeout.${k}: use a duration from 1s to 2h`;
+    }
+    if (s.results?.junit !== undefined && !insideRepo(s.results.junit)) return `suite.results.junit: ${JSON.stringify(s.results.junit)} must be a path inside the repo`;
+    if ((s.results?.artifacts.length ?? 0) > SUITE_LIMITS.artifacts) return `suite.results.artifacts: at most ${SUITE_LIMITS.artifacts} paths`;
+    for (const a of s.results?.artifacts ?? []) if (!insideRepo(a)) return `suite.results.artifacts: ${JSON.stringify(a)} must be a path inside the repo`;
+    return undefined;
+}
+
 /** The rules every cell enforces (validate.go), in its order, on the resolved recipe. */
 function recipeRules(r: Recipe): string | undefined {
     if (r.filesCopy.length) return 'files.copy is refused in a cell: env files never go to the machine; use a fake';
@@ -477,6 +551,35 @@ export function parseRecipe(text: string): RecipeParseResult {
             ...(str(s.database) ? { database: str(s.database) } : {}),
         };
     }
+    let suite: RecipeSuite | undefined;
+    if (d.suite) {
+        const x = d.suite;
+        const timeoutSeconds: NonNullable<RecipeSuite['timeoutSeconds']> = {};
+        for (const k of ['shard', 'spec', 'total'] as const) {
+            if (x.timeout?.[k] === undefined) continue;
+            const seconds = recipeDurationSeconds(x.timeout[k]);
+            if (seconds === undefined) return fail(`suite.timeout.${k}: bad duration ${JSON.stringify(x.timeout[k])}`);
+            timeoutSeconds[k] = seconds;
+        }
+        suite = {
+            runner: x.runner,
+            command: x.command,
+            ...(x.cwd !== undefined ? { cwd: x.cwd } : {}),
+            specs: x.specs,
+            ...(x.shards !== undefined ? { shards: x.shards } : {}),
+            ...(x.service !== undefined ? { service: x.service } : {}),
+            ...(x.image !== undefined ? { image: x.image } : {}),
+            ...(Object.keys(timeoutSeconds).length ? { timeoutSeconds } : {}),
+            env: Object.fromEntries(Object.entries(x.env ?? {}).map(([k, v]) => [k, str(v)])),
+            ...(x.results ? { results: { ...(x.results.junit !== undefined ? { junit: x.results.junit } : {}), artifacts: x.results.artifacts ?? [] } } : {}),
+            baseline: x.baseline ?? true,
+            ignore: x.ignore ?? [],
+            ...(x.retries?.main !== undefined ? { retriesMain: x.retries.main } : {}),
+            gate: x.gate ?? 'default',
+        };
+        const refused = suiteRules(suite);
+        if (refused) return fail(refused);
+    }
     const recipe: Recipe = {
         version: 1,
         ...(d.validate !== undefined ? { validate: d.validate } : {}),
@@ -496,6 +599,7 @@ export function parseRecipe(text: string): RecipeParseResult {
         ...(d.fakes ? { fakes } : {}),
         ...((d.services?.expose ?? []).some((e) => e.readonly_user_from_seed === true) ? { seededSQL: true as const } : {}),
         ...(needs.length ? { needs } : {}),
+        ...(suite ? { suite } : {}),
     };
     const unapplied: string[] = RECIPE_UNAPPLIED_KEYS.filter((k) => d[k] !== undefined);
     if (d.limits)

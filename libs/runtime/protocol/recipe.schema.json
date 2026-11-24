@@ -489,6 +489,164 @@
       "additionalProperties": false
     },
     "ui": {},
+    "suite": {
+      "type": "object",
+      "properties": {
+        "runner": {
+          "type": "string",
+          "enum": [
+            "cypress",
+            "playwright"
+          ],
+          "description": "The runner the repository uses for its e2e tests."
+        },
+        "command": {
+          "type": "string",
+          "description": "The command a shard runs; {specs} is the comma list of spec files the engine fills. Never --record or --parallel: those need Cypress Cloud."
+        },
+        "cwd": {
+          "description": "Where the command runs, relative to the repository root.",
+          "type": "string",
+          "maxLength": 512
+        },
+        "specs": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Glob of the spec files, relative to cwd."
+        },
+        "shards": {
+          "description": "A ceiling on the hosts the suite is spread over.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "service": {
+          "description": "The compose service the command runs in; or image.",
+          "type": "string",
+          "maxLength": 128
+        },
+        "image": {
+          "description": "An image the command runs in, instead of service.",
+          "type": "string",
+          "maxLength": 256
+        },
+        "timeout": {
+          "type": "object",
+          "properties": {
+            "shard": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "spec": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "total": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "env": {
+          "description": "Plain values only; secrets stay in the environment sealed secrets.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "results": {
+          "description": "Where the runner writes its JUnit files, and the artifact paths to keep for failed specs.",
+          "type": "object",
+          "properties": {
+            "junit": {
+              "type": "string",
+              "maxLength": 512
+            },
+            "artifacts": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 512
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "baseline": {
+          "description": "False: no run on main (a repository whose suite only runs in CI mode).",
+          "type": "boolean"
+        },
+        "ignore": {
+          "description": "Globs of files that never select specs (docs, assets).",
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 512
+          }
+        },
+        "retries": {
+          "type": "object",
+          "properties": {
+            "main": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2
+            }
+          },
+          "additionalProperties": false
+        },
+        "gate": {
+          "description": "strict: any unclassified failure fails the check.",
+          "type": "string",
+          "enum": [
+            "default",
+            "strict"
+          ]
+        }
+      },
+      "required": [
+        "runner",
+        "command",
+        "specs"
+      ],
+      "additionalProperties": false
+    },
     "expose": {
       "description": "Runo's: how its VM is reached from outside; a cell ignores it."
     }

@@ -5,7 +5,7 @@ Kody's recipe author: an agent on the product's harness, with the org's BYOK (AD
 ## Owns
 - The agent: `recipe-author.agent.ts` `authorRecipe`, its tools (`find_files` with `globMatcher`, `submit_recipe`), `RECIPE_AUTHOR_LIMITS`, the instructions and previous-attempt feedback.
 - What it knows before reading: `repository-facts.ts` `repositoryFacts`, `factsBlock`, `workspaceFactsBlock` (no model).
-- How the repo's CI boots its app (job, services, setup, commands, env names only, 4 KB cap), no model: `ci-evidence.ts` `ciEvidenceBlock`.
+- How the repo's CI boots its app (job, services, setup, commands, env names only, 4 KB cap), no model: `ci-evidence.ts` `ciEvidenceBlock`. `ciEvidence` also returns the structured `suiteCandidate` for the recipe's `suite:` block (`suite-candidate.ts`: runner, command with the Cypress Cloud flags removed and `{specs}` in place, matrix size, spec glob read from the runner's config as text, env and secret NAMES only; absent when no job runs cypress or playwright directly).
 - Context size options (off by default): `recipe-author-context.ts` (`ClearStaleReadsPolicy`, prefetch).
 - Rules a written recipe must pass beyond a repository's: `authored-recipe-policy.ts` `checkAuthoredRecipe`. Rules for its files: `authored-files-policy.ts` (`checkAuthoredDockerfile`, `checkNodeBuild`, compose checks), `authored-compose-sanitiser.ts` `sanitiseAuthoredCompose`, `authored-dockerfile-mirror.ts` `declareMirrorBuildArgs`.
 - Readers: `git-repo-reader.ts` `GitRepoReader` (over `RuntimeGitPort`, `GIT_READ_MAX_BYTES`), `workspace-repo-reader.ts` `WorkspaceRepoReader` (every repository of a multi-repo workspace, each at its commit), `repo-reader.ts` (re-export of `libs/runtime/planner/repo-reader`, kept as an entry point).
@@ -32,7 +32,7 @@ Kody's recipe author: an agent on the product's harness, with the org's BYOK (AD
 
 ## Module map
 
-Files (13, tests apart): `authored-compose-sanitiser.ts`, `authored-dockerfile-firebase.ts`, `authored-dockerfile-mirror.ts`, `authored-files-policy.ts`, `authored-recipe-policy.ts`, `ci-evidence.ts`, `firebase-emulators-fetch-script.ts`, `git-repo-reader.ts`, `recipe-author-context.ts`, `recipe-author.agent.ts`, `repo-reader.ts`, `repository-facts.ts`, `workspace-repo-reader.ts`
+Files (14, tests apart): `authored-compose-sanitiser.ts`, `authored-dockerfile-firebase.ts`, `authored-dockerfile-mirror.ts`, `authored-files-policy.ts`, `authored-recipe-policy.ts`, `ci-evidence.ts`, `firebase-emulators-fetch-script.ts`, `git-repo-reader.ts`, `recipe-author-context.ts`, `recipe-author.agent.ts`, `repo-reader.ts`, `repository-facts.ts`, `suite-candidate.ts`, `workspace-repo-reader.ts`
 
 Imports these Runtime modules:
 
