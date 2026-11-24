@@ -37,6 +37,7 @@ import {
 import { OrganizationPurgeRequestedHandler } from './organization-purge.handler';
 import type { RunEngine } from './run-engine.port';
 import { type PullRequestPreviews, RunCancelRequestedHandler, RunRequestedHandler } from './run-requested.handler';
+import { SuiteRequestedHandler, type SuiteStarter } from './suite-requested.handler';
 
 /** Every handler the Runtime command consumer routes to, one per event. */
 export const RUNTIME_COMMAND_HANDLERS = Symbol('RUNTIME_COMMAND_HANDLERS');
@@ -72,6 +73,8 @@ export interface CommandHandlerDeps {
     prSessions?: Pick<PullRequestSessions, 'forget'>;
     /** The organization purge: without its store and releaser that command is not handled (the consumer dead-letters it). */
     organizationPurge?: { store: OrganizationPurgeStore; releaser: ClaimReleaser; evidence: Pick<EvidenceStore, 'deletePrefix'> | null; cells?: CellDataPurger | null };
+    /** The suite engine: without it `runtime.suite.requested` is not handled (the consumer dead-letters it). */
+    suites?: SuiteStarter;
     warn?: (msg: string, meta: Record<string, unknown>) => void;
 }
 
@@ -93,6 +96,7 @@ export function runtimeCommandHandlers(deps: CommandHandlerDeps): CommandHandler
         new CellTokenRevokedHandler(commands),
         new CellRevokeRequestedHandler(commands),
         new LessonUpdateRequestedHandler(deps.lessons),
+        ...(deps.suites ? [new SuiteRequestedHandler(deps.suites)] : []),
         ...(deps.organizationPurge ? [new OrganizationPurgeRequestedHandler(engine, projection, deps.organizationPurge.store, deps.organizationPurge.releaser, deps.organizationPurge.evidence, deps.organizationPurge.cells ?? null)] : []),
     ];
 }

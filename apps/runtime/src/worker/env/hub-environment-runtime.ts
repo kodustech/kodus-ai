@@ -336,8 +336,8 @@ function refusalBlocker(r: CellRefusal): Blocked['blockers'][number] {
 }
 
 /** The acquire as the hub takes it: placement-only fields (boundKey) stay on the worker. */
-function wireOf(req: AcquireRequest): Omit<AcquireRequest, 'boundKey'> {
-    const { boundKey: _placementOnly, ...wire } = req;
+function wireOf(req: AcquireRequest): Omit<AcquireRequest, 'boundKey' | 'suiteRunId' | 'shard'> {
+    const { boundKey: _placementOnly, suiteRunId: _suitePlacement, shard: _shardPlacement, ...wire } = req;
     return wire;
 }
 
@@ -480,6 +480,8 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
             ...(req.environmentId ? { environmentId: req.environmentId } : {}),
             // A template's setup: only the cell bound to its key (the directory checks it is this org's).
             ...(req.consumer === 'setup' && req.boundKey ? { boundKey: req.boundKey } : {}),
+            // A suite shard: its own perRun host, bound to `suite:<org>/<suiteRun>/<shard>`.
+            ...(req.consumer === 'suite' && req.suiteRunId && req.shard !== undefined ? { suiteRunId: req.suiteRunId, shard: req.shard } : {}),
         });
         if (!cell) throw new NoCellConnectedError('no cell is connected for this organization');
         if (isCellRefusal(cell)) return capacityBlocked(cell);

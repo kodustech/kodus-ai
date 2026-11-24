@@ -33,6 +33,12 @@ export interface AcquireRequest {
      * bound to that key. The worker never sends it to the cell or the hub.
      */
     boundKey?: string;
+    /**
+     * A suite shard's claim (consumer `suite`): the suite run and the shard, which name the perRun host bound to it
+     * (`suite:<org>/<suiteRun>/<shard>`). Placement alone reads them; the worker never sends them to the cell or the hub.
+     */
+    suiteRunId?: string;
+    shard?: number;
     /** The default branch's recipe the cell boots with (content null: there is none), never the checkout's. */
     recipe?: RecipeForClaim;
     /** The environment's machine size for the workload's builds and services; absent: the cell's default. */

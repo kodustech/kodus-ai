@@ -42,9 +42,12 @@ export interface StoredSuiteShard extends SuiteShardPlan {
     state: string;
 }
 
+/** What a spec ended as: a runner's verdict, or `not_run` (the shard stopped first) and `infra` (the host or the runner, never the PR). */
+export type SuiteSpecStatus = 'passed' | 'failed' | 'skipped' | 'not_run' | 'infra';
+
 export interface SuiteResultRow {
     spec: string;
-    status: 'passed' | 'failed' | 'skipped';
+    status: SuiteSpecStatus;
     durationMs: number;
     errorSignature?: string;
     tests: unknown[];

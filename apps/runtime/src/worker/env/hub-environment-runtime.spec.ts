@@ -178,6 +178,16 @@ describe('HubEnvironmentClient', () => {
         expect(one[0].body.repoToken).toBe('ghs_plain');
     });
 
+    it("a suite shard's acquire names the suite run and shard to the placement, and neither goes to the cell", async () => {
+        const calls: Call[] = [];
+        const asked: Array<CellWant | undefined> = [];
+        const hub = new HubClient({ cellDirectory: { reserveCell: async (_o: string, want?: CellWant) => (asked.push(want), { cellId: 'cell-a', replicaUrl: 'https://hub-1', owner: 'kodus' as const }), replicaForClaim: async () => 'https://hub-1' }, hubBaseUrl: 'https://hub', postImpl: recording(calls) });
+        await runtime(hub, 'sr-1').acquire({ organizationId: 'org-a', consumer: 'suite', suiteRunId: 'sr-1', shard: 2, ref: { side: 'pr', sha: 'b'.repeat(40) } } as any);
+        expect(asked[0]).toMatchObject({ consumer: 'suite', suiteRunId: 'sr-1', shard: 2 });
+        expect(calls[0].body).not.toHaveProperty('shard');
+        expect(calls[0].body).not.toHaveProperty('suiteRunId');
+    });
+
     it('the production factory keeps the PR token too: it was dropped there, so the PR fetched with the base token', async () => {
         const calls: Call[] = [];
         const env = hubEnvironments(client(recording(calls)), secrets, { provider: 'github', apiBase: 'https://api.github.com' })({
