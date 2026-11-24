@@ -37,10 +37,11 @@ import {
 import { OrganizationPurgeRequestedHandler } from './organization-purge.handler';
 import type { RunEngine } from './run-engine.port';
 import { type PullRequestPreviews, RunCancelRequestedHandler, RunRequestedHandler, type SuiteCancelPort } from './run-requested.handler';
-import { SUITE_RUNS } from '../suite/suite-service';
+import { SUITE_RUNS, SUITE_SELECTION_STATE } from '../suite/suite-service';
 import { type LiveSuiteRuns, SuiteCanceller } from '../suite/suite-canceller';
 import { SuiteRequestedHandler, type SuiteStarter } from './suite-requested.handler';
 import { SuiteRetriedHandler, type SuiteRetryRuns } from './suite-retried.handler';
+import { SuiteSelectionChangedHandler, type SuiteSelectionWrites } from './suite-selection-changed.handler';
 
 /** Every handler the Runtime command consumer routes to, one per event. */
 export const RUNTIME_COMMAND_HANDLERS = Symbol('RUNTIME_COMMAND_HANDLERS');
@@ -80,6 +81,8 @@ export interface CommandHandlerDeps {
     suites?: SuiteStarter;
     /** The suite runs a retry reads: with it and `suites`, `runtime.suite.retried` is handled too. */
     suiteRuns?: SuiteRetryRuns;
+    /** The environment's selection state: with it `runtime.suite.selection_changed` is handled. */
+    suiteSelection?: SuiteSelectionWrites;
     /** Cancels the PR's running suites with its Runs (a new head, the PR closed); absent: they end on their own. */
     suiteCancel?: SuiteCancelPort;
     warn?: (msg: string, meta: Record<string, unknown>) => void;
@@ -105,6 +108,7 @@ export function runtimeCommandHandlers(deps: CommandHandlerDeps): CommandHandler
         new LessonUpdateRequestedHandler(deps.lessons),
         ...(deps.suites ? [new SuiteRequestedHandler(deps.suites)] : []),
         ...(deps.suites && deps.suiteRuns ? [new SuiteRetriedHandler(deps.suiteRuns, deps.suites)] : []),
+        ...(deps.suiteSelection ? [new SuiteSelectionChangedHandler(deps.suiteSelection)] : []),
         ...(deps.organizationPurge ? [new OrganizationPurgeRequestedHandler(engine, projection, deps.organizationPurge.store, deps.organizationPurge.releaser, deps.organizationPurge.evidence, deps.organizationPurge.cells ?? null)] : []),
     ];
 }
@@ -134,6 +138,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
         EVIDENCE_STORE,
         CELL_DATA_PURGER,
         SUITE_RUNS,
+        SUITE_SELECTION_STATE,
     ],
     useFactory: (
         engine: RunEngine,
@@ -154,6 +159,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
         evidence: EvidenceStore | null,
         cells: CellDataPurger,
         suiteRuns: SuiteRetryRuns & LiveSuiteRuns,
+        suiteSelection: SuiteSelectionWrites,
     ) => {
         const logger = new Logger('RuntimeCommandConsumer');
         return runtimeCommandHandlers({
@@ -174,6 +180,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
             // The suite workflow is the engine's; a retry reads the runs it left.
             suites: { start: async (cmd) => (engine.startSuite ? engine.startSuite(cmd) : false) },
             suiteRuns,
+            suiteSelection,
             // A new head or a closed PR cancels the suites of the PR that are for another head, as it cancels its Runs.
             suiteCancel: new SuiteCanceller(suiteRuns, { cancelSuite: async (id) => void (await engine.cancelSuite?.(id)) }),
             warn: (msg, meta) => logger.warn({ msg, ...meta }),

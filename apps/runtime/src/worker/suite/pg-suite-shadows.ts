@@ -114,6 +114,8 @@ export class PgSuiteShadows {
 export interface SelectionState {
     /** Two misses in ten shadows turned selection off until a person turns it on. */
     off: boolean;
+    /** Who turned it off: the shadow check's brake, or a person's switch. Set only while `off`. */
+    offBy?: 'brake' | 'person';
     /** Pull requests that still run the whole suite after a miss. */
     fullPrsLeft: number;
     /** When a person last turned selection on: the window of shadows starts there. */
@@ -124,9 +126,9 @@ export class PgSuiteSelectionState {
     constructor(private readonly pool: Pick<Pool, 'query'>) {}
 
     async read(organizationId: string, environmentId: string): Promise<SelectionState> {
-        const r = await this.pool.query(`SELECT off, full_prs_left, reenabled_at FROM runtime.runtime_suite_selection_state WHERE organization_id = $1 AND environment_id = $2`, [organizationId, environmentId]);
+        const r = await this.pool.query(`SELECT off, off_by, full_prs_left, reenabled_at FROM runtime.runtime_suite_selection_state WHERE organization_id = $1 AND environment_id = $2`, [organizationId, environmentId]);
         const x = r.rows[0];
-        return x ? { off: x.off, fullPrsLeft: x.full_prs_left, ...(x.reenabled_at ? { reenabledAt: x.reenabled_at } : {}) } : { off: false, fullPrsLeft: 0 };
+        return x ? { off: x.off, ...(x.off && x.off_by ? { offBy: x.off_by } : {}), fullPrsLeft: x.full_prs_left, ...(x.reenabled_at ? { reenabledAt: x.reenabled_at } : {}) } : { off: false, fullPrsLeft: 0 };
     }
 
     /** Counts one more selected run of the environment and answers the count (1-based), atomically. */
@@ -143,9 +145,10 @@ export class PgSuiteSelectionState {
     /** A miss: the whole suite for the next `fullPrs` pull requests, and off when the window says so. Off never turns itself back on. */
     async applyMiss(organizationId: string, environmentId: string, brake: { fullPrs: number; off: boolean }): Promise<void> {
         await this.pool.query(
-            `INSERT INTO runtime.runtime_suite_selection_state AS s (organization_id, environment_id, full_prs_left, off, off_at) VALUES ($1, $2, $3, $4, CASE WHEN $4 THEN now() END)
+            `INSERT INTO runtime.runtime_suite_selection_state AS s (organization_id, environment_id, full_prs_left, off, off_at, off_by) VALUES ($1, $2, $3, $4, CASE WHEN $4 THEN now() END, CASE WHEN $4 THEN 'brake' END)
              ON CONFLICT (environment_id) DO UPDATE SET full_prs_left = EXCLUDED.full_prs_left, off = s.off OR EXCLUDED.off,
-                 off_at = CASE WHEN EXCLUDED.off AND NOT s.off THEN now() ELSE s.off_at END, updated_at = now()
+                 off_at = CASE WHEN EXCLUDED.off AND NOT s.off THEN now() ELSE s.off_at END,
+                 off_by = CASE WHEN EXCLUDED.off AND NOT s.off THEN 'brake' ELSE s.off_by END, updated_at = now()
               WHERE s.organization_id = EXCLUDED.organization_id`,
             [organizationId, environmentId, brake.fullPrs, brake.off],
         );
@@ -156,10 +159,20 @@ export class PgSuiteSelectionState {
         await this.pool.query(`UPDATE runtime.runtime_suite_selection_state SET full_prs_left = greatest(full_prs_left - 1, 0), updated_at = now() WHERE organization_id = $1 AND environment_id = $2`, [organizationId, environmentId]);
     }
 
+    /** A person turns selection off: every pull request runs the whole suite until it is turned on. A brake that is already on stays the brake. */
+    async turnOff(organizationId: string, environmentId: string, at: Date = new Date()): Promise<void> {
+        await this.pool.query(
+            `INSERT INTO runtime.runtime_suite_selection_state AS s (organization_id, environment_id, off, off_at, off_by) VALUES ($1, $2, true, $3, 'person')
+             ON CONFLICT (environment_id) DO UPDATE SET off = true, off_at = CASE WHEN s.off THEN s.off_at ELSE $3 END, off_by = CASE WHEN s.off THEN s.off_by ELSE 'person' END, updated_at = now()
+              WHERE s.organization_id = EXCLUDED.organization_id`,
+            [organizationId, environmentId, at],
+        );
+    }
+
     /** A person turns selection on again: off and the whole-suite window clear, and the shadows counted start afresh. Answers the time the window starts at. */
     async reenable(organizationId: string, environmentId: string, at: Date = new Date()): Promise<Date | undefined> {
         const r = await this.pool.query(
-            `UPDATE runtime.runtime_suite_selection_state SET off = false, off_at = NULL, full_prs_left = 0, reenabled_at = $3, updated_at = now() WHERE organization_id = $1 AND environment_id = $2 RETURNING reenabled_at`,
+            `UPDATE runtime.runtime_suite_selection_state SET off = false, off_at = NULL, off_by = NULL, full_prs_left = 0, reenabled_at = $3, updated_at = now() WHERE organization_id = $1 AND environment_id = $2 RETURNING reenabled_at`,
             [organizationId, environmentId, at],
         );
         return r.rows[0]?.reenabled_at ?? undefined;

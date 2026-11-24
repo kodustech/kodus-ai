@@ -131,6 +131,25 @@ const at = (min: number) => new Date(Date.parse('2026-11-23T12:00:00Z') + min * 
             expect(await state.read('org-a', 'env-1')).toEqual({ off: false, fullPrsLeft: 0, reenabledAt: at(5) });
         });
 
+        it('says who turned selection off: the shadow check (a brake) or a person, and turning it on clears either', async () => {
+            await state.applyMiss('org-a', 'env-1', { fullPrs: 10, off: true });
+            expect(await state.read('org-a', 'env-1')).toMatchObject({ off: true, offBy: 'brake' });
+            await state.reenable('org-a', 'env-1', at(1));
+            await state.turnOff('org-a', 'env-2', at(2));
+            expect(await state.read('org-a', 'env-2')).toMatchObject({ off: true, offBy: 'person' });
+            expect(await state.read('org-a', 'env-1')).toEqual({ off: false, fullPrsLeft: 0, reenabledAt: at(1) });
+            await state.reenable('org-a', 'env-2', at(3));
+            expect(await state.read('org-a', 'env-2')).toEqual({ off: false, fullPrsLeft: 0, reenabledAt: at(3) });
+        });
+
+        it('a person turning selection off never takes over a brake that is already on, and never touches another organization\'s environment', async () => {
+            await state.applyMiss('org-a', 'env-1', { fullPrs: 10, off: true });
+            await state.turnOff('org-a', 'env-1', at(2));
+            expect(await state.read('org-a', 'env-1')).toMatchObject({ off: true, offBy: 'brake' });
+            await state.turnOff('org-b', 'env-1', at(3));
+            expect(await state.read('org-b', 'env-1')).toEqual({ off: false, fullPrsLeft: 0 });
+        });
+
         it('never reads or changes another organization\'s environment', async () => {
             await state.applyMiss('org-a', 'env-1', { fullPrs: 10, off: true });
             expect(await state.read('org-b', 'env-1')).toEqual({ off: false, fullPrsLeft: 0 });

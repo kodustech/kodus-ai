@@ -227,8 +227,8 @@ export class InMemorySuiteShadows implements Pick<PgSuiteShadows, 'request' | 'g
 }
 
 /** What each environment's selection is doing because of the shadow check. */
-export class InMemorySuiteSelectionState implements Pick<PgSuiteSelectionState, 'read' | 'recordSelected' | 'applyMiss' | 'consumeFullPr' | 'reenable'> {
-    readonly rows = new Map<string, { organizationId: string; selected: number; fullPrsLeft: number; off: boolean; reenabledAt?: Date }>();
+export class InMemorySuiteSelectionState implements Pick<PgSuiteSelectionState, 'read' | 'recordSelected' | 'applyMiss' | 'consumeFullPr' | 'reenable' | 'turnOff'> {
+    readonly rows = new Map<string, { organizationId: string; selected: number; fullPrsLeft: number; off: boolean; offBy?: 'brake' | 'person'; reenabledAt?: Date }>();
     private row(o: string, e: string) {
         const r = this.rows.get(e) ?? { organizationId: o, selected: 0, fullPrsLeft: 0, off: false };
         this.rows.set(e, r);
@@ -236,7 +236,7 @@ export class InMemorySuiteSelectionState implements Pick<PgSuiteSelectionState, 
     }
     async read(o: string, e: string): Promise<SelectionState> {
         const r = this.rows.get(e);
-        return r && r.organizationId === o ? { off: r.off, fullPrsLeft: r.fullPrsLeft, ...(r.reenabledAt ? { reenabledAt: r.reenabledAt } : {}) } : { off: false, fullPrsLeft: 0 };
+        return r && r.organizationId === o ? { off: r.off, ...(r.off && r.offBy ? { offBy: r.offBy } : {}), fullPrsLeft: r.fullPrsLeft, ...(r.reenabledAt ? { reenabledAt: r.reenabledAt } : {}) } : { off: false, fullPrsLeft: 0 };
     }
     async recordSelected(o: string, e: string) {
         const r = this.row(o, e);
@@ -244,16 +244,20 @@ export class InMemorySuiteSelectionState implements Pick<PgSuiteSelectionState, 
     }
     async applyMiss(o: string, e: string, brake: { fullPrs: number; off: boolean }) {
         const r = this.row(o, e);
-        if (r) Object.assign(r, { fullPrsLeft: brake.fullPrs, off: r.off || brake.off });
+        if (r) Object.assign(r, { fullPrsLeft: brake.fullPrs, off: r.off || brake.off, ...(brake.off && !r.off ? { offBy: 'brake' as const } : {}) });
     }
     async consumeFullPr(o: string, e: string) {
         const r = this.rows.get(e);
         if (r && r.organizationId === o) r.fullPrsLeft = Math.max(0, r.fullPrsLeft - 1);
     }
+    async turnOff(o: string, e: string) {
+        const r = this.row(o, e);
+        if (r && !r.off) Object.assign(r, { off: true, offBy: 'person' as const });
+    }
     async reenable(o: string, e: string, at: Date = new Date(0)) {
         const r = this.rows.get(e);
         if (!r || r.organizationId !== o) return undefined;
-        Object.assign(r, { off: false, fullPrsLeft: 0, reenabledAt: at });
+        Object.assign(r, { off: false, offBy: undefined, fullPrsLeft: 0, reenabledAt: at });
         return at;
     }
 }

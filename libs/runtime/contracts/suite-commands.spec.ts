@@ -69,3 +69,17 @@ describe('the suite commands', () => {
         expect(RuntimeSuiteRetriedSchema.safeParse({ ...base, repoToken: 'ghs_plain' }).success).toBe(false);
     });
 });
+
+describe('the suite selection command', () => {
+    const change = { organizationId: 'org-a', environmentId: 'env-1', selection: 'off' as const, requestedBy: actor, requestedAt, key: 'selection:1' };
+    it('says on or off for one environment, and refuses anything else, an unknown key or a missing actor', () => {
+        expect(() => runtimeCommandOutboxMessage(RuntimeCommandName.SuiteSelectionChanged, change, 'm-1')).not.toThrow();
+        expect(() => runtimeCommandOutboxMessage(RuntimeCommandName.SuiteSelectionChanged, { ...change, selection: 'maybe' } as never, 'm-1')).toThrow();
+        expect(() => runtimeCommandOutboxMessage(RuntimeCommandName.SuiteSelectionChanged, { ...change, extra: 1 } as never, 'm-1')).toThrow();
+        const { requestedBy: _gone, ...noActor } = change;
+        expect(() => runtimeCommandOutboxMessage(RuntimeCommandName.SuiteSelectionChanged, noActor as never, 'm-1')).toThrow();
+    });
+    it('is a control command, not work: it never waits behind the suites of the Run lane', () => {
+        expect(isRunLaneEvent(RuntimeCommandName.SuiteSelectionChanged)).toBe(false);
+    });
+});

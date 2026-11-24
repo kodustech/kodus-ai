@@ -1286,6 +1286,14 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
             updated_at      timestamptz NOT NULL DEFAULT now()
         );`,
     },
+    {
+        version: 58,
+        name: 'who turned an environment\'s spec selection off',
+        // docs/runtime/e2e-suites.md D14: the shadow check (a brake) or a person. The settings screen shows a brake as "paused" with its
+        // way to resume, and a person's choice as the switch it is. Null while selection is on.
+        sql: `ALTER TABLE runtime.runtime_suite_selection_state ADD COLUMN IF NOT EXISTS off_by text;
+        UPDATE runtime.runtime_suite_selection_state SET off_by = 'brake' WHERE off AND off_by IS NULL;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

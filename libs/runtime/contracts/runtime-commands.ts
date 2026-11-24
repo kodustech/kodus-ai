@@ -36,6 +36,7 @@ export const RuntimeCommandName = {
     OrganizationPurgeRequested: 'runtime.organization.purge_requested',
     SuiteRequested: 'runtime.suite.requested',
     SuiteRetried: 'runtime.suite.retried',
+    SuiteSelectionChanged: 'runtime.suite.selection_changed',
 } as const;
 export type RuntimeCommandEventName = (typeof RuntimeCommandName)[keyof typeof RuntimeCommandName];
 
@@ -502,6 +503,21 @@ export const RuntimeSuiteRetriedSchema = z
     .refine((m) => (m.scope === 'shard') === (m.shard !== undefined), { message: 'a shard retry names its shard; a failed-specs retry names none', path: ['shard'] });
 export type RuntimeSuiteRetried = z.infer<typeof RuntimeSuiteRetriedSchema>;
 
+/**
+ * A person turns spec selection on or off for an environment (docs/runtime/e2e-suites.md section 6.1): `off` runs the whole suite on every
+ * pull request until it is turned on again; `on` also lifts a brake the shadow check set (D14) and starts its window afresh. The selection
+ * state is the Runtime's, so the product asks here and never writes it. Control, not work: it never waits behind the suites.
+ */
+export const RuntimeSuiteSelectionChangedSchema = z.strictObject({
+    organizationId: id,
+    environmentId: id,
+    selection: z.enum(['on', 'off']),
+    requestedBy: actor,
+    requestedAt: z.iso.datetime(),
+    key: z.string().min(1).max(256),
+});
+export type RuntimeSuiteSelectionChanged = z.infer<typeof RuntimeSuiteSelectionChangedSchema>;
+
 /** The payload of each command, by its name. */
 export interface RuntimeCommandPayloads {
     'runtime.run.fork_approved': RuntimeForkApproved;
@@ -520,6 +536,7 @@ export interface RuntimeCommandPayloads {
     'runtime.organization.purge_requested': RuntimeOrganizationPurgeRequested;
     'runtime.suite.requested': RuntimeSuiteRequested;
     'runtime.suite.retried': RuntimeSuiteRetried;
+    'runtime.suite.selection_changed': RuntimeSuiteSelectionChanged;
 }
 
 const SCHEMAS: Record<RuntimeCommandEventName, z.ZodType> = {
@@ -539,6 +556,7 @@ const SCHEMAS: Record<RuntimeCommandEventName, z.ZodType> = {
     [RuntimeCommandName.OrganizationPurgeRequested]: RuntimeOrganizationPurgeRequestedSchema,
     [RuntimeCommandName.SuiteRequested]: RuntimeSuiteRequestedSchema,
     [RuntimeCommandName.SuiteRetried]: RuntimeSuiteRetriedSchema,
+    [RuntimeCommandName.SuiteSelectionChanged]: RuntimeSuiteSelectionChangedSchema,
 };
 
 /**
