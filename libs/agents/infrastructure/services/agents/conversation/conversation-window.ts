@@ -39,6 +39,12 @@ export async function conversationCompression(params: {
             ),
             safetyMarginTokens:
                 Math.ceil(window * DEFAULT_SAFETY_MARGIN_RATIO) + answer,
+            // The PR diff a tool read is what the developer asked about: it
+            // stays whole while the request fits (#2681 review).
+            onlyWhenOverBudget: true,
+            // A dense result (an inline base64 image) undercounted by 3x
+            // was sent past the window (#2233).
+            countAtWorstCase: true,
         }),
     );
 }

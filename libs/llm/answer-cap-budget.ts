@@ -81,10 +81,11 @@ export function optionsNamespace(
  */
 export async function anthropicDeclaredMaxTokens(
     modelId: string,
-    maxOutputTokens: number,
+    /** Unset: what the adapter sends when the slot sets no answer limit. */
+    maxOutputTokens: number | undefined,
     providerOptions: Record<string, unknown> | undefined,
 ): Promise<number | undefined> {
-    const key = `${modelId}|${maxOutputTokens}|${JSON.stringify(providerOptions ?? {})}`;
+    const key = `${modelId}|${maxOutputTokens ?? 'unset'}|${JSON.stringify(providerOptions ?? {})}`;
     const known = declared.get(key);
     if (known !== undefined) {
         return known;
@@ -104,7 +105,7 @@ export async function anthropicDeclaredMaxTokens(
         });
         await adapter(modelId).doGenerate({
             prompt: [{ role: 'user', content: [{ type: 'text', text: '.' }] }],
-            maxOutputTokens,
+            ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
             providerOptions: providerOptions as any,
         });
     } catch {

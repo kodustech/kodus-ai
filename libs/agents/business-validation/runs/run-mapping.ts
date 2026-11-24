@@ -5,7 +5,7 @@ import type {
 } from '../business-validation.types';
 import { deriveStatus } from '../judge/validation-verdict';
 import type { CheckedCommit } from '../render';
-import { taskTextHash } from '../carry-over';
+import { matchPrevious, requirementKey, taskTextHash } from '../carry-over';
 import type { RunAuthor, RunTask } from './validation-run.model';
 import type {
     NewValidationRun,
@@ -83,46 +83,77 @@ export function toRunTasks(result: BusinessValidationResult): RunTask[] {
 /** What `sameResult` compares. */
 type ResultFields = Pick<
     NewValidationRun,
-    'outcome' | 'skipReason' | 'passed' | 'tasks' | 'unseenFiles'
+    'outcome' | 'skipReason' | 'passed' | 'tasks' | 'unseenFiles' | 'references'
 >;
 
 /**
- * Whether two runs reached the same result, as the author reads it: the
- * outcome, each task's verdict and scope, how many of its requirements and
- * out-of-scope changes stand in each state, accepted or not, and the files
- * the judge could not see. Wording is left out: the judge restates a
- * requirement in other words from one run to the next, and that is not a
- * change the author has to act on. So is the commit: a new push with the
- * same verdict is the same result (#2423).
+ * Whether two runs reached the same result, as the author reads it (#2423):
+ * the outcome, the tasks and references it is about, the files the judge
+ * could not see, and per task its verdict and scope, each requirement's state
+ * and acceptance, and each out-of-scope change. A requirement is the same
+ * one by the match the comment's "was missing" uses (`matchPrevious`), so a
+ * re-quote in other words is not a change, and AC01 fixed while AC02 broke
+ * is. The commit is left out: a new push with the same verdict is the same
+ * result.
  */
 export function sameResult(
     previous: ResultFields,
     next: ResultFields,
 ): boolean {
-    return resultKey(previous) === resultKey(next);
+    if (outlineKey(previous) !== outlineKey(next)) {
+        return false;
+    }
+    const before = new Map(
+        (previous.tasks ?? []).map((t) => [`${t.tracker}:${t.id}`, t]),
+    );
+    return (next.tasks ?? []).every((task) => {
+        const prior = before.get(`${task.tracker}:${task.id}`);
+        return !!prior && sameTaskVerdict(prior, task);
+    });
 }
 
-function resultKey(run: ResultFields): string {
+/** Everything but each task's requirements and out-of-scope changes. */
+function outlineKey(run: ResultFields): string {
     return JSON.stringify([
         run.outcome,
         run.skipReason ?? null,
         run.passed ?? null,
+        (run.references ?? []).map((r) => `${r.kind}:${r.id}`).sort(),
         (run.tasks ?? [])
-            .map((task) => [
-                task.tracker,
-                task.id,
-                task.passed,
-                task.scopeMismatch ?? false,
-                (task.requirements ?? [])
-                    .map((r) => `${r.state}:${r.accepted ? 1 : 0}`)
-                    .sort(),
-                (task.outOfScope ?? [])
-                    .map((o) => `${o.accepted ? 1 : 0}`)
-                    .sort(),
-            ])
-            .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+            .map((t) =>
+                [t.tracker, t.id, t.passed, t.scopeMismatch ?? false].join('|'),
+            )
+            .sort(),
         [...(run.unseenFiles ?? [])].sort(),
     ]);
+}
+
+function sameTaskVerdict(before: RunTask, now: RunTask): boolean {
+    const was = before.requirements ?? [];
+    const is = now.requirements ?? [];
+    if (was.length !== is.length) {
+        return false;
+    }
+    const matched = matchPrevious(
+        is.map((r) => r.requirement),
+        was.map((r) => r.requirement),
+        { similar: !!before.textHash && before.textHash === now.textHash },
+    );
+    const sameRequirements = is.every((r, i) => {
+        const at = matched[i];
+        const prior = at === undefined ? undefined : was[at];
+        return (
+            !!prior &&
+            prior.state === r.state &&
+            !!prior.accepted === !!r.accepted
+        );
+    });
+    const changes = (run: RunTask) =>
+        (run.outOfScope ?? [])
+            .map((o) => `${requirementKey(o.change)}:${o.accepted ? 1 : 0}`)
+            .sort()
+            .join('\n');
+    return sameRequirements && changes(before) === changes(now);
 }
 
 export function buildRun(

@@ -59,7 +59,7 @@ import {
     resolvesSuggestionThread,
     statusesAtOrAbove,
 } from '@libs/platformData/domain/pullRequests/implementation-status';
-import { declaredAnswerTokens } from '@libs/llm/model-invocation';
+import { structuredCallAnswerTokens } from '@libs/llm/structured-review-call';
 import { slotContextWindow } from '@libs/llm/slot-window';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 import {
@@ -306,18 +306,13 @@ export class SuggestionService implements ISuggestionService {
                 );
             // The smaller of the slot's and its fallback's window (LLM.run
             // re-sends the call to the fallback), else the env model's, less
-            // the answer: what the slot's own limit makes the call declare,
-            // else the quarter of the window it always kept.
+            // the answer the call declares on either (a structured call: no
+            // thinking by default), else the quarter of the window it always
+            // kept.
             const window = slotContextWindow(byokConfig ?? undefined);
             const answerTokens =
-                byokConfig?.maxOutputTokens && byokConfig.maxOutputTokens > 0
-                    ? await declaredAnswerTokens(
-                          byokConfig,
-                          byokConfig.maxOutputTokens,
-                      )
-                    : Math.ceil(
-                          window * (1 - IMPLEMENTATION_CHECK_PROMPT_SHARE),
-                      );
+                (await structuredCallAnswerTokens(byokConfig ?? undefined)) ??
+                Math.ceil(window * (1 - IMPLEMENTATION_CHECK_PROMPT_SHARE));
             const maxPromptTokens = Math.max(0, window - answerTokens);
 
             const requests = [...byFile].map(([filename, asks]) => ({

@@ -1,6 +1,6 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { declaredAnswerTokens } from '@libs/llm/model-invocation';
 import { knownSlotContextWindow } from '@libs/llm/slot-window';
+import { structuredCallAnswerTokens } from '@libs/llm/structured-review-call';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { LLM } from '@libs/llm/llm';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
@@ -3402,7 +3402,9 @@ ${reviewOptions}
 
     /**
      * The input tokens a summary call has: the slot's window (or the model's
-     * known one) less the answer the slot declares. Undefined when neither
+     * known one) less the answer the call declares on the slot or its
+     * fallback. Anthropic's adapter declares the model's whole output limit
+     * when the slot sets none, so that is kept too. Undefined when neither
      * the slot nor the model table knows the window.
      */
     private async summaryInputBudget(
@@ -3412,10 +3414,7 @@ ${reviewOptions}
         if (window === undefined) {
             return undefined;
         }
-        const answer =
-            slot?.maxOutputTokens && slot.maxOutputTokens > 0
-                ? await declaredAnswerTokens(slot, slot.maxOutputTokens)
-                : 0;
+        const answer = (await structuredCallAnswerTokens(slot)) ?? 0;
         return Math.max(1, window - answer);
     }
 

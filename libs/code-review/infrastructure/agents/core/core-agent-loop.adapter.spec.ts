@@ -11,9 +11,15 @@
 // via resolveModelConfig — mock it to inject the scripted MockLanguageModelV3.
 jest.mock('@libs/llm/model-invocation', () => ({
     resolveModelConfig: jest.fn(),
+    // The check slot's answer, as its adapter would declare it.
+    declaredAnswerTokens: jest.fn(
+        async (_slot: unknown, answer?: number) => answer,
+    ),
 }));
 
 import { MockLanguageModelV3 } from 'ai/test';
+import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
 
 import {
@@ -160,6 +166,83 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
         expect(slotsCalled).toContain('check-model');
     });
 
+    it("keeps the check model's declared answer out of what each verify run re-sends (#2233)", async () => {
+        const { model } = makeModel();
+        const run = jest.spyOn(AiSdkAgentRunner.prototype, 'run');
+        try {
+            await runAgentLoopViaCore(makeInput(model), {
+                ...secrets,
+                byokConfig: { provider: 'openai', model: 'run-model' },
+                verifyByokConfig: {
+                    provider: 'anthropic',
+                    model: 'check-model',
+                    maxInputTokens: 32_000,
+                    maxOutputTokens: 16_000,
+                },
+            });
+            const verifyRuns = run.mock.calls.filter(
+                ([spec]) => spec.phase === 'verify',
+            );
+            expect(verifyRuns.length).toBeGreaterThan(0);
+            // Under the soft threshold (70% of 32k), so only the answer the
+            // check model declares can make the history too long.
+            const messages = [
+                { role: 'user', content: 'verify the finding' },
+                ...Array.from({ length: 8 }, (_, i) => [
+                    {
+                        role: 'assistant',
+                        content: [
+                            {
+                                type: 'tool-call',
+                                toolCallId: `r${i}`,
+                                toolName: 'readFile',
+                                input: { path: `src/f${i}.ts` },
+                            },
+                        ],
+                    },
+                    {
+                        role: 'tool',
+                        content: [
+                            {
+                                type: 'tool-result',
+                                toolCallId: `r${i}`,
+                                toolName: 'readFile',
+                                output: {
+                                    type: 'text',
+                                    value: Array.from(
+                                        { length: 160 },
+                                        (_, line) =>
+                                            `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                                    ).join('\n'),
+                                },
+                            },
+                        ],
+                    },
+                ]).flat(),
+            ];
+            const before = estimateTextTokens(JSON.stringify(messages));
+            expect(before).toBeLessThan(32_000 * 0.7);
+            expect(before + 16_000).toBeGreaterThan(32_000);
+            for (const [spec] of verifyRuns) {
+                const compression = spec.policies.find(
+                    (p) => p.name === 'compression',
+                );
+                const sent =
+                    (
+                        await compression?.prepareStep?.({
+                            messages,
+                            stepNumber: 8,
+                        } as any)
+                    )?.messages ?? messages;
+                expect(
+                    estimateTextTokens(JSON.stringify(sent)) + 16_000,
+                ).toBeLessThanOrEqual(32_000);
+            }
+        } finally {
+            run.mockRestore();
+        }
+    });
+
     it('keeps verify on the run slot when the check slot is the same model', async () => {
         const { model } = makeModel();
         const input = makeInput(model);
@@ -244,9 +327,8 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
                 : HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT;
             const doGenerate = (async (opts: any) => {
                 const text = JSON.stringify(opts?.prompt ?? '');
-                const role = /ONE assignment on this pull request: ([^.]+)\./.exec(
-                    text,
-                );
+                const role =
+                    /ONE assignment on this pull request: ([^.]+)\./.exec(text);
                 if (role && text.includes(lensSystem)) {
                     roles.push(role[1]);
                 }
@@ -256,7 +338,9 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
                         {
                             type: 'tool-call',
                             toolCallId: 't',
-                            toolName: verifier ? 'submitVerdict' : 'submitResult',
+                            toolName: verifier
+                                ? 'submitVerdict'
+                                : 'submitResult',
                             input: JSON.stringify(
                                 verifier
                                     ? { keep: true, rationale: 'ok' }
@@ -485,22 +569,19 @@ describe('contract matrix — B. semantic-but-wrong', () => {
     // KEPT (verifier.agent.ts:143) — the #1786 class for the verify gate.
 
     // Row 21 — boolean as string ("false").
-    it(
-        'row 21 — keep:"false" (string) must drop, not silently default to keep',
-        () => {
-            const v = extractVerdict(
-                mkState({
-                    artifacts: [
-                        verdictArtifact({
-                            keep: 'false',
-                            rationale: 'refuted',
-                        }),
-                    ],
-                }),
-            );
-            expect(v.keep).toBe(false); // fails today (defaults to true)
-        },
-    );
+    it('row 21 — keep:"false" (string) must drop, not silently default to keep', () => {
+        const v = extractVerdict(
+            mkState({
+                artifacts: [
+                    verdictArtifact({
+                        keep: 'false',
+                        rationale: 'refuted',
+                    }),
+                ],
+            }),
+        );
+        expect(v.keep).toBe(false); // fails today (defaults to true)
+    });
 
     // A genuine boolean verdict is honored both ways (the happy semantic path).
     it('row 21-23 baseline — a real boolean keep:false is honored', () => {
@@ -924,9 +1005,9 @@ describe('runAgentLoopViaCore — model policy and threaded review context', () 
         );
 
         expect(out.droppedByVerify).toHaveLength(0);
-        expect(out.findings.suggestions.map((s: any) => s.relevantFile)).toEqual([
-            'a.ts',
-        ]);
+        expect(
+            out.findings.suggestions.map((s: any) => s.relevantFile),
+        ).toEqual(['a.ts']);
     });
 
     describe('readRepoInstruction', () => {
@@ -1277,9 +1358,7 @@ describe('finderRunEnvironment — overhead', () => {
                 fallback: { model: 'claude-sonnet-5-5' },
             }),
         ).toBe(systemPrompt);
-        expect(withSlot({ model: 'claude-sonnet-5-5' })).not.toBe(
-            systemPrompt,
-        );
+        expect(withSlot({ model: 'claude-sonnet-5-5' })).not.toBe(systemPrompt);
     });
 });
 

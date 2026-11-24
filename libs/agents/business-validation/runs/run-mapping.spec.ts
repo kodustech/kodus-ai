@@ -86,9 +86,11 @@ describe('sameResult (#2423)', () => {
                     id: 'SAA-96',
                     passed: false,
                     readAt: '2026-10-05T12:00:00.000Z',
+                    textHash: 'same-task-text',
                     requirements: [
                         {
-                            requirement: 'Order persists',
+                            requirement:
+                                'The order persists after a page reload',
                             state: 'missing',
                             evidence: [],
                             confidence: 'high',
@@ -107,7 +109,7 @@ describe('sameResult (#2423)', () => {
             {
                 requirements: [
                     {
-                        requirement: 'The order is saved',
+                        requirement: 'The order persists after the page reload',
                         state: 'missing',
                         evidence: [],
                         confidence: 'high',
@@ -125,5 +127,65 @@ describe('sameResult (#2423)', () => {
         expect(sameResult(run(), run({ unseenFiles: ['icons/a.svg'] }))).toBe(
             false,
         );
+    });
+
+    it('reads AC01 fixed while AC02 broke as a change, though the states add up the same', () => {
+        const req = (requirement: string, source: string, state: string) => ({
+            requirement,
+            source,
+            state,
+            evidence: [],
+            confidence: 'high',
+        });
+        const before = run(
+            {},
+            {
+                requirements: [
+                    req('Refunds are logged', 'AC01', 'missing'),
+                    req('Refunds notify the buyer', 'AC02', 'met'),
+                ],
+            },
+        );
+        const after = run(
+            {},
+            {
+                requirements: [
+                    req('Refunds are logged', 'AC01', 'met'),
+                    req('Refunds notify the buyer', 'AC02', 'missing'),
+                ],
+            },
+        );
+        expect(sameResult(before, after)).toBe(false);
+    });
+
+    it('reads a different out-of-scope change as a change', () => {
+        const change = (text: string) =>
+            run({}, { outOfScope: [{ change: text, evidence: [] }] });
+        expect(
+            sameResult(
+                change('Added a Redis cache to refunds'),
+                change('Removed the audit log on refunds'),
+            ),
+        ).toBe(false);
+    });
+
+    it('reads a skip about another task as a change', () => {
+        const missing = (id: string) =>
+            ({
+                outcome: 'task_missing',
+                tasks: [],
+                unseenFiles: [],
+                references: [
+                    {
+                        kind: 'key',
+                        id,
+                        raw: id,
+                        source: 'command',
+                        intent: 'mentions',
+                    },
+                ],
+            }) as any;
+        expect(sameResult(missing('PAY-12'), missing('PAY-21'))).toBe(false);
+        expect(sameResult(missing('PAY-12'), missing('PAY-12'))).toBe(true);
     });
 });

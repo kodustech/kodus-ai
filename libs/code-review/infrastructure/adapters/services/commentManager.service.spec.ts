@@ -635,6 +635,33 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 expect(users.some((p) => /\(cut:/.test(p.prompt))).toBe(false);
             });
 
+            it("keeps room for the output limit Anthropic's adapter declares when the slot sets none", async () => {
+                await summarize(
+                    {
+                        provider: 'anthropic',
+                        model: 'claude-haiku-4-5-20251001',
+                        apiKey: 'k',
+                        maxInputTokens: 100_000,
+                    },
+                    [
+                        {
+                            filename: 'src/catalog.ts',
+                            patch: Array.from(
+                                { length: 6_000 },
+                                (_, line) =>
+                                    `+export const item${line} = load('${line}');`,
+                            ).join('\n'),
+                            status: 'added',
+                        },
+                    ],
+                );
+                expect(sent().length).toBeGreaterThan(0);
+                for (const tokens of sent()) {
+                    // The adapter sends max_tokens = 64,000 for Haiku 4.5.
+                    expect(tokens + 64_000).toBeLessThanOrEqual(100_000);
+                }
+            });
+
             it('asks the model nothing when the prompt alone leaves no room', async () => {
                 const result = await summarize(
                     {

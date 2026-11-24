@@ -29,7 +29,10 @@ import {
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 
-import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
+import {
+    ContextWindowCompressor,
+    DEFAULT_SAFETY_MARGIN_RATIO,
+} from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
 import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
 import { OverflowRecoveringRunner } from './overflow-recovering-runner';
 import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compression/token-estimator';
@@ -59,6 +62,7 @@ import {
     type AgentLoopSecrets,
     type VerificationTraceSummary,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import { declaredAnswerTokens } from '@libs/llm/model-invocation';
 import { slotContextWindow } from '@libs/llm/slot-window';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
@@ -352,6 +356,18 @@ export async function runAgentLoopViaCore(
         !!verifySlot &&
         (verifySlot.provider !== secrets.byokConfig?.provider ||
             verifySlot.model !== secrets.byokConfig?.model);
+    // The check model's compressor keeps the answer that model declares
+    // (its own limit, or what its adapter sends with none) beside the
+    // drift margin: a wide batch of reads plus a 64k answer overflowed.
+    const verifyWindow = verifyOnOwnModel ? slotContextWindow(verifySlot) : 0;
+    const verifyAnswer = verifyOnOwnModel
+        ? ((await declaredAnswerTokens(
+              verifySlot,
+              verifySlot.maxOutputTokens && verifySlot.maxOutputTokens > 0
+                  ? verifySlot.maxOutputTokens
+                  : undefined,
+          )) ?? 0)
+        : 0;
     const ownVerify = verifyOnOwnModel
         ? {
               verifyRunner: new AiSdkAgentRunner(verifySlot, {
@@ -366,10 +382,12 @@ export async function runAgentLoopViaCore(
               verifyModelId: verifySlot.model ?? 'resolved',
               verifyFallbackModelId: verifySlot.fallback?.model,
               // Its own window: the check model's, not the finder's (#2233).
-              verifyCompressor: new ContextWindowCompressor(
-                  slotContextWindow(verifySlot),
-                  { overheadTokens },
-              ),
+              verifyCompressor: new ContextWindowCompressor(verifyWindow, {
+                  overheadTokens,
+                  safetyMarginTokens:
+                      Math.ceil(verifyWindow * DEFAULT_SAFETY_MARGIN_RATIO) +
+                      verifyAnswer,
+              }),
               verifyProviderOptions: buildProviderOptions(
                   `${input.agentName ?? 'finder'}/verify`,
                   input.telemetryMetadata,

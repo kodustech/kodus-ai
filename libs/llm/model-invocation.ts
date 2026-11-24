@@ -232,22 +232,51 @@ function resolveReasoningOptions(
     return { providerOptions, reasoningSlot };
 }
 
+/** How a call resolves reasoning: an agent loop's, or a structured call's. */
+export interface AnswerCallReasoning {
+    /** The effort an unset slot gets: `low` in an agent loop, `none` structured. */
+    reasoningEffortDefault?: ReasoningEffort;
+    /** The call turns thinking off (a structured call's `suppress-thinking` plan). */
+    suppressReasoning?: boolean;
+}
+
+/** What @ai-sdk/amazon-bedrock adds when thinking is on and no answer is set. */
+const BEDROCK_UNSET_ANSWER_ROOM = 4096;
+
 /**
- * The answer an agent-loop call on this slot (or, without one, on the
- * env-managed model) declares to the provider for `answerTokens`: Anthropic
- * and Bedrock ask for `max_tokens = answer + thinking budget`, and Anthropic
- * caps that sum at a known Claude model's output limit. The window must hold
- * what is declared, no more and no less.
+ * The answer a call on this slot (or, without one, on the env-managed model)
+ * declares to the provider for `answerTokens`: Anthropic and Bedrock ask for
+ * `max_tokens = answer + thinking budget`, and Anthropic caps that sum at a
+ * known Claude model's output limit. With `answerTokens` unset, what the
+ * provider is sent when the slot sets no limit: Anthropic's adapter still
+ * declares the model's whole output limit, so the window must hold it.
+ * Undefined only when nothing is declared (the provider decides).
+ * Reasoning resolves as an agent loop's unless `call` says otherwise.
  */
 export async function declaredAnswerTokens(
     slot: NormalizedModel | undefined,
     answerTokens: number,
-): Promise<number> {
+    call?: AnswerCallReasoning,
+): Promise<number>;
+export async function declaredAnswerTokens(
+    slot: NormalizedModel | undefined,
+    answerTokens: number | undefined,
+    call?: AnswerCallReasoning,
+): Promise<number | undefined>;
+export async function declaredAnswerTokens(
+    slot: NormalizedModel | undefined,
+    answerTokens: number | undefined,
+    call: AnswerCallReasoning = {},
+): Promise<number | undefined> {
     try {
         const { providerOptions, reasoningSlot } = resolveReasoningOptions(
             slot,
             slot ? undefined : envManagedReasoningDescriptor(),
-            { runName: 'declaredAnswerTokens', reasoningEffortDefault: 'low' },
+            {
+                runName: 'declaredAnswerTokens',
+                reasoningEffortDefault: call.reasoningEffortDefault ?? 'low',
+                suppressReasoning: call.suppressReasoning,
+            },
         );
         const namespace = optionsNamespace(reasoningSlot);
         if (namespace === 'anthropic' && reasoningSlot?.model) {
@@ -260,14 +289,17 @@ export async function declaredAnswerTokens(
                 return declared;
             }
         }
-        return (
-            answerTokens +
-            (budgetAddedToAnswerCap(
-                providerOptions,
-                reasoningSlot,
-                namespace,
-            ) ?? 0)
+        const budget = budgetAddedToAnswerCap(
+            providerOptions,
+            reasoningSlot,
+            namespace,
         );
+        if (answerTokens === undefined) {
+            return budget === undefined
+                ? undefined
+                : budget + BEDROCK_UNSET_ANSWER_ROOM;
+        }
+        return answerTokens + (budget ?? 0);
     } catch {
         return answerTokens;
     }

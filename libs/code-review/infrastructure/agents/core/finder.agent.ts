@@ -1135,11 +1135,10 @@ export async function runFinderWithVerify(
         {
             ...params,
             // A verify run reads and re-sends files on up to ten steps
-            // (#2233): the finder's window guard when it runs on the finder's
-            // model, its own when it runs on a check model.
-            compression: params.verifyRunner
-                ? params.verifyCompressor &&
-                  new CompressionPolicy(params.verifyCompressor)
+            // (#2233): the check model's own window guard when the caller
+            // built one, else the finder's.
+            compression: params.verifyCompressor
+                ? new CompressionPolicy(params.verifyCompressor)
                 : params.finderSpec.policies.find(
                       (p) => p.name === 'compression',
                   ),

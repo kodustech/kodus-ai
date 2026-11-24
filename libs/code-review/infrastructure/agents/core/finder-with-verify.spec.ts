@@ -360,6 +360,41 @@ describe('runFinderWithVerify on a check model of its own (#2233)', () => {
     });
 });
 
+describe('runFinderWithVerify on a check runner with no window guard of its own', () => {
+    it("keeps the finder's compression on every verify run", async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+            compressor: new ContextWindowCompressor(16_000),
+        });
+        const verifyRunner = new AiSdkAgentRunner(undefined);
+        const verifyRun = jest.spyOn(verifyRunner, 'run');
+
+        await runFinderWithVerify(
+            {
+                runner: new AiSdkAgentRunner(undefined),
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                skipHeavyPasses: true,
+                verifyRunner,
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(verifyRun).toHaveBeenCalled();
+        for (const [spec] of verifyRun.mock.calls) {
+            expect(spec.policies.some((p) => p.name === 'compression')).toBe(
+                true,
+            );
+        }
+    });
+});
+
 describe('runFinderWithVerify — repo_instruction findings', () => {
     // The verifier is told to drop a quote it cannot find, and did not always:
     // a PR that adds an instruction to CLAUDE.md is not checked against it.
