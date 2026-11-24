@@ -1294,6 +1294,15 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         sql: `ALTER TABLE runtime.runtime_suite_selection_state ADD COLUMN IF NOT EXISTS off_by text;
         UPDATE runtime.runtime_suite_selection_state SET off_by = 'brake' WHERE off AND off_by IS NULL;`,
     },
+    {
+        version: 59,
+        name: 'the machine time a suite run held hosts for',
+        // docs/runtime/e2e-suites.md section 12 and usage-report.md: the time the run's hosts were held (a claim's acquire until its commands ended),
+        // as the engine measured it: the first pass on the shard hosts, and the re-runs on the PR, main and fresh hosts. Summed over hosts, so
+        // three shards of four minutes are twelve. Null on a run stored before this, and on one that ended before it measured: never zero.
+        sql: `ALTER TABLE runtime.runtime_suite_runs ADD COLUMN IF NOT EXISTS first_pass_ms bigint;
+        ALTER TABLE runtime.runtime_suite_runs ADD COLUMN IF NOT EXISTS rerun_ms bigint;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

@@ -39,6 +39,9 @@ export interface StoredSuiteRun extends SuiteRunRecord {
     /** The baseline the run was judged against (its main sha) and how many main commits it was behind (8.2). */
     baselineSha?: string;
     baseDrift?: number;
+    /** The machine time the run's hosts were held for, in ms summed over hosts: the first pass, and the re-runs (docs section 12). Absent on a run that did not measure it. */
+    firstPassMs?: number;
+    rerunMs?: number;
 }
 
 /** What a run ends with beside its state. */
@@ -46,6 +49,8 @@ export interface SuiteRunEnd {
     classification?: Classification;
     baselineSha?: string;
     baseDrift?: number;
+    firstPassMs?: number;
+    rerunMs?: number;
 }
 
 export interface SuiteShardPlan {
@@ -101,6 +106,8 @@ const runOf = (x: Record<string, any>): StoredSuiteRun => ({
     ...(x.selection && Object.keys(x.selection).length ? { selection: x.selection } : {}),
     ...(x.baseline_sha ? { baselineSha: x.baseline_sha } : {}),
     ...(x.base_drift !== null && x.base_drift !== undefined ? { baseDrift: x.base_drift } : {}),
+    ...(x.first_pass_ms !== null && x.first_pass_ms !== undefined ? { firstPassMs: Number(x.first_pass_ms) } : {}),
+    ...(x.rerun_ms !== null && x.rerun_ms !== undefined ? { rerunMs: Number(x.rerun_ms) } : {}),
 });
 
 export class PgSuiteRuns {
@@ -143,8 +150,8 @@ export class PgSuiteRuns {
     /** The first conclusion stays: a run that ended is never moved again. */
     async finish(organizationId: string, suiteRunId: string, state: SuiteRunState, at: Date, end: SuiteRunEnd = {}): Promise<void> {
         await this.pool.query(
-            `UPDATE runtime.runtime_suite_runs SET state = $3, finished_at = $4, classification = $5::jsonb, baseline_sha = $6, base_drift = $7, updated_at = now() WHERE organization_id = $1 AND suite_run_id = $2 AND finished_at IS NULL`,
-            [organizationId, suiteRunId, state, at, end.classification ? JSON.stringify(end.classification) : null, end.baselineSha ?? null, end.baseDrift ?? null],
+            `UPDATE runtime.runtime_suite_runs SET state = $3, finished_at = $4, classification = $5::jsonb, baseline_sha = $6, base_drift = $7, first_pass_ms = $8, rerun_ms = $9, updated_at = now() WHERE organization_id = $1 AND suite_run_id = $2 AND finished_at IS NULL`,
+            [organizationId, suiteRunId, state, at, end.classification ? JSON.stringify(end.classification) : null, end.baselineSha ?? null, end.baseDrift ?? null, end.firstPassMs ?? null, end.rerunMs ?? null],
         );
     }
 

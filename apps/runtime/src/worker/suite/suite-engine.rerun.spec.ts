@@ -178,3 +178,32 @@ describe('re-running what failed in the first pass', () => {
         expect(w.cell.acquires.every((a) => a.ref.side === 'base')).toBe(true);
     });
 });
+
+// What a run cost in machine time, as the hosts held it: the first pass on the shard hosts, and the re-runs on the PR and main hosts.
+// The usage report and the run page read it; a run that did not measure it (one stored before this) says nothing, never zero.
+describe('the machine time a suite run records', () => {
+    it('a green run holds hosts for its first pass only: no re-run time', async () => {
+        const w = world({ specs: { 'a.cy.ts': { ms: 3 * MIN }, 'b.cy.ts': { ms: 2 * MIN } } });
+        await w.run();
+        const stored = await w.runs.get(ORG, 'sr-1');
+        expect(stored?.firstPassMs).toBeGreaterThanOrEqual(5 * MIN);
+        expect(stored?.rerunMs).toBe(0);
+    });
+
+    it('a red spec adds the time of its re-runs on the PR host and on the main host, apart from the first pass', async () => {
+        const w = world({ specs: { ...oks, 'reg.cy.ts': { ms: 2 * MIN, pr: [{ fail: ERR }] } } });
+        await w.run();
+        const stored = await w.runs.get(ORG, 'sr-1');
+        expect(stored?.firstPassMs).toBeGreaterThan(0);
+        // Two re-runs of a 2 minute spec: one on the PR, one on main.
+        expect(stored?.rerunMs).toBeGreaterThanOrEqual(4 * MIN);
+    });
+
+    it('a baseline records its time as a first pass', async () => {
+        const w = world({ specs: { 'a.cy.ts': { ms: 3 * MIN } } });
+        await w.run({ mode: 'baseline', prNumber: undefined, prSha: undefined, mergeBase: undefined });
+        const stored = await w.runs.get(ORG, 'sr-1');
+        expect(stored?.firstPassMs).toBeGreaterThanOrEqual(3 * MIN);
+        expect(stored?.rerunMs).toBe(0);
+    });
+});

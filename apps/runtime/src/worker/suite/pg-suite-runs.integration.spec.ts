@@ -127,6 +127,17 @@ const run: SuiteRunRecord = {
         expect((await store.get('org-a', '0b5c2f6e-6f1d-4c53-9a43-1d1f5f3a9c12'))?.selection).toBeUndefined();
     });
 
+    it('keeps the machine time the hosts were held for at the end of the run, and a run that never measured it has none, not zero', async () => {
+        await store.create(run);
+        await store.create({ ...run, suiteRunId: 'r-unmeasured' });
+        await store.finish('org-a', run.suiteRunId, 'passed', new Date('2026-11-23T12:30:00.000Z'), { firstPassMs: 11 * 60_000, rerunMs: 3 * 60_000 });
+        await store.finish('org-a', 'r-unmeasured', 'passed', new Date('2026-11-23T12:30:00.000Z'));
+        expect(await store.get('org-a', run.suiteRunId)).toMatchObject({ firstPassMs: 660_000, rerunMs: 180_000 });
+        const old = (await store.get('org-a', 'r-unmeasured'))!;
+        expect(old.firstPassMs).toBeUndefined();
+        expect(old.rerunMs).toBeUndefined();
+    });
+
     it('a shadow is no run of the PR: it never feeds the re-push rule and a new push does not cancel it', async () => {
         await store.create(run);
         await store.create({ ...run, suiteRunId: 'r-shadow', mode: 'shadow', prSha: 'd'.repeat(40), requestedAt: new Date('2026-11-23T13:00:00.000Z') });

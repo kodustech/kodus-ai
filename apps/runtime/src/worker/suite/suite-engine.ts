@@ -245,6 +245,8 @@ interface RunCtx {
     artifactChain: Promise<void>;
     /** A canary was found in an artifact. */
     leaked: boolean;
+    /** The time the run's hosts were held, summed over hosts (a baseline and a first pass count as `firstPass`). */
+    hostMs: { firstPass: number; rerun: number };
 }
 
 /** The test's last failed attempt as a signature: what makes two failures "the same". */
@@ -290,6 +292,7 @@ export class SuiteEngine {
             artifactBytes: 0,
             artifactChain: Promise.resolve(),
             leaked: false,
+            hostMs: { firstPass: 0, rerun: 0 },
         };
         try {
             await this.firstPass(ctx);
@@ -304,6 +307,21 @@ export class SuiteEngine {
         } finally {
             await this.cleanup(ctx);
         }
+    }
+
+    /** Runs `work` and adds the time it held a host to the run's machine time: `firstPass` for the shards, `rerun` for everything after. */
+    private async held<T>(ctx: RunCtx, kind: 'firstPass' | 'rerun', work: () => Promise<T>): Promise<T> {
+        const at = this.d.clock.now();
+        try {
+            return await work();
+        } finally {
+            ctx.hostMs[kind] += Math.max(0, this.d.clock.now() - at);
+        }
+    }
+
+    /** What a run ends with beside its state: the machine time it measured. */
+    private machineOf(ctx: RunCtx) {
+        return { firstPassMs: Math.round(ctx.hostMs.firstPass), rerunMs: Math.round(ctx.hostMs.rerun) };
     }
 
     // ---- plan, hosts
@@ -329,8 +347,10 @@ export class SuiteEngine {
             for (const p of runs[0].planned) runs[0].missing.set(p, 'infra');
         } else {
             await Promise.all(runs.map(async (r) => {
-                await this.driveShard(ctx, r);
-                await this.keepArtifacts(ctx, r);
+                await this.held(ctx, 'firstPass', async () => {
+                    await this.driveShard(ctx, r);
+                    await this.keepArtifacts(ctx, r);
+                });
             }));
         }
         await this.recordMissing(ctx);
@@ -744,10 +764,12 @@ export class SuiteEngine {
 
     /** The specs that never reported, once more, on a host of their own that holds the PR build. */
     private async freshHostPass(ctx: RunCtx, specs: readonly string[]): Promise<{ ran: Ran } | undefined> {
+        const at = this.d.clock.now();
         const claimId = await this.extraHost(ctx, FRESH_HOST_SHARD, 'pr', ctx.sha, 0);
         const runnable = specs.filter((s) => SPEC_SAFE.test(s));
         if (!claimId || runnable.length === 0) return undefined;
         const ran = await this.runSpecs(ctx, { claimId, shard: FRESH_HOST_SHARD }, 'shard', runnable, `${ctx.req.suiteRunId}-${FRESH_HOST_SHARD}`, { timeoutMs: ctx.inputs.config.shardTimeoutMs, crashRetries: 0, clear: false });
+        ctx.hostMs.rerun += Math.max(0, this.d.clock.now() - at);
         ctx.shards.set(FRESH_HOST_SHARD, { shard: FRESH_HOST_SHARD, planned: runnable, claimId, done: ran.done, missing: ran.missing });
         await this.recordMissing(ctx, 'shard', [{ shard: FRESH_HOST_SHARD, missing: ran.missing }]);
         return { ran };
@@ -766,7 +788,7 @@ export class SuiteEngine {
             [...byShard].map(async ([shard, list]) => {
                 const claimId = ctx.shards.get(shard)?.claimId;
                 if (!claimId) return void list.forEach((s) => missing.set(s, 'infra'));
-                const ran = await this.runSpecs(ctx, { claimId, shard }, 'rerun_pr', list, `${ctx.req.suiteRunId}-${shard}-rerun`, { timeoutMs: RERUN_TIMEOUT_MS, crashRetries: 0, clear: true });
+                const ran = await this.held(ctx, 'rerun', () => this.runSpecs(ctx, { claimId, shard }, 'rerun_pr', list, `${ctx.req.suiteRunId}-${shard}-rerun`, { timeoutMs: RERUN_TIMEOUT_MS, crashRetries: 0, clear: true }));
                 for (const [k, v] of ran.done) done.set(k, v);
                 for (const [k, v] of ran.missing) missing.set(k, v);
                 await this.recordMissing(ctx, 'rerun_pr', [{ shard, missing: ran.missing }]);
@@ -780,9 +802,11 @@ export class SuiteEngine {
         const { req } = ctx;
         if (this.d.templates && !(await this.d.templates.hasReady(req.organizationId, req.environmentId))) return { state: 'template_missing' };
         for (let attempt = 0; attempt < MAIN_HOST_ATTEMPTS; attempt++) {
+            const at = this.d.clock.now();
             const claimId = await this.extraHost(ctx, MAIN_HOST_SHARD, 'base', req.mainSha, attempt);
             if (!claimId) continue;
             const ran = await this.runSpecs(ctx, { claimId, shard: MAIN_HOST_SHARD }, 'rerun_main', specs, `${req.suiteRunId}-${MAIN_HOST_SHARD}`, { timeoutMs: RERUN_TIMEOUT_MS, crashRetries: 0, clear: false });
+            ctx.hostMs.rerun += Math.max(0, this.d.clock.now() - at);
             await this.recordMissing(ctx, 'rerun_main', [{ shard: MAIN_HOST_SHARD, missing: ran.missing }]);
             return { state: 'ran', ran };
         }
@@ -820,19 +844,19 @@ export class SuiteEngine {
             await this.recordCoverageMap(ctx, firstPass);
         }
         const state = this.stateOf(ctx, firstPass, classification);
-        await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, state, new Date(this.d.clock.now()), { ...(classification ? { classification } : {}), ...(ctx.judged ? { ...(ctx.judged.baselineSha ? { baselineSha: ctx.judged.baselineSha } : {}), baseDrift: ctx.judged.baseDrift } : {}) });
+        await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, state, new Date(this.d.clock.now()), { ...this.machineOf(ctx), ...(classification ? { classification } : {}), ...(ctx.judged ? { ...(ctx.judged.baselineSha ? { baselineSha: ctx.judged.baselineSha } : {}), baseDrift: ctx.judged.baseDrift } : {}) });
         return { suiteRunId: ctx.req.suiteRunId, state, replayed: false, firstPass, ...(classification ? { classification } : {}) };
     }
 
     /** A canary in an artifact ends the suite `failed` (a security event, never green or neutral): no classification, no baseline, no durations. */
     private async concludeLeaked(ctx: RunCtx, firstPass: FirstPassSpec[]): Promise<SuiteOutcome> {
-        await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, 'failed', new Date(this.d.clock.now()));
+        await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, 'failed', new Date(this.d.clock.now()), this.machineOf(ctx));
         return { suiteRunId: ctx.req.suiteRunId, state: 'failed', replayed: false, firstPass, leaked: true };
     }
 
     /** A cancelled suite ends `cancelled`: no classification, no baseline, no durations (a cut-short spec says nothing of how long it takes). */
     private async concludeCancelled(ctx: RunCtx, firstPass: FirstPassSpec[]): Promise<SuiteOutcome> {
-        await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, 'cancelled', new Date(this.d.clock.now()));
+        await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, 'cancelled', new Date(this.d.clock.now()), this.machineOf(ctx));
         return { suiteRunId: ctx.req.suiteRunId, state: 'cancelled', replayed: false, firstPass };
     }
 
