@@ -15,6 +15,7 @@ import { PlusIcon, SearchIcon } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { isSelfHosted } from "src/core/utils/self-hosted";
 
+import { BillingConnectionPicker } from "./_components/billing-connection-picker";
 import { InviteModal } from "./_components/invite-modal";
 import { LicenseKeySettings } from "./_components/license-key-settings";
 import { useSubscriptionStatus } from "./_hooks/use-subscription-status";
@@ -98,6 +99,12 @@ export default function SubscriptionLayout({
                     <LicenseKeySettings />
                 ) : (
                     status
+                )}
+
+                {!isUnlicensedSelfHosted && (
+                    <Suspense>
+                        <BillingConnectionPicker />
+                    </Suspense>
                 )}
 
                 {/* Seats only exist once a plan has them: an unlicensed

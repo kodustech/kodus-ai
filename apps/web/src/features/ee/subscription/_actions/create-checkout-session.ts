@@ -2,6 +2,7 @@
 
 import { captureCheckoutStarted } from "src/core/utils/gate-hit";
 
+import { getBillingConnectionId } from "../_services/billing/billing-connection.server";
 import { createCheckoutSession } from "../_services/billing/fetch";
 
 export const createCheckoutSessionAction = async ({
@@ -21,6 +22,7 @@ export const createCheckoutSessionAction = async ({
             teamId,
             quantity,
             planId,
+            connectionId: await getBillingConnectionId(teamId),
         });
 
         // Everything after this happens on Stripe and comes back as the

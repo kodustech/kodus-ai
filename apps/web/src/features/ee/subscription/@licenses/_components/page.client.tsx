@@ -27,6 +27,7 @@ import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { TableFilterContext } from "../../_providers/table-filter-context";
+import { readBillingConnectionId } from "../../_services/billing/billing-connection.client";
 import { refreshOrganizationMembers } from "../../_services/billing/fetch";
 import { AssignByGitIdButton } from "./assign-by-git-id-modal";
 import { columns, type LicenseTableRow } from "./columns";
@@ -53,7 +54,10 @@ export const LicensesPageClient = ({
     const [handleRefreshMembers, { loading: isRefreshing }] = useAsyncAction(
         async () => {
             try {
-                await refreshOrganizationMembers({ teamId });
+                await refreshOrganizationMembers({
+                    teamId,
+                    connectionId: readBillingConnectionId(teamId),
+                });
                 router.refresh();
             } catch {
                 toast({

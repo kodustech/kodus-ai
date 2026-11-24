@@ -11,6 +11,7 @@ import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { UserMinusIcon } from "lucide-react";
 
+import { readBillingConnectionId } from "../../_services/billing/billing-connection.client";
 import { pruneRemovedSeats } from "../../_services/billing/fetch";
 
 type PruneCandidate = {
@@ -31,6 +32,7 @@ export const PruneSeatsModal = ({
         try {
             const result = await pruneRemovedSeats({
                 teamId,
+                connectionId: readBillingConnectionId(teamId),
                 gitIds: candidates.map((candidate) => candidate.id),
             });
 

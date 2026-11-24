@@ -45,6 +45,9 @@ export function useSuspenseGetConnections(teamId: string) {
                 | "PROJECT_MANAGEMENT"
                 | "CODE_MANAGEMENT";
             config?: { [key: string]: string };
+            connectionId?: string;
+            connectionName?: string | null;
+            reviewEnabled?: boolean;
         }[]
     >(SETUP_PATHS.CONNECTIONS, {
         params: { teamId },

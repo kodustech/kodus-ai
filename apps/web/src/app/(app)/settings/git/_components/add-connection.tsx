@@ -14,6 +14,7 @@ import { magicModal } from "@components/ui/magic-modal";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { PlusIcon } from "lucide-react";
+import { isSelfHosted } from "src/core/utils/self-hosted";
 
 import { GitProviders } from "./_providers";
 
@@ -28,9 +29,10 @@ const AddConnectionModal = () => {
                     <DialogDescription>
                         Connect another organization, group or account, on the
                         same provider or a different one. Its repositories are
-                        reviewed with this workspace's settings, and it is
-                        billed separately from the workspace's other
-                        connections.
+                        reviewed with this workspace&apos;s settings.{" "}
+                        {isSelfHosted
+                            ? "Its seats count toward the instance license."
+                            : "It is billed separately: it starts on the free plan with its own seats, and you subscribe to it from Subscription. The trial and prepaid credits stay shared by the workspace."}
                     </DialogDescription>
                 </DialogHeader>
 

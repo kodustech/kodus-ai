@@ -10,6 +10,7 @@ import {
 import { Page } from "@components/ui/page";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
 
+import { getBillingConnectionId } from "../_services/billing/billing-connection.server";
 import {
     getPlans,
     validateOrganizationLicense,
@@ -46,7 +47,10 @@ export default async function ChoosePlanPage() {
     // Fast fetches - these load quickly
     const [plansData, license, simulatorModels] = await Promise.all([
         getPlans().catch(() => ({ plans: [] as Plan[] })),
-        validateOrganizationLicense({ teamId }).catch(() => null),
+        validateOrganizationLicense({
+            teamId,
+            connectionId: await getBillingConnectionId(teamId),
+        }).catch(() => null),
         fetchPopularModels().catch(() => []),
     ]);
 

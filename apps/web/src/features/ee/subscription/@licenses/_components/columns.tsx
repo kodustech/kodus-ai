@@ -7,10 +7,10 @@ import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { useSuspenseGetConnections } from "@services/setup/hooks";
 import { ColumnDef, Row } from "@tanstack/react-table";
 import { AsyncBoundary } from "src/core/components/async-boundary";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
+import { useBillingConnection } from "src/features/ee/subscription/_hooks/use-billing-connection";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { assignOrDeassignUserLicenseAction } from "../../_actions/assign-or-deassign-license";
@@ -27,12 +27,10 @@ export type LicenseTableRow = {
 const LicenseAssignmentCell = ({ row }: { row: Row<LicenseTableRow> }) => {
     const subscription = useSubscriptionStatus();
     const { teamId } = useSelectedTeamId();
-    const connections = useSuspenseGetConnections(teamId);
+    // The seat is taken on the connection the page manages, so its platform
+    // names the git tool, not whichever connection is listed first.
+    const { connection: codeManagementConnection } = useBillingConnection();
     const canEdit = usePermission(Action.Update, ResourceType.UserSettings);
-
-    const codeManagementConnection = connections.find(
-        (connection) => connection.category === "CODE_MANAGEMENT",
-    );
 
     const [
         assignOrDeassignLicense,
