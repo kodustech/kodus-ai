@@ -362,6 +362,7 @@ describe('GitHub installation linking', () => {
             const { svc, appAuth } = setup({});
             const denied = Object.assign(new Error('Not Found'), {
                 status: 404,
+                request: { url: '/app/installations/4242/access_tokens' },
             });
             appAuth.mockImplementation(async (args: any) => {
                 if (args.type === 'oauth-user') return { token: 'ghu_user' };
@@ -503,6 +504,7 @@ describe('GitHub installation linking', () => {
             const svc = service();
             const bad = Object.assign(new Error('Bad credentials'), {
                 status: 401,
+                request: { url: '/user' },
             });
             svc.createUserOctokitClient = jest.fn().mockReturnValue({
                 rest: {

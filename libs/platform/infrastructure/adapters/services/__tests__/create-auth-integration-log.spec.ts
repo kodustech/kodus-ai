@@ -14,6 +14,7 @@ jest.mock('bitbucket', () => ({
                 if (auth.password === PAT) {
                     throw Object.assign(new Error('Unauthorized'), {
                         status: 401,
+                        request: { url: '/user' },
                     });
                 }
                 return { data: { username: 'acme' } };
@@ -117,11 +118,11 @@ describe('authenticateWithToken logs a refused token as a warning, without it', 
     it('Bitbucket Data Center', async () => {
         const { svc, error, warn } = service(BitbucketDataCenterService);
         svc.getAxiosInstance = jest.fn(() => ({
-            get: jest
-                .fn()
-                .mockRejectedValue(
-                    Object.assign(new Error('Unauthorized'), { status: 401 }),
-                ),
+            get: jest.fn().mockRejectedValue(
+                Object.assign(new Error('Unauthorized'), {
+                    response: { status: 401 },
+                }),
+            ),
         }));
 
         await expect(

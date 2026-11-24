@@ -28,6 +28,7 @@ const MAX_CAUSE_DEPTH = 5;
 type ErrorLike = {
     code?: unknown;
     status?: unknown;
+    request?: unknown;
     response?: { status?: unknown };
     cause?: unknown;
 };
@@ -61,11 +62,20 @@ function unreachableHostCode(chain: ErrorLike[]): string | undefined {
 }
 
 /**
- * The first status any link of the chain carries: octokit and bitbucket set
- * `status`, axios `response.status`, gitbeaker a cause with `response.status`.
+ * The first status a host response in the chain carries: octokit and
+ * bitbucket set `status` with the `request`, axios `response.status`,
+ * gitbeaker a cause with `response.status`. A link with neither `request` nor
+ * `response`, or a Nest exception (it keeps its own `status` and `response`),
+ * is not the host's answer.
  */
 function hostStatus(chain: ErrorLike[]): number | undefined {
     for (const link of chain) {
+        if (link instanceof HttpException) {
+            continue;
+        }
+        if (link.request === undefined && link.response === undefined) {
+            continue;
+        }
         for (const status of [link.status, link.response?.status]) {
             if (typeof status === 'number') {
                 return status;

@@ -3,6 +3,7 @@ import {
     ForbiddenException,
     HttpException,
     InternalServerErrorException,
+    UnauthorizedException,
 } from '@nestjs/common';
 
 import {
@@ -23,7 +24,7 @@ describe('toIntegrationLinkError', () => {
     });
 
     it.each([
-        ['octokit', fail({ status: 401 })],
+        ['octokit', fail({ status: 401, request: {} })],
         ['axios', fail({ response: { status: 401 } })],
         ['gitbeaker', fail({ cause: { response: { status: 401 } } })],
     ])(
@@ -41,7 +42,7 @@ describe('toIntegrationLinkError', () => {
 
     it('words a host 403 as missing access', () => {
         const mapped = toIntegrationLinkError(
-            fail({ status: 403 }),
+            fail({ status: 403, request: {} }),
             'Bitbucket Cloud',
         ) as HttpException;
 
@@ -123,7 +124,7 @@ describe('toIntegrationLinkError', () => {
     });
 
     it('finds a host 401 under a wrapper error', () => {
-        const refused = fail({ status: 401 });
+        const refused = fail({ status: 401, request: {} });
         const err = fail({ cause: fail({ cause: refused }) }, 'retry failed');
 
         const mapped = toIntegrationLinkError(err, 'GitHub') as HttpException;
@@ -135,8 +136,24 @@ describe('toIntegrationLinkError', () => {
         expect(mapped.cause).toBe(err);
     });
 
+    it('ignores a status on a link that is not a host response', () => {
+        const err = fail({ cause: fail({ status: 401 }) }, 'wrapped');
+
+        expect(toIntegrationLinkError(err, 'GitHub')).toBe(err);
+    });
+
+    it('ignores a Nest exception nested under a fault', () => {
+        const err = fail({ cause: new UnauthorizedException('not here') });
+
+        expect(toIntegrationLinkError(err, 'GitHub')).toBe(err);
+    });
+
     it('takes the first status in the chain, so a 500 over a 401 stays a fault', () => {
-        const err = fail({ status: 500, cause: fail({ status: 401 }) });
+        const err = fail({
+            status: 500,
+            request: {},
+            cause: fail({ status: 401, request: {} }),
+        });
 
         expect(toIntegrationLinkError(err, 'GitHub')).toBe(err);
     });
