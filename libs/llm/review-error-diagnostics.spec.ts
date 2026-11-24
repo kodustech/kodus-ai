@@ -281,3 +281,91 @@ describe('buildReviewErrorMessage', () => {
         ).toBe('Network failure.');
     });
 });
+
+describe('OpenRouter upstream errors (#1871)', () => {
+    // OpenRouter answers an upstream failure with its own wrapper sentence and
+    // puts the upstream answer in `error.metadata`. The AI SDK's error schema
+    // drops `metadata` from `data`, so only `responseBody` still carries it.
+    const openRouterError = (metadata: Record<string, unknown>) => ({
+        message: 'Provider returned error',
+        statusCode: 429,
+        data: { error: { message: 'Provider returned error', code: 429 } },
+        responseBody: JSON.stringify({
+            error: { message: 'Provider returned error', code: 429, metadata },
+        }),
+    });
+
+    it("quotes the upstream provider's plain-text reason, not OpenRouter's wrapper", () => {
+        const out = extractProviderMessage(
+            openRouterError({
+                raw: 'google/gemma-3-27b-it:free is temporarily rate-limited upstream. Please retry shortly.',
+                provider_name: 'Chutes',
+            }),
+        );
+        expect(out).toBe(
+            'Chutes: google/gemma-3-27b-it:free is temporarily rate-limited upstream. Please retry shortly.',
+        );
+    });
+
+    it('reads the message field of an upstream JSON body kept as a string in metadata.raw', () => {
+        const out = extractProviderMessage(
+            openRouterError({
+                raw: JSON.stringify({
+                    error: {
+                        message: 'Quota exceeded for model on this project.',
+                        status: 'RESOURCE_EXHAUSTED',
+                    },
+                }),
+                provider_name: 'Google AI Studio',
+            }),
+        );
+        expect(out).toBe(
+            'Google AI Studio: Quota exceeded for model on this project.',
+        );
+    });
+
+    // What must not change: the upstream text gets the same publishing gate as
+    // any other body, and a body without it reads as before.
+    describe('impact: what must not change', () => {
+        it('keeps the wrapper sentence when the upstream raw body is a payload, not prose', () => {
+            const echoed =
+                'Request rejected. Input was: ' +
+                'function computeInternalPricing(customer) { return customer.tier * 1.7; } ' +
+                'and the rest of the file followed';
+            expect(
+                extractProviderMessage(openRouterError({ raw: echoed })),
+            ).toBe('Provider returned error');
+        });
+
+        it('never publishes the flagged input of a moderation error', () => {
+            const out = extractProviderMessage(
+                openRouterError({
+                    reasons: ['violence'],
+                    flagged_input: 'the user prompt that was flagged',
+                    provider_name: 'OpenAI',
+                }),
+            );
+            expect(out).toBe('Provider returned error');
+        });
+
+        it('never publishes a key the upstream body echoes', () => {
+            const out = extractProviderMessage(
+                openRouterError({
+                    raw: 'Invalid key sk-or-v1-abcdef0123456789abcdef',
+                }),
+            );
+            expect(out).not.toContain('abcdef0123456789');
+        });
+
+        it('reads an ordinary provider body exactly as before', () => {
+            expect(
+                extractProviderMessage({
+                    data: { error: { message: 'Rate limit exceeded' } },
+                    responseBody: JSON.stringify({
+                        error: { message: 'Rate limit exceeded' },
+                    }),
+                }),
+            ).toBe('Rate limit exceeded');
+        });
+    });
+});

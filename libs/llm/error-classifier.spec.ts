@@ -1029,3 +1029,168 @@ describe('REQUEST_REJECTED (#1687)', () => {
         );
     });
 });
+
+describe('transport failures before any HTTP status (#1844)', () => {
+    // The AI SDK turns undici's `TypeError('fetch failed')` into this shape: the
+    // message prefixed "Cannot connect to API:", the socket error as `cause`,
+    // and no status. Built the same way here so no socket is opened.
+    const cannotConnect = (causeMessage: string, code: string) =>
+        new APICallError({
+            message: `Cannot connect to API: ${causeMessage}`,
+            url: 'https://llm.example.invalid/v1/chat/completions',
+            requestBodyValues: {},
+            cause: Object.assign(new Error(causeMessage), { code }),
+            isRetryable: true,
+        });
+
+    it.each([
+        ['connect ECONNREFUSED 127.0.0.1:443', 'ECONNREFUSED'],
+        ['getaddrinfo ENOTFOUND llm.example.invalid', 'ENOTFOUND'],
+        ['getaddrinfo EAI_AGAIN llm.example.invalid', 'EAI_AGAIN'],
+        ['connect EHOSTUNREACH 10.0.0.9:443', 'EHOSTUNREACH'],
+        ['connect ENETUNREACH 10.0.0.9:443', 'ENETUNREACH'],
+        // undici's wording for a socket the server dropped mid-request.
+        ['other side closed', 'UND_ERR_SOCKET'],
+    ])(
+        'an unreachable provider (%s) is TRANSIENT and cascades to the fallback',
+        (causeMessage, code) => {
+            const err = cannotConnect(causeMessage, code);
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+            expect(shouldFailoverToNextModel(err)).toBe(true);
+        },
+    );
+
+    it('a bare ECONNREFUSED from a caller outside the AI SDK is TRANSIENT too', () => {
+        const err = Object.assign(
+            new Error('connect ECONNREFUSED 10.0.0.1:443'),
+            {
+                code: 'ECONNREFUSED',
+            },
+        );
+        expect(classifyLLMError(err).category).toBe(LlmErrorCategory.TRANSIENT);
+    });
+
+    // What the shared gate must keep doing. These pass before and after the fix.
+    describe('impact: what must not change', () => {
+        it('a connect timeout stays out of the cascade (the abort/timeout rule)', () => {
+            const err = cannotConnect(
+                'Connect Timeout Error (attempted address: 10.0.0.9:443, timeout: 10000ms)',
+                'UND_ERR_CONNECT_TIMEOUT',
+            );
+            expect(shouldFailoverToNextModel(err)).toBe(false);
+        });
+
+        it('an ETIMEDOUT stays out of the cascade', () => {
+            expect(
+                shouldFailoverToNextModel(
+                    cannotConnect(
+                        'connect ETIMEDOUT 10.0.0.9:443',
+                        'ETIMEDOUT',
+                    ),
+                ),
+            ).toBe(false);
+        });
+
+        it('a user abort is not cascaded', () => {
+            const abort = Object.assign(
+                new Error('This operation was aborted'),
+                { name: 'AbortError' },
+            );
+            expect(shouldFailoverToNextModel(abort)).toBe(false);
+        });
+
+        const withBody = (statusCode: number, message: string) =>
+            new APICallError({
+                message,
+                url: 'https://llm.example.invalid/v1/chat/completions',
+                requestBodyValues: {},
+                statusCode,
+                responseBody: JSON.stringify({ error: { message } }),
+            });
+
+        it.each([401, 403])(
+            'a %i stays AUTH_INVALID even when its body names a connect failure',
+            (status) => {
+                expect(
+                    classifyLLMError(
+                        withBody(
+                            status,
+                            'upstream ECONNREFUSED: cannot connect to api',
+                        ),
+                    ).category,
+                ).toBe(LlmErrorCategory.AUTH_INVALID);
+            },
+        );
+
+        it('a 402 stays QUOTA_EXCEEDED', () => {
+            expect(
+                classifyLLMError(withBody(402, 'Insufficient credits'))
+                    .category,
+            ).toBe(LlmErrorCategory.QUOTA_EXCEEDED);
+        });
+
+        it('a 400 with no recognised wording stays REQUEST_REJECTED and is not cascaded', () => {
+            const err = withBody(400, 'Unknown parameter: foo');
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.REQUEST_REJECTED,
+            );
+            expect(shouldFailoverToNextModel(err)).toBe(false);
+        });
+
+        it('an unclassified error with no status stays UNKNOWN and is not cascaded', () => {
+            const err = new Error('the model returned something odd');
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.UNKNOWN,
+            );
+            expect(shouldFailoverToNextModel(err)).toBe(false);
+        });
+    });
+});
+
+describe('OpenRouter upstream errors (#1871)', () => {
+    const wrapped = (statusCode: number, raw: string) =>
+        new APICallError({
+            message: 'Provider returned error',
+            url: 'https://openrouter.ai/api/v1/chat/completions',
+            requestBodyValues: {},
+            statusCode,
+            data: {
+                error: { message: 'Provider returned error', code: statusCode },
+            },
+            responseBody: JSON.stringify({
+                error: {
+                    message: 'Provider returned error',
+                    code: statusCode,
+                    metadata: { raw, provider_name: 'Chutes' },
+                },
+            }),
+        });
+
+    it('a rejected request quotes the upstream reason in the headline', () => {
+        const info = classifyLLMError(
+            wrapped(400, 'max_tokens must be at most 8192 for this model'),
+            'open_router',
+        );
+        expect(info.category).toBe(LlmErrorCategory.REQUEST_REJECTED);
+        expect(info.providerMessage).toBe(
+            'Chutes: max_tokens must be at most 8192 for this model',
+        );
+        expect(info.friendlyMessage).toContain(
+            'max_tokens must be at most 8192 for this model',
+        );
+    });
+
+    it('impact: an upstream 429 still classifies as a rate limit', () => {
+        expect(
+            classifyLLMError(
+                wrapped(
+                    429,
+                    'temporarily rate-limited upstream. Please retry shortly.',
+                ),
+                'open_router',
+            ).category,
+        ).toBe(LlmErrorCategory.RATE_LIMIT);
+    });
+});

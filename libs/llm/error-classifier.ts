@@ -568,6 +568,16 @@ function matchByMessage(lower: string): LlmErrorCategory {
     if (
         lower.includes('econnreset') ||
         lower.includes('etimedout') ||
+        // An unreachable endpoint never answers with a status, so without these
+        // a provider that is down read as UNKNOWN and never reached the
+        // fallback (#1844). "cannot connect to api" is the AI SDK's own prefix
+        // for any fetch-level failure; the codes cover callers outside it.
+        lower.includes('cannot connect to api') ||
+        lower.includes('econnrefused') ||
+        lower.includes('enotfound') ||
+        lower.includes('eai_again') ||
+        lower.includes('ehostunreach') ||
+        lower.includes('enetunreach') ||
         lower.includes('socket hang up') ||
         lower.includes('network error') ||
         lower.includes('fetch failed') ||

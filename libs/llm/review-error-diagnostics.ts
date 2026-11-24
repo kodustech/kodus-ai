@@ -135,6 +135,38 @@ const looksLikeProse = (text: string): boolean => {
 };
 
 /**
+ * The upstream answer an aggregator wrapped. OpenRouter replies "Provider
+ * returned error" and keeps what the upstream said in `error.metadata.raw`, so
+ * quoting its `message` told the reader nothing (#1871). `raw` is a body like
+ * any other: only its labelled message, or a plain sentence, is published.
+ * Other metadata (a moderation error's `flagged_input`) is never read.
+ */
+const upstreamMessageIn = (body: unknown): string | undefined => {
+    if (!body || typeof body !== 'object') return undefined;
+    const node = body as Record<string, unknown>;
+    const error =
+        node.error && typeof node.error === 'object'
+            ? (node.error as Record<string, unknown>)
+            : node;
+    const metadata = error.metadata;
+    if (!metadata || typeof metadata !== 'object') return undefined;
+    const { raw, provider_name: providerName } = metadata as Record<
+        string,
+        unknown
+    >;
+
+    const said =
+        typeof raw === 'string'
+            ? (messageIn(parsed(raw)) ??
+              (looksLikeProse(raw) ? raw.trim() : undefined))
+            : messageIn(raw);
+    if (!said) return undefined;
+    return typeof providerName === 'string' && providerName.trim()
+        ? `${providerName.trim()}: ${said}`
+        : said;
+};
+
+/**
  * The provider's OWN explanation of the failure, ready for a public comment.
  *
  * Preferred over the SDK's `message`, which for a Vercel AI SDK `APICallError`
@@ -157,6 +189,13 @@ export const extractProviderMessage = (err: unknown): string | undefined => {
         typeof e.body === 'string' ? parsed(e.body) : undefined,
         e.body,
     ];
+
+    // Before any `message`: the wrapper's own sentence would win otherwise, and
+    // the AI SDK strips `metadata` from `data`, so it is only in the raw body.
+    for (const body of bodies) {
+        const upstream = upstreamMessageIn(body);
+        if (upstream) return tidy(redactSecrets(upstream));
+    }
 
     for (const body of bodies) {
         const found = messageIn(body);
