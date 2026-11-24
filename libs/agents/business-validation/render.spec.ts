@@ -267,3 +267,44 @@ describe('the met summary names each row once', () => {
         expect(comment).toContain('Defaults to comfortable');
     });
 });
+
+describe('one criterion, however the model spells it', () => {
+    it('reads AC1, AC-1, AC #1 and AC01 as the same criterion, AC01', () => {
+        for (const source of ['AC1', 'AC-1', 'AC #1', 'ac#01', 'AC01']) {
+            const sample = outcome();
+            sample.checks[0].verdict.requirements![0].source = source;
+            expect(renderComment(sample)).toContain('<sub>AC01</sub>');
+        }
+    });
+
+    it('names two met rows apart when their words share a long beginning', () => {
+        const met = outcome({ passed: true });
+        met.passed = true;
+        const [first] = met.checks[0].verdict.requirements!;
+        const given =
+            'Given a signed-in user on the account settings page, when they ';
+        met.checks[0].verdict.requirements = [
+            {
+                ...first,
+                state: 'met',
+                source: 'AC1',
+                requirement: `${given}save, the name is stored`,
+            },
+            {
+                ...first,
+                state: 'met',
+                source: 'AC01',
+                requirement: `${given}cancel, nothing changes`,
+            },
+        ];
+        met.checks[0].verdict.outOfScope = [];
+        const summary = renderComment(met)
+            .split('\n')
+            .find((line) => line.includes(' met: '))!;
+        expect(
+            summary.split('Given a signed-in user').length - 1,
+        ).toBeLessThanOrEqual(1);
+        expect(summary).toContain('save');
+        expect(summary).toContain('cancel');
+    });
+});

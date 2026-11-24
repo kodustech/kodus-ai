@@ -1,3 +1,4 @@
+import { sliceWhole } from './pull-request-diff';
 import type {
     BusinessValidationOutcome,
     TaskCheck,
@@ -133,9 +134,10 @@ function renderTaskSection(check: TaskCheck, context: RenderContext): string {
         const met = requirements.filter((r) => r.state === 'met');
         const labels = labelCounts(requirements);
         lines.push(
-            `✅ ${met.length} of ${requirements.length} met: ${met
-                .map((r) => metLabel(r, labels))
-                .join(', ')}`,
+            `✅ ${met.length} of ${requirements.length} met: ${metNames(
+                met,
+                labels,
+            ).join(', ')}`,
         );
         if (rows.length) {
             lines.push('');
@@ -214,7 +216,9 @@ function headline(check: TaskCheck): string {
  */
 function displayRequirementSource(source: string): string {
     const normalized = source.trim();
-    const criterion = /^AC\s*#\s*(\d+)$/i.exec(normalized);
+    // `AC #1`, `AC#1`, `AC-1`, `AC1` and `AC01` all name criterion 1: the
+    // model writes the source freely, and two spellings read as two rows.
+    const criterion = /^AC[\s#-]*0*(\d+)$/i.exec(normalized);
     return criterion ? `AC${criterion[1].padStart(2, '0')}` : normalized;
 }
 
@@ -391,5 +395,44 @@ function metLabel(
         return label;
     }
     const text = requirement.requirement.trim();
-    return text.length > 60 ? `${text.slice(0, 57)}…` : text;
+    return text.length > 60 ? `${sliceWhole(text, 57)}…` : text;
+}
+
+/**
+ * The met rows' names, each once: two requirements whose shortened words read
+ * the same (BDD criteria share a long "Given …" prefix) are named from where
+ * their words differ.
+ */
+function metNames(
+    met: RequirementVerdict[],
+    labels: Map<string, number>,
+): string[] {
+    const names = met.map((r) => metLabel(r, labels));
+    return names.map((name, i) => {
+        const twins = met.filter((_, j) => names[j] === name);
+        if (twins.length < 2) {
+            return name;
+        }
+        const text = met[i].requirement.trim();
+        const others = twins
+            .map((r) => r.requirement.trim())
+            .filter((other) => other !== text);
+        if (!others.length) {
+            return name;
+        }
+        const differsAt = Math.min(
+            ...others.map((other) => {
+                let at = 0;
+                while (at < text.length && text[at] === other[at]) at++;
+                return at;
+            }),
+        );
+        let from = Math.max(0, differsAt - 20);
+        const first = text.charCodeAt(from);
+        if (from > 0 && first >= 0xdc00 && first <= 0xdfff) from -= 1;
+        const part = text.slice(from);
+        return `${from > 0 ? '…' : ''}${
+            part.length > 57 ? `${sliceWhole(part, 57)}…` : part
+        }`;
+    });
 }
