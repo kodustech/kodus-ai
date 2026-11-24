@@ -999,10 +999,15 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
         expect(worst(calls[0].text) + 60_000).toBeLessThanOrEqual(200_000);
     });
 
-    it("judges a PR that fits beside the answer a Claude model's output limit caps", async () => {
-        const catalog = formatPullRequestDiff([
-            { filename: 'src/catalog.json', patch: numberTable(90_000) },
-        ]);
+    it("cuts the code to what fits beside the answer a Claude model's output limit caps, no less", async () => {
+        const catalog = formatPullRequestDiff(
+            Array.from({ length: 40 }, (_, i) => ({
+                filename: `src/catalog/part-${i}.json`,
+                patch: numberTable(4_750),
+            })),
+        );
+        // Whole, it does not fit beside the 64k answer.
+        expect(worst(catalog) + 64_000).toBeGreaterThan(200_000);
         const { outcome, calls } = await judgeCalls(
             {
                 provider: 'anthropic',
@@ -1014,9 +1019,13 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
             { diff: catalog },
         );
         expect(outcome.kind).toBe('validated');
-        expect(calls[0].diff).toBe(catalog);
-        // The adapter declares max_tokens = min(64k + 40k budget, 64k).
+        expect(calls[0].diff.length).toBeGreaterThan(0);
+        expect(calls[0].diff.length).toBeLessThan(catalog.length);
+        // The adapter declares max_tokens = min(64k + 40k budget, 64k): the
+        // call fits with that answer, and uses the room a 104k reserve
+        // (answer + budget, uncapped) would have taken from the code.
         expect(worst(calls[0].text) + 64_000).toBeLessThanOrEqual(200_000);
+        expect(worst(calls[0].text) + 104_000).toBeGreaterThan(200_000);
     });
 
     it("reads the code on a small slot whose answer limit is below the judge's own", async () => {

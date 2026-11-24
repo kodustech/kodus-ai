@@ -85,37 +85,43 @@ export async function anthropicDeclaredMaxTokens(
     providerOptions: Record<string, unknown> | undefined,
 ): Promise<number | undefined> {
     const key = `${modelId}|${maxOutputTokens}|${JSON.stringify(providerOptions ?? {})}`;
-    if (declared.has(key)) {
-        return declared.get(key);
+    const known = declared.get(key);
+    if (known !== undefined) {
+        return known;
     }
     let sent: number | undefined;
-    const adapter = createAnthropic({
-        apiKey: 'declared-max-tokens',
-        fetch: (async (_url: unknown, init?: { body?: unknown }) => {
-            const body = JSON.parse(String(init?.body ?? '{}'));
-            sent =
-                typeof body.max_tokens === 'number'
-                    ? body.max_tokens
-                    : undefined;
-            throw new Error('declared max_tokens read; nothing is sent');
-        }) as typeof fetch,
-    });
     try {
+        const adapter = createAnthropic({
+            apiKey: 'declared-max-tokens',
+            fetch: (async (_url: unknown, init?: { body?: unknown }) => {
+                const body = JSON.parse(String(init?.body ?? '{}'));
+                sent =
+                    typeof body.max_tokens === 'number'
+                        ? body.max_tokens
+                        : undefined;
+                throw new Error('declared max_tokens read; nothing is sent');
+            }) as typeof fetch,
+        });
         await adapter(modelId).doGenerate({
             prompt: [{ role: 'user', content: [{ type: 'text', text: '.' }] }],
             maxOutputTokens,
             providerOptions: providerOptions as any,
         });
     } catch {
-        // The fetch above always stops the call.
+        // The fetch above always stops the call; a build that failed leaves
+        // `sent` unset.
     }
-    if (declared.size >= DECLARED_MAX_ENTRIES) {
-        declared.delete(declared.keys().next().value as string);
+    // Only an answer is kept: a probe that could not tell is asked again,
+    // not answered "unknown" for the life of the worker.
+    if (sent !== undefined) {
+        if (declared.size >= DECLARED_MAX_ENTRIES) {
+            declared.delete(declared.keys().next().value as string);
+        }
+        declared.set(key, sent);
     }
-    declared.set(key, sent);
     return sent;
 }
 
 /** One entry per model, answer and options: a worker sees few of them. */
 const DECLARED_MAX_ENTRIES = 256;
-const declared = new Map<string, number | undefined>();
+const declared = new Map<string, number>();
