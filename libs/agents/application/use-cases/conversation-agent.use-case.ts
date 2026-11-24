@@ -26,7 +26,7 @@ export class ConversationAgentUseCase implements IUseCase {
         organizationAndTeamData?: OrganizationAndTeamData;
         thread?: ConversationThread;
         prepareContext?: any;
-        sandbox?: SandboxInstance;
+        openSandbox?: () => Promise<SandboxInstance>;
     }): Promise<any> {
         try {
             const {
@@ -34,14 +34,14 @@ export class ConversationAgentUseCase implements IUseCase {
                 organizationAndTeamData,
                 prepareContext,
                 thread,
-                sandbox,
+                openSandbox,
             } = context;
 
             return await this.conversationAgentProvider.execute(prompt, {
                 organizationAndTeamData,
                 prepareContext,
                 thread,
-                sandbox,
+                openSandbox,
             });
         } catch (error) {
             const errorMessage =

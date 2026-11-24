@@ -26,11 +26,14 @@ describe('conversation tools — guarded outputs', () => {
                 .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
             ...over,
         };
-        const tools = buildNativeToolConfigs({
-            remoteCommands: remote,
-            cleanup: jest.fn(),
-            type: 'local',
-        } as unknown as SandboxInstance);
+        const tools = buildNativeToolConfigs(
+            async () =>
+                ({
+                    remoteCommands: remote,
+                    cleanup: jest.fn(),
+                    type: 'local',
+                }) as unknown as SandboxInstance,
+        );
         const run = (name: string, input: unknown) =>
             tools.find((t) => t.name === name)!.execute(input);
         return { remote, run };
