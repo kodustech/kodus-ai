@@ -900,6 +900,16 @@ export class AutomationCodeReviewService implements Omit<
                 approvalReviewSummary: result.approvalReviewSummary,
             });
         }
+
+        // What the approval cron needs to answer the same question the
+        // pipeline answered: a failed PR summary is partial but does not
+        // block approval (#2408). The handler computes it from the errors it
+        // saw; a result that does not carry it keeps reading as blocking.
+        if (typeof result.reviewApprovalBlocked === 'boolean') {
+            Object.assign(baseData, {
+                reviewApprovalBlocked: result.reviewApprovalBlocked,
+            });
+        }
         if (result.customAgentRiskSkips?.length) {
             Object.assign(baseData, {
                 customAgentRiskSkips: result.customAgentRiskSkips,

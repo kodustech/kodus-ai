@@ -13,7 +13,7 @@ import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 // SeverityLevel no longer used — request changes is driven by level classification
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
-import { SUMMARY_GENERATION_FAILED_REASON } from '../constants/error-reasons';
+import { reviewErrorsBlockApproval } from '@libs/code-review/domain/approval/review-approval-errors';
 import type { ApprovalDecision } from '@libs/code-review/domain/approval/approval-decision';
 import { isCriticalFinding } from '@libs/code-review/domain/approval/own-change-request';
 import { OwnChangeRequestService } from '../services/own-change-request.service';
@@ -187,12 +187,7 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
         // — proved with a regression test before this fix (a clean PR with
         // ONLY that error never called approvePullRequest). Every OTHER
         // partial/critical error still blocks, unchanged.
-        const reviewHasFailures = (context.errors ?? []).some(
-            (e) =>
-                e?.metadata?.reason !== SUMMARY_GENERATION_FAILED_REASON &&
-                ((e?.severity ?? 'critical') === 'critical' ||
-                    e?.severity === 'partial'),
-        );
+        const reviewHasFailures = reviewErrorsBlockApproval(context.errors);
 
         // `@kody -v <agent>` runs one custom agent and none of the built-in
         // ones (#2172): finding nothing there says nothing about the PR as a
