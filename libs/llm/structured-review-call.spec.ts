@@ -54,6 +54,7 @@ jest.mock('@libs/llm/reasoning-options', () => ({
 import {
     runStructuredReviewCall,
     runTextReviewCall,
+    withJsonUserHint,
 } from '@libs/llm/structured-review-call';
 import {
     NoObjectGeneratedError,
@@ -1383,6 +1384,73 @@ describe('MATRIX C — unparseable / transport (the fail-safe layer)', () => {
         // Reroute is single-shot: exactly one attempt, no 2nd-model cascade.
         expect(mockGenerate).toHaveBeenCalledTimes(1);
         assertNoSecondModelBuilt();
+    });
+});
+
+describe('reroute-json — no valid object re-asks once through the reroute', () => {
+    it('re-asks with the JSON hint, still without Output.object, and returns the second answer', async () => {
+        mockGenerate
+            .mockResolvedValueOnce({ text: 'no object here', usage: {} })
+            .mockResolvedValueOnce({ text: '{"keep":true}', usage: {} });
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema: keepSchema,
+                byokConfig: zooKimiSlot,
+            }),
+        ).resolves.toEqual({ keep: true });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        const second = mockGenerate.mock.calls[1][0];
+        // Output.object is what an always-thinking model rejects.
+        expect(second.output).toBeUndefined();
+        expect(second.prompt).toBe(withJsonUserHint('usr'));
+        assertNoSecondModelBuilt();
+    });
+
+    it('throws after the second request when it has no valid object either (no 3rd call)', async () => {
+        mockGenerate
+            .mockResolvedValueOnce({ text: 'no object here', usage: {} })
+            .mockResolvedValueOnce({ text: 'still none', usage: {} });
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema: keepSchema,
+                byokConfig: zooKimiSlot,
+            }),
+        ).rejects.toThrow('produced no valid object');
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('a 429 on the re-ask is handed to the fallback (retries exhausted)', async () => {
+        const limited: any = new Error('429 Too Many Requests');
+        limited.status = 429;
+        mockGenerate
+            .mockResolvedValueOnce({ text: 'no object here', usage: {} })
+            .mockRejectedValueOnce(limited);
+        const err = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: zooKimiSlot,
+        }).catch((e) => e);
+        expect(err).toBe(limited);
+        expect(retriesWereExhausted(err)).toBe(true);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('a reply the token limit cut off is not re-asked into the same limit', async () => {
+        mockGenerate.mockResolvedValueOnce({
+            text: '{"keep":',
+            finishReason: 'length',
+            usage: {},
+        });
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema: keepSchema,
+                byokConfig: zooKimiSlot,
+            }),
+        ).rejects.toThrow('produced no valid object');
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
     });
 });
 

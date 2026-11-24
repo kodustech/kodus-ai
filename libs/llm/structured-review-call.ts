@@ -781,23 +781,34 @@ async function runReviewCall<T>(
     if (structuredPlan === 'reroute-json') {
         const inv = buildInvocation(false);
         const reroutedSystem = withJsonContract(system, mode.schemaForPrompt);
-        const reroute = () =>
+        const noValidObject = new WeakSet<Error>();
+        const reroute = (recovery?: string) =>
             call(
                 inv.model,
                 inv.modelName,
                 reroutedSystem,
-                { structuredReroute: 'thinking-forced-tool_choice' },
+                {
+                    structuredReroute: 'thinking-forced-tool_choice',
+                    ...(recovery ? { structuredRecovery: recovery } : {}),
+                },
                 {
                     outputArgs: {}, // plain generateText — no Output.object, no tool_choice
+                    ...(recovery ? { prompt: withJsonUserHint(user) } : {}),
                     extract: async (r: any) => {
                         const value = await repairAndValidate<T>(
                             mode.validatingSchema,
                             (r?.text ?? '') as string,
                         );
                         if (value === undefined) {
-                            throw new Error(
+                            const e = new Error(
                                 `[structured-output] reroute-json produced no valid object for ${runName}`,
                             );
+                            // A reply the token limit cut off re-asks into
+                            // the same limit: thrown as is, like the text path.
+                            if (r?.finishReason !== 'length') {
+                                noValidObject.add(e);
+                            }
+                            throw e;
                         }
                         return value;
                     },
@@ -806,7 +817,25 @@ async function runReviewCall<T>(
         try {
             return await reroute();
         } catch (err) {
-            // Single-shot otherwise; only a 429 earns the re-issue.
+            // No valid object is repairAndValidate's "re-ask" (a reply cut off
+            // after a quoted code block, or valid objects on both sides of one):
+            // the same one re-ask the text path gives a schema mismatch, through
+            // the reroute itself, since Output.object is what this model rejects.
+            if (err instanceof Error && noValidObject.has(err)) {
+                try {
+                    return await reroute('reroute-no-valid-object');
+                } catch (again) {
+                    // Already the second request: a 429 here goes to the fallback.
+                    if (
+                        classifyLLMError(again).category ===
+                        LlmErrorCategory.RATE_LIMIT
+                    ) {
+                        throw markRetriesExhausted(again);
+                    }
+                    throw again;
+                }
+            }
+            // Otherwise only a 429 earns the re-issue.
             if (
                 classifyLLMError(err).category !== LlmErrorCategory.RATE_LIMIT
             ) {
