@@ -84,12 +84,12 @@ export function toRunTasks(result: BusinessValidationResult): RunTask[] {
 /** What `sameResult` compares. */
 type ResultFields = Pick<
     NewValidationRun,
-    'outcome' | 'skipReason' | 'passed' | 'tasks' | 'unseenFiles' | 'references'
+    'outcome' | 'skipReason' | 'passed' | 'tasks' | 'unseenFiles' | 'attempts'
 >;
 
 /**
  * Whether two runs reached the same result, as the author reads it (#2423):
- * the outcome, the tasks and references it is about, the files the judge
+ * the outcome, the tasks it is about and the references it looked up, the files the judge
  * could not see, and per task its verdict and scope, each requirement's state
  * and acceptance, and each out-of-scope change. A requirement is the same
  * one by the match the comment's "was missing" uses (`matchPrevious`), so a
@@ -119,7 +119,9 @@ function outlineKey(run: ResultFields): string {
         run.outcome,
         run.skipReason ?? null,
         run.passed ?? null,
-        (run.references ?? []).map((r) => `${r.kind}:${r.id}`).sort(),
+        // What it looked up, not every mention the text has: a description
+        // that adds "SHA-256" or "#2410" changes nothing the author reads.
+        [...new Set((run.attempts ?? []).map((a) => a.reference))].sort(),
         (run.tasks ?? [])
             .map((t) =>
                 [t.tracker, t.id, t.passed, t.scopeMismatch ?? false].join('|'),

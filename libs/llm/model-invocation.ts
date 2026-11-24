@@ -36,6 +36,7 @@ import { getModelName, type ByokModelOptions } from '@libs/llm/byok-to-vercel';
 import { envManagedReasoningDescriptor } from '@libs/llm/managed-slot';
 import {
     anthropicDeclaredMaxTokens,
+    bedrockDeclaredMaxTokens,
     budgetAddedToAnswerCap,
     optionsNamespace,
 } from '@libs/llm/answer-cap-budget';
@@ -238,6 +239,12 @@ export interface AnswerCallReasoning {
     reasoningEffortDefault?: ReasoningEffort;
     /** The call turns thinking off (a structured call's `suppress-thinking` plan). */
     suppressReasoning?: boolean;
+    /**
+     * The reasoning options the call sends, when its caller builds them
+     * itself (the review's finder and verify pass their own): used as they
+     * are, instead of resolving them from the slot.
+     */
+    providerOptions?: Record<string, unknown>;
 }
 
 /** What @ai-sdk/amazon-bedrock adds when thinking is on and no answer is set. */
@@ -269,7 +276,7 @@ export async function declaredAnswerTokens(
     call: AnswerCallReasoning = {},
 ): Promise<number | undefined> {
     try {
-        const { providerOptions, reasoningSlot } = resolveReasoningOptions(
+        const resolved = resolveReasoningOptions(
             slot,
             slot ? undefined : envManagedReasoningDescriptor(),
             {
@@ -278,7 +285,32 @@ export async function declaredAnswerTokens(
                 suppressReasoning: call.suppressReasoning,
             },
         );
+        const reasoningSlot = resolved.reasoningSlot;
+        const providerOptions =
+            call.providerOptions ?? resolved.providerOptions;
         const namespace = optionsNamespace(reasoningSlot);
+        if (namespace === 'amazonBedrock' && reasoningSlot?.model) {
+            const declared = await bedrockDeclaredMaxTokens(
+                reasoningSlot.model,
+                answerTokens,
+                providerOptions,
+            );
+            if (declared?.maxTokens !== undefined) {
+                return declared.maxTokens;
+            }
+            if (declared && answerTokens === undefined) {
+                // Nothing in the body: AWS applies the model's maximum
+                // output. A Claude model's is the one Anthropic's adapter
+                // knows; for another model it is not known here.
+                return /claude/i.test(reasoningSlot.model)
+                    ? await anthropicDeclaredMaxTokens(
+                          reasoningSlot.model,
+                          undefined,
+                          undefined,
+                      )
+                    : undefined;
+            }
+        }
         if (namespace === 'anthropic' && reasoningSlot?.model) {
             const declared = await anthropicDeclaredMaxTokens(
                 reasoningSlot.model,

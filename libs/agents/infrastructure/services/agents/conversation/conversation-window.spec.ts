@@ -1,4 +1,5 @@
 import { estimateTextTokens } from '@libs/llm/token-estimate';
+import { get_encoding } from 'tiktoken';
 
 import { conversationCompression } from './conversation-window';
 
@@ -72,32 +73,55 @@ describe('conversationCompression', () => {
         expect(sent[2].content[0].output.value).toBe(diff);
     });
 
-    it('measures a dense result at its worst and cuts it to the window (#2233)', async () => {
+    it('measures a dense result at its real size and cuts it to the window (#2233)', async () => {
         let seed = 7;
-        const bytes = Buffer.alloc(45_000);
+        const bytes = Buffer.alloc(75_000);
         for (let i = 0; i < bytes.length; i++) {
             seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
             bytes[i] = seed % 256;
         }
         const image = `+![logo](data:image/png;base64,${bytes.toString('base64')})`;
         const messages = withToolResult(image);
-        const worst = (value: unknown) =>
-            estimateTextTokens(JSON.stringify(value), { worstCase: true });
-        // The ordinary count reads it as fitting; it does not.
-        expect(estimateTextTokens(JSON.stringify(messages))).toBeLessThan(
-            32_000 * 0.7,
+        const enc = get_encoding('o200k_base');
+        const real = (value: unknown) =>
+            enc.encode_ordinary(JSON.stringify(value)).length;
+        // Over the window by the tokenizer's own count; read at ~4 chars a
+        // token it looked like it fit.
+        expect(real(messages) + 4_000).toBeGreaterThan(32_000);
+        expect(Math.ceil(JSON.stringify(messages).length / 4)).toBeLessThan(
+            32_000 * 0.8,
         );
-        expect(worst(messages)).toBeGreaterThan(32_000);
 
         const sent = await send(messages);
 
-        expect(worst(sent) + 4_000).toBeLessThanOrEqual(32_000);
+        expect(real(sent) + 4_000).toBeLessThanOrEqual(32_000);
         // Cut, not dropped: the model still gets the result's start.
         const kept = sent.at(-1).content[0];
         expect(kept.toolCallId).toBe('diff');
         expect(JSON.stringify(kept.output)).toContain(
             '![logo](data:image/png;base64,',
         );
+        enc.free();
+    });
+
+    it("sends a tool's JSON result that fits whole: it has no spaces, and is not dense (#2681 review)", async () => {
+        const listing = JSON.stringify(
+            Array.from({ length: 700 }, (_, i) => ({
+                path: `src/checkout/handlers/f${i}.ts`,
+                size: i * 7,
+            })),
+        );
+        const messages = withToolResult(listing);
+        const enc = get_encoding('o200k_base');
+        const tokens = enc.encode_ordinary(JSON.stringify(messages)).length;
+        enc.free();
+        // Fits beside the 4k answer, and is past the usage threshold.
+        expect(tokens + 4_000).toBeLessThan(32_000 * 0.92);
+        expect(JSON.stringify(messages).length).toBeGreaterThan(24_000);
+
+        const sent = await send(messages);
+
+        expect(sent[2].content[0].output.value).toBe(listing);
     });
 
     it("fits the tightest attempt when the slot's answer outgrows its fallback's window", async () => {

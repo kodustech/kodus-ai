@@ -208,17 +208,47 @@ function isWhitespace(code: number): boolean {
     );
 }
 
+/** What tiktoken's pre-tokenizer keeps in one piece, as far as cost goes. */
+const enum Stretch {
+    Whitespace,
+    /** Letters and anything else outside ASCII: one piece can span them. */
+    Letters,
+    /** o200k cuts digits into pieces of three: never one long piece. */
+    Digits,
+    /** ASCII punctuation and symbols: a run of them is one piece. */
+    Symbols,
+}
+
+function stretchOf(code: number): Stretch {
+    if (isWhitespace(code)) return Stretch.Whitespace;
+    if (code >= 48 && code <= 57) return Stretch.Digits;
+    if (
+        (code >= 65 && code <= 90) ||
+        (code >= 97 && code <= 122) ||
+        code > 0x7f
+    ) {
+        return Stretch.Letters;
+    }
+    return Stretch.Symbols;
+}
+
 /**
- * tiktoken count, except that any run of more than MAX_ENCODED_RUN_CHARS
- * characters of one kind (whitespace, or anything but whitespace) is
- * estimated instead: tiktoken is quadratic on both, since a whitespace run is
- * one pre-token piece too (80k spaces took 3.8s). A whitespace run counts by
- * the fallback ratio (conservative: tiktoken packs many spaces per token).
- * In any other run, ASCII characters count by the fallback ratio and every
- * other character as one token (CJK and other scripts written without spaces
- * run about 1-1.5 characters per token, so 3 would under-count them). One
- * linear pass over the text; no regex (a `\S{n,}` scan would itself be
- * O(n·k)).
+ * tiktoken count, except that a stretch of more than MAX_ENCODED_RUN_CHARS
+ * characters that tiktoken keeps in one pre-token piece (whitespace, letters,
+ * or symbols) is estimated instead: its BPE is quadratic in a piece's length,
+ * and a piece never spans two of these. Measured at 40k chars: a letter run
+ * 0.64s, a repeated `=` 0.98s; base64, hex, minified JSON and digit runs,
+ * whose pieces are short, 4-9ms. So those are counted exactly. They used to
+ * be estimated as one whitespace-free run, at ~4 characters a token, which
+ * read a 0.5MB base64 image at half its size (#2233) and a tool's JSON
+ * result, which has no spaces, the same way.
+ *
+ * A whitespace stretch counts by the fallback ratio (conservative: tiktoken
+ * packs many spaces per token). In a letter or symbol stretch, ASCII
+ * characters count by the fallback ratio and every other character as one
+ * token (CJK and other scripts written without spaces run about 1-1.5
+ * characters per token, so 3 would under-count them). One linear pass over
+ * the text; no regex (a `\S{n,}` scan would itself be O(n·k)).
  */
 function countTokens(enc: Tiktoken, text: string, worstCase = false): number {
     if (text.length <= MAX_ENCODED_RUN_CHARS) {
@@ -227,13 +257,15 @@ function countTokens(enc: Tiktoken, text: string, worstCase = false): number {
     let tokens = 0;
     let segmentStart = 0;
     let runStart = 0;
-    let runIsWhitespace = isWhitespace(text.charCodeAt(0));
+    let runKind = stretchOf(text.charCodeAt(0));
     let longRuns = false;
-    // Non-ASCII code units in the current run.
+    // Non-ASCII code units in the current stretch.
     let runNonAscii = 0;
     const flushRun = (runEnd: number) => {
         const length = runEnd - runStart;
-        if (length <= MAX_ENCODED_RUN_CHARS) return;
+        if (length <= MAX_ENCODED_RUN_CHARS || runKind === Stretch.Digits) {
+            return;
+        }
         longRuns = true;
         if (runStart > segmentStart) {
             tokens += enc.encode_ordinary(
@@ -242,7 +274,7 @@ function countTokens(enc: Tiktoken, text: string, worstCase = false): number {
         }
         tokens += worstCase
             ? worstCaseTokens(length, runNonAscii)
-            : runIsWhitespace
+            : runKind === Stretch.Whitespace
               ? Math.ceil(length / FALLBACK_CHARS_PER_TOKEN)
               : Math.ceil((length - runNonAscii) / FALLBACK_CHARS_PER_TOKEN) +
                 runNonAscii;
@@ -250,11 +282,11 @@ function countTokens(enc: Tiktoken, text: string, worstCase = false): number {
     };
     for (let i = 0; i < text.length; i++) {
         const code = text.charCodeAt(i);
-        const whitespace = isWhitespace(code);
-        if (whitespace !== runIsWhitespace) {
+        const kind = stretchOf(code);
+        if (kind !== runKind) {
             flushRun(i);
             runStart = i;
-            runIsWhitespace = whitespace;
+            runKind = kind;
             runNonAscii = 0;
         }
         if (code > 0x7f) runNonAscii++;

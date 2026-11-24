@@ -4,6 +4,7 @@
  * fit a request in the model's window: both have to count what the provider
  * really receives as `max_tokens`.
  */
+import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock';
 import { createAnthropic } from '@ai-sdk/anthropic';
 
 import { REGISTRY } from '@libs/llm/providers/kernel/registry';
@@ -126,3 +127,57 @@ export async function anthropicDeclaredMaxTokens(
 /** One entry per model, answer and options: a worker sees few of them. */
 const DECLARED_MAX_ENTRIES = 256;
 const declared = new Map<string, number>();
+
+/**
+ * What @ai-sdk/amazon-bedrock puts in `inferenceConfig.maxTokens` for this
+ * answer and these options, asked of the adapter as Anthropic's is: it adds
+ * the thinking budget when thinking is on, and sends nothing when neither an
+ * answer nor thinking is set (AWS then applies the model's maximum). No
+ * request leaves. `{ maxTokens: undefined }` when the body carries none;
+ * undefined when the adapter could not tell.
+ */
+export async function bedrockDeclaredMaxTokens(
+    modelId: string,
+    maxOutputTokens: number | undefined,
+    providerOptions: Record<string, unknown> | undefined,
+): Promise<{ maxTokens: number | undefined } | undefined> {
+    const key = `${modelId}|${maxOutputTokens ?? 'unset'}|${JSON.stringify(providerOptions ?? {})}`;
+    if (bedrockDeclared.has(key)) {
+        return bedrockDeclared.get(key);
+    }
+    let read: { maxTokens: number | undefined } | undefined;
+    try {
+        const adapter = createAmazonBedrock({
+            region: 'us-east-1',
+            accessKeyId: 'declared-max-tokens',
+            secretAccessKey: 'declared-max-tokens',
+            fetch: (async (_url: unknown, init?: { body?: unknown }) => {
+                const body = JSON.parse(String(init?.body ?? '{}'));
+                const sent = body?.inferenceConfig?.maxTokens;
+                read = {
+                    maxTokens: typeof sent === 'number' ? sent : undefined,
+                };
+                throw new Error('declared maxTokens read; nothing is sent');
+            }) as typeof fetch,
+        });
+        await adapter(modelId).doGenerate({
+            prompt: [{ role: 'user', content: [{ type: 'text', text: '.' }] }],
+            ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+            providerOptions: providerOptions as any,
+        });
+    } catch {
+        // The fetch above always stops the call; a build that failed leaves
+        // `read` unset.
+    }
+    if (read) {
+        if (bedrockDeclared.size >= DECLARED_MAX_ENTRIES) {
+            bedrockDeclared.delete(
+                bedrockDeclared.keys().next().value as string,
+            );
+        }
+        bedrockDeclared.set(key, read);
+    }
+    return read;
+}
+
+const bedrockDeclared = new Map<string, { maxTokens: number | undefined }>();

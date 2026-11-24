@@ -20,7 +20,10 @@ jest.mock('@libs/llm/model-invocation', () => ({
 import { MockLanguageModelV3 } from 'ai/test';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
-import { resolveModelConfig } from '@libs/llm/model-invocation';
+import {
+    declaredAnswerTokens,
+    resolveModelConfig,
+} from '@libs/llm/model-invocation';
 
 import {
     finderRunEnvironment,
@@ -355,6 +358,15 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
                     },
                 },
             });
+            // Reserved with the options the verify sends (the slot's own
+            // effort, no default added), for the slot and its fallback.
+            for (const slotModel of ['check-model', 'small-fallback']) {
+                expect(declaredAnswerTokens).toHaveBeenCalledWith(
+                    expect.objectContaining({ model: slotModel }),
+                    expect.any(Number),
+                    { providerOptions: expect.any(Object) },
+                );
+            }
             const verifyRuns = run.mock.calls.filter(
                 ([spec]) => spec.phase === 'verify',
             );

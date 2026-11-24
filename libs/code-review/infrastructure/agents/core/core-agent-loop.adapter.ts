@@ -361,6 +361,21 @@ export async function runAgentLoopViaCore(
     // sends with none): a wide batch of reads plus a 64k answer overflowed.
     // LLM.run re-sends a failed call to the slot's fallback with its own
     // window and limit, so the room is the smaller of the two attempts'.
+    // The reasoning a verify run sends: the slot's own effort, with no
+    // default added (the finder and verify pass their options themselves).
+    const verifyOptionsFor = (slot: Parameters<typeof slotContextWindow>[0]) =>
+        buildProviderOptions(
+            `${input.agentName ?? 'finder'}/verify`,
+            input.telemetryMetadata,
+            {
+                reasoningEffort: slot?.reasoningEffort,
+                reasoningConfigOverride: slot?.reasoningConfigOverride,
+                byokProvider: slot?.provider,
+                modelName: slot?.model,
+                openrouterProviderOrder: slot?.openrouterProviderOrder,
+                openrouterAllowFallbacks: slot?.openrouterAllowFallbacks,
+            },
+        );
     const verifyWindow = verifyOnOwnModel ? slotContextWindow(verifySlot) : 0;
     const verifyRoom = verifyOnOwnModel
         ? await slotInputRoom(
@@ -371,6 +386,7 @@ export async function runAgentLoopViaCore(
                       slot?.maxOutputTokens && slot.maxOutputTokens > 0
                           ? slot.maxOutputTokens
                           : undefined,
+                      { providerOptions: verifyOptionsFor(slot) },
                   )) ?? 0,
           )
         : 0;
@@ -394,21 +410,7 @@ export async function runAgentLoopViaCore(
                       Math.ceil(verifyWindow * DEFAULT_SAFETY_MARGIN_RATIO) +
                       (verifyWindow - verifyRoom),
               }),
-              verifyProviderOptions: buildProviderOptions(
-                  `${input.agentName ?? 'finder'}/verify`,
-                  input.telemetryMetadata,
-                  {
-                      reasoningEffort: verifySlot.reasoningEffort,
-                      reasoningConfigOverride:
-                          verifySlot.reasoningConfigOverride,
-                      byokProvider: verifySlot.provider,
-                      modelName: verifySlot.model,
-                      openrouterProviderOrder:
-                          verifySlot.openrouterProviderOrder,
-                      openrouterAllowFallbacks:
-                          verifySlot.openrouterAllowFallbacks,
-                  },
-              ),
+              verifyProviderOptions: verifyOptionsFor(verifySlot),
           }
         : {};
 

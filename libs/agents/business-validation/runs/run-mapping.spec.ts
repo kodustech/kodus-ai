@@ -175,14 +175,8 @@ describe('sameResult (#2423)', () => {
                 outcome: 'task_missing',
                 tasks: [],
                 unseenFiles: [],
-                references: [
-                    {
-                        kind: 'key',
-                        id,
-                        raw: id,
-                        source: 'command',
-                        intent: 'mentions',
-                    },
+                attempts: [
+                    { reference: id, tracker: 'Jira', status: 'not_found' },
                 ],
             }) as any;
         expect(sameResult(missing('PAY-12'), missing('PAY-21'))).toBe(false);
@@ -223,5 +217,25 @@ describe('sameResult (#2423)', () => {
             sameResult(accepted(by('ana')), accepted(by('ana', 'PAY-30'))),
         ).toBe(false);
         expect(sameResult(accepted(), accepted(by('ana')))).toBe(false);
+    });
+
+    it('reads a mention the run never looked up as no change', () => {
+        const looked = (references: string[]) =>
+            ({
+                ...run(),
+                attempts: [
+                    { reference: 'PAY-123', tracker: 'Jira', status: 'found' },
+                ],
+                references: references.map((id) => ({
+                    kind: 'key',
+                    id,
+                    raw: id,
+                    source: 'body',
+                    intent: 'mentions',
+                })),
+            }) as any;
+        expect(
+            sameResult(looked(['PAY-123']), looked(['PAY-123', 'SHA-256'])),
+        ).toBe(true);
     });
 });
