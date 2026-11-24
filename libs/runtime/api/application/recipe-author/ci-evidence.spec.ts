@@ -147,6 +147,17 @@ describe('ciEvidence suiteCandidate', () => {
         expect(suiteCandidate).toMatchObject({ runner: 'cypress', matrixSize: 3, cwd: 'apps/dashboard', specs: 'cypress/e2e/**/*.cy.ts', origin: 'inferred' });
     });
 
+    // A design partner's cypress.config.ts lists its globs: no suite block was ever written for it.
+    it('reads a specPattern given as an array: the glob that covers the others, else them all as alternatives', async () => {
+        const config = (list: string) => `import { defineConfig } from 'cypress';\nexport default defineConfig({ e2e: { baseUrl: 'http://localhost:3000', specPattern: [${list}], supportFile: 'cypress/support/e2e.ts' } });`;
+        const covered = await ciEvidence(reader({ ...files, 'apps/dashboard/cypress.config.ts': config(`'cypress/e2e/*.spec.cy.ts', 'cypress/e2e/**/*.spec.cy.ts'`) }));
+        expect(covered.suiteCandidate!.specs).toBe('cypress/e2e/**/*.spec.cy.ts');
+        const both = await ciEvidence(reader({ ...files, 'apps/dashboard/cypress.config.ts': config(`"cypress/e2e/**/*.cy.ts",\n  "cypress/smoke/**/*.cy.ts"`) }));
+        expect(both.suiteCandidate!.specs).toBe('{cypress/e2e/**/*.cy.ts,cypress/smoke/**/*.cy.ts}');
+        const unsafe = await ciEvidence(reader({ ...files, 'apps/dashboard/cypress.config.ts': config(`'../outside/**/*.cy.ts'`) }));
+        expect(unsafe.suiteCandidate!.specs).toBeUndefined();
+    });
+
     it('strips the Cypress Cloud flags and keeps the rest of the command, with the spec list as {specs}', async () => {
         const { suiteCandidate } = await ciEvidence(reader(files));
         expect(suiteCandidate!.command).toBe('npx cypress run --browser chrome --spec "{specs}"');

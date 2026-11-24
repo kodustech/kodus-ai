@@ -126,6 +126,16 @@ const CONFIG_FILES = {
     playwright: ['playwright.config.ts', 'playwright.config.js', 'playwright.config.mjs', 'playwright.config.cjs'],
 } as const;
 
+// The recipe's one `suite.specs` glob for a list of them: the one whose double-star directory covers every other
+// (cypress/e2e/<double star>/x.cy.ts covers cypress/e2e/x.cy.ts), else every one as alternatives of a brace ({a,b});
+// none when the list is empty.
+export function oneGlob(globs: readonly string[]): string | undefined {
+    const unique = [...new Set(globs)];
+    if (unique.length <= 1) return unique[0];
+    const covering = unique.find((g) => g.includes('/**/') && unique.every((o) => o === g || o === g.replace('/**/', '/')));
+    return covering ?? `{${unique.join(',')}}`;
+}
+
 async function specsFromConfig(reader: RepoReader, runner: SuiteCandidate['runner'], cwd: string | undefined): Promise<string | undefined> {
     for (const name of CONFIG_FILES[runner]) {
         const text = await reader.read(cwd ? `${cwd}/${name}` : name, 32 * 1024).catch(() => null);
@@ -133,8 +143,11 @@ async function specsFromConfig(reader: RepoReader, runner: SuiteCandidate['runne
         if (runner === 'cypress') {
             const e2e = /\be2e\s*:\s*\{/.exec(text);
             const from = e2e ? text.slice(e2e.index) : text;
-            const m = /specPattern\s*:\s*['"`]([^'"`$]+)['"`]/.exec(from);
-            return m && !m[1].startsWith('/') && !m[1].includes('..') ? m[1] : undefined;
+            const one = /specPattern\s*:\s*['"`]([^'"`$]+)['"`]/.exec(from);
+            // An array of globs (specPattern: ['cypress/e2e/*.cy.ts', 'cypress/e2e/**/*.cy.ts']), as a design partner's config has it.
+            const list = /specPattern\s*:\s*\[([^\]]{1,2000})\]/.exec(from);
+            const globs = list ? [...list[1].matchAll(/['"`]([^'"`$]+)['"`]/g)].map((x) => x[1]) : one ? [one[1]] : [];
+            return oneGlob(globs.filter((g) => !g.startsWith('/') && !g.includes('..') && !/[{},]/.test(g)));
         }
         const dir = /\btestDir\s*:\s*['"`]([^'"`$]+)['"`]/.exec(text)?.[1]?.replace(/^\.\//, '').replace(/\/$/, '');
         return dir && !dir.startsWith('/') && !dir.includes('..') ? `${dir}/**/*.{spec,test}.{js,ts,mjs,cjs}` : undefined;
