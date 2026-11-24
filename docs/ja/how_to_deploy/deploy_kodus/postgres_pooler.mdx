@@ -55,6 +55,7 @@ DB_IDLE_IN_TRANSACTION_TIMEOUT_MS=0
 ```
 
 ```sql
+ALTER ROLE kodusdev IN DATABASE kodus_db SET statement_timeout = '30s';
 ALTER ROLE kodusdev IN DATABASE kodus_db SET idle_in_transaction_session_timeout = '60s';
 ```
 

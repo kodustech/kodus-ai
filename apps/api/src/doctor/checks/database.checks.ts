@@ -1,4 +1,5 @@
 import {
+    DatabaseSettingError,
     describeConnection,
     resolveDirectConnection,
     resolveSessionTimeouts,
@@ -39,10 +40,12 @@ export function databaseCheck(probe: DatabaseProbe): DoctorCheck {
                     status: 'fail',
                     title: 'A database setting is invalid.',
                     impact: 'The api and worker refuse to start with it.',
-                    fix: String((error as Error)?.message ?? error).slice(
-                        0,
-                        200,
-                    ),
+                    // Only our own messages, which name the variable and
+                    // carry no credential; anything else stays in the log.
+                    fix:
+                        error instanceof DatabaseSettingError
+                            ? error.message
+                            : 'Check DATABASE_URL, DATABASE_DIRECT_URL, the API_PG_DB_* settings and DB_STATEMENT_TIMEOUT_MS / DB_IDLE_IN_TRANSACTION_TIMEOUT_MS on api and worker.',
                 });
                 return results;
             }

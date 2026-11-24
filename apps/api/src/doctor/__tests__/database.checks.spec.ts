@@ -99,4 +99,24 @@ describe('doctor: database behind a connection pooler', () => {
             fix: expect.stringContaining('DB_STATEMENT_TIMEOUT_MS'),
         });
     });
+
+    it('an unexpected failure reading the settings never echoes its message, which may hold a connection string', async () => {
+        const env = {} as Record<string, string>;
+        Object.defineProperty(env, 'DB_STATEMENT_TIMEOUT_MS', {
+            enumerable: true,
+            get() {
+                throw new Error(
+                    'bad value postgres://kodus:s3cret@db/kodus_db',
+                );
+            },
+        });
+
+        const results = byCheck(
+            await databaseCheck(probe({ status: 'delivering' })).run(ctx(env)),
+        );
+
+        expect(results['database.config'].status).toBe('fail');
+        expect(results['database.config'].fix).not.toContain('s3cret');
+        expect(results['database.config'].fix).toContain('DATABASE_DIRECT_URL');
+    });
 });

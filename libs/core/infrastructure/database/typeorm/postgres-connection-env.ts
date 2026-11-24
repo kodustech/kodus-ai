@@ -30,6 +30,17 @@ export interface PostgresSessionTimeouts {
 type Env = Record<string, string | undefined>;
 
 /** docker-compose writes unset vars as empty strings: treat those as unset. */
+/**
+ * A database setting Kodus refuses. The message names the variable and
+ * never carries a credential, so it is safe to show as is (logs, doctor).
+ */
+export class DatabaseSettingError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'DatabaseSettingError';
+    }
+}
+
 function envValue(env: Env, key: string): string | undefined {
     const value = env[key];
     return value !== undefined && value.trim() !== ''
@@ -43,7 +54,7 @@ function readMilliseconds(env: Env, key: string, fallback: number): number {
         return fallback;
     }
     if (!/^\d+$/.test(raw)) {
-        throw new Error(
+        throw new DatabaseSettingError(
             `${key} must be a whole number of milliseconds (0 turns it off), got "${raw}"`,
         );
     }
@@ -115,7 +126,7 @@ export function resolveDirectConnection(
         // A placeholder or a host:port here would only surface later as an
         // opaque connect failure in the migrations or the LISTEN client.
         if (!/^postgres(ql)?:\/\//i.test(url)) {
-            throw new Error(
+            throw new DatabaseSettingError(
                 'DATABASE_DIRECT_URL must be a postgres:// connection string (or unset)',
             );
         }
@@ -127,6 +138,13 @@ export function resolveDirectConnection(
         return undefined;
     }
     const port = envValue(env, 'API_PG_DB_DIRECT_PORT') ?? '5432';
+    // URL's port setter ignores what it cannot parse, so a typo would keep
+    // the pooler's port while logs and the doctor say "direct".
+    if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
+        throw new DatabaseSettingError(
+            'API_PG_DB_DIRECT_PORT must be a port number between 1 and 65535 (or unset for 5432)',
+        );
+    }
     const pooled = resolvePooledConnection(env);
 
     if (pooled.url) {
@@ -134,7 +152,7 @@ export function resolveDirectConnection(
         try {
             parsed = new URL(pooled.url);
         } catch {
-            throw new Error(
+            throw new DatabaseSettingError(
                 'API_PG_DB_DIRECT_HOST needs a parseable DATABASE_URL to borrow credentials from; set DATABASE_DIRECT_URL instead',
             );
         }
@@ -162,6 +180,9 @@ export function describeConnection(connection: DatabaseConnection): string {
     if (connection.url) {
         try {
             const parsed = new URL(connection.url);
+            // Without `//` (postgres:user:pass@host/db) there is no host and
+            // the credentials land in the path: never print that.
+            if (!parsed.hostname) return 'connection URL without a host';
             return `${parsed.hostname}:${parsed.port || '5432'}${parsed.pathname}`;
         } catch {
             return 'unparseable connection URL';

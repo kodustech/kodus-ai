@@ -170,6 +170,27 @@ describe('Postgres connection settings', () => {
             ).toMatchObject({ host: 'pg-primary', port: 5433 });
         });
 
+        it.each(['abc', '70000', '0', '54 32', '5432x'])(
+            'refuses API_PG_DB_DIRECT_PORT=%p instead of silently keeping the pooled port',
+            (port) => {
+                for (const pooled of [
+                    discreteVars,
+                    {
+                        DATABASE_URL:
+                            'postgres://kodus:s3cret@pgbouncer:6432/kodus_db',
+                    },
+                ]) {
+                    expect(() =>
+                        resolveDirectConnection({
+                            ...pooled,
+                            API_PG_DB_DIRECT_HOST: 'pg-primary',
+                            API_PG_DB_DIRECT_PORT: port,
+                        }),
+                    ).toThrow(/API_PG_DB_DIRECT_PORT/);
+                }
+            },
+        );
+
         it('a direct host cannot borrow credentials from an unparseable DATABASE_URL, and says what to set instead', () => {
             expect(() =>
                 resolveDirectConnection({
@@ -222,6 +243,14 @@ describe('Postgres connection settings', () => {
             'db:5432/kodus_db',
         );
         expect(describeConnection({})).toBe('?:5432/?');
+    });
+
+    it('describes a URL missing its // without printing the credentials that end up in its path', () => {
+        const described = describeConnection({
+            url: 'postgres:kodus:s3cret@db/kodus_db',
+        });
+        expect(described).not.toContain('s3cret');
+        expect(described).toBe('connection URL without a host');
     });
 
     it('describes an unparseable URL as such, without echoing it', () => {

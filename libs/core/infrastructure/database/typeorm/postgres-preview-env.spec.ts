@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 
 import { resolveSessionConnection } from './postgres-connection-env';
 
-it('a neutralized preview .env still runs migrations and LISTEN on the stack’s own Postgres', () => {
+it('a neutralized preview .env points the connection used by migrations and LISTEN at the stack’s own Postgres', () => {
     const dir = mkdtempSync(join(tmpdir(), 'kodus-preview-pg-env-'));
     try {
         const env = join(dir, '.env');
