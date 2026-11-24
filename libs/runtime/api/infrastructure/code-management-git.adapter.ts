@@ -152,6 +152,12 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
         const recipeFiles = kodusFilesChangedBy(
             named.flatMap((f) => [String(f.filename), typeof f.previous_filename === 'string' ? f.previous_filename : undefined]),
         );
+        // The specs the suite drops: a removed file, and the old path of a rename (the new path is a changed file).
+        const removed = [
+            ...new Set(
+                named.flatMap((f) => (f.status === 'removed' ? [String(f.filename)] : f.status === 'renamed' && typeof f.previous_filename === 'string' && f.previous_filename ? [f.previous_filename] : [])),
+            ),
+        ].sort();
         let truncated = named.length > MAX_DIFF_FILES;
         let bytes = 0;
         const files: Array<RuntimeRunRequested['diff'][number] & { removed?: boolean }> = [];
@@ -173,7 +179,7 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
             files.push({ path, patch, removed: f.status === 'removed', ...(previousPath ? { previousPath } : {}) });
         }
         await this.fillContents(input, files, bytes);
-        return { files: files.map(({ removed: _removed, ...file }) => file), truncated, ...(recipeFiles.length ? { recipeFiles } : {}) };
+        return { files: files.map(({ removed: _removed, ...file }) => file), truncated, ...(recipeFiles.length ? { recipeFiles } : {}), ...(removed.length ? { removedFiles: removed } : {}) };
     }
 
     /** Reads the post-change content of the first code files, bounded in count, size and total bytes. */

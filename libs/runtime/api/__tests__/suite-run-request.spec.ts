@@ -17,9 +17,9 @@ const recipe = `version: 1\nservices:\n  compose:\n    public: app\n${SUITE}`;
 const env = { environmentId: 'env-1', organizationId: ORG, teamId: TEAM, repositoryId: REPO, repositoryName: 'acme/shop' };
 const head: PullRequestHead = { headSha: SHA, baseSha: BASE_SHA, fork: false };
 
-function world(o: { recipe?: string | null; setupSha?: string | null } = {}) {
+function world(o: { recipe?: string | null; setupSha?: string | null; removed?: string[]; truncated?: boolean } = {}) {
     const issued: string[] = [];
-    const git = { getPullRequestDiff: async () => ({ files: [{ path: 'src/a.ts', patch: '' }, { path: 'src/new.ts', previousPath: 'src/old.ts', patch: '' }], truncated: false }), readFileAtCommit: async () => (o.recipe === undefined ? recipe : o.recipe) } as unknown as RuntimeGitPort;
+    const git = { getPullRequestDiff: async () => ({ files: [{ path: 'src/a.ts', patch: '' }, { path: 'src/new.ts', previousPath: 'src/old.ts', patch: '' }], truncated: !!o.truncated, ...(o.removed ? { removedFiles: o.removed } : {}) }), readFileAtCommit: async () => (o.recipe === undefined ? recipe : o.recipe) } as unknown as RuntimeGitPort;
     const tokens = { issue: async () => (issued.push('t'), `ghs_${issued.length}`) };
     const setups = { get: async () => (o.setupSha === null ? null : { sha: o.setupSha ?? MAIN }) };
     const inputs = new RuntimeSuiteInputs(git, tokens, config(), setups as any);
@@ -38,6 +38,14 @@ describe('the Run request carries the suite of its environment', () => {
         expect(req.suite!.moreRepoTokens).toHaveLength(4);
         const all = [req.suite!.repoToken, ...req.suite!.moreRepoTokens!];
         expect(new Set(all.map((t) => openSealed(t, RUN))).size).toBe(5);
+    });
+
+    it('sends the files the PR removes, and neither list when the diff was cut', async () => {
+        const w = world({ removed: ['e2e/gone.cy.ts'] });
+        expect((await build(w)).suite).toMatchObject({ removedFiles: ['e2e/gone.cy.ts'] });
+        const cut = await build(world({ removed: ['e2e/gone.cy.ts'], truncated: true }));
+        expect(cut.suite).not.toHaveProperty('changedFiles');
+        expect(cut.suite).not.toHaveProperty('removedFiles');
     });
 
     it('leaves the section out, and mints nothing for it, when the recipe has no suite', async () => {

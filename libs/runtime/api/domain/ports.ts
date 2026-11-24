@@ -285,6 +285,8 @@ export interface PullRequestDiff {
     truncated: boolean;
     /** Root `.kodus/` files the PR changes, from the whole file list before any cut: the worker picks the recipe among them (S-19). */
     recipeFiles?: RecipeChangedPath[];
+    /** The files the PR removes, a rename's old path included, from the whole file list before any cut; absent when it removes none. */
+    removedFiles?: string[];
 }
 
 export interface GitIdentity {

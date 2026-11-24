@@ -17,13 +17,13 @@ const SUITE = 'suite:\n  runner: cypress\n  command: npx cypress run --spec "{sp
 const recipe = `version: 1\nservices:\n  compose:\n    public: app\n${SUITE}`;
 const env = (patch: Partial<ProductEnvironment> = {}): ProductEnvironment => ({ environmentId: 'env-1', organizationId: ORG, teamId: TEAM, repositoryId: REPO, repositoryName: 'acme/shop', state: 'active', createdAt: NOW.toISOString(), updatedAt: NOW.toISOString(), ...patch });
 
-function world(o: { head?: Partial<Awaited<ReturnType<RuntimeGitPort['getPullRequestHead']>> & object> | null; recipe?: string | null; setupSha?: string | null; released?: boolean; truncated?: boolean; diff?: Array<{ path: string; previousPath?: string }> } = {}) {
+function world(o: { head?: Partial<Awaited<ReturnType<RuntimeGitPort['getPullRequestHead']>> & object> | null; recipe?: string | null; setupSha?: string | null; released?: boolean; truncated?: boolean; diff?: Array<{ path: string; previousPath?: string }>; removed?: string[] } = {}) {
     const outbox = new FakeOutbox();
     const targets = new InMemoryRunTargetStore();
     const issued: string[] = [];
     const git = {
         getPullRequestHead: async () => (o.head === null ? null : { headSha: HEAD, baseSha: BASE, fork: false, state: 'open', ...o.head }),
-        getPullRequestDiff: async () => ({ files: (o.diff ?? [{ path: 'src/a.ts' }, { path: 'src/new.ts', previousPath: 'src/old.ts' }]).map((f) => ({ patch: '', ...f })), truncated: !!o.truncated }),
+        getPullRequestDiff: async () => ({ files: (o.diff ?? [{ path: 'src/a.ts' }, { path: 'src/new.ts', previousPath: 'src/old.ts' }]).map((f) => ({ patch: '', ...f })), truncated: !!o.truncated, ...(o.removed ? { removedFiles: o.removed } : {}) }),
         readFileAtCommit: async () => (o.recipe === undefined ? recipe : o.recipe),
     } as unknown as RuntimeGitPort;
     const tokens = { issue: async () => (issued.push('t'), `ghs_${issued.length}`) };
@@ -48,6 +48,18 @@ describe('asking for the suite of a pull request (CI mode)', () => {
         expect(cmd.moreRepoTokens).toHaveLength(4);
         expect(w.issued).toHaveLength(5);
         expect(openSealed(cmd.repoToken, cmd.key)).toBe('ghs_1');
+    });
+
+    it('sends the files the PR removes, so the suite does not run a spec the PR deletes, and none when the diff was cut', async () => {
+        const w = world({ removed: ['e2e/gone.cy.ts', 'e2e/old.cy.ts'] });
+        await w.step.requestCi({ environment: env(), prNumber: 42 });
+        expect(commands(w.outbox)[0].removedFiles).toEqual(['e2e/gone.cy.ts', 'e2e/old.cy.ts']);
+        const cut = world({ removed: ['e2e/gone.cy.ts'], truncated: true });
+        await cut.step.requestCi({ environment: env(), prNumber: 42 });
+        expect(commands(cut.outbox)[0]).not.toHaveProperty('removedFiles');
+        const none = world();
+        await none.step.requestCi({ environment: env(), prNumber: 42 });
+        expect(commands(none.outbox)[0]).not.toHaveProperty('removedFiles');
     });
 
     it('stores the publish target under the suite run id before the command, so the check can be written', async () => {

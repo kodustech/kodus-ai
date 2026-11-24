@@ -41,10 +41,16 @@ export class RuntimeSuiteInputs {
         @Inject(RUNTIME_ENVIRONMENT_SETUP_READER) private readonly setups: Pick<RuntimeEnvironmentSetupReader, 'get'>,
     ) {}
 
-    /** The files the PR changed (a rename is both paths), or nothing when the diff was cut: unknown is never a short list. */
-    changesOf(diff: PullRequestDiff): { changedFiles?: string[] } {
+    /**
+     * The files the PR changed (a rename is both paths) and those it removed (a rename's old path included), or nothing when the diff
+     * was cut: unknown is never a short list. No removal is no field.
+     */
+    changesOf(diff: PullRequestDiff): { changedFiles?: string[]; removedFiles?: string[] } {
         if (diff.truncated) return {};
-        return { changedFiles: [...new Set(diff.files.flatMap((f) => [f.path, ...(f.previousPath ? [f.previousPath] : [])]))].sort() };
+        return {
+            changedFiles: [...new Set(diff.files.flatMap((f) => [f.path, ...(f.previousPath ? [f.previousPath] : [])]))].sort(),
+            ...(diff.removedFiles?.length ? { removedFiles: [...diff.removedFiles].sort() } : {}),
+        };
     }
 
     /** One sealed download token per claim of a suite with `shards` as its ceiling, bound to `sealTo`. */

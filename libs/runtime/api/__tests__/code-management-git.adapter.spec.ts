@@ -103,6 +103,21 @@ describe('CodeManagementRuntimeGitAdapter: facts from the Git API (ADR-057)', ()
         expect(await none.getPullRequestDiff({ ...input, headSha: 'a'.repeat(40) })).not.toHaveProperty('recipeFiles');
     });
 
+    it('names the files the PR removes, a rename\'s old path included, from the whole list (the suite drops those specs)', async () => {
+        const adapter = new CodeManagementRuntimeGitAdapter({
+            getFilesByPullRequestId: async () => [
+                { filename: 'src/a.ts', patch: '@@', status: 'modified' },
+                { filename: 'e2e/gone.cy.ts', patch: '', status: 'removed' },
+                { filename: 'e2e/new-name.cy.ts', previous_filename: 'e2e/old-name.cy.ts', patch: '', status: 'renamed' },
+                { filename: 'e2e/added.cy.ts', patch: '@@', status: 'added' },
+            ],
+        } as any);
+        const diff = await adapter.getPullRequestDiff({ ...input, headSha: 'a'.repeat(40) });
+        expect(diff.removedFiles).toEqual(['e2e/gone.cy.ts', 'e2e/old-name.cy.ts']);
+        const none = new CodeManagementRuntimeGitAdapter({ getFilesByPullRequestId: async () => [{ filename: 'a.md', patch: '@@', status: 'modified' }] } as any);
+        expect(await none.getPullRequestDiff({ ...input, headSha: 'a'.repeat(40) })).not.toHaveProperty('removedFiles');
+    });
+
     it('reads the post-change content of changed code files at the head, so routes can be extracted', async () => {
         const reads: any[] = [];
         const adapter = new CodeManagementRuntimeGitAdapter({

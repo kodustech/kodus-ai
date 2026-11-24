@@ -84,7 +84,7 @@ export class RuntimeSuiteRequester {
         const suiteRunId = uuidV5From(sha256(`suite-ci:${env.organizationId}:${env.environmentId}:${input.prNumber}:${head.headSha}`));
         const diff = await this.git.getPullRequestDiff({ ...orgTeam, ...repo, prNumber: input.prNumber, headSha: head.headSha });
         // A diff the product had to cut says nothing of the files it left out: unknown, so the whole suite runs.
-        const { changedFiles } = this.inputs.changesOf(diff);
+        const { changedFiles, removedFiles } = this.inputs.changesOf(diff);
 
         // One token per claim: the spec listing, each shard, the fresh host and the main host.
         const tokens = await this.inputs.tokensFor({ ...orgTeam, ...repo }, suite.shards, suiteRunId);
@@ -124,6 +124,7 @@ export class RuntimeSuiteRequester {
                     repoToken: tokens[0],
                     moreRepoTokens: tokens.slice(1),
                     ...(changedFiles ? { changedFiles } : {}),
+                    ...(removedFiles ? { removedFiles } : {}),
                 },
                 suiteRunId,
             ),
