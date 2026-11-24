@@ -531,7 +531,7 @@ export const ModelsFields = ({
                 className="[&>div>span]:min-w-0 [&>div>svg]:shrink-0">
                 <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-w-(--radix-select-content-available-width)">
                 <SelectItem value={ROUTING_DEFAULT}>
                     <span className="flex min-w-0">
                         <span className="shrink-0 whitespace-pre">
