@@ -7,6 +7,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 - `junit.ts` `parseJUnit` and `mochawesome.ts` `parseMochawesome`: a runner's result text as `SpecResult[]` (`types.ts`: per test the attempts, so a retried-then-passed test is `isFlakyInRun`). A text that is not that format throws.
 - `error-signature.ts` `errorSignature`: the first error line with numbers, hashes, uuids and generated selectors replaced, cut at 200 characters.
 - `classifier.ts`: the re-run classifier of section 9. `planReruns` (mass failure over 25%, the 40-spec budget, infra specs to one fresh-host retry) before the re-runs; `classifyFailures` after them (`flaky`, `regression`, `pre_existing`, `pre_existing_changed`, `regression_unconfirmed` under base drift, the baseline fallbacks of 9.5, `unclassified` with its reason); `needsMainRerun` (a spec red everywhere in the exact baseline skips the main run). Only a `regression` blocks or becomes a finding.
+- `select.ts` `select` (section 6.1): the specs a PR's changed files reach through the stored coverage map, the importer walk and the workspace closure, or the whole suite with a reason (`FullReason`: manifest, lockfile, config, shared routing, a file no spec covers, map missing, stale or of another digest, a noise file, a forced run). `suite.ignore` globs never override the net; unknown never selects nothing.
 
 ## Does not own
 - Storing results, baselines and durations, the shard hosts, the detached command and its polling, publishing: later steps of the build plan (section 17), in the runtime-worker and `libs/runtime-publish`.
@@ -28,7 +29,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 
 ## Module map
 
-Files (7, tests apart): `balance.ts`, `classifier.ts`, `error-signature.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `types.ts`
+Files (8, tests apart): `balance.ts`, `classifier.ts`, `error-signature.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `select.ts`, `types.ts`
 
 Imports these Runtime modules:
 
