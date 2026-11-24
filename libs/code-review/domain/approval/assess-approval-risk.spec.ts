@@ -419,3 +419,49 @@ it('returns unknown when the model fails, so approval cannot proceed', async () 
         reviewedHeadSha: 'abc123',
     });
 });
+
+it('holds unshown code on the legacy approval path without asking the model', async () => {
+    const result = await assessApprovalRisk({
+        ...input,
+        files: [
+            ...input.files,
+            {
+                filename: 'src/auth/generated.ts',
+                status: 'added',
+                additions: 4000,
+                deletions: 0,
+            } as any,
+        ],
+    });
+
+    expect(result).toMatchObject({
+        level: 'unknown',
+        reason: 'Kody could not read the diff of `src/auth/generated.ts`: the Git provider did not return it.',
+    });
+    expect(LLM.run).not.toHaveBeenCalled();
+});
+
+it('lists an unshown asset out of band on the legacy approval path', async () => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        level: 'low',
+        reason: 'Only a logo was added.',
+    });
+    const result = await assessApprovalRisk({
+        ...input,
+        files: [
+            ...input.files,
+            {
+                filename: 'public/logo.png',
+                status: 'added',
+                additions: 0,
+                deletions: 0,
+            } as any,
+        ],
+    });
+
+    expect(result.level).toBe('low');
+    expect(
+        JSON.parse((LLM.run as jest.Mock).mock.calls[0][0].user)
+            .filesWithoutDiff,
+    ).toEqual(['public/logo.png']);
+});

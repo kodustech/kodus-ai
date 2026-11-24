@@ -39,15 +39,39 @@ export const approvalRiskOutputSchema = z.object({
 const MAX_REASON_CHARS = 2_000;
 const MAX_AREA_FILES = 100;
 const logger = createLogger('AssessApprovalRisk');
-// Providers omit binary files and diffs too large to show; say so in place.
-const UNSHOWN_DIFF =
-    '[no diff: the Git provider did not show this file (binary or too large); its content was not inspected]';
+
+/** Kinds the model can judge by path alone: assets, docs, data, lockfiles, tests, fixtures. */
+const JUDGEABLE_WITHOUT_DIFF =
+    /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|icns|tiff?|svg|pdf|mp3|mp4|m4a|mov|webm|ogg|oga|wav|flac|woff2?|ttf|otf|eot|md|mdx|markdown|rst|adoc|txt|csv|tsv|json|jsonl|ndjson|snap)$|(?:^|\/)(?:yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Gemfile\.lock|composer\.lock|go\.sum|mix\.lock|pubspec\.lock|Podfile\.lock)$|(?:^|\/)(?:__tests__|__snapshots__|__fixtures__|tests?|specs?|fixtures?|testdata)\/|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/i;
+
+const hasDiff = (file: FileChange) =>
+    typeof file.patch === 'string' && !!file.patch.trim();
+
+/**
+ * Providers omit binary and oversized patches but keep the file. The model
+ * judges such a file only when its path says what it holds; any other path
+ * the provider did not show could hide code. Zero counters cannot prove a
+ * pure rename: adapters can default missing counts to zero.
+ */
+export function unshownCodePath(files: FileChange[]): string | undefined {
+    for (const file of files.filter((file) => !hasDiff(file))) {
+        const path = [file.filename, file.previous_filename].find(
+            (path) => !!path && !JUDGEABLE_WITHOUT_DIFF.test(path),
+        );
+        if (path) return path;
+    }
+    return undefined;
+}
+
+/** A provider path as inert inline code in a published reason. */
+const quotedPath = (path: string) =>
+    `\`${path.replace(/[`\s]+/g, ' ').slice(0, 200)}\``;
 
 export function buildChangeRiskDiff(files: FileChange[]): string {
     return files
         .map(
             (file) =>
-                `${file.filename}${file.previous_filename && file.previous_filename !== file.filename ? ` (renamed from ${file.previous_filename})` : ''} (${file.status}; +${file.additions}/-${file.deletions})\n${file.patch?.trim() ? file.patch : UNSHOWN_DIFF}`,
+                `${file.filename}${file.previous_filename && file.previous_filename !== file.filename ? ` (renamed from ${file.previous_filename})` : ''} (${file.status}; +${file.additions}/-${file.deletions})${hasDiff(file) ? `\n${file.patch}` : ''}`,
         )
         .join('\n\n');
 }
@@ -66,6 +90,14 @@ export async function assessChangeRisk(input: {
     modelSlot?: NormalizedModel;
     trace?: { baseSha: string; assessmentKey: string };
 }): Promise<ChangeRiskAssessment> {
+    const unshown = unshownCodePath(input.files);
+    if (unshown)
+        return {
+            level: 'unknown',
+            reason: `Kody could not read the diff of ${quotedPath(unshown)}: the Git provider did not return it.`,
+            reviewedHeadSha: input.headSha,
+            areaMapVersion: input.areaMap?.version,
+        };
     const areaByPath = new Map(
         (input.areaMap?.files ?? []).map((area) => [area.path, area]),
     );
@@ -128,6 +160,10 @@ export async function assessChangeRisk(input: {
             fileCount: input.files.length,
             diffWasTruncated: false,
             diff,
+            // Out of band: patch text is author content and could imitate a marker.
+            filesWithoutDiff: input.files
+                .filter((file) => !hasDiff(file))
+                .map((file) => file.filename),
             historicalAreas: relevantAreas.slice(0, MAX_AREA_FILES),
             areaEvidenceTruncated: input.files.length > MAX_AREA_FILES,
             historyCoverage: input.areaMap?.coverage ?? null,

@@ -123,8 +123,8 @@ export function riskApprovalVeto(
     current: CurrentRiskSnapshot,
 ): string | undefined {
     if (!riskEnabled) return undefined;
-    // Unavailable reasons are Kody's own fixed text, never model or provider
-    // prose; without one the hold reads like an outage on every such PR.
+    // Unavailable reasons are Kody's own text (at most a quoted file path),
+    // never model or provider prose; without one every hold reads like an outage.
     if (risk?.status === 'unavailable')
         return `Risk assessment is unavailable: ${risk.reason}`;
     return (

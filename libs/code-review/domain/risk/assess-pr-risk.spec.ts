@@ -355,7 +355,7 @@ it.each([
             }),
         ).toMatchObject({
             status: 'unavailable',
-            reason: 'Kody could not read the diff of src/billing/charge.ts: the Git provider did not return it.',
+            reason: 'Kody could not read the diff of `src/billing/charge.ts`: the Git provider did not return it.',
         });
         expect(LLM.run).not.toHaveBeenCalled();
     },
@@ -370,6 +370,9 @@ it.each([
     ['libs/scan/engine.spec.ts', 'added', 3115, 0],
     ['evals/rounds/fixtures/repo/gitlab.service.ts', 'added', 6683, 0],
     ['pnpm-lock.yaml', 'modified', 5000, 4000],
+    ['test_email.py', 'added', 4000, 0],
+    ['pkg/email_test.go', 'added', 4000, 0],
+    ['src/EmailServiceTest.java', 'added', 4000, 0],
 ])(
     'judges a PR whose unshown file %s cannot hide code, and tells the model it was not shown',
     async (filename, status, additions, deletions) => {
@@ -389,13 +392,17 @@ it.each([
         const data = JSON.parse(
             jest.mocked(LLM.run).mock.calls[0][0].user as string,
         );
-        expect(data.diff).toContain(
-            `${filename} (${status}; +${additions}/-${deletions})\n[no diff: the Git provider did not show this file (binary or too large); its content was not inspected]`,
-        );
+        expect(data.filesWithoutDiff).toEqual([filename]);
+        // Only the header: the diff carries no in-band marker to imitate.
+        expect(
+            data.diff.endsWith(
+                `${filename} (${status}; +${additions}/-${deletions})`,
+            ),
+        ).toBe(true);
     },
 );
 
-it('keeps a rename unavailable when its old path held unshown code', async () => {
+it('names the old path when a rename moved unshown code out of a code path', async () => {
     expect(
         await assessPrRisk({
             ...input,
@@ -409,8 +416,29 @@ it('keeps a rename unavailable when its old path held unshown code', async () =>
                 },
             ] as any,
         }),
-    ).toMatchObject({ status: 'unavailable' });
+    ).toMatchObject({
+        status: 'unavailable',
+        reason: 'Kody could not read the diff of `src/auth.ts`: the Git provider did not return it.',
+    });
     expect(LLM.run).not.toHaveBeenCalled();
+});
+
+it('quotes a provider path as inert text in the published reason', async () => {
+    const result = await assessPrRisk({
+        ...input,
+        files: [
+            {
+                filename: 'src/a`b\n@team [x](y).ts',
+                status: 'added',
+                additions: 1,
+                deletions: 0,
+            },
+        ] as any,
+    });
+    expect(result).toMatchObject({
+        status: 'unavailable',
+        reason: 'Kody could not read the diff of `src/a b @team [x](y).ts`: the Git provider did not return it.',
+    });
 });
 
 it('keeps a patch-less rename unknown even when normalized counters are zero', async () => {
