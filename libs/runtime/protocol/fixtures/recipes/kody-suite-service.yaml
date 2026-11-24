@@ -1,0 +1,10 @@
+version: 1
+services:
+  compose:
+    public: app
+suite:
+  runner: cypress
+  command: npx cypress run --spec "{specs}"
+  cwd: apps/dashboard
+  specs: "cypress/e2e/**/*.cy.ts"
+  service: e2e

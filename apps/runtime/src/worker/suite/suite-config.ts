@@ -27,6 +27,7 @@ export function suiteConfigOf(recipe: Pick<Recipe, 'suite'>): ResolvedSuite | un
             runner: s.runner,
             command: s.command,
             ...(s.cwd !== undefined ? { cwd: s.cwd } : {}),
+            ...(s.service !== undefined ? { service: s.service } : {}),
             env: s.env,
             resultsGlob: s.results?.junit ?? DEFAULT_RESULTS_GLOB,
             shardTimeoutMs: s.timeoutSeconds?.shard !== undefined ? s.timeoutSeconds.shard * 1000 : DEFAULT_SHARD_TIMEOUT_MS,

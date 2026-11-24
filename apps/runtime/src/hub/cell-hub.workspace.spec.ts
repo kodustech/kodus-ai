@@ -242,3 +242,49 @@ describe('exec.repository', () => {
         await expect(c.exec('c1', { ...body, repository: '../etc' })).rejects.toBeDefined();
     });
 });
+
+describe('exec.service', () => {
+    it('reaches a cell that names execService, and never one that does not: the answer is exec_service_unavailable and nothing is sent', async () => {
+        for (const [features, sent] of [
+            [[...FEATURES, 'execService'], true],
+            [FEATURES, false],
+        ] as const) {
+            const ctx = setup();
+            const c = await ctx.connect([...features]);
+            const { claim } = await ctx.acquire(c, `setup:execsvc:${sent}`, { repos: undefined });
+            const stepId = randomUUID();
+            const p = ctx.hub.exec({ claimId: claim.claimId, organizationId: 'org-a' }, { stepId, command: 'npx cypress run', timeoutMs: 1_000, service: 'e2e' });
+            for (let i = 0; i < 6; i++) await tick();
+            const exec = c.sock.last('exec');
+            if (sent) {
+                expect(exec.body).toMatchObject({ stepId, command: 'npx cypress run', service: 'e2e' });
+                await c.onMessage(frame('cell-a', 'step.result', { stepId, executor: 'vm', imageId: 'img-1', vmHealth: 'ok', exec: { exitCode: 0, stdout: '', stderr: '', truncated: false, durationMs: 1 } }, { claimId: claim.claimId, re: exec.id }));
+                expect(await p).toMatchObject({ exitCode: 0 });
+            } else {
+                expect(exec).toBeUndefined();
+                expect(await p).toEqual({ code: 'exec_service_unavailable' });
+            }
+        }
+    });
+
+    it('an exec with no service is sent to a cell that does not name the feature, as it always was', async () => {
+        const ctx = setup();
+        const c = await ctx.connect([...FEATURES]);
+        const { claim } = await ctx.acquire(c, 'setup:execsvc:none', { repos: undefined });
+        const stepId = randomUUID();
+        void ctx.hub.exec({ claimId: claim.claimId, organizationId: 'org-a' }, { stepId, command: 'ls', timeoutMs: 1_000 });
+        for (let i = 0; i < 6; i++) await tick();
+        expect(c.sock.last('exec').body).not.toHaveProperty('service');
+    });
+
+    it('the exec route takes a service name and refuses anything else', async () => {
+        const seen: any[] = [];
+        const c = new InternalController({ exec: async (_ref: unknown, req: unknown) => (seen.push(req), { exitCode: 0 }) } as any);
+        const body = { organizationId: 'org-a', stepId: randomUUID(), command: 'ls', timeoutMs: 1_000 };
+        await c.exec('c1', { ...body, service: 'e2e' });
+        await c.exec('c1', body);
+        expect(seen[0].service).toBe('e2e');
+        expect(seen[1]).not.toHaveProperty('service');
+        await expect(c.exec('c1', { ...body, service: '../etc' })).rejects.toBeDefined();
+    });
+});

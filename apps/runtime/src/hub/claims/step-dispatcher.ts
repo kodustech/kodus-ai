@@ -54,7 +54,7 @@ export class StepDispatcher {
     ) {}
 
     /** The cell's session; a read that fails is logged and answers as no session, so each caller refuses the feature or sends no evidence. */
-    private async sessionFor(cellId: string, purpose: 'evidence' | 'browser_explore' | 'workspace' | 'workload_exec' | 'exercised_lines') {
+    private async sessionFor(cellId: string, purpose: 'evidence' | 'browser_explore' | 'workspace' | 'workload_exec' | 'exercised_lines' | 'exec_service') {
         if (!this.sessionOf) return null;
         try {
             return await this.sessionOf(cellId);
@@ -273,6 +273,14 @@ export class StepDispatcher {
         return !!session?.features?.includes('workspace');
     }
 
+    /** Whether the cell of the claim names execService (exec.service). */
+    private async namesExecService(ref: ClaimRef): Promise<boolean> {
+        const claim = await this.claims.findActiveClaim(ref, { allowHeld: true });
+        if (!claim || !this.sessionOf) return false;
+        const session = await this.sessionFor(claim.cellId, 'exec_service');
+        return !!session?.features?.includes('execService');
+    }
+
     async exec(ref: ClaimRef, req: ExecRequest): Promise<StepResult | EnvError> {
         let expectedConnection: CellConnection | undefined;
         if (req.executionScope !== undefined) {
@@ -298,11 +306,15 @@ export class StepDispatcher {
             // A cell that cannot read it would run the command on the claim's own repository's code.
             return { code: 'workload_exec_unavailable' };
         }
+        if (req.service && !(await this.namesExecService(ref))) {
+            // A cell that cannot read it would refuse the frame whole, or run the command in the public service.
+            return { code: 'exec_service_unavailable' };
+        }
         const ev = await this.evidenceFor(ref, req.evidence);
         const r = await this.sendStep(
             ref,
             'exec',
-            { stepId: req.stepId, command: req.command, cwd: req.cwd, timeoutMs: req.timeoutMs, ...(ev ? { evidence: ev } : {}), ...(req.repository ? { repository: req.repository } : {}) },
+            { stepId: req.stepId, command: req.command, cwd: req.cwd, timeoutMs: req.timeoutMs, ...(ev ? { evidence: ev } : {}), ...(req.repository ? { repository: req.repository } : {}), ...(req.service ? { service: req.service } : {}) },
             req.command,
             req.timeoutMs + 10_000,
             expectedConnection,

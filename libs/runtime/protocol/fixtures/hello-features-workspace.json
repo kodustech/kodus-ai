@@ -53,7 +53,8 @@
         "sandboxPool",
         "toolLayers",
         "buildStateDiskFacts",
-        "suite"
+        "suite",
+        "execService"
       ],
       "maxClaimSize": {
         "memoryMb": 16384,

@@ -807,6 +807,7 @@ type ExecBody struct {
 	Stream     *bool            `json:"stream,omitempty"`
 	Evidence   *EvidenceRequest `json:"evidence,omitempty"`
 	Repository *string          `json:"repository,omitempty"`
+	Service    *string          `json:"service,omitempty"`
 }
 
 type UploadFile struct {

@@ -262,6 +262,8 @@ export type ProbeOutcome = ProbeResult & { vmHealth: VmHealth };
 export type EnvError =
     /** This current cell cannot prove exec stays inside an isolated workload. */
     | { code: 'workload_exec_unavailable' }
+    /** The claim's cell cannot run a command in a named compose service (it does not name execService): nothing ran. */
+    | { code: 'exec_service_unavailable' }
     | { code: 'lease_expired' }
     /** The observer gave no result and the cell reports the machine OOM, crashed or gone. */
     | { code: 'vm_unhealthy'; stepId: string; vmHealth: Exclude<VmHealth, 'ok'> }
@@ -321,6 +323,13 @@ export interface ExecRequest {
      * it where that repository was built. Absent: the claim's own repository.
      */
     repository?: string;
+    /**
+     * The compose service whose container the command runs in (exec.service,
+     * feature execService): the suite's `service:`. Absent: the recipe's public
+     * service. A cell that does not name the feature is never sent it: the
+     * answer is exec_service_unavailable.
+     */
+    service?: string;
 }
 
 export interface StepResult {

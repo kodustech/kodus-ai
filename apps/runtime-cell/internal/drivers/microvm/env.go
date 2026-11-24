@@ -80,6 +80,9 @@ func (d *Driver) Exec(ctx context.Context, ref driver.MachineRef, req kodyexec.R
 	if _, ok, err := d.find(ctx, ref.MachineID); err != nil || !ok {
 		return kodyexec.Result{}, errors.Join(err, notFound(ok, ref))
 	}
+	if req.Service != "" {
+		return kodyexec.Result{}, kodyexec.ErrServiceUnsupported
+	}
 	op, err := execOp(req)
 	if err != nil {
 		return kodyexec.Result{}, err

@@ -243,6 +243,8 @@ export async function putStepOutput(ev: RunEvidence, at: { runId: string; side: 
 /** Why a step has no result, in words a developer reads on the Run page: the code and its facts, no internal id. */
 export function envErrorEvidence(e: EnvError): { code: EnvError['code']; reason: string; vmHealth?: string; afterMs?: number } {
     switch (e.code) {
+        case 'exec_service_unavailable':
+            return { code: e.code, reason: "the claim's cell cannot run a command in a named service; nothing ran" };
         case 'lease_expired':
             return { code: e.code, reason: "the claim's lease expired before the step ran" };
         case 'vm_unhealthy':

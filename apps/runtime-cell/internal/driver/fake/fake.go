@@ -59,6 +59,8 @@ type Driver struct {
 	// bake then reports it pushed (BakeSpec.Shared), before it returns.
 	ShareBakes bool
 	Shared     []driver.SharedImage
+	// ExecService is what Capabilities says of exec on a compose service.
+	ExecService bool
 	// Diagnostics is what Diagnose answers (nil: an error).
 	Diagnostics *driver.Diagnostics
 	// MaxClaimSize is the largest claim size the fake grants (default none).
@@ -100,7 +102,7 @@ func (d *Driver) Capabilities() driver.Capabilities {
 	if iso == "" {
 		iso = driver.IsolationNone
 	}
-	return driver.Capabilities{Isolation: iso, NestedContainers: true, Arch: []string{"x86_64", "arm64"}, MaxClaimSize: d.MaxClaimSize, DefaultClaimSize: d.DefaultClaimSize, Backends: d.Backends, KVM: d.KVM, HostArch: d.HostArch, SandboxCellTrust: !d.NoSandboxCellTrust, ShareBakes: d.ShareBakes}
+	return driver.Capabilities{Isolation: iso, NestedContainers: true, Arch: []string{"x86_64", "arm64"}, MaxClaimSize: d.MaxClaimSize, DefaultClaimSize: d.DefaultClaimSize, Backends: d.Backends, KVM: d.KVM, HostArch: d.HostArch, SandboxCellTrust: !d.NoSandboxCellTrust, ShareBakes: d.ShareBakes, ExecService: d.ExecService}
 }
 
 // Parts is what the fake cell (-driver fake) runs: bakes, resets and the

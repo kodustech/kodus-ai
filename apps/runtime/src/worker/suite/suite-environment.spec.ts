@@ -1,7 +1,8 @@
 import type { AcquireRequest, Claim, EnvironmentRuntime } from '@libs/runtime/environment';
 import { isBlocked } from '@libs/runtime/environment';
 
-import { suiteEnvironment } from './suite-environment';
+import { ExecArtifactSource } from './suite-artifacts';
+import { execInService, suiteEnvironment } from './suite-environment';
 
 // The cell revokes a repository download token once it fetched with it, so a suite run, which holds one claim per shard
 // plus the fresh host and the main host, needs one token per claim. Each claim is acquired by a client built with its own.
@@ -78,5 +79,33 @@ describe('the environment of a suite run', () => {
         await new Promise((r) => setImmediate(r));
         // The first claim's renewal is stopped; the second's keeps going.
         expect(w.calls.filter((c) => c.startsWith('renew:'))).toEqual(['renew:t2:claim-k1:suite']);
+    });
+});
+
+describe('exec in the suite service', () => {
+    const seen: Array<{ service?: string; command: string }> = [];
+    const base = {
+        exec: async (_claimId: string, r: { stepId: string; command: string; service?: string }) => {
+            seen.push({ command: r.command, ...(r.service !== undefined ? { service: r.service } : {}) });
+            return { stepId: r.stepId, exitCode: 0, stdout: '', stderr: '', truncated: false, durationMs: 1, transport: 'ok' as const };
+        },
+    };
+    beforeEach(() => (seen.length = 0));
+
+    it('names the service on every exec, and keeps one a request already names', async () => {
+        const env = execInService(base, 'e2e');
+        await env.exec('c1', { stepId: 's1', command: 'ls', timeoutMs: 1 });
+        await env.exec('c1', { stepId: 's2', command: 'id', timeoutMs: 1, service: 'other' });
+        expect(seen).toEqual([{ command: 'ls', service: 'e2e' }, { command: 'id', service: 'other' }]);
+    });
+
+    it('is the environment itself when the recipe names no service', async () => {
+        expect(execInService(base, undefined)).toBe(base);
+    });
+
+    it('the artifact source reads the runner\'s files in that service', async () => {
+        await new ExecArtifactSource(execInService(base, 'e2e'), 'art-1').list('c1', { cwd: 'apps/dashboard', dirs: ['cypress/screenshots'] });
+        expect(seen).toHaveLength(1);
+        expect(seen[0].service).toBe('e2e');
     });
 });

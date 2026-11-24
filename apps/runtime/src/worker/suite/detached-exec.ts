@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 
 import type { EnvError, EnvironmentRuntime, StepResult } from '@libs/runtime/environment';
+import { EXEC_SERVICE_PATTERN } from '@libs/runtime/protocol/messages';
 
 // A suite command run detached (docs/runtime/e2e-suites.md section 4, D3). `exec` caps `timeoutMs` at 600 s and a
 // call returns 192 KiB, so a 10 to 25 minute runner does not fit one call. The shard driver starts the command in
@@ -31,6 +32,11 @@ export interface DetachedRunInput {
     command: string;
     /** Relative to the checkout; the command and the results glob both start there. */
     cwd?: string;
+    /**
+     * The compose service the command runs in (the recipe's `suite.service`): the start, every poll, the kill and the final
+     * read all name it, so they all see the same container's files and process. Absent: the recipe's public service.
+     */
+    service?: string;
     /** Plain values the command runs with (the recipe's suite.env). */
     envVars?: Record<string, string>;
     /** Where the runner writes its result files, relative to `cwd` (`suite.results.junit`): a path pattern. */
@@ -47,7 +53,7 @@ export interface DetachedRunInput {
     onPoll?(p: { resultFiles: string[]; logTail: string; elapsedMs: number }): void | Promise<void>;
 }
 
-export type InfraReason = 'no_result_file' | 'transport_lost' | 'start_failed' | 'bad_results_glob' | 'bad_input';
+export type InfraReason = 'no_result_file' | 'transport_lost' | 'start_failed' | 'bad_results_glob' | 'bad_input' | 'service_unsupported';
 
 export type DetachedOutcome =
     /** The command exited on its own; red specs are results, so a non-zero status with result files is still this. */
@@ -75,12 +81,16 @@ export async function runDetached(i: DetachedRunInput): Promise<DetachedOutcome>
     const infra = (reason: InfraReason, extra: { exitCode?: number; logTail?: string } = {}): DetachedOutcome => ({ outcome: 'infra', reason, ...extra, durationMs: took() });
     if (!safePath(i.resultsGlob)) return infra('bad_results_glob');
     const cwd = i.cwd ?? '.';
+    if (i.service !== undefined && !EXEC_SERVICE_PATTERN.test(i.service)) return infra('bad_input');
+    const where = i.service !== undefined ? { service: i.service } : {};
     if (!KEY.test(i.key) || !safePath(cwd) || Object.keys(i.envVars ?? {}).some((n) => !ENV_NAME.test(n))) return infra('bad_input');
     const dir = `${i.stateDir ?? DEFAULT_STATE_DIR}/${i.key}`;
     if (!/^[A-Za-z0-9._\/-]+$/.test(dir)) return infra('bad_input');
 
     if (i.signal?.aborted) return { outcome: 'cancelled', resultFiles: [], logTail: '', durationMs: took() };
-    const started = await i.env.exec(i.claimId, { stepId: `${i.key}:start`, command: startScript(dir, cwd, i.command, i.envVars ?? {}), timeoutMs: POLL_TIMEOUT_MS });
+    const started = await i.env.exec(i.claimId, { stepId: `${i.key}:start`, command: startScript(dir, cwd, i.command, i.envVars ?? {}), timeoutMs: POLL_TIMEOUT_MS, ...where });
+    // A cell that cannot run in a named service ran nothing: the shard is infra with its own reason, never a failed spec.
+    if ('code' in started && started.code === 'exec_service_unavailable') return infra('service_unsupported');
     if (!answered(started) || started.exitCode !== 0) return infra('start_failed');
 
     const deadline = t0 + i.timeoutMs;
@@ -93,7 +103,7 @@ export async function runDetached(i: DetachedRunInput): Promise<DetachedOutcome>
         if (remaining <= 0 || i.signal?.aborted) break;
         await i.sleep(Math.min(pollMs, remaining));
         n++;
-        const answer = await i.env.exec(i.claimId, { stepId: `${i.key}:poll:${n}`, command: pollScript(dir, cwd, i.resultsGlob), timeoutMs: POLL_TIMEOUT_MS });
+        const answer = await i.env.exec(i.claimId, { stepId: `${i.key}:poll:${n}`, command: pollScript(dir, cwd, i.resultsGlob), timeoutMs: POLL_TIMEOUT_MS, ...where });
         const report = answered(answer) && answer.exitCode === 0 ? parseReport(answer.stdout) : undefined;
         if (!report) {
             if (++lost >= MAX_LOST_POLLS) return infra('transport_lost', { ...(last ? { logTail: last.logTail } : {}) });
@@ -111,8 +121,8 @@ export async function runDetached(i: DetachedRunInput): Promise<DetachedOutcome>
     }
     // The shard's cap, or a cancel: stop the command and its children, then read what finished once more.
     const cancelled = !!i.signal?.aborted;
-    await i.env.exec(i.claimId, { stepId: `${i.key}:kill`, command: killScript(dir), timeoutMs: POLL_TIMEOUT_MS });
-    const final = await i.env.exec(i.claimId, { stepId: `${i.key}:poll:final`, command: pollScript(dir, cwd, i.resultsGlob), timeoutMs: POLL_TIMEOUT_MS });
+    await i.env.exec(i.claimId, { stepId: `${i.key}:kill`, command: killScript(dir), timeoutMs: POLL_TIMEOUT_MS, ...where });
+    const final = await i.env.exec(i.claimId, { stepId: `${i.key}:poll:final`, command: pollScript(dir, cwd, i.resultsGlob), timeoutMs: POLL_TIMEOUT_MS, ...where });
     const report = (answered(final) && final.exitCode === 0 ? parseReport(final.stdout) : undefined) ?? last;
     return { outcome: cancelled ? 'cancelled' : 'timeout', resultFiles: report?.files ?? [], logTail: report?.logTail ?? '', durationMs: took() };
 }

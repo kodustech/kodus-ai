@@ -843,3 +843,11 @@ func TestDestroyForgetsEverythingTheMachineHad(t *testing.T) {
 		t.Fatal("the destroyed machine's initdb binds stayed")
 	}
 }
+
+// The guest agent runs a command in the VM, not in a compose service: a request that names one is refused.
+func TestAnExecOnAServiceIsRefusedInTheVM(t *testing.T) {
+	d, ref, _, _ := envDriver(t)
+	if _, err := d.Exec(context.Background(), ref, kodyexec.Request{Command: "true", Service: "e2e", TimeoutMs: 5000}); !errors.Is(err, kodyexec.ErrServiceUnsupported) {
+		t.Fatalf("exec on a service in a VM: %v", err)
+	}
+}

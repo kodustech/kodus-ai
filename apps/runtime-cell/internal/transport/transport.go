@@ -46,6 +46,9 @@ func resolveInside(base, rel string) (string, error) {
 }
 
 func (l Local) Exec(ctx context.Context, ref driver.MachineRef, req kodyexec.Request) (kodyexec.Result, error) {
+	if req.Service != "" {
+		return kodyexec.Result{}, kodyexec.ErrServiceUnsupported
+	}
 	dir, err := l.machineDir(ref)
 	if err != nil {
 		return kodyexec.Result{}, err

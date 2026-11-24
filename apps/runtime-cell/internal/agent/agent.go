@@ -353,6 +353,10 @@ func (a *Agent) hello(trim bool) *protocol.HelloBody {
 		if feature == protocol.FeatureBakeShare && !caps.ShareBakes {
 			continue
 		}
+		// Only a driver that runs the project's own containers can target one.
+		if feature == protocol.FeatureExecService && !caps.ExecService {
+			continue
+		}
 		// A placeholder is worth something only where an injector swaps it:
 		// a cell that pushes no egress policy takes no secrets.
 		if (feature == protocol.FeatureSecrets || feature == protocol.FeatureEgressTiers) && a.cfg.Egress == nil {

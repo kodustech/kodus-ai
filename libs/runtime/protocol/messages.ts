@@ -202,6 +202,9 @@ export function claimSecretsError(secrets: readonly { id: string; name: string }
     return undefined;
 }
 
+/** A compose service name an exec may target (the recipe's service names). */
+export const EXEC_SERVICE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/;
+
 /**
  * Optional claim.acquire fields a cell advertises it decodes (hello
  * features). Every field added to claim.acquire after the first cells
@@ -298,6 +301,9 @@ export function claimSecretsError(secrets: readonly { id: string; name: string }
  *     `cell update` refuses a release this hub would refuse at hello
  *     (docs/runtime/cell-distribution.md). A cell without it gets the ack
  *     it always got.
+ *   - execService: exec service (the command runs in that compose
+ *     service's container). A cell without it never gets the field: the
+ *     hub answers exec_service_unavailable.
  */
 export const CELL_FEATURES = [
     'seedsCache',
@@ -378,6 +384,11 @@ export const CELL_FEATURES = [
     // e2e suite. A cell's strict decoder refuses a consumer it does not know, so the hub sends it only to a cell that
     // names this; at the end, like the features before it, so an older hub's trim drops it first.
     'suite',
+    // exec.service (docs/runtime/e2e-suites.md section 4, 6.x): a command that runs in the named compose service's container
+    // instead of the recipe's public one (the suite's `service:`). A cell's strict decoder refuses a field it does not know, so
+    // the hub sends it only to a cell that names this; only a driver that runs the project's own containers names it. At the
+    // end, like the features before it, so an older hub's trim drops it first.
+    'execService',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
 
@@ -1071,6 +1082,11 @@ export const MessageBodySchemas = {
         // whose code the command runs on; the cell runs it in the container
         // built from that repository. Absent: the claim's own repository.
         repository: z.string().regex(REPOSITORY_ALIAS_PATTERN).optional(),
+        // feature execService: the compose service whose container the command
+        // runs in (a service of the claim's project, public or not). A service
+        // the project does not have is an error, never another container.
+        // Absent: the recipe's public service.
+        service: z.string().regex(EXEC_SERVICE_PATTERN).optional(),
     }),
     'upload': z.strictObject({
         stepId: z.uuid(),

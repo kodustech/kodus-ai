@@ -27,6 +27,8 @@ export interface FakeSuiteRun {
     diesAtMs?: number;
     /** Result files by the time (after the start) each appears. */
     resultsAt?: Record<string, number>;
+    /** The cell has no exec service: every exec that names one is answered exec_service_unavailable. */
+    refusesService?: boolean;
     /** Polls (1-based) that answer a lost transport. */
     lostPolls?: number[];
 }
@@ -37,7 +39,7 @@ export interface FakeSuiteRun {
  * Calls are told apart by their step id suffix, which the poller owns.
  */
 export class FakeSuiteEnvironment {
-    readonly calls: Array<{ kind: 'start' | 'poll' | 'kill'; timeoutMs: number; command: string }> = [];
+    readonly calls: Array<{ kind: 'start' | 'poll' | 'kill'; timeoutMs: number; command: string; service?: string }> = [];
     /** How many times the command itself began running. */
     commandRuns = 0;
     private startedAt: number | undefined;
@@ -51,7 +53,8 @@ export class FakeSuiteEnvironment {
 
     async exec(_claimId: string, req: ExecRequest): Promise<StepResult | EnvError> {
         const kind = req.stepId.endsWith(':start') ? 'start' : req.stepId.endsWith(':kill') ? 'kill' : 'poll';
-        this.calls.push({ kind, timeoutMs: req.timeoutMs, command: req.command });
+        this.calls.push({ kind, timeoutMs: req.timeoutMs, command: req.command, ...(req.service !== undefined ? { service: req.service } : {}) });
+        if (req.service !== undefined && this.run.refusesService) return { code: 'exec_service_unavailable' };
         if (kind === 'start') {
             if (this.startedAt === undefined) {
                 this.startedAt = this.clock.now();
@@ -298,6 +301,8 @@ export interface FakeSuiteWorld {
     specs: Record<string, FakeSpec>;
     /** An acquire this answers true for is blocked (no host, no capacity). */
     blocked?: (req: AcquireRequest) => boolean;
+    /** The cell has no exec service: every exec that names one is answered exec_service_unavailable. */
+    refusesService?: boolean;
 }
 
 interface FakeProcess {
@@ -327,6 +332,8 @@ export class FakeSuiteCell {
     maxConcurrentOnClaim = 0;
     /** The coverage collector's reads: the directory it was asked about. */
     readonly coverageReads: string[] = [];
+    /** The service each exec named, in order (undefined: the public service). */
+    readonly execServices: Array<{ stepId: string; service?: string }> = [];
     private readonly coverageDirs = new Map<string, string>();
     readonly released: string[] = [];
     private readonly procs = new Map<string, FakeProcess>();
@@ -361,6 +368,8 @@ export class FakeSuiteCell {
     async exec(claimId: string, req: ExecRequest): Promise<StepResult | EnvError> {
         const claim = this.claims.get(claimId);
         if (!claim || claim.released) return { code: 'lease_expired' };
+        this.execServices.push({ stepId: req.stepId, ...(req.service !== undefined ? { service: req.service } : {}) });
+        if (req.service !== undefined && this.world.refusesService) return { code: 'exec_service_unavailable' };
         const ok = (stdout: string): StepResult => ({ stepId: req.stepId, exitCode: 0, stdout, stderr: '', truncated: false, durationMs: 1, transport: 'ok' });
         if (req.stepId.endsWith(':start')) return ok(this.start(claim, req));
         const key = req.stepId.split(':')[0];

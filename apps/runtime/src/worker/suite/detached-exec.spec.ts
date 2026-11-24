@@ -116,4 +116,33 @@ describe('a suite command run detached', () => {
         expect(await w.go()).toMatchObject({ outcome: 'infra', reason: 'bad_results_glob' });
         expect(w.env.calls).toEqual([]);
     });
+
+    describe('in a compose service (suite.service)', () => {
+        it('the start, every poll, the kill and the final read all run in that service', async () => {
+            const w = world({ runMs: 60 * MIN }, { service: 'e2e', timeoutMs: 2 * MIN });
+            expect(await w.go()).toMatchObject({ outcome: 'timeout' });
+            const kinds = new Set(w.env.calls.map((c) => c.kind));
+            expect([...kinds].sort()).toEqual(['kill', 'poll', 'start']);
+            expect(w.env.calls.every((c) => c.service === 'e2e')).toBe(true);
+        });
+
+        it('without a service no call names one: the public service runs it, as before', async () => {
+            const w = world({ runMs: 2 * MIN, resultsAt: { 'results/a.xml': 1 * MIN } });
+            await w.go();
+            expect(w.env.calls.length).toBeGreaterThan(1);
+            expect(w.env.calls.some((c) => 'service' in c)).toBe(false);
+        });
+
+        it('a cell that cannot run in a service is infra with its own reason, and nothing is polled', async () => {
+            const w = world({ runMs: 2 * MIN, refusesService: true }, { service: 'e2e' });
+            expect(await w.go()).toMatchObject({ outcome: 'infra', reason: 'service_unsupported' });
+            expect(w.env.calls).toHaveLength(1);
+        });
+
+        it('refuses a service name that is not a compose service name', async () => {
+            const w = world({ runMs: 2 * MIN }, { service: '../e2e' });
+            expect(await w.go()).toMatchObject({ outcome: 'infra', reason: 'bad_input' });
+            expect(w.env.calls).toHaveLength(0);
+        });
+    });
 });

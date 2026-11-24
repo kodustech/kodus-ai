@@ -41,7 +41,17 @@ type Request struct {
 	// driver that lays workspaces out runs it where that code was built.
 	// Empty: the claim's own repository.
 	Repository string `json:"repository,omitempty"`
+	// Service is the compose service whose container the command runs in
+	// (exec.service, hello feature execService). Empty: the recipe's public
+	// service. A driver that does not run the project's containers refuses
+	// it (ErrServiceUnsupported); one that has no such service fails, and
+	// never runs the command in another container.
+	Service string `json:"service,omitempty"`
 }
+
+// ErrServiceUnsupported is a driver's refusal of Request.Service: it runs
+// commands in the machine, not in one of the project's service containers.
+var ErrServiceUnsupported = errors.New("exec service: this driver runs commands in the machine, not in a compose service")
 
 // Limits are per-command rlimits, a second lock under the VM's own pids,
 // memory and disk limits (S-09). Zero means unset.

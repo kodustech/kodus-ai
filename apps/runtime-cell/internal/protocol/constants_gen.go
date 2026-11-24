@@ -43,6 +43,7 @@ const (
 	FeatureToolLayers            = "toolLayers"
 	FeatureBuildStateDiskFacts   = "buildStateDiskFacts"
 	FeatureSuite                 = "suite"
+	FeatureExecService           = "execService"
 )
 
 // CellFeatures is CELL_FEATURES (libs/runtime/protocol/messages.ts), in order.
@@ -85,6 +86,7 @@ var CellFeatures = []string{
 	FeatureToolLayers,
 	FeatureBuildStateDiskFacts,
 	FeatureSuite,
+	FeatureExecService,
 }
 
 // HubAcceptedFeatures is HUB_ACCEPTED_FEATURES (libs/runtime/protocol/messages.ts):

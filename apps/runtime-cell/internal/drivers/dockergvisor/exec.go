@@ -60,14 +60,18 @@ var ErrNoExecService = errors.New("dockergvisor: no service to run commands in (
 // ErrNoRepositoryService means no service of the project is built from the repository a command names.
 var ErrNoRepositoryService = errors.New("dockergvisor: no service of the project is built from repository")
 
+// ErrNoServiceTarget means a command named a compose service the project does not run.
+var ErrNoServiceTarget = errors.New("dockergvisor: the project has no such service to run the command in")
+
 // execGrace is how much longer the docker client may run than the command:
 // timeout(1) in the sandbox stops the command first.
 const execGrace = 5_000
 
 var envKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 
-// Exec runs the request in the workload's public service container. cwd is
-// relative to the container's working directory and stays inside it.
+// Exec runs the request in the workload's public service container, or in
+// the container of the compose service it names (Request.Service). cwd is
+// relative to that container's working directory and stays inside it.
 func (d *Driver) Exec(ctx context.Context, ref driver.MachineRef, req kodyexec.Request) (kodyexec.Result, error) {
 	if _, err := d.owned(ctx, ref.MachineID); err != nil {
 		return kodyexec.Result{}, err
@@ -79,6 +83,14 @@ func (d *Driver) Exec(ctx context.Context, ref driver.MachineRef, req kodyexec.R
 		t, ok := m.repoExec[req.Repository]
 		if !ok {
 			return kodyexec.Result{}, fmt.Errorf("%w: %s", ErrNoRepositoryService, req.Repository)
+		}
+		at = &t
+	}
+	if req.Service != "" {
+		// A command on a compose service runs in that service's container: a service the project does not have is an error, never the public one.
+		t, ok := m.targets[req.Service]
+		if !ok {
+			return kodyexec.Result{}, fmt.Errorf("%w: %s", ErrNoServiceTarget, req.Service)
 		}
 		at = &t
 	}

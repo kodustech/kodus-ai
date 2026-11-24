@@ -31,4 +31,10 @@ describe('the suite block of a recipe as the engine reads it', () => {
         expect(c.baseline).toBe(false);
         expect(c.ignore).toEqual(['docs/**']);
     });
+
+    it('takes the compose service the suite runs in, and none when the recipe names none', () => {
+        const base = 'suite:\n  runner: cypress\n  command: npx cypress run --spec "{specs}"\n  specs: "cypress/e2e/**/*.cy.ts"\n';
+        expect(suiteConfigOf(recipeWith(`${base}  service: e2e\n`))!.config.service).toBe('e2e');
+        expect(suiteConfigOf(recipeWith(base))!.config).not.toHaveProperty('service');
+    });
 });

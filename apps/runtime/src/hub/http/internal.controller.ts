@@ -7,6 +7,7 @@ import { ProbeSchema } from '@libs/runtime/probe';
 import { CANARY_SLOTS, ClaimCanarySchema, ClaimRecipeSchema, ClaimRepoSchema, ClaimRunIdentitySchema, claimReposError, EvidenceRequestSchema, ExercisedRequestSchema, MachineSizeSchema, MessageBodySchemas, RepoRefSchema, MAX_TOOL_LAYERS, SandboxOpCheckedSchema, sandboxSnapshotError, SNAPSHOT_PURPOSES, SnapshotIdSchema, SnapshotKeySchema, ToolLayerPlanSchema } from '@libs/runtime/protocol';
 import { CLAIM_CONSUMERS } from '@libs/runtime/contracts/enums';
 import { IsolationMinimumSchema } from '@libs/runtime/contracts/isolation';
+import { EXEC_SERVICE_PATTERN } from '@libs/runtime/protocol/messages';
 import { MAX_HEALTH_TIMEOUT_SECONDS } from '@libs/runtime/protocol/recipe';
 import { PreviewIdSchema } from '@libs/runtime/contracts/preview';
 import { MAX_WORKSPACE_REPOSITORIES, REPOSITORY_ALIAS_PATTERN } from '@libs/runtime/contracts/workspace';
@@ -255,11 +256,12 @@ export class InternalController {
                 evidence: EvidenceRequestSchema.optional(),
                 executionScope: z.literal('workload').optional(),
                 repository: z.string().regex(REPOSITORY_ALIAS_PATTERN).optional(),
+                service: z.string().regex(EXEC_SERVICE_PATTERN).optional(),
             }),
             body,
         );
         return this.hub
-            .exec(ref(claimId, b), { stepId: b.stepId, command: b.command, cwd: b.cwd, timeoutMs: b.timeoutMs, ...(b.evidence ? { evidence: b.evidence } : {}), ...(b.executionScope ? {executionScope:b.executionScope} : {}), ...(b.repository ? { repository: b.repository } : {}) })
+            .exec(ref(claimId, b), { stepId: b.stepId, command: b.command, cwd: b.cwd, timeoutMs: b.timeoutMs, ...(b.evidence ? { evidence: b.evidence } : {}), ...(b.executionScope ? {executionScope:b.executionScope} : {}), ...(b.repository ? { repository: b.repository } : {}), ...(b.service ? { service: b.service } : {}) })
             .catch(mapped);
     }
 

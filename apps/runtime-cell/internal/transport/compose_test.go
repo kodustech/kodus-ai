@@ -47,3 +47,12 @@ func TestComposeHandsTheDriverACwdRelativeToTheContainersWorkdir(t *testing.T) {
 		}
 	}
 }
+
+// A command that names a compose service is for a driver that runs the project's containers: the cell-host
+// transport (fake cell, local-docker) refuses it rather than run it elsewhere.
+func TestLocalRefusesAnExecOnAServiceInsteadOfRunningItElsewhere(t *testing.T) {
+	l := Local{Root: t.TempDir()}
+	if _, err := l.Exec(context.Background(), driver.MachineRef{MachineID: "m1"}, kodyexec.Request{Command: "id", Service: "e2e", TimeoutMs: 1000}); !errors.Is(err, kodyexec.ErrServiceUnsupported) {
+		t.Fatalf("local exec on a service: %v", err)
+	}
+}

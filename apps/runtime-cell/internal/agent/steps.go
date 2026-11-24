@@ -252,10 +252,10 @@ func (a *Agent) observe(ctx context.Context, frameID string, c *claims.Claim, b 
 	return res, err
 }
 
-func (a *Agent) runExec(ctx context.Context, c *claims.Claim, b *protocol.ExecBody, cwd, repository string) {
+func (a *Agent) runExec(ctx context.Context, c *claims.Claim, b *protocol.ExecBody, cwd, repository, service string) {
 	// The download token never goes to the VM, not even as a value to mask:
 	// the cell redacts the output on its side (S-51).
-	req := kodyexec.Request{Command: b.Command, TimeoutMs: b.TimeoutMs, Cwd: cwd, Limits: a.cfg.ExecLimits, Repository: repository}
+	req := kodyexec.Request{Command: b.Command, TimeoutMs: b.TimeoutMs, Cwd: cwd, Limits: a.cfg.ExecLimits, Repository: repository, Service: service}
 	// kody-exec ends the command at timeoutMs; past that and the grace the
 	// VM is not answering.
 	ectx, cancel := context.WithTimeout(ctx, time.Duration(b.TimeoutMs)*time.Millisecond+a.cfg.ExecGrace)

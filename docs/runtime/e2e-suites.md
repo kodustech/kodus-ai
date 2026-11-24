@@ -110,6 +110,10 @@ disk). A host boots in 10 to 20 s with main's build ready (`host-providers.md` 8
   in the recipe's `service` (the customer's own e2e image or a service that has Cypress and Chrome; Xvfb is
   `cypress/included`'s own entry). The recipe author adds that service from the CI workflow when it is missing
   (`image: cypress/included@sha256:...`, pinned by digest like the browser runner image, `CheckBrowserImage`).
+  **Built:** the command, its polls, its kill and the result, artifact and coverage reads run in the named
+  service's container (`exec.service`, hello feature `execService`, docker-gvisor only). A cell without the feature
+  makes the shard `infra` (`service_unsupported`), and a service the project does not run is an error of the exec, never
+  another container. `suite.cwd` is relative to that container's working directory.
 - **Java and emulators** (Firebase emulators, the customer's functions) are already services of the environment; the
   suite shard boots the same compose project the Run's PR side boots.
 - **Memory.** Chrome plus the app plus emulators on 16 GB: the same load as one CI shard on 8 vCPU. Unverified on

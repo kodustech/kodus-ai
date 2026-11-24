@@ -17,7 +17,7 @@ import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
 import { isCancellation } from '../workflow-cancellation';
 import { mainHistoryOf } from './suite-adapters';
 import { suiteConfigOf, type ResolvedSuite } from './suite-config';
-import type { SuiteEnvironment } from './suite-environment';
+import { execInService, type SuiteEnvironment } from './suite-environment';
 import { type SuiteHostDemand, SuiteEngine, type SuiteTemplates } from './suite-engine';
 import { TemplateSpecLister } from './spec-lister';
 import { ExecArtifactSource, SuiteArtifactKeeper } from './suite-artifacts';
@@ -209,7 +209,7 @@ export class SuiteService {
             clock,
             ...(this.d.baselines ? { baselines: this.d.baselines } : {}),
             ...(this.d.maps ? { maps: this.d.maps } : {}),
-            ...(this.d.evidence ? { artifacts: new SuiteArtifactKeeper({ source: new ExecArtifactSource(env, `art-${cmd.suiteRunId}`), store: this.d.evidence }) } : {}),
+            ...(this.d.evidence ? { artifacts: new SuiteArtifactKeeper({ source: new ExecArtifactSource(execInService(env, s.suite.config.service), `art-${cmd.suiteRunId}`), store: this.d.evidence }) } : {}),
             ...(this.d.templates ? { templates: this.d.templates } : {}),
             ...(this.d.headroom ? { headroom: this.d.headroom } : {}),
         });

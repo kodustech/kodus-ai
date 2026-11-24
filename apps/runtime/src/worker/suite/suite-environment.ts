@@ -55,3 +55,12 @@ export function suiteEnvironment(make: (sealedRepoToken: string) => EnvironmentR
         },
     };
 }
+
+/**
+ * `env` with every exec naming `service` (the recipe's `suite.service`): the commands, polls, reads and kills of a suite
+ * all run in that one container. A request that already names a service keeps it. Absent service: `env` itself.
+ */
+export function execInService<E extends Pick<EnvironmentRuntime, 'exec'>>(env: E, service: string | undefined): Pick<EnvironmentRuntime, 'exec'> {
+    if (service === undefined) return env;
+    return { exec: (claimId: string, req: ExecRequest) => env.exec(claimId, req.service !== undefined ? req : { ...req, service }) };
+}

@@ -71,12 +71,22 @@ func (a *Agent) Handle(ctx context.Context, m *protocol.Message) error {
 		if err != nil {
 			return nack("invalid_body", "repository: %v", err)
 		}
+		service := ""
+		if b.Service != nil {
+			service = *b.Service
+		}
+		if service != "" && repo != "" {
+			return nack("invalid_body", "service: a command runs in a service or on a repository's code, not both")
+		}
 		canon := "exec\x00" + b.Command + "\x00" + cwd
 		if repo != "" {
 			canon += "\x00repository:" + repo
 		}
+		if service != "" {
+			canon += "\x00service:" + service
+		}
 		return a.admitStep(stepAdmission{trace: tctx, kind: m.Envelope.Type, claimID: claimID, stepID: b.StepID, canon: []byte(canon), allowHeld: true},
-			func(ctx context.Context, c *claims.Claim) { a.runExec(ctx, c, b, cwd, repo) })
+			func(ctx context.Context, c *claims.Claim) { a.runExec(ctx, c, b, cwd, repo, service) })
 	case *protocol.ClaimSnapshotBody:
 		return a.claimSnapshot(tctx, claimID, b)
 	case *protocol.ClaimExercisedBody:

@@ -37,6 +37,7 @@ import type { BaselineSpec, PgSuiteBaselines } from './pg-suite-baselines';
 import type { PgSuiteRuns, SuitePhase, SuiteRunState, SuiteSpecStatus } from './pg-suite-runs';
 import type { PgSuiteSpecStats } from './pg-suite-spec-stats';
 import type { SuiteArtifactKeeper } from './suite-artifacts';
+import { execInService } from './suite-environment';
 import type { Canary } from '../canary/canary';
 import type { SuiteShardHost } from '../../shared/persistence/suite-demand';
 
@@ -63,6 +64,8 @@ export interface SuiteConfig {
     maxShards: number;
     /** `suite.results.artifacts`: the directories the runner writes screenshots, videos and traces to; the artifacts of failed specs are kept from them. */
     artifacts?: readonly string[];
+    /** `suite.service`: the compose service every command of the suite runs in (the command, its polls and kill, the result, artifact and coverage reads). Absent: the recipe's public service. */
+    service?: string;
     /** `suite.gate`: `strict` fails the run on any unclassified failure; default leaves it neutral (D4). */
     gate?: 'default' | 'strict';
 }
@@ -483,7 +486,7 @@ export class SuiteEngine {
             for (const [s, r] of ran.done) shard.done.set(s, r);
             for (const [s, why] of ran.missing) shard.missing.set(s, why);
             if (!ran.done.has(spec)) continue;
-            const files = await collectCoverage(this.d.env, claimId, key, dir);
+            const files = await collectCoverage(this.execIn(inputs.config), claimId, key, dir);
             if (files) ctx.coverage.set(spec, files);
         }
     }
@@ -522,9 +525,14 @@ export class SuiteEngine {
         return { done: col.done, missing };
     }
 
+    /** The environment's exec for the suite's commands: in the recipe's service when it names one. */
+    private execIn(config: Pick<SuiteConfig, 'service'>): Pick<EnvironmentRuntime, 'exec'> {
+        return execInService(this.d.env, config.service);
+    }
+
     private async clearResults(ctx: RunCtx, claimId: string, key: string): Promise<void> {
         const { config } = ctx.inputs;
-        await this.d.env.exec(claimId, { stepId: `${key}:clear`, command: `rm -f -- ${config.resultsGlob}`, ...(config.cwd ? { cwd: config.cwd } : {}), timeoutMs: READ_TIMEOUT_MS });
+        await this.execIn(config).exec(claimId, { stepId: `${key}:clear`, command: `rm -f -- ${config.resultsGlob}`, ...(config.cwd ? { cwd: config.cwd } : {}), timeoutMs: READ_TIMEOUT_MS });
     }
 
     private async runCommand(ctx: RunCtx, col: Collector, specs: readonly string[], key: string, timeoutMs: number): Promise<DetachedOutcome> {
@@ -532,6 +540,7 @@ export class SuiteEngine {
         const out = await runDetached({
             env: this.d.env,
             claimId: col.claimId,
+            ...(config.service ? { service: config.service } : {}),
             key,
             command: fillSpecs(config, specs),
             ...(config.cwd ? { cwd: config.cwd } : {}),
@@ -557,7 +566,7 @@ export class SuiteEngine {
         const fresh: SpecResult[] = [];
         for (const f of files) {
             if (col.seen.has(f)) continue;
-            const r = await this.d.env.exec(col.claimId, { stepId: `${key}:read:${++col.reads}`, command: `cat -- ${quote(f)}`, ...(ctx.inputs.config.cwd ? { cwd: ctx.inputs.config.cwd } : {}), timeoutMs: READ_TIMEOUT_MS });
+            const r = await this.execIn(ctx.inputs.config).exec(col.claimId, { stepId: `${key}:read:${++col.reads}`, command: `cat -- ${quote(f)}`, ...(ctx.inputs.config.cwd ? { cwd: ctx.inputs.config.cwd } : {}), timeoutMs: READ_TIMEOUT_MS });
             if (!answered(r) || r.exitCode !== 0 || r.truncated) continue;
             let parsed: SpecResult[];
             try {

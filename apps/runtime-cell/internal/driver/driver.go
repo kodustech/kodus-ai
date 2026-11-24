@@ -66,6 +66,10 @@ type Capabilities struct {
 	// BakeSpec.Shared; docs/runtime/shared-baked-environments.md). The cell
 	// names hello feature bakeShare only then.
 	ShareBakes bool
+	// ExecService: the driver runs a command in the container of the
+	// compose service a request names (kodyexec.Request.Service). The cell
+	// names hello feature execService only then.
+	ExecService bool
 }
 
 // ClaimSize is the memory and CPUs a claim asked for its workload
