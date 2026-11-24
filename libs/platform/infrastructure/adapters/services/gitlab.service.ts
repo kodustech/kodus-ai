@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import { instanceConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import type {
     ApprovalTeamMembership,
@@ -1310,6 +1311,7 @@ export class GitlabService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITLAB,
             });
 
@@ -1419,6 +1421,7 @@ export class GitlabService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITLAB,
             });
 
@@ -1473,6 +1476,7 @@ export class GitlabService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITLAB,
             });
 
@@ -1602,6 +1606,7 @@ export class GitlabService implements Omit<
                 team: {
                     uuid: params.organizationAndTeamData.teamId,
                 },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITLAB,
             });
 
@@ -2033,6 +2038,7 @@ export class GitlabService implements Omit<
             team: {
                 uuid: params.organizationAndTeamData.teamId,
             },
+            ...connectionScope(params.organizationAndTeamData),
             platform: PlatformType.GITLAB,
         });
 
@@ -2137,6 +2143,8 @@ export class GitlabService implements Omit<
                     organization: {
                         uuid: params.organizationAndTeamData.organizationId,
                     },
+                    team: { uuid: params.organizationAndTeamData.teamId },
+                    ...connectionScope(params.organizationAndTeamData),
                     status: true,
                     platform: PlatformType.GITLAB,
                 }),
@@ -2256,6 +2264,7 @@ export class GitlabService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.GITLAB,
             });
 
@@ -3787,6 +3796,7 @@ export class GitlabService implements Omit<
                     uuid: organizationAndTeamData.organizationId,
                 },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.GITLAB,
             });
 
@@ -5884,6 +5894,7 @@ export class GitlabService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITLAB,
             });
 

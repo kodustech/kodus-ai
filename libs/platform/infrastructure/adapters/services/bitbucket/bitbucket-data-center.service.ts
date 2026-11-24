@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
@@ -272,6 +273,7 @@ export class BitbucketDataCenterService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 
@@ -317,6 +319,7 @@ export class BitbucketDataCenterService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 
@@ -363,6 +366,8 @@ export class BitbucketDataCenterService implements Omit<
 
             const bitbucketOrg = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 status: true,
                 platform: PlatformType.BITBUCKET,
             });
@@ -438,6 +443,7 @@ export class BitbucketDataCenterService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 
@@ -978,6 +984,7 @@ export class BitbucketDataCenterService implements Omit<
                         uuid: organizationAndTeamData.organizationId,
                     },
                     team: { uuid: organizationAndTeamData.teamId },
+                    ...connectionScope(organizationAndTeamData),
                     platform: PlatformType.BITBUCKET,
                 })
             )?.uuid;
@@ -3385,6 +3392,7 @@ export class BitbucketDataCenterService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 

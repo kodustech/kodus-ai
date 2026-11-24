@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import { createLogger } from '@libs/core/log/logger';
 import pLimit from 'p-limit';
 
@@ -1367,6 +1368,7 @@ export class BitbucketCloudService implements Omit<
                 team: {
                     uuid: organizationAndTeamData.teamId,
                 },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 
@@ -1678,6 +1680,8 @@ export class BitbucketCloudService implements Omit<
                     organization: {
                         uuid: organizationAndTeamData.organizationId,
                     },
+                    team: { uuid: organizationAndTeamData.teamId },
+                    ...connectionScope(organizationAndTeamData),
                     status: true,
                     platform: PlatformType.BITBUCKET,
                 }),
@@ -3471,6 +3475,7 @@ export class BitbucketCloudService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 
@@ -3553,6 +3558,7 @@ export class BitbucketCloudService implements Omit<
                         uuid: organizationAndTeamData.organizationId,
                     },
                     team: { uuid: organizationAndTeamData.teamId },
+                    ...connectionScope(organizationAndTeamData),
                     platform: PlatformType.BITBUCKET,
                 })
             )?.uuid;
@@ -4204,6 +4210,7 @@ export class BitbucketCloudService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 
@@ -4276,6 +4283,7 @@ export class BitbucketCloudService implements Omit<
                     uuid: organizationAndTeamData.organizationId,
                 },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.BITBUCKET,
             });
 

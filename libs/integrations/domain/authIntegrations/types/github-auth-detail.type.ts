@@ -9,6 +9,8 @@ export type GithubAuthDetail = {
     accountType?: 'organization' | 'user'; // Cache para evitar verificações repetidas
     /** Row id of the stored credential (not secret). Set on read. */
     authIntegrationId?: string;
+    /** The connection (`integrations.uuid`) these credentials belong to. */
+    integrationId?: string;
     /** Last write of the stored credential row. Set on read. */
     authUpdatedAt?: Date | string;
 };

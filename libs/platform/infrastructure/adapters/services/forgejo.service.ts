@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import { forgejoConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -500,6 +501,7 @@ export class ForgejoService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.FORGEJO,
             });
 
@@ -1137,6 +1139,7 @@ export class ForgejoService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.FORGEJO,
             });
 
@@ -1303,6 +1306,7 @@ export class ForgejoService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.FORGEJO,
             });
 
@@ -1383,6 +1387,7 @@ export class ForgejoService implements Omit<
         const integration = await this.integrationService.findOne({
             organization: { uuid: organizationAndTeamData.organizationId },
             team: { uuid: organizationAndTeamData.teamId },
+            ...connectionScope(organizationAndTeamData),
             platform: PlatformType.FORGEJO,
         });
 
@@ -1471,6 +1476,7 @@ export class ForgejoService implements Omit<
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.FORGEJO,
             });
 
@@ -4503,6 +4509,7 @@ export class ForgejoService implements Omit<
                             uuid: organizationAndTeamData.organizationId,
                         },
                         team: { uuid: organizationAndTeamData.teamId },
+                        ...connectionScope(organizationAndTeamData),
                         platform: PlatformType.FORGEJO,
                     })
                 )?.uuid;

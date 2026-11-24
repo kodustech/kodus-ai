@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import type {
     ApprovalTeamMembership,
     ApprovalTeamMembershipParams,
@@ -3172,6 +3173,7 @@ export class AzureReposService implements Omit<
                     uuid: organizationAndTeamData.organizationId,
                 },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.AZURE_REPOS,
             });
 
@@ -3350,6 +3352,7 @@ export class AzureReposService implements Omit<
                 team: {
                     uuid: params.organizationAndTeamData.teamId,
                 },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.AZURE_REPOS,
             });
 
@@ -3410,6 +3413,7 @@ export class AzureReposService implements Omit<
                 team: {
                     uuid: params.organizationAndTeamData.teamId,
                 },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.AZURE_REPOS,
             });
 
@@ -3975,6 +3979,7 @@ export class AzureReposService implements Omit<
                 team: {
                     uuid: organizationAndTeamData.teamId,
                 },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.AZURE_REPOS,
             });
 
@@ -4739,6 +4744,7 @@ export class AzureReposService implements Omit<
                     team: {
                         uuid: params.organizationAndTeamData.teamId,
                     },
+                    ...connectionScope(params.organizationAndTeamData),
                     platform: PlatformType.AZURE_REPOS,
                     status: true,
                 }),
@@ -4778,6 +4784,8 @@ export class AzureReposService implements Omit<
         try {
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.AZURE_REPOS,
             });
 
@@ -4813,6 +4821,7 @@ export class AzureReposService implements Omit<
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.AZURE_REPOS,
             });
 

@@ -1,4 +1,5 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import { webhookConfigsOfInstance } from '@libs/common/utils/webhooks/webhook-source-host';
 import type {
     ApprovalTeamMembership,
@@ -492,6 +493,7 @@ export class GithubService
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITHUB,
             });
 
@@ -534,9 +536,7 @@ export class GithubService
                 );
 
             if (params.configKey === IntegrationConfigKey.REPOSITORIES) {
-                this.connectedSelectionByTeam?.delete(
-                    GithubService.teamKey(params.organizationAndTeamData),
-                );
+                this.forgetConnectedSelections(params.organizationAndTeamData);
             }
 
             if (shouldRefreshTokenWebhooks) {
@@ -853,6 +853,7 @@ export class GithubService
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITHUB,
             });
 
@@ -964,6 +965,7 @@ export class GithubService
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITHUB,
             });
 
@@ -2051,7 +2053,25 @@ export class GithubService
     private static teamKey(
         organizationAndTeamData: OrganizationAndTeamData,
     ): string {
-        return `${organizationAndTeamData?.organizationId}:${organizationAndTeamData?.teamId}`;
+        return `${GithubService.teamPrefix(organizationAndTeamData)}${organizationAndTeamData?.integrationId ?? ''}`;
+    }
+
+    private static teamPrefix(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): string {
+        return `${organizationAndTeamData?.organizationId}:${organizationAndTeamData?.teamId}:`;
+    }
+
+    /** A saved selection drops every cached read of the workspace's connections. */
+    private forgetConnectedSelections(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): void {
+        const prefix = GithubService.teamPrefix(organizationAndTeamData);
+        for (const key of this.connectedSelectionByTeam?.keys() ?? []) {
+            if (key.startsWith(prefix)) {
+                this.connectedSelectionByTeam.delete(key);
+            }
+        }
     }
 
     /**
@@ -2970,6 +2990,7 @@ export class GithubService
                     uuid: params.organizationAndTeamData.organizationId,
                 },
                 team: { uuid: params.organizationAndTeamData.teamId },
+                ...connectionScope(params.organizationAndTeamData),
                 platform: PlatformType.GITHUB,
                 status: true,
             });
@@ -3012,6 +3033,7 @@ export class GithubService
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.GITHUB,
                 status: true,
             });
@@ -3043,6 +3065,7 @@ export class GithubService
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.GITHUB,
             });
 
@@ -3121,6 +3144,8 @@ export class GithubService
                         organization: {
                             uuid: params.organizationAndTeamData.organizationId,
                         },
+                        team: { uuid: params.organizationAndTeamData.teamId },
+                        ...connectionScope(params.organizationAndTeamData),
                         status: true,
                         platform: PlatformType.GITHUB,
                     }),
@@ -3863,7 +3888,7 @@ export class GithubService
                 throw new BadRequestException('Instalation not found');
             }
 
-            const ns = `${organizationAndTeamData?.organizationId ?? 'no-org'}:${organizationAndTeamData?.teamId ?? 'no-team'}`;
+            const ns = `${organizationAndTeamData?.organizationId ?? 'no-org'}:${organizationAndTeamData?.teamId ?? 'no-team'}:${githubAuthDetail.integrationId ?? 'no-connection'}`;
             const store = this.makeTenantETagStore(ns);
 
             if (
@@ -4219,6 +4244,7 @@ export class GithubService
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
                 team: { uuid: organizationAndTeamData.teamId },
+                ...connectionScope(organizationAndTeamData),
                 platform: PlatformType.GITHUB,
             });
 
@@ -6823,6 +6849,7 @@ This is an experimental feature that generates committable changes. Review the d
                         uuid: organizationAndTeamData.organizationId,
                     },
                     team: { uuid: organizationAndTeamData.teamId },
+                    ...connectionScope(organizationAndTeamData),
                     platform: PlatformType.GITHUB,
                 })
             )?.uuid;
@@ -8877,6 +8904,7 @@ This is an experimental feature that generates committable changes. Review the d
                 uuid: params.organizationAndTeamData.organizationId,
             },
             team: { uuid: params.organizationAndTeamData.teamId },
+            ...connectionScope(params.organizationAndTeamData),
             platform: PlatformType.GITHUB,
         });
 
