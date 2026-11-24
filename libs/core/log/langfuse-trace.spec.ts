@@ -67,17 +67,20 @@ describe('withLangfuseObservation', () => {
         process.env.LANGFUSE_TRACING = 'true';
         process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
         process.env.LANGFUSE_SECRET_KEY = 'sk-test';
+        const buildOutput = jest.fn((): never => {
+            throw new Error('bad output');
+        });
 
         await expect(
             withLangfuseObservation(
                 'open',
                 async () => 'lease',
                 undefined,
-                () => {
-                    throw new Error('bad output');
-                },
+                buildOutput,
             ),
         ).resolves.toBe('lease');
+        // The output was built, and its failure did not reach the caller.
+        expect(buildOutput).toHaveBeenCalledTimes(1);
     });
 });
 
