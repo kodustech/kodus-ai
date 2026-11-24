@@ -250,3 +250,38 @@ describe('the usage report: the e2e suite lines', () => {
         expect(suiteUsageView({ rows: [], savings: null })).toEqual({ lines: [], unmeasuredRuns: 0 });
     });
 });
+
+// The specs table and the time bar of the tab: every spec of the first pass with its tests and tries, and each host's moments.
+describe('the specs table and where the time went', () => {
+    it('lists every spec of the first pass with its tests, tries and time; a pass that needed a retry reads flaky', () => {
+        const view = runSuiteView(withClassification(stored(), CLASSIFICATION));
+        expect(view.specRows.map((r) => [r.spec, r.result, r.group ?? null, r.shard])).toEqual([
+            ['cart.spec.ts', 'passed', null, 0],
+            ['catalog.spec.ts', 'failed', 'pre_existing', 1],
+            ['checkout.spec.ts', 'failed', 'regression', 0],
+            ['order.spec.ts', 'flaky', 'flaky', 1],
+        ]);
+        expect(view.specRows.find((r) => r.spec === 'order.spec.ts')!.tests).toEqual([{ title: 'shows the order confirmation', status: 'passed', attempts: ['failed', 'passed'] }]);
+    });
+
+    it('says when each host was asked for, was up, started its specs and ended them; the listing host is told apart', () => {
+        const view = runSuiteView({
+            ...stored({ shards: [
+                { shard: 0, specs: ['checkout.spec.ts', 'cart.spec.ts'], startedAt: '2026-11-24T10:02:30.000Z', finishedAt: '2026-11-24T10:04:00.000Z' },
+                { shard: 1, specs: ['catalog.spec.ts', 'order.spec.ts'] },
+            ] }),
+            hosts: [
+                { shard: 61, requestedAt: '2026-11-24T10:00:10.000Z', readyAt: '2026-11-24T10:00:40.000Z', endedAt: '2026-11-24T10:01:20.000Z' },
+                { shard: 0, requestedAt: '2026-11-24T10:01:30.000Z', readyAt: '2026-11-24T10:01:50.000Z' },
+            ],
+        });
+        expect(view.hostTimes).toEqual([
+            { shard: 61, role: 'list', requestedAt: '2026-11-24T10:00:10.000Z', readyAt: '2026-11-24T10:00:40.000Z', endedAt: '2026-11-24T10:01:20.000Z' },
+            { shard: 0, role: 'shard', requestedAt: '2026-11-24T10:01:30.000Z', readyAt: '2026-11-24T10:01:50.000Z', startedAt: '2026-11-24T10:02:30.000Z', finishedAt: '2026-11-24T10:04:00.000Z' },
+        ]);
+    });
+
+    it('a run from before the times were recorded has no host times, not invented ones', () => {
+        expect(runSuiteView(stored()).hostTimes).toEqual([]);
+    });
+});

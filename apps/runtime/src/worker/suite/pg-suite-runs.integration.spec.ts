@@ -57,6 +57,16 @@ const run: SuiteRunRecord = {
         ]);
     });
 
+    it('records when a shard started and finished, only for its own organization', async () => {
+        await store.create(run);
+        await store.savePlan('org-a', run.suiteRunId, [{ shard: 0, specs: ['a.cy.ts'] }]);
+        await store.markShard('org-a', run.suiteRunId, 0, 'running', new Date('2026-11-24T10:00:00Z'));
+        await store.markShard('org-b', run.suiteRunId, 0, 'finished', new Date('2026-11-24T10:09:00Z'));
+        await store.markShard('org-a', run.suiteRunId, 0, 'finished', new Date('2026-11-24T10:05:00Z'));
+        const r = await pool.query(`SELECT state, started_at, finished_at FROM runtime.runtime_suite_shards WHERE suite_run_id = $1`, [run.suiteRunId]);
+        expect(r.rows).toEqual([{ state: 'finished', started_at: new Date('2026-11-24T10:00:00Z'), finished_at: new Date('2026-11-24T10:05:00Z') }]);
+    });
+
     it('keeps one result per spec and phase however often a shard reports it, and a rerun is its own phase', async () => {
         await store.create(run);
         const failed = { spec: 'a.cy.ts', status: 'failed' as const, durationMs: 900, errorSignature: 'timeout', tests: [] };

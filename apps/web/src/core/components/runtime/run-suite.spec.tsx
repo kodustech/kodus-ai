@@ -71,6 +71,83 @@ const suite: RuntimeSuiteRun = {
             specMs: 302_000,
         },
     ],
+    specRows: [
+        {
+            spec: "e2e/cart.spec.ts",
+            shard: 0,
+            result: "passed",
+            durationMs: 40_000,
+            tests: [
+                {
+                    title: "adds an item",
+                    status: "passed",
+                    attempts: ["passed"],
+                },
+            ],
+            artifacts: [],
+        },
+        {
+            spec: "e2e/checkout.spec.ts",
+            shard: 0,
+            result: "failed",
+            group: "regression",
+            durationMs: 90_000,
+            tests: [
+                {
+                    title: "applies a discount code",
+                    status: "failed",
+                    attempts: ["failed", "failed"],
+                },
+            ],
+            artifacts: ["trace.zip"],
+        },
+        {
+            spec: "e2e/order.spec.ts",
+            shard: 1,
+            result: "flaky",
+            durationMs: 70_000,
+            tests: [
+                {
+                    title: "shows the confirmation",
+                    status: "passed",
+                    attempts: ["failed", "passed"],
+                },
+            ],
+            artifacts: [],
+        },
+        {
+            spec: "e2e/search.spec.ts",
+            shard: 1,
+            result: "passed",
+            durationMs: 120_000,
+            tests: [
+                {
+                    title: "finds a product",
+                    status: "passed",
+                    attempts: ["passed"],
+                },
+            ],
+            artifacts: [],
+        },
+    ],
+    hostTimes: [
+        {
+            shard: 0,
+            role: "shard",
+            requestedAt: "2026-11-24T10:01:00.000Z",
+            readyAt: "2026-11-24T10:01:20.000Z",
+            startedAt: "2026-11-24T10:02:00.000Z",
+            finishedAt: "2026-11-24T10:05:30.000Z",
+        },
+        {
+            shard: 1,
+            role: "shard",
+            requestedAt: "2026-11-24T10:01:00.000Z",
+            readyAt: "2026-11-24T10:01:25.000Z",
+            startedAt: "2026-11-24T10:02:05.000Z",
+            finishedAt: "2026-11-24T10:06:00.000Z",
+        },
+    ],
     failures: [
         {
             spec: "e2e/checkout.spec.ts",
@@ -209,7 +286,7 @@ describe("the e2e suite tab of a Run", () => {
         ).toBeInTheDocument();
     });
 
-    it("keeps the details closed: why these specs, the shards and the passed list", () => {
+    it("keeps why these specs closed, with the file to specs map inside", () => {
         render(<RunSuiteTab run={run} suite={suite} />);
         const why = screen
             .getByRole("heading", { name: "Why these 9 specs" })
@@ -218,19 +295,63 @@ describe("the e2e suite tab of a Run", () => {
         expect(why).toHaveTextContent(
             "src/routes/cart.js → checkout.spec.ts, cart.spec.ts",
         );
-        const shards = screen
-            .getByRole("heading", { name: "Shards" })
-            .closest("details")!;
-        expect(shards).not.toHaveAttribute("open");
-        const rows = within(shards)
+    });
+
+    it("lists every spec, failures first, and opens one for its tests and its kept files", () => {
+        render(<RunSuiteTab run={run} suite={suite} />);
+        const table = within(screen.getByRole("region", { name: "Specs" }));
+        const specs = table
             .getAllByRole("row")
-            .map((r) => r.textContent);
-        expect(rows[1]).toContain("5");
-        expect(rows).toHaveLength(3);
-        const passed = screen
-            .getByRole("heading", { name: "Passed" })
-            .closest("details")!;
-        expect(passed).toHaveTextContent("cart.spec.ts · search.spec.ts");
+            .slice(1)
+            .map((r) => r.querySelector("td")?.textContent);
+        expect(specs).toEqual([
+            "e2e/checkout.spec.ts",
+            "e2e/order.spec.ts",
+            "e2e/search.spec.ts",
+            "e2e/cart.spec.ts",
+        ]);
+        expect(table.getByText("Regression")).toBeInTheDocument();
+        expect(table.getByText("Flaky")).toBeInTheDocument();
+        fireEvent.click(table.getByText("e2e/order.spec.ts"));
+        expect(table.getByText("shows the confirmation")).toBeInTheDocument();
+        expect(table.getByText("2 tries")).toBeInTheDocument();
+    });
+
+    it("filters the specs by result and by a test's title", () => {
+        render(<RunSuiteTab run={run} suite={suite} />);
+        const region = within(screen.getByRole("region", { name: "Specs" }));
+        fireEvent.click(region.getByRole("button", { name: "Passed 2" }));
+        expect(
+            region
+                .getAllByRole("row")
+                .slice(1)
+                .map((r) => r.querySelector("td")?.textContent),
+        ).toEqual(["e2e/search.spec.ts", "e2e/cart.spec.ts"]);
+        fireEvent.click(region.getByRole("button", { name: "All 4" }));
+        fireEvent.change(
+            region.getByRole("searchbox", { name: "Search a spec or a test" }),
+            { target: { value: "discount" } },
+        );
+        expect(
+            region
+                .getAllByRole("row")
+                .slice(1)
+                .map((r) => r.querySelector("td")?.textContent),
+        ).toEqual(["e2e/checkout.spec.ts"]);
+    });
+
+    it("says where the run's time went, and each host's boot, app and specs", () => {
+        render(<RunSuiteTab run={run} suite={suite} />);
+        const time = screen.getByRole("region", {
+            name: "Where the time went",
+        });
+        expect(within(time).getByRole("heading")).toHaveTextContent(
+            "Where the 6 min 12 s went",
+        );
+        expect(time).toHaveTextContent(
+            "Host 1 · 5 specs · boot 20 s · app up 40 s · specs 3 min 30 s",
+        );
+        expect(time).toHaveTextContent("Running the specs");
     });
 
     it("offers Re-run failed to who may run the Run again, and asks the API for it once", () => {

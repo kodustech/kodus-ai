@@ -166,6 +166,16 @@ export class PgSuiteRuns {
         );
     }
 
+    /** A shard's claim turned ready (`running`, started_at) or its specs ended (`finished`, finished_at). */
+    async markShard(organizationId: string, suiteRunId: string, shard: number, moment: 'running' | 'finished', at: Date): Promise<void> {
+        await this.pool.query(
+            moment === 'running'
+                ? `UPDATE runtime.runtime_suite_shards SET state = 'running', started_at = $4, updated_at = now() WHERE organization_id = $1 AND suite_run_id = $2 AND shard = $3`
+                : `UPDATE runtime.runtime_suite_shards SET state = 'finished', finished_at = $4, updated_at = now() WHERE organization_id = $1 AND suite_run_id = $2 AND shard = $3`,
+            [organizationId, suiteRunId, shard, at],
+        );
+    }
+
     async shards(organizationId: string, suiteRunId: string): Promise<StoredSuiteShard[]> {
         const r = await this.pool.query(`SELECT shard, state, specs FROM runtime.runtime_suite_shards WHERE organization_id = $1 AND suite_run_id = $2 ORDER BY shard`, [organizationId, suiteRunId]);
         return r.rows.map((x) => ({ shard: x.shard, state: x.state, specs: x.specs }));

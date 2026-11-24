@@ -1,12 +1,13 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { RuntimeDisclosure } from "@components/runtime/disclosure";
 import { MintedEvidenceLink } from "@components/runtime/evidence-link";
 import { Metric } from "@components/runtime/section";
 import { StatusChip, TONE_TEXT_CLASS } from "@components/runtime/status-chip";
 import { Button } from "@components/ui/button";
 import { Heading } from "@components/ui/heading";
+import { Input } from "@components/ui/input";
 import {
     Table,
     TableBody,
@@ -24,6 +25,7 @@ import type {
     RuntimeRun,
     RuntimeSuiteFailure,
     RuntimeSuiteRun,
+    RuntimeSuiteSpec,
 } from "@services/runtime/contracts";
 import { formatDurationMs, shortSha } from "@services/runtime/format";
 import type { Tone } from "@services/runtime/labels";
@@ -34,9 +36,15 @@ import {
     attemptsLine,
     failureGroups,
     mainLine,
+    specCounts,
+    specResultLabel,
+    specRows,
     suiteFacts,
+    suiteTimeSplit,
     suiteVerdict,
     whySpecs,
+    type SpecFilter,
+    type TimeSegment,
 } from "@services/runtime/model/suite";
 import { useRetryRunSuite } from "@services/runtime/queries";
 import {
@@ -191,6 +199,335 @@ const FailureItem = ({
     </details>
 );
 
+const SEGMENT_CLASS: Record<TimeSegment["key"], string> = {
+    start: "bg-card-lv3",
+    list: "bg-info/50",
+    boot: "bg-info",
+    setup: "bg-warning",
+    specs: "bg-success",
+    results: "bg-alert",
+    rest: "bg-card-lv3",
+};
+
+/** Where the run's wall time went: one bar along the host that finished last, then each host's own boot, app and specs. */
+const TimeSplit = ({ suite }: { suite: RuntimeSuiteRun }) => {
+    const split = suiteTimeSplit(suite);
+    if (!split) return null;
+    const specsMs = split.segments.find((s) => s.key === "specs")?.ms;
+    return (
+        <section
+            aria-label="Where the time went"
+            className="bg-card-lv1 flex flex-col gap-3 rounded-xl px-6 py-5">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+                <Heading variant="h2" className="text-base">
+                    Where the {formatDurationMs(split.totalMs)} went
+                </Heading>
+                {specsMs !== undefined && (
+                    <span className="text-text-secondary text-sm">
+                        · the specs themselves took {formatDurationMs(specsMs)}
+                    </span>
+                )}
+            </div>
+            <div
+                role="img"
+                aria-label={split.segments
+                    .map((s) => `${s.label} ${formatDurationMs(s.ms)}`)
+                    .join(", ")}
+                className="bg-card-lv2 flex h-3 overflow-hidden rounded-full">
+                {split.segments.map((s) => (
+                    <div
+                        key={s.key}
+                        title={`${s.label} · ${formatDurationMs(s.ms)}`}
+                        className={SEGMENT_CLASS[s.key]}
+                        style={{ width: `${(s.ms / split.totalMs) * 100}%` }}
+                    />
+                ))}
+            </div>
+            <ul className="text-text-secondary flex flex-wrap gap-x-5 gap-y-1 text-xs">
+                {split.segments.map((s) => (
+                    <li key={s.key} className="flex items-center gap-1.5">
+                        <span
+                            aria-hidden
+                            className={cn(
+                                "size-2.5 rounded-sm",
+                                SEGMENT_CLASS[s.key],
+                            )}
+                        />
+                        {s.label}{" "}
+                        <span className="text-text-primary tabular-nums">
+                            {formatDurationMs(s.ms)}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+            <ul className="text-text-secondary flex flex-col gap-1 text-sm">
+                {split.hosts.map((h) => (
+                    <li key={h.label} className="tabular-nums">
+                        <span className="text-text-primary font-medium">
+                            {h.label}
+                        </span>{" "}
+                        · {h.specs === 1 ? "1 spec" : `${h.specs} specs`}
+                        {h.bootMs !== undefined && (
+                            <> · boot {formatDurationMs(h.bootMs)}</>
+                        )}
+                        {h.setupMs !== undefined && (
+                            <> · app up {formatDurationMs(h.setupMs)}</>
+                        )}
+                        {h.specsMs !== undefined && (
+                            <> · specs {formatDurationMs(h.specsMs)}</>
+                        )}
+                    </li>
+                ))}
+            </ul>
+            {!split.complete && (
+                <p className="text-text-tertiary text-xs">
+                    This run did not record when its specs started, so the last
+                    part covers the app, the specs and the results together.
+                </p>
+            )}
+        </section>
+    );
+};
+
+const ATTEMPT_CLASS: Record<string, string> = {
+    passed: "bg-success",
+    failed: "bg-danger",
+    skipped: "bg-card-lv3",
+};
+
+const Attempts = ({ attempts }: { attempts: readonly string[] }) => (
+    <span
+        className="inline-flex gap-0.5 align-middle"
+        aria-label={`Tries: ${attempts.join(", ")}`}>
+        {attempts.map((a, i) => (
+            <span
+                key={i}
+                title={a}
+                className={cn(
+                    "size-2.5 rounded-[3px]",
+                    ATTEMPT_CLASS[a] ?? "bg-card-lv3",
+                )}
+            />
+        ))}
+    </span>
+);
+
+/** The tries of a spec as one strip: its test with the most tries (a retried test is the one worth seeing). */
+const triesOf = (r: RuntimeSuiteSpec) =>
+    r.tests.reduce<string[]>(
+        (most, t) => (t.attempts.length > most.length ? t.attempts : most),
+        [],
+    );
+
+const FILTERS: Array<{ value: SpecFilter; label: string }> = [
+    { value: "all", label: "All" },
+    { value: "failed", label: "Failed" },
+    { value: "flaky", label: "Flaky" },
+    { value: "passed", label: "Passed" },
+    { value: "skipped", label: "Skipped" },
+];
+
+/** Every spec of the first pass: filter, search, and open one for its tests, tries and files. */
+const SpecsTable = ({
+    run,
+    suite,
+}: {
+    run: RuntimeRun;
+    suite: RuntimeSuiteRun;
+}) => {
+    const counts = specCounts(suite);
+    const [filter, setFilter] = useState<SpecFilter>("all");
+    const [query, setQuery] = useState("");
+    const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+    if (counts.all === 0) return null;
+    const rows = specRows(suite, filter, query);
+    const longest = Math.max(1, ...suite.specRows.map((r) => r.durationMs));
+    const toggle = (spec: string) =>
+        setOpen((prev) => {
+            const next = new Set(prev);
+            if (next.has(spec)) next.delete(spec);
+            else next.add(spec);
+            return next;
+        });
+    return (
+        <section aria-label="Specs" className="flex flex-col gap-3">
+            <Heading variant="h2" className="text-base">
+                Specs
+            </Heading>
+            <div className="flex flex-wrap items-center gap-2">
+                <div
+                    role="group"
+                    aria-label="Show"
+                    className="flex flex-wrap gap-1.5">
+                    {FILTERS.filter(
+                        (f) => f.value === "all" || counts[f.value] > 0,
+                    ).map((f) => (
+                        <Button
+                            key={f.value}
+                            size="xs"
+                            variant={
+                                filter === f.value ? "primary" : "secondary"
+                            }
+                            aria-pressed={filter === f.value}
+                            onClick={() => setFilter(f.value)}>
+                            {f.label} {counts[f.value]}
+                        </Button>
+                    ))}
+                </div>
+                <Input
+                    type="search"
+                    aria-label="Search a spec or a test"
+                    placeholder="Search a spec or a test"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className="min-w-0 flex-1 basis-56"
+                />
+            </div>
+            <TableContainer>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Spec</TableHead>
+                            <TableHead>Result</TableHead>
+                            <TableHead>Tries</TableHead>
+                            <TableHead>Host</TableHead>
+                            <TableHead className="text-right">Time</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {rows.length === 0 && (
+                            <TableRow>
+                                <TableCell
+                                    colSpan={5}
+                                    className="text-text-secondary">
+                                    No spec matches.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                        {rows.map((r) => {
+                            const result = specResultLabel(r);
+                            const isOpen = open.has(r.spec);
+                            return (
+                                <Fragment key={r.spec}>
+                                    <TableRow
+                                        tabIndex={0}
+                                        aria-expanded={isOpen}
+                                        className="cursor-pointer"
+                                        onClick={() => toggle(r.spec)}
+                                        onKeyDown={(e) => {
+                                            if (
+                                                e.key === "Enter" ||
+                                                e.key === " "
+                                            ) {
+                                                e.preventDefault();
+                                                toggle(r.spec);
+                                            }
+                                        }}>
+                                        <TableCell className="font-mono text-xs break-all">
+                                            {r.spec}
+                                        </TableCell>
+                                        <TableCell>
+                                            <StatusChip tone={result.tone}>
+                                                {result.label}
+                                            </StatusChip>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Attempts attempts={triesOf(r)} />
+                                        </TableCell>
+                                        <TableCell className="tabular-nums">
+                                            {r.shard + 1}
+                                        </TableCell>
+                                        <TableCell className="text-right font-mono text-xs whitespace-nowrap tabular-nums">
+                                            <span
+                                                aria-hidden
+                                                className="bg-info/60 mr-2 inline-block h-1.5 rounded-full align-middle"
+                                                style={{
+                                                    width: `${Math.max(4, (r.durationMs / longest) * 64)}px`,
+                                                }}
+                                            />
+                                            {formatDurationMs(r.durationMs)}
+                                        </TableCell>
+                                    </TableRow>
+                                    {isOpen && (
+                                        <TableRow className="bg-card-lv2 hover:bg-card-lv2">
+                                            <TableCell colSpan={5}>
+                                                <div className="flex flex-col gap-2 py-1">
+                                                    {r.tests.length === 0 && (
+                                                        <span className="text-text-secondary text-sm">
+                                                            The runner reported
+                                                            no test for this
+                                                            spec.
+                                                        </span>
+                                                    )}
+                                                    {r.tests.map((t) => (
+                                                        <div
+                                                            key={t.title}
+                                                            className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                                                            <Attempts
+                                                                attempts={
+                                                                    t.attempts
+                                                                }
+                                                            />
+                                                            <span className="text-text-primary">
+                                                                {t.title}
+                                                            </span>
+                                                            {t.attempts.length >
+                                                                1 && (
+                                                                <span className="text-text-tertiary text-xs">
+                                                                    {
+                                                                        t
+                                                                            .attempts
+                                                                            .length
+                                                                    }{" "}
+                                                                    tries
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                    {r.artifacts.length > 0 && (
+                                                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                                                            {r.artifacts.map(
+                                                                (name) => (
+                                                                    <MintedEvidenceLink
+                                                                        key={
+                                                                            name
+                                                                        }
+                                                                        what={{
+                                                                            runId: run.runId,
+                                                                            spec: r.spec,
+                                                                            name,
+                                                                        }}
+                                                                        mint={() =>
+                                                                            getRunSuiteArtifactUrl(
+                                                                                {
+                                                                                    runId: run.runId,
+                                                                                    spec: r.spec,
+                                                                                    name,
+                                                                                },
+                                                                            )
+                                                                        }>
+                                                                        {artifactLabel(
+                                                                            name,
+                                                                        )}
+                                                                    </MintedEvidenceLink>
+                                                                ),
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </Fragment>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+        </section>
+    );
+};
+
 export const RunSuiteTab = ({
     run,
     suite,
@@ -206,7 +543,9 @@ export const RunSuiteTab = ({
     const verdict = suiteVerdict(suite);
     const groups = failureGroups(suite);
     const why = whySpecs(suite);
-    let first = true;
+    // Only the first failed test opens, and only when it is a regression.
+    const opened =
+        groups[0]?.group === "regression" ? groups[0].items[0] : undefined;
     return (
         <div className="flex flex-col gap-6">
             <section
@@ -250,23 +589,23 @@ export const RunSuiteTab = ({
                         Failed tests
                     </Heading>
                     {groups.flatMap((g) =>
-                        g.items.map((f) => {
-                            const open = first && g.group === "regression";
-                            first = false;
-                            return (
-                                <FailureItem
-                                    key={`${f.spec}\u0000${f.title}`}
-                                    runId={run.runId}
-                                    failure={f}
-                                    label={g.label}
-                                    tone={g.tone}
-                                    open={open}
-                                />
-                            );
-                        }),
+                        g.items.map((f) => (
+                            <FailureItem
+                                key={`${f.spec}\u0000${f.title}`}
+                                runId={run.runId}
+                                failure={f}
+                                label={g.label}
+                                tone={g.tone}
+                                open={f === opened}
+                            />
+                        )),
                     )}
                 </section>
             )}
+
+            <TimeSplit suite={suite} />
+
+            <SpecsTable run={run} suite={suite} />
 
             <section aria-label="Details" className="flex flex-col gap-3">
                 <Heading variant="h2" className="text-base">
@@ -288,53 +627,6 @@ export const RunSuiteTab = ({
                         </p>
                     )}
                 </RuntimeDisclosure>
-
-                {suite.shards.length > 0 && (
-                    <RuntimeDisclosure
-                        title="Shards"
-                        summary={`${suite.hosts === 1 ? "1 host" : `${suite.hosts} hosts`} · longest ${formatDurationMs(Math.max(...suite.shards.map((s) => s.specMs ?? 0)))} of spec time`}>
-                        <TableContainer>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Shard</TableHead>
-                                        <TableHead>Specs</TableHead>
-                                        <TableHead>Passed</TableHead>
-                                        <TableHead>Failed</TableHead>
-                                        <TableHead>Spec time</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {suite.shards.map((s) => (
-                                        <TableRow key={s.shard}>
-                                            <TableCell>{s.shard + 1}</TableCell>
-                                            <TableCell>{s.specs}</TableCell>
-                                            <TableCell>{s.passed}</TableCell>
-                                            <TableCell>{s.failed}</TableCell>
-                                            <TableCell>
-                                                {s.specMs === null
-                                                    ? "—"
-                                                    : formatDurationMs(
-                                                          s.specMs,
-                                                      )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </RuntimeDisclosure>
-                )}
-
-                {suite.passed.length > 0 && (
-                    <RuntimeDisclosure
-                        title="Passed"
-                        summary={`${suite.passed.length} ${suite.passed.length === 1 ? "spec" : "specs"}`}>
-                        <p className="text-text-secondary font-mono text-xs">
-                            {suite.passed.join(" · ")}
-                        </p>
-                    </RuntimeDisclosure>
-                )}
             </section>
         </div>
     );

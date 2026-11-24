@@ -3,6 +3,7 @@ import type {
     RuntimeSuiteFailure,
     RuntimeSuiteFailureGroup,
     RuntimeSuiteRun,
+    RuntimeSuiteSpec,
     RuntimeSuiteUsage,
 } from "../contracts";
 import { formatDurationMs, shortSha } from "../format";
@@ -385,4 +386,181 @@ export const suiteUsageLines = (usage: RuntimeSuiteUsage) => {
                 ? `${plural(usage.unmeasuredRuns, "run")} ${usage.unmeasuredRuns === 1 ? "was" : "were"} stored before machine time was measured; their minutes are not here.`
                 : undefined,
     };
+};
+
+// ---- Where the time went: the run's wall time split by what it waited for, along the host that finished last.
+
+export type TimeSegment = {
+    key: "start" | "list" | "boot" | "setup" | "specs" | "results" | "rest";
+    label: string;
+    ms: number;
+};
+export type HostTimeLine = {
+    label: string;
+    specs: number;
+    bootMs?: number;
+    setupMs?: number;
+    specsMs?: number;
+};
+export type SuiteTimeSplit = {
+    totalMs: number;
+    segments: TimeSegment[];
+    hosts: HostTimeLine[];
+    /** False when a run recorded only part of the moments: the last segment then covers what was not told apart. */
+    complete: boolean;
+};
+
+const at = (iso?: string) => (iso ? Date.parse(iso) : undefined);
+const span = (from?: number, to?: number) =>
+    from !== undefined && to !== undefined && to > from ? to - from : undefined;
+
+/** The suite's wall time by phase, or null for a run with no host moments (a run from before they were recorded, a static cell). */
+export const suiteTimeSplit = (run: RuntimeSuiteRun): SuiteTimeSplit | null => {
+    const start = at(run.requestedAt);
+    const end = at(run.finishedAt);
+    const shards = (run.hostTimes ?? []).filter((h) => h.role === "shard");
+    if (start === undefined || end === undefined || shards.length === 0)
+        return null;
+    const list = run.hostTimes.find((h) => h.role === "list");
+    const lastOf = (h: (typeof shards)[number]) =>
+        at(h.finishedAt) ?? at(h.endedAt) ?? at(h.readyAt) ?? 0;
+    const critical = shards.reduce((a, b) => (lastOf(b) > lastOf(a) ? b : a));
+    const firstShardAsked = Math.min(
+        ...shards.map((h) => at(h.requestedAt) ?? Infinity),
+    );
+    const marks: Array<[TimeSegment["key"], string, number | undefined]> = [
+        [
+            "start",
+            "Before the suite's hosts",
+            at(list?.requestedAt) ??
+                (Number.isFinite(firstShardAsked)
+                    ? firstShardAsked
+                    : undefined),
+        ],
+        [
+            "list",
+            "Listing the specs on main",
+            list && Number.isFinite(firstShardAsked)
+                ? firstShardAsked
+                : undefined,
+        ],
+        ["boot", "Host boot", at(critical.readyAt)],
+        ["setup", "App up on the host", at(critical.startedAt)],
+        ["specs", "Running the specs", at(critical.finishedAt)],
+    ];
+    const segments: TimeSegment[] = [];
+    let from = start;
+    for (const [key, label, to] of marks) {
+        if (to === undefined) continue;
+        const clamped = Math.min(Math.max(to, from), end);
+        if (clamped > from) segments.push({ key, label, ms: clamped - from });
+        from = clamped;
+    }
+    const complete = !!critical.startedAt && !!critical.finishedAt;
+    if (end > from)
+        segments.push(
+            complete
+                ? {
+                      key: "results",
+                      label: "Results and cleanup",
+                      ms: end - from,
+                  }
+                : {
+                      key: "rest",
+                      label: "App, specs and results",
+                      ms: end - from,
+                  },
+        );
+    const specsOf = new Map(run.shards.map((s) => [s.shard, s.specs]));
+    return {
+        totalMs: end - start,
+        segments,
+        complete,
+        hosts: [...shards]
+            .sort((a, b) => a.shard - b.shard)
+            .map((h) => {
+                const boot = span(at(h.requestedAt), at(h.readyAt));
+                const setup = span(at(h.readyAt), at(h.startedAt));
+                const specs = span(at(h.startedAt), at(h.finishedAt));
+                return {
+                    label: `Host ${h.shard + 1}`,
+                    specs: specsOf.get(h.shard) ?? 0,
+                    ...(boot !== undefined ? { bootMs: boot } : {}),
+                    ...(setup !== undefined ? { setupMs: setup } : {}),
+                    ...(specs !== undefined ? { specsMs: specs } : {}),
+                };
+            }),
+    };
+};
+
+// ---- The specs table.
+
+export type SpecBucket = "failed" | "flaky" | "passed" | "skipped";
+export type SpecFilter = "all" | SpecBucket;
+
+/** Which filter a spec falls under: a failure the classifier called flaky is flaky, not failed. */
+export const specBucket = (r: RuntimeSuiteSpec): SpecBucket => {
+    if (r.result === "flaky" || r.group === "flaky") return "flaky";
+    if (r.result === "passed") return "passed";
+    if (r.result === "skipped") return "skipped";
+    return "failed";
+};
+
+export type SpecResultLabel = { label: string; tone: Tone };
+
+export const specResultLabel = (r: RuntimeSuiteSpec): SpecResultLabel => {
+    if (r.group === "regression")
+        return { label: "Regression", tone: "danger" };
+    if (r.group === "pre_existing")
+        return { label: "Fails on main too", tone: "warning" };
+    if (r.result === "flaky" || r.group === "flaky")
+        return { label: "Flaky", tone: "warning" };
+    if (r.result === "passed") return { label: "Passed", tone: "success" };
+    if (r.result === "skipped") return { label: "Skipped", tone: "neutral" };
+    if (r.result === "not_run" || r.result === "infra")
+        return { label: "Not run", tone: "neutral" };
+    return { label: "Failed", tone: "danger" };
+};
+
+const BUCKET_ORDER: SpecBucket[] = ["failed", "flaky", "skipped", "passed"];
+
+/** The rows a filter and a search keep: failures first, then the slowest. */
+export const specRows = (
+    run: RuntimeSuiteRun,
+    filter: SpecFilter,
+    query: string,
+): RuntimeSuiteSpec[] => {
+    const q = query.trim().toLowerCase();
+    return (run.specRows ?? [])
+        .filter((r) => filter === "all" || specBucket(r) === filter)
+        .filter(
+            (r) =>
+                !q ||
+                r.spec.toLowerCase().includes(q) ||
+                r.tests.some((t) => t.title.toLowerCase().includes(q)),
+        )
+        .sort(
+            (a, b) =>
+                BUCKET_ORDER.indexOf(specBucket(a)) -
+                    BUCKET_ORDER.indexOf(specBucket(b)) ||
+                b.durationMs - a.durationMs ||
+                a.spec.localeCompare(b.spec),
+        );
+};
+
+export const specCounts = (
+    run: RuntimeSuiteRun,
+): Record<SpecFilter, number> => {
+    const counts: Record<SpecFilter, number> = {
+        all: 0,
+        failed: 0,
+        flaky: 0,
+        passed: 0,
+        skipped: 0,
+    };
+    for (const r of run.specRows ?? []) {
+        counts.all++;
+        counts[specBucket(r)]++;
+    }
+    return counts;
 };

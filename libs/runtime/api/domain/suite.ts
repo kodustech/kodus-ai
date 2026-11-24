@@ -31,6 +31,17 @@ export interface StoredSuiteRunRecord {
 export interface StoredSuiteShardRecord {
     shard: number;
     specs: string[];
+    /** When the shard's claim was ready and when its specs ended (absent on runs from before they were recorded). */
+    startedAt?: string;
+    finishedAt?: string;
+}
+
+/** A host the fleet started for one shard of the run (`runtime_hosts`, bound `suite:<org>/<run>/<shard>`): when it was asked for, ready and gone. */
+export interface StoredSuiteHost {
+    shard: number;
+    requestedAt: string;
+    readyAt?: string;
+    endedAt?: string;
 }
 
 export interface StoredSuiteTest {
@@ -54,6 +65,8 @@ export interface StoredSuiteRun {
     run: StoredSuiteRunRecord;
     shards: StoredSuiteShardRecord[];
     results: StoredSuiteResultRecord[];
+    /** Absent where no fleet started the hosts (a static cell) or the hosts cannot be read. */
+    hosts?: StoredSuiteHost[];
 }
 
 /** An environment's selection state (`runtime_suite_selection_state`): who turned it off and the whole-suite window a miss left. */

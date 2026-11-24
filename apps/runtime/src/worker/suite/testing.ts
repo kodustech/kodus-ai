@@ -82,7 +82,9 @@ const ok = (stepId: string, stdout: string): StepResult => ({ stepId, exitCode: 
 
 // ---- in-memory twins of the stores (the same public methods, the same rules the integration specs hold the Postgres ones to)
 
-export class InMemorySuiteRuns implements Pick<PgSuiteRuns, 'create' | 'get' | 'latestForPr' | 'finish' | 'savePlan' | 'shards' | 'recordResults' | 'recordArtifacts' | 'results'> {
+export class InMemorySuiteRuns implements Pick<PgSuiteRuns, 'create' | 'get' | 'latestForPr' | 'finish' | 'savePlan' | 'markShard' | 'shards' | 'recordResults' | 'recordArtifacts' | 'results'> {
+    /** Each shard's moments as markShard wrote them, by `<suiteRunId>|<shard>`. */
+    readonly moments = new Map<string, { running?: number; finished?: number }>();
     readonly runs = new Map<string, StoredSuiteRun>();
     private readonly plans = new Map<string, Map<number, StoredSuiteShard>>();
     private readonly rows = new Map<string, StoredSuiteResult & { organizationId: string; suiteRunId: string; at: number }>();
@@ -109,6 +111,13 @@ export class InMemorySuiteRuns implements Pick<PgSuiteRuns, 'create' | 'get' | '
         const m = this.plans.get(suiteRunId) ?? new Map<number, StoredSuiteShard>();
         for (const s of shards) m.set(s.shard, { shard: s.shard, specs: [...s.specs], state: m.get(s.shard)?.state ?? 'planned' });
         this.plans.set(suiteRunId, m);
+    }
+    async markShard(organizationId: string, suiteRunId: string, shard: number, moment: 'running' | 'finished', at: Date) {
+        if (this.runs.get(suiteRunId)?.organizationId !== organizationId) return;
+        const key = `${suiteRunId}|${shard}`;
+        this.moments.set(key, { ...this.moments.get(key), [moment]: at.getTime() });
+        const row = this.plans.get(suiteRunId)?.get(shard);
+        if (row) row.state = moment;
     }
     async shards(organizationId: string, suiteRunId: string) {
         if (this.runs.get(suiteRunId)?.organizationId !== organizationId) return [];

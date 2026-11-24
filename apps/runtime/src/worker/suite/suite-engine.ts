@@ -126,7 +126,7 @@ export interface SuiteHostDemand {
 
 export interface SuiteEngineDeps {
     env: Pick<EnvironmentRuntime, 'acquire' | 'exec' | 'release'>;
-    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'recordArtifacts'>;
+    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'recordArtifacts'> & Partial<Pick<PgSuiteRuns, 'markShard'>>;
     stats: Pick<PgSuiteSpecStats, 'read' | 'record'>;
     demand: SuiteHostDemand;
     clock: { now(): number; sleep(ms: number): Promise<void> };
@@ -466,7 +466,7 @@ export class SuiteEngine {
     // ---- one shard
 
     private async driveShard(ctx: RunCtx, shard: ShardRun): Promise<void> {
-        const { req, inputs } = ctx;
+        const { req } = ctx;
         const runnable = shard.planned.filter((s) => SPEC_SAFE.test(s));
         for (const s of shard.planned) if (!SPEC_SAFE.test(s)) shard.missing.set(s, 'not_run');
         if (runnable.length === 0) return;
@@ -491,11 +491,27 @@ export class SuiteEngine {
         }
         shard.claimId = claim.claimId;
         ctx.claims.push(claim.claimId);
+        // The claim is ready (the app is up on the host): from here to the end is the shard's own time, as the page shows it.
+        await this.markShard(ctx, shard.shard, 'running');
+        try {
+            await this.runShard(ctx, shard, claim.claimId, runnable);
+        } finally {
+            await this.markShard(ctx, shard.shard, 'finished');
+        }
+    }
+
+    /** When a shard's claim was ready and when its specs ended: best effort, a failed write never fails the run. */
+    private async markShard(ctx: RunCtx, shard: number, moment: 'running' | 'finished'): Promise<void> {
+        await this.d.runs.markShard?.(ctx.req.organizationId, ctx.req.suiteRunId, shard, moment, new Date(this.d.clock.now())).catch(() => undefined);
+    }
+
+    private async runShard(ctx: RunCtx, shard: ShardRun, claimId: string, runnable: readonly string[]): Promise<void> {
+        const { req, inputs } = ctx;
         const durations = estimateDurations(inputs.specs, ctx.stats);
         const ordered = orderBin(runnable, { failedBefore: inputs.order?.failedBefore ?? [], diffCoverage: inputs.order?.diffCoverage ?? {}, durations: Object.fromEntries(durations ?? []) });
-        if (this.collectsCoverage(ctx)) return this.driveShardWithCoverage(ctx, shard, claim.claimId, ordered);
+        if (this.collectsCoverage(ctx)) return this.driveShardWithCoverage(ctx, shard, claimId, ordered);
         // A crash re-runs what the runner had not reported, once, in the same claim.
-        const ran = await this.runSpecs(ctx, { claimId: claim.claimId, shard: shard.shard }, 'shard', ordered, `${req.suiteRunId}-${shard.shard}`, { timeoutMs: inputs.config.shardTimeoutMs, crashRetries: 1, clear: false });
+        const ran = await this.runSpecs(ctx, { claimId, shard: shard.shard }, 'shard', ordered, `${req.suiteRunId}-${shard.shard}`, { timeoutMs: inputs.config.shardTimeoutMs, crashRetries: 1, clear: false });
         for (const [spec, r] of ran.done) shard.done.set(spec, r);
         for (const [spec, why] of ran.missing) shard.missing.set(spec, why);
     }

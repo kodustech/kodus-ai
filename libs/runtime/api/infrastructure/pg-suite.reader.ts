@@ -5,6 +5,7 @@ import type {
     StoredBaselineSummary,
     StoredSelectionMiss,
     StoredSelectionState,
+    StoredSuiteHost,
     StoredSuiteResultRecord,
     StoredSuiteRun,
     StoredSuiteRunRecord,
@@ -13,6 +14,14 @@ import type {
 } from '../domain/suite';
 
 const iso = (d: Date | string | null | undefined) => (d ? new Date(d).toISOString() : undefined);
+/** A value inside a LIKE pattern, matched as itself. */
+const likeLiteral = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
+/** A host row of the run: its shard is the bound key's last segment; a key that does not end in one is not a shard's host. */
+function suiteHostOf(h: { bound_key: string; created_at: Date; ready_at: Date | null; terminated_at: Date | null }): StoredSuiteHost[] {
+    const shard = Number(h.bound_key.slice(h.bound_key.lastIndexOf('/') + 1));
+    if (!Number.isInteger(shard) || shard < 0) return [];
+    return [{ shard, requestedAt: iso(h.created_at)!, ...(h.ready_at ? { readyAt: iso(h.ready_at)! } : {}), ...(h.terminated_at ? { endedAt: iso(h.terminated_at)! } : {}) }];
+}
 const num = (v: unknown) => (v === null || v === undefined ? undefined : Number(v));
 /** A usage month is read on the reports' pool: a slow month still answers, a runaway one is cancelled by the server. */
 const REPORT_QUERY_TIMEOUT_MS = 15_000;
@@ -38,13 +47,21 @@ export class PgSuiteReader implements RuntimeSuiteReader {
         );
         const x = runs.rows[0];
         if (!x) return null;
-        const [shards, results] = await Promise.all([
-            this.db.query(`SELECT shard, specs FROM runtime.runtime_suite_shards WHERE organization_id = $1 AND suite_run_id = $2 ORDER BY shard`, [organizationId, suiteRunId]),
+        const [shards, results, hosts] = await Promise.all([
+            this.db.query(`SELECT shard, specs, started_at, finished_at FROM runtime.runtime_suite_shards WHERE organization_id = $1 AND suite_run_id = $2 ORDER BY shard`, [organizationId, suiteRunId]),
             this.db.query(
                 `SELECT phase, shard, spec, status, duration_ms, error_signature, tests, artifacts
                    FROM runtime.runtime_suite_results WHERE organization_id = $1 AND suite_run_id = $2 ORDER BY phase, spec`,
                 [organizationId, suiteRunId],
             ),
+            // The fleet's hosts of this run, by their bound key; only the times. A deployment whose reader cannot see them shows no host times.
+            this.db
+                .query(
+                    `SELECT bound_key, created_at, ready_at, terminated_at FROM runtime.runtime_hosts
+                      WHERE organization_id = $1 AND bound_key LIKE $2 ESCAPE '\\' ORDER BY created_at`,
+                    [organizationId, `suite:${likeLiteral(organizationId)}/${likeLiteral(suiteRunId)}/%`],
+                )
+                .then((r) => r.rows, () => null),
         ]);
         const run: StoredSuiteRunRecord = {
             suiteRunId: x.suite_run_id,
@@ -68,7 +85,8 @@ export class PgSuiteReader implements RuntimeSuiteReader {
         };
         return {
             run,
-            shards: shards.rows.map((s) => ({ shard: s.shard, specs: s.specs })),
+            shards: shards.rows.map((s) => ({ shard: s.shard, specs: s.specs, ...(s.started_at ? { startedAt: iso(s.started_at)! } : {}), ...(s.finished_at ? { finishedAt: iso(s.finished_at)! } : {}) })),
+            ...(hosts ? { hosts: hosts.flatMap((h) => suiteHostOf(h)) } : {}),
             results: results.rows.map(
                 (r): StoredSuiteResultRecord => ({
                     phase: r.phase,

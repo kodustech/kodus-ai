@@ -111,8 +111,10 @@ import type {
     RuntimeSuiteUsage as LibRuntimeSuiteUsage,
     RuntimeEnvironmentSuiteView,
     RuntimeSuiteFailureView,
+    RuntimeSuiteHostTimeView,
     RuntimeSuiteRunView,
     RuntimeSuiteShardView,
+    RuntimeSuiteSpecView,
 } from "@libs/runtime/contracts/views/suite";
 import type { Verdict as LibVerdict } from "@libs/runtime/gate";
 import type {
@@ -714,6 +716,8 @@ export type RuntimeLesson = RuntimeLessonView;
 export type RuntimeSuiteRun = RuntimeSuiteRunView;
 export type RuntimeSuiteFailure = RuntimeSuiteFailureView;
 export type RuntimeSuiteShard = RuntimeSuiteShardView;
+export type RuntimeSuiteSpec = RuntimeSuiteSpecView;
+export type RuntimeSuiteHostTime = RuntimeSuiteHostTimeView;
 export type RuntimeSuiteFailureGroup = LibRuntimeSuiteFailureGroup;
 /** GET /runtime/environments/:id/suite: Settings, e2e suite. */
 export type RuntimeEnvironmentSuite = RuntimeEnvironmentSuiteView;

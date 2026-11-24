@@ -1,6 +1,6 @@
 import type { ClassifiedTest } from '@libs/runtime/suite';
 
-import type { RuntimeEnvironmentSuiteView, RuntimeSuiteFailureGroup, RuntimeSuiteFailureView, RuntimeSuiteRunView, RuntimeSuiteUsage, RuntimeSuiteUsageLine } from '@libs/runtime/contracts/views/suite';
+import type { RuntimeEnvironmentSuiteView, RuntimeSuiteFailureGroup, RuntimeSuiteFailureView, RuntimeSuiteHostTimeView, RuntimeSuiteRunView, RuntimeSuiteSpecView, RuntimeSuiteUsage, RuntimeSuiteUsageLine } from '@libs/runtime/contracts/views/suite';
 
 import type { StoredBaselineSummary, StoredSelectionMiss, StoredSelectionState, StoredSuiteResultRecord, StoredSuiteRun, StoredSuiteSavings, StoredSuiteUsageRow } from './suite';
 
@@ -30,6 +30,34 @@ const lastFailedError = (t: { attempts: Array<{ status: string; error?: string }
 };
 
 const testOf = (results: readonly StoredSuiteResultRecord[], phase: StoredSuiteResultRecord['phase'], spec: string, title: string) => results.find((r) => r.phase === phase && r.spec === spec)?.tests.find((t) => t.title === title);
+
+/** The host that lists main's spec files (worker spec-lister LIST_HOST_SHARD); shards above the plan's re-run failures. */
+const LIST_HOST_SHARD = 61;
+const FIRST_PASS_STATUSES = new Set(['passed', 'failed', 'skipped', 'not_run', 'infra']);
+
+function specRowsOf(first: Map<string, StoredSuiteResultRecord>, failures: readonly RuntimeSuiteFailureView[]): RuntimeSuiteSpecView[] {
+    return [...first.values()]
+        .map((r) => {
+            const tests = r.tests.map((t) => ({ title: t.title, status: t.status, attempts: t.attempts.map((a) => a.status) }));
+            const retried = r.status === 'passed' && tests.some((t) => t.attempts.includes('failed'));
+            const group = failures.find((f) => f.spec === r.spec)?.group;
+            const result = (retried ? 'flaky' : FIRST_PASS_STATUSES.has(r.status) ? r.status : 'infra') as RuntimeSuiteSpecView['result'];
+            return { spec: r.spec, shard: r.shard, result, ...(group ? { group } : {}), durationMs: r.durationMs, tests, artifacts: r.artifacts.map((a) => a.name) };
+        })
+        .sort((a, b) => a.spec.localeCompare(b.spec));
+}
+
+function hostTimesOf(s: StoredSuiteRun, planned: ReadonlySet<number>): RuntimeSuiteHostTimeView[] {
+    const byShard = new Map<number, RuntimeSuiteHostTimeView>();
+    const roleOf = (shard: number): RuntimeSuiteHostTimeView['role'] => (shard === LIST_HOST_SHARD ? 'list' : planned.has(shard) ? 'shard' : 'rerun');
+    for (const h of s.hosts ?? []) byShard.set(h.shard, { shard: h.shard, role: roleOf(h.shard), requestedAt: h.requestedAt, ...(h.readyAt ? { readyAt: h.readyAt } : {}), ...(h.endedAt ? { endedAt: h.endedAt } : {}) });
+    for (const sh of s.shards) {
+        if (!sh.startedAt && !sh.finishedAt) continue;
+        const t = byShard.get(sh.shard) ?? { shard: sh.shard, role: roleOf(sh.shard) };
+        byShard.set(sh.shard, { ...t, ...(sh.startedAt ? { startedAt: sh.startedAt } : {}), ...(sh.finishedAt ? { finishedAt: sh.finishedAt } : {}) });
+    }
+    return [...byShard.values()].sort((a, b) => (a.requestedAt ?? a.startedAt ?? '').localeCompare(b.requestedAt ?? b.startedAt ?? '') || a.shard - b.shard);
+}
 
 export function runSuiteView(s: StoredSuiteRun): RuntimeSuiteRunView {
     const { run, results } = s;
@@ -109,6 +137,8 @@ export function runSuiteView(s: StoredSuiteRun): RuntimeSuiteRunView {
         shards,
         failures,
         passed: [...first.values()].filter((r) => r.status === 'passed').map((r) => r.spec).sort(),
+        specRows: specRowsOf(first, failures),
+        hostTimes: hostTimesOf(s, new Set(s.shards.filter((sh) => sh.specs.length > 0).map((sh) => sh.shard))),
         canRetry: !!run.finishedAt && [...first.values()].some((r) => RED_FIRST_PASS.has(r.status)),
     };
 }

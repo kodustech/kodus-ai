@@ -76,6 +76,27 @@ const at = (day: number, hour = 10) => new Date(Date.UTC(2026, 10, day, hour));
             expect(await reader.get('org-a', 'nope')).toBeNull();
         });
 
+        it('reads each shard\'s start and end, and the times of the run\'s own hosts only (never another run\'s or org\'s)', async () => {
+            await run('sr-h');
+            await owner.query(`INSERT INTO runtime.runtime_suite_shards (suite_run_id, shard, organization_id, specs, started_at, finished_at) VALUES ('sr-h', 0, 'org-a', '["a.cy.ts"]', $1, $2)`, [at(10, 10), at(10, 11)]);
+            await owner.query(`INSERT INTO runtime.runtime_host_pools (pool_id, scope, provider, lifecycle) VALUES ('p1', 'kodus', 'boat', 'perRun') ON CONFLICT DO NOTHING`);
+            await owner.query(`DELETE FROM runtime.runtime_hosts`);
+            await owner.query(
+                `INSERT INTO runtime.runtime_hosts (host_id, pool_id, provider, state, bound_key, organization_id, created_at, ready_at, terminated_at, usd_per_hour, last_error) VALUES
+                 ('h-list', 'p1', 'boat', 'terminated', 'suite:org-a/sr-h/61', 'org-a', $1, $2, $3, 1.5, 'secret detail'),
+                 ('h-0', 'p1', 'boat', 'terminated', 'suite:org-a/sr-h/0', 'org-a', $2, $3, NULL, 1.5, NULL),
+                 ('h-other', 'p1', 'boat', 'terminated', 'suite:org-a/sr-hx/0', 'org-a', $1, $2, $3, 1.5, NULL),
+                 ('h-org', 'p1', 'boat', 'terminated', 'suite:org-b/sr-h/0', 'org-b', $1, $2, $3, 1.5, NULL)`,
+                [at(10, 8), at(10, 9), at(10, 12)],
+            );
+            const got = await reader.get('org-a', 'sr-h');
+            expect(got?.shards).toEqual([{ shard: 0, specs: ['a.cy.ts'], startedAt: at(10, 10).toISOString(), finishedAt: at(10, 11).toISOString() }]);
+            expect(got?.hosts).toEqual([
+                { shard: 61, requestedAt: at(10, 8).toISOString(), readyAt: at(10, 9).toISOString(), endedAt: at(10, 12).toISOString() },
+                { shard: 0, requestedAt: at(10, 9).toISOString(), readyAt: at(10, 12).toISOString() },
+            ]);
+        });
+
         it('says nothing of machine time for a run stored before it was measured', async () => {
             await run('sr-old');
             const got = await reader.get('org-a', 'sr-old');

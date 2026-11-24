@@ -10,7 +10,10 @@ import {
     failureGroups,
     mainLine,
     selectionBanner,
+    specCounts,
+    specRows,
     suiteFacts,
+    suiteTimeSplit,
     suiteUsageLines,
     suiteVerdict,
     whySpecs,
@@ -56,6 +59,8 @@ const run = (over: Partial<RuntimeSuiteRun> = {}): RuntimeSuiteRun => ({
     machine: { firstPassMs: 11 * 60_000, rerunMs: 3 * 60_000 },
     hosts: 2,
     shards: [],
+    specRows: [],
+    hostTimes: [],
     failures: [
         failure(),
         failure({
@@ -504,5 +509,171 @@ describe("the usage lines", () => {
         expect(u.saved).toBeUndefined();
         expect(u.totalMinutes).toBeUndefined();
         expect(u.caveat).toBeUndefined();
+    });
+});
+
+// Where the time went and the specs table (the tab's top half), from a run shaped like kr-shop #49 on dev.
+describe("where a suite run's time went", () => {
+    const timed = run({
+        requestedAt: "2026-11-24T18:14:42.000Z",
+        finishedAt: "2026-11-24T18:18:09.000Z",
+        shards: [
+            {
+                shard: 0,
+                specs: 5,
+                passed: 5,
+                failed: 0,
+                notRun: 0,
+                specMs: 228,
+            },
+            {
+                shard: 1,
+                specs: 4,
+                passed: 4,
+                failed: 0,
+                notRun: 0,
+                specMs: 320,
+            },
+        ],
+        hostTimes: [
+            {
+                shard: 61,
+                role: "list",
+                requestedAt: "2026-11-24T18:15:49.000Z",
+                readyAt: "2026-11-24T18:16:10.000Z",
+            },
+            {
+                shard: 0,
+                role: "shard",
+                requestedAt: "2026-11-24T18:16:49.000Z",
+                readyAt: "2026-11-24T18:17:05.000Z",
+                startedAt: "2026-11-24T18:17:40.000Z",
+                finishedAt: "2026-11-24T18:18:02.000Z",
+            },
+            {
+                shard: 1,
+                role: "shard",
+                requestedAt: "2026-11-24T18:16:49.000Z",
+                readyAt: "2026-11-24T18:17:10.000Z",
+                startedAt: "2026-11-24T18:17:45.000Z",
+                finishedAt: "2026-11-24T18:18:05.000Z",
+            },
+        ],
+    });
+
+    it("splits the wall time along the host that finished last, and the parts add up to the whole", () => {
+        const split = suiteTimeSplit(timed)!;
+        expect(
+            split.segments.map((s) => [s.key, Math.round(s.ms / 1000)]),
+        ).toEqual([
+            ["start", 67],
+            ["list", 60],
+            ["boot", 21],
+            ["setup", 35],
+            ["specs", 20],
+            ["results", 4],
+        ]);
+        expect(split.segments.reduce((n, s) => n + s.ms, 0)).toBe(
+            split.totalMs,
+        );
+        expect(split.complete).toBe(true);
+        expect(
+            split.hosts.map((h) => [h.label, h.specs, h.bootMs, h.specsMs]),
+        ).toEqual([
+            ["Host 1", 5, 16_000, 22_000],
+            ["Host 2", 4, 21_000, 20_000],
+        ]);
+    });
+
+    it("a run whose shards never recorded their start says one last part for what it cannot tell apart", () => {
+        const split = suiteTimeSplit(
+            run({
+                ...timed,
+                hostTimes: timed.hostTimes.map(
+                    ({ startedAt: _s, finishedAt: _f, ...h }) => h,
+                ),
+            }),
+        )!;
+        expect(split.complete).toBe(false);
+        expect(split.segments.at(-1)).toMatchObject({
+            key: "rest",
+            label: "App, specs and results",
+        });
+    });
+
+    it("says nothing for a run with no host moments", () => {
+        expect(suiteTimeSplit(run())).toBeNull();
+    });
+});
+
+describe("the specs table", () => {
+    const rows = run({
+        specRows: [
+            {
+                spec: "e2e/a.spec.js",
+                shard: 0,
+                result: "passed",
+                durationMs: 50,
+                tests: [],
+                artifacts: [],
+            },
+            {
+                spec: "e2e/slow.spec.js",
+                shard: 1,
+                result: "passed",
+                durationMs: 900,
+                tests: [
+                    {
+                        title: "checks out",
+                        status: "passed",
+                        attempts: ["passed"],
+                    },
+                ],
+                artifacts: [],
+            },
+            {
+                spec: "e2e/retry.spec.js",
+                shard: 0,
+                result: "flaky",
+                durationMs: 70,
+                tests: [],
+                artifacts: [],
+            },
+            {
+                spec: "e2e/cart.spec.js",
+                shard: 1,
+                result: "failed",
+                group: "regression",
+                durationMs: 30,
+                tests: [],
+                artifacts: ["trace.zip"],
+            },
+        ],
+    });
+
+    it("puts failures first, then flaky, then the slowest of the rest", () => {
+        expect(specRows(rows, "all", "").map((r) => r.spec)).toEqual([
+            "e2e/cart.spec.js",
+            "e2e/retry.spec.js",
+            "e2e/slow.spec.js",
+            "e2e/a.spec.js",
+        ]);
+    });
+
+    it("filters by result and finds a spec by a test's title", () => {
+        expect(specCounts(rows)).toEqual({
+            all: 4,
+            failed: 1,
+            flaky: 1,
+            passed: 2,
+            skipped: 0,
+        });
+        expect(specRows(rows, "passed", "").map((r) => r.spec)).toEqual([
+            "e2e/slow.spec.js",
+            "e2e/a.spec.js",
+        ]);
+        expect(specRows(rows, "all", "checks OUT").map((r) => r.spec)).toEqual([
+            "e2e/slow.spec.js",
+        ]);
     });
 });

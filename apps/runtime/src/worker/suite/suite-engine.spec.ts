@@ -54,6 +54,17 @@ describe('the first pass of a suite run', () => {
         expect(w.cell.acquires.map((a) => ({ consumer: a.consumer, side: a.ref.side, sha: a.ref.sha, suiteRunId: a.suiteRunId, shard: a.shard })).sort((x, y) => x.shard! - y.shard!)).toEqual([0, 1, 2].map((shard) => ({ consumer: 'suite', side: 'pr', sha: 'b'.repeat(40), suiteRunId: 'sr-1', shard })));
     });
 
+    it('records when each shard got its host ready and when its specs ended, so the page can say where the time went', async () => {
+        const w = world({ specs: { 'a.cy.ts': { ms: 2 * MIN }, 'b.cy.ts': { ms: MIN } } }, { maxShards: 2 });
+        await w.engine.run(request(), w.inputs(['a.cy.ts', 'b.cy.ts']));
+        for (const shard of [0, 1]) {
+            const m = w.runs.moments.get(`sr-1|${shard}`)!;
+            expect(m.running).toBeDefined();
+            expect(m.finished! - m.running!).toBeGreaterThanOrEqual(MIN);
+        }
+        expect((await w.runs.shards(ORG, 'sr-1')).map((s) => s.state)).toEqual(['finished', 'finished']);
+    });
+
     it('records each spec result when its shard has it, not at the end of the shard', async () => {
         const w = world({ specs: { 'a.cy.ts': { ms: MIN }, 'b.cy.ts': { ms: MIN }, 'c.cy.ts': { ms: MIN } } }, { maxShards: 1 });
         await w.engine.run(request(), w.inputs(['a.cy.ts', 'b.cy.ts', 'c.cy.ts']));

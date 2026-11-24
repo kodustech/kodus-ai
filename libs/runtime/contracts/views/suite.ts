@@ -53,6 +53,38 @@ export interface RuntimeSuiteFailureView {
     artifacts: RuntimeSuiteArtifactView[];
 }
 
+/** One spec of the first pass, as the specs table shows it. */
+export interface RuntimeSuiteSpecView {
+    spec: string;
+    shard: number;
+    /** The runner's verdict; `flaky` is a pass that needed one of the runner's own retries. */
+    result: 'passed' | 'flaky' | 'failed' | 'skipped' | 'not_run' | 'infra';
+    /** The classifier's group for a spec that failed (regression, pre-existing, flaky, unclassified). */
+    group?: RuntimeSuiteFailureGroup;
+    /** The runner's time for the spec; 0 when it did not report one. */
+    durationMs: number;
+    tests: Array<{ title: string; status: string; attempts: Array<'passed' | 'failed' | 'skipped'> }>;
+    /** Names of the files kept for it (trace, video, screenshot). */
+    artifacts: string[];
+}
+
+/** Where one host's time went, in instants; a field the run did not record is absent. */
+export interface RuntimeSuiteHostTimeView {
+    shard: number;
+    /** `list` read main's spec files; `shard` ran specs; `rerun` re-ran failures (on the PR or on main). */
+    role: 'list' | 'shard' | 'rerun';
+    /** The fleet was asked for the host. */
+    requestedAt?: string;
+    /** The host's machine was up. */
+    readyAt?: string;
+    /** The app was up on it and the specs started. */
+    startedAt?: string;
+    /** The specs ended. */
+    finishedAt?: string;
+    /** The host was gone. */
+    endedAt?: string;
+}
+
 export interface RuntimeSuiteShardView {
     shard: number;
     specs: number;
@@ -94,6 +126,10 @@ export interface RuntimeSuiteRunView {
     failures: RuntimeSuiteFailureView[];
     /** The specs that passed in the first pass, in order. */
     passed: string[];
+    /** Every spec of the first pass, with its tests, tries and time. */
+    specRows: RuntimeSuiteSpecView[];
+    /** Each host's moments, in the order they were asked for. */
+    hostTimes: RuntimeSuiteHostTimeView[];
     /** The caller may ask for the failed specs again: the run ended and left a red or unreported spec. */
     canRetry: boolean;
 }
