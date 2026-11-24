@@ -1,7 +1,13 @@
 import { axiosAuthorized } from "src/core/utils/axios";
 import { pathToApiUrl } from "src/core/utils/helpers";
 
-import type { SecurityScan, StartSecurityScanPayload } from "./types";
+import type {
+    ExportResult,
+    SaveScanSchedulePayload,
+    SecurityScan,
+    SecurityScanSchedule,
+    StartSecurityScanPayload,
+} from "./types";
 
 // A function, not a constant: pathToApiUrl resolves to the same-origin proxy
 // only when called in the browser.
@@ -24,6 +30,48 @@ export const cancelSecurityScan = async (
     const response = await axiosAuthorized.post<{ data: SecurityScan }>(
         `${securityScansPath()}/${scanId}/cancel`,
         {},
+    );
+
+    return response.data;
+};
+
+export const securityScanSchedulesPath = () =>
+    `${securityScansPath()}/schedules`;
+
+export const exportDestinationsPath = () =>
+    `${securityScansPath()}/export-destinations`;
+
+export const saveSecurityScanSchedule = async (
+    payload: SaveScanSchedulePayload,
+): Promise<SecurityScanSchedule> => {
+    const response = await axiosAuthorized.put<{ data: SecurityScanSchedule }>(
+        securityScanSchedulesPath(),
+        payload,
+    );
+
+    return response.data;
+};
+
+export const removeSecurityScanSchedule = async (
+    teamId: string,
+    repositoryId: string,
+): Promise<void> => {
+    await axiosAuthorized.deleted(
+        `${securityScanSchedulesPath()}/${encodeURIComponent(repositoryId)}`,
+        { params: { teamId } },
+    );
+};
+
+/** Files these findings through a plugin; one result per finding asked. */
+export const exportScanFindings = async (payload: {
+    teamId: string;
+    issueIds: string[];
+    integrationId: string;
+    destinationNote?: string;
+}): Promise<ExportResult[]> => {
+    const response = await axiosAuthorized.post<{ data: ExportResult[] }>(
+        `${securityScansPath()}/issues/export`,
+        payload,
     );
 
     return response.data;

@@ -29,6 +29,7 @@ import {
     securityScansPath,
     startSecurityScan,
 } from "@services/security-scans/fetch";
+import type { SecurityScanMode } from "@services/security-scans/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { ShieldIcon, XCircleIcon } from "lucide-react";
@@ -38,6 +39,7 @@ import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { extractRejectionMessage } from "src/core/utils/extract-error-message";
 import { hasPermission } from "src/core/utils/permission-map";
 
+import { useScanModels } from "../../../deep-scan/_components/use-scan-models";
 import {
     formatTokenCount,
     isNoKnownPriceMessage,
@@ -45,6 +47,9 @@ import {
 } from "./format";
 
 type LimitBy = "usd" | "tokens";
+
+/** The Deep scan routing's model: no pick. */
+const ROUTING_MODEL = "__routing";
 
 /**
  * "Run deep scan" button and its dialog. Starting a scan is its own
@@ -99,6 +104,9 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
     }, [allRepositories, organizationId, permissions]);
 
     const [repositoryId, setRepositoryId] = useState("");
+    const [mode, setMode] = useState<SecurityScanMode>("incremental");
+    const [modelId, setModelId] = useState(ROUTING_MODEL);
+    const scanModels = useScanModels();
     const [limitBy, setLimitBy] = useState<LimitBy>("usd");
     // Both optional: left empty, the scan covers the whole repository.
     const [maxUsd, setMaxUsd] = useState("");
@@ -131,6 +139,8 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
             await startSecurityScan({
                 teamId,
                 repositoryId,
+                mode,
+                ...(modelId === ROUTING_MODEL ? {} : { modelId }),
                 ...(limitValue === undefined
                     ? {}
                     : limitBy === "usd"
@@ -182,9 +192,10 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                         Kody reads the repository&apos;s default branch with
                         your organization&apos;s own model, and stops at a spend
                         limit only if you set one. Findings appear below as the
-                        scan stores them, and a scan that stopped before the end
-                        picks up where it stopped. Experimental alpha: check
-                        each finding before acting on it.
+                        scan stores them. By default it reads only what changed
+                        since earlier scans, or what no scan read yet, so a
+                        limit picks up where the last scan stopped. Experimental
+                        alpha: check each finding before acting on it.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -233,6 +244,77 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                                     No repositories you can scan in this team.
                                 </FormControl.Helper>
                             )}
+                    </FormControl.Root>
+
+                    <FormControl.Root>
+                        <FormControl.Label htmlFor="security-scan-mode">
+                            What to read
+                        </FormControl.Label>
+                        <FormControl.Input>
+                            <Select
+                                value={mode}
+                                disabled={submitting}
+                                onValueChange={(v) =>
+                                    setMode(v as SecurityScanMode)
+                                }>
+                                <SelectTrigger
+                                    id="security-scan-mode"
+                                    size="md">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="incremental">
+                                        Only what changed or was never read
+                                    </SelectItem>
+                                    <SelectItem value="full">
+                                        The whole repository again
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </FormControl.Input>
+                        <FormControl.Helper>
+                            {mode === "incremental"
+                                ? "A file is read again when it, or a file its last reading leaned on, changed."
+                                : "Use it after switching to a stronger model, or to start over."}
+                        </FormControl.Helper>
+                    </FormControl.Root>
+
+                    <FormControl.Root>
+                        <FormControl.Label htmlFor="security-scan-model">
+                            Model
+                        </FormControl.Label>
+                        <FormControl.Input>
+                            <Select
+                                value={modelId}
+                                disabled={submitting}
+                                onValueChange={(v) => {
+                                    setModelId(v);
+                                    setApiError(undefined);
+                                }}>
+                                <SelectTrigger
+                                    id="security-scan-model"
+                                    size="md"
+                                    loading={scanModels.isLoading}>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value={ROUTING_MODEL}>
+                                        Deep scan routing (default)
+                                    </SelectItem>
+                                    {scanModels.models.map((model) => (
+                                        <SelectItem
+                                            key={model.id}
+                                            value={model.id}>
+                                            {model.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </FormControl.Input>
+                        <FormControl.Helper>
+                            Only for this scan; the routing in AI providers
+                            stays as it is.
+                        </FormControl.Helper>
                     </FormControl.Root>
 
                     {limitBy === "usd" ? (

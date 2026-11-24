@@ -61,6 +61,11 @@ export const formatScanCoverage = (
     if (coverage.unitsFailed > 0) {
         parts.push(`${coverage.unitsFailed} failed`);
     }
+    if (coverage.unchangedFiles) {
+        parts.push(
+            `${coverage.unchangedFiles} ${coverage.unchangedFiles === 1 ? "file" : "files"} unchanged since an earlier scan`,
+        );
+    }
     if (coverage.filesBeyondPlan) {
         parts.push(
             `${coverage.filesBeyondPlan} ${coverage.filesBeyondPlan === 1 ? "file" : "files"} past the plan's limit not examined`,

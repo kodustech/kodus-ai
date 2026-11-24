@@ -129,8 +129,8 @@ export const IssueSecurityEvidence = ({
         <div className="mt-10 flex flex-col gap-10 px-6">
             {duplicateOf && (
                 <p className="text-text-secondary text-sm">
-                    Folded into another issue with the same root cause: fix
-                    that one.
+                    Folded into another issue with the same root cause: fix that
+                    one.
                 </p>
             )}
 

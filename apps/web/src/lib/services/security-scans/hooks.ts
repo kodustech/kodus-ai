@@ -1,8 +1,17 @@
 import { useFetch } from "src/core/utils/reactQuery";
 import { safeArray } from "src/core/utils/safe-array";
 
-import { securityScansPath } from "./fetch";
-import { isSecurityScanActive, type SecurityScan } from "./types";
+import {
+    exportDestinationsPath,
+    securityScanSchedulesPath,
+    securityScansPath,
+} from "./fetch";
+import {
+    isSecurityScanActive,
+    type ExportDestination,
+    type SecurityScan,
+    type SecurityScanSchedule,
+} from "./types";
 
 const SECURITY_SCANS_LIST_LIMIT = 20;
 const ACTIVE_SCAN_POLL_MS = 10_000;
@@ -20,6 +29,33 @@ export const useSecurityScans = () => {
                     ? ACTIVE_SCAN_POLL_MS
                     : false,
         },
+    );
+
+    return { ...query, data: safeArray(data) };
+};
+
+/** The repositories' deep scan schedules the caller can see. */
+export const useSecurityScanSchedules = () => {
+    const { data, ...query } = useFetch<SecurityScanSchedule[]>(
+        securityScanSchedulesPath(),
+        undefined,
+        true,
+        { placeholderData: (prev) => prev },
+    );
+
+    return { ...query, data: safeArray(data) };
+};
+
+/** The organization's plugins a finding can be filed through. */
+export const useExportDestinations = (
+    teamId: string | undefined,
+    enabled = true,
+) => {
+    const { data, ...query } = useFetch<ExportDestination[]>(
+        exportDestinationsPath(),
+        { params: { teamId } },
+        enabled && !!teamId,
+        { staleTime: 5 * 60 * 1000, retry: false },
     );
 
     return { ...query, data: safeArray(data) };

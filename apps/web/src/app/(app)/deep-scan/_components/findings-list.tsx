@@ -11,6 +11,7 @@ import { cn } from "src/core/utils/components";
 import { CopyFixPromptButton } from "../../issues/_components/copy-fix-prompt-button";
 import { formatOwner } from "../../issues/_components/security-scan/format";
 import { StatusBadge } from "../../issues/_components/status-badge";
+import { ExportFindingsButton } from "./export-findings-dialog";
 
 const SEVERITY_RANK: Record<SeverityLevel, number> = {
     critical: 0,
@@ -83,6 +84,7 @@ export const FindingsList = ({
                 <h2 className="text-base font-semibold">Findings</h2>
 
                 <div className="flex flex-wrap items-center gap-3">
+                    <ExportFindingsButton findings={shown} />
                     {shown.length > 0 && (
                         <CopyFixPromptButton
                             size="sm"

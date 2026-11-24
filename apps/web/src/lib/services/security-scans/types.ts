@@ -42,6 +42,8 @@ export type SecurityScan = {
         mapFailedLanguages?: string[];
         /** Candidate files past the plan's limit, never read by this scan. */
         filesBeyondPlan?: number;
+        /** Incremental: files left out because nothing they read changed. */
+        unchangedFiles?: number;
     };
     outcome?: {
         created: number;
@@ -55,6 +57,10 @@ export type SecurityScan = {
         consolidated?: number;
     };
     modelName?: string;
+    /** The model picked for this scan; the Deep scan routing's when unset. */
+    modelId?: string;
+    mode?: SecurityScanMode;
+    scheduleId?: string;
     error?: string;
     startedAt?: string;
     finishedAt?: string;
@@ -62,11 +68,65 @@ export type SecurityScan = {
     updatedAt: string;
 };
 
+/** incremental: only what changed since earlier scans; full: everything again. */
+export type SecurityScanMode = "incremental" | "full";
+
 export type StartSecurityScanPayload = {
     teamId: string;
     /** Git provider repository id, the same as `issue.repository.id`. */
     repositoryId: string;
+    mode?: SecurityScanMode;
+    modelId?: string;
 } & SecurityScanBudget;
+
+export type ScanCadence = "daily" | "weekly";
+
+export type ScanExportTarget = {
+    integrationId: string;
+    destinationNote?: string;
+    minSeverity: "critical" | "high" | "medium" | "low";
+};
+
+export type SecurityScanSchedule = {
+    uuid: string;
+    teamId: string;
+    repository: { platform: string; host: string; id: string };
+    cadence: ScanCadence;
+    budget: SecurityScanBudget;
+    mode: SecurityScanMode;
+    modelId?: string;
+    exportTo?: ScanExportTarget;
+    enabled: boolean;
+    nextRunAt: string;
+    lastRunAt?: string;
+    lastScanId?: string;
+    lastError?: string;
+};
+
+export type SaveScanSchedulePayload = {
+    teamId: string;
+    repositoryId: string;
+    cadence: ScanCadence;
+    mode?: SecurityScanMode;
+    modelId?: string;
+    exportTo?: ScanExportTarget;
+    enabled?: boolean;
+} & SecurityScanBudget;
+
+/** A plugin a finding can be filed through. */
+export type ExportDestination = {
+    integrationId: string;
+    name: string;
+    createTools: string[];
+};
+
+export type ExportResult = {
+    issueId: string;
+    status: "created" | "already" | "failed" | "skipped";
+    url?: string;
+    ticketId?: string;
+    error?: string;
+};
 
 export const isSecurityScanActive = (scan: Pick<SecurityScan, "status">) =>
     scan.status === "queued" || scan.status === "running";
