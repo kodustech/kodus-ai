@@ -97,14 +97,6 @@ import type {
 } from "@libs/runtime/contracts/views/environments";
 import type { RuntimeLessonView } from "@libs/runtime/contracts/views/lessons";
 import type {
-    RuntimeEnvironmentSuiteView,
-    RuntimeSuiteFailureGroup as LibRuntimeSuiteFailureGroup,
-    RuntimeSuiteFailureView,
-    RuntimeSuiteRunView,
-    RuntimeSuiteShardView,
-    RuntimeSuiteUsage as LibRuntimeSuiteUsage,
-} from "@libs/runtime/contracts/views/suite";
-import type {
     FindingFeedbackView,
     FindingIntentView,
     ProbeRequestView,
@@ -114,6 +106,14 @@ import type {
     RuntimeRepositorySettingsView,
     RuntimeSettingsView,
 } from "@libs/runtime/contracts/views/settings";
+import type {
+    RuntimeSuiteFailureGroup as LibRuntimeSuiteFailureGroup,
+    RuntimeSuiteUsage as LibRuntimeSuiteUsage,
+    RuntimeEnvironmentSuiteView,
+    RuntimeSuiteFailureView,
+    RuntimeSuiteRunView,
+    RuntimeSuiteShardView,
+} from "@libs/runtime/contracts/views/suite";
 import type { Verdict as LibVerdict } from "@libs/runtime/gate";
 import type {
     BootPhases,

@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom";
 
 import type { ReactNode } from "react";
-import type { RuntimeRun } from "@services/runtime/contracts";
+import type { RuntimeRun, RuntimeSuiteRun } from "@services/runtime/contracts";
 import {
     bootFailureRun,
     newRouteRun,
@@ -17,7 +17,11 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { RunDetailPage } from "./_page-component";
 
-const mockState: { run?: RuntimeRun; view?: RunStreamView } = {};
+const mockState: {
+    run?: RuntimeRun;
+    view?: RunStreamView;
+    suite?: RuntimeSuiteRun | null;
+} = {};
 /** Kodus's own record of the PR (its code review executions); none by default. */
 const mockExecutions: { items: Array<Record<string, unknown>> } = { items: [] };
 const mockIntent = jest.fn();
@@ -37,8 +41,10 @@ jest.mock("next/link", () => ({
         </a>
     ),
 }));
+const mockSearch = { tab: null as string | null };
 jest.mock("next/navigation", () => ({
     useRouter: () => ({ push: jest.fn() }),
+    useSearchParams: () => ({ get: () => mockSearch.tab }),
 }));
 jest.mock("@components/ui/toaster/use-toast", () => ({ toast: jest.fn() }));
 jest.mock("@components/runtime/browser-evidence", () => ({
@@ -65,6 +71,8 @@ jest.mock("@services/runtime/queries", () => {
         }),
         useRunBeingRecorded: () => false,
         useRunStream: () => ({ view: mockState.view, status: "done" }),
+        useRunSuite: () => ({ data: mockState.suite }),
+        useRetryRunSuite: idle,
         useFindingFeedback: idle,
         useFindingIntent: () => ({ mutate: mockIntent, isPending: false }),
         useRuntimeEnvironment: () => ({ data: undefined }),
@@ -90,6 +98,83 @@ describe("RunDetailPage", () => {
     beforeEach(() => {
         mockIntent.mockReset();
         mockExecutions.items = [];
+        mockState.suite = undefined;
+        mockSearch.tab = null;
+    });
+
+    describe("the e2e suite tab", () => {
+        const suite = {
+            suiteRunId: "sr-1",
+            environmentId: "env-1",
+            mode: "run",
+            state: "failed",
+            requestedAt: "2026-11-24T10:00:00.000Z",
+            mainSha: "a".repeat(40),
+            selection: { mode: "full", total: 3 },
+            specs: { ran: 3, total: 3 },
+            totals: { passed: 2, failed: 1, skipped: 0, notRun: 0 },
+            classes: {
+                regression: 0,
+                preExisting: 0,
+                flaky: 0,
+                unclassified: 0,
+            },
+            hosts: 1,
+            shards: [],
+            failures: [],
+            passed: ["a.spec.ts"],
+            canRetry: false,
+        } as unknown as RuntimeSuiteRun;
+
+        it("is not offered for a Run with no suite: the page is what it was", () => {
+            show(regressionRun(), regressionView());
+            expect(
+                screen.queryByRole("link", { name: "e2e suite" }),
+            ).not.toBeInTheDocument();
+            expect(
+                screen.queryByRole("navigation", { name: "Run sections" }),
+            ).not.toBeInTheDocument();
+        });
+
+        it("is a tab beside the Run when the Run has a suite, and the Run's sections stay the first tab", () => {
+            mockState.suite = suite;
+            show(regressionRun(), regressionView());
+            const nav = screen.getByRole("navigation", {
+                name: "Run sections",
+            });
+            expect(
+                within(nav).getByRole("link", { name: "e2e suite" }),
+            ).toHaveAttribute(
+                "href",
+                expect.stringContaining("?tab=e2e-suite"),
+            );
+            expect(
+                screen.getByRole("heading", { name: "Logs" }),
+            ).toBeInTheDocument();
+            expect(
+                screen.queryByRole("region", { name: "Verdict" }),
+            ).not.toBeInTheDocument();
+        });
+
+        it("shows the suite instead of the Run's sections on its tab", () => {
+            mockState.suite = suite;
+            mockSearch.tab = "e2e-suite";
+            show(regressionRun(), regressionView());
+            expect(
+                screen.getByRole("region", { name: "Verdict" }),
+            ).toBeInTheDocument();
+            expect(
+                screen.queryByRole("heading", { name: "Logs" }),
+            ).not.toBeInTheDocument();
+        });
+
+        it("ignores the tab for a Run with no suite", () => {
+            mockSearch.tab = "e2e-suite";
+            show(regressionRun(), regressionView());
+            expect(
+                screen.getByRole("heading", { name: "Logs" }),
+            ).toBeInTheDocument();
+        });
     });
 
     it("shows one status line instead of the stat tiles and the generated headline", () => {

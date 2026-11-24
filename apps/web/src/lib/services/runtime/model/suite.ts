@@ -25,7 +25,8 @@ const FULL_REASON_TEXT: Record<FullReason, string> = {
     lockfile: "a lockfile changed",
     config: "a runner, build or compose configuration changed",
     shared_routing: "shared routing or setup code changed",
-    uncovered_file: "a changed file is covered by no spec, so nothing is skipped on a guess",
+    uncovered_file:
+        "a changed file is covered by no spec, so nothing is skipped on a guess",
     map_missing: "no coverage map is stored for this environment yet",
     changes_unknown: "the files this pull request changes could not be read",
     map_stale: "the stored coverage map is too old to trust",
@@ -34,7 +35,8 @@ const FULL_REASON_TEXT: Record<FullReason, string> = {
     ready_for_review: "the pull request is ready for review",
     baseline: "this is the baseline on main",
     shadow: "this is a shadow run that checks the selection",
-    selection_miss: "the shadow check found a failure the selection had skipped, so the whole suite runs for a while",
+    selection_miss:
+        "the shadow check found a failure the selection had skipped, so the whole suite runs for a while",
     selection_off: "spec selection is off for this environment",
 };
 
@@ -47,8 +49,12 @@ const times = (n: number) =>
 /** "1 test was already failing on main and 1 is flaky; neither blocks." Empty when there is neither. */
 const noiseSentence = (preExisting: number, flaky: number): string => {
     const parts = [
-        preExisting > 0 ? `${plural(preExisting, "test")} ${preExisting === 1 ? "was" : "were"} already failing on main` : undefined,
-        flaky > 0 ? `${preExisting > 0 ? flaky : plural(flaky, "test")} ${flaky === 1 ? "is" : "are"} flaky` : undefined,
+        preExisting > 0
+            ? `${plural(preExisting, "test")} ${preExisting === 1 ? "was" : "were"} already failing on main`
+            : undefined,
+        flaky > 0
+            ? `${preExisting > 0 ? flaky : plural(flaky, "test")} ${flaky === 1 ? "is" : "are"} flaky`
+            : undefined,
     ].filter((x): x is string => !!x);
     if (!parts.length) return "";
     const total = preExisting + flaky;
@@ -78,13 +84,15 @@ export const suiteVerdict = (run: RuntimeSuiteRun): SuiteVerdict => {
         return {
             tone: "neutral",
             title: "Cancelled",
-            sentence: "A newer push or a closed pull request stopped this suite.",
+            sentence:
+                "A newer push or a closed pull request stopped this suite.",
         };
     if (run.state === "errored")
         return {
             tone: "danger",
             title: "Could not finish",
-            sentence: "The suite stopped before it could report. Run the failed specs again.",
+            sentence:
+                "The suite stopped before it could report. Run the failed specs again.",
         };
     const noise = noiseSentence(preExisting, flaky);
     if (regression > 0) {
@@ -119,7 +127,12 @@ export const suiteVerdict = (run: RuntimeSuiteRun): SuiteVerdict => {
     };
 };
 
-export type SuiteFact = { label: string; value: string; hint: string; mono?: boolean };
+export type SuiteFact = {
+    label: string;
+    value: string;
+    hint: string;
+    mono?: boolean;
+};
 
 /** The four key facts under the banner. */
 export const suiteFacts = (run: RuntimeSuiteRun): SuiteFact[] => {
@@ -134,11 +147,18 @@ export const suiteFacts = (run: RuntimeSuiteRun): SuiteFact[] => {
                 : "The whole suite ran";
     const drift = run.baseDrift;
     return [
-        { label: "Specs run", value: `${run.specs.ran} of ${run.specs.total}`, hint: why },
+        {
+            label: "Specs run",
+            value: `${run.specs.ran} of ${run.specs.total}`,
+            hint: why,
+        },
         {
             label: "Duration",
             value: formatDurationMs(run.durationMs),
-            hint: run.hosts === 1 ? "1 host" : `${run.hosts} hosts, one shard each`,
+            hint:
+                run.hosts === 1
+                    ? "1 host"
+                    : `${run.hosts} hosts, one shard each`,
         },
         {
             label: "Compared against",
@@ -165,25 +185,40 @@ export const suiteFacts = (run: RuntimeSuiteRun): SuiteFact[] => {
     ];
 };
 
-const GROUPS: Array<{ group: RuntimeSuiteFailureGroup; label: string; tone: Tone }> = [
+const GROUPS: Array<{
+    group: RuntimeSuiteFailureGroup;
+    label: string;
+    tone: Tone;
+}> = [
     { group: "regression", label: "Regression", tone: "danger" },
     { group: "unclassified", label: "Unclassified", tone: "alert" },
-    { group: "pre_existing", label: "Already failing on main", tone: "warning" },
+    {
+        group: "pre_existing",
+        label: "Already failing on main",
+        tone: "warning",
+    },
     { group: "flaky", label: "Flaky", tone: "info" },
 ];
 
 /** The failed tests by whose fault they are; a group with none is left out. */
 export const failureGroups = (run: RuntimeSuiteRun) =>
-    GROUPS.map((g) => ({ ...g, items: run.failures.filter((f) => f.group === g.group) })).filter((g) => g.items.length > 0);
+    GROUPS.map((g) => ({
+        ...g,
+        items: run.failures.filter((f) => f.group === g.group),
+    })).filter((g) => g.items.length > 0);
 
 export const attemptsLine = (pr: RuntimeSuiteFailure["pr"]) =>
-    pr.attempts === 0 ? "no attempt recorded" : `failed ${pr.failed} of ${pr.attempts}`;
+    pr.attempts === 0
+        ? "no attempt recorded"
+        : `failed ${pr.failed} of ${pr.attempts}`;
 
 export const mainLine = (f: RuntimeSuiteFailure): string => {
     if (!f.main) return "not run for this test";
     if (f.main.outcome === "passed") return "passed";
     if (f.main.outcome === "not_run") return "not run";
-    return f.main.sameError ? "failed, the same error" : "failed, with another error";
+    return f.main.sameError
+        ? "failed, the same error"
+        : "failed, with another error";
 };
 
 /** What a kept file is, by its name. */
@@ -217,15 +252,26 @@ export const whySpecs = (run: RuntimeSuiteRun): WhySpecs => {
             note: WHY_NOTE,
         };
     const title = `Why these ${run.specs.ran} specs`;
-    const rows = Object.entries(s.reachedBy ?? {}).map(([file, specs]) => ({ file, specs: specs.map(baseName).join(", ") }));
+    const rows = Object.entries(s.reachedBy ?? {}).map(([file, specs]) => ({
+        file,
+        specs: specs.map(baseName).join(", "),
+    }));
     if (rows.length === 0)
         return {
             title,
-            summary: s.mode === "none" ? "no spec is reached by this change" : "which changed file reached which spec was not recorded for this run",
+            summary:
+                s.mode === "none"
+                    ? "no spec is reached by this change"
+                    : "which changed file reached which spec was not recorded for this run",
             rows,
             note: WHY_NOTE,
         };
-    return { title, summary: `coverage map · ${plural(rows.length, "changed file")}`, rows, note: WHY_NOTE };
+    return {
+        title,
+        summary: `coverage map · ${plural(rows.length, "changed file")}`,
+        rows,
+        note: WHY_NOTE,
+    };
 };
 
 const GATE_TEXT = {
@@ -233,29 +279,55 @@ const GATE_TEXT = {
     strict: "Strict: anything unconfirmed fails the check too",
 } as const;
 
-const RUNNER_NAME: Record<string, string> = { playwright: "Playwright", cypress: "Cypress" };
+const RUNNER_NAME: Record<string, string> = {
+    playwright: "Playwright",
+    cypress: "Cypress",
+};
 
 /** "From the recipe": what `.kodus/workspace.yaml` says, read only (the file is where it is edited). */
-export const environmentSuiteFacts = (suite: RuntimeEnvironmentSuite): Array<{ label: string; value: string; mono?: boolean }> => {
+export const environmentSuiteFacts = (
+    suite: RuntimeEnvironmentSuite,
+): Array<{ label: string; value: string; mono?: boolean }> => {
     const r = suite.recipe;
     if (!r) return [];
     const base = suite.lastBaseline;
     return [
         { label: "Runner", value: RUNNER_NAME[r.runner] ?? r.runner },
-        { label: "Specs", value: base ? `${r.specs} · ${plural(base.specs, "file")}` : r.specs, mono: true },
+        {
+            label: "Specs",
+            value: base
+                ? `${r.specs} · ${plural(base.specs, "file")}`
+                : r.specs,
+            mono: true,
+        },
         { label: "Command", value: r.command, mono: true },
-        ...(r.results ? [{ label: "Results", value: r.results, mono: true }] : []),
+        ...(r.results
+            ? [{ label: "Results", value: r.results, mono: true }]
+            : []),
         {
             label: "Last baseline on main",
-            value: base ? `${shortSha(base.sha)} · ${base.passed} passed, ${base.failed} failed` : "No baseline on main yet",
+            value: base
+                ? `${shortSha(base.sha)} · ${base.passed} passed, ${base.failed} failed`
+                : "No baseline on main yet",
         },
-        { label: "Maximum hosts per run", value: r.shards !== undefined ? String(r.shards) : "Up to the recipe's default" },
-        { label: "When a failure cannot be classified", value: GATE_TEXT[r.gate] },
+        {
+            label: "Maximum hosts per run",
+            value:
+                r.shards !== undefined
+                    ? String(r.shards)
+                    : "Up to the recipe's default",
+        },
+        {
+            label: "When a failure cannot be classified",
+            value: GATE_TEXT[r.gate],
+        },
     ];
 };
 
 /** The "selection paused" banner: shown only while the shadow check's brake holds; a person's own switch is just the switch. */
-export const selectionBanner = (selection: RuntimeEnvironmentSuite["selection"]): { title: string; body: string } | undefined => {
+export const selectionBanner = (
+    selection: RuntimeEnvironmentSuite["selection"],
+): { title: string; body: string } | undefined => {
     const brake = selection.brake;
     if (!brake) return undefined;
     if (brake.off)
@@ -272,11 +344,20 @@ export const selectionBanner = (selection: RuntimeEnvironmentSuite["selection"])
     };
 };
 
-const KIND_TEXT: Record<RuntimeSuiteUsage["lines"][number]["kind"], { label: string; what: string }> = {
+const KIND_TEXT: Record<
+    RuntimeSuiteUsage["lines"][number]["kind"],
+    { label: string; what: string }
+> = {
     pr: { label: "PR", what: "First pass on each pull request" },
     baseline: { label: "Baseline", what: "Whole suite on main, with coverage" },
-    rerun: { label: "Re-run", what: "Failed specs again, on the PR and on main" },
-    shadow: { label: "Shadow", what: "Whole suite in the background to check selection" },
+    rerun: {
+        label: "Re-run",
+        what: "Failed specs again, on the PR and on main",
+    },
+    shadow: {
+        label: "Shadow",
+        what: "Whole suite in the background to check selection",
+    },
 };
 
 const grouped = (n: number) => n.toLocaleString("en-US");
@@ -292,7 +373,9 @@ export const suiteUsageLines = (usage: RuntimeSuiteUsage) => {
             minutes: l.minutes === null ? "Not measured" : grouped(l.minutes),
             minutesValue: l.minutes,
         })),
-        totalMinutes: measured.length ? measured.reduce((n, l) => n + (l.minutes ?? 0), 0) : undefined,
+        totalMinutes: measured.length
+            ? measured.reduce((n, l) => n + (l.minutes ?? 0), 0)
+            : undefined,
         saved: usage.saved
             ? `In the ${usage.saved.shadowedRuns} selected runs a full shadow run also covered, selection saved ${grouped(usage.saved.minutes)} minutes.`
             : undefined,

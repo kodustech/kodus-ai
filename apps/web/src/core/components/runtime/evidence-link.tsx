@@ -21,21 +21,17 @@ const openInNewTab = (url: string) => {
 };
 
 /**
- * Asks the API for the step's evidence (a URL valid for 5 minutes, on the
- * isolated evidence origin), checks it, and opens it. If the browser blocks
- * the new tab, the minted link stays on screen until it expires.
+ * Asks the API for a file's URL (valid 5 minutes, on the isolated evidence origin), checks it, and opens it. If the browser blocks
+ * the new tab, the minted link stays on screen until it expires. `mint` is the API call; `what` names the file in the console when the
+ * URL is refused.
  */
-export const EvidenceLink = ({
-    runId,
-    stepId,
-    side,
-    type,
+export const MintedEvidenceLink = ({
+    mint,
+    what,
     children,
 }: {
-    runId: string;
-    stepId: string;
-    side: EvidenceSide;
-    type?: EvidenceType;
+    mint: () => Promise<{ url: unknown; expiresAt?: string }>;
+    what: Record<string, string>;
     children: ReactNode;
 }) => {
     const [loading, setLoading] = useState(false);
@@ -73,19 +69,13 @@ export const EvidenceLink = ({
             onClick={async () => {
                 setLoading(true);
                 try {
-                    const res = await getRunEvidenceUrl({
-                        runId,
-                        stepId,
-                        side,
-                        type,
-                    });
+                    const res = await mint();
                     const checked = checkEvidenceUrl(res.url, {
                         appOrigin: window.location.origin,
                     });
                     if (!checked.ok) {
                         console.warn("[Kody Runtime] evidence URL refused", {
-                            runId,
-                            stepId,
+                            ...what,
                             reason: checked.reason,
                         });
                         throw new Error(checked.reason);
@@ -115,3 +105,24 @@ export const EvidenceLink = ({
         </button>
     );
 };
+
+/** The evidence of one step of a Run, opened through the API's short-lived URL. */
+export const EvidenceLink = ({
+    runId,
+    stepId,
+    side,
+    type,
+    children,
+}: {
+    runId: string;
+    stepId: string;
+    side: EvidenceSide;
+    type?: EvidenceType;
+    children: ReactNode;
+}) => (
+    <MintedEvidenceLink
+        mint={() => getRunEvidenceUrl({ runId, stepId, side, type })}
+        what={{ runId, stepId }}>
+        {children}
+    </MintedEvidenceLink>
+);

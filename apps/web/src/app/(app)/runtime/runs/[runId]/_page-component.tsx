@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import NextLink from "next/link";
+import { useSearchParams } from "next/navigation";
 import { BootFailurePanel } from "@components/runtime/boot-failure";
 import { ConnectedFindings } from "@components/runtime/connected-findings";
 import { RuntimeDisclosure } from "@components/runtime/disclosure";
@@ -18,11 +19,13 @@ import {
 } from "@components/runtime/run-coverage";
 import { RunLogView } from "@components/runtime/run-log";
 import { RunPreviewCard } from "@components/runtime/run-preview";
+import { RunSuiteTab } from "@components/runtime/run-suite";
 import { RunTimingView } from "@components/runtime/run-timing";
 import { RunWorkspaceSection } from "@components/runtime/run-workspace";
 import { Fact, RuntimeSection } from "@components/runtime/section";
 import { StuckNotice } from "@components/runtime/stuck-notice";
 import { Heading } from "@components/ui/heading";
+import { LinkTab, LinkTabs } from "@components/ui/link-tabs";
 import { Page } from "@components/ui/page";
 import { Skeleton } from "@components/ui/skeleton";
 import { useInfinitePullRequestExecutions } from "@services/pull-requests/hooks";
@@ -56,6 +59,7 @@ import { runTiming } from "@services/runtime/model/run-timing";
 import {
     useRunBeingRecorded,
     useRunStream,
+    useRunSuite,
     useRuntimeEnvironment,
     useRuntimeRun,
     type RunStreamStatus,
@@ -71,6 +75,9 @@ const STREAM_STATUS_LABEL: Record<RunStreamStatus, string> = {
     done: "Finished",
     failed: "Live view unavailable · refreshing every few seconds",
 };
+
+/** `?tab=e2e-suite`: the Run's e2e suite instead of the Run's own sections. */
+const SUITE_TAB = "e2e-suite";
 
 const PLATFORM: Record<string, string> = {
     GITHUB: "GitHub",
@@ -140,6 +147,12 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
     );
     const pr = usePullRequestMeta(run);
     const prTitle = pr?.title || run?.prTitle;
+    // The Run's e2e suite (none: no tab). Read again while the Run or its suite runs, so the tab appears when the suite starts.
+    const suite =
+        useRunSuite(runId, !!run && !isTerminalRunState(run.state)).data ??
+        undefined;
+    const tab = useSearchParams().get("tab");
+    const onSuiteTab = !!suite && tab === SUITE_TAB;
 
     // A multi-repository Run names its repositories by id and folder: the
     // environment, read once, gives their names (a removed one keeps its folder).
@@ -317,136 +330,167 @@ export const RunDetailPage = ({ runId }: { runId: string }) => {
 
                 <StuckNotice what="Run" stuck={run.stuck} />
 
-                {bootFailure && (
-                    <RuntimeSection
-                        title={
-                            bootFailure.kodusSide
-                                ? "What failed on Kodus's side"
-                                : bootFailure.side === "pr"
-                                  ? "Why this PR did not boot"
-                                  : `Why ${baseLabel} did not boot`
-                        }
-                        description="What the machine saw, with the last log lines it kept · secrets and tokens redacted."
-                        aside={
-                            // The verdict card already links the setup file when the boot is the whole story.
-                            !bootFailure.kodusSide &&
-                            run.state !== "could_not_boot" && (
-                                <NextLink
-                                    href={environmentHref(
-                                        run.environmentId,
-                                        ENVIRONMENT_SECTION.recipe,
-                                    )}
-                                    className="text-primary-light text-sm hover:underline">
-                                    See the setup file
-                                </NextLink>
-                            )
-                        }>
-                        <BootFailurePanel failure={bootFailure} />
-                    </RuntimeSection>
+                {suite && (
+                    <LinkTabs aria-label="Run sections">
+                        <LinkTab
+                            href={`/runtime/runs/${encodeURIComponent(run.runId)}`}
+                            active={!onSuiteTab}>
+                            Run
+                        </LinkTab>
+                        <LinkTab
+                            href={`/runtime/runs/${encodeURIComponent(run.runId)}?tab=${SUITE_TAB}`}
+                            active={onSuiteTab}>
+                            e2e suite
+                        </LinkTab>
+                    </LinkTabs>
                 )}
 
-                <section aria-label="Findings">
-                    <ConnectedFindings
-                        run={run}
-                        findings={findings}
-                        runPaths={runPaths}
-                        live={live}
-                        pullRequestUrl={pr?.url}
-                        bootFailure={bootFailure}
-                    />
-                </section>
+                {onSuiteTab && suite ? (
+                    <RunSuiteTab run={run} suite={suite} />
+                ) : (
+                    <>
+                        {bootFailure && (
+                            <RuntimeSection
+                                title={
+                                    bootFailure.kodusSide
+                                        ? "What failed on Kodus's side"
+                                        : bootFailure.side === "pr"
+                                          ? "Why this PR did not boot"
+                                          : `Why ${baseLabel} did not boot`
+                                }
+                                description="What the machine saw, with the last log lines it kept · secrets and tokens redacted."
+                                aside={
+                                    // The verdict card already links the setup file when the boot is the whole story.
+                                    !bootFailure.kodusSide &&
+                                    run.state !== "could_not_boot" && (
+                                        <NextLink
+                                            href={environmentHref(
+                                                run.environmentId,
+                                                ENVIRONMENT_SECTION.recipe,
+                                            )}
+                                            className="text-primary-light text-sm hover:underline">
+                                            See the setup file
+                                        </NextLink>
+                                    )
+                                }>
+                                <BootFailurePanel failure={bootFailure} />
+                            </RuntimeSection>
+                        )}
 
-                <RuntimeDisclosure
-                    id="paths-tested"
-                    title="Paths tested"
-                    summary={
-                        runPaths.totalCount === 0
-                            ? `The same request sent to ${baseLabel} and to this PR`
-                            : `${runPaths.testedCount} of ${runPaths.totalCount} ${runPaths.totalCount === 1 ? "path" : "paths"} of this PR · the same request sent to ${baseLabel} and to this PR`
-                    }>
-                    <div className="flex flex-col gap-4">
-                        <RunCoverageList
-                            runId={run.runId}
-                            rows={coverage}
-                            live={live}
-                        />
-                        <ExercisedFilesList
-                            files={run.exercised?.files ?? []}
-                        />
-                    </div>
-                </RuntimeDisclosure>
+                        <section aria-label="Findings">
+                            <ConnectedFindings
+                                run={run}
+                                findings={findings}
+                                runPaths={runPaths}
+                                live={live}
+                                pullRequestUrl={pr?.url}
+                                bootFailure={bootFailure}
+                            />
+                        </section>
 
-                <RuntimeDisclosure
-                    id="what-was-running"
-                    title="What was running"
-                    summary={whatWasRunningLine(
-                        run,
-                        baseLabel,
-                        workspaceRows.length,
-                    )}>
-                    <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        <Fact label="Commits">
-                            this PR{" "}
-                            <code className="font-mono">
-                                {shortSha(run.headSha)}
-                            </code>{" "}
-                            · {baseLabel}{" "}
-                            <code className="font-mono">
-                                {shortSha(run.baseSha)}
-                            </code>
-                        </Fact>
-                        <Fact label="Environment">
-                            <NextLink
-                                href={environmentHref(run.environmentId)}
-                                className="text-primary-light underline-offset-2 hover:underline">
-                                Open the environment
-                            </NextLink>
-                        </Fact>
-                        <Fact label="Setup file">
-                            <NextLink
-                                href={environmentHref(
-                                    run.environmentId,
-                                    ENVIRONMENT_SECTION.recipe,
+                        <RuntimeDisclosure
+                            id="paths-tested"
+                            title="Paths tested"
+                            summary={
+                                runPaths.totalCount === 0
+                                    ? `The same request sent to ${baseLabel} and to this PR`
+                                    : `${runPaths.testedCount} of ${runPaths.totalCount} ${runPaths.totalCount === 1 ? "path" : "paths"} of this PR · the same request sent to ${baseLabel} and to this PR`
+                            }>
+                            <div className="flex flex-col gap-4">
+                                <RunCoverageList
+                                    runId={run.runId}
+                                    rows={coverage}
+                                    live={live}
+                                />
+                                <ExercisedFilesList
+                                    files={run.exercised?.files ?? []}
+                                />
+                            </div>
+                        </RuntimeDisclosure>
+
+                        <RuntimeDisclosure
+                            id="what-was-running"
+                            title="What was running"
+                            summary={whatWasRunningLine(
+                                run,
+                                baseLabel,
+                                workspaceRows.length,
+                            )}>
+                            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                                <Fact label="Commits">
+                                    this PR{" "}
+                                    <code className="font-mono">
+                                        {shortSha(run.headSha)}
+                                    </code>{" "}
+                                    · {baseLabel}{" "}
+                                    <code className="font-mono">
+                                        {shortSha(run.baseSha)}
+                                    </code>
+                                </Fact>
+                                <Fact label="Environment">
+                                    <NextLink
+                                        href={environmentHref(
+                                            run.environmentId,
+                                        )}
+                                        className="text-primary-light underline-offset-2 hover:underline">
+                                        Open the environment
+                                    </NextLink>
+                                </Fact>
+                                <Fact label="Setup file">
+                                    <NextLink
+                                        href={environmentHref(
+                                            run.environmentId,
+                                            ENVIRONMENT_SECTION.recipe,
+                                        )}
+                                        className="text-primary-light underline-offset-2 hover:underline">
+                                        {run.recipe?.state === "absent"
+                                            ? "No setup file"
+                                            : run.recipe?.sha
+                                              ? `Read from ${baseLabel} at ${shortSha(run.recipe.sha)}`
+                                              : "Open the setup file"}
+                                    </NextLink>
+                                </Fact>
+                                <Fact label="Host">
+                                    {cellOwnerLabel(run.cellOwner)}
+                                </Fact>
+                            </dl>
+                            <RecipeChangedNotice run={run} />
+                            <RunWorkspaceSection
+                                embedded
+                                rows={workspaceRows}
+                                pullRequestBranch={pullRequestBranchOf(
+                                    run.workspace,
                                 )}
-                                className="text-primary-light underline-offset-2 hover:underline">
-                                {run.recipe?.state === "absent"
-                                    ? "No setup file"
-                                    : run.recipe?.sha
-                                      ? `Read from ${baseLabel} at ${shortSha(run.recipe.sha)}`
-                                      : "Open the setup file"}
-                            </NextLink>
-                        </Fact>
-                        <Fact label="Host">
-                            {cellOwnerLabel(run.cellOwner)}
-                        </Fact>
-                    </dl>
-                    <RecipeChangedNotice run={run} />
-                    <RunWorkspaceSection
-                        embedded
-                        rows={workspaceRows}
-                        pullRequestBranch={pullRequestBranchOf(run.workspace)}
-                    />
-                    <RunPreviewCard run={run} embedded />
-                </RuntimeDisclosure>
+                            />
+                            <RunPreviewCard run={run} embedded />
+                        </RuntimeDisclosure>
 
-                <RuntimeDisclosure
-                    id="run-log"
-                    title="Logs"
-                    summary={
-                        elapsed ? `${elapsed} in total` : "Not started yet"
-                    }
-                    defaultOpen={live}>
-                    <RunTimingView timing={timing} />
-                    <RunLogView runId={run.runId} groups={log} note={logNote} />
-                </RuntimeDisclosure>
+                        <RuntimeDisclosure
+                            id="run-log"
+                            title="Logs"
+                            summary={
+                                elapsed
+                                    ? `${elapsed} in total`
+                                    : "Not started yet"
+                            }
+                            defaultOpen={live}>
+                            <RunTimingView timing={timing} />
+                            <RunLogView
+                                runId={run.runId}
+                                groups={log}
+                                note={logNote}
+                            />
+                        </RuntimeDisclosure>
 
-                {run.cost && (
-                    <RuntimeDisclosure
-                        id="run-cost"
-                        title="Cost"
-                        summary={`${formatEstimatedUsd(run.cost.totalUsd)} · machine time and LLM tokens at list prices`}>
-                        <RunCostBreakdown cost={run.cost} />
-                    </RuntimeDisclosure>
+                        {run.cost && (
+                            <RuntimeDisclosure
+                                id="run-cost"
+                                title="Cost"
+                                summary={`${formatEstimatedUsd(run.cost.totalUsd)} · machine time and LLM tokens at list prices`}>
+                                <RunCostBreakdown cost={run.cost} />
+                            </RuntimeDisclosure>
+                        )}
+                    </>
                 )}
             </Page.Content>
         </Page.Root>

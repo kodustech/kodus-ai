@@ -17,7 +17,9 @@ import {
 } from "./suite";
 
 const MAIN = "a41c0d3".padEnd(40, "0");
-const failure = (over: Partial<RuntimeSuiteFailure> = {}): RuntimeSuiteFailure => ({
+const failure = (
+    over: Partial<RuntimeSuiteFailure> = {},
+): RuntimeSuiteFailure => ({
     spec: "e2e/checkout.spec.ts",
     title: "applies a discount code",
     group: "regression",
@@ -56,8 +58,23 @@ const run = (over: Partial<RuntimeSuiteRun> = {}): RuntimeSuiteRun => ({
     shards: [],
     failures: [
         failure(),
-        failure({ spec: "e2e/catalog.spec.ts", title: "lists products by price", group: "pre_existing", detail: "pre_existing", main: { sha: MAIN, outcome: "failed", sameError: true }, reachedBy: [] }),
-        failure({ spec: "e2e/order.spec.ts", title: "shows the order confirmation", group: "flaky", detail: "flaky", pr: { attempts: 2, failed: 1 }, main: undefined, reachedBy: [] }),
+        failure({
+            spec: "e2e/catalog.spec.ts",
+            title: "lists products by price",
+            group: "pre_existing",
+            detail: "pre_existing",
+            main: { sha: MAIN, outcome: "failed", sameError: true },
+            reachedBy: [],
+        }),
+        failure({
+            spec: "e2e/order.spec.ts",
+            title: "shows the order confirmation",
+            group: "flaky",
+            detail: "flaky",
+            pr: { attempts: 2, failed: 1 },
+            main: undefined,
+            reachedBy: [],
+        }),
     ],
     passed: [],
     canRetry: true,
@@ -75,25 +92,84 @@ describe("the verdict banner, written from the structured fields", () => {
     });
 
     it("counts several regressions instead of naming them", () => {
-        const v = suiteVerdict(run({ classes: { regression: 3, preExisting: 0, flaky: 0, unclassified: 0 }, failures: [failure(), failure({ title: "b" }), failure({ title: "c" })] }));
+        const v = suiteVerdict(
+            run({
+                classes: {
+                    regression: 3,
+                    preExisting: 0,
+                    flaky: 0,
+                    unclassified: 0,
+                },
+                failures: [
+                    failure(),
+                    failure({ title: "b" }),
+                    failure({ title: "c" }),
+                ],
+            }),
+        );
         expect(v.title).toBe("3 regressions, the check failed");
         expect(v.sentence).toBe("3 tests pass on main and fail on this PR.");
     });
 
     it("a regression with no main run says only that it fails on this PR", () => {
-        const v = suiteVerdict(run({ failures: [failure({ main: undefined })], classes: { regression: 1, preExisting: 0, flaky: 0, unclassified: 0 } }));
-        expect(v.sentence).toBe("checkout.spec.ts › applies a discount code fails on this PR, twice.");
+        const v = suiteVerdict(
+            run({
+                failures: [failure({ main: undefined })],
+                classes: {
+                    regression: 1,
+                    preExisting: 0,
+                    flaky: 0,
+                    unclassified: 0,
+                },
+            }),
+        );
+        expect(v.sentence).toBe(
+            "checkout.spec.ts › applies a discount code fails on this PR, twice.",
+        );
     });
 
     it("failures that could not be classified are neutral unless the gate made the check fail", () => {
-        const unclassified = { classes: { regression: 0, preExisting: 0, flaky: 0, unclassified: 2 }, failures: [] };
-        expect(suiteVerdict(run({ ...unclassified, state: "neutral" }))).toMatchObject({ tone: "warning", title: "2 failures could not be classified, the check is neutral" });
-        expect(suiteVerdict(run({ ...unclassified, state: "failed" }))).toMatchObject({ tone: "danger", title: "2 failures could not be classified, the check failed" });
+        const unclassified = {
+            classes: {
+                regression: 0,
+                preExisting: 0,
+                flaky: 0,
+                unclassified: 2,
+            },
+            failures: [],
+        };
+        expect(
+            suiteVerdict(run({ ...unclassified, state: "neutral" })),
+        ).toMatchObject({
+            tone: "warning",
+            title: "2 failures could not be classified, the check is neutral",
+        });
+        expect(
+            suiteVerdict(run({ ...unclassified, state: "failed" })),
+        ).toMatchObject({
+            tone: "danger",
+            title: "2 failures could not be classified, the check failed",
+        });
     });
 
     it("a green run says how many specs passed, and what noise did not block", () => {
-        const v = suiteVerdict(run({ state: "passed", classes: { regression: 0, preExisting: 0, flaky: 1, unclassified: 0 }, totals: { passed: 8, failed: 0, skipped: 0, notRun: 0 } }));
-        expect(v).toEqual({ tone: "success", title: "No regressions, 8 specs passed", sentence: "1 test is flaky; it does not block." });
+        const v = suiteVerdict(
+            run({
+                state: "passed",
+                classes: {
+                    regression: 0,
+                    preExisting: 0,
+                    flaky: 1,
+                    unclassified: 0,
+                },
+                totals: { passed: 8, failed: 0, skipped: 0, notRun: 0 },
+            }),
+        );
+        expect(v).toEqual({
+            tone: "success",
+            title: "No regressions, 8 specs passed",
+            sentence: "1 test is flaky; it does not block.",
+        });
     });
 
     it.each([
@@ -103,34 +179,91 @@ describe("the verdict banner, written from the structured fields", () => {
         ["cancelled", "neutral", "Cancelled"],
         ["errored", "danger", "Could not finish"],
     ] as const)("a %s run is %s: %s", (state, tone, title) => {
-        expect(suiteVerdict(run({ state, finishedAt: undefined, classes: { regression: 0, preExisting: 0, flaky: 0, unclassified: 0 }, failures: [] }))).toMatchObject({ tone, title });
+        expect(
+            suiteVerdict(
+                run({
+                    state,
+                    finishedAt: undefined,
+                    classes: {
+                        regression: 0,
+                        preExisting: 0,
+                        flaky: 0,
+                        unclassified: 0,
+                    },
+                    failures: [],
+                }),
+            ),
+        ).toMatchObject({ tone, title });
     });
 });
 
 describe("the four key facts", () => {
     it("says how many specs ran of how many, and why", () => {
         const [specs] = suiteFacts(run());
-        expect(specs).toEqual({ label: "Specs run", value: "9 of 24", hint: "Selected by coverage of the diff" });
-        const full = suiteFacts(run({ specs: { ran: 24, total: 24 }, selection: { mode: "full", reason: "lockfile", total: 24 } }))[0];
-        expect(full).toEqual({ label: "Specs run", value: "24 of 24", hint: "The whole suite ran: a lockfile changed" });
-        expect(suiteFacts(run({ specs: { ran: 0, total: 24 }, selection: { mode: "none", total: 24 } }))[0].hint).toBe("No spec is reached by this change");
+        expect(specs).toEqual({
+            label: "Specs run",
+            value: "9 of 24",
+            hint: "Selected by coverage of the diff",
+        });
+        const full = suiteFacts(
+            run({
+                specs: { ran: 24, total: 24 },
+                selection: { mode: "full", reason: "lockfile", total: 24 },
+            }),
+        )[0];
+        expect(full).toEqual({
+            label: "Specs run",
+            value: "24 of 24",
+            hint: "The whole suite ran: a lockfile changed",
+        });
+        expect(
+            suiteFacts(
+                run({
+                    specs: { ran: 0, total: 24 },
+                    selection: { mode: "none", total: 24 },
+                }),
+            )[0].hint,
+        ).toBe("No spec is reached by this change");
     });
 
     it("says the duration with its shards and hosts", () => {
-        expect(suiteFacts(run())[1]).toEqual({ label: "Duration", value: "6 min 12 s", hint: "2 hosts, one shard each" });
+        expect(suiteFacts(run())[1]).toEqual({
+            label: "Duration",
+            value: "6 min 12 s",
+            hint: "2 hosts, one shard each",
+        });
         expect(suiteFacts(run({ hosts: 1 }))[1].hint).toBe("1 host");
     });
 
     it("says which main it was compared against and how far behind the merge base is", () => {
-        expect(suiteFacts(run())[2]).toEqual({ label: "Compared against", value: "main a41c0d3", hint: "Merge base, 2 commits behind main", mono: true });
-        expect(suiteFacts(run({ baseDrift: 1 }))[2].hint).toBe("Merge base, 1 commit behind main");
-        expect(suiteFacts(run({ baseDrift: 0 }))[2].hint).toBe("Merge base is main");
-        expect(suiteFacts(run({ baseDrift: undefined }))[2].hint).toBe("How far behind main was not compared");
+        expect(suiteFacts(run())[2]).toEqual({
+            label: "Compared against",
+            value: "main a41c0d3",
+            hint: "Merge base, 2 commits behind main",
+            mono: true,
+        });
+        expect(suiteFacts(run({ baseDrift: 1 }))[2].hint).toBe(
+            "Merge base, 1 commit behind main",
+        );
+        expect(suiteFacts(run({ baseDrift: 0 }))[2].hint).toBe(
+            "Merge base is main",
+        );
+        expect(suiteFacts(run({ baseDrift: undefined }))[2].hint).toBe(
+            "How far behind main was not compared",
+        );
     });
 
     it("splits the machine time into the first pass and the re-runs, and says when it was not recorded", () => {
-        expect(suiteFacts(run())[3]).toEqual({ label: "Machine time", value: "14 min", hint: "First pass 11 · re-runs 3" });
-        expect(suiteFacts(run({ machine: undefined }))[3]).toEqual({ label: "Machine time", value: "Not recorded", hint: "This run was stored before machine time was measured" });
+        expect(suiteFacts(run())[3]).toEqual({
+            label: "Machine time",
+            value: "14 min",
+            hint: "First pass 11 · re-runs 3",
+        });
+        expect(suiteFacts(run({ machine: undefined }))[3]).toEqual({
+            label: "Machine time",
+            value: "Not recorded",
+            hint: "This run was stored before machine time was measured",
+        });
     });
 });
 
@@ -143,19 +276,45 @@ describe("the failed tests", () => {
             ["Flaky", 1],
         ]);
         expect(groups[0].tone).toBe("danger");
-        const withUnclassified = failureGroups(run({ failures: [failure({ group: "unclassified", detail: "infra" })] }));
+        const withUnclassified = failureGroups(
+            run({
+                failures: [failure({ group: "unclassified", detail: "infra" })],
+            }),
+        );
         expect(withUnclassified.map((g) => g.label)).toEqual(["Unclassified"]);
     });
 
     it("says the PR's tries and what main said", () => {
         expect(attemptsLine({ attempts: 2, failed: 2 })).toBe("failed 2 of 2");
         expect(attemptsLine({ attempts: 2, failed: 1 })).toBe("failed 1 of 2");
-        expect(attemptsLine({ attempts: 0, failed: 0 })).toBe("no attempt recorded");
+        expect(attemptsLine({ attempts: 0, failed: 0 })).toBe(
+            "no attempt recorded",
+        );
         expect(mainLine(failure())).toBe("passed");
-        expect(mainLine(failure({ main: { sha: MAIN, outcome: "failed", sameError: true } }))).toBe("failed, the same error");
-        expect(mainLine(failure({ main: { sha: MAIN, outcome: "failed", sameError: false } }))).toBe("failed, with another error");
-        expect(mainLine(failure({ main: { sha: MAIN, outcome: "not_run", sameError: false } }))).toBe("not run");
-        expect(mainLine(failure({ main: undefined }))).toBe("not run for this test");
+        expect(
+            mainLine(
+                failure({
+                    main: { sha: MAIN, outcome: "failed", sameError: true },
+                }),
+            ),
+        ).toBe("failed, the same error");
+        expect(
+            mainLine(
+                failure({
+                    main: { sha: MAIN, outcome: "failed", sameError: false },
+                }),
+            ),
+        ).toBe("failed, with another error");
+        expect(
+            mainLine(
+                failure({
+                    main: { sha: MAIN, outcome: "not_run", sameError: false },
+                }),
+            ),
+        ).toBe("not run");
+        expect(mainLine(failure({ main: undefined }))).toBe(
+            "not run for this test",
+        );
     });
 
     it("names an artifact by what it is", () => {
@@ -173,7 +332,10 @@ describe("why these specs", () => {
             title: "Why these 9 specs",
             summary: "coverage map · 2 changed files",
             rows: [
-                { file: "src/routes/cart.js", specs: "checkout.spec.ts, cart.spec.ts" },
+                {
+                    file: "src/routes/cart.js",
+                    specs: "checkout.spec.ts, cart.spec.ts",
+                },
                 { file: "src/lib/price.js", specs: "catalog.spec.ts" },
             ],
             note: "The whole suite runs instead when a lockfile, manifest or config changes, when the map is missing or stale, or after the shadow check found a miss.",
@@ -181,21 +343,46 @@ describe("why these specs", () => {
     });
 
     it("gives the reason when the whole suite ran, and never an invented map when the run did not store one", () => {
-        const full = whySpecs(run({ specs: { ran: 24, total: 24 }, selection: { mode: "full", reason: "manifest", total: 24 } }));
+        const full = whySpecs(
+            run({
+                specs: { ran: 24, total: 24 },
+                selection: { mode: "full", reason: "manifest", total: 24 },
+            }),
+        );
         expect(full.title).toBe("Why all 24 specs");
         expect(full.summary).toBe("a dependency manifest changed");
         expect(full.rows).toEqual([]);
-        const noMap = whySpecs(run({ selection: { mode: "selected", selected: 9, total: 24 } }));
+        const noMap = whySpecs(
+            run({ selection: { mode: "selected", selected: 9, total: 24 } }),
+        );
         expect(noMap.rows).toEqual([]);
-        expect(noMap.summary).toBe("which changed file reached which spec was not recorded for this run");
+        expect(noMap.summary).toBe(
+            "which changed file reached which spec was not recorded for this run",
+        );
     });
 });
 
 describe("the environment settings: facts and the paused banner", () => {
-    const env = (over: Partial<RuntimeEnvironmentSuite> = {}): RuntimeEnvironmentSuite => ({
+    const env = (
+        over: Partial<RuntimeEnvironmentSuite> = {},
+    ): RuntimeEnvironmentSuite => ({
         environmentId: "env-1",
-        recipe: { runner: "playwright", specs: "e2e/**/*.spec.ts", command: "npx playwright test {specs}", results: "results/*.xml", shards: 3, gate: "default", baseline: true },
-        lastBaseline: { sha: MAIN, specs: 24, passed: 22, failed: 2, finishedAt: "2026-11-24T14:02:00.000Z" },
+        recipe: {
+            runner: "playwright",
+            specs: "e2e/**/*.spec.ts",
+            command: "npx playwright test {specs}",
+            results: "results/*.xml",
+            shards: 3,
+            gate: "default",
+            baseline: true,
+        },
+        lastBaseline: {
+            sha: MAIN,
+            specs: 24,
+            passed: 22,
+            failed: 2,
+            finishedAt: "2026-11-24T14:02:00.000Z",
+        },
         selection: { enabled: true },
         ci: { enabled: false, source: "deployment" },
         ...over,
@@ -210,9 +397,23 @@ describe("the environment settings: facts and the paused banner", () => {
             ["Results", "results/*.xml"],
             ["Last baseline on main", "a41c0d3 · 22 passed, 2 failed"],
             ["Maximum hosts per run", "3"],
-            ["When a failure cannot be classified", "Neutral: only a confirmed regression fails the check"],
+            [
+                "When a failure cannot be classified",
+                "Neutral: only a confirmed regression fails the check",
+            ],
         ]);
-        expect(environmentSuiteFacts(env({ recipe: { ...env().recipe!, gate: "strict", shards: undefined }, lastBaseline: undefined })).map((x) => x.value)).toEqual([
+        expect(
+            environmentSuiteFacts(
+                env({
+                    recipe: {
+                        ...env().recipe!,
+                        gate: "strict",
+                        shards: undefined,
+                    },
+                    lastBaseline: undefined,
+                }),
+            ).map((x) => x.value),
+        ).toEqual([
             "Playwright",
             "e2e/**/*.spec.ts",
             "npx playwright test {specs}",
@@ -225,15 +426,34 @@ describe("the environment settings: facts and the paused banner", () => {
 
     it("tells a pause by the shadow check, with the PR and the spec it missed", () => {
         expect(selectionBanner({ enabled: true })).toBeUndefined();
-        expect(selectionBanner({ enabled: true, brake: { off: false, fullPrsLeft: 8, miss: { prNumber: 38, specs: ["e2e/search.spec.ts"] } } })).toEqual({
+        expect(
+            selectionBanner({
+                enabled: true,
+                brake: {
+                    off: false,
+                    fullPrsLeft: 8,
+                    miss: { prNumber: 38, specs: ["e2e/search.spec.ts"] },
+                },
+            }),
+        ).toEqual({
             title: "Spec selection is paused for the next 8 pull requests",
             body: "The shadow check ran the whole suite for PR #38 and found a failure the selection had skipped (e2e/search.spec.ts). Until then every pull request runs the whole suite.",
         });
-        expect(selectionBanner({ enabled: true, brake: { off: true, fullPrsLeft: 10 } })).toEqual({
+        expect(
+            selectionBanner({
+                enabled: true,
+                brake: { off: true, fullPrsLeft: 10 },
+            }),
+        ).toEqual({
             title: "Spec selection is paused until you resume it",
             body: "The shadow check found failures the selection had skipped. Until you resume it, every pull request runs the whole suite.",
         });
-        expect(selectionBanner({ enabled: true, brake: { off: false, fullPrsLeft: 1 } })?.title).toBe("Spec selection is paused for the next pull request");
+        expect(
+            selectionBanner({
+                enabled: true,
+                brake: { off: false, fullPrsLeft: 1 },
+            })?.title,
+        ).toBe("Spec selection is paused for the next pull request");
     });
 });
 
@@ -249,19 +469,38 @@ describe("the usage lines", () => {
             unmeasuredRuns: 2,
             saved: { minutes: 520, shadowedRuns: 9 },
         });
-        expect(u.rows.map((r) => [r.label, r.what, r.runs, r.minutes])).toEqual([
-            ["PR", "First pass on each pull request", "212", "1,140"],
-            ["Baseline", "Whole suite on main, with coverage", "31", "390"],
-            ["Re-run", "Failed specs again, on the PR and on main", "64", "150"],
-            ["Shadow", "Whole suite in the background to check selection", "9", "Not measured"],
-        ]);
+        expect(u.rows.map((r) => [r.label, r.what, r.runs, r.minutes])).toEqual(
+            [
+                ["PR", "First pass on each pull request", "212", "1,140"],
+                ["Baseline", "Whole suite on main, with coverage", "31", "390"],
+                [
+                    "Re-run",
+                    "Failed specs again, on the PR and on main",
+                    "64",
+                    "150",
+                ],
+                [
+                    "Shadow",
+                    "Whole suite in the background to check selection",
+                    "9",
+                    "Not measured",
+                ],
+            ],
+        );
         expect(u.totalMinutes).toBe(1680);
-        expect(u.saved).toBe("In the 9 selected runs a full shadow run also covered, selection saved 520 minutes.");
-        expect(u.caveat).toBe("2 runs were stored before machine time was measured; their minutes are not here.");
+        expect(u.saved).toBe(
+            "In the 9 selected runs a full shadow run also covered, selection saved 520 minutes.",
+        );
+        expect(u.caveat).toBe(
+            "2 runs were stored before machine time was measured; their minutes are not here.",
+        );
     });
 
     it("has no savings sentence when none could be measured, and no total when no line has minutes", () => {
-        const u = suiteUsageLines({ lines: [{ kind: "pr", runs: 3, minutes: null }], unmeasuredRuns: 0 });
+        const u = suiteUsageLines({
+            lines: [{ kind: "pr", runs: 3, minutes: null }],
+            unmeasuredRuns: 0,
+        });
         expect(u.saved).toBeUndefined();
         expect(u.totalMinutes).toBeUndefined();
         expect(u.caveat).toBeUndefined();
