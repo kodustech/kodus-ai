@@ -144,8 +144,10 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                                 } as ProbeResult,
                             ),
                     ),
+                    // null: the events could not be read, which says nothing
+                    // about whether any arrived.
                     deps.deliveredEvents
-                        ? deps.deliveredEvents(team).catch(() => NO_EVENTS)
+                        ? deps.deliveredEvents(team).catch(() => null)
                         : Promise.resolve(NO_EVENTS),
                 ]);
                 const cut = done
@@ -163,6 +165,12 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                 const hookUncovered: string[] = [];
                 /** GitHub App install that delivered nothing in the window. */
                 const appSilent: string[] = [];
+                /** No hook seen, and the received events could not be read. */
+                const hookUnreadable: string[] = [];
+                /** Token rejected by this api, yet the repository delivered this week. */
+                const staleButDelivered: string[] = [];
+                /** Write access unreported; settled by comments Kody posted. */
+                const writeUnknown: Array<{ id: string; name: string }> = [];
                 const unverified = {
                     read: [] as string[],
                     write: [] as string[],
@@ -184,14 +192,7 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                     if (d.write === 'denied') {
                         writeDenied.push(repo.name);
                     } else if (d.write === 'unknown') {
-                        const posted = deps.postedComments
-                            ? await deps
-                                  .postedComments(team, repo.id)
-                                  .catch(() => 0)
-                            : 0;
-                        if (!posted) {
-                            unverified.write.push(repo.name);
-                        }
+                        writeUnknown.push(repo);
                     }
 
                     // Without a webhook URL there is nothing to look for;
@@ -199,22 +200,52 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                     if (!webhookUrlSet) {
                         continue;
                     }
-                    const deliveredHere = delivered.repositoryIds.has(repo.id);
+                    const deliveredHere = !!delivered?.repositoryIds.has(
+                        repo.id,
+                    );
                     if (d.hook === 'stale') {
-                        hookStale.push(repo.name);
+                        (deliveredHere ? staleButDelivered : hookStale).push(
+                            repo.name,
+                        );
+                    } else if (
+                        (d.hook === 'missing' || d.hook === 'app-level') &&
+                        !delivered
+                    ) {
+                        hookUnreadable.push(repo.name);
                     } else if (d.hook === 'missing' && !deliveredHere) {
-                        (delivered.platformEvents
+                        (delivered!.platformEvents
                             ? hookUncovered
                             : hookMissing
                         ).push(repo.name);
                     } else if (d.hook === 'app-level') {
-                        if (!delivered.platformEvents) {
+                        if (!delivered!.platformEvents) {
                             appSilent.push(repo.name);
                         }
                     } else if (d.hook === 'unknown' && !deliveredHere) {
                         unverified.hook.push(repo.name);
                     }
                 }
+
+                // Together and within the same ceiling as the diagnoses: one
+                // slow Mongo count per repository must not time the check out.
+                const posted = deps.postedComments
+                    ? await Promise.all(
+                          writeUnknown.map((repo) =>
+                              withCeiling(
+                                  deps.postedComments!(team, repo.id).catch(
+                                      () => 0,
+                                  ),
+                                  deadline + GIT_PROBE_GRACE_MS - now(),
+                                  0,
+                              ),
+                          ),
+                      )
+                    : writeUnknown.map(() => 0);
+                writeUnknown.forEach((repo, i) => {
+                    if (!posted[i]) {
+                        unverified.write.push(repo.name);
+                    }
+                });
 
                 const providerSaid = errors.size
                     ? ` Provider said: ${[...errors].slice(0, 2).join('; ')}`
@@ -267,6 +298,26 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                         scope,
                         title: `No repository webhook on ${names(hookUncovered)}, and no event came from ${hookUncovered.length === 1 ? 'it' : 'them'} in the last ${RECENT_DAYS} days (other ${git} repositories do deliver).`,
                         fix: `Fine if an organization or group webhook covers ${hookUncovered.length === 1 ? 'it' : 'them'}: open a pull request there to confirm. Otherwise deselect and reselect ${hookUncovered.length === 1 ? 'it' : 'them'} in Settings > Git.`,
+                        blocking: true,
+                    });
+                }
+                if (hookUnreadable.length) {
+                    results.push({
+                        check: 'git.webhook',
+                        status: 'unknown',
+                        scope,
+                        title: `No repository webhook was found on ${names(hookUnreadable)}, and the events Kodus received could not be read to tell whether ${hookUnreadable.length === 1 ? 'it delivers' : 'they deliver'} anyway.`,
+                        fix: `Open a pull request there to confirm; check the repository's webhooks in ${git} for ${webhookUrl}.`,
+                        blocking: true,
+                    });
+                }
+                if (staleButDelivered.length) {
+                    results.push({
+                        check: 'git.webhook',
+                        status: 'unknown',
+                        scope,
+                        title: `The Kodus webhook on ${names(staleButDelivered)} carries a token this api no longer accepts, although events from ${staleButDelivered.length === 1 ? 'it' : 'them'} arrived in the last ${RECENT_DAYS} days.`,
+                        fix: 'If CODE_MANAGEMENT_SECRET or CODE_MANAGEMENT_WEBHOOK_TOKEN changed recently, deselect and reselect these repositories in Settings > Git to recreate the hook.',
                         blocking: true,
                     });
                 }
@@ -351,7 +402,9 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                             readDenied,
                             hookMissing,
                             hookStale,
+                            staleButDelivered,
                             hookUncovered,
+                            hookUnreadable,
                             appSilent,
                             unverified.hook,
                         ),

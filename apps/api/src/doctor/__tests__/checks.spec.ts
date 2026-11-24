@@ -761,6 +761,51 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             expect(line?.fix).toContain('organization or group webhook');
         });
 
+        it('events that could not be read are not "no event arrived": a missing hook is unverified, not failed', async () => {
+            const git = {
+                ...healthyGit({ hook: 'missing' }),
+                deliveredEvents: jest.fn(async () => {
+                    throw new Error('relation does not exist');
+                }),
+            };
+            const results = await gitAccessCheck(git).run(ctx());
+            expect(problems(results)).toEqual([]);
+            expect(
+                results.find((r) => r.check === 'git.webhook'),
+            ).toMatchObject({ status: 'unknown', blocking: true });
+        });
+
+        it('a stale hook whose repository delivered this week is unverified, not failed', async () => {
+            const git = {
+                ...healthyGit({ hook: 'stale' }),
+                deliveredEvents: jest.fn(async () => ({
+                    platformEvents: 2,
+                    repositoryIds: new Set(['1']),
+                })),
+            };
+            const results = await gitAccessCheck(git).run(ctx());
+            expect(problems(results)).toEqual([]);
+            expect(
+                results.find((r) => r.check === 'git.webhook'),
+            ).toMatchObject({ status: 'unknown', blocking: true });
+        });
+
+        it('a comment lookup that hangs is cut at the ceiling, the check still reports', async () => {
+            let clock = 0;
+            const git = {
+                ...healthyGit({ write: 'unknown' }),
+                now: () => clock,
+                postedComments: jest.fn(() => {
+                    clock = 10 * 60_000; // past deadline + grace
+                    return new Promise<number>(() => undefined);
+                }),
+            };
+            const results = await gitAccessCheck(git).run(ctx());
+            expect(
+                results.find((r) => r.check === 'git.unverified')?.title,
+            ).toContain('comment on pull requests in api');
+        });
+
         it('write access the provider does not report is proven by comments Kody posted', async () => {
             const git = {
                 ...healthyGit({ write: 'unknown' }),
@@ -1361,6 +1406,44 @@ describe('doctor checks — each condition in scope, one at a time', () => {
                     title: 'The model routed to Kody Rules checks (openai / gpt-5-mini) did not answer a test request.',
                     impact: 'Kody Rules are not checked on pull requests.',
                 });
+            });
+
+            it("side-task probes run after every org's review model, so they never leave one untested", async () => {
+                let clock = 0;
+                const other = team({
+                    organizationId: '66666666-6666-6666-6666-666666666666',
+                    organizationName: 'beta',
+                    teamId: '77777777-7777-7777-7777-777777777777',
+                });
+                const deps = {
+                    ...llmDeps(),
+                    now: () => clock,
+                    getBYOKConfig: jest.fn(async (organizationId: string) =>
+                        organizationId === team().organizationId
+                            ? byok({
+                                  defaultModelId: 'm-A',
+                                  taskOverrides: { kodyRulesReview: 'm-B' },
+                              })
+                            : null,
+                    ),
+                };
+                // Each probe takes 8s of the 70s budget: three fit only if the
+                // review models go first.
+                deps.complete.mockImplementation(async () => {
+                    clock += 8_000;
+                });
+                const results = await llmCheck(deps).run(
+                    ctx({ teams: [team(), other] }),
+                );
+
+                expect(
+                    results
+                        .filter((r) => r.check === 'llm.completion')
+                        .map((r) => r.status),
+                ).toEqual(['ok', 'ok']);
+                expect(
+                    results.filter((r) => r.status === 'unknown' && r.blocking),
+                ).toEqual([]);
             });
 
             it('a task routed to the review model itself is not probed twice', async () => {

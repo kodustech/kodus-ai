@@ -816,9 +816,11 @@ export async function probeWebhookUrl(
     platform: string,
 ): Promise<WebhookAnswer> {
     let target = url;
+    let token: string | undefined;
     if (platform === PlatformType.AZURE_REPOS) {
+        token = generateWebhookToken();
         const withToken = new URL(url);
-        withToken.searchParams.set('token', generateWebhookToken());
+        withToken.searchParams.set('token', token);
         target = withToken.toString();
     }
     const res = await fetch(target, {
@@ -831,7 +833,14 @@ export async function probeWebhookUrl(
         redirect: 'manual',
         signal: AbortSignal.timeout(8000),
     });
-    const body = await res.text().catch(() => '');
+    let body = await res.text().catch(() => '');
+    // A proxy or login page may echo the request URL: the minted token is a
+    // live webhook credential and must not reach a report shared with support.
+    if (token) {
+        for (const form of [token, encodeURIComponent(token)]) {
+            body = body.split(form).join('<redacted>');
+        }
+    }
     return { status: res.status, body: body.slice(0, 300) };
 }
 

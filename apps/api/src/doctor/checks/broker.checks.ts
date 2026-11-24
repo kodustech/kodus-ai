@@ -156,6 +156,11 @@ export const amqpBrokerProbe: BrokerProbe = {
                         });
                         const routingKey = `kodus.doctor.probe.${randomUUID()}`;
                         await ch.bindQueue(queue, exchange, routingKey);
+                        // The broker may have blocked the connection already,
+                        // during the checks above: a publish now is swallowed.
+                        if (blocked) {
+                            return { outcome: 'blocked', reason: blocked };
+                        }
                         let timer: NodeJS.Timeout | undefined;
                         const result = new Promise<DelayedRoundTrip>(
                             (resolve) => {
@@ -166,12 +171,15 @@ export const amqpBrokerProbe: BrokerProbe = {
                                 onBlocked.push((reason) =>
                                     resolve({ outcome: 'blocked', reason }),
                                 );
-                                void ch.consume(
+                                // Rejects with "Channel closed" when the
+                                // channel goes before consume-ok (an early
+                                // resolve closes it): nothing to report then.
+                                ch.consume(
                                     queue,
                                     (msg) =>
                                         msg && resolve({ outcome: 'arrived' }),
                                     { noAck: true },
-                                );
+                                ).catch(() => undefined);
                             },
                         );
                         ch.publish(exchange, routingKey, Buffer.from('{}'), {
@@ -362,7 +370,8 @@ export function staleJobsCheck(dataSource: DataSource): DoctorCheck {
                         COUNT(*) FILTER (WHERE status = 'PROCESSING'
                                            AND COALESCE("startedAt", "updatedAt") < now() - make_interval(mins => $3))::int AS stranded,
                         MODE() WITHIN GROUP (ORDER BY left("lastError", 160))
-                            FILTER (WHERE status = 'FAILED') AS "topError"
+                            FILTER (WHERE status = 'FAILED'
+                                      AND "updatedAt" < now() - make_interval(mins => $2)) AS "topError"
                    FROM kodus_workflow.workflow_jobs
                   WHERE "workflowType"::text = ANY($4)
                     AND "createdAt" > now() - make_interval(days => $1)

@@ -281,11 +281,27 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 orgs.set('', 'install');
             }
 
+            /**
+             * Side tasks are probed after every org's review model, with the
+             * time left: they degrade, the review model decides whether
+             * reviews run, so it must never be the one left untested.
+             */
+            const sideWork: Array<{
+                scope?: string;
+                organizationId: string;
+                config: BYOKConfig;
+                reviewKey: string;
+                modelsById: Map<string, { model?: string }>;
+            }> = [];
+
             for (const [organizationId, organizationName] of orgs) {
                 const scope = organizationId ? organizationName : undefined;
                 const config = organizationId
                     ? await deps.getBYOKConfig(organizationId)
                     : null;
+                const modelsById = new Map(
+                    (config?.models ?? []).map((m) => [m.id, m]),
+                );
                 const { slot, verdict } = resolveTaskSlot(
                     config,
                     LLM_TASK.codeReview,
@@ -295,9 +311,7 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 // review outside a trial, which self-hosted never is
                 // (permissionValidation.service.ts, BYOK integrity).
                 if (config && !slot && verdict?.modelId) {
-                    const chosen = config.models?.find(
-                        (m) => m.id === verdict.modelId,
-                    );
+                    const chosen = modelsById.get(verdict.modelId);
                     results.push({
                         check: 'llm.byok_credential',
                         status: 'fail',
@@ -416,15 +430,30 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 }
 
                 // Without BYOK every task runs on the model just probed.
-                if (!config) {
-                    continue;
+                if (config) {
+                    sideWork.push({
+                        scope,
+                        organizationId,
+                        config,
+                        reviewKey: key,
+                        modelsById,
+                    });
                 }
+            }
+
+            for (const {
+                scope,
+                organizationId,
+                config,
+                reviewKey,
+                modelsById,
+            } of sideWork) {
                 for (const side of REVIEW_SIDE_TASKS) {
                     const routed = resolveTaskSlot(config, side.task);
                     if (!routed.slot) {
                         if (routed.verdict?.modelId) {
-                            const chosen = config.models?.find(
-                                (m) => m.id === routed.verdict?.modelId,
+                            const chosen = modelsById.get(
+                                routed.verdict.modelId,
                             );
                             results.push({
                                 check: 'llm.task_model',
@@ -439,7 +468,7 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                         }
                         continue;
                     }
-                    if (keyOf(routed.slot, organizationId) === key) {
+                    if (keyOf(routed.slot, organizationId) === reviewKey) {
                         continue;
                     }
                     const sideOutcome = await probe(
