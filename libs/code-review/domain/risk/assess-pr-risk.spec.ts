@@ -423,6 +423,57 @@ it('names the old path when a rename moved unshown code out of a code path', asy
     expect(LLM.run).not.toHaveBeenCalled();
 });
 
+it.each(['src/Contest.java', 'src/auth_TEST.go', 'src/Fastest.cs'])(
+    'treats %s as code: test names compare with case, as toolchains do',
+    async (filename) => {
+        expect(
+            await assessPrRisk({
+                ...input,
+                files: [
+                    { filename, status: 'added', additions: 9, deletions: 0 },
+                ] as any,
+            }),
+        ).toMatchObject({
+            status: 'unavailable',
+            reason: `Kody could not read the diff of \`${filename}\`: the Git provider did not return it.`,
+        });
+        expect(LLM.run).not.toHaveBeenCalled();
+    },
+);
+
+it('holds a patch-less file with a blank name', async () => {
+    expect(
+        await assessPrRisk({
+            ...input,
+            files: [
+                ...input.files,
+                { filename: ' ', status: 'added', additions: 1, deletions: 0 },
+            ] as any,
+        }),
+    ).toMatchObject({
+        status: 'unavailable',
+        reason: 'Kody could not read the diff of `(unnamed file)`: the Git provider did not return it.',
+    });
+});
+
+it('never cuts a quoted path inside a surrogate pair', async () => {
+    const result = await assessPrRisk({
+        ...input,
+        files: [
+            {
+                filename: `src/${'a'.repeat(195)}😀.ts`,
+                status: 'added',
+                additions: 1,
+                deletions: 0,
+            },
+        ] as any,
+    });
+    expect(result).toMatchObject({
+        status: 'unavailable',
+        reason: `Kody could not read the diff of \`src/${'a'.repeat(195)}\`: the Git provider did not return it.`,
+    });
+});
+
 it('quotes a provider path as inert text in the published reason', async () => {
     const result = await assessPrRisk({
         ...input,

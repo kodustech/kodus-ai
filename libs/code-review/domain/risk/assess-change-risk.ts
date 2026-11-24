@@ -40,9 +40,13 @@ const MAX_REASON_CHARS = 2_000;
 const MAX_AREA_FILES = 100;
 const logger = createLogger('AssessApprovalRisk');
 
-/** Kinds the model can judge by path alone: assets, docs, data, lockfiles, tests, fixtures. */
-const JUDGEABLE_WITHOUT_DIFF =
-    /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|icns|tiff?|svg|pdf|mp3|mp4|m4a|mov|webm|ogg|oga|wav|flac|woff2?|ttf|otf|eot|md|mdx|markdown|rst|adoc|txt|csv|tsv|json|jsonl|ndjson|snap)$|(?:^|\/)(?:yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Gemfile\.lock|composer\.lock|go\.sum|mix\.lock|pubspec\.lock|Podfile\.lock)$|(?:^|\/)(?:__tests__|__snapshots__|__fixtures__|tests?|specs?|fixtures?|testdata)\/|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/i;
+// Kinds the model can judge by path alone: assets, docs, data, lockfiles, tests
+// and fixtures. Extensions compare without case (a .PNG is an image); names
+// compare with case, as toolchains do (auth_TEST.go and Contest.java are code).
+const JUDGEABLE_EXTENSION =
+    /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|icns|tiff?|svg|pdf|mp3|mp4|m4a|mov|webm|ogg|oga|wav|flac|woff2?|ttf|otf|eot|md|mdx|markdown|rst|adoc|txt|csv|tsv|json|jsonl|ndjson|snap)$/i;
+const JUDGEABLE_NAME =
+    /(?:^|\/)(?:yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Gemfile\.lock|composer\.lock|go\.sum|mix\.lock|pubspec\.lock|Podfile\.lock)$|(?:^|\/)(?:__tests__|__snapshots__|__fixtures__|tests?|specs?|fixtures?|testdata)\/|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]*[a-z0-9]Tests?\.(?:cs|java))$/;
 
 const hasDiff = (file: FileChange) =>
     typeof file.patch === 'string' && !!file.patch.trim();
@@ -50,22 +54,32 @@ const hasDiff = (file: FileChange) =>
 /**
  * Providers omit binary and oversized patches but keep the file. The model
  * judges such a file only when its path says what it holds; any other path
- * the provider did not show could hide code. Zero counters cannot prove a
- * pure rename: adapters can default missing counts to zero.
+ * the provider did not show, or a blank one, could hide code. Zero counters
+ * cannot prove a pure rename: adapters can default missing counts to zero.
  */
 export function unshownCodePath(files: FileChange[]): string | undefined {
     for (const file of files.filter((file) => !hasDiff(file))) {
-        const path = [file.filename, file.previous_filename].find(
-            (path) => !!path && !JUDGEABLE_WITHOUT_DIFF.test(path),
-        );
+        if (typeof file.filename !== 'string' || !file.filename.trim())
+            return '(unnamed file)';
+        const path = [file.filename, file.previous_filename]
+            .filter((path): path is string => !!path?.trim())
+            .find(
+                (path) =>
+                    !JUDGEABLE_EXTENSION.test(path) &&
+                    !JUDGEABLE_NAME.test(path),
+            );
         if (path) return path;
     }
     return undefined;
 }
 
 /** A provider path as inert inline code in a published reason. */
-const quotedPath = (path: string) =>
-    `\`${path.replace(/[`\s]+/g, ' ').slice(0, 200)}\``;
+function quotedPath(path: string): string {
+    let cut = path.replace(/[`\s]+/g, ' ').slice(0, 200);
+    // Never end on half of a surrogate pair.
+    if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
+    return `\`${cut}\``;
+}
 
 export function buildChangeRiskDiff(files: FileChange[]): string {
     return files
