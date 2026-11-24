@@ -195,9 +195,35 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
         expect(rec.recipe).toMatchObject({ origin: 'authored', content: SECOND });
         expect(a.calls).toHaveLength(1);
         expect(a.calls[0]).toMatchObject({ attempt: 'repair-1', sha: SHA });
-        expect(a.calls[0].last).toBeUndefined();
+        expect(a.calls[0].last).toMatchObject({ recipe: FIRST, failure: { signature: 'compose_refused' } });
         expect(calls.filter((c) => c.startsWith('acquire'))).toEqual([`acquire setup:${KEY}`, `acquire setup:${KEY}:repair-1`]);
         expect(rec.repairs).toHaveLength(1);
+    });
+
+    // The cell loads the compose project before building it; a build context whose Dockerfile is missing is its
+    // recipe_load refusal (kind recipe_outdated), the one the customer's docker-compose.yml build: functions/Dockerfile met.
+    it('an inferred recipe the cell refuses at recipe_load for a missing compose Dockerfile goes to Kody carrying the refusal', async () => {
+        const store = new InMemoryEnvironmentSetupStore();
+        const refusal = 'compose build context: dockerfile functions/Dockerfile not found';
+        const { env } = fakeEnv({ first: blockedOn('recipe_outdated', 'recipe_load', refusal), second: 'ok' });
+        const a = author(store, submitted(SECOND));
+        const rec = await service(store, env, { author: a.client }).run(cmd({ recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST, origin: 'inferred' } }));
+
+        expect(a.calls).toHaveLength(1);
+        expect(a.calls[0]).toMatchObject({ attempt: 'repair-1' });
+        expect(rec.repairs?.[0]).toMatchObject({ blocker: { signature: 'recipe_load' } });
+        expect(a.calls[0].last).toMatchObject({ recipe: FIRST, failure: { signature: 'recipe_load', evidence: [refusal] } });
+        expect(rec.state).toBe('active');
+        expect(rec.recipe).toMatchObject({ origin: 'authored', content: SECOND });
+    });
+
+    it('a recipe_load refusal after the repair budget is spent still ends blocked', async () => {
+        const store = new InMemoryEnvironmentSetupStore();
+        const { env } = fakeEnv({ first: blockedOn('recipe_outdated', 'recipe_load', 'dockerfile functions/Dockerfile not found'), second: blockedOn('recipe_outdated', 'recipe_load', 'other') });
+        const a = author(store, submitted(SECOND));
+        const rec = await service(store, env, { author: a.client, authorRepairs: 1 }).run(cmd({ recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST, origin: 'inferred' } }));
+        expect(a.calls).toHaveLength(1);
+        expect(rec.state).toBe('blocked');
     });
 
     it('an inferred recipe is repaired no more than the cap', async () => {

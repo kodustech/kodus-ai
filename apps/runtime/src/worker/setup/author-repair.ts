@@ -10,7 +10,7 @@ import { setupLogger, type SetupRun } from './setup-scope';
 import { askTokens, useTokens } from './setup-tokens';
 
 /**
- * Repair n of Kody's recipe (or of one Kodus inferred, which Kody then writes from scratch), after the boot that just ended blocked on
+ * Repair n of Kody's recipe (or of one Kodus inferred, which Kody rewrites from its refusal), after the boot that just ended blocked on
  * the recipe's account (repairFailureOf): that recipe, its files and the
  * failure go back to Kody's author as `last`, as the next setup would
  * send them, and the recipe Kody writes becomes the one to boot. True
@@ -29,16 +29,14 @@ export async function authorRepair(run: SetupRun, n: number): Promise<boolean> {
     const blocker = rec.blockers[0];
     if (!failedBoot || !failed?.content || !failed.digest || !blocker) return false;
     const failure = failedBoot.failure;
-    // An inferred recipe is Kodus's guess, not Kody's work: Kody writes one from scratch instead of patching it.
-    const last: RecipeAuthorLast | undefined =
-        failed.origin === 'inferred'
-            ? undefined
-            : {
-                  recipe: failed.content,
-                  ...(failed.files?.length ? { files: failed.files } : {}),
-                  ...(failed.notes ? { notes: failed.notes.slice(0, 1_000) } : {}),
-                  failure,
-              };
+    // The recipe that failed goes back with the failure, an inferred one too: its refusal (a compose build
+    // context whose Dockerfile is missing, say) is the evidence Kody needs to write one that does not depend on it.
+    const last: RecipeAuthorLast = {
+        recipe: failed.content,
+        ...(failed.files?.length ? { files: failed.files } : {}),
+        ...(failed.notes ? { notes: failed.notes.slice(0, 1_000) } : {}),
+        failure,
+    };
     // Every recipe that failed in this setup: Kody answering one of them again is no repair.
     const failedDigests = new Set([...(rec.repairs ?? []).map((r) => r.failedDigest), failed.digest]);
     const entry: EnvironmentSetupRepair = {
@@ -85,7 +83,7 @@ export async function authorRepair(run: SetupRun, n: number): Promise<boolean> {
         // A cancelled setup stops here, between two attempts (read inside the step, as the boot does).
         run.cancellationSignal?.()?.throwIfAborted();
         return author
-            .author({ organizationId: cmd.organizationId, llmToken, setupKey: cmd.key, sha: run.sha, attempt: `repair-${n}`, ...(last ? { last } : {}) })
+            .author({ organizationId: cmd.organizationId, llmToken, setupKey: cmd.key, sha: run.sha, attempt: `repair-${n}`, last })
             .catch((e: Error): RecipeAuthorOutcome => ({ status: 'unavailable', code: 'llm_unavailable', message: (e?.message ?? String(e)).slice(0, 200) }));
     });
     if (out.status === 'unavailable') {
