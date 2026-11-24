@@ -189,6 +189,76 @@ describe("the Runtime usage content", () => {
         ).toHaveTextContent("Not measured");
     });
 
+    it("adds an e2e suite table when the month has suite runs: a line per kind with runs and machine minutes, and only the savings it measured", () => {
+        (usePermission as jest.Mock).mockReturnValue(true);
+        (useRuntimeUsageReport as jest.Mock).mockReturnValue({
+            data: {
+                ...report,
+                suite: {
+                    lines: [
+                        { kind: "pr", runs: 212, minutes: 1140 },
+                        { kind: "baseline", runs: 31, minutes: 390 },
+                        { kind: "rerun", runs: 64, minutes: 150 },
+                        { kind: "shadow", runs: 9, minutes: 160 },
+                    ],
+                    unmeasuredRuns: 0,
+                    saved: { minutes: 520, shadowedRuns: 9 },
+                },
+            },
+            isLoading: false,
+            isError: false,
+        });
+        render(<RuntimeUsageContent />);
+        const sections = screen
+            .getAllByRole("region")
+            .map((s) => s.getAttribute("aria-label"));
+        expect(sections.indexOf("e2e suite")).toBe(
+            sections.indexOf("Machine time") + 1,
+        );
+        const suite = screen.getByRole("region", { name: "e2e suite" });
+        expect(suite).toHaveTextContent("1,840 machine minutes");
+        const rows = within(suite)
+            .getAllByRole("row")
+            .slice(1)
+            .map((r) =>
+                Array.from(r.querySelectorAll("td,th")).map(
+                    (c) => c.textContent,
+                ),
+            );
+        expect(rows).toEqual([
+            ["PR", "First pass on each pull request", "212", "1,140"],
+            ["Baseline", "Whole suite on main, with coverage", "31", "390"],
+            [
+                "Re-run",
+                "Failed specs again, on the PR and on main",
+                "64",
+                "150",
+            ],
+            [
+                "Shadow",
+                "Whole suite in the background to check selection",
+                "9",
+                "160",
+            ],
+        ]);
+        expect(suite).toHaveTextContent(
+            "In the 9 selected runs a full shadow run also covered, selection saved 520 minutes.",
+        );
+    });
+
+    it("has no e2e suite table for a month without suite runs", () => {
+        (usePermission as jest.Mock).mockReturnValue(true);
+        (useRuntimeUsageReport as jest.Mock).mockReturnValue({
+            data: { ...report, suite: { lines: [], unmeasuredRuns: 0 } },
+            isLoading: false,
+            isError: false,
+        });
+        render(<RuntimeUsageContent />);
+        expect(
+            screen.queryByRole("region", { name: "e2e suite" }),
+        ).not.toBeInTheDocument();
+    });
+
     it("exports the month's CSV with the chosen filters", async () => {
         (usePermission as jest.Mock).mockReturnValue(true);
         const createObjectURL = jest.fn(() => "blob:usage");

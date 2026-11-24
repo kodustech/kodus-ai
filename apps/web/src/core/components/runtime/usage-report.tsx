@@ -37,6 +37,7 @@ import {
 import type { RuntimeUsageReport } from "@services/runtime/contracts";
 import { runStateLabel, runStateTone } from "@services/runtime/labels";
 import { runtimeErrorMessage } from "@services/runtime/model/errors";
+import { suiteUsageLines } from "@services/runtime/model/suite";
 import {
     agentLabel,
     bootLine,
@@ -353,6 +354,72 @@ const RunsTable = ({ report }: { report: RuntimeUsageReport }) => (
 );
 
 /**
+ * The e2e suite's month (docs/runtime/e2e-suites.md section 13): a line per kind, with the runs and the machine minutes their hosts were held
+ * for. What selection saved is only what a full shadow run measured; a month with no suite run has no table.
+ */
+const SuiteUsage = ({ report }: { report: RuntimeUsageReport }) => {
+    if (!report.suite || report.suite.lines.length === 0) return null;
+    const view = suiteUsageLines(report.suite);
+    const max = Math.max(1, ...view.rows.map((r) => r.minutesValue ?? 0));
+    return (
+        <RuntimeSection
+            title="e2e suite"
+            description={
+                view.totalMinutes === undefined
+                    ? "Runs of the repository's own e2e suite this month."
+                    : `${view.totalMinutes.toLocaleString("en-US")} machine minutes this month: the time the suite's hosts were held, by kind of run.`
+            }>
+            <TableContainer>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Kind</TableHead>
+                            <TableHead>What it is</TableHead>
+                            <TableHead>Runs</TableHead>
+                            <TableHead>Minutes</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {view.rows.map((r) => (
+                            <TableRow key={r.kind}>
+                                <TableCell className="font-medium">
+                                    {r.label}
+                                </TableCell>
+                                <TableCell>{r.what}</TableCell>
+                                <TableCell className="font-mono text-xs">
+                                    {r.runs}
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">
+                                    <span className="flex items-center gap-3">
+                                        <span
+                                            aria-hidden
+                                            className="bg-card-lv2 hidden h-1.5 w-32 overflow-hidden rounded-full sm:block">
+                                            <span
+                                                className="bg-primary-light block h-full rounded-full"
+                                                style={{
+                                                    width: `${Math.round(((r.minutesValue ?? 0) / max) * 100)}%`,
+                                                }}
+                                            />
+                                        </span>
+                                        {r.minutes}
+                                    </span>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+            {view.saved && (
+                <p className="text-text-secondary text-sm">{view.saved}</p>
+            )}
+            {view.caveat && (
+                <p className="text-text-tertiary text-xs">{view.caveat}</p>
+            )}
+        </RuntimeSection>
+    );
+};
+
+/**
  * A month of Kody Runtime usage: summary, LLM by agent, machine time and Runs,
  * with its filters and CSV export. It is the Runtime tab of the Usage screen.
  */
@@ -459,6 +526,7 @@ export const RuntimeUsageContent = () => {
                             <Summary report={report.data} />
                             <LlmByAgent report={report.data} />
                             <MachineTime report={report.data} />
+                            <SuiteUsage report={report.data} />
                             <RunsTable report={report.data} />
                         </>
                     )}
