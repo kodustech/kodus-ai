@@ -9,6 +9,7 @@ import type {
 import { referenceLabel, selectReferences } from './task-references';
 import { createLogger } from '@libs/core/log/logger';
 
+import { TrackerConnectionError } from './trackers/mcp-tool-session';
 import type { TaskTracker, TrackerReadContext } from './trackers/tracker';
 
 /** A PR that states more tasks than this is a release or a merge, not one task's work. */
@@ -280,11 +281,28 @@ async function withoutStrayKeys(
     trackers: TaskTracker[],
     context: TrackerReadContext,
 ): Promise<TaskReference[]> {
-    // A tracker that failed once fails for every key (a dead connection): it
-    // is asked once per run and logged once, not once per word of the PR
-    // that looks like a key (up to 201 warnings a run in production).
+    // A tracker whose connection failed fails for every key: it is asked once
+    // per run, not once per word of the PR that looks like a key (up to 201
+    // warnings a run in production). Any other failure (one team lookup that
+    // errored) stays about that key, so a version string is still dropped.
     const firstAsk = new Map<TaskTracker, Promise<unknown>>();
-    const failed = new Map<TaskTracker, { error: unknown; keys: string[] }>();
+    const unreachable = new Set<TaskTracker>();
+    const failures = new Map<TaskTracker, { error: unknown; keys: string[] }>();
+    const recordFailure = (
+        tracker: TaskTracker,
+        reference: TaskReference,
+        error: unknown,
+    ) => {
+        const entry = failures.get(tracker);
+        if (entry) {
+            entry.keys.push(referenceLabel(reference));
+        } else {
+            failures.set(tracker, {
+                error,
+                keys: [referenceLabel(reference)],
+            });
+        }
+    };
     const owns = async (
         tracker: TaskTracker,
         reference: TaskReference,
@@ -293,28 +311,25 @@ async function withoutStrayKeys(
         if (earlier) {
             await earlier;
         }
-        const failure = failed.get(tracker);
-        if (failure) {
-            failure.keys.push(referenceLabel(reference));
+        if (unreachable.has(tracker)) {
+            recordFailure(tracker, reference, undefined);
             return true;
         }
         const ask = tracker.ownsReference?.(reference, context);
         if (!ask) {
             return undefined;
         }
-        if (!earlier) {
-            firstAsk.set(
-                tracker,
-                ask.catch(() => undefined),
-            );
-        }
-        return ask.catch((error) => {
-            failed.set(tracker, {
-                error,
-                keys: [referenceLabel(reference)],
-            });
+        const settled = ask.catch((error) => {
+            if (error instanceof TrackerConnectionError) {
+                unreachable.add(tracker);
+            }
+            recordFailure(tracker, reference, error);
             return true;
         });
+        if (!earlier) {
+            firstAsk.set(tracker, settled);
+        }
+        return settled;
     };
     const keep = await Promise.all(
         references.map(async (reference) => {
@@ -329,11 +344,12 @@ async function withoutStrayKeys(
             return false;
         }),
     );
-    for (const [tracker, { error, keys }] of failed) {
+    for (const [tracker, { error, keys }] of failures) {
         warn(
             `${tracker.name} could not list its keys; kept ${keys.length} unchecked: ${keys.slice(0, 5).join(', ')}${keys.length > 5 ? ', …' : ''}`,
             context,
             error,
+            { tracker: tracker.name, keptKeys: keys.length },
         );
     }
     return references.filter((_, i) => keep[i]);
@@ -343,6 +359,7 @@ function warn(
     message: string,
     context: TrackerReadContext,
     error: unknown,
+    extra: Record<string, unknown> = {},
 ): void {
     logger.warn({
         message: `[BUSINESS-LOGIC] ${message}`,
@@ -350,7 +367,10 @@ function warn(
         error: error instanceof Error ? error : undefined,
         metadata: {
             organizationId: context.organizationAndTeamData?.organizationId,
+            teamId: context.organizationAndTeamData?.teamId,
+            repository: context.repository?.name,
             reason: error instanceof Error ? error.message : String(error),
+            ...extra,
         },
     });
 }

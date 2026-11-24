@@ -5,7 +5,22 @@ import {
     repositoryForLookup,
     resolveTasks,
 } from './task-resolver';
+import { TrackerConnectionError } from './trackers/mcp-tool-session';
 import type { TaskTracker } from './trackers/tracker';
+
+const warnings: Array<{ message: string; metadata?: Record<string, unknown> }> =
+    [];
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        warn: (entry: {
+            message: string;
+            metadata?: Record<string, unknown>;
+        }) => warnings.push(entry),
+        log: () => undefined,
+        error: () => undefined,
+        debug: () => undefined,
+    }),
+}));
 
 const context = { organizationAndTeamData: { organizationId: 'org-1' } };
 
@@ -261,13 +276,16 @@ describe('resolveTasks', () => {
         expect(result.kind).toBe('tracker_unavailable');
     });
 
-    it('asks a tracker that could not list its keys once per run, however many keys the PR has', async () => {
+    it('asks a tracker whose connection failed once per run, however many keys the PR has', async () => {
         let asked = 0;
+        warnings.length = 0;
         const linear = {
             ...tracker('Linear', {}, { down: true }),
             ownsReference: async () => {
                 asked += 1;
-                throw new Error('Failed to connect to any MCP server');
+                throw new TrackerConnectionError(
+                    'Failed to connect to any MCP server',
+                );
             },
         };
         const result = await resolveTasks(
@@ -280,6 +298,38 @@ describe('resolveTasks', () => {
         );
         expect(asked).toBe(1);
         expect(result.kind).toBe('tracker_unavailable');
+        const kept = warnings.filter((w) =>
+            w.message.includes('could not list its keys'),
+        );
+        expect(kept).toHaveLength(1);
+        expect(kept[0].metadata).toMatchObject({
+            tracker: 'Linear',
+            keptKeys: 5,
+        });
+    });
+
+    it('still drops version strings and reads the real task when one team lookup fails', async () => {
+        const linear = {
+            ...tracker('Linear', { 'KOD-10': 'Sticky notes' }),
+            ownsReference: async (r: { id: string }) => {
+                const prefix = r.id.split('-')[0];
+                if (prefix === 'GPT') {
+                    throw new Error('503 Service Unavailable');
+                }
+                return prefix === 'KOD';
+            },
+        };
+        const result = await resolveTasks(
+            refs(
+                '',
+                'compare gpt-5, node-22, python-3 and openssl-3 for kod-10',
+            ),
+            [linear],
+            context,
+        );
+        expect(result.kind).toBe('found');
+        expect(linear.reads).toContain('KOD-10');
+        expect(linear.reads).not.toContain('NODE-22');
     });
 
     it('still reports the miss when the typo check cannot list the keys', async () => {
