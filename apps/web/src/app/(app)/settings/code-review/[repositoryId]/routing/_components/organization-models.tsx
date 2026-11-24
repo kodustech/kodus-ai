@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
 import { Link } from "@components/ui/link";
 import { Spinner } from "@components/ui/spinner";
+import { TruncateStart } from "@components/ui/truncate-start";
 import { ChevronsUpDownIcon } from "lucide-react";
 import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { ProviderAvatar } from "src/features/ee/byok/_components/provider-avatar";
@@ -115,7 +116,7 @@ export function OrganizationModels({
                                                 }
                                                 className="w-full justify-between sm:max-w-80"
                                                 rightIcon={
-                                                    <ChevronsUpDownIcon className="opacity-50" />
+                                                    <ChevronsUpDownIcon className="shrink-0 opacity-50" />
                                                 }>
                                                 <span className="flex min-w-0 items-center gap-2">
                                                     <ProviderAvatar
@@ -123,10 +124,13 @@ export function OrganizationModels({
                                                             defaultModel?.provider
                                                         }
                                                     />
-                                                    <span className="truncate">
+                                                    <TruncateStart
+                                                        title={
+                                                            defaultModel?.label
+                                                        }>
                                                         {defaultModel?.label ??
                                                             "Select a connected model"}
-                                                    </span>
+                                                    </TruncateStart>
                                                 </span>
                                             </Button>
                                         }
@@ -175,7 +179,7 @@ export function OrganizationModels({
                                                 }
                                                 className="w-full justify-between sm:max-w-80"
                                                 rightIcon={
-                                                    <ChevronsUpDownIcon className="opacity-50" />
+                                                    <ChevronsUpDownIcon className="shrink-0 opacity-50" />
                                                 }>
                                                 <span className="flex min-w-0 items-center gap-2">
                                                     <ProviderAvatar
@@ -183,12 +187,15 @@ export function OrganizationModels({
                                                             fallbackModel?.provider
                                                         }
                                                     />
-                                                    <span className="truncate">
+                                                    <TruncateStart
+                                                        title={
+                                                            fallbackModel?.label
+                                                        }>
                                                         {fallbackModel?.label ??
                                                             (routing.fallbackModelId
                                                                 ? "Unavailable model"
                                                                 : "None")}
-                                                    </span>
+                                                    </TruncateStart>
                                                 </span>
                                             </Button>
                                         }

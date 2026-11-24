@@ -1,14 +1,44 @@
 import { TASK_ROUTING_FALLBACK } from "@libs/llm/llm-tasks";
-import type { LLMConfigStatus } from "@services/organizationParameters/fetch";
+import type {
+    LLMConfigStatus,
+    LLMModelStatus,
+} from "@services/organizationParameters/fetch";
 import { ULTRA_MODEL_COUNT } from "src/features/ee/ultra-review/plan";
 
-import { formatModelLabel } from "../../_data/model-label";
+import { formatModelLabel, modelLabeler } from "../../_data/model-label";
 import { PROVIDER_LABELS } from "../../_data/provider-labels";
-import type { BYOKRouting, LlmTask } from "../../_types";
+import type { BYOKConfig, BYOKRouting, LlmTask } from "../../_types";
 import { capabilityGate } from "./capability-gate";
 
+/** What `routingModelLabels` reads from a model. */
+type LabeledModel = Pick<
+    LLMModelStatus,
+    "modelId" | "model" | "credentialId" | "providerId" | "baseUrl" | "managed"
+>;
+
+/** A stored config's models, as Routing's status lists them. */
+export function routingModelsFromConfig(
+    config?: BYOKConfig | null,
+): LabeledModel[] {
+    const credentials = new Map(
+        (config?.credentials ?? []).map((c) => [c.id, c]),
+    );
+    return (config?.models ?? []).map((entry) => {
+        const credential = credentials.get(entry.credentialId);
+        const baseURL = credential?.settings?.baseURL;
+        return {
+            modelId: entry.id,
+            model: entry.model,
+            credentialId: entry.credentialId,
+            providerId: credential?.provider,
+            baseUrl: typeof baseURL === "string" ? baseURL : undefined,
+            managed: credential?.managed,
+        };
+    });
+}
+
 /** Repeated names identify the connection without displaying URL credentials. */
-export function routingModelLabels(models: LLMConfigStatus["models"]) {
+export function routingModelLabels(models: LabeledModel[]) {
     const hostOf = (url?: string) => {
         try {
             return url ? new URL(url).host : undefined;
@@ -20,9 +50,25 @@ export function routingModelLabels(models: LLMConfigStatus["models"]) {
         string,
         Map<string | undefined, { count: number; hosts: Map<string, number> }>
     >();
+    // A pinned id and its alias share a label; the id tells them apart. The
+    // same id on two connections still needs the connection below.
+    const connectionOf = (model: LabeledModel) =>
+        model.credentialId ?? `${model.providerId}|${model.baseUrl}`;
+    const labelOf = modelLabeler(
+        models
+            .filter((model) => !model.managed)
+            .map((model) => ({
+                id: model.model ?? model.modelId,
+                connection: connectionOf(model),
+            })),
+    );
     const entries = models.map((model) => ({
         ...model,
-        label: formatModelLabel(model.model ?? model.modelId) || model.modelId,
+        label:
+            (model.managed
+                ? formatModelLabel(model.model ?? model.modelId)
+                : labelOf(model.model ?? model.modelId, connectionOf(model))) ||
+            model.modelId,
         host: hostOf(model.baseUrl),
     }));
     const labelCounts = new Map<string, number>();
