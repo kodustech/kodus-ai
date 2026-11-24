@@ -279,12 +279,17 @@ it('keeps legacy deep links inside canonical Routing and rejects malformed ancho
 });
 
 it('distinguishes identical model names across providers and gateways without exposing URL credentials', () => {
+    // Every field the labeler reads is spelled out: this spec type-checks
+    // from the repo root too, where the web's model-status type is opaque
+    // and every picked field counts as required.
     const models = [
         {
             modelId: 'native',
             model: 'gpt-4o',
             providerId: 'openai',
-            resolvable: true,
+            credentialId: undefined,
+            baseUrl: undefined,
+            managed: false,
         },
         {
             modelId: 'gateway-a',
@@ -293,7 +298,7 @@ it('distinguishes identical model names across providers and gateways without ex
             credentialId: 'a',
             baseUrl:
                 'https://user:private-password@first.example/v1?key=private-key',
-            resolvable: true,
+            managed: false,
         },
         {
             modelId: 'gateway-b',
@@ -301,7 +306,7 @@ it('distinguishes identical model names across providers and gateways without ex
             providerId: 'openai_compatible',
             credentialId: 'b',
             baseUrl: 'https://second.example/v1',
-            resolvable: true,
+            managed: false,
         },
     ];
     const labels = routingModelLabels(models);
