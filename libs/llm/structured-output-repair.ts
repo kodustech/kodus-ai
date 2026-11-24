@@ -98,6 +98,35 @@ export function ensureValidatingSchema(wire: unknown): unknown {
 
 /** Slice out the outermost balanced `{ … }` / `[ … ]`, string-aware so braces
  *  inside string literals don't move the depth. Returns null if none found. */
+/** End (exclusive) of the balanced span opened at `s[start]`, which must be
+ *  `{` or `[`, or -1 when it never closes. Same string-aware rule as
+ *  {@link sliceBalancedJson}, without copying the text after `start`. */
+function balancedSpanEnd(s: string, start: number): number {
+    const open = s[start];
+    const close = open === '{' ? '}' : ']';
+    let depth = 0;
+    let inStr = false;
+    let escaped = false;
+    for (let i = start; i < s.length; i++) {
+        const ch = s[i];
+        if (inStr) {
+            if (escaped) escaped = false;
+            else if (ch === '\\') escaped = true;
+            else if (ch === '"') inStr = false;
+            continue;
+        }
+        if (ch === '"') {
+            inStr = true;
+        } else if (ch === open) {
+            depth++;
+        } else if (ch === close) {
+            depth--;
+            if (depth === 0) return i + 1;
+        }
+    }
+    return -1;
+}
+
 function sliceBalancedJson(s: string): string | null {
     const start = s.search(/[{[]/);
     if (start < 0) {
@@ -327,6 +356,10 @@ export function repairJsonText(text: string): string | null {
 
 /** Above this size a broken payload is not worth a character scan (#2112). */
 const SALVAGE_MAX_CHARS = 1_000_000;
+/** Chars the fallback walk may scan in total, ~0.25s on the worst shapes:
+ *  openers that start no parseable container each rescan the text after
+ *  them, and a balanced span that is not JSON also pays a regex and a parse. */
+const FALLBACK_SCAN_BUDGET = 20_000_000;
 
 /**
  * Make the string literals of almost-JSON legal: raw control characters
@@ -610,7 +643,8 @@ async function firstValidatingObjectAfter<T = unknown>(
      *  first fence and no balanced span — everything competes. */
     floor: number | null,
     /** The first fence quoted code (no primary candidate came out of it):
-     *  objects before it may be the answer too, see the walk below. */
+     *  a valid object before it makes the one after it ambiguous, see the
+     *  walk below. */
     before = false,
 ): Promise<T | undefined> {
     // Same #2112 bound as salvageJsonText for the EXPENSIVE part: the
@@ -628,12 +662,22 @@ async function firstValidatingObjectAfter<T = unknown>(
         floor = floor === null ? null : Math.max(0, floor - windowStart);
     }
     const candidates: { value: unknown; end: number }[] = [];
+    // Every opener that starts no parseable container rescans the text after
+    // it, so the window alone does not bound the walk: `{` × 1M is ~10^12
+    // steps. Past FALLBACK_SCAN_BUDGET chars scanned the walk gives up →
+    // re-ask, as before the fallback existed.
+    let scanned = 0;
     for (let i = 0; i < text.length; i++) {
         const ch = text[i];
         if (ch !== '{' && ch !== '[') continue;
-        const slice = sliceBalancedJson(text.slice(i));
+        const end = balancedSpanEnd(text, i);
+        scanned += (end < 0 ? text.length : end) - i;
+        if (scanned > FALLBACK_SCAN_BUDGET) {
+            return undefined;
+        }
         // Unbalanced from HERE says nothing about a later `{` — keep scanning.
-        if (!slice) continue;
+        if (end < 0) continue;
+        const slice = text.slice(i, end);
         // String-aware (tryParseLenient's rule): a comma inside a literal
         // (`f(a, }` in improvedCode) is payload content and stays; only
         // commas OUTSIDE string literals are stripped. The string
@@ -705,22 +749,20 @@ async function firstValidatingObjectAfter<T = unknown>(
         // that come AFTER it (review 5939864639).
         return fromAfter?.value as T | undefined;
     }
-    // The first fence quoted code, so it is no answer and the one before it
-    // is as plausible as the one after: `{answer} ```ts…``` Empty would be
-    // {…}` and `If nothing is wrong I would return {…} ```ts…``` {answer}`
-    // differ only in order. A schema-valid object on BOTH sides is
+    // The first fence quoted code, so it is no answer, and the object before
+    // it is as plausible as the one after: `{answer} ```ts…``` Empty would
+    // be {…}` and `If nothing is wrong I would return {…} ```ts…```
+    // {answer}` differ only in order. A schema-valid object on BOTH sides is
     // ambiguous → re-ask, never a guess that can ship an empty review. An
-    // object before the quote stands only when nothing at all follows it.
+    // object before the quote never stands alone either: a reply cut off
+    // after the quote leaves only the prose example.
+    if (!fromAfter) {
+        return undefined;
+    }
     const fromBefore = await firstAccepted(
         candidates.filter((c) => floor !== null && c.end <= floor),
     );
-    if (fromAfter) {
-        return fromBefore ? undefined : (fromAfter.value as T);
-    }
-    if (after.length > 0) {
-        return undefined;
-    }
-    return fromBefore?.value as T | undefined;
+    return fromBefore ? undefined : (fromAfter.value as T);
 }
 
 /**

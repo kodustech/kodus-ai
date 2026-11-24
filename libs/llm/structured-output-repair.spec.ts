@@ -746,14 +746,55 @@ describe('repairAndValidate', () => {
             ).toBeUndefined();
         });
 
-        it('keeps an answer written before a trailing quoted code block', async () => {
-            const text =
-                answer('const real = 1;') +
-                '\nThe change in context:\n```ts\nconst real = 1;\n```';
-            expect(await repairAndValidate(codeWire, text)).toEqual({
-                improvedCode: 'const real = 1;',
-                fixStatus: 'fixed',
-            });
+        it('re-asks when the only object sits before a quoted code block (a reply cut off after the quote)', async () => {
+            // Kody, PR #2700: alone, the object before the quote is as likely
+            // the prose example of a truncated reply as the answer.
+            expect(
+                await repairAndValidate(
+                    violationsWire,
+                    'If nothing is wrong I would return {"violations":[]}.\n' +
+                        '```ts\nconst a = 1;\n```\n',
+                ),
+            ).toBeUndefined();
+            expect(
+                await repairAndValidate(
+                    codeWire,
+                    answer('const real = 1;') +
+                        '\nThe change in context:\n```ts\nconst real = 1;\n```',
+                ),
+            ).toBeUndefined();
+        });
+
+        it('gives up (re-ask) instead of stalling on a reply made of unclosed openers', async () => {
+            // Kody, PR #2700: each opener rescanned the rest — `{` × 1M was
+            // ~10^12 steps. 40k took 1.7s before the scan budget.
+            const started = Date.now();
+            expect(
+                await repairAndValidate(violationsWire, '{'.repeat(1_000_000)),
+            ).toBeUndefined();
+            expect(
+                await repairAndValidate(
+                    violationsWire,
+                    '{'.repeat(500_000) + 'x' + '}'.repeat(500_000),
+                ),
+            ).toBeUndefined();
+            expect(Date.now() - started).toBeLessThan(5_000);
+        }, 30_000);
+
+        it('still recovers the answer behind a long quote of real code under the scan budget', async () => {
+            // Balanced braces in ordinary code cost their own span, not the
+            // rest of the reply: 100k chars of nested functions stay cheap.
+            const code = 'function f() { if (a) { g({ x: 1 }); } }\n'.repeat(
+                2_500,
+            );
+            const started = Date.now();
+            expect(
+                await repairAndValidate(
+                    violationsWire,
+                    '```ts\n' + code + '```\n' + findings,
+                ),
+            ).toEqual({ violations: [{ body: 'bug', line: 12 }] });
+            expect(Date.now() - started).toBeLessThan(2_000);
         });
 
         it('recovers an answer whose own string value holds the fence the primary took', async () => {
