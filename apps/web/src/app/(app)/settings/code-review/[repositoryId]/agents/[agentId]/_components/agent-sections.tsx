@@ -517,6 +517,9 @@ export const ModelsFields = ({
             models: value === ROUTING_DEFAULT ? undefined : { run: value },
         }));
 
+    // Radix's SelectValue and ItemText drop className: their span and the
+    // icon are reached from the button, so a long label truncates.
+    const shrinkLabel = "[&>div>span]:min-w-0 [&>div>svg]:shrink-0";
     const selector = (
         <Select
             value={agent.models?.run ?? ROUTING_DEFAULT}
@@ -526,13 +529,11 @@ export const ModelsFields = ({
                 size="md"
                 aria-label="Model"
                 id={AGENT_MODEL_FIELD_ID}
-                // SelectValue drops its className: the value span and the
-                // chevron are reached from here so a long label truncates.
-                className="[&>div>span]:min-w-0 [&>div>svg]:shrink-0">
+                className={shrinkLabel}>
                 <SelectValue />
             </SelectTrigger>
             <SelectContent className="max-w-(--radix-select-content-available-width)">
-                <SelectItem value={ROUTING_DEFAULT}>
+                <SelectItem value={ROUTING_DEFAULT} className={shrinkLabel}>
                     <span className="flex min-w-0">
                         <span className="shrink-0 whitespace-pre">
                             {routed ? "Routing default · " : "Routing default"}
@@ -545,7 +546,10 @@ export const ModelsFields = ({
                     </span>
                 </SelectItem>
                 {models.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
+                    <SelectItem
+                        key={model.id}
+                        value={model.id}
+                        className={shrinkLabel}>
                         <span className="flex min-w-0">
                             <TruncateStart title={labelOf(model.id)}>
                                 {labelOf(model.id)}
