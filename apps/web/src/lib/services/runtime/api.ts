@@ -26,6 +26,7 @@ import type {
     RuntimeBlocker,
     RuntimeCell,
     RuntimeEnvironment,
+    RuntimeEnvironmentSuite,
     RuntimeEnvironmentStatus,
     RuntimeEnvironmentPreview,
     RuntimeHealth,
@@ -43,6 +44,7 @@ import type {
     RuntimeSettings,
     RuntimeSpeed,
     RuntimeStopScope,
+    RuntimeSuiteRun,
     RuntimeUsageReport,
     SpeedWindowDays,
     SandboxCapacityView,
@@ -68,6 +70,12 @@ export const RUNTIME_PATHS = {
         pathToApiUrl(
             `/runtime/runs/${enc(runId)}/findings/${enc(probeId)}/reproduce`,
         ),
+    RUN_SUITE: (runId: string) =>
+        pathToApiUrl(`/runtime/runs/${enc(runId)}/suite`),
+    RUN_SUITE_RETRY: (runId: string) =>
+        pathToApiUrl(`/runtime/runs/${enc(runId)}/suite/retry`),
+    RUN_SUITE_ARTIFACT: (runId: string) =>
+        pathToApiUrl(`/runtime/runs/${enc(runId)}/suite/artifacts`),
     RUN_APPROVALS: (runId: string) =>
         pathToApiUrl(`/runtime/runs/${enc(runId)}/approvals`),
     RUN_FINDING_FEEDBACK: (runId: string, probeId: string) =>
@@ -118,6 +126,12 @@ export const RUNTIME_PATHS = {
         pathToApiUrl(`/runtime/environments/${enc(environmentId)}/setup`),
     ENVIRONMENT_SETTINGS: (environmentId: string) =>
         pathToApiUrl(`/runtime/environments/${enc(environmentId)}/settings`),
+    ENVIRONMENT_SUITE: (environmentId: string) =>
+        pathToApiUrl(`/runtime/environments/${enc(environmentId)}/suite`),
+    ENVIRONMENT_SUITE_RESUME: (environmentId: string) =>
+        pathToApiUrl(
+            `/runtime/environments/${enc(environmentId)}/suite/selection/resume`,
+        ),
     ENVIRONMENT_SIMULATE: (environmentId: string) =>
         pathToApiUrl(`/runtime/environments/${enc(environmentId)}/simulate`),
     STOP: () => pathToApiUrl("/runtime/stop"),
@@ -207,6 +221,45 @@ export const listRuntimeRuns = (params: {
 
 export const getRuntimeRun = (runId: string) =>
     orNullWhenMissing(runtimeFetch<RuntimeRun>(RUNTIME_PATHS.RUN(runId)));
+
+/** The Run's e2e suite, or `null` when the Run has none (404). */
+export const getRunSuite = (runId: string) =>
+    orNullWhenMissing(runtimeFetch<RuntimeSuiteRun>(RUNTIME_PATHS.RUN_SUITE(runId)));
+
+/** "Re-run failed": the specs of the suite that did not pass, run again as a suite run of their own. */
+export const retryRunSuite = (runId: string) =>
+    runtimeFetch<{ suiteRunId: string; state: "queued" }>(
+        RUNTIME_PATHS.RUN_SUITE_RETRY(runId),
+        { method: "POST", body: JSON.stringify({}) },
+    );
+
+/** The URL (valid 5 minutes) of a file kept for a failed spec; unchecked, as the evidence URL is. */
+export const getRunSuiteArtifactUrl = async (params: {
+    runId: string;
+    spec: string;
+    name: string;
+}): Promise<{ url: unknown; expiresAt?: string }> => {
+    const res = await runtimeFetch<{
+        url?: unknown;
+        expiresAt?: string;
+    } | null>(RUNTIME_PATHS.RUN_SUITE_ARTIFACT(params.runId), {
+        params: { spec: params.spec, name: params.name },
+    });
+    return { url: res?.url, expiresAt: res?.expiresAt };
+};
+
+/** Settings, e2e suite of one environment. */
+export const getEnvironmentSuite = (environmentId: string) =>
+    runtimeFetch<RuntimeEnvironmentSuite>(
+        RUNTIME_PATHS.ENVIRONMENT_SUITE(environmentId),
+    );
+
+/** "Resume selection": the Runtime turns spec selection on again after the shadow check paused it. */
+export const resumeSuiteSelection = (environmentId: string) =>
+    runtimeFetch<{ state: "requested" }>(
+        RUNTIME_PATHS.ENVIRONMENT_SUITE_RESUME(environmentId),
+        { method: "POST", body: JSON.stringify({}) },
+    );
 
 /** 👍/👎 on one tested path; `null` clears the vote. */
 export const setFindingFeedback = (params: {
@@ -582,6 +635,10 @@ export const updateEnvironmentSettings = ({
     poolSize?: number | null;
     poolPolicy?: PoolPolicy | null;
     previewSecrets?: "none" | "run";
+    /** Run the e2e suite on every push as a CI check; null follows the deployment's default. */
+    suiteCi?: boolean | null;
+    /** Run only the specs the change reaches (false: the whole suite on every pull request). */
+    suiteSelection?: boolean;
 }) =>
     runtimeFetch<unknown>(RUNTIME_PATHS.ENVIRONMENT_SETTINGS(environmentId), {
         method: "PATCH",

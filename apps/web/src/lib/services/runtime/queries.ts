@@ -23,6 +23,8 @@ import {
     getRunPreview,
     getRunPreviews,
     getRunReproduction,
+    getEnvironmentSuite,
+    getRunSuite,
     getRuntimeEnvironment,
     getRuntimeHealth,
     getRuntimeMachineMinutes,
@@ -47,6 +49,8 @@ import {
     requestEnvironmentSetup,
     rerunRun,
     resumeRuntime,
+    resumeSuiteSelection,
+    retryRunSuite,
     revokeCellRegistrationToken,
     revokeEgressHost,
     revokeRuntimeCell,
@@ -114,6 +118,8 @@ export const runtimeKeys = {
             },
         ] as const,
     run: (runId: string) => ["runtime", "run", runId] as const,
+    /** The Run's e2e suite: under the Run, so a change to the Run reads it again. */
+    runSuite: (runId: string) => ["runtime", "run", runId, "suite"] as const,
     /** Whether this browser follows the Run's stream live (set by useRunStream, read by useRuntimeRun). */
     runStreamLive: (runId: string) =>
         ["runtime", "run-stream-live", runId] as const,
@@ -126,6 +132,9 @@ export const runtimeKeys = {
     environmentStatuses: () => ["runtime", "environment-statuses"] as const,
     environment: (environmentId: string) =>
         ["runtime", "environment", environmentId] as const,
+    /** Settings, e2e suite: under the environment, so saving its settings reads it again. */
+    environmentSuite: (environmentId: string) =>
+        ["runtime", "environment", environmentId, "suite"] as const,
     blockers: (environmentId: string) =>
         ["runtime", "environment", environmentId, "blockers"] as const,
     cells: () => ["runtime", "cells"] as const,
@@ -147,6 +156,8 @@ export const runtimeKeys = {
 };
 
 export const RUNS_PAGE_SIZE = 50;
+/** How often a Run's suite is read while it runs. */
+const SUITE_POLL_MS = 5_000;
 
 export const useRuntimeRuns = (filter: {
     repositoryId: string | undefined;
@@ -291,6 +302,36 @@ export const useRerunRun = () => {
             markRunsStarted(queryClient, next);
             return invalidateRun(queryClient, runId);
         },
+    });
+};
+
+/**
+ * The Run's e2e suite (`null`: the Run has none). It is read again while the Run or its suite runs, so the tab appears when the
+ * suite starts and its failures when it ends.
+ */
+export const useRunSuite = (runId: string, runIsLive: boolean) =>
+    useQuery({
+        queryKey: runtimeKeys.runSuite(runId),
+        queryFn: () => getRunSuite(runId),
+        retry: false,
+        refetchInterval: (query) => {
+            const suite = query.state.data;
+            const running = suite
+                ? !suite.finishedAt
+                : runIsLive;
+            return running ? SUITE_POLL_MS : false;
+        },
+    });
+
+/** "Re-run failed" on a Run's suite. */
+export const useRetryRunSuite = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: retryRunSuite,
+        onSuccess: (_res, runId) =>
+            queryClient.invalidateQueries({
+                queryKey: runtimeKeys.runSuite(runId),
+            }),
     });
 };
 
@@ -627,6 +668,32 @@ export const useRuntimeEnvironment = (environmentId: string | undefined) => {
         { complete: false },
     );
     return query;
+};
+
+/** Settings, e2e suite of one environment. */
+export const useEnvironmentSuite = (
+    environmentId: string | undefined,
+    /** Read again this often (ms) while a change the Runtime applies is awaited. */
+    refetchMs: number | false = false,
+) =>
+    useQuery({
+        queryKey: runtimeKeys.environmentSuite(environmentId ?? ""),
+        queryFn: () => getEnvironmentSuite(environmentId!),
+        enabled: !!environmentId,
+        retry: false,
+        refetchInterval: refetchMs,
+    });
+
+/** "Resume selection" after the shadow check paused it; the Runtime applies it, so the state is read again a moment later. */
+export const useResumeSuiteSelection = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: resumeSuiteSelection,
+        onSuccess: (_res, environmentId) =>
+            queryClient.invalidateQueries({
+                queryKey: runtimeKeys.environmentSuite(environmentId),
+            }),
+    });
 };
 
 export const useEnvironmentBlockers = (environmentId: string | undefined) =>

@@ -97,6 +97,14 @@ import type {
 } from "@libs/runtime/contracts/views/environments";
 import type { RuntimeLessonView } from "@libs/runtime/contracts/views/lessons";
 import type {
+    RuntimeEnvironmentSuiteView,
+    RuntimeSuiteFailureGroup as LibRuntimeSuiteFailureGroup,
+    RuntimeSuiteFailureView,
+    RuntimeSuiteRunView,
+    RuntimeSuiteShardView,
+    RuntimeSuiteUsage as LibRuntimeSuiteUsage,
+} from "@libs/runtime/contracts/views/suite";
+import type {
     FindingFeedbackView,
     FindingIntentView,
     ProbeRequestView,
@@ -701,6 +709,16 @@ export type MembershipBlockerFix = RuntimeMembershipFixView;
 
 /** What Kody learned: the fix that got a blocker past, proven by a clean setup (ADR-018). */
 export type RuntimeLesson = RuntimeLessonView;
+
+/** GET /runtime/runs/:id/suite: the Run page's e2e suite tab (docs/runtime/e2e-suites.md section 13). */
+export type RuntimeSuiteRun = RuntimeSuiteRunView;
+export type RuntimeSuiteFailure = RuntimeSuiteFailureView;
+export type RuntimeSuiteShard = RuntimeSuiteShardView;
+export type RuntimeSuiteFailureGroup = LibRuntimeSuiteFailureGroup;
+/** GET /runtime/environments/:id/suite: Settings, e2e suite. */
+export type RuntimeEnvironmentSuite = RuntimeEnvironmentSuiteView;
+/** The usage report's e2e suite table. */
+export type RuntimeSuiteUsage = LibRuntimeSuiteUsage;
 
 export type BlockerEvidence = LibBlockerEvidence;
 
