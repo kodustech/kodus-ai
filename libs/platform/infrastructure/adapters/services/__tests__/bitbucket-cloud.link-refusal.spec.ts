@@ -57,6 +57,16 @@ describe('Bitbucket Cloud link, through the real bitbucket client', () => {
         expect(cause).toMatchObject({ name: 'HTTPError', status: 401 });
         expect(cause.request).toBeDefined();
         expect(svc.logger.error).not.toHaveBeenCalled();
+        expect(svc.logger.warn).toHaveBeenCalledTimes(1);
+        expect(svc.logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Bitbucket Cloud integration refused',
+                metadata: expect.objectContaining({
+                    organizationAndTeamData: ORG,
+                    reason: (thrown as HttpException).message,
+                }),
+            }),
+        );
         expect(JSON.stringify(svc.logger.warn.mock.calls)).not.toContain(PAT);
     });
 });
