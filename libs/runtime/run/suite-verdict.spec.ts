@@ -1,7 +1,7 @@
 import type { Classification, ClassifiedTest } from '@libs/runtime/suite';
 
 import { checkConclusionFor, decideRunVerdict } from './run-state';
-import { suiteFindingsOf, suiteUnclassifiedCount } from './suite-verdict';
+import { suiteFindingsOf, suiteUnclassifiedCount, suiteVerdictParts } from './suite-verdict';
 
 // docs/runtime/e2e-suites.md section 10.2: in Run mode the suite is a stage of the Run. A regression becomes a finding of
 // kind e2e_regression and the verdict regression; flaky, pre-existing and the rest are no finding; an unclassified failure
@@ -50,6 +50,17 @@ describe('the Run verdict with a suite', () => {
 
     it('with every probe settled and nothing unclassified, the suite changes nothing', () => {
         expect(decideRunVerdict({ entryPoints: ['GET /orders'], probes: [settled], suiteUnclassified: 0 }).verdictState).toBe('no_regressions');
+    });
+
+    it('a suite that could not start holds a green Run back and the check says why, in fixed words', () => {
+        const parts = suiteVerdictParts({ status: 'unavailable', reason: 'no_host' });
+        expect(parts).toEqual({ findings: [], unclassified: 0, notRun: true, notRunWhy: 'no suite host came up' });
+        const v = decideRunVerdict({ entryPoints: ['GET /orders'], probes: [settled], suiteNotRun: true, suiteNotRunWhy: parts.notRunWhy });
+        expect(v.verdictState).toBe('partly_tested');
+        expect(v.forcedNeutral).toContain('the e2e suite could not run: no suite host came up');
+        // A reason the check has no words for says only that it did not run.
+        expect(suiteVerdictParts({ status: 'unavailable', reason: 'something new' })).toEqual({ findings: [], unclassified: 0, notRun: true });
+        expect(decideRunVerdict({ entryPoints: ['GET /orders'], probes: [settled], suiteNotRun: true }).forcedNeutral).toContain('the e2e suite could not run');
     });
 
     it('a regression stays a regression when other failures are unclassified', () => {

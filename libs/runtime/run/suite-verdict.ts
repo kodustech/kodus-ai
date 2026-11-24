@@ -40,9 +40,22 @@ export interface SuiteStageResult {
 }
 
 /** The suite's part of the verdict: findings, the failures left undecided, and whether the suite did not run or finish. */
-export function suiteVerdictParts(r: SuiteStageResult | undefined): { findings: ProbeVerdict[]; unclassified: number; notRun: boolean } {
+/** Why a suite could not start, in the check's words: the engine's reason, never free text. */
+const NOT_RUN_WORDS: Record<string, string> = {
+    no_host: 'no suite host came up',
+    list_failed: 'its specs could not be listed',
+    no_repository: 'the repository is unknown',
+    no_specs: 'no spec matches its glob',
+    template_missing: 'the environment has no template yet',
+    stage_failed: 'it failed to start',
+};
+
+export function suiteVerdictParts(r: SuiteStageResult | undefined): { findings: ProbeVerdict[]; unclassified: number; notRun: boolean; notRunWhy?: string } {
     if (!r || r.status === 'off') return { findings: [], unclassified: 0, notRun: false };
-    if (r.status === 'unavailable') return { findings: [], unclassified: 0, notRun: true };
+    if (r.status === 'unavailable') {
+        const why = r.reason ? NOT_RUN_WORDS[r.reason] : undefined;
+        return { findings: [], unclassified: 0, notRun: true, ...(why ? { notRunWhy: why } : {}) };
+    }
     // A run that timed out, was cancelled or errored never reached its classification: what it did not decide is not "tested".
     const finished = r.state === 'passed' || r.state === 'failed' || r.state === 'neutral';
     return { findings: suiteFindingsOf(r.classification), unclassified: suiteUnclassifiedCount(r.classification), notRun: !finished };

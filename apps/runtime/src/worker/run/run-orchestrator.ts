@@ -1964,7 +1964,7 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
         ...(exercised ? { exercised: exercised.summary } : {}),
         ...(kept ? { keptChecksNotRun: kept.filter(isKeptCheckNotRun).length } : {}),
         ...(suite.unclassified ? { suiteUnclassified: suite.unclassified } : {}),
-        ...(suite.notRun ? { suiteNotRun: true } : {}),
+        ...(suite.notRun ? { suiteNotRun: true, ...(suite.notRunWhy ? { suiteNotRunWhy: suite.notRunWhy } : {}) } : {}),
     });
     tally.findings = verdict.findings.length;
     if (ctx.securityViolation) await securityViolationEvent(deps, req, ctx.securityViolation);

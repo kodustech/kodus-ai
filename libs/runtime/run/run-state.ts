@@ -258,6 +258,8 @@ export interface VerdictInput {
     suiteUnclassified?: number;
     /** The repository's e2e suite was asked for and did not run, or did not finish: the Run cannot say it tested the suite. */
     suiteNotRun?: boolean;
+    /** Why the suite could not start, in the check's words (suiteVerdictParts). */
+    suiteNotRunWhy?: string;
 }
 
 export interface VerdictOutcome {
@@ -336,7 +338,7 @@ export function decideRunVerdict(input: VerdictInput): VerdictOutcome {
     }
     if (input.suiteNotRun && verdictState !== 'regression') {
         verdictState = 'partly_tested';
-        forcedNeutral.push('the e2e suite could not run');
+        forcedNeutral.push(input.suiteNotRunWhy ? `the e2e suite could not run: ${input.suiteNotRunWhy}` : 'the e2e suite could not run');
     }
     if (input.blockedOutbound) forcedNeutral.push(`${input.blockedOutbound} blocked outbound request${input.blockedOutbound > 1 ? 's' : ''}`);
     if (input.dependencyChangeUntested) forcedNeutral.push('dependency change not behavior-tested');
