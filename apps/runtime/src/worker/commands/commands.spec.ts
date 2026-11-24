@@ -253,10 +253,11 @@ describe('EnvironmentPoolRequested', () => {
 // and stays with the Runs, and so does a cancel, which must never pass the
 // request it cancels.
 describe('command routes', () => {
-    it('sends every control command to the control queue and a setup to the Run queue', () => {
+    it('sends every control command to the control queue, and a setup or a suite (work like a Run) to the Run queue', () => {
+        const work: string[] = [RuntimeCommandName.EnvironmentSetupRequested, RuntimeCommandName.SuiteRequested, RuntimeCommandName.SuiteRetried];
         for (const name of Object.values(RuntimeCommandName)) {
             const route = runtimeCommandRoute(name);
-            if (name === RuntimeCommandName.EnvironmentSetupRequested) {
+            if (work.includes(name)) {
                 expect(route).toEqual({ routingKey: RUNTIME_RUN_ROUTING_KEY, workflowType: 'RUNTIME_RUN' });
             } else {
                 expect(route).toEqual({ routingKey: RUNTIME_CONTROL_ROUTING_KEY, workflowType: 'RUNTIME_CONTROL' });

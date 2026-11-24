@@ -29,7 +29,10 @@ BEGIN
       -- The org's own daily machine minutes (v35): Settings, Runtime, machine minutes.
       'runtime_org_machine_budget',
       -- Each Run's outcome of the kept checks (v37; ids, outcome and reason code): the kept checks list and its metric.
-      'runtime_kept_check_results'
+      'runtime_kept_check_results',
+      -- The e2e suite's runs, shards, results, baselines and spec durations (v51; docs/runtime/e2e-suites.md): the suite
+      -- page and the environment's suite settings. Results hold redacted errors cut to the evidence limits, never a secret.
+      'runtime_suite_runs', 'runtime_suite_shards', 'runtime_suite_results', 'runtime_suite_baselines', 'runtime_suite_spec_stats'
     ] LOOP
       IF to_regclass(format('runtime.%I', t)) IS NOT NULL THEN
         EXECUTE format('GRANT SELECT ON runtime.%I TO kodus_runtime_reader', t);

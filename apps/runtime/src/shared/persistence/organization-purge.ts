@@ -55,6 +55,11 @@ export const ORGANIZATION_PURGE_TABLES: ReadonlyArray<readonly [table: string, c
     ['runtime_stability', 'org_id'],
     ['runtime_steps_index', 'org_id'],
     ['runtime_stops', 'organization_id'],
+    ['runtime_suite_baselines', 'organization_id'],
+    ['runtime_suite_results', 'organization_id'],
+    ['runtime_suite_runs', 'organization_id'],
+    ['runtime_suite_shards', 'organization_id'],
+    ['runtime_suite_spec_stats', 'organization_id'],
     // Fleet rows: a host that is not terminated still has a machine at a provider, so it (and its pool) stays until
     // runtime-fleet tears it down; the purge reports it and a second purge removes it.
     ['runtime_hosts', 'organization_id'],

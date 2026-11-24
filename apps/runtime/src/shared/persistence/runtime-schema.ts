@@ -1111,6 +1111,79 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         );
         CREATE INDEX IF NOT EXISTS runtime_template_setups_env_idx ON runtime.runtime_template_setups (organization_id, environment_id);`,
     },
+    {
+        version: 51,
+        name: 'the e2e suite runs, shards, results, baselines and spec durations',
+        // docs/runtime/e2e-suites.md section 7. A suite run is the worker's (the product asks through a command); every
+        // table carries the organization so the purge reaches it and a read is always scoped. Results are one row per
+        // spec and phase (shard, rerun_pr, rerun_main): a shard reporting a spec twice writes it once. The baseline is
+        // unique per (environment, main commit, suite digest). Spec stats hold the duration the next plan balances by.
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_suite_runs (
+            suite_run_id    text PRIMARY KEY,
+            organization_id text NOT NULL,
+            environment_id  text NOT NULL,
+            repository_id   text NOT NULL,
+            mode            text NOT NULL,
+            state           text NOT NULL DEFAULT 'requested',
+            pr_number       integer,
+            pr_sha          text,
+            merge_base      text,
+            main_sha        text NOT NULL,
+            suite_digest    text,
+            selection       jsonb NOT NULL DEFAULT '{}'::jsonb,
+            requested_at    timestamptz NOT NULL,
+            finished_at     timestamptz,
+            updated_at      timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS runtime_suite_runs_pr_idx ON runtime.runtime_suite_runs (organization_id, environment_id, pr_number, requested_at DESC) WHERE pr_number IS NOT NULL;
+        CREATE TABLE IF NOT EXISTS runtime.runtime_suite_shards (
+            suite_run_id    text NOT NULL,
+            shard           integer NOT NULL,
+            organization_id text NOT NULL,
+            state           text NOT NULL DEFAULT 'planned',
+            specs           jsonb NOT NULL DEFAULT '[]'::jsonb,
+            host_id         text,
+            started_at      timestamptz,
+            finished_at     timestamptz,
+            updated_at      timestamptz NOT NULL DEFAULT now(),
+            PRIMARY KEY (suite_run_id, shard)
+        );
+        CREATE TABLE IF NOT EXISTS runtime.runtime_suite_results (
+            suite_run_id    text NOT NULL,
+            phase           text NOT NULL,
+            spec            text NOT NULL,
+            organization_id text NOT NULL,
+            shard           integer NOT NULL,
+            status          text NOT NULL,
+            duration_ms     integer NOT NULL DEFAULT 0,
+            error_signature text,
+            tests           jsonb NOT NULL DEFAULT '[]'::jsonb,
+            recorded_at     timestamptz NOT NULL DEFAULT now(),
+            PRIMARY KEY (suite_run_id, phase, spec)
+        );
+        CREATE TABLE IF NOT EXISTS runtime.runtime_suite_baselines (
+            organization_id text NOT NULL,
+            environment_id  text NOT NULL,
+            main_sha        text NOT NULL,
+            suite_digest    text NOT NULL,
+            status          text NOT NULL,
+            specs           jsonb NOT NULL DEFAULT '{}'::jsonb,
+            finished_at     timestamptz NOT NULL,
+            PRIMARY KEY (environment_id, main_sha, suite_digest)
+        );
+        CREATE INDEX IF NOT EXISTS runtime_suite_baselines_env_idx ON runtime.runtime_suite_baselines (organization_id, environment_id, finished_at DESC);
+        CREATE TABLE IF NOT EXISTS runtime.runtime_suite_spec_stats (
+            organization_id text NOT NULL,
+            environment_id  text NOT NULL,
+            spec            text NOT NULL,
+            p50_ms          integer NOT NULL,
+            last_ms         integer NOT NULL,
+            samples         integer NOT NULL DEFAULT 1,
+            last_seen_sha   text,
+            updated_at      timestamptz NOT NULL DEFAULT now(),
+            PRIMARY KEY (environment_id, spec)
+        );`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */
@@ -1241,6 +1314,10 @@ export async function applyRetention(pool: Pick<Pool, 'query'>, days = 30, batch
         // A claim that ended (released or terminated; an open one never has released_at), past the report's year.
         // created_at bounds it on runtime_claims_created_brin: a claim never ends before it is made.
         ['runtime_claims', `released_at IS NOT NULL AND ${older('released_at')} AND ${older('created_at')}`, CLAIM_RETENTION_DAYS],
+        // A suite run's shards and results follow the evidence TTL; the run row stays for the re-push rule while it is that young.
+        ['runtime_suite_results', older('recorded_at'), days],
+        ['runtime_suite_shards', older('updated_at'), days],
+        ['runtime_suite_runs', `finished_at IS NOT NULL AND ${older('updated_at')}`, days],
     ] as const) {
         removed += await deleteInBatches(pool, table, where, value, batch);
     }

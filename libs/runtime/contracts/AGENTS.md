@@ -4,7 +4,7 @@ The shared vocabulary and the product↔Runtime contracts, defined once and impo
 
 ## Owns
 - Vocabulary: `enums.ts` (expose kinds, blocker kinds, verdicts, finding kinds and intents, VM health, sides, claim states and `assertClaimTransition`, consumers, triggers, check conclusions, cell owners, recipe paths, fork policies).
-- Commands that change Runtime state: `runtime-commands.ts` schemas, `runtimeCommandRoute` (Run lane or control lane), `runtimeCommandOutboxMessage`.
+- Commands that change Runtime state: `runtime-commands.ts` schemas, `runtimeCommandRoute` (Run lane or control lane), `runtimeCommandOutboxMessage`. `RuntimeSuiteRequested` and `RuntimeSuiteRetried` (the e2e suite, docs/runtime/e2e-suites.md) go on the Run lane, like a setup; no worker handler consumes them yet.
 - Internal HTTP contracts between the worker and the product: `run-plan.ts` (`checkPlanSubmission`), `planner-source.ts`, `model-turn.ts`, `recipe-author.ts`, `setup-repo-tokens.ts`, `env-session.ts` (signed requests), `sandbox.ts`, `preview.ts` (grants, cookies, tunnel tickets, settings), `external-findings.ts`.
 - Evidence: `evidence.ts` keys, signed URLs and upload grants; `evidence-s3.ts` and `sigv4.ts` for an S3-compatible store.
 - Kept checks (docs/runtime/kept-checks.md): `kept-check.ts`, the check a Run receives (`KeptCheckSchema`, `keptCheckProbe`), its outcomes and stale reasons, and the limits (`MAX_KEPT_CHECKS_PER_REPOSITORY`, `KEPT_CHECKS_BUDGET_MS`, `KEPT_CHECK_RESULTS_RETENTION_DAYS`).
@@ -73,6 +73,7 @@ Imported by:
 - [`apps/runtime/src/worker/run`](../../../apps/runtime/src/worker/run/AGENTS.md)
 - [`apps/runtime/src/worker/sandbox`](../../../apps/runtime/src/worker/sandbox/AGENTS.md)
 - [`apps/runtime/src/worker/setup`](../../../apps/runtime/src/worker/setup/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../../../apps/runtime/src/worker/suite/AGENTS.md)
 - [`libs/runtime-publish/domain`](../../runtime-publish/domain/AGENTS.md)
 - [`libs/runtime-publish/infrastructure`](../../runtime-publish/infrastructure/AGENTS.md)
 - [`libs/runtime/api`](../api/AGENTS.md)

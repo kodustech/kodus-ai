@@ -39,6 +39,6 @@ Imports these Runtime modules:
 
 Imported by:
 
-- none
+- [`apps/runtime/src/worker/suite`](../../../apps/runtime/src/worker/suite/AGENTS.md)
 
 <!-- module-map:end -->

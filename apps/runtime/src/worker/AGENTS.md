@@ -25,6 +25,7 @@ The runtime-worker: consumes the product's Runtime commands from RabbitMQ and ru
 - `run/`: the Run workflow: boot, plan, replay, verdict, report, publish.
 - `sandbox/`: code sandboxes for the review and custom agents, and a closed PR's sessions.
 - `secrets/`: opening and sealing tokens bound to a Run or a setup.
+- `suite/`: running a repository's own e2e suite: the run, baseline and spec-duration stores (the engine comes in later steps).
 - `setup/`: the environment setup workflow: boot the default branch, check health, bake, learn from failures.
 
 ## Rules and limits

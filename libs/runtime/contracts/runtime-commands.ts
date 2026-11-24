@@ -34,6 +34,8 @@ export const RuntimeCommandName = {
     CellRevokeRequested: 'runtime.cell.revoke_requested',
     LessonUpdateRequested: 'runtime.lesson.update_requested',
     OrganizationPurgeRequested: 'runtime.organization.purge_requested',
+    SuiteRequested: 'runtime.suite.requested',
+    SuiteRetried: 'runtime.suite.retried',
 } as const;
 export type RuntimeCommandEventName = (typeof RuntimeCommandName)[keyof typeof RuntimeCommandName];
 
@@ -409,6 +411,65 @@ export const RuntimeOrganizationPurgeRequestedSchema = z.strictObject({
 });
 export type RuntimeOrganizationPurgeRequested = z.infer<typeof RuntimeOrganizationPurgeRequestedSchema>;
 
+/** How a suite run starts (docs/runtime/e2e-suites.md section 11): a Run's stage, a CI check, or the baseline of a main commit. */
+export const SUITE_MODES = ['run', 'ci', 'baseline'] as const;
+export type SuiteMode = (typeof SUITE_MODES)[number];
+
+/**
+ * Starts one run of the repository's own e2e suite. `suiteRunId` is the idempotency identity (a second delivery
+ * finds the run and starts nothing). A baseline names the main commit alone; a PR suite also names its PR, its head
+ * and the merge base (the commit the selection and the baseline lookup start from).
+ */
+export const RuntimeSuiteRequestedSchema = z
+    .strictObject({
+        suiteRunId: z.uuid(),
+        organizationId: id,
+        environmentId: id,
+        repositoryId: id,
+        mode: z.enum(SUITE_MODES),
+        prNumber: z.number().int().min(1).optional(),
+        prSha: sha.optional(),
+        mergeBase: sha.optional(),
+        /** The default-branch head the environment template was built from: the main side of every comparison. */
+        mainSha: sha,
+        requestedAt: z.iso.datetime(),
+        /** Idempotency key `suiteRunId`. */
+        key: z.string().min(1).max(256),
+        traceparent: TraceparentSchema.optional(),
+        /** Download token for the repository, sealed for this suite run (bound to `key`), like a setup's. */
+        repoToken: z
+            .string()
+            .min(1)
+            .max(8_192)
+            .refine((v): boolean => isSealedSecret(v), { message: 'the token must be sealed (sealed:v1:…), never plain' })
+            .optional(),
+    })
+    .superRefine((m, ctx) => {
+        const pr = [m.prNumber, m.prSha, m.mergeBase];
+        if (m.mode === 'baseline') {
+            if (pr.some((v) => v !== undefined)) ctx.addIssue({ code: 'custom', message: 'a baseline names the main commit alone', path: ['mode'] });
+            return;
+        }
+        for (const [name, v] of [['prNumber', m.prNumber], ['prSha', m.prSha], ['mergeBase', m.mergeBase]] as const) {
+            if (v === undefined) ctx.addIssue({ code: 'custom', message: `a ${m.mode} suite run names its ${name}`, path: [name] });
+        }
+    });
+export type RuntimeSuiteRequested = z.infer<typeof RuntimeSuiteRequestedSchema>;
+
+/** A person asks to run one shard of a suite again, or every spec that failed in it. */
+export const RuntimeSuiteRetriedSchema = z
+    .strictObject({
+        suiteRunId: z.uuid(),
+        organizationId: id,
+        scope: z.enum(['shard', 'failed']),
+        shard: z.number().int().min(0).max(63).optional(),
+        requestedBy: actor,
+        requestedAt: z.iso.datetime(),
+        key: z.string().min(1).max(256),
+    })
+    .refine((m) => (m.scope === 'shard') === (m.shard !== undefined), { message: 'a shard retry names its shard; a failed-specs retry names none', path: ['shard'] });
+export type RuntimeSuiteRetried = z.infer<typeof RuntimeSuiteRetriedSchema>;
+
 /** The payload of each command, by its name. */
 export interface RuntimeCommandPayloads {
     'runtime.run.fork_approved': RuntimeForkApproved;
@@ -425,6 +486,8 @@ export interface RuntimeCommandPayloads {
     'runtime.cell.revoke_requested': RuntimeCellRevokeRequested;
     'runtime.lesson.update_requested': RuntimeLessonUpdateRequested;
     'runtime.organization.purge_requested': RuntimeOrganizationPurgeRequested;
+    'runtime.suite.requested': RuntimeSuiteRequested;
+    'runtime.suite.retried': RuntimeSuiteRetried;
 }
 
 const SCHEMAS: Record<RuntimeCommandEventName, z.ZodType> = {
@@ -442,6 +505,8 @@ const SCHEMAS: Record<RuntimeCommandEventName, z.ZodType> = {
     [RuntimeCommandName.CellRevokeRequested]: RuntimeCellRevokeRequestedSchema,
     [RuntimeCommandName.LessonUpdateRequested]: RuntimeLessonUpdateRequestedSchema,
     [RuntimeCommandName.OrganizationPurgeRequested]: RuntimeOrganizationPurgeRequestedSchema,
+    [RuntimeCommandName.SuiteRequested]: RuntimeSuiteRequestedSchema,
+    [RuntimeCommandName.SuiteRetried]: RuntimeSuiteRetriedSchema,
 };
 
 /**
@@ -454,6 +519,9 @@ const RUN_LANE_EVENTS: ReadonlySet<string> = new Set([
     RuntimeEventName.RunRequested,
     RuntimeEventName.RunCancelRequested,
     RuntimeCommandName.EnvironmentSetupRequested,
+    // A suite is work like a Run and a setup: it waits in their lane, never in front of a stop.
+    RuntimeCommandName.SuiteRequested,
+    RuntimeCommandName.SuiteRetried,
 ]);
 
 /** Whether an event (a Run message or a command) belongs on the Run queue rather than the control queue. */
