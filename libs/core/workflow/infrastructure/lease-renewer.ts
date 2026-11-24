@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Worker } from 'node:worker_threads';
+import { Worker, WorkerOptions } from 'node:worker_threads';
 
 import { createLogger } from '@libs/core/log/logger';
 import { resolveSessionTimeouts } from '@libs/core/infrastructure/database/typeorm/postgres-connection-env';
@@ -127,6 +127,7 @@ async function beat() {
     try {
         c = c || (await connect(budget));
         for (const [id, l] of due) {
+            const sentAt = Date.now();
             const result = await withDeadline(
                 c.query(renewSql, [l.key, l.holder, l.leaseMs]),
                 budget,
@@ -136,6 +137,9 @@ async function beat() {
             const held = result.rows.length > 0 && result.rows[0].held === true;
             if (held) {
                 l.nextAt = Date.now() + l.every;
+                // Held until at least sentAt + leaseMs: the database moved
+                // expires_at after the query was sent.
+                parentPort.postMessage({ type: 'renewed', id, at: sentAt });
             } else {
                 leases.delete(id);
                 parentPort.postMessage({ type: 'lost', id });
@@ -162,7 +166,7 @@ parentPort.on('message', (m) => {
             holder: m.holder,
             leaseMs: m.leaseMs,
             every: m.every,
-            nextAt: Date.now() + m.every,
+            nextAt: Date.now() + (typeof m.delay === 'number' ? m.delay : m.every),
         });
     } else if (m.type === 'untrack') {
         leases.delete(m.id);
@@ -204,6 +208,36 @@ interface Tracked {
     holder: string;
     leaseMs: number;
     onLost: () => void;
+    /** Main-thread clock: the lease holds at least until then. */
+    confirmedUntil: number;
+}
+
+type SpawnThread = (source: string, options: WorkerOptions) => Worker;
+
+/** Longest wait between two attempts to bring a dead thread back. */
+const MAX_RESTART_DELAY_MS = 30_000;
+/** A thread that ran this long before exiting did not die on start. */
+const HEALTHY_RUN_MS = 60_000;
+
+/**
+ * Connection strings and passwords out of a message bound for the logs:
+ * pg echoes a malformed connection string, password included, in its
+ * errors, and key-based log redaction cannot see inside a message.
+ */
+export function redactCredentials(text: string): string {
+    return text
+        .replace(/(postgres(?:ql)?:\/\/)[^\s'"]+/gi, '$1***')
+        .replace(/(password\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi, '$1***');
+}
+
+function redactedError(error: unknown): Error | undefined {
+    if (!(error instanceof Error)) return undefined;
+    // A fresh Error: the original may carry the connection string in
+    // other properties too (Node's URL errors keep it in `input`).
+    const safe = new Error(redactCredentials(error.message));
+    safe.name = error.name;
+    safe.stack = error.stack ? redactCredentials(error.stack) : undefined;
+    return safe;
 }
 
 /**
@@ -214,8 +248,10 @@ interface Tracked {
  * long as the process holds it, gone when the process dies — here, one
  * lease later instead of at once.
  *
- * One thread per process and connection. If the thread dies it is started
- * again and every tracked lease is handed to the new one.
+ * One thread per process and connection. A thread that dies is started
+ * again, with a growing delay when it keeps dying, and gets every tracked
+ * lease. While there is no thread, leases whose time runs out are reported
+ * lost, so no holder believes it still holds a lock nobody renews.
  */
 export class ThreadLeaseRenewer implements LeaseRenewer {
     private static readonly shared = new Map<string, ThreadLeaseRenewer>();
@@ -223,10 +259,19 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
     private readonly logger = createLogger(ThreadLeaseRenewer.name);
     private readonly tracked = new Map<string, Tracked>();
     private worker: Worker | null = null;
+    private workerStartedAt = 0;
     private failing = false;
     private stopped = false;
+    /** Consecutive starts that failed or died early. */
+    private restarts = 0;
+    private restartTimer: NodeJS.Timeout | null = null;
+    private watchdog: NodeJS.Timeout | null = null;
 
-    private constructor(private readonly connection: Record<string, unknown>) {}
+    private constructor(
+        private readonly connection: Record<string, unknown>,
+        private readonly spawn: SpawnThread = (source, options) =>
+            new Worker(source, options),
+    ) {}
 
     /**
      * The renewer for the connection described by TypeORM DataSource
@@ -245,6 +290,13 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
         return renewer;
     }
 
+    /** A renewer over threads made by `spawn` (tests). Not shared. */
+    static overThreads(spawn: SpawnThread): ThreadLeaseRenewer {
+        const renewer = new ThreadLeaseRenewer({}, spawn);
+        renewer.start();
+        return renewer;
+    }
+
     /** Stops every renewal thread (tests and process shutdown). */
     static async stopAll(): Promise<void> {
         const renewers = [...ThreadLeaseRenewer.shared.values()];
@@ -259,8 +311,15 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
         onLost: () => void,
     ): () => void {
         const id = randomUUID();
-        this.tracked.set(id, { key, holder, leaseMs, onLost });
-        this.post(id);
+        this.tracked.set(id, {
+            key,
+            holder,
+            leaseMs,
+            onLost,
+            confirmedUntil: Date.now() + leaseMs,
+        });
+        // With no thread right now, the restart hands it over.
+        this.post(id, renewEvery(leaseMs));
         return () => {
             if (this.tracked.delete(id)) {
                 this.worker?.postMessage({ type: 'untrack', id });
@@ -268,7 +327,7 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
         };
     }
 
-    private post(id: string): void {
+    private post(id: string, delay: number): void {
         const lease = this.tracked.get(id);
         if (!lease) return;
         this.worker?.postMessage({
@@ -278,11 +337,12 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
             holder: lease.holder,
             leaseMs: lease.leaseMs,
             every: renewEvery(lease.leaseMs),
+            delay,
         });
     }
 
     private start(): void {
-        const worker = new Worker(THREAD_SOURCE, {
+        const worker = this.spawn(THREAD_SOURCE, {
             eval: true,
             workerData: {
                 connection: this.connection,
@@ -295,37 +355,102 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
                 message:
                     'Distributed lock renewal thread crashed — restarting it',
                 context: ThreadLeaseRenewer.name,
-                error: error instanceof Error ? error : undefined,
+                error: redactedError(error),
             });
         });
         worker.on('exit', () => {
             if (this.worker !== worker || this.stopped) return;
             this.worker = null;
-            // Hand every live lease to a fresh thread before they expire.
-            try {
-                this.start();
-            } catch (error) {
-                this.logger.error({
-                    message:
-                        'Could not restart the distributed lock renewal thread — held locks expire with their lease',
-                    context: ThreadLeaseRenewer.name,
-                    error: error instanceof Error ? error : undefined,
-                });
+            if (Date.now() - this.workerStartedAt >= HEALTHY_RUN_MS) {
+                this.restarts = 0;
             }
+            this.restarts++;
+            this.scheduleRestart();
         });
         // Never keeps the process alive on its own. After the listeners:
         // adding a 'message' listener refs the port again.
         worker.unref();
         this.worker = worker;
-        for (const id of this.tracked.keys()) this.post(id);
+        this.workerStartedAt = Date.now();
+        this.stopWatchdog();
+        // Renewed at once: part of their lease went by with no thread.
+        for (const id of this.tracked.keys()) this.post(id, 0);
+    }
+
+    private scheduleRestart(): void {
+        if (this.stopped || this.restartTimer) return;
+        this.startWatchdog();
+        // A thread that dies on every start must not become a tight loop.
+        const base = Math.min(
+            MAX_RESTART_DELAY_MS,
+            250 * 2 ** Math.max(0, this.restarts - 1),
+        );
+        const delay = Math.round(base * (0.8 + Math.random() * 0.4));
+        this.logger.warn({
+            message: 'Distributed lock renewal thread stopped — restarting it',
+            context: ThreadLeaseRenewer.name,
+            metadata: {
+                consecutiveRestarts: this.restarts,
+                delayMs: delay,
+                held: this.tracked.size,
+            },
+        });
+        this.restartTimer = setTimeout(() => {
+            this.restartTimer = null;
+            if (this.stopped || this.worker) return;
+            try {
+                this.start();
+            } catch (error) {
+                this.logger.error({
+                    message:
+                        'Could not restart the distributed lock renewal thread — retrying; held locks are reported lost when their lease runs out',
+                    context: ThreadLeaseRenewer.name,
+                    error: redactedError(error),
+                    metadata: { consecutiveRestarts: this.restarts },
+                });
+                this.restarts++;
+                this.scheduleRestart();
+            }
+        }, delay);
+        this.restartTimer.unref?.();
+    }
+
+    /**
+     * While no thread renews, report each lease lost once its time runs
+     * out. Not while a thread runs: a main loop that was blocked would
+     * read renewals still queued as missing.
+     */
+    private startWatchdog(): void {
+        if (this.watchdog) return;
+        this.watchdog = setInterval(() => {
+            const now = Date.now();
+            for (const [id, lease] of this.tracked) {
+                if (lease.confirmedUntil <= now) {
+                    this.tracked.delete(id);
+                    lease.onLost();
+                }
+            }
+        }, 1_000);
+        this.watchdog.unref?.();
+    }
+
+    private stopWatchdog(): void {
+        if (this.watchdog) clearInterval(this.watchdog);
+        this.watchdog = null;
     }
 
     private onMessage(message: {
-        type: 'ok' | 'error' | 'lost';
+        type: 'ok' | 'error' | 'lost' | 'renewed';
         id?: string;
+        at?: number;
         message?: string;
     }): void {
-        if (message.type === 'lost' && message.id) {
+        if (message.type === 'renewed' && message.id) {
+            const lease = this.tracked.get(message.id);
+            if (lease && typeof message.at === 'number') {
+                lease.confirmedUntil = message.at + lease.leaseMs;
+            }
+        } else if (message.type === 'lost' && message.id) {
             const lease = this.tracked.get(message.id);
             if (!lease) return;
             this.tracked.delete(message.id);
@@ -339,23 +464,29 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
                         'Distributed lock renewal is failing — held locks stay valid until their lease runs out; retrying',
                     context: ThreadLeaseRenewer.name,
                     metadata: {
-                        error: message.message,
+                        error: redactCredentials(message.message ?? ''),
                         held: this.tracked.size,
                     },
                 });
             }
-        } else if (message.type === 'ok' && this.failing) {
-            this.failing = false;
-            this.logger.log({
-                message: 'Distributed lock renewal recovered',
-                context: ThreadLeaseRenewer.name,
-                metadata: { held: this.tracked.size },
-            });
+        } else if (message.type === 'ok') {
+            this.restarts = 0;
+            if (this.failing) {
+                this.failing = false;
+                this.logger.log({
+                    message: 'Distributed lock renewal recovered',
+                    context: ThreadLeaseRenewer.name,
+                    metadata: { held: this.tracked.size },
+                });
+            }
         }
     }
 
-    private async stop(): Promise<void> {
+    async stop(): Promise<void> {
         this.stopped = true;
+        if (this.restartTimer) clearTimeout(this.restartTimer);
+        this.restartTimer = null;
+        this.stopWatchdog();
         const worker = this.worker;
         this.worker = null;
         await worker?.terminate();

@@ -122,9 +122,12 @@ describe('DistributedLockService', () => {
     });
 
     it('a lock is released when its ttl elapses, even if the holder never releases it', async () => {
-        const lock = await instanceA.acquire('cron', { ttl: 5 * 60_000 });
+        // Between two renewal beats (every LOCK_LEASE_MS / 3), so the
+        // release cannot race a renewal landing on the same instant.
+        const ttl = 5 * 60_000 - LOCK_LEASE_MS / 6;
+        const lock = await instanceA.acquire('cron', { ttl });
 
-        await jest.advanceTimersByTimeAsync(5 * 60_000 + 1);
+        await jest.advanceTimersByTimeAsync(ttl + 1);
 
         // The holder hands it back itself, not only the lease running out.
         expect(lock!.isReleased()).toBe(true);
@@ -184,9 +187,41 @@ describe('DistributedLockService', () => {
             new Error('connection refused'),
         );
 
-        await jest.advanceTimersByTimeAsync(30 * 60_000);
+        const unhandled = jest.fn();
+        process.on('unhandledRejection', unhandled);
+        try {
+            await jest.advanceTimersByTimeAsync(30 * 60_000);
+            // Node reports unhandled rejections after the microtask queue
+            // drains: give it a real turn of the event loop.
+            await new Promise((resolve) =>
+                jest.requireActual('timers').setImmediate(resolve),
+            );
+        } finally {
+            process.off('unhandledRejection', unhandled);
+        }
 
         expect(leases.deleteExpired).toHaveBeenCalledTimes(2);
+        expect(unhandled).not.toHaveBeenCalled();
+    });
+
+    it('a configured lease of 0 falls back to the default lease instead of expiring on acquire', async () => {
+        const tracked: number[] = [];
+        const service = new DistributedLockService({} as any, leases, {
+            leaseMs: 0,
+            renewer: {
+                track: (_key, _holder, leaseMs) => {
+                    tracked.push(leaseMs);
+                    return () => undefined;
+                },
+            },
+        });
+
+        const lock = await service.acquire('job');
+
+        expect(tracked).toEqual([LOCK_LEASE_MS]);
+        expect(await instanceB.acquire('job')).toBeNull();
+        await lock!.release();
+        await service.onModuleDestroy();
     });
 
     it('when the renewal thread cannot start, held locks still renew on the main event loop', async () => {

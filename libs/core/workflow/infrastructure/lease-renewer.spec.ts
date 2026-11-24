@@ -1,4 +1,15 @@
-import { ThreadLeaseRenewer, renewalConnectionConfig } from './lease-renewer';
+import { EventEmitter } from 'node:events';
+
+const logged = { warn: jest.fn(), error: jest.fn(), log: jest.fn() };
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({ ...logged, debug: jest.fn() }),
+}));
+
+import {
+    ThreadLeaseRenewer,
+    redactCredentials,
+    renewalConnectionConfig,
+} from './lease-renewer';
 
 describe('renewal thread connection', () => {
     it('uses the same TLS settings as the app pool (managed Postgres that requires TLS)', () => {
@@ -85,5 +96,151 @@ describe('renewal thread', () => {
         expect(ThreadLeaseRenewer.for({ ...options, host: 'other' })).not.toBe(
             first,
         );
+    });
+});
+
+/** Stands in for the renewal thread: records what it is told, dies on cue. */
+class FakeThread extends EventEmitter {
+    posted: any[] = [];
+    postMessage(message: unknown) {
+        this.posted.push(message);
+    }
+    unref() {}
+    async terminate() {
+        return 0;
+    }
+    die() {
+        this.emit('exit', 1);
+    }
+    tracks() {
+        return this.posted.filter((m) => m.type === 'track');
+    }
+}
+
+describe('renewal thread restarts', () => {
+    let threads: FakeThread[];
+    let failSpawn: boolean;
+    let renewer: ThreadLeaseRenewer;
+    const spawn = () => {
+        if (failSpawn) throw new Error('ERR_WORKER_INIT_FAILED');
+        const thread = new FakeThread();
+        threads.push(thread);
+        return thread as any;
+    };
+
+    beforeEach(() => {
+        jest.useFakeTimers();
+        threads = [];
+        failSpawn = false;
+        Object.values(logged).forEach((fn) => fn.mockClear());
+        renewer = ThreadLeaseRenewer.overThreads(spawn);
+    });
+
+    afterEach(async () => {
+        await renewer.stop();
+        jest.useRealTimers();
+    });
+
+    it('a thread that dies is started again and renews every held lease at once', async () => {
+        renewer.track('job', 'h1', 60_000, jest.fn());
+        expect(threads[0].tracks()).toEqual([
+            expect.objectContaining({ key: 'job', delay: 20_000 }),
+        ]);
+
+        threads[0].die();
+        await jest.advanceTimersByTimeAsync(400);
+
+        expect(threads).toHaveLength(2);
+        // Part of the lease went by with no thread: no waiting a full beat.
+        expect(threads[1].tracks()).toEqual([
+            expect.objectContaining({ key: 'job', holder: 'h1', delay: 0 }),
+        ]);
+    });
+
+    it('a thread that dies on every start is restarted with growing delays, not in a loop', async () => {
+        const startedAt: number[] = [];
+        renewer = ThreadLeaseRenewer.overThreads(() => {
+            const thread = spawn();
+            startedAt.push(Date.now());
+            queueMicrotask(() => thread.die());
+            return thread;
+        });
+
+        await jest.advanceTimersByTimeAsync(60_000);
+
+        // 250ms doubling up to 30s, jittered: about eight starts a minute.
+        expect(startedAt.length).toBeGreaterThan(4);
+        expect(startedAt.length).toBeLessThan(15);
+        const gaps = startedAt.slice(1).map((t, i) => t - startedAt[i]);
+        expect(gaps[gaps.length - 1]).toBeGreaterThan(gaps[0] * 8);
+        expect(Math.max(...gaps)).toBeLessThanOrEqual(30_000 * 1.2);
+    });
+
+    it('while no thread can start, a held lease is reported lost when its time runs out, not before', async () => {
+        const onLost = jest.fn();
+        renewer.track('job', 'h1', 60_000, onLost);
+        const id = threads[0].tracks()[0].id;
+        // The thread renewed it 20s in: it holds until 80s.
+        await jest.advanceTimersByTimeAsync(20_000);
+        threads[0].emit('message', { type: 'renewed', id, at: Date.now() });
+        await jest.advanceTimersByTimeAsync(10_000);
+
+        failSpawn = true;
+        threads[0].die();
+
+        await jest.advanceTimersByTimeAsync(48_000); // 78s
+        expect(onLost).not.toHaveBeenCalled();
+        await jest.advanceTimersByTimeAsync(3_000); // 81s
+        expect(onLost).toHaveBeenCalledTimes(1);
+        expect(logged.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('Could not restart'),
+            }),
+        );
+    });
+
+    it('a lease taken while no thread runs is handed to the next thread', async () => {
+        failSpawn = true;
+        threads[0].die();
+        await jest.advanceTimersByTimeAsync(400); // a failed restart
+
+        const onLost = jest.fn();
+        renewer.track('job', 'h1', 60_000, onLost);
+        failSpawn = false;
+        await jest.advanceTimersByTimeAsync(2_000);
+
+        expect(threads).toHaveLength(2);
+        expect(threads[1].tracks()).toEqual([
+            expect.objectContaining({ key: 'job', holder: 'h1', delay: 0 }),
+        ]);
+        expect(onLost).not.toHaveBeenCalled();
+    });
+
+    it('logs renewal failures without the connection string or password pg puts in its errors', () => {
+        threads[0].emit('message', {
+            type: 'error',
+            message:
+                'invalid connection string postgres://kodus:s3cret@db:5432/kodus_db (password=s3cret)',
+        });
+
+        const line = JSON.stringify(logged.warn.mock.calls);
+        expect(line).not.toContain('s3cret');
+        expect(line).toContain('postgres://***');
+    });
+});
+
+describe('credential redaction for logs', () => {
+    it.each([
+        ['postgres://kodus:s3cret@db:5432/kodus_db', 'postgres://***'],
+        ['postgresql://u:s3cret@h/db?sslmode=require', 'postgresql://***'],
+        [
+            'host=db password=s3cret user=kodus',
+            'host=db password=*** user=kodus',
+        ],
+        ["password: 's3cret and more'", 'password: ***'],
+    ])('%s', (input, expected) => {
+        const out = redactCredentials(input);
+        expect(out).not.toContain('s3cret');
+        expect(out).toContain(expected);
     });
 });

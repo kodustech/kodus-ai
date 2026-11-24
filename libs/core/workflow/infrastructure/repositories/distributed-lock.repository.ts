@@ -76,7 +76,14 @@ export class DistributedLockRepository implements IDistributedLockRepository {
                     max_hold_until = EXCLUDED.max_hold_until
               WHERE distributed_locks.expires_at <= now()
              RETURNING holder`,
-            [key, holder, leaseMs, maxHoldMs ?? null],
+            // No positive max hold means none, as `ttl: 0` always meant:
+            // 0 would end the lock at the moment it is taken.
+            [
+                key,
+                holder,
+                leaseMs,
+                maxHoldMs && maxHoldMs > 0 ? maxHoldMs : null,
+            ],
         );
         return rows.length > 0 && rows[0].holder === holder;
     }

@@ -205,7 +205,11 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
         // repository layer without wiring a token into each of them.
         this.repository =
             repository ?? new DistributedLockRepository(dataSource);
-        this.leaseMs = config?.leaseMs ?? LOCK_LEASE_MS;
+        // A lease of 0 would be expired the moment it is taken.
+        this.leaseMs =
+            config?.leaseMs && config.leaseMs > 0
+                ? config.leaseMs
+                : LOCK_LEASE_MS;
         this.renewer = config?.renewer ?? this.defaultRenewer(dataSource);
     }
 

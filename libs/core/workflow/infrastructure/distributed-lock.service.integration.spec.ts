@@ -516,16 +516,23 @@ const targets = [
                         },
                     },
                 );
-                const exited = await new Promise<boolean>((done) => {
-                    const timer = setTimeout(() => done(false), 30_000);
-                    child.once('exit', () => {
-                        clearTimeout(timer);
-                        done(true);
-                    });
-                });
-                if (!exited) child.kill('SIGKILL');
+                const messages: unknown[] = [];
+                child.on('message', (m) => messages.push(m));
+                const exitCode = await new Promise<number | null | 'hung'>(
+                    (done) => {
+                        const timer = setTimeout(() => done('hung'), 30_000);
+                        child.once('exit', (code) => {
+                            clearTimeout(timer);
+                            done(code);
+                        });
+                    },
+                );
+                if (exitCode === 'hung') child.kill('SIGKILL');
 
-                expect(exited).toBe(true);
+                // It held a lock (the renewal thread ran), then ended cleanly
+                // on its own — not a crash before ever taking one.
+                expect(messages).toEqual([{ acquired: true }]);
+                expect(exitCode).toBe(0);
             }, 45_000);
 
             it('a holder whose lease was taken over learns it from the next renewal', async () => {
@@ -561,11 +568,15 @@ const targets = [
                     [dead],
                 );
 
-                expect(
-                    await repository.deleteExpired(60 * 60 * 1000),
-                ).toBeGreaterThanOrEqual(1);
+                await repository.deleteExpired(60 * 60 * 1000);
 
-                expect(await repository.isHeld(dead)).toBe(false);
+                // Judged by the row itself: a parallel spec's sweep may be
+                // the one that deleted it, so the count returned here is not.
+                const [{ n }] = await sources[2].query(
+                    `SELECT count(*)::int AS n FROM "kodus_workflow"."distributed_locks" WHERE lock_key = $1`,
+                    [dead],
+                );
+                expect(n).toBe(0);
                 expect(await repository.tryAcquire(live, 'other', 60_000)).toBe(
                     false,
                 );

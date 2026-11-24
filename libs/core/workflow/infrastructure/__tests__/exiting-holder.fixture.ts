@@ -22,6 +22,10 @@ async function main(): Promise<void> {
     await dataSource.initialize();
     const service = new DistributedLockService(dataSource);
     const lock = await service.acquire(`exiting-holder::${process.pid}`);
+    // The parent tells this run from one that died before holding a lock.
+    await new Promise<void>((resolve) =>
+        process.send!({ acquired: lock !== null }, () => resolve()),
+    );
     await lock?.release();
     await dataSource.destroy();
     // No explicit exit and no ThreadLeaseRenewer.stopAll(): the process
