@@ -470,7 +470,7 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             organizationAndTeamData: ORGANIZATION_AND_TEAM_DATA,
             thread: { id: 'TR-cmc-sandbox' },
             prepareContext: scenarioById('no-durable-signal').prepareContext,
-            sandbox,
+            openSandbox: async () => sandbox,
         } as never);
 
         expect(sandbox.remoteCommands.grep).toHaveBeenCalled();

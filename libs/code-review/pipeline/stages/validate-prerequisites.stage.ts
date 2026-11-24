@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { KODY_IDENTIFIERS } from '@libs/common/utils/kody-identifiers';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
@@ -82,12 +83,20 @@ const LICENSE_NOTICE_DATA_KEY = 'licenseNoticePostedAt';
 export const USER_NO_LICENSE_NOTICE =
     '## Kodus license not found\n\n' +
     'Kody skipped this review because the PR author has no Kodus license assigned. ' +
-    'Ask your Kodus admin to assign you a license.\n\n' +
-    '<!-- kody-codereview -->';
+    'Ask your Kodus admin to assign you a license.';
+
+// Bitbucket renders an HTML comment as text, so there the notice opens with
+// the chip Kody's other Bitbucket comments carry.
+export const licenseNoticeBody = (platformType: PlatformType): string =>
+    platformType === PlatformType.BITBUCKET
+        ? `\`${KODY_IDENTIFIERS.MARKDOWN_IDENTIFIERS.BITBUCKET}\`\n\n${USER_NO_LICENSE_NOTICE}`
+        : `${USER_NO_LICENSE_NOTICE}\n\n<!-- ${KODY_IDENTIFIERS.MARKDOWN_IDENTIFIERS.DEFAULT} -->`;
 
 type ValidationFailureOutcome = {
     outcome: 'auto_assigned' | 'failed';
     licenseNoticePostedAt?: string;
+    /** Set when kodus-config.yml decided status feedback for this run. */
+    showStatusFeedback?: boolean;
 };
 
 type NoActiveSubscriptionType =
@@ -156,7 +165,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
         const { organizationAndTeamData, userGitId, pullRequest } = context;
-        const showStatusFeedback =
+        let showStatusFeedback =
             await this.isShowStatusFeedbackEnabled(context);
         const applyShowStatusFeedbackMetadata = (
             draft: CodeReviewPipelineContext,
@@ -400,6 +409,9 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 showStatusFeedback,
             );
 
+            showStatusFeedback =
+                failureHandled.showStatusFeedback ?? showStatusFeedback;
+
             if (failureHandled.outcome === 'auto_assigned') {
                 // Auto-assign succeeded, continue with review
                 return this.updateContext(context, (draft) => {
@@ -584,21 +596,35 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 autoAssignResult.reason !== 'IGNORED_USER' &&
                 autoAssignResult.reason !== 'NOT_ALLOWED_USER';
 
-            if (shouldAddReaction && showStatusFeedback) {
-                await this.addNoLicenseReaction({
-                    organizationAndTeamData,
-                    repository,
-                    prNumber: pullRequest.number,
-                    platformType,
-                    triggerCommentId,
-                });
+            if (!shouldAddReaction) {
+                return { outcome: 'failed' };
+            }
 
+            const fileShowStatusFeedback =
+                await this.configFileShowStatusFeedback(context);
+            const feedbackOn = fileShowStatusFeedback ?? showStatusFeedback;
+
+            if (!feedbackOn) {
                 return {
                     outcome: 'failed',
-                    licenseNoticePostedAt:
-                        await this.postLicenseNoticeOnce(context),
+                    showStatusFeedback: fileShowStatusFeedback,
                 };
             }
+
+            await this.addNoLicenseReaction({
+                organizationAndTeamData,
+                repository,
+                prNumber: pullRequest.number,
+                platformType,
+                triggerCommentId,
+            });
+
+            return {
+                outcome: 'failed',
+                licenseNoticePostedAt:
+                    await this.postLicenseNoticeOnce(context),
+                showStatusFeedback: fileShowStatusFeedback,
+            };
         } else {
             let noActiveSubscriptionType: NoActiveSubscriptionType =
                 validationResult.errorType
@@ -768,6 +794,66 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         }
 
         return true;
+    }
+
+    /**
+     * `showStatusFeedback` from the repository's kodus-config.yml. This stage
+     * runs before ResolveConfigStage, so the file is not in `codeReviewConfig`
+     * yet; it is read only when the stage is about to post. As in the review,
+     * the file applies only when the repository opted into
+     * `kodusConfigFileOverridesWebPreferences`, and then wins over the web
+     * settings. Undefined leaves the web settings in charge.
+     */
+    private async configFileShowStatusFeedback(
+        context: CodeReviewPipelineContext,
+    ): Promise<boolean | undefined> {
+        if (typeof context.codeReviewConfig?.showStatusFeedback === 'boolean') {
+            return undefined;
+        }
+
+        const { organizationAndTeamData, repository, pullRequest } = context;
+        try {
+            const parameter = await this.parametersService.findByKey(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                organizationAndTeamData,
+            );
+            const repositoryConfig = (
+                parameter?.configValue as any
+            )?.repositories?.find(
+                (config: any) => config?.id === repository?.id,
+            );
+
+            if (
+                repositoryConfig?.configs
+                    ?.kodusConfigFileOverridesWebPreferences !== true
+            ) {
+                return undefined;
+            }
+
+            const file = await this.codeBaseConfigService.getKodusConfigFile({
+                organizationAndTeamData,
+                repository: { id: repository.id, name: repository.name },
+                overrideConfig: true,
+                tolerateReviewSettingsErrors: true,
+            });
+
+            return typeof file?.showStatusFeedback === 'boolean'
+                ? file.showStatusFeedback
+                : undefined;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not read kodus-config.yml for status feedback, the web settings apply',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                    prNumber: pullRequest?.number,
+                },
+            });
+            return undefined;
+        }
     }
 
     private async resolveIgnoreState(
@@ -1067,11 +1153,11 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                                   ? parseInt(triggerCommentId, 10) ||
                                     triggerCommentId
                                   : triggerCommentId,
-                          body: USER_NO_LICENSE_NOTICE,
+                          body: licenseNoticeBody(platformType),
                       })
                     : await this.codeManagementService.createIssueComment({
                           ...target,
-                          body: USER_NO_LICENSE_NOTICE,
+                          body: licenseNoticeBody(platformType),
                       });
 
             return posted ? new Date().toISOString() : undefined;
@@ -1161,11 +1247,11 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
 
     private async licenseUnavailableMessage(): Promise<string> {
         return (
-            "## Subscription check unavailable ⏳\n\n" +
+            '## Subscription check unavailable ⏳\n\n' +
             "We couldn't confirm your subscription right now — the license " +
             'service is temporarily unreachable.\n\n' +
             'Please re-run the review in a few minutes (or push a new commit) ' +
-            "and Kody will pick it up.\n\n" +
+            'and Kody will pick it up.\n\n' +
             '<!-- kody-codereview -->'
         );
     }
