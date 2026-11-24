@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OrganizationMemberListService } from '@libs/platform/application/services/organization-member-list.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CacheService } from '@libs/core/cache/cache.service';
+import { INTEGRATION_SERVICE_TOKEN } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -63,6 +64,13 @@ describe('OrganizationMemberListService', () => {
                 {
                     provide: CacheService,
                     useValue: mockCacheService,
+                },
+                {
+                    // The workspace's only Git connection.
+                    provide: INTEGRATION_SERVICE_TOKEN,
+                    useValue: {
+                        find: jest.fn().mockResolvedValue([{ uuid: 'conn-1' }]),
+                    },
                 },
                 {
                     provide: LICENSE_SERVICE_TOKEN,

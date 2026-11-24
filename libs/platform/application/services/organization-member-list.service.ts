@@ -8,6 +8,11 @@ import {
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
+import {
+    IIntegrationService,
+    INTEGRATION_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 
 export type OrganizationMemberSummary = {
     name: string;
@@ -66,6 +71,8 @@ export class OrganizationMemberListService {
         private readonly cacheService: CacheService,
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
+        @Inject(INTEGRATION_SERVICE_TOKEN)
+        private readonly integrationService: IIntegrationService,
     ) {}
 
     /**
@@ -89,6 +96,89 @@ export class OrganizationMemberListService {
             // them so the ids checked here are the ids it revokes from.
             seatHolderIds?: string[];
         } = {},
+    ): Promise<OrganizationMemberListResult> {
+        if (!organizationAndTeamData.integrationId) {
+            const connections =
+                (await this.integrationService.find({
+                    organization: {
+                        uuid: organizationAndTeamData.organizationId,
+                    },
+                    team: { uuid: organizationAndTeamData.teamId },
+                    integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+                    status: true,
+                })) ?? [];
+            if (connections.length > 1) {
+                return this.fetchEveryConnection(
+                    organizationAndTeamData,
+                    connections.map((connection) => connection.uuid),
+                    options,
+                );
+            }
+        }
+        return this.fetchConnection(organizationAndTeamData, options);
+    }
+
+    /**
+     * A workspace's members are every connection's. A member missing from one
+     * connection may be on another, so one unreadable connection makes the
+     * whole list unavailable rather than partial.
+     */
+    private async fetchEveryConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        integrationIds: string[],
+        options: Parameters<OrganizationMemberListService['fetch']>[1],
+    ): Promise<OrganizationMemberListResult> {
+        const results = await Promise.all(
+            integrationIds.map((integrationId) =>
+                this.fetchConnection(
+                    { ...organizationAndTeamData, integrationId },
+                    options,
+                ),
+            ),
+        );
+
+        if (results.some((result) => result.status !== 'ok')) {
+            return unavailable();
+        }
+
+        const listed = results.filter(
+            (
+                result,
+            ): result is Extract<
+                OrganizationMemberListResult,
+                { status: 'ok' }
+            > => result.status === 'ok',
+        );
+        const members = this.normalize(
+            listed.flatMap((result) => result.members),
+        );
+        const memberIds = new Set(members.map((member) => String(member.id)));
+        const absentEverywhere = listed.every(
+            (result) => result.absentSeatHolderIds,
+        )
+            ? listed
+                  .map((result) => new Set(result.absentSeatHolderIds))
+                  .reduce(
+                      (acc, ids) =>
+                          new Set([...acc].filter((id) => ids.has(id))),
+                  )
+            : undefined;
+
+        return {
+            status: 'ok',
+            complete: listed.every((result) => result.complete),
+            members,
+            ...(absentEverywhere && {
+                absentSeatHolderIds: [...absentEverywhere].filter(
+                    (id) => !memberIds.has(id),
+                ),
+            }),
+        };
+    }
+
+    private async fetchConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        options: Parameters<OrganizationMemberListService['fetch']>[1] = {},
     ): Promise<OrganizationMemberListResult> {
         const [memberResult, authorResult] = await Promise.allSettled([
             this.codeManagementService.getListMembers({
@@ -270,7 +360,7 @@ export class OrganizationMemberListService {
         options: { skipCache?: boolean; requireAuthors?: boolean },
     ): Promise<RawMember[]> {
         // v2: entries written before the adapters read strictly may be partial.
-        const cacheKey = `org_member_pr_authors_v2_${organizationAndTeamData.organizationId}_${organizationAndTeamData.teamId}`;
+        const cacheKey = `org_member_pr_authors_v2_${organizationAndTeamData.organizationId}_${organizationAndTeamData.teamId}${organizationAndTeamData.integrationId ? `_${organizationAndTeamData.integrationId}` : ''}`;
 
         if (options.skipCache) {
             // A refresh that fails must not leave the previous authors for
