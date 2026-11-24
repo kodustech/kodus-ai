@@ -556,3 +556,42 @@ describe('StartSecurityScanUseCase — a share of the workers per organization',
         expect(jobQueue.enqueue).not.toHaveBeenCalled();
     });
 });
+
+describe('StartSecurityScanUseCase — a unit the limit stopped halfway', () => {
+    it('carries the lenses it read to the end as inherited, and runs again one cut short', async () => {
+        const { scans, start } = useCaseWith({
+            status: SecurityScanStatus.STOPPED_BY_BUDGET,
+            units: [unit('a'), { ...unit('b'), classes: ['authz', 'injection', 'ssrf'] }],
+            progress: [
+                { unitId: 'a', state: 'done', findings: 0 },
+                {
+                    unitId: 'b',
+                    state: 'skipped_budget',
+                    findings: 1,
+                    // ssrf ran but was cut short.
+                    lensesRun: ['authz', 'ssrf'],
+                    lensesExamined: ['authz'],
+                },
+            ],
+            reported: [],
+            coverage: { languages: ['typescript'] },
+            commitSha: 'plan-sha',
+        });
+
+        await start();
+
+        const created = scans.create.mock.calls[0][0];
+        expect(created.progress).toEqual([
+            { unitId: 'a', state: 'done', findings: 0 },
+            {
+                unitId: 'b',
+                state: 'pending',
+                findings: 0,
+                lensesRun: ['authz'],
+                lensesExamined: [],
+                lensesInherited: ['authz'],
+            },
+        ]);
+        expect(created.coverage.unitsDone).toBe(1);
+    });
+});

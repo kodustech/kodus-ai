@@ -606,10 +606,24 @@ export class SecurityScanEngine {
                 findings.push(...result.findings);
                 if (budgetSignal.aborted || params.meter.isExhausted()) {
                     stoppedByBudget = true;
+                    // The lenses that ended stay ended: a scan that carries
+                    // the plan on runs only the rest of the unit.
                     progress.set(unit.id, {
                         unitId: unit.id,
                         state: 'skipped_budget',
                         findings: result.findings.length,
+                        ...(result.lensesRun?.length
+                            ? {
+                                  lensesRun: result.lensesRun,
+                                  lensesExamined: result.lensesExamined,
+                                  ...(result.lensesInherited?.length
+                                      ? {
+                                            lensesInherited:
+                                                result.lensesInherited,
+                                        }
+                                      : {}),
+                              }
+                            : {}),
                         ...refutedHere,
                     });
                     await params.onUnitDone?.(
@@ -627,6 +641,9 @@ export class SecurityScanEngine {
                         findings: 0,
                         lensesRun: result.lensesRun,
                         lensesExamined: result.lensesExamined,
+                        ...(result.lensesInherited?.length
+                            ? { lensesInherited: result.lensesInherited }
+                            : {}),
                         ...refutedHere,
                     };
                     progress.set(unit.id, pending);
@@ -1182,6 +1199,8 @@ export class SecurityScanEngine {
         // Classes whose lens ended, in this slice or an earlier one.
         const ran = new Set<VulnClass>(resume?.lensesRun ?? []);
         const examinedBefore = resume?.lensesExamined ?? [];
+        // Read to the end by an earlier scan of this commit: complete, not ours.
+        const inherited = new Set<VulnClass>(resume?.lensesInherited ?? []);
         // Earlier findings one of this unit's repeated.
         const sighted: ScanReportedFinding[] = [];
         // The files each class's lens read: the evidence its conclusion holds on.
@@ -1201,6 +1220,7 @@ export class SecurityScanEngine {
                     ),
                 ]),
             ],
+            ...(inherited.size ? { lensesInherited: [...inherited] } : {}),
         });
 
         const runs = unit.classes
@@ -1474,7 +1494,9 @@ export class SecurityScanEngine {
         // were read still count as examined.
         const { lensesExamined: examinedClasses } = progressSoFar();
         const examinedSet = new Set(examinedClasses);
-        const missing = unit.classes.filter((c) => !examinedSet.has(c));
+        const missing = unit.classes.filter(
+            (c) => !examinedSet.has(c) && !inherited.has(c),
+        );
         if (missing.length) {
             return {
                 findings,
@@ -2381,6 +2403,7 @@ interface AuditResult {
     /** On a unit that stopped halfway, where to pick it up. */
     lensesRun?: VulnClass[];
     lensesExamined?: VulnClass[];
+    lensesInherited?: VulnClass[];
     error?: string;
     /** The unit stopped halfway: the cap, or the job ended. */
     aborted?: boolean;

@@ -3064,3 +3064,78 @@ describe('a bounded piece of work per job', () => {
         expect(result.progress.filter((p) => p.state === 'pending').length).toBeGreaterThan(0);
     });
 });
+
+describe('a unit an earlier scan stopped halfway at its limit', () => {
+    const unit = {
+        id: 'u-half',
+        file: 'src/orders/orders.controller.ts',
+        relatedFiles: [],
+        language: 'typescript',
+        classes: ['authz', 'injection'],
+        priority: 90,
+        reasons: [],
+    };
+    const classOf = (input: any) => input.agentName.replace('security-scan-', '');
+
+    it('runs only the lenses that scan did not read to the end, and claims none it did not read', async () => {
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm(),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            units: [unit],
+            progress: [
+                {
+                    unitId: 'u-half',
+                    state: 'pending',
+                    findings: 0,
+                    lensesRun: ['authz'],
+                    lensesExamined: [],
+                    lensesInherited: ['authz'],
+                },
+            ],
+        } as any);
+
+        expect(runLens.mock.calls.map(([input]) => classOf(input))).toEqual(['injection']);
+        expect(result.progress[0]).toEqual(expect.objectContaining({ state: 'done' }));
+        // Read by this scan: injection only; authz resolves nothing here.
+        expect(result.examinedByClass.map((e) => e.vulnerabilityClass)).toEqual(['injection']);
+    });
+
+    it('keeps the lenses that ended when the limit stops a unit', async () => {
+        let calls = 0;
+        const runLens = jest.fn(async (input: any) => {
+            calls++;
+            // The first lens ends; the second costs the whole limit.
+            await bill(calls === 2 ? 900_000 : 1, 1, input.usageRunName);
+            return { findings: { reasoning: '', suggestions: [] }, finishReason: 'completed' } as any;
+        });
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm(),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 0.5 }, RATES),
+            units: [unit],
+        } as any);
+
+        expect(result.stoppedByBudget).toBe(true);
+        expect(result.progress[0]).toEqual(
+            expect.objectContaining({
+                state: 'skipped_budget',
+                lensesRun: ['authz'],
+                lensesExamined: ['authz'],
+            }),
+        );
+    });
+});

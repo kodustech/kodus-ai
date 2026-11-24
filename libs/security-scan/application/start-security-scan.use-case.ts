@@ -460,13 +460,41 @@ export class StartSecurityScanUseCase {
                 );
             }
         }
+        // A unit the limit stopped halfway keeps the lenses that ended: this
+        // scan runs only the rest of it, never pays for those again.
+        // Only lenses read to the end are carried; one cut short runs again.
+        const halfway = (last.progress ?? [])
+            .filter(
+                (p) =>
+                    (p.state === 'skipped_budget' || p.state === 'pending') &&
+                    !!p.lensesExamined?.length,
+            )
+            .map((p) => {
+                const read = [
+                    ...new Set([
+                        ...(p.lensesInherited ?? []),
+                        ...(p.lensesExamined ?? []),
+                    ]),
+                ];
+                return {
+                    unitId: p.unitId,
+                    state: 'pending' as const,
+                    findings: 0,
+                    lensesRun: read,
+                    lensesExamined: [],
+                    lensesInherited: read,
+                };
+            });
         return {
             units: last.units,
             // Done, but not read by this scan: what they examined is
             // inherited below, never a miss of this scan's own.
-            progress: progress.map(
-                ({ examinedByClass: _carried, ...carried }) => carried,
-            ),
+            progress: [
+                ...progress.map(
+                    ({ examinedByClass: _carried, ...carried }) => carried,
+                ),
+                ...halfway,
+            ],
             planCommitSha,
             reported,
             coverage: {

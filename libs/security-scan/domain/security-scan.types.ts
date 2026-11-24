@@ -63,6 +63,13 @@ export interface ScanUnitProgress {
      */
     lensesRun?: VulnClass[];
     lensesExamined?: VulnClass[];
+    /**
+     * On a unit carried from an earlier scan of the same commit that its
+     * limit stopped halfway: the classes that scan read to the end. They do
+     * not run again and they complete the unit, but this scan did not read
+     * them: they resolve nothing.
+     */
+    lensesInherited?: VulnClass[];
     /** Files fully read by each class, recorded with this unit. */
     examinedByClass?: ScanExaminedClass[];
 }
