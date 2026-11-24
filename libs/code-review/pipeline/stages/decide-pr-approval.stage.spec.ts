@@ -170,7 +170,7 @@ it('names a failed shared assessment in the hold and does not record it twice', 
     });
     expect(result.approvalDecision).toMatchObject({
         kind: 'hold',
-        reason: 'Risk assessment is unavailable for the current PR head.',
+        reason: 'Risk assessment is unavailable: Kody could not assess risk for this PR.',
     });
     expect(result.errors).toEqual([sharedRiskFailure]);
 });

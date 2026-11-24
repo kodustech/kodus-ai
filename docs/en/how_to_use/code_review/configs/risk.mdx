@@ -31,7 +31,7 @@ Risk assessment starts off. Kody can assess risk while automatic approval is off
 
 - **Risk found:** risk-conditioned agents may run, Routing uses its risk-found mode, and automatic approval is blocked.
 - **No risk found:** Routing uses its no-risk mode. Approval still needs a clean review and a matching policy.
-- **Unavailable:** Routing uses the configured default review mode. Automatic approval is blocked, and agents that require confirmed risk do not run automatically.
+- **Unavailable:** Routing uses the configured default review mode. Automatic approval is blocked, and agents that require confirmed risk do not run automatically. The approval comment says why, for example when the Git provider did not return the diff of a code file.
 
 With assessment off, Routing uses one configured mode for all PRs. Conditional agents do not run without confirmed risk; explicit manual agent commands bypass that condition.
 

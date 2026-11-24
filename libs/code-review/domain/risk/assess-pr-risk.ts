@@ -14,6 +14,10 @@ import type { RiskAssessmentResult, RiskSnapshot } from './risk-assessment';
 
 export { approvalRiskOutputSchema as prRiskOutputSchema } from './assess-change-risk';
 
+/** Kinds the model can judge by path alone: assets, docs, data, lockfiles, tests, fixtures. */
+const JUDGEABLE_WITHOUT_DIFF =
+    /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|icns|tiff?|svg|pdf|mp3|mp4|m4a|mov|webm|ogg|oga|wav|flac|woff2?|ttf|otf|eot|md|mdx|markdown|rst|adoc|txt|csv|tsv|json|jsonl|ndjson|snap)$|(?:^|\/)(?:yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Gemfile\.lock|composer\.lock|go\.sum|mix\.lock|pubspec\.lock|Podfile\.lock)$|(?:^|\/)(?:__tests__|__snapshots__|__fixtures__|tests?|specs?|fixtures?|testdata)\/|\.(?:test|spec)\.[^/.]+$/i;
+
 export interface AssessPrRiskInput {
     organizationId: string;
     repositoryId: string;
@@ -94,15 +98,21 @@ export async function assessPrRisk(
     if (!input.headSha || !input.baseSha || !input.files.length) {
         return unavailable('Kody could not verify the complete PR snapshot.');
     }
-    // Providers can omit large/binary patches while retaining the file and its
-    // line counts. An absent patch must not turn a partial diff into a judgment.
-    // Zero counters cannot prove a pure rename: adapters can default missing counts to zero.
-    if (
-        input.files.some(
-            (file) => typeof file.patch !== 'string' || !file.patch.trim(),
-        )
-    ) {
-        return unavailable('Kody could not verify the complete PR diff.');
+    // Providers omit binary and oversized patches but keep the file. The model
+    // judges an unseen file only when its path says what it holds, and is told
+    // it did not see it; unseen code keeps the PR unavailable. Zero counters
+    // cannot prove a pure rename: adapters can default missing counts to zero.
+    const unseen = input.files.find(
+        (file) =>
+            (typeof file.patch !== 'string' || !file.patch.trim()) &&
+            approvalPathsOf([file]).some(
+                (path) => !JUDGEABLE_WITHOUT_DIFF.test(path),
+            ),
+    );
+    if (unseen) {
+        return unavailable(
+            `Kody could not read the diff of ${unseen.filename}: the Git provider did not return it.`,
+        );
     }
     const criteria = applicableRiskCriteria(input.criteria, input.files);
     const teamInstructions = criteria

@@ -271,7 +271,7 @@ it('still holds on unavailable risk when the PR has not changed', async () => {
     input.config.riskAssessmentActive = true;
     expect((await service().evaluate(input)).decision).toMatchObject({
         kind: 'hold',
-        reason: 'Risk assessment is unavailable for the current PR head.',
+        reason: 'Risk assessment is unavailable: Model failed.',
     });
     expect(code.getPullRequest).toHaveBeenCalledTimes(1);
     expect(LLM.run).not.toHaveBeenCalled();

@@ -83,6 +83,21 @@ describe('shared PR risk contract', () => {
         expect(riskApprovalVeto(true, risk, current)).toBeDefined();
     });
 
+    it('says why an unavailable assessment holds approval', () => {
+        expect(
+            riskApprovalVeto(
+                true,
+                {
+                    status: 'unavailable',
+                    reason: 'Kody could not read the diff of src/a.ts: the Git provider did not return it.',
+                },
+                current,
+            ),
+        ).toBe(
+            'Risk assessment is unavailable: Kody could not read the diff of src/a.ts: the Git provider did not return it.',
+        );
+    });
+
     it('requires verified no-risk on the reviewed head for approval', () => {
         expect(
             riskApprovalVeto(true, assessed(false), current),

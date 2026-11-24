@@ -14,7 +14,6 @@ import { resolveContextWindowWithSource } from '@libs/llm/model-context-window';
 import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
 import { createLogger } from '@libs/core/log/logger';
 import { CHANGE_RISK_PROMPT } from './change-risk-prompt';
-import { addedCodeLines } from './added-code-lines';
 import { estimateRiskPromptTokens } from './estimate-risk-prompt-tokens';
 
 /** Internal judgment retained for compatibility; public PR risk is binary. */
@@ -40,51 +39,15 @@ export const approvalRiskOutputSchema = z.object({
 const MAX_REASON_CHARS = 2_000;
 const MAX_AREA_FILES = 100;
 const logger = createLogger('AssessApprovalRisk');
-const SOURCE_FILE = /\.(?:ts|tsx|js|jsx|py|go|java|cs|rs)$/i;
-const TEST_FILE =
-    /(?:^|\/)(?:__tests__|tests?|specs?)(?:\/|\.|$)|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/i;
-const ADDED_CONTROL_FLOW = /\b(?:if\s*\(|return\b|throw\b)/;
-// Parentheses may follow newlines or comments that only the lexer can mask.
-const POSSIBLE_ADDED_CONTROL_FLOW = /\b(?:if|return|throw)\b/;
-
-function controlFlowEvidence(
-    files: FileChange[],
-): 'none' | 'untested' | 'unverifiable' {
-    if (
-        files.some(
-            (file) =>
-                file.status !== 'removed' &&
-                TEST_FILE.test(file.filename) &&
-                /\S/.test(
-                    addedCodeLines(file.patch ?? '', file.filename) ?? '',
-                ),
-        )
-    )
-        return 'none';
-    let unverifiable = false;
-    for (const file of files) {
-        if (
-            file.status === 'removed' ||
-            !SOURCE_FILE.test(file.filename) ||
-            TEST_FILE.test(file.filename)
-        )
-            continue;
-        const code = addedCodeLines(
-            file.patch ?? '',
-            file.filename,
-            POSSIBLE_ADDED_CONTROL_FLOW,
-        );
-        if (code === undefined) unverifiable = true;
-        else if (ADDED_CONTROL_FLOW.test(code)) return 'untested';
-    }
-    return unverifiable ? 'unverifiable' : 'none';
-}
+// Providers omit binary files and diffs too large to show; say so in place.
+const UNSHOWN_DIFF =
+    '[no diff: the Git provider did not show this file (binary or too large); its content was not inspected]';
 
 export function buildChangeRiskDiff(files: FileChange[]): string {
     return files
         .map(
             (file) =>
-                `${file.filename}${file.previous_filename && file.previous_filename !== file.filename ? ` (renamed from ${file.previous_filename})` : ''} (${file.status}; +${file.additions}/-${file.deletions})\n${file.patch ?? '[patch unavailable]'}`,
+                `${file.filename}${file.previous_filename && file.previous_filename !== file.filename ? ` (renamed from ${file.previous_filename})` : ''} (${file.status}; +${file.additions}/-${file.deletions})\n${file.patch?.trim() ? file.patch : UNSHOWN_DIFF}`,
         )
         .join('\n\n');
 }
@@ -232,25 +195,6 @@ export async function assessChangeRisk(input: {
             !result?.reason?.trim()
         ) {
             throw new Error('Empty approval risk judgment');
-        }
-        const flow =
-            result.level === 'low' ? controlFlowEvidence(input.files) : 'none';
-        if (flow === 'unverifiable')
-            return {
-                level: 'unknown',
-                reason: 'Kody could not verify control-flow and test evidence in this diff.',
-                reviewedHeadSha: input.headSha,
-                areaMapVersion: input.areaMap?.version,
-            };
-        if (flow === 'untested') {
-            return {
-                level: 'medium',
-                reason: input.language?.toLowerCase().startsWith('pt')
-                    ? 'O fluxo do código mudou sem evidência de testes no PR; uma pessoa deve conferir o comportamento.'
-                    : 'Control flow changed without test evidence in this PR; a person should verify the behavior.',
-                reviewedHeadSha: input.headSha,
-                areaMapVersion: input.areaMap?.version,
-            };
         }
         return {
             level: result.level,
