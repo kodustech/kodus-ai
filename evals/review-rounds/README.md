@@ -146,6 +146,8 @@ which vendors this repository's own public history in `fixtures/kodus-2011/`.
 | R20/R21-heavy | the same through heavy mode, whose lenses never see the history | `not_deliver` |
 | R23 | kodus-ai#2663 round 2 replayed from this repository: the applied host filter and round 1's seven answered comments | reversal and both re-raises → `not_deliver`; `-heavy` the same through heavy mode |
 | R24 | kodus-ai#2667 round 2 replayed: the applied per-label `needsId` and round 1's three answered comments | the per-entry reversal → `not_deliver`; `-heavy` through heavy mode; `-unanswered` with no thread answered, so only the reversal verdict holds it |
+| R25 | the R21 point with its thread read from the host: Kody conceded (`-kody-conceded`) or the developer said it will be fixed later (`-will-fix-later`) | the re-raise → `not_deliver` |
+| R26 | an applied suggestion that opened a CORS suffix bypass with credentials | the hole → `deliver`, even though its fix narrows the change; `-control` with no history |
 
 K5–K12 and R15–R17 reproduce repost shapes from a production sample (500
 later-round comments, 2026-10-05→12, #2114) with invented code; the volumes are

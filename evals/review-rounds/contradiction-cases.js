@@ -274,6 +274,74 @@ const kodus2667Claims = [
     },
 ];
 
+// ---------------------------------------------------------------------------
+// Thread state read from the host, as production reads it: the record carries
+// only its comment id, and the PR's threads say whether it was answered.
+// ---------------------------------------------------------------------------
+const { answered: _answered, ...pagingDecisionUnread } = pagingDecision;
+const pagingThreadCase = (replyBody) => ({
+    previousDecisions: [{ ...pagingDecisionUnread, commentId: '9101' }],
+    reviewThreads: [{ rootIds: ['9101'], replies: [{ body: replyBody }] }],
+});
+
+// ---------------------------------------------------------------------------
+// A security hole the applied suggestion opened: posted even though its fix
+// narrows the change. Round A asked to accept every subdomain of example.com;
+// the applied endsWith check also accepts evilexample.com, on a CORS policy
+// that sends credentials.
+// ---------------------------------------------------------------------------
+const corsRepo = {
+    'src/http/cors.ts': lines(
+        'export function isAllowedOrigin(origin: string | undefined): boolean {',
+        '    if (!origin) return false;',
+        "    return origin.endsWith('example.com');",
+        '}',
+    ),
+    'src/http/server.ts': lines(
+        "import { isAllowedOrigin } from './cors';",
+        '',
+        'export function corsHeaders(origin: string | undefined): Record<string, string> {',
+        '    if (!isAllowedOrigin(origin)) return {};',
+        '    return {',
+        "        'Access-Control-Allow-Origin': origin as string,",
+        "        'Access-Control-Allow-Credentials': 'true',",
+        '    };',
+        '}',
+    ),
+};
+const corsDiff = [
+    patch('src/http/cors.ts', 1, [
+        '-const ALLOWED = [\'https://app.example.com\'];',
+        '-',
+        ' export function isAllowedOrigin(origin: string | undefined): boolean {',
+        '     if (!origin) return false;',
+        '-    return ALLOWED.includes(origin);',
+        "+    return origin.endsWith('example.com');",
+        ' }',
+    ]),
+];
+const corsDecision = {
+    suggestionId: 'round-a-subdomains',
+    relevantFile: 'src/http/cors.ts',
+    relevantLinesStart: 1,
+    relevantLinesEnd: 5,
+    existingCode: "const ALLOWED = ['https://app.example.com'];\n\nexport function isAllowedOrigin(origin: string | undefined): boolean {\n    if (!origin) return false;\n    return ALLOWED.includes(origin);",
+    improvedCode: "return origin.endsWith('example.com');",
+    suggestionContent: 'isAllowedOrigin only accepts https://app.example.com, so the staging and preview web apps on other example.com subdomains cannot call the API. Accept every subdomain of example.com.',
+    label: 'bug',
+    outcome: 'implemented',
+    decidedAt: '2026-11-22T12:01:36Z',
+};
+const corsClaims = [
+    {
+        id: 'cors-suffix-bypass',
+        golden: 'isAllowedOrigin uses origin.endsWith(\'example.com\'), so an attacker origin such as https://evilexample.com passes, and corsHeaders then returns it with Access-Control-Allow-Credentials: true; it should match the exact host or a \'.example.com\' subdomain of a parsed URL.',
+        truth: 'true',
+        premise: 'diff',
+        expect: 'deliver',
+    },
+];
+
 const contradictionCases = [
     // The #2663 reversal, through the finder's link and through the check.
     {
@@ -324,6 +392,25 @@ const contradictionCases = [
     },
     { id: 'R23-kodus2663-round2', family: 'rounds', ...kodus2663, sandbox: 'alive', claims: kodus2663Claims },
     { id: 'R23-kodus2663-round2-heavy', family: 'rounds', ...kodus2663, sandbox: 'alive', heavy: true, claims: kodus2663Claims },
+    // The point's thread got a reply, read from the host: Kody conceded it, or
+    // the developer said it will be fixed later. Either ends the point.
+    {
+        id: 'R25-kody-conceded', family: 'rounds', repo: pagingRepo, changedFiles: pagingDiff, sandbox: 'alive',
+        ...pagingThreadCase('Fair point, rounding down is what the export expects here, since a partial page is merged into the previous one. Happy to leave it as is.'),
+        claims: [lastPageClaim('last-page-after-concession', 'not_deliver')],
+    },
+    {
+        id: 'R25-will-fix-later', family: 'rounds', repo: pagingRepo, changedFiles: pagingDiff, sandbox: 'alive',
+        ...pagingThreadCase('Good catch, I will fix this in a follow-up PR.'),
+        claims: [lastPageClaim('last-page-after-will-fix', 'not_deliver')],
+    },
+    // A security hole the applied change opened is posted, linked or not.
+    {
+        id: 'R26-security-hole-from-applied', family: 'rounds', repo: corsRepo, changedFiles: corsDiff, sandbox: 'alive',
+        previousDecisions: [corsDecision],
+        claims: corsClaims,
+    },
+    { id: 'R26-control', family: 'control', repo: corsRepo, changedFiles: corsDiff, sandbox: 'alive', claims: [{ ...corsClaims[0], id: 'cors-suffix-bypass-control' }] },
     { id: 'R24-kodus2667-round2', family: 'rounds', ...kodus2667, sandbox: 'alive', claims: kodus2667Claims },
     { id: 'R24-kodus2667-round2-heavy', family: 'rounds', ...kodus2667, sandbox: 'alive', heavy: true, claims: kodus2667Claims },
     // No thread answered: only the reversal verdict stands between it and the PR.
