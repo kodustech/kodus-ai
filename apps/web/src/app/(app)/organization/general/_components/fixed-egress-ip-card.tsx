@@ -7,12 +7,6 @@ import {
     planCtaTarget,
 } from "@components/system/plan-cta-target";
 import { Button } from "@components/ui/button";
-import {
-    Card,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@components/ui/card";
 import { Link } from "@components/ui/link";
 import { Switch } from "@components/ui/switch";
 import { toast } from "@components/ui/toaster/use-toast";
@@ -22,8 +16,13 @@ import {
 } from "@services/organizationParameters/fixedEgressIp";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
+import { CopyIcon, InfoIcon, LockIcon } from "lucide-react";
 import { ClipboardHelpers } from "src/core/utils/clipboard";
 import { isSelfHosted } from "src/core/utils/self-hosted";
+
+import { SettingsGroup, SettingsRow } from "./settings-group";
+
+const GROUP_TITLE = "Git host access";
 
 /** The API's refusal message (403 on a plan without it), if it sent one. */
 const apiMessage = (error: unknown): string | undefined => {
@@ -71,17 +70,12 @@ export const FixedEgressIpCard = ({
     if (isSelfHosted) return null;
     if (loadFailed && !savedHere) {
         return (
-            <Card color="lv1" className="w-md">
-                <CardHeader className="space-y-2">
-                    <CardTitle className="text-base">
-                        Fixed outbound IP
-                    </CardTitle>
-                    <CardDescription>
-                        Kodus could not load this setting. Refresh the page to
-                        try again.
-                    </CardDescription>
-                </CardHeader>
-            </Card>
+            <SettingsGroup title={GROUP_TITLE}>
+                <SettingsRow
+                    title="Fixed outbound IP"
+                    description="Kodus could not load this setting. Refresh the page to try again."
+                />
+            </SettingsGroup>
         );
     }
     if (!setting.available) return null;
@@ -128,94 +122,107 @@ export const FixedEgressIpCard = ({
     };
 
     const cta = planCtaTarget();
+    const showIp = setting.allowedByPlan && !unusedOnPlan && setting.fixedIp;
+
+    const notice = unusedOnPlan ? (
+        <>
+            Your plan does not include the fixed outbound IP, so Kody reaches
+            your Git host from the shared network even though this is on. Turn
+            it off to clear it.
+        </>
+    ) : setting.planUnconfirmed && !on ? (
+        <>
+            Kodus could not confirm your plan right now, so this cannot be
+            turned on yet. Try again in a few minutes.
+        </>
+    ) : !setting.allowedByPlan ? (
+        <>
+            {availabilityLine()}{" "}
+            <Link href={cta.href} className="underline">
+                {cta.label}
+            </Link>
+        </>
+    ) : setting.enabled && setting.source === "clone_fallback" ? (
+        <>
+            Kody turned this on after your Git host refused a clone from the
+            shared network.
+        </>
+    ) : null;
 
     return (
-        <Card color="lv1" className="w-md">
-            <CardHeader className="flex flex-row items-start justify-between gap-6">
-                <div className="space-y-2">
-                    <CardTitle className="text-base">
-                        Fixed outbound IP
-                    </CardTitle>
-                    <CardDescription>
-                        Turn this on when your Git host only accepts connections
-                        from allowlisted IPs, such as a self-managed GitLab
-                        behind a firewall. Kody then clones the repositories of
-                        every team in this organization from Kodus&apos;s fixed
-                        IP. Without it, Kody reaches your Git host from a shared
-                        network. Saved as soon as you switch it.
-                    </CardDescription>
+        <SettingsGroup
+            title={GROUP_TITLE}
+            description="Saved as soon as you change it, without the Save button.">
+            <SettingsRow
+                title="Fixed outbound IP"
+                description={
+                    <>
+                        Kody clones your repositories from one fixed IP instead
+                        of a shared network. Turn it on when your Git host only
+                        accepts allowlisted IPs, such as a self-managed GitLab
+                        behind a firewall. Applies to every team.
+                    </>
+                }
+                control={
+                    <Switch
+                        role="switch"
+                        aria-label="Fixed outbound IP"
+                        checked={on}
+                        disabled={
+                            !canEdit ||
+                            saving ||
+                            (!on &&
+                                (!setting.allowedByPlan ||
+                                    Boolean(setting.planUnconfirmed)))
+                        }
+                        loading={saving}
+                        onCheckedChange={(checked) => {
+                            onToggle(checked).catch(() => undefined);
+                        }}
+                    />
+                }
+            />
 
-                    {unusedOnPlan ? (
-                        <p className="text-text-secondary text-sm">
-                            Your plan does not include the fixed outbound IP, so
-                            Kody reaches your Git host from the shared network
-                            even though this is on. Turn it off to clear it.
+            {showIp && (
+                <SettingsRow
+                    title="IP to allowlist"
+                    description="Add it to your Git host's allowlist before you turn this on."
+                    control={
+                        <div className="bg-card-lv1 flex items-center gap-1 rounded-lg py-1 pr-1 pl-3">
+                            <code className="text-text-primary font-mono text-sm">
+                                {setting.fixedIp}
+                            </code>
+                            <Button
+                                type="button"
+                                size="xs"
+                                variant="helper"
+                                leftIcon={<CopyIcon />}
+                                onClick={copyIp}>
+                                Copy
+                            </Button>
+                        </div>
+                    }
+                />
+            )}
+
+            {(notice || !canEdit) && (
+                <div className="text-text-secondary flex flex-col gap-1 px-5 py-3 text-sm">
+                    {notice && (
+                        <p className="flex items-start gap-2">
+                            <InfoIcon className="text-text-tertiary mt-0.5 size-4 shrink-0" />
+                            <span>{notice}</span>
                         </p>
-                    ) : setting.planUnconfirmed && !on ? (
-                        <p className="text-text-secondary text-sm">
-                            Kodus could not confirm your plan right now, so this
-                            cannot be turned on yet. Try again in a few minutes.
-                        </p>
-                    ) : !setting.allowedByPlan ? (
-                        <p className="text-text-secondary text-sm">
-                            {availabilityLine()}{" "}
-                            <Link href={cta.href} className="underline">
-                                {cta.label}
-                            </Link>
-                        </p>
-                    ) : (
-                        <>
-                            {setting.fixedIp && (
-                                <div className="flex items-center gap-3 pt-1">
-                                    <span className="text-text-secondary text-sm">
-                                        Allowlist this IP on your Git host:
-                                    </span>
-                                    <code className="bg-card-lv3 rounded px-2 py-1 text-sm">
-                                        {setting.fixedIp}
-                                    </code>
-                                    <Button
-                                        type="button"
-                                        size="xs"
-                                        variant="helper"
-                                        onClick={copyIp}>
-                                        Copy
-                                    </Button>
-                                </div>
-                            )}
-                            {setting.enabled &&
-                                setting.source === "clone_fallback" && (
-                                    <p className="text-text-secondary text-sm">
-                                        Kody turned this on after your Git host
-                                        refused a clone from the shared network.
-                                    </p>
-                                )}
-                        </>
                     )}
-
                     {!canEdit && (
-                        <p className="text-text-secondary text-sm">
-                            Only an organization owner can change this.
+                        <p className="flex items-start gap-2">
+                            <LockIcon className="text-text-tertiary mt-0.5 size-4 shrink-0" />
+                            <span>
+                                Only an organization owner can change this.
+                            </span>
                         </p>
                     )}
                 </div>
-
-                <Switch
-                    role="switch"
-                    aria-label="Fixed outbound IP"
-                    checked={on}
-                    disabled={
-                        !canEdit ||
-                        saving ||
-                        (!on &&
-                            (!setting.allowedByPlan ||
-                                Boolean(setting.planUnconfirmed)))
-                    }
-                    loading={saving}
-                    onCheckedChange={(checked) => {
-                        onToggle(checked).catch(() => undefined);
-                    }}
-                />
-            </CardHeader>
-        </Card>
+            )}
+        </SettingsGroup>
     );
 };

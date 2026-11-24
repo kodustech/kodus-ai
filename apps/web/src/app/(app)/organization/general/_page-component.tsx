@@ -1,10 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Card, CardHeader } from "@components/ui/card";
 import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
-import { Label } from "@components/ui/label";
 import { Page } from "@components/ui/page";
 import {
     Select,
@@ -25,12 +23,13 @@ import {
     OrganizationParametersReviewCommandModesConfig,
     Timezone,
 } from "@services/parameters/types";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { publicDomainsSet } from "src/core/utils/email";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 import { z } from "zod";
 
 import { FixedEgressIpCard } from "./_components/fixed-egress-ip-card";
+import { SettingsGroup, SettingsRow } from "./_components/settings-group";
 
 const timezoneOptions = [
     { value: Timezone.NEW_YORK, title: "New York" },
@@ -123,6 +122,11 @@ export const GeneralOrganizationSettingsPage = (props: {
         formState: { errors, isDirty, isValid },
     } = form;
 
+    const autoJoinEnabled = useWatch({
+        control,
+        name: "autoJoinConfig.enabled",
+    });
+
     const [saveSettings, { loading: isLoadingSubmitButton }] = useAsyncAction(
         async (data: SettingsFormData) => {
             try {
@@ -191,9 +195,8 @@ export const GeneralOrganizationSettingsPage = (props: {
                     <Page.TitleContainer>
                         <Page.Title>General settings</Page.Title>
                         <Page.Description>
-                            Your organization&apos;s timezone, who can join it
-                            automatically, which review modes a PR comment can
-                            start, and how Kody reaches your Git host.
+                            Settings that apply to every team in this
+                            organization.
                         </Page.Description>
                     </Page.TitleContainer>
                     <Page.SaveActions
@@ -205,203 +208,176 @@ export const GeneralOrganizationSettingsPage = (props: {
                     />
                 </Page.Header>
 
-                <Page.Content className="flex flex-col gap-8">
-                    <Controller
-                        name="timezone"
-                        control={control}
-                        render={({ field }) => (
-                            <FormControl.Root>
-                                <FormControl.Label htmlFor="timezone">
-                                    Timezone
-                                </FormControl.Label>
-                                <FormControl.Input>
-                                    <Select
-                                        value={field.value}
-                                        onValueChange={field.onChange}>
-                                        <SelectTrigger
-                                            id="timezone"
-                                            className="w-72">
-                                            <SelectValue placeholder="Select timezone" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {timezoneOptions.map((opt) => (
-                                                <SelectItem
-                                                    key={opt.value}
-                                                    value={opt.value}>
-                                                    {opt.title}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </FormControl.Input>
-                            </FormControl.Root>
-                        )}
-                    />
+                <Page.Content className="flex max-w-3xl flex-col gap-10">
+                    <SettingsGroup title="Organization">
+                        <SettingsRow
+                            title="Timezone"
+                            description="Dates and times for this organization follow it."
+                            htmlFor="timezone"
+                            control={
+                                <Controller
+                                    name="timezone"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Select
+                                            value={field.value}
+                                            onValueChange={field.onChange}>
+                                            <SelectTrigger
+                                                id="timezone"
+                                                className="w-48">
+                                                <SelectValue placeholder="Select timezone" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {timezoneOptions.map((opt) => (
+                                                    <SelectItem
+                                                        key={opt.value}
+                                                        value={opt.value}>
+                                                        {opt.title}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                            }
+                        />
+                    </SettingsGroup>
 
-                    <Card color="lv1" className="w-md">
-                        <CardHeader>
-                            <FormControl.Root className="flex flex-col">
-                                <FormControl.Label className="mb-0 text-base font-bold">
-                                    Auto Join
-                                </FormControl.Label>
-                                <FormControl.Helper className="mt-0 mb-5">
-                                    Allow users with matching email domains to
-                                    automatically join.
-                                </FormControl.Helper>
-
+                    <SettingsGroup title="Members">
+                        <SettingsRow
+                            title="Auto join by email domain"
+                            description="People who sign up with your company's email domain join this organization on their own."
+                            htmlFor="autoJoinConfig.enabled"
+                            control={
                                 <Controller
                                     name="autoJoinConfig.enabled"
                                     control={control}
                                     render={({ field }) => (
-                                        <div className="flex items-center gap-3">
-                                            <Switch
-                                                id={field.name}
-                                                checked={field.value}
-                                                onCheckedChange={(v) => {
-                                                    field.onChange(v);
-                                                    form.trigger(
-                                                        "autoJoinConfig.domains",
-                                                    );
-                                                }}
-                                            />
-                                            <Label
-                                                htmlFor={field.name}
-                                                className="text-sm font-medium">
-                                                Enable Auto Join
-                                            </Label>
-                                        </div>
+                                        <Switch
+                                            id={field.name}
+                                            checked={field.value}
+                                            onCheckedChange={(v) => {
+                                                field.onChange(v);
+                                                form.trigger(
+                                                    "autoJoinConfig.domains",
+                                                );
+                                            }}
+                                        />
                                     )}
                                 />
-
+                            }>
+                            {autoJoinEnabled && (
                                 <Controller
                                     name="autoJoinConfig.domains"
                                     control={control}
-                                    render={({ field, fieldState }) => {
-                                        const autoJoinEnabled = form.watch(
-                                            "autoJoinConfig.enabled",
-                                        );
-                                        return (
-                                            <>
-                                                <FormControl.Input>
-                                                    <Input
-                                                        placeholder="e.g., yourcompany.com"
-                                                        error={fieldState.error}
-                                                        value={
-                                                            field.value?.join(
-                                                                ",",
-                                                            ) ?? ""
-                                                        }
-                                                        onChange={(e) => {
-                                                            const inputValue =
-                                                                e.target.value;
-
-                                                            if (
-                                                                inputValue ===
-                                                                ""
-                                                            ) {
-                                                                field.onChange(
-                                                                    [],
-                                                                );
-                                                                return;
-                                                            }
-
-                                                            const domains =
-                                                                e.target.value
-                                                                    .split(
-                                                                        /,\s*/,
-                                                                    )
-                                                                    .map((d) =>
-                                                                        d.trim(),
-                                                                    );
-                                                            field.onChange(
-                                                                domains,
-                                                            );
-                                                        }}
-                                                        disabled={
-                                                            !autoJoinEnabled
-                                                        }
-                                                        className="mt-3"
-                                                    />
-                                                </FormControl.Input>
-                                                <FormControl.Error>
-                                                    {
-                                                        errors.autoJoinConfig
-                                                            ?.domains?.message
+                                    render={({ field, fieldState }) => (
+                                        <FormControl.Root>
+                                            <FormControl.Label htmlFor="autoJoinConfig.domains">
+                                                Domains
+                                            </FormControl.Label>
+                                            <FormControl.Input>
+                                                <Input
+                                                    id="autoJoinConfig.domains"
+                                                    placeholder="e.g., yourcompany.com"
+                                                    error={fieldState.error}
+                                                    value={
+                                                        field.value?.join(
+                                                            ",",
+                                                        ) ?? ""
                                                     }
-                                                </FormControl.Error>
-                                                <FormControl.Helper>
-                                                    Enter domains separated by
-                                                    commas.
-                                                </FormControl.Helper>
-                                            </>
-                                        );
-                                    }}
+                                                    onChange={(e) => {
+                                                        const inputValue =
+                                                            e.target.value;
+                                                        if (inputValue === "") {
+                                                            field.onChange([]);
+                                                            return;
+                                                        }
+                                                        field.onChange(
+                                                            inputValue
+                                                                .split(/,\s*/)
+                                                                .map((d) =>
+                                                                    d.trim(),
+                                                                ),
+                                                        );
+                                                    }}
+                                                />
+                                            </FormControl.Input>
+                                            <FormControl.Error>
+                                                {
+                                                    errors.autoJoinConfig
+                                                        ?.domains?.message
+                                                }
+                                            </FormControl.Error>
+                                            <FormControl.Helper>
+                                                Separate domains with commas.
+                                                Only your own domain is
+                                                accepted.
+                                            </FormControl.Helper>
+                                        </FormControl.Root>
+                                    )}
                                 />
-                            </FormControl.Root>
-                        </CardHeader>
-                    </Card>
+                            )}
+                        </SettingsRow>
+                    </SettingsGroup>
 
-                    <Card color="lv1" className="w-md">
-                        <CardHeader>
-                            <FormControl.Root className="flex flex-col">
-                                <FormControl.Label className="mb-0 text-base font-bold">
-                                    Review mode commands
-                                </FormControl.Label>
-                                <FormControl.Helper className="mt-0 mb-5">
-                                    Anyone with write access to the repository
-                                    can start a Heavy or Ultra review with{" "}
-                                    <code>@kody review --heavy</code> or{" "}
-                                    <code>--ultra</code>. Blocking a command
-                                    stops only that command: automatic reviews
-                                    keep the mode set in Routing.
-                                </FormControl.Helper>
-
-                                {!props.reviewCommandModes && (
-                                    <p
-                                        role="alert"
-                                        className="text-danger mb-3 text-sm">
-                                        These settings could not be loaded.
-                                        Reload the page to try again.
-                                    </p>
+                    <SettingsGroup
+                        title="Review commands"
+                        description={
+                            <>
+                                Anyone with write access to a repository can
+                                start these reviews from a PR comment. Turning
+                                one off blocks only the command: automatic
+                                reviews keep the mode set in Routing.
+                            </>
+                        }>
+                        {!props.reviewCommandModes && (
+                            <p
+                                role="alert"
+                                className="text-danger px-5 py-4 text-sm">
+                                These settings could not be loaded. Reload the
+                                page to try again.
+                            </p>
+                        )}
+                        {(
+                            [
+                                ["heavyBlocked", "Heavy", "--heavy"],
+                                ["ultraBlocked", "Ultra", "--ultra"],
+                            ] as const
+                        ).map(([key, mode, flag]) => (
+                            <Controller
+                                key={key}
+                                name={`reviewCommandModes.${key}`}
+                                control={control}
+                                render={({ field }) => (
+                                    <SettingsRow
+                                        title={`${mode} review`}
+                                        description={
+                                            <code className="text-text-secondary text-xs">
+                                                @kody review {flag}
+                                            </code>
+                                        }
+                                        htmlFor={field.name}
+                                        control={
+                                            // On means the command is
+                                            // allowed; the stored value is
+                                            // whether it is blocked.
+                                            <Switch
+                                                id={field.name}
+                                                aria-label={`Allow ${mode} review by command`}
+                                                disabled={
+                                                    !props.reviewCommandModes
+                                                }
+                                                checked={!field.value}
+                                                onCheckedChange={(allowed) =>
+                                                    field.onChange(!allowed)
+                                                }
+                                            />
+                                        }
+                                    />
                                 )}
-
-                                <div className="flex flex-col gap-3">
-                                    {(
-                                        [
-                                            ["heavyBlocked", "Heavy"],
-                                            ["ultraBlocked", "Ultra"],
-                                        ] as const
-                                    ).map(([key, mode]) => (
-                                        <Controller
-                                            key={key}
-                                            name={`reviewCommandModes.${key}`}
-                                            control={control}
-                                            render={({ field }) => (
-                                                <div className="flex items-center gap-3">
-                                                    <Switch
-                                                        id={field.name}
-                                                        disabled={
-                                                            !props.reviewCommandModes
-                                                        }
-                                                        checked={field.value}
-                                                        onCheckedChange={
-                                                            field.onChange
-                                                        }
-                                                    />
-                                                    <Label
-                                                        htmlFor={field.name}
-                                                        className="text-sm font-medium">
-                                                        Block {mode} review by
-                                                        command
-                                                    </Label>
-                                                </div>
-                                            )}
-                                        />
-                                    ))}
-                                </div>
-                            </FormControl.Root>
-                        </CardHeader>
-                    </Card>
+                            />
+                        ))}
+                    </SettingsGroup>
 
                     <FixedEgressIpCard
                         initialSetting={props.fixedEgressIp}

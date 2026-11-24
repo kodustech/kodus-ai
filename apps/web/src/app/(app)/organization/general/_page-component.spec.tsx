@@ -72,14 +72,14 @@ describe("General settings — review mode commands", () => {
         renderPage();
         expect(
             screen.getByRole("switch", {
-                name: "Block Heavy review by command",
+                name: "Allow Heavy review by command",
             }),
-        ).not.toBeChecked();
+        ).toBeChecked();
         expect(
             screen.getByRole("switch", {
-                name: "Block Ultra review by command",
+                name: "Allow Ultra review by command",
             }),
-        ).not.toBeChecked();
+        ).toBeChecked();
     });
 
     it("shows the switches unknown, and the rest of the page, when they could not be read", () => {
@@ -88,31 +88,31 @@ describe("General settings — review mode commands", () => {
             "These settings could not be loaded.",
         );
         for (const name of [
-            "Block Heavy review by command",
-            "Block Ultra review by command",
+            "Allow Heavy review by command",
+            "Allow Ultra review by command",
         ]) {
             expect(screen.getByRole("switch", { name })).toBeDisabled();
         }
     });
 
-    it("saves the switch blocked, and only that parameter", async () => {
+    it("saves a command turned off as blocked, and only that parameter", async () => {
         renderPage({ heavyBlocked: true, ultraBlocked: false });
         expect(
             screen.getByRole("switch", {
-                name: "Block Heavy review by command",
+                name: "Allow Heavy review by command",
             }),
-        ).toBeChecked();
+        ).not.toBeChecked();
 
         fireEvent.click(
             screen.getByRole("switch", {
-                name: "Block Ultra review by command",
+                name: "Allow Ultra review by command",
             }),
         );
         await act(async () => {
             fireEvent.submit(
                 screen
                     .getByRole("switch", {
-                        name: "Block Ultra review by command",
+                        name: "Allow Ultra review by command",
                     })
                     .closest("form")!,
             );
