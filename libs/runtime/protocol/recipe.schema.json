@@ -521,12 +521,12 @@
           "maximum": 16
         },
         "service": {
-          "description": "The compose service the command runs in; or image.",
+          "description": "The compose service of the environment the command runs in (its container has the repository, node and the browser).",
           "type": "string",
           "maxLength": 128
         },
         "image": {
-          "description": "An image the command runs in, instead of service.",
+          "description": "Not supported yet: refused. Add the image as a service of the compose file and name it with service.",
           "type": "string",
           "maxLength": 256
         },

@@ -205,6 +205,10 @@ func (s *suiteBlock) validate() error {
 	if s.Service != "" && s.Image != "" {
 		return errors.New("suite: service and image together; use one")
 	}
+	// An image is not turned into a service by the engine: the environment's compose file holds the services (docs/runtime/e2e-suites.md section 4).
+	if s.Image != "" {
+		return errors.New("suite.image: not supported yet; add the image as a service of the environment's compose file and name it with suite.service")
+	}
 	for _, k := range []string{"shard", "spec", "total"} {
 		if d, set := s.Timeout[k]; set && (d <= 0 || time.Duration(d) > maxSuiteTimeout) {
 			return fmt.Errorf("suite.timeout.%s: use a duration from 1s to 2h", k)

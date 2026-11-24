@@ -171,8 +171,8 @@ const RecipeSuiteSchema = z.strictObject({
     cwd: z.string().max(512).optional().describe('Where the command runs, relative to the repository root.'),
     specs: z.string().max(512).describe('Glob of the spec files, relative to cwd.'),
     shards: z.number().int().min(1).max(SUITE_LIMITS.shards).optional().describe('A ceiling on the hosts the suite is spread over.'),
-    service: z.string().max(128).optional().describe('The compose service the command runs in; or image.'),
-    image: z.string().max(256).optional().describe('An image the command runs in, instead of service.'),
+    service: z.string().max(128).optional().describe('The compose service of the environment the command runs in (its container has the repository, node and the browser).'),
+    image: z.string().max(256).optional().describe('Not supported yet: refused. Add the image as a service of the compose file and name it with service.'),
     timeout: z.strictObject({ shard: duration.optional(), spec: duration.optional(), total: duration.optional() }).optional(),
     env: z.record(z.string(), scalar).optional().describe('Plain values only; secrets stay in the environment sealed secrets.'),
     results: z
@@ -424,6 +424,8 @@ function suiteRules(s: RecipeSuite): string | undefined {
     if (!insideRepo(s.specs)) return `suite.specs: ${JSON.stringify(s.specs)} must be a path inside the repo`;
     if (s.service !== undefined && !NAME.test(s.service)) return `suite.service: bad service ${JSON.stringify(s.service)}`;
     if (s.service !== undefined && s.image !== undefined) return 'suite: service and image together; use one';
+    // The engine does not turn an image into a service: the environment's compose file holds the services (docs/runtime/e2e-suites.md section 4).
+    if (s.image !== undefined) return "suite.image: not supported yet; add the image as a service of the environment's compose file and name it with suite.service";
     for (const [k, v] of Object.entries(s.timeoutSeconds ?? {})) {
         if (!(v > 0 && v <= SUITE_LIMITS.maxTimeoutSeconds)) return `suite.timeout.${k}: use a duration from 1s to 2h`;
     }

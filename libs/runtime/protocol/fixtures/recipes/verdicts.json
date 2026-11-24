@@ -442,6 +442,11 @@
             "runo": "unvalidated",
             "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
         },
+        "libs/runtime/protocol/fixtures/recipes/refuse-suite-image.yaml": {
+            "cell": "refuse: suite.image: not supported yet",
+            "runo": "unvalidated",
+            "why": "Pins TS/Go cell parsing of the suite block only (docs/runtime/e2e-suites.md section 3); Runo execution was not rerun."
+        },
         "libs/runtime/protocol/fixtures/recipes/refuse-suite-timeout-zero.yaml": {
             "cell": "refuse: suite.timeout.shard",
             "runo": "unvalidated",

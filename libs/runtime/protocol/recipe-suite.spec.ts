@@ -57,6 +57,7 @@ describe('recipe suite block', () => {
         ['a cwd that leaves the repo', `${CYPRESS}\ncwd: ../x`, 'suite.cwd: "../x" must be a path inside the repo'],
         ['an absolute specs glob', 'runner: cypress\ncommand: c {specs}\nspecs: /etc/**', 'suite.specs: "/etc/**" must be a path inside the repo'],
         ['service and image together', `${CYPRESS}\nservice: e2e\nimage: cypress/included`, 'suite: service and image together; use one'],
+        ['an image', `${CYPRESS}\nimage: cypress/included@sha256:${'0'.repeat(64)}`, 'suite.image: not supported yet; add the image as a service of the environment\'s compose file and name it with suite.service'],
         ['a zero timeout', `${CYPRESS}\ntimeout: { spec: 0s }`, 'suite.timeout.spec'],
         ['a bad duration', `${CYPRESS}\ntimeout: { total: soon }`, 'suite.timeout.total'],
         ['9 artifact paths', `${CYPRESS}\nresults: { artifacts: [a, b, c, d, e, f, g, h, i] }`, 'suite.results.artifacts: at most 8 paths'],
