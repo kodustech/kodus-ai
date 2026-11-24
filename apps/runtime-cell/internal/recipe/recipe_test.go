@@ -140,7 +140,7 @@ func TestParseRefuses(t *testing.T) {
 // A fix's test value (catalog.ts testValueFor) may sit under a name that
 // looks like a secret; a real-looking value never may, whatever the name.
 func TestParseTakesKodusTestValuesUnderSecretNames(t *testing.T) {
-	r, err := Parse([]byte("version: 1\nservices: { compose: { env: { SESSION_SECRET: kodus-test-value, STRIPE_API_URL: \"http://kodus-fake.invalid\", API_TOKEN: \"http://kodus-fake.invalid\" } } }\n"))
+	r, err := Parse([]byte("version: 1\nservices: { compose: { env: { SESSION_SECRET: kodus-test-value, STRIPE_API_URL: \"http://kodus-fake.invalid\", SHOP_TOKEN: \"http://kodus-fake.invalid\" } } }\n"))
 	if err != nil || r.Services.Compose.Env["SESSION_SECRET"] != "kodus-test-value" {
 		t.Fatalf("%+v %v", r, err)
 	}

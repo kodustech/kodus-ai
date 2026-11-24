@@ -53,7 +53,7 @@ func TestUnsafeFakeDeclarationsAreRefused(t *testing.T) {
 		"fakes: { stripe: { image: stripe-mock, privileged: true } }",
 		"fakes: { stripe: false }",
 		"fakes: { stripe: { image: stripe-mock, env: { NODE_OPTIONS: '--require /tmp/x' } } }",
-		"fakes: { stripe: { image: stripe-mock, env: { API_TOKEN: customer-secret } } }",
+		"fakes: { stripe: { image: stripe-mock, env: { SHOP_TOKEN: customer-secret } } }",
 		"fakes: { stripe: { image: stripe-mock, env: { SAME: a } }, email: { image: mailpit, env: { SAME: b } } }",
 		"services: { compose: { env: { SAME: a } } }\nfakes: { stripe: { image: stripe-mock, env: { SAME: b } } }",
 		"fakes: { stripe: { image: stripe-mock, env: { SAFE: 12 } } }",

@@ -49,7 +49,7 @@ describe('recipe suite block', () => {
         ['a command over 1 KiB', `runner: playwright\ncommand: ${'x'.repeat(1025)}\nspecs: "a/**"`, 'suite.command: at most 1024 bytes'],
         ['a multibyte command over 1 KiB in bytes', `runner: playwright\ncommand: ${'é'.repeat(600)}\nspecs: "a/**"`, 'suite.command: at most 1024 bytes'],
         ['17 env entries', `${CYPRESS}\nenv: { ${Array.from({ length: 17 }, (_, i) => `V${i}: 1`).join(', ')} }`, 'suite.env: at most 16 entries'],
-        ['a secret in env', `${CYPRESS}\nenv: { API_TOKEN: abc }`, 'suite.env.API_TOKEN looks like a secret'],
+        ['a secret in env', `${CYPRESS}\nenv: { SHOP_TOKEN: abc }`, 'suite.env.SHOP_TOKEN looks like a secret'],
         ['the Cypress record key in env', `${CYPRESS}\nenv: { CYPRESS_RECORD_KEY: abc }`, 'suite.env.CYPRESS_RECORD_KEY'],
         ['a control env name', `${CYPRESS}\nenv: { NODE_OPTIONS: "--x" }`, 'suite.env.NODE_OPTIONS changes what runs'],
         ['a cypress command with no {specs}', 'runner: cypress\ncommand: npx cypress run\nspecs: "a/**"', 'suite.command: a cypress command needs {specs}'],
