@@ -53,10 +53,10 @@ export function noReferenceMessage(): string {
 This pull request doesn't reference a task. Reference it in the title, description or branch (\`PROJ-123\`, \`#123\` or a link), or run ${RERUN} followed by the task id or link. A \`#123\` the description only mentions isn't read as the task: write \`Closes #123\`.`;
 }
 
-/** No task referenced, and the repository's settings ask for one. */
 /** How to name the task, for every message that asks for one. */
 const REFERENCE_A_TASK = `Reference the task in the title, description or branch (\`PROJ-123\`, \`Closes #123\` or a link) and comment ${RERUN}.`;
 
+/** No task referenced, and the repository's settings ask for one. */
 export function taskRequiredMessage(): string {
     return `## 🤔 Which task is this?
 
@@ -160,7 +160,16 @@ export function diffUnavailableMessage(): string {
 I found the task, but I couldn't load the pull request diff, so I can't compare the implementation with it. Try ${RERUN} again.`;
 }
 
-export function tooLargeForModelMessage(contextWindowTokens: number): string {
+export function tooLargeForModelMessage(
+    contextWindowTokens: number,
+    /** The answer the call declares: the slot's `maxOutputTokens`, when it sets one. */
+    answerTokens = 0,
+): string {
+    if (answerTokens * 2 >= contextWindowTokens) {
+        return `## 🤔 The model's answer limit leaves no room for the code
+
+The model that checks business logic may write up to ${answerTokens} tokens, and its input window is ${contextWindowTokens} tokens: the provider counts both against the window, so the task and this PR's changes don't fit beside the answer. Nothing was checked. Lower the max output tokens of that model in the Business Logic settings, or pick a model with a larger window.`;
+    }
     return `## 🤔 Too large for the model
 
 The task, the pull request description and this PR's changes don't fit the input window of the model that checks business logic (${contextWindowTokens} tokens): not one changed file fits beside the task. Nothing was checked. A model with a larger window in the Business Logic settings, or a shorter task, lets Kody read the code.`;

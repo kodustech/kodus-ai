@@ -888,7 +888,7 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
         expect(worst(calls[0].text) + 32_000).toBeLessThanOrEqual(64_000);
     });
 
-    it('still reads code when the slot allows an answer as large as its window', async () => {
+    it("asks nothing, and says to lower the answer limit, when the slot's answer fills its window", async () => {
         const { outcome, calls } = await judgeCalls(
             {
                 model: 'local-open-weights',
@@ -897,8 +897,25 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
             },
             { diff: codePr },
         );
-        expect(outcome.kind).toBe('validated');
+        expect(calls).toHaveLength(0);
+        expect(outcome).toMatchObject({
+            kind: 'skipped',
+            reason: 'too_large_for_model',
+        });
+        expect(outcome.message).toContain('Lower the max output tokens');
+    });
+
+    it("fits the call with the slot's whole answer when that answer takes most of the window", async () => {
+        const { calls } = await judgeCalls(
+            {
+                model: 'local-open-weights',
+                maxInputTokens: 64_000,
+                maxOutputTokens: 48_000,
+            },
+            { diff: codeFiles(60) },
+        );
         expect(calls[0].diff.length).toBeGreaterThan(0);
+        expect(worst(calls[0].text) + 48_000).toBeLessThanOrEqual(64_000);
     });
 
     it('sizes the call for a fallback with a smaller window than the primary', async () => {

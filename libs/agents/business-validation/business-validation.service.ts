@@ -524,12 +524,13 @@ export class BusinessValidationService {
                     ),
                 ),
             );
+        const answerTokens = analyzerOutputTokens(slot).reserved;
         const { diff, unseenFiles } = fitDiff(fullDiff, {
             chars: DIFF_BUDGET_CHARS,
             tokens: diffTokenBudget({
                 contextWindowTokens,
                 promptTokens,
-                outputTokens: analyzerOutputTokens(slot).reserved,
+                outputTokens: answerTokens,
             }),
         });
         // No file fits beside the task and the answer: a judge that reads no
@@ -537,7 +538,10 @@ export class BusinessValidationService {
         if (!diff.trim()) {
             return skip(
                 'too_large_for_model',
-                messages.tooLargeForModelMessage(contextWindowTokens),
+                messages.tooLargeForModelMessage(
+                    contextWindowTokens,
+                    answerTokens,
+                ),
             );
         }
 

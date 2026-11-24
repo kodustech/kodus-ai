@@ -10,13 +10,6 @@ export const ANALYZER_MAX_OUTPUT_TOKENS = 20_000;
  */
 const ANALYZER_OUTPUT_WINDOW_SHARE = 0.25;
 
-/**
- * The most of the window kept for a slot's own `maxOutputTokens`: a slot whose
- * answer limit is as large as its window would otherwise leave no room for
- * any diff, and every PR would be skipped as too large.
- */
-const SLOT_OUTPUT_WINDOW_SHARE = 0.5;
-
 type Slot = Omit<NormalizedModel, 'fallback'>;
 
 function windowOf(slot: Slot): number {
@@ -62,7 +55,9 @@ export function analyzerOutputTokens(model: NormalizedModel | undefined): {
  * The answer room a call on this slot keeps in the window, for a caller that
  * asks for `requested`: the slot's own `maxOutputTokens` wins in
  * `runAgentLoopCall`, on the primary or the fallback, so the larger of what
- * each would send, at most half the window.
+ * each would send. Not capped by the window: the call declares that much
+ * whatever room is left, and a provider rejects input plus answer above the
+ * window, so a slot whose answer limit fills its window can't be judged.
  */
 export function reservedOutputTokens(
     model: NormalizedModel | undefined,
@@ -72,11 +67,5 @@ export function reservedOutputTokens(
         slot?.maxOutputTokens && slot.maxOutputTokens > 0
             ? slot.maxOutputTokens
             : requested;
-    return Math.min(
-        Math.max(sent(model), sent(model?.fallback)),
-        Math.max(
-            requested,
-            Math.floor(judgeWindow(model) * SLOT_OUTPUT_WINDOW_SHARE),
-        ),
-    );
+    return Math.max(sent(model), sent(model?.fallback));
 }
