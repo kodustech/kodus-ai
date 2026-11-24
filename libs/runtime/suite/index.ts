@@ -9,3 +9,5 @@ export { BASELINE_MAX_COMMITS_BEHIND, classifyFailures, MASS_FAILURE_RATIO, need
 export type { BaselineEvidence, Classification, ClassifiedTest, ClassifyInput, FailureClass, MainSide, Rerun, RerunPlan, SuiteFailure, UnclassifiedReason } from './classifier';
 export { IMPORTER_WALK, MAP_MAX_AGE_MS, MAP_MAX_COMMITS_BEHIND, NOISE_SHARE, select } from './select';
 export type { CoverageMapInput, FullReason, SelectInput, Selection } from './select';
+export { planRepush } from './repush';
+export type { PreviousSuiteRun, RepushInput, RepushPlan } from './repush';
