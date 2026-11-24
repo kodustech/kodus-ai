@@ -654,6 +654,23 @@ Dashboards and events: `runtime.suite.run{mode,outcome}`, `runtime.suite.shard_m
 16. **Run orchestrator stage and CI mode trigger**; one engine, both modes' publish differences tested.
 17. **API, web, usage**: suite tab and page (selected vs full, why), settings, usage line (`baseline | pr | rerun |
     shadow`), org ceiling.
+    **Built (the owner's approved prototype).** Routes: `GET /runtime/runs/:id/suite` (the Run page's "e2e suite" tab: the verdict's
+    fields, four facts, the failed tests as Regression / Unclassified / Already failing on main / Flaky, "Why these N specs", the
+    shards, the passed list), `POST /runtime/runs/:id/suite/retry` ("Re-run failed": `RuntimeSuiteRetried` of scope `failed`, tokens
+    minted by the product like CI mode), `GET /runtime/runs/:id/suite/artifacts?spec=&name=` (a 5-minute URL for a file the suite run
+    stored; the key is found server side), `GET /runtime/environments/:id/suite` (Settings) and `POST
+    /runtime/environments/:id/suite/selection/resume`; the usage report gains `suite`. **Where each setting lives.** The recipe owns the
+    command, the specs, the results, the shard ceiling (`suite.shards`) and the gate (`suite.gate`, D4): Settings shows them read-only with
+    "Edit .kodus/workspace.yaml", never a control. The environment owns two switches: "run on every push as a CI check" is a product column
+    (`runtime_environments.suite_ci`, null follows `RUNTIME_SUITE_CI`), and "run only the specs the change reaches" is the Runtime's state
+    (`runtime_suite_selection_state`, which the shadow check also writes): the product asks through `runtime.suite.selection_changed` on
+    the control lane and never writes it; a brake the shadow check set shows as "paused" with Resume selection, a person's off as the
+    switch it is (`off_by`). **Stored data the screens needed.** A selected run stores `reachedBy` (changed file to specs) so "why these
+    specs" is shown, not recomputed; a run stores the machine time its hosts were held (`first_pass_ms`, `rerun_ms`), first pass apart from
+    re-runs. The usage line per kind (PR, baseline, re-run, shadow) is runs and those minutes; "minutes saved by selection" is only
+    what a full shadow run measured (its first pass less the selected run's, over the pairs that finished), never an extrapolation, and
+    absent when none could be measured. Not built: a page for a CI-mode suite run (`runtime/suites/[suiteRunId]`); the Run's tab shows
+    a Run's suite, and a retry's result is published to the suite's check.
 18. **Evidence**: `suite-artifact` upload type, budget, redaction and canary specs; failed-only retention.
 19. **Shadow check**. Test first: every `S`th selected run also enqueues a full background run; a seeded spec the
     selection skipped and the full run fails stores a `selection_miss` with the changed files and switches the

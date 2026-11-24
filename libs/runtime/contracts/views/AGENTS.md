@@ -6,6 +6,7 @@ The response shapes of the product's /runtime routes, types only. The API's use 
 - `environments.ts`: GET /runtime/environments, /environments/:id and its blockers (`RuntimeEnvironmentView`, `RuntimeBlockerGroupView`, `RuntimeMembershipBlockerGroupView`, `RuntimeLearnView`, …), built in `api/application/use-cases/environment-view.ts`.
 - `run.ts`: GET /runtime/runs/:id (`RuntimeRunDetail`, `FindingFeedbackView`, `FindingIntentView`, `ProbeRequestView`), built in `get-run.use-case.ts`.
 - `kept-checks.ts`: GET/POST /runtime/kept-checks (`RuntimeKeptChecksView`, `RuntimeKeptCheckView`, `RuntimeKeepCheckView`), built in `kept-checks.use-cases.ts`.
+- `suite.ts`: GET /runtime/runs/:id/suite (`RuntimeSuiteRunView`: the verdict's fields, the failed tests by whose fault they are, the shards, how the specs were chosen), GET /runtime/environments/:id/suite (`RuntimeEnvironmentSuiteView`) and the usage report's `RuntimeSuiteUsage`, built in `api/domain/suite-view.ts`. It declares `RuntimeSuiteSelectionView` itself instead of importing the Runtime's report type, which would pull the selection rules into the web build.
 - `lessons.ts` (`RuntimeLessonView`), `settings.ts` (`RuntimeSettingsView`, `RuntimeRepositorySettingsView`), `cells.ts` (`CellRegistrationTokenView`).
 
 ## Does not own
@@ -27,7 +28,7 @@ The response shapes of the product's /runtime routes, types only. The API's use 
 
 ## Module map
 
-Files (6, tests apart): `cells.ts`, `environments.ts`, `kept-checks.ts`, `lessons.ts`, `run.ts`, `settings.ts`
+Files (7, tests apart): `cells.ts`, `environments.ts`, `kept-checks.ts`, `lessons.ts`, `run.ts`, `settings.ts`, `suite.ts`
 
 Imports these Runtime modules:
 
@@ -40,5 +41,6 @@ Imports these Runtime modules:
 Imported by:
 
 - [`libs/runtime/api/application/use-cases`](../../api/application/use-cases/AGENTS.md)
+- [`libs/runtime/api/domain`](../../api/domain/AGENTS.md)
 
 <!-- module-map:end -->

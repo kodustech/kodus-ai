@@ -7,7 +7,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 - `junit.ts` `parseJUnit` and `mochawesome.ts` `parseMochawesome`: a runner's result text as `SpecResult[]` (`types.ts`: per test the attempts, so a retried-then-passed test is `isFlakyInRun`). A text that is not that format throws.
 - `error-signature.ts` `errorSignature`: the first error line with numbers, hashes, uuids and generated selectors replaced, cut at 200 characters.
 - `classifier.ts`: the re-run classifier of section 9. `planReruns` (mass failure over 25%, the 40-spec budget, infra specs to one fresh-host retry) before the re-runs; `classifyFailures` after them (`flaky`, `regression`, `pre_existing`, `pre_existing_changed`, `regression_unconfirmed` under base drift, the baseline fallbacks of 9.5, `unclassified` with its reason); `needsMainRerun` (a spec red everywhere in the exact baseline skips the main run). Only a `regression` blocks or becomes a finding.
-- `select.ts` `select` (section 6.1): the specs a PR's changed files reach through the stored coverage map, the importer walk and the workspace closure, or the whole suite with a reason (`FullReason`: manifest, lockfile, config, shared routing, a file no spec covers, map missing, stale or of another digest, a noise file, a forced run). `suite.ignore` globs never override the net; unknown never selects nothing.
+- `select.ts` `select` (section 6.1; a selected result also says `reachedBy`, per changed file the specs it reaches, at most `REACHED_BY_LIMITS` 40 files and 25 specs each, which the run stores for its page): the specs a PR's changed files reach through the stored coverage map, the importer walk and the workspace closure, or the whole suite with a reason (`FullReason`: manifest, lockfile, config, shared routing, a file no spec covers, map missing, stale or of another digest, a noise file, a forced run). `suite.ignore` globs never override the net; unknown never selects nothing.
 - `repush.ts` `planRepush`: a new push on the same PR runs what was red before (minus `pre_existing`) plus what the delta reaches; a green previous run and an empty delta run none; a delta in the safety net escalates to full; a rebase selects again from the new merge base.
 - `order.ts`: `orderBin` / `orderBins` (inside a shard: failed before, then specs covering the diff by number of changed files, then the rest longest first; the balance is untouched) and `failFast` (more than 25% of the first `max(5, 10%)` specs failed: stop the first pass and name the rest `not_run`; the classifier then sees a mass failure).
 
@@ -51,6 +51,7 @@ Imported by:
 - [`apps/runtime/src/worker/suite`](../../../apps/runtime/src/worker/suite/AGENTS.md)
 - [`libs/runtime-publish/application`](../../runtime-publish/application/AGENTS.md)
 - [`libs/runtime-publish/domain`](../../runtime-publish/domain/AGENTS.md)
+- [`libs/runtime/api/domain`](../api/domain/AGENTS.md)
 - [`libs/runtime/run`](../run/AGENTS.md)
 
 <!-- module-map:end -->

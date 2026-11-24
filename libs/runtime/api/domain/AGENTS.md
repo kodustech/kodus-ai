@@ -8,6 +8,7 @@ The domain layer of the product's Runtime API: the ports every use case depends 
 - What a Run may spend: `budget.ts` `planLlmCall`, `decideBudget` (per Run, per PR, per org per day); the Run token: `run-token.ts` `signRunToken`, `verifyRunToken`, and the setup token `signSetupToken`, `verifySetupToken`.
 - Admin settings bounded by the plan: `pool.ts` (`effectivePoolSize`, `parsePoolPolicy`, `desiredPoolSize`), `machine-size-plan.ts` `effectiveMachineSize`, `egress.ts` `normalizeEgressHost`, `deniedBy` (the Kodus denylist wins over an approval).
 - Costs and usage: `run-cost.ts` `estimateRunCost`, `run-cost-summary.ts`, `llm-spend.ts`, `machine-minutes-today.ts`, `usage-report.ts` `buildUsageReport`, `usageReportCsv`; the Health screen: `runtime-health.ts` `buildRuntimeHealth`, and its Speed card: `runtime-speed.ts` `buildRuntimeSpeed` (nearest-rank p50/p95).
+- The e2e suite's stored rows and their reader port: `suite.ts` (`RuntimeSuiteReader`, `RUNTIME_SUITE_READER`), and `suite-view.ts` (`runSuiteView`, `environmentSuiteView`, `suiteUsageView`: stored rows to the views of `contracts/views/suite.ts`; structured fields only, the web writes the sentences, and a field a row does not say is absent).
 - Derived Run ids: `deterministic-id.ts` `deterministicUuid`.
 
 ## Does not own
@@ -32,16 +33,18 @@ The domain layer of the product's Runtime API: the ports every use case depends 
 
 ## Module map
 
-Files (27, tests apart): `budget.ts`, `cell-token.ts`, `deterministic-id.ts`, `egress.ts`, `env-tools.ts`, `external-findings.ts`, `fork-policy.ts`, `llm-spend.ts`, `machine-minutes-today.ts`, `machine-size-plan.ts`, `model-turn.ts`, `organization-purge.ts`, `pool.ts`, `ports.ts`, `previews.ts`, `pull-request-runs.ts`, `run-cost-summary.ts`, `run-cost.ts`, `run-token.ts`, `runtime-commands.ts`, `runtime-health.ts`, `runtime-speed.ts`, `secrets.ts`, `setup-calls.ts`, `trigger-rules.ts`, `usage-report.ts`, `webhook-reconciler.ts`
+Files (29, tests apart): `budget.ts`, `cell-token.ts`, `deterministic-id.ts`, `egress.ts`, `env-tools.ts`, `external-findings.ts`, `fork-policy.ts`, `llm-spend.ts`, `machine-minutes-today.ts`, `machine-size-plan.ts`, `model-turn.ts`, `organization-purge.ts`, `pool.ts`, `ports.ts`, `previews.ts`, `pull-request-runs.ts`, `run-cost-summary.ts`, `run-cost.ts`, `run-token.ts`, `runtime-commands.ts`, `runtime-health.ts`, `runtime-speed.ts`, `secrets.ts`, `setup-calls.ts`, `suite-view.ts`, `suite.ts`, `trigger-rules.ts`, `usage-report.ts`, `webhook-reconciler.ts`
 
 Imports these Runtime modules:
 
 - [`libs/runtime/blockers`](../../blockers/AGENTS.md)
 - [`libs/runtime/contracts`](../../contracts/AGENTS.md)
+- [`libs/runtime/contracts/views`](../../contracts/views/AGENTS.md)
 - [`libs/runtime/environment`](../../environment/AGENTS.md)
 - [`libs/runtime/health`](../../health/AGENTS.md)
 - [`libs/runtime/protocol`](../../protocol/AGENTS.md)
 - [`libs/runtime/run`](../../run/AGENTS.md)
+- [`libs/runtime/suite`](../../suite/AGENTS.md)
 
 Imported by:
 
