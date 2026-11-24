@@ -29,7 +29,6 @@ export interface PostgresSessionTimeouts {
 
 type Env = Record<string, string | undefined>;
 
-/** docker-compose writes unset vars as empty strings: treat those as unset. */
 /**
  * A database setting Kodus refuses. The message names the variable and
  * never carries a credential, so it is safe to show as is (logs, doctor).
@@ -41,6 +40,7 @@ export class DatabaseSettingError extends Error {
     }
 }
 
+/** docker-compose writes unset vars as empty strings: treat those as unset. */
 function envValue(env: Env, key: string): string | undefined {
     const value = env[key];
     return value !== undefined && value.trim() !== ''

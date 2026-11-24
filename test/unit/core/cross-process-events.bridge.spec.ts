@@ -557,8 +557,14 @@ describe('CrossProcessEventsBridge', () => {
             const newProbe = (bridge as any).verifyListenDelivery(newClient);
             await new Promise((r) => setImmediate(r));
 
+            // The status the new connection set; the old probe must not
+            // overwrite it when it fails.
+            (bridge as any).listenHealth = { status: 'pending' };
             failOld(new Error('pool closed'));
             await oldProbe;
+            expect(CrossProcessEventsBridge.listenStatus().status).toBe(
+                'pending',
+            );
             (bridge as any).pendingProbe(nonceOf(query, 1));
             await newProbe;
 
