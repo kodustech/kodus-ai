@@ -17,10 +17,9 @@ const minutes = (ms: number) => Math.round(ms / 60_000);
 /** `e2e/checkout.spec.ts` → `checkout.spec.ts` */
 const baseName = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
-type FullReason = NonNullable<RuntimeSuiteRun["selection"]["reason"]>;
-
 /** Why the whole suite ran, as a clause: "The whole suite ran: …" and "Why all N specs". */
-const FULL_REASON_TEXT: Record<FullReason, string> = {
+/** Keyed by the Runtime's `FullReason` (a parity spec holds the keys to libs/runtime/suite/select.ts). */
+export const FULL_REASON_TEXT: Record<string, string> = {
     manifest: "a dependency manifest changed",
     lockfile: "a lockfile changed",
     config: "a runner, build or compose configuration changed",
@@ -40,8 +39,10 @@ const FULL_REASON_TEXT: Record<FullReason, string> = {
     selection_off: "spec selection is off for this environment",
 };
 
-const reasonText = (reason: FullReason | undefined) =>
-    reason ? FULL_REASON_TEXT[reason] : undefined;
+const reasonText = (reason: string | undefined) =>
+    reason
+        ? (FULL_REASON_TEXT[reason] ?? reason.replace(/_/g, " "))
+        : undefined;
 
 const times = (n: number) =>
     n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;

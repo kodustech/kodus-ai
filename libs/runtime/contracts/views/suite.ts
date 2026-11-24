@@ -1,7 +1,22 @@
-import type { SuiteSelectionReport } from '../../suite/report';
-
 // The e2e suite as the product's /runtime routes answer it (docs/runtime/e2e-suites.md sections 10 and 13). Structured fields only: the
 // web writes the sentences. Types only; every import here is `import type`.
+
+/**
+ * How the specs were chosen (the Runtime's `SuiteSelectionReport`, libs/runtime/suite/report.ts, built from the same stored JSON). It is
+ * declared here, not imported: that file imports the selection rules, and a view reaches the web build as types only, with nothing of them.
+ * `reason` is a `FullReason` of libs/runtime/suite/select.ts (a parity spec in the web holds the two lists to each other).
+ */
+export interface RuntimeSuiteSelectionView {
+    /** `full`: the whole suite ran (with `reason`); `selected`: the specs the change can reach; `none`: nothing was reached. */
+    mode: 'full' | 'selected' | 'none';
+    reason?: string;
+    selected?: number;
+    total: number;
+    /** Set while main is ahead of the merge base and no coverage map could say which specs the diff reaches: why. */
+    reachUnknown?: string;
+    /** For a `selected` run: per changed file, the specs it reaches (bounded); absent on a re-push. */
+    reachedBy?: Record<string, string[]>;
+}
 
 /** `runtime_suite_runs.state`. */
 export type RuntimeSuiteRunState = 'requested' | 'running' | 'passed' | 'failed' | 'neutral' | 'timed_out' | 'cancelled' | 'errored';
@@ -66,7 +81,7 @@ export interface RuntimeSuiteRunView {
     /** Main commits ahead of the PR's merge base; absent when not known. */
     baseDrift?: number;
     /** How the specs were chosen: the whole suite with the reason, or the selection with the changed file to specs map. */
-    selection: SuiteSelectionReport;
+    selection: RuntimeSuiteSelectionView;
     /** Specs the first pass ran, and the suite's size. */
     specs: { ran: number; total: number };
     totals: { passed: number; failed: number; skipped: number; notRun: number };
