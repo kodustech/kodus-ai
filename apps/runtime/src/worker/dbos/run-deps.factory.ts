@@ -300,6 +300,8 @@ export class RunDependenciesFactory implements RunDepsFactory {
                 const env = this.deps.environment({
                     correlationId: input.correlationId,
                     organizationId: input.organizationId,
+                    // The hub scopes a claim's exec, renew and release to the runId it was acquired with: a suite's is its suite run.
+                    runId: input.suiteRunId,
                     fullName: input.fullName,
                     sealedRepoToken,
                     tokenBinding: input.key,

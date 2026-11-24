@@ -36,7 +36,7 @@ describe('the suite stage of a Run', () => {
 describe('the environment of a suite run', () => {
     const ctx = { organizationId: 'org-1', suiteRunId: 'sr-1', key: 'suite-key', correlationId: 'suite-sr-1', fullName: 'acme/shop', imageId: 'img-1', expose: [], tokens: ['sealed:v1:a', 'sealed:v1:b'] };
 
-    it('builds one client per claim, each with the next sealed token bound to the command key, and no Run behind it', async () => {
+    it('builds one client per claim, each with the next sealed token bound to the command key and scoped to the suite run', async () => {
         const built: any[] = [];
         const f = new RunDependenciesFactory(options({ environment: (c) => (built.push(c), { acquire: async () => ({ claimId: 'c' }), renew: async () => ({ status: 'gone' as const }), release: async () => undefined }) as any }));
         const env = f.envForSuite(ctx);
@@ -45,7 +45,8 @@ describe('the environment of a suite run', () => {
         await acquire('k1');
         expect(built.map((c) => c.sealedRepoToken)).toEqual(['sealed:v1:a', 'sealed:v1:b']);
         expect(built[0]).toMatchObject({ tokenBinding: 'suite-key', fullName: 'acme/shop', organizationId: 'org-1', correlationId: 'suite-sr-1', imageId: 'img-1' });
-        expect(built[0].runId).toBeUndefined();
+        // The suite's claims are acquired with runId = the suite run: the hub refuses an exec scoped to anything else.
+        expect(built[0].runId).toBe('sr-1');
     });
 
     it('refuses a production environment that cannot renew claims, as for a Run', () => {
