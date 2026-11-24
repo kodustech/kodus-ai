@@ -72,6 +72,16 @@ export class IntegrationConfigService implements IIntegrationConfigService {
         return this.integrationConfigRepository.findById(uuid);
     }
 
+    findAllOfTeamByConfigKey(
+        configKey: IntegrationConfigKey,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<IntegrationConfigEntity[]> {
+        return this.integrationConfigRepository.findAllOfTeamByConfigKey(
+            configKey,
+            organizationAndTeamData,
+        );
+    }
+
     findIntegrationConfigWithTeams(
         configKey: IntegrationConfigKey,
         repositoryId: string,
@@ -182,6 +192,23 @@ export class IntegrationConfigService implements IIntegrationConfigService {
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<T> {
         try {
+            // A workspace can hold several Git connections: with none named,
+            // its repositories are every connection's together.
+            if (
+                configKey === IntegrationConfigKey.REPOSITORIES &&
+                !organizationAndTeamData?.integrationId
+            ) {
+                const rows =
+                    await this.integrationConfigRepository.findAllOfTeamByConfigKey(
+                        configKey,
+                        organizationAndTeamData,
+                    );
+                const repositories = rows.flatMap((row) =>
+                    Array.isArray(row?.configValue) ? row.configValue : [],
+                );
+                return repositories.length ? (repositories as T) : null;
+            }
+
             const data = await this.findOneIntegrationConfigWithIntegrations(
                 configKey,
                 organizationAndTeamData,

@@ -31,6 +31,7 @@ const build = (
                 ? (overrides.selection ?? null)
                 : (overrides.persistedRepoIds ?? []),
         ),
+        findByOrganizationAndConfigKey: jest.fn().mockResolvedValue([]),
     };
 
     const repositoryConnectionService = {
@@ -57,6 +58,15 @@ const build = (
         {
             repositoryConnected: jest.fn(),
             repositoriesSelected: jest.fn(),
+        } as any,
+        {
+            // The workspace's only Git connection.
+            resolveCodeManagementConnection: jest.fn().mockResolvedValue({
+                integration: { uuid: 'conn-1', platform: 'GITHUB' },
+                platform: 'GITHUB',
+                ambiguous: false,
+            }),
+            find: jest.fn().mockResolvedValue([]),
         } as any,
     );
 
@@ -96,6 +106,7 @@ describe('CreateRepositoriesUseCase', () => {
             organizationAndTeamData: {
                 organizationId: 'org-1',
                 teamId: 'team-1',
+                integrationId: 'conn-1',
             },
             type: 'replace',
         });
@@ -140,7 +151,11 @@ describe('CreateRepositoriesUseCase', () => {
             teamId: 'team-1',
             type: 'replace',
             repositories: [
-                { id: 'repo-existing', name: 'alpha', organizationName: 'kodus' },
+                {
+                    id: 'repo-existing',
+                    name: 'alpha',
+                    organizationName: 'kodus',
+                },
                 { id: 'repo-new', name: 'beta', organizationName: 'kodus' },
             ],
         });
@@ -163,7 +178,11 @@ describe('CreateRepositoriesUseCase', () => {
             teamId: 'team-1',
             type: 'replace',
             repositories: [
-                { id: 'repo-existing', name: 'alpha', organizationName: 'kodus' },
+                {
+                    id: 'repo-existing',
+                    name: 'alpha',
+                    organizationName: 'kodus',
+                },
             ],
         });
 
@@ -194,13 +213,14 @@ describe('CreateRepositoriesUseCase', () => {
                 organizationAndTeamData: {
                     organizationId: 'org-1',
                     teamId: 'team-1',
+                    integrationId: 'conn-1',
                 },
                 platform: 'github',
             }),
         );
-        expect(repositoryConnectionService.enqueueAstBuild).toHaveBeenCalledTimes(
-            2,
-        );
+        expect(
+            repositoryConnectionService.enqueueAstBuild,
+        ).toHaveBeenCalledTimes(2);
     });
 
     describe('when the team reviews all repositories', () => {

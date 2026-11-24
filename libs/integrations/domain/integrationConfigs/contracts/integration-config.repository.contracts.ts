@@ -31,6 +31,11 @@ export interface IIntegrationConfigRepository {
         configKey: IntegrationConfigKey,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<IntegrationConfigEntity>;
+    /** One row per active Git connection of the workspace that has the key. */
+    findAllOfTeamByConfigKey(
+        configKey: IntegrationConfigKey,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<IntegrationConfigEntity[]>;
     findIntegrationConfigWithTeams(
         configKey: IntegrationConfigKey,
         repositoryId: string,

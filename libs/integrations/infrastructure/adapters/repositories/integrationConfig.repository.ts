@@ -411,6 +411,11 @@ export class IntegrationConfigRepository implements IIntegrationConfigRepository
                             organization: {
                                 uuid: organizationAndTeamData.organizationId,
                             } as any,
+                            ...(organizationAndTeamData.integrationId
+                                ? {
+                                      uuid: organizationAndTeamData.integrationId,
+                                  }
+                                : {}),
                         } as any,
                         team: { uuid: organizationAndTeamData.teamId } as any,
                     },
@@ -440,6 +445,33 @@ export class IntegrationConfigRepository implements IIntegrationConfigRepository
             console.log(error);
             throw error;
         }
+    }
+
+    async findAllOfTeamByConfigKey(
+        configKey: IntegrationConfigKey,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<IntegrationConfigEntity[]> {
+        if (!configKey || !organizationAndTeamData?.teamId) return [];
+
+        const integrationConfigs = await this.integrationConfigRepository.find({
+            where: {
+                configKey,
+                integration: {
+                    organization: {
+                        uuid: organizationAndTeamData.organizationId,
+                    } as any,
+                    status: true,
+                } as any,
+                team: { uuid: organizationAndTeamData.teamId } as any,
+            },
+            relations: ['integration'],
+            order: { createdAt: 'ASC' },
+        });
+
+        return mapSimpleModelsToEntities(
+            integrationConfigs,
+            IntegrationConfigEntity,
+        );
     }
 
     async delete(uuid: string): Promise<void> {
