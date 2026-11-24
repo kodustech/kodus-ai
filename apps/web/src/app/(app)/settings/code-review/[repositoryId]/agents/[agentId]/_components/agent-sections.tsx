@@ -525,8 +525,11 @@ export const ModelsFields = ({
             <SelectTrigger
                 size="md"
                 aria-label="Model"
-                id={AGENT_MODEL_FIELD_ID}>
-                <SelectValue className="min-w-0" />
+                id={AGENT_MODEL_FIELD_ID}
+                // SelectValue drops its className: the value span and the
+                // chevron are reached from here so a long label truncates.
+                className="[&>div>span]:min-w-0 [&>div>svg]:shrink-0">
+                <SelectValue />
             </SelectTrigger>
             <SelectContent>
                 <SelectItem value={ROUTING_DEFAULT}>
