@@ -270,6 +270,27 @@ describe('recent reviews (#2066)', () => {
             );
         });
 
+        it('an @kody -v request refused for custom agents is not a missed review', async () => {
+            const results = await recentReviewsCheck(
+                deps({
+                    list: runs(
+                        4,
+                        skippedFor(
+                            'Custom agents are in beta and BETA_FEATURES is off on this install.',
+                        ),
+                    ),
+                }),
+            ).run(ctx());
+
+            expect(problems(results)).toEqual([]);
+            expect(line(results, 'reviews.failed')).toBeUndefined();
+            expect(line(results, 'reviews.not_run')).toBeUndefined();
+            expect(line(results, 'reviews.command_skipped')).toMatchObject({
+                status: 'info',
+                title: '4 `@kody -v` request(s) in the last 7 days did not run (4 custom agents need BETA_FEATURES=true); the regular reviews were not affected.',
+            });
+        });
+
         it('a window skipped only for seats points at the seat line', async () => {
             const results = await recentReviewsCheck(
                 deps({

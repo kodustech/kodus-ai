@@ -220,7 +220,12 @@ function unmappedKinds(run: ReviewRun): string[] {
     return run.warningKinds.filter((k) => !MAPPED_KINDS.has(k));
 }
 
-type SkipKind = 'settings' | 'seat' | 'failure' | 'other';
+/**
+ * `command`: an `@kody -v <agent>` request that did not run. The regular
+ * review of that pull request is not affected (validate-config.stage.ts
+ * skips only when `onlyCustomAgent` is set), so it is not a missed review.
+ */
+type SkipKind = 'settings' | 'seat' | 'failure' | 'command' | 'other';
 
 interface SkipReason {
     kind: SkipKind;
@@ -298,8 +303,9 @@ export const SKIP_REASONS: Array<{ prefix: string } & SkipReason> = [
     },
     {
         prefix: 'No custom agent matches',
-        kind: 'settings',
-        label: 'unknown agent asked for',
+        kind: 'command',
+        label: 'no custom agent has that name',
+        fix: 'Check the agent names in Settings > Custom agents.',
     },
     // license.seats reports these with their own fix.
     {
@@ -381,13 +387,13 @@ export const SKIP_REASONS: Array<{ prefix: string } & SkipReason> = [
     },
     {
         prefix: 'Custom agents are in beta',
-        kind: 'failure',
+        kind: 'command',
         label: 'custom agents need BETA_FEATURES=true',
         fix: 'Set BETA_FEATURES=true on api and worker and restart them.',
     },
     {
         prefix: "Custom agents are not on this organization's plan",
-        kind: 'failure',
+        kind: 'command',
         label: 'custom agents are not on the license',
         fix: 'Custom agents need a Teams or Enterprise license.',
     },
@@ -464,6 +470,9 @@ export function recentReviewsCheck(deps: ReviewRunsDeps): DoctorCheck {
                     (s) => s.reason.kind === 'failure',
                 );
                 const unclear = skips.filter((s) => s.reason.kind === 'other');
+                const commands = skips.filter(
+                    (s) => s.reason.kind === 'command',
+                );
                 const reviewed = runs.filter((r) => r.status !== 'skipped');
                 const errors = reviewed.filter((r) => r.status === 'error');
                 /** Pull requests a review was owed to (seat skips: license.seats). */
@@ -476,6 +485,17 @@ export function recentReviewsCheck(deps: ReviewRunsDeps): DoctorCheck {
                         scope,
                         title: `${onPurpose.length} pull request(s) in the last ${RECENT_DAYS} days were skipped by your settings (${breakdown(onPurpose.map((s) => s.reason.label))}).`,
                         fix: 'See the "configured to skip" lines; change them in Settings > Code Review if this is not intended.',
+                    });
+                }
+                if (commands.length) {
+                    const top = mostCommon(commands.map((s) => s.reason.label));
+                    results.push({
+                        check: 'reviews.command_skipped',
+                        status: 'info',
+                        scope,
+                        title: `${commands.length} \`@kody -v\` request(s) in the last ${RECENT_DAYS} days did not run (${breakdown(commands.map((s) => s.reason.label))}); the regular reviews were not affected.`,
+                        fix: commands.find((s) => s.reason.label === top)!
+                            .reason.fix,
                     });
                 }
                 if (unclear.length) {
@@ -495,6 +515,7 @@ export function recentReviewsCheck(deps: ReviewRunsDeps): DoctorCheck {
                         onPurpose.length &&
                             'the "skipped by your settings" line',
                         unclear.length && 'the "were skipped" line',
+                        commands.length && 'the "@kody -v" line',
                     ].filter(Boolean);
                     results.push({
                         check: 'reviews.none',

@@ -175,6 +175,8 @@ type ProbeOutcome =
     /** The primary failed; the fallback the runtime fails over to answered. */
     | { kind: 'fallback'; error: string; fallback: string }
     | { kind: 'failed'; error: string; fallback?: string }
+    /** The primary failed; no time was left to test the fallback reviews use then. */
+    | { kind: 'fallback_untested'; error: string; fallback: string }
     /** Not started: the budget could not give it its full timeout. */
     | { kind: 'untested' };
 
@@ -195,7 +197,8 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
             const envModel = envDescriptor.configured
                 ? envDescriptor.model
                 : undefined;
-            const outcomes = new Map<string, ProbeOutcome>();
+            /** One probe per model, shared by every caller (they run at once). */
+            const outcomes = new Map<string, Promise<ProbeOutcome>>();
             /** One result per probed model, shared by the orgs that use it. */
             const shared = new Map<string, DoctorResult>();
             const reported = new Set<DoctorResult>();
@@ -216,15 +219,10 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
             // A probe gets its full timeout or does not start: cutting it
             // short would fail a slow but working model as "did not answer"
             // and blame its key.
-            const probe = async (
+            const runProbe = async (
                 slot: NormalizedModel | undefined,
                 organizationId: string,
             ): Promise<ProbeOutcome> => {
-                const key = keyOf(slot, organizationId);
-                const known = outcomes.get(key);
-                if (known) {
-                    return known;
-                }
                 const call = (target?: NormalizedModel) =>
                     deps.complete({
                         slot: target,
@@ -240,10 +238,18 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                         outcome = { kind: 'ok' };
                     } catch (error) {
                         const fallback = slot?.fallback;
-                        if (!fallback || deadline - now() < PROBE_TIMEOUT_MS) {
+                        if (!fallback) {
                             outcome = {
                                 kind: 'failed',
                                 error: errorText(error),
+                            };
+                        } else if (deadline - now() < PROBE_TIMEOUT_MS) {
+                            // Reviews would fail over to it: a primary that
+                            // timed out says nothing about whether they run.
+                            outcome = {
+                                kind: 'fallback_untested',
+                                error: errorText(error),
+                                fallback: modelLabel(fallback),
                             };
                         } else {
                             try {
@@ -263,8 +269,19 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                         }
                     }
                 }
-                outcomes.set(key, outcome);
                 return outcome;
+            };
+            const probe = (
+                slot: NormalizedModel | undefined,
+                organizationId: string,
+            ): Promise<ProbeOutcome> => {
+                const key = keyOf(slot, organizationId);
+                let pending = outcomes.get(key);
+                if (!pending) {
+                    pending = runProbe(slot, organizationId);
+                    outcomes.set(key, pending);
+                }
+                return pending;
             };
 
             // Only organizations that review: a sign-up that created its own
@@ -281,11 +298,35 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 orgs.set('', 'install');
             }
 
-            /**
-             * Side tasks are probed after every org's review model, with the
-             * time left: they degrade, the review model decides whether
-             * reviews run, so it must never be the one left untested.
-             */
+            // Every probe starts now, together: the models of different orgs
+            // and tasks are independent, and a probe started after another
+            // would only get what that one left of the budget, so a slow but
+            // working model would leave the next one untested.
+            const configs = new Map<string, BYOKConfig | null>();
+            for (const [organizationId] of orgs) {
+                const config = organizationId
+                    ? await deps.getBYOKConfig(organizationId)
+                    : null;
+                configs.set(organizationId, config);
+                const { slot, verdict } = resolveTaskSlot(
+                    config,
+                    LLM_TASK.codeReview,
+                );
+                if (config && !slot && verdict?.modelId) {
+                    continue; // blocked before any model is called
+                }
+                if (slot || envModel) {
+                    void probe(slot, organizationId);
+                }
+                for (const side of config ? REVIEW_SIDE_TASKS : []) {
+                    const routed = resolveTaskSlot(config, side.task);
+                    if (routed.slot) {
+                        void probe(routed.slot, organizationId);
+                    }
+                }
+            }
+
+            /** Side-task lines come after every org's review-model lines. */
             const sideWork: Array<{
                 scope?: string;
                 organizationId: string;
@@ -296,9 +337,7 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
 
             for (const [organizationId, organizationName] of orgs) {
                 const scope = organizationId ? organizationName : undefined;
-                const config = organizationId
-                    ? await deps.getBYOKConfig(organizationId)
-                    : null;
+                const config = configs.get(organizationId) ?? null;
                 const modelsById = new Map(
                     (config?.models ?? []).map((m) => [m.id, m]),
                 );
@@ -387,25 +426,34 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                                       fix: 'Run the doctor again; the models of the other organizations were slow to answer.',
                                       blocking: true,
                                   }
-                                : outcome.kind === 'fallback'
+                                : outcome.kind === 'fallback_untested'
                                   ? {
                                         check: 'llm.completion',
-                                        status: 'warn',
+                                        status: 'unknown',
                                         scope: slot ? scope : undefined,
-                                        title: `The review model (${label}) did not answer a test request; its fallback (${outcome.fallback}) did.`,
-                                        impact: 'Reviews run on the fallback model, with different cost and quality.',
+                                        title: `The review model (${label}) did not answer a test request, and the doctor ran out of time before testing its fallback (${outcome.fallback}), which reviews fail over to.`,
                                         fix: `${where} Provider said: ${outcome.error}`,
+                                        blocking: true,
                                     }
-                                  : {
-                                        check: 'llm.completion',
-                                        status: 'fail',
-                                        scope: slot ? scope : undefined,
-                                        title: outcome.fallback
-                                            ? `The review model (${label}) and its fallback (${outcome.fallback}) did not answer a test request.`
-                                            : `The review model (${label}) did not answer a test request.`,
-                                        impact: 'Reviews fail when they call the model.',
-                                        fix: `${where} Provider said: ${outcome.error}`,
-                                    };
+                                  : outcome.kind === 'fallback'
+                                    ? {
+                                          check: 'llm.completion',
+                                          status: 'warn',
+                                          scope: slot ? scope : undefined,
+                                          title: `The review model (${label}) did not answer a test request; its fallback (${outcome.fallback}) did.`,
+                                          impact: 'Reviews run on the fallback model, with different cost and quality.',
+                                          fix: `${where} Provider said: ${outcome.error}`,
+                                      }
+                                    : {
+                                          check: 'llm.completion',
+                                          status: 'fail',
+                                          scope: slot ? scope : undefined,
+                                          title: outcome.fallback
+                                              ? `The review model (${label}) and its fallback (${outcome.fallback}) did not answer a test request.`
+                                              : `The review model (${label}) did not answer a test request.`,
+                                          impact: 'Reviews fail when they call the model.',
+                                          fix: `${where} Provider said: ${outcome.error}`,
+                                      };
                         shared.set(key, result);
                     }
                     if (!reported.has(result)) {
@@ -494,7 +542,10 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                             impact: `${side.what[0].toUpperCase()}${side.what.slice(1)} run on the fallback model.`,
                             fix: `Check the API key, model name and base URL of that model in the BYOK page (user menu > BYOK). Provider said: ${sideOutcome.error}`,
                         });
-                    } else if (sideOutcome.kind === 'untested') {
+                    } else if (
+                        sideOutcome.kind === 'untested' ||
+                        sideOutcome.kind === 'fallback_untested'
+                    ) {
                         results.push({
                             check: 'llm.task_model',
                             status: 'unknown',

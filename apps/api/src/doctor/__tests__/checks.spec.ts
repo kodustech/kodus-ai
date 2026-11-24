@@ -1464,7 +1464,9 @@ describe('doctor checks — each condition in scope, one at a time', () => {
                 });
             });
 
-            it("side-task probes run after every org's review model, so they never leave one untested", async () => {
+            it('probes of different orgs run together, so one slow model never leaves another untested', async () => {
+                // Each answer takes 12s. In sequence, the second org's probe
+                // would start with 58s of the 70s budget left and never run.
                 let clock = 0;
                 const other = team({
                     organizationId: '66666666-6666-6666-6666-666666666666',
@@ -1475,19 +1477,25 @@ describe('doctor checks — each condition in scope, one at a time', () => {
                     ...llmDeps(),
                     now: () => clock,
                     getBYOKConfig: jest.fn(async (organizationId: string) =>
-                        organizationId === team().organizationId
-                            ? byok({
-                                  defaultModelId: 'm-A',
-                                  taskOverrides: { kodyRulesReview: 'm-B' },
-                              })
-                            : null,
+                        byok(
+                            organizationId === team().organizationId
+                                ? {
+                                      defaultModelId: 'm-A',
+                                      taskOverrides: { kodyRulesReview: 'm-B' },
+                                  }
+                                : { defaultModelId: 'm-B' },
+                        ),
                     ),
                 };
-                // Each probe takes 8s of the 70s budget: three fit only if the
-                // review models go first.
-                deps.complete.mockImplementation(async () => {
-                    clock += 8_000;
-                });
+                deps.complete.mockImplementation(
+                    () =>
+                        new Promise<void>((resolve) =>
+                            setImmediate(() => {
+                                clock = Math.max(clock, 12_000);
+                                resolve();
+                            }),
+                        ),
+                );
                 const results = await llmCheck(deps).run(
                     ctx({ teams: [team(), other] }),
                 );
@@ -1497,9 +1505,31 @@ describe('doctor checks — each condition in scope, one at a time', () => {
                         .filter((r) => r.check === 'llm.completion')
                         .map((r) => r.status),
                 ).toEqual(['ok', 'ok']);
+                expect(results.filter((r) => r.status === 'unknown')).toEqual(
+                    [],
+                );
+            });
+
+            it('a primary that failed too late to test its fallback is unverified, not failed', async () => {
+                let clock = 0;
+                const deps = {
+                    ...llmDeps({
+                        byok: byok({
+                            defaultModelId: 'm-A',
+                            fallbackModelId: 'm-B',
+                        }),
+                    }),
+                    now: () => clock,
+                };
+                deps.complete.mockImplementation(async () => {
+                    clock = 60_000; // the primary timed out
+                    throw new Error('timeout');
+                });
+                const results = await llmCheck(deps).run(ctx());
                 expect(
-                    results.filter((r) => r.status === 'unknown' && r.blocking),
-                ).toEqual([]);
+                    results.find((r) => r.check === 'llm.completion'),
+                ).toMatchObject({ status: 'unknown', blocking: true });
+                expect(deps.complete).toHaveBeenCalledTimes(1);
             });
 
             it('a task routed to the review model itself is not probed twice', async () => {
