@@ -8,6 +8,14 @@ const settings = {
     mode: 'incremental' as const,
     nextRunAt: '2026-11-25T03:00:00.000Z',
 };
+// One schedule per organization and repository (platform, host, id).
+const FILTER = {
+    'organizationId': 'org-1',
+    'repository.platform': 'GITHUB',
+    'repository.host': 'github.com',
+    'repository.id': 'repo-1',
+};
+const OPTIONS = { upsert: true, new: true };
 
 function withModel(write: jest.Mock) {
     const model = {
@@ -26,7 +34,9 @@ describe('SecurityScanScheduleRepository.save', () => {
 
         await schedules.save('org-1', repository, settings);
 
-        const [, update] = model.findOneAndUpdate.mock.calls[0] as any;
+        const [filter, update, options] = model.findOneAndUpdate.mock.calls[0] as any;
+        expect(filter).toEqual(FILTER);
+        expect(options).toEqual(OPTIONS);
         expect(update.$set).not.toHaveProperty('enabled');
         expect(update.$setOnInsert).toEqual({ enabled: true });
     });
@@ -36,17 +46,33 @@ describe('SecurityScanScheduleRepository.save', () => {
 
         await schedules.save('org-1', repository, { ...settings, enabled: false });
 
-        const [, update] = model.findOneAndUpdate.mock.calls[0] as any;
+        const [filter, update, options] = model.findOneAndUpdate.mock.calls[0] as any;
+        expect(filter).toEqual(FILTER);
+        expect(options).toEqual(OPTIONS);
         expect(update.$set.enabled).toBe(false);
         expect(update.$setOnInsert).toBeUndefined();
     });
 
-    it('lands a save that lost the insert race as an update', async () => {
+    it('stores no enabled that is not a boolean', async () => {
+        const { schedules, model } = withModel(jest.fn());
+
+        await schedules.save('org-1', repository, { ...settings, enabled: null as any });
+
+        const [, update] = model.findOneAndUpdate.mock.calls[0] as any;
+        expect(update.$set).not.toHaveProperty('enabled');
+        expect(update.$setOnInsert).toEqual({ enabled: true });
+    });
+
+    it('lands a save that lost the insert race as the same upsert again', async () => {
         const write = jest.fn();
         const { schedules, model } = withModel(write);
         write.mockRejectedValueOnce(Object.assign(new Error('dup'), { code: 11000 }));
 
         await expect(schedules.save('org-1', repository, settings)).resolves.toMatchObject({ uuid: 'sch-1' });
         expect(model.findOneAndUpdate).toHaveBeenCalledTimes(2);
+        const [first, retry] = model.findOneAndUpdate.mock.calls as any[];
+        expect(retry[0]).toEqual(FILTER);
+        expect(retry[1]).toEqual(first[1]);
+        expect(retry[2]).toEqual(OPTIONS);
     });
 });

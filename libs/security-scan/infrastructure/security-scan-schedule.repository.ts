@@ -85,7 +85,7 @@ export class SecurityScanScheduleRepository implements ISecurityScanScheduleRepo
                             cadence: settings.cadence,
                             budget: settings.budget,
                             mode: settings.mode,
-                            ...(settings.enabled !== undefined
+                            ...(typeof settings.enabled === 'boolean'
                                 ? { enabled: settings.enabled }
                                 : {}),
                             nextRunAt: new Date(settings.nextRunAt),
@@ -99,10 +99,11 @@ export class SecurityScanScheduleRepository implements ISecurityScanScheduleRepo
                                 ? { createdBy: settings.createdBy }
                                 : {}),
                         },
-                        // Saved without saying, a schedule keeps its state.
-                        ...(settings.enabled === undefined
-                            ? { $setOnInsert: { enabled: true } }
-                            : {}),
+                        // Saved without saying (or with no boolean), a
+                        // schedule keeps its state; a new one is enabled.
+                        ...(typeof settings.enabled === 'boolean'
+                            ? {}
+                            : { $setOnInsert: { enabled: true } }),
                         // Back to the Deep scan routing when no model is picked;
                         // no export when none is set.
                         ...(settings.modelId && settings.exportTo
