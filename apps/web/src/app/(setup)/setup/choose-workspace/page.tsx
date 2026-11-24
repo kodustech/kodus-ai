@@ -137,7 +137,7 @@ export default function ChooseWorkspacePage() {
                                 />
                                 <Label
                                     htmlFor={org.uuid}
-                                    className="flex-1 cursor-pointer">
+                                    className="min-w-0 flex-1 cursor-pointer [overflow-wrap:anywhere]">
                                     {org.name}
                                 </Label>
                             </CardHeader>

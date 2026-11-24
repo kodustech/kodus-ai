@@ -423,7 +423,7 @@ export default function App() {
                                                     <AlertTitle className="text-alert text-sm">
                                                         Low recent activity{" "}
                                                     </AlertTitle>
-                                                    <AlertDescription className="text-text-secondary text-xs">
+                                                    <AlertDescription className="text-text-secondary text-xs [overflow-wrap:anywhere]">
                                                         {`Selected repos had no PRs in the last 14 days: ${staleRepositories
                                                             .map(
                                                                 (r) =>
@@ -461,9 +461,7 @@ export default function App() {
                                                 }
                                                 size="md"
                                                 className={`w-full justify-center gap-2 rounded-lg border transition-all`}>
-                                                <HatGlasses
-                                                    className={`size-4`}
-                                                />
+                                                <HatGlasses className="size-4 shrink-0" />
                                                 <span>PRs opened by me</span>
                                             </Button>
                                         </ToggleGroup.ToggleGroupItem>
@@ -479,9 +477,7 @@ export default function App() {
                                                 }
                                                 size="md"
                                                 className={`w-full justify-center gap-3 rounded-lg border transition-all`}>
-                                                <Sparkles
-                                                    className={`size-4`}
-                                                />
+                                                <Sparkles className="size-4 shrink-0" />
                                                 All PRs in selected repos
                                             </Button>
                                         </ToggleGroup.ToggleGroupItem>
