@@ -4,7 +4,10 @@ import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
 
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
-import { IntegrationConfigKeyProjectManagement } from '@libs/core/domain/enums/Integration-config-key.enum';
+import {
+    IntegrationConfigKey,
+    IntegrationConfigKeyProjectManagement,
+} from '@libs/core/domain/enums/Integration-config-key.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import {
     IIntegrationConfigService,
@@ -36,6 +39,16 @@ export class GetIntegrationConfigsByIntegrationCategoryUseCase implements IUseCa
                 organizationId: this.request.user.organization.uuid,
                 teamId: params.teamId,
             };
+
+            if (
+                params.integrationCategory ===
+                IntegrationCategory.CODE_MANAGEMENT
+            ) {
+                return this.codeManagementConfigs(
+                    organizationAndTeamData,
+                    params.connectionId,
+                );
+            }
 
             const integration = await this.integrationService.findOne({
                 organization: { uuid: organizationAndTeamData.organizationId },
@@ -73,6 +86,63 @@ export class GetIntegrationConfigsByIntegrationCategoryUseCase implements IUseCa
                 },
             });
         }
+    }
+
+    /**
+     * The configs of the named Git connection, or of every connection of the
+     * workspace. Repositories carry the connection they belong to.
+     */
+    private async codeManagementConfigs(
+        organizationAndTeamData: { organizationId: string; teamId: string },
+        connectionId?: string,
+    ) {
+        const scope = {
+            organization: { uuid: organizationAndTeamData.organizationId },
+            team: { uuid: organizationAndTeamData.teamId },
+            integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+            status: true,
+        };
+        const connections = connectionId
+            ? [
+                  await this.integrationService.findOne({
+                      ...scope,
+                      uuid: connectionId,
+                  }),
+              ]
+            : ((await this.integrationService.find(scope)) ?? []);
+
+        const byKey = new Map<string, unknown>();
+        for (const connection of connections.filter(Boolean)) {
+            const configs =
+                (await this.integrationConfigService.find({
+                    integration: { uuid: connection.uuid },
+                    team: { uuid: organizationAndTeamData.teamId },
+                })) ?? [];
+            for (const config of configs) {
+                if (
+                    config.configKey === IntegrationConfigKey.REPOSITORIES &&
+                    Array.isArray(config.configValue)
+                ) {
+                    const tagged = config.configValue.map(
+                        (repository: Record<string, unknown>) => ({
+                            ...repository,
+                            connectionId: connection.uuid,
+                        }),
+                    );
+                    byKey.set(config.configKey, [
+                        ...((byKey.get(config.configKey) as unknown[]) ?? []),
+                        ...tagged,
+                    ]);
+                } else if (!byKey.has(config.configKey)) {
+                    byKey.set(config.configKey, config.configValue);
+                }
+            }
+        }
+
+        return [...byKey.entries()].map(([configKey, configValue]) => ({
+            configKey,
+            configValue,
+        }));
     }
 
     private formatResult(integrationConfigs: IntegrationConfigEntity[]) {

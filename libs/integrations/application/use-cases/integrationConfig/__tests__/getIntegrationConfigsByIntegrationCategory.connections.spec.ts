@@ -1,0 +1,77 @@
+import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
+
+import { GetIntegrationConfigsByIntegrationCategoryUseCase } from '../getIntegrationConfigsByIntegrationCategory.use-case';
+
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({ log: jest.fn(), warn: jest.fn(), error: jest.fn() }),
+}));
+
+const build = (reposByConnection: Record<string, Array<{ id: string }>>) => {
+    const connections = Object.keys(reposByConnection).map((uuid) => ({
+        uuid,
+    }));
+    const integrationService = {
+        find: jest.fn().mockResolvedValue(connections),
+        findOne: jest.fn(async (filter: any) =>
+            connections.find((c) => c.uuid === filter.uuid),
+        ),
+    };
+    const integrationConfigService = {
+        find: jest.fn(async (filter: any) => [
+            {
+                configKey: 'repositories',
+                configValue: reposByConnection[filter.integration.uuid],
+            },
+        ]),
+    };
+    const useCase = new GetIntegrationConfigsByIntegrationCategoryUseCase(
+        integrationService as any,
+        integrationConfigService as any,
+        { user: { organization: { uuid: 'org-1' } } } as any,
+    );
+    return { useCase };
+};
+
+describe('GetIntegrationConfigsByIntegrationCategoryUseCase — Git connections', () => {
+    it('lists every connection’s repositories, each tagged with its connection', async () => {
+        const { useCase } = build({
+            'gh-a': [{ id: '1' }],
+            'gl-b': [{ id: '2' }],
+        });
+
+        const result = await useCase.execute({
+            teamId: 'team-1',
+            integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+        });
+
+        expect(result).toEqual([
+            {
+                configKey: 'repositories',
+                configValue: [
+                    { id: '1', connectionId: 'gh-a' },
+                    { id: '2', connectionId: 'gl-b' },
+                ],
+            },
+        ]);
+    });
+
+    it('lists only the named connection’s configs', async () => {
+        const { useCase } = build({
+            'gh-a': [{ id: '1' }],
+            'gl-b': [{ id: '2' }],
+        });
+
+        const result = await useCase.execute({
+            teamId: 'team-1',
+            integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+            connectionId: 'gl-b',
+        });
+
+        expect(result).toEqual([
+            {
+                configKey: 'repositories',
+                configValue: [{ id: '2', connectionId: 'gl-b' }],
+            },
+        ]);
+    });
+});

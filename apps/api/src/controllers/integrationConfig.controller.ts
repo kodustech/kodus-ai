@@ -44,14 +44,23 @@ export class IntegrationConfigController {
     })
     @ApiQuery({ name: 'integrationCategory', type: String, required: true })
     @ApiQuery({ name: 'teamId', type: String, required: true })
+    @ApiQuery({
+        name: 'connectionId',
+        type: String,
+        required: false,
+        description:
+            'A Git connection of the workspace; every connection when absent.',
+    })
     @ApiOkResponse({ type: ApiArrayResponseDto })
     public async getIntegrationConfigsByIntegrationCategory(
         @Query('integrationCategory') integrationCategory: string,
         @Query('teamId') teamId: string,
+        @Query('connectionId') connectionId?: string,
     ) {
         return this.getIntegrationConfigsByIntegrationCategoryUseCase.execute({
             integrationCategory,
             teamId,
+            connectionId,
         });
     }
 }
