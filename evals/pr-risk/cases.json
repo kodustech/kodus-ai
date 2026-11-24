@@ -1,7 +1,7 @@
 [
     {
         "id": "risk-found",
-        "checks": "A confirmed risk routes Heavy, selects the conditional agent and vetoes approval from one shared assessment. Its medium rating gets one second look at the PR head, which the scripted model leaves as it was.",
+        "checks": "A confirmed risk routes Heavy, selects the conditional agent and vetoes approval from one shared assessment.",
         "title": "EVAL_FORCE_MEDIUM_RISK: change authorization",
         "active": true,
         "files": [
@@ -19,8 +19,7 @@
             "mode": "heavy",
             "agentRuns": true,
             "approvalVeto": true,
-            "policyDecision": "hold",
-            "calls": 2
+            "policyDecision": "hold"
         }
     },
     {

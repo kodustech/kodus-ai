@@ -1,6 +1,5 @@
 // Production services with frozen provider/database responses at their I/O boundaries.
 const { EVAL_ORG } = require('../shared/model-route');
-const { repoAtHead } = require('../shared/repo-at-head');
 const {
     AssessPrRiskStage,
 } = require('../../libs/code-review/pipeline/stages/assess-pr-risk.stage.ts');
@@ -53,7 +52,7 @@ function stageFor(item, storedConfig, { withMap = false } = {}) {
         body: item.body || '',
         labels: item.labels ?? [],
         user: { login: item.author || 'alice' },
-        head: { sha: item.headSha || 'head', ref: 'pr-head' },
+        head: { sha: item.headSha || 'head' },
         base: { sha: item.baseSha || 'base' },
         stats: { total_files: item.files.length },
     };
@@ -81,8 +80,6 @@ function stageFor(item, storedConfig, { withMap = false } = {}) {
     factory.registerCodeManagementService(PlatformType.GITHUB, {
         getPullRequest: async () => pr,
         getFilesByPullRequestId: async () => item.files,
-        // The repository at the snapshot's head, for the second look.
-        ...repoAtHead(item),
     });
     const host = new CodeManagementService(integrations, factory);
     const parameters = new OrganizationParametersService({

@@ -487,10 +487,7 @@ it('saves risk outside label scope so a later label can be checked by the cron',
 
     expect(result.approvalDecision?.kind).toBe('out-of-scope');
     expect(result.approvalRisk?.level).toBe('medium');
-    // One judgment, then the medium rating's second look at the PR head: the
-    // scripted model answers no tool, so the first judgment stands.
-    expect(LLM.run).toHaveBeenCalledTimes(2);
-    expect(jest.mocked(LLM.run).mock.calls[1][0]).toHaveProperty('loop');
+    expect(LLM.run).toHaveBeenCalledTimes(1);
 });
 
 it('holds approval when a new commit arrives during review', async () => {

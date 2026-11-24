@@ -47,7 +47,7 @@ Kody assesses risk without team criteria. Criteria add team context, such as the
 
 A criterion has a name, instructions, a switch and optional included/excluded file patterns. You can add up to 50. A name is up to 120 characters and instructions up to 4,000; in a file, each `id` must be unique. Its file filters scope the guidance; matching a file does not automatically declare the PR risky. Kody still assesses the rest of the change.
 
-The assessment reads the diff, the PR title and description, and the bug-fix history of the changed areas. Before it holds a change it rated medium, Kody reads the repository at the PR head, and lowers the rating only when a file settles the concern, such as new behavior behind a flag that is off by default. Missing history is unknown information, not evidence of safety.
+The assessment reads the diff, the PR title and description, and the bug-fix history of the changed areas. Missing history is unknown information, not evidence of safety.
 
 ## YAML
 

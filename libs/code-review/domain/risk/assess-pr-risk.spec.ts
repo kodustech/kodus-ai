@@ -1,6 +1,5 @@
 import { assessApprovalRisk } from '../approval/assess-approval-risk';
 import { unshownCodePath } from './assess-change-risk';
-import { createRiskSecondLook, riskAgentRun } from './risk-second-look';
 import { LLM } from '@libs/llm/llm';
 import {
     applicableRiskCriteria,
@@ -10,11 +9,6 @@ import {
 } from './assess-pr-risk';
 
 jest.mock('@libs/llm/llm', () => ({ LLM: { run: jest.fn() } }));
-jest.mock('./risk-second-look', () => ({
-    ...jest.requireActual('./risk-second-look'),
-    createRiskSecondLook: jest.fn(),
-    riskAgentRun: jest.fn(),
-}));
 
 const input: AssessPrRiskInput = {
     organizationId: 'org',
@@ -578,30 +572,4 @@ it('invalidates identity when guidance, model, history, PR data or the diff chan
             } as any,
         }).assessmentKey,
     );
-});
-
-it('gives a medium rating a second look with the risk model and the PR head reader', async () => {
-    jest.mocked(LLM.run).mockResolvedValue({
-        level: 'medium',
-        reason: 'Callers may rely on the old return value.',
-    } as any);
-    const look = jest.fn().mockResolvedValue({
-        reason: 'Both callers already handle the new result.',
-        evidence: { file: 'src/caller.ts', line: 12 },
-    });
-    jest.mocked(createRiskSecondLook).mockReturnValue(look);
-    jest.mocked(riskAgentRun).mockReturnValue('run' as any);
-    const reader = { listFiles: jest.fn(), readFile: jest.fn() };
-    const modelSlot = { provider: 'openai', model: 'gpt-test' } as any;
-
-    expect(await assessPrRisk({ ...input, reader, modelSlot })).toMatchObject({
-        status: 'assessed',
-        riskIdentified: false,
-    });
-    expect(riskAgentRun).toHaveBeenCalledWith(modelSlot, {
-        organizationId: 'org',
-        prNumber: 4,
-    });
-    expect(createRiskSecondLook).toHaveBeenCalledWith('run');
-    expect(look).toHaveBeenCalledWith(expect.objectContaining({ reader }));
 });

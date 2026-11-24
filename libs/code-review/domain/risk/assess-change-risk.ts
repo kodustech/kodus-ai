@@ -15,12 +15,6 @@ import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
 import { createLogger } from '@libs/core/log/logger';
 import { CHANGE_RISK_PROMPT } from './change-risk-prompt';
 import { estimateRiskPromptTokens } from './estimate-risk-prompt-tokens';
-import {
-    createRiskSecondLook,
-    riskAgentRun,
-    type RiskRepositoryReader,
-    type RiskSecondLook,
-} from './risk-second-look';
 
 /** Internal judgment retained for compatibility; public PR risk is binary. */
 export interface ChangeRiskAssessment {
@@ -44,8 +38,6 @@ export const approvalRiskOutputSchema = z.object({
 
 const MAX_REASON_CHARS = 2_000;
 const MAX_AREA_FILES = 100;
-/** A smaller window can't hold the diff and the files the second look reads. */
-const MIN_SECOND_LOOK_WINDOW = 64_000;
 const logger = createLogger('AssessApprovalRisk');
 
 // Kinds the model can judge by path alone: assets, docs, data, lockfiles, tests
@@ -119,10 +111,6 @@ export async function assessChangeRisk(input: {
     areaMap?: CodeAreaRiskMap | null;
     modelSlot?: NormalizedModel;
     trace?: { baseSha: string; assessmentKey: string };
-    /** The repository at the PR head: absent, a medium rating gets no second look. */
-    reader?: RiskRepositoryReader;
-    /** A seam for tests; production builds it from the risk model. */
-    secondLook?: RiskSecondLook;
 }): Promise<ChangeRiskAssessment> {
     const unshown = unshownCodePath(input.files);
     if (unshown)
@@ -265,52 +253,6 @@ export async function assessChangeRisk(input: {
             !result?.reason?.trim()
         ) {
             throw new Error('Empty approval risk judgment');
-        }
-        const cleared =
-            result.level === 'medium' &&
-            input.reader &&
-            window.tokens >= MIN_SECOND_LOOK_WINDOW
-                ? await (
-                      input.secondLook ??
-                      createRiskSecondLook(
-                          riskAgentRun(input.modelSlot, {
-                              organizationId: input.organizationId,
-                              prNumber: input.prNumber,
-                          }),
-                      )
-                  )({
-                      title: input.title,
-                      body: input.body ?? '',
-                      diff,
-                      reason: result.reason.trim(),
-                      language: input.language,
-                      reader: input.reader,
-                  }).catch((error) => {
-                      // A failed look keeps the first judgment.
-                      logger.warn({
-                          message: 'Risk second look failed',
-                          context: 'approval-risk',
-                          error,
-                          metadata: {
-                              organizationId: input.organizationId,
-                              prNumber: input.prNumber,
-                              headSha: input.headSha,
-                          },
-                      });
-                      return undefined;
-                  })
-                : undefined;
-        if (cleared) {
-            const reason = `${cleared.reason} (${quotedPath(`${cleared.evidence.file}:${cleared.evidence.line}`)})`;
-            return {
-                level: 'low',
-                reason:
-                    reason.length > MAX_REASON_CHARS
-                        ? `${reason.slice(0, MAX_REASON_CHARS - 3)}...`
-                        : reason,
-                reviewedHeadSha: input.headSha,
-                areaMapVersion: input.areaMap?.version,
-            };
         }
         return {
             level: result.level,

@@ -7,7 +7,6 @@ const zlib = require('node:zlib');
 const { registerTs, countTokens, tokensUsed } = require('../shared/eval-kit');
 const { orgRouteOrExit, EVAL_ORG } = require('../shared/model-route');
 const { evalQuestion, resultProblems } = require('../shared/eval-result');
-const { repoAtHead } = require('../shared/repo-at-head');
 
 const args = Object.fromEntries(
     process.argv.slice(2).map((arg) => {
@@ -168,7 +167,7 @@ async function runCase(item, slot, withMap = true) {
         number: item.prNumber || 1,
         title: item.title,
         body: item.body || '',
-        head: { sha: headSha, ref: 'pr-head' },
+        head: { sha: headSha },
         user: { login: item.author || 'eval-author' },
     };
     // Snapshot data enters at the provider boundary; the stage still calls
@@ -176,8 +175,6 @@ async function runCase(item, slot, withMap = true) {
     const snapshotProvider = {
         getPullRequest: async () => ({ ...pr, labels: item.labels || [] }),
         getFilesByPullRequestId: async () => item.files,
-        // The repository at the snapshot's head, for the second look.
-        ...repoAtHead(item),
     };
     const organizationId = '00000000-0000-4000-8000-00000000e7a1';
     const teamId = 'eval-team';

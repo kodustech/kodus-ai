@@ -7,7 +7,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 /** A large repository is listed once, up to this many files. */
 const MAX_FILES = 5000;
 
-const logger = createLogger('RepositoryReaderAtHead');
+const logger = createLogger('BusinessLogicRepositoryReader');
 
 /**
  * The request with the repository at the PR head, read-only, so a MISSING
@@ -23,44 +23,15 @@ export function withRepositoryReader(
     if (!repository?.id || !repository.name || !pullRequest?.number) {
         return request;
     }
-    return {
-        ...request,
-        repositoryReader: repositoryReaderAtHead(code, {
-            organizationAndTeamData,
-            repository: { id: repository.id, name: repository.name },
-            pullRequest: {
-                number: pullRequest.number,
-                headRef: pullRequest.headRef,
-            },
-            platformType: request.platformType as PlatformType | undefined,
-        }),
-    };
-}
-
-/**
- * The repository at a PR's head, read-only, through the Git provider: the same
- * on every platform, without a sandbox. Business validation and the risk
- * assessment read code the diff doesn't show through it.
- */
-export function repositoryReaderAtHead(
-    code: CodeManagementService,
-    target: {
-        organizationAndTeamData: BusinessValidationRequest['organizationAndTeamData'];
-        repository: { id: string; name: string };
-        pullRequest: { number: number; headRef?: string };
-        platformType?: PlatformType;
-    },
-): RepositoryReader {
-    const { organizationAndTeamData, pullRequest } = target;
-    const repository = target.repository;
-    const type = target.platformType;
+    const type = request.platformType as PlatformType | undefined;
+    const target = { id: repository.id, name: repository.name };
     let paths: Promise<string[]> | undefined;
     const files = new Map<string, Promise<string | undefined>>();
     // A failed read leaves the requirement MISSING; the log says why.
     const warn = (what: string, error: Error) =>
         logger.warn({
-            message: `Couldn't ${what} at the PR head; the agent reading it sees less`,
-            context: 'RepositoryReaderAtHead',
+            message: `[BUSINESS-LOGIC] Couldn't ${what} at the PR head; the gap check sees less`,
+            context: 'BusinessLogicRepositoryReader',
             error,
             metadata: {
                 organizationId: organizationAndTeamData?.organizationId,
@@ -78,7 +49,7 @@ export function repositoryReaderAtHead(
                   .getPullRequest(
                       {
                           organizationAndTeamData,
-                          repository,
+                          repository: target,
                           prNumber: pullRequest.number,
                       },
                       type,
@@ -96,7 +67,7 @@ export function repositoryReaderAtHead(
                     ? code.getRepositoryAllFiles(
                           {
                               organizationAndTeamData,
-                              repository,
+                              repository: target,
                               filters: {
                                   branch: headRef,
                                   maxFiles: MAX_FILES,
@@ -126,7 +97,7 @@ export function repositoryReaderAtHead(
         const response = (await code.getRepositoryContentFile(
             {
                 organizationAndTeamData,
-                repository,
+                repository: target,
                 file: { filename: path },
                 pullRequest: {
                     number: pullRequest.number,
@@ -145,7 +116,7 @@ export function repositoryReaderAtHead(
             : content;
     };
 
-    return {
+    const reader: RepositoryReader = {
         listFiles: async (filter) => {
             const needle = filter.trim().toLowerCase();
             return (await listAll()).filter(
@@ -164,4 +135,5 @@ export function repositoryReaderAtHead(
             return file;
         },
     };
+    return { ...request, repositoryReader: reader };
 }

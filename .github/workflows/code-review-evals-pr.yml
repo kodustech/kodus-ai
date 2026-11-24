@@ -254,8 +254,6 @@ jobs:
               env:
                   BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-                  # The risk second look reads each snapshot's public repository at its head.
-                  GITHUB_TOKEN: ${{ github.token }}
                   APPROVAL_CASE_IDS: ${{ inputs.approval_case_ids }}
                   APPROVAL_SET: ${{ inputs.approval_set }}
                   COMPARE_SHARED_RISK: ${{ inputs.compare_shared_risk }}

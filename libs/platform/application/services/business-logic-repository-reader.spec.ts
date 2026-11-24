@@ -1,4 +1,4 @@
-import { withRepositoryReader } from './repository-reader-at-head';
+import { withRepositoryReader } from './business-logic-repository-reader';
 
 describe('withRepositoryReader', () => {
     const base = {
