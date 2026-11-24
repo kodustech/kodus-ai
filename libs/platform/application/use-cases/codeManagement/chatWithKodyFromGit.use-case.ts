@@ -1117,16 +1117,23 @@ export class ChatWithKodyFromGitUseCase {
         defaultBranch?: string,
         implicit = false,
     ): Promise<FlowOutcome> {
-        const allComments =
-            await this.codeManagementService.getPullRequestReviewComment({
-                organizationAndTeamData,
-                filters: {
-                    pullRequestNumber,
-                    repository,
-                    discussionId:
-                        params.payload?.object_attributes?.discussion_id,
-                },
-            });
+        // A GitHub `issue_comment` is a PR conversation comment: it has an
+        // issue-comment id that never appears in `pulls.listReviewComments`,
+        // so looking it up there left every top-level @kody mention with
+        // `comment === undefined` and the run returned RETRY silently (#2683).
+        // The webhook already carries the comment, author included.
+        const topLevelComment = this.topLevelCommentOf(params);
+        const allComments = topLevelComment
+            ? undefined
+            : await this.codeManagementService.getPullRequestReviewComment({
+                  organizationAndTeamData,
+                  filters: {
+                      pullRequestNumber,
+                      repository,
+                      discussionId:
+                          params.payload?.object_attributes?.discussion_id,
+                  },
+              });
 
         // GitLab-only: when discussion_id is missing from the webhook,
         // getPullRequestReviewComment returns raw discussions (with notes[]).
@@ -1150,19 +1157,35 @@ export class ChatWithKodyFromGitUseCase {
                           : undefined,
                   }));
               })
-            : allComments;
+            : (allComments ?? []);
 
         const commentId = this.getCommentId(params);
         const comment =
-            params.platformType !== PlatformType.AZURE_REPOS
+            topLevelComment ??
+            (params.platformType !== PlatformType.AZURE_REPOS
                 ? normalizedComments?.find((c) => c.id === commentId)
                 : this.getReviewThreadByCommentId(
                       commentId,
                       normalizedComments,
                       params,
-                  );
+                  ));
 
         if (!comment) {
+            // A mention Kody cannot place is dropped; say so, or the only
+            // trace is a job that finishes in 30ms with no model call.
+            this.logger.warn({
+                message:
+                    'Comment not found among the pull request comments; nothing to answer',
+                context: ChatWithKodyFromGitUseCase.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    repository: repository.name,
+                    pullRequestNumber,
+                    commentId,
+                    event: params.event,
+                    platformType: params.platformType,
+                },
+            });
             return RETRY;
         }
 
@@ -1261,21 +1284,19 @@ export class ChatWithKodyFromGitUseCase {
                 },
             });
 
-            await this.codeManagementService.createResponseToComment({
+            await this.replyInConversation({
+                topLevelComment,
+                params,
                 organizationAndTeamData,
-                inReplyToId: comment.id,
-                discussionId:
-                    params.payload?.object_attributes?.discussion_id ??
-                    comment.discussionId,
-                threadId: comment.threadId,
+                repository,
+                pullRequestNumber,
+                comment,
                 body: this.withKodyMarker(
                     licenseUnavailable
                         ? CONVERSATION_LICENSE_UNAVAILABLE_MESSAGE
                         : CONVERSATION_PLAN_GATE_MESSAGE,
                     params.platformType,
                 ),
-                repository,
-                prNumber: pullRequestNumber,
             });
             return;
         }
@@ -1427,16 +1448,14 @@ export class ChatWithKodyFromGitUseCase {
 
         try {
             if (responsePolicy.usesReaction()) {
-                await this.codeManagementService.createResponseToComment({
+                await this.replyInConversation({
+                    topLevelComment,
+                    params,
                     organizationAndTeamData,
-                    inReplyToId: comment.id,
-                    discussionId:
-                        params.payload?.object_attributes?.discussion_id ??
-                        comment.discussionId,
-                    threadId: comment.threadId,
-                    body: this.withKodyMarker(response, params.platformType),
                     repository,
-                    prNumber: pullRequestNumber,
+                    pullRequestNumber,
+                    comment,
+                    body: this.withKodyMarker(response, params.platformType),
                 });
 
                 this.logger.log({
@@ -2060,6 +2079,65 @@ export class ChatWithKodyFromGitUseCase {
             });
             return null;
         }
+    }
+
+    /**
+     * The comment a GitHub `issue_comment` webhook carries, shaped like the
+     * review comments the rest of this flow reads. Undefined for inline review
+     * replies, whose ids are looked up in the PR's review comments.
+     */
+    private topLevelCommentOf(params: WebhookParams): Comment | undefined {
+        if (
+            params.platformType !== PlatformType.GITHUB ||
+            params.event !== 'issue_comment'
+        ) {
+            return undefined;
+        }
+        const payloadComment = params.payload?.comment;
+        if (!payloadComment?.id) {
+            return undefined;
+        }
+        return {
+            id: payloadComment.id,
+            body: payloadComment.body ?? '',
+            user: payloadComment.user ?? params.payload?.sender,
+        };
+    }
+
+    /**
+     * Answers in the place the question was asked. A conversation comment
+     * cannot be answered through `pulls.createReplyForReviewComment`: that
+     * call only accepts inline review comment ids.
+     */
+    private async replyInConversation(args: {
+        topLevelComment?: Comment;
+        params: WebhookParams;
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Repository;
+        pullRequestNumber: number;
+        comment: Comment;
+        body: string;
+    }): Promise<void> {
+        if (args.topLevelComment) {
+            await this.codeManagementService.createIssueComment({
+                organizationAndTeamData: args.organizationAndTeamData,
+                repository: args.repository,
+                prNumber: args.pullRequestNumber,
+                body: args.body,
+            });
+            return;
+        }
+        await this.codeManagementService.createResponseToComment({
+            organizationAndTeamData: args.organizationAndTeamData,
+            inReplyToId: args.comment.id,
+            discussionId:
+                args.params.payload?.object_attributes?.discussion_id ??
+                args.comment.discussionId,
+            threadId: args.comment.threadId,
+            body: args.body,
+            repository: args.repository,
+            prNumber: args.pullRequestNumber,
+        });
     }
 
     private getCommentId(params: WebhookParams): number {
