@@ -46,7 +46,10 @@ const logger = createLogger('AssessApprovalRisk');
 const JUDGEABLE_EXTENSION =
     /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|icns|tiff?|svg|pdf|mp3|mp4|m4a|mov|webm|ogg|oga|wav|flac|woff2?|ttf|otf|eot|md|mdx|markdown|rst|adoc|txt|csv|tsv|json|jsonl|ndjson|snap)$/i;
 const JUDGEABLE_NAME =
-    /(?:^|\/)(?:yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Gemfile\.lock|composer\.lock|go\.sum|mix\.lock|pubspec\.lock|Podfile\.lock)$|(?:^|\/)(?:__tests__|__snapshots__|__fixtures__|tests?|specs?|fixtures?|testdata)\/|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java)|Test[A-Z][^/]*\.(?:cs|java))$/;
+    /(?:^|\/)(?:yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Gemfile\.lock|composer\.lock|go\.sum|mix\.lock|pubspec\.lock|Podfile\.lock)$|(?:^|\/)(?:__tests__|__snapshots__|__fixtures__|tests?|specs?|fixtures?|testdata)\/|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/;
+
+const usablePath = (path: unknown): path is string =>
+    typeof path === 'string' && !!path.trim();
 
 const hasDiff = (file: FileChange) =>
     typeof file.patch === 'string' && !!file.patch.trim();
@@ -59,13 +62,15 @@ const hasDiff = (file: FileChange) =>
  */
 export function unshownCodePath(files: FileChange[]): string | undefined {
     for (const file of files.filter((file) => !hasDiff(file))) {
-        if (typeof file.filename !== 'string' || !file.filename.trim())
-            return '(unnamed file)';
+        if (!usablePath(file.filename)) return '(unnamed file)';
+        // Absent on a plain change; any other unusable value hides a rename.
+        if (
+            file.previous_filename != null &&
+            !usablePath(file.previous_filename)
+        )
+            return file.filename;
         const path = [file.filename, file.previous_filename]
-            .filter(
-                (path): path is string =>
-                    typeof path === 'string' && !!path.trim(),
-            )
+            .filter(usablePath)
             .find(
                 (path) =>
                     !JUDGEABLE_EXTENSION.test(path) &&

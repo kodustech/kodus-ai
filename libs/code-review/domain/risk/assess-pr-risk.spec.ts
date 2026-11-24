@@ -376,7 +376,6 @@ it.each([
     ['src/EmailServiceTest.java', 'added', 4000, 0],
     ['src/URLTest.java', 'added', 4000, 0],
     ['src/Foo.Test.cs', 'added', 4000, 0],
-    ['src/TestHelper.cs', 'added', 4000, 0],
 ])(
     'judges a PR whose unshown file %s cannot hide code, and tells the model it was not shown',
     async (filename, status, additions, deletions) => {
@@ -432,6 +431,7 @@ it.each([
     'src/auth_TEST.go',
     'src/Fastest.cs',
     'src/Testimonial.java',
+    'src/TestRailClient.java',
 ])(
     'treats %s as code: test names compare with case, as toolchains do',
     async (filename) => {
@@ -450,13 +450,21 @@ it.each([
     },
 );
 
-it('reads a non-string previous path as absent instead of throwing', () => {
-    expect(
-        unshownCodePath([
-            { filename: 'public/logo.png', previous_filename: 42 },
-        ] as any),
-    ).toBeUndefined();
-});
+it.each([42, ' '])(
+    'holds a patch-less rename whose previous path is unusable (%j)',
+    (previous) => {
+        expect(
+            unshownCodePath([
+                { filename: 'public/logo.png', previous_filename: previous },
+            ] as any),
+        ).toBe('public/logo.png');
+        expect(
+            unshownCodePath([
+                { filename: 'public/logo.png', previous_filename: null },
+            ] as any),
+        ).toBeUndefined();
+    },
+);
 
 it('holds a patch-less file with a blank name', async () => {
     expect(
