@@ -271,6 +271,10 @@ export class FakeSuiteCell {
             if (proc) proc.killedAt ??= this.clock.now();
             return ok('');
         }
+        if (req.stepId.endsWith(':clear')) {
+            for (const [id, p] of this.procs) if (id.startsWith(`${claimId}|`)) p.files = [];
+            return ok('');
+        }
         if (req.stepId.includes(':read:')) {
             const path = /cat -- '([^']+)'/.exec(req.command)?.[1] ?? '';
             const body = this.xml.get(`${claimId}|${path}`);

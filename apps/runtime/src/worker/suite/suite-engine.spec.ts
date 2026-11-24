@@ -93,7 +93,8 @@ describe('the first pass of a suite run', () => {
         const w = world({ specs: { 'a.cy.ts': {}, 'b.cy.ts': { pr: ['crash'] }, 'c.cy.ts': {} } }, { maxShards: 1 });
         const out = await w.engine.run(request(), w.inputs(['a.cy.ts', 'b.cy.ts', 'c.cy.ts']));
         expect(statusOf(out)).toEqual({ 'a.cy.ts': 'passed', 'b.cy.ts': 'infra', 'c.cy.ts': 'infra' });
-        expect(w.cell.starts).toHaveLength(2);
+        // Two starts in the shard's claim, then one on a fresh host that crashes the same way.
+        expect(w.cell.starts.map((x) => x.claimId)).toEqual(['claim:suite:sr-1:0', 'claim:suite:sr-1:0', 'claim:suite:sr-1:62:0']);
         expect(out.state).toBe('neutral');
     });
 
@@ -112,8 +113,8 @@ describe('the first pass of a suite run', () => {
         expect(plan.flatMap((s) => s.specs).sort()).toEqual(['a', 'b', 'c', 'd', 'e', 'f'].map((n) => `${n}.cy.ts`));
     });
 
-    it('a shard whose claim is blocked has its specs as infra while the others run', async () => {
-        const w = world({ specs: Object.fromEntries(['a', 'b', 'c'].map((n) => [`${n}.cy.ts`, { ms: 4 * MIN }])), blocked: (r) => r.shard === 1 });
+    it('a shard whose claim is blocked has its specs as infra while the others run (and no fresh host to retry them on)', async () => {
+        const w = world({ specs: Object.fromEntries(['a', 'b', 'c'].map((n) => [`${n}.cy.ts`, { ms: 4 * MIN }])), blocked: (r) => r.shard === 1 || r.shard === 62 });
         const out = await w.engine.run(request(), w.inputs(['a', 'b', 'c'].map((n) => `${n}.cy.ts`)));
         const bySpec = Object.fromEntries(out.firstPass.map((s) => [s.spec, s]));
         const infra = out.firstPass.filter((s) => s.status === 'infra');
