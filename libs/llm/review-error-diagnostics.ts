@@ -179,8 +179,11 @@ const upstreamMessageIn = (body: unknown): string | undefined => {
  * is no value in printing "Provider said: Not Found" under a message that
  * already explained the 404.
  */
-export const extractProviderMessage = (err: unknown): string | undefined => {
-    if (!err || typeof err !== 'object') return undefined;
+export const extractProviderMessage = (
+    err: unknown,
+    depth = 0,
+): string | undefined => {
+    if (!err || typeof err !== 'object' || depth > 3) return undefined;
     const e = err as Record<string, unknown>;
 
     const bodies: unknown[] = [
@@ -208,6 +211,17 @@ export const extractProviderMessage = (err: unknown): string | undefined => {
     for (const raw of [e.responseBody, e.body]) {
         if (typeof raw === 'string' && looksLikeProse(raw)) {
             return tidy(redactSecrets(raw));
+        }
+    }
+
+    // A wrapper carries no body of its own: the AI SDK's RetryError keeps the
+    // provider's answer on the last attempt (every retried 429 / 5xx in the
+    // agent loop), and our own errors keep it as the cause. The same walk
+    // extractErrorText makes, under the same publishing rules.
+    for (const inner of [e.lastError, e.cause]) {
+        if (inner && inner !== err) {
+            const found = extractProviderMessage(inner, depth + 1);
+            if (found) return found;
         }
     }
 

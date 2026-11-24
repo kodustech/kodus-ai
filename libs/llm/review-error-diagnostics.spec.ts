@@ -369,3 +369,54 @@ describe('OpenRouter upstream errors (#1871)', () => {
         });
     });
 });
+
+describe('extractProviderMessage — a wrapper with no body of its own', () => {
+    const apiError = (body: unknown) =>
+        Object.assign(new Error('Too Many Requests'), {
+            statusCode: 429,
+            responseBody: JSON.stringify(body),
+        });
+
+    it("reads the provider's sentence from a RetryError's last attempt", () => {
+        const retry = Object.assign(new Error('Failed after 3 attempts.'), {
+            name: 'AI_RetryError',
+            lastError: apiError({
+                error: {
+                    message: 'Rate limit reached for gpt-x on tokens per min',
+                },
+            }),
+        });
+        expect(extractProviderMessage(retry)).toBe(
+            'Rate limit reached for gpt-x on tokens per min',
+        );
+    });
+
+    it('reads it from the cause of our own wrapper error', () => {
+        const wrapped = new Error('summary failed', {
+            cause: apiError({ error: { message: 'Overloaded' } }),
+        });
+        expect(extractProviderMessage(wrapped)).toBe('Overloaded');
+    });
+
+    it('keeps redacting a key found on the last attempt', () => {
+        const retry = Object.assign(new Error('Failed after 3 attempts.'), {
+            lastError: apiError({
+                error: {
+                    message:
+                        'Incorrect API key provided: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789',
+                },
+            }),
+        });
+        const published = extractProviderMessage(retry);
+        expect(published).toContain('Incorrect API key provided');
+        expect(published).not.toContain('abcdefghijklmnopqrstuvwxyz0123456789');
+    });
+
+    it('stops on a cycle instead of looping', () => {
+        const a: any = new Error('a');
+        const b: any = new Error('b');
+        a.cause = b;
+        b.cause = a;
+        expect(extractProviderMessage(a)).toBeUndefined();
+    });
+});

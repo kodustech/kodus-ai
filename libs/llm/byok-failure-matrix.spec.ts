@@ -700,8 +700,6 @@ const GEMINI_FAILURES: HttpFailure[] = [
         published: {
             has: ['Provider said: You exceeded your current quota'],
         },
-        // The same RetryError gap as OpenRouter's upstream 429 below.
-        publishedInLoop: { hasNot: ['Provider said'] },
     },
     {
         // #2130: the same 429 without its details. Only the retry delay in
@@ -1125,16 +1123,6 @@ const OPENROUTER_FAILURES: HttpFailure[] = [
             has: [
                 'Chutes: deepseek/deepseek-chat-v3.1:free is temporarily rate-limited upstream',
             ],
-        },
-        // KNOWN GAP, pinned so a fix flips it: the loop door's SDK retry
-        // throws a RetryError, and `extractProviderMessage` reads only the
-        // outer error's body, not `lastError` (which `extractErrorText` and
-        // `extractHttpStatus` both walk). The category survives; the
-        // upstream sentence does not reach the comment. Applies to every
-        // retried status (429, 5xx) on every provider.
-        publishedInLoop: {
-            has: ['Rate limit reached on the provider (open_router)'],
-            hasNot: ['Chutes', 'Provider said'],
         },
     },
 ];
