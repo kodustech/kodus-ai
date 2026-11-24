@@ -13,7 +13,6 @@ import {
     ValidationErrorType,
 } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
-import { resolveContextWindow } from '@libs/llm/model-context-window';
 import { overrideContext } from '@libs/llm/routing-strategy';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 import type { MCPServerConfig } from '@libs/mcp-server/mcp-adapter';
@@ -40,11 +39,8 @@ import type {
     TaskResolution,
 } from './business-validation.types';
 import { taskPasses } from './check-policy';
-import {
-    ANALYZER_MAX_OUTPUT_TOKENS,
-    IntentJudge,
-    JudgePolicy,
-} from './judge/intent-judge';
+import { IntentJudge, JudgePolicy } from './judge/intent-judge';
+import { analyzerOutputTokens, judgeWindow } from './judge/model-window';
 import { buildBusinessRulesAnalysisPrompt } from './judge/analysis-prompt.builder';
 import {
     classifyReply,
@@ -495,33 +491,47 @@ export class BusinessValidationService {
         if (!fullDiff.trim()) {
             return skip('diff_unavailable', messages.diffUnavailableMessage());
         }
+        const slot = (await judge()).modelSlot;
+        const contextWindowTokens = judgeWindow(slot);
+        // Everything that is not the diff, counted at its worst like the diff:
+        // a PR description or a task can carry a base64 image or a log too.
+        const promptTokens =
+            estimateTextTokens(this.instructions(request), {
+                worstCase: true,
+            }) +
+            Math.max(
+                ...judgeable.map((f) =>
+                    estimateTextTokens(
+                        buildBusinessRulesAnalysisPrompt({
+                            task: f.task,
+                            taskText: formatTaskForJudge(f.task),
+                            taskQuality: gradeTask(f.task),
+                            diff: '',
+                            unseenFiles: changedFileNames(fullDiff),
+                            pullRequestBody: request.pullRequest?.body,
+                            userLanguage: language,
+                            teamGuidance: settings.teamGuidance,
+                        }),
+                        { worstCase: true },
+                    ),
+                ),
+            );
         const { diff, unseenFiles } = fitDiff(fullDiff, {
             chars: DIFF_BUDGET_CHARS,
             tokens: diffTokenBudget({
-                contextWindowTokens: contextWindowOf((await judge()).modelSlot),
-                // The largest call: the task with the most text, and every
-                // changed file named as left out.
-                promptTokens:
-                    estimateTextTokens(this.instructions(request)) +
-                    Math.max(
-                        ...judgeable.map((f) =>
-                            estimateTextTokens(
-                                buildBusinessRulesAnalysisPrompt({
-                                    task: f.task,
-                                    taskText: formatTaskForJudge(f.task),
-                                    taskQuality: gradeTask(f.task),
-                                    diff: '',
-                                    unseenFiles: changedFileNames(fullDiff),
-                                    pullRequestBody: request.pullRequest?.body,
-                                    userLanguage: language,
-                                    teamGuidance: settings.teamGuidance,
-                                }),
-                            ),
-                        ),
-                    ),
-                outputTokens: ANALYZER_MAX_OUTPUT_TOKENS,
+                contextWindowTokens,
+                promptTokens,
+                outputTokens: analyzerOutputTokens(slot).reserved,
             }),
         });
+        // No file fits beside the task and the answer: a judge that reads no
+        // code says nothing, and the provider may reject the call outright.
+        if (!diff.trim()) {
+            return skip(
+                'too_large_for_model',
+                messages.tooLargeForModelMessage(contextWindowTokens),
+            );
+        }
 
         const judged = await Promise.all(
             judgeable.map((f) =>
@@ -756,7 +766,7 @@ export class BusinessValidationService {
                 },
                 request.signal,
             ),
-            { contextWindowTokens: contextWindowOf(model) },
+            { contextWindowTokens: judgeWindow(model) },
         );
     }
 
@@ -1374,15 +1384,4 @@ function verdictLine(check: TaskCheck): string {
         check.passed ? 'passed' : 'failed',
         ...[...counts].map(([state, n]) => `${state}=${n}`),
     ].join(' ');
-}
-
-/**
- * The input window of the model the judge runs on: the slot's own
- * `maxInputTokens` when the team set one, else what the model is known to hold.
- */
-export function contextWindowOf(model: NormalizedModel | undefined): number {
-    return resolveContextWindow({
-        byokMaxInputTokens: model?.maxInputTokens,
-        modelName: model?.model ?? '',
-    });
 }

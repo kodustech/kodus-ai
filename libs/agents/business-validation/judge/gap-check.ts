@@ -6,7 +6,9 @@ import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/i
 
 import type { AgentRun } from '../trackers/task-finder';
 import { fence } from '../fence';
-import { diffFor, GAP_DIFF_CHARS } from '../pull-request-diff';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+
+import { diffFor, GAP_DIFF_CHARS, sliceWhole } from '../pull-request-diff';
 import { asRecord } from '../value-utils';
 import type { RequirementVerdict } from './validation.types';
 
@@ -45,6 +47,16 @@ export type GapCheck = (
 const MAX_STEPS = 10;
 const MAX_LISTED = 60;
 const MAX_LINES = 400;
+/** A longer line is cut: tiktoken counts a run this short at its real size. */
+const MAX_LINE_CHARS = 500;
+/** At most this share of the window for one file read. */
+const READ_WINDOW_SHARE = 0.2;
+/** Past this share of the window, the first message can't be kept whole. */
+const HEAD_WINDOW_SHARE = 0.5;
+/** The compressor's own margin for tokenizer drift (its default). */
+const COMPRESSOR_MARGIN_SHARE = 0.08;
+/** The answer each step may write: kept out of the compressor's budget. */
+const GAP_CHECK_OUTPUT_TOKENS = 800;
 
 /**
  * A second look at one requirement the diff alone left open, by an agent that
@@ -68,7 +80,7 @@ export function createGapCheck(
         contextWindowTokens?: number;
     } = {},
 ): GapCheck {
-    const window = options.contextWindowTokens;
+    const contextWindow = options.contextWindowTokens;
     return async (input) => {
         const read = new Map<string, string[]>();
         // The lines the agent was shown: a citation must be one of them.
@@ -125,18 +137,43 @@ export function createGapCheck(
                     const lines = text.split('\n');
                     read.set(file, lines);
                     const start = Math.max(1, Number(fromLine) || 1);
-                    const window = lines.slice(
-                        start - 1,
-                        start - 1 + MAX_LINES,
-                    );
+                    // A line is cut at MAX_LINE_CHARS (a minified bundle or an
+                    // inline image is one line), and the read stops at a share
+                    // of the window: the compressor counts what it is given,
+                    // and only short runs are counted at their real size.
+                    const room = contextWindow
+                        ? Math.floor(contextWindow * READ_WINDOW_SHARE)
+                        : Infinity;
+                    const out: string[] = [];
+                    let used = 0;
+                    for (const [i, line] of lines
+                        .slice(start - 1, start - 1 + MAX_LINES)
+                        .entries()) {
+                        const shownLine = `${start + i}: ${
+                            line.length > MAX_LINE_CHARS
+                                ? `${sliceWhole(line, MAX_LINE_CHARS)} … (line cut)`
+                                : line
+                        }`;
+                        const cost =
+                            room === Infinity
+                                ? 0
+                                : estimateTextTokens(shownLine, {
+                                      worstCase: true,
+                                  }) + 1;
+                        if (out.length && used + cost > room) {
+                            out.push(`… (read on with fromLine ${start + i})`);
+                            break;
+                        }
+                        out.push(shownLine);
+                        used += cost;
+                    }
                     const seen = shown.get(file) ?? new Set<number>();
-                    window.forEach((_, i) => seen.add(start + i));
+                    out.forEach((line) => {
+                        const n = Number(line.slice(0, line.indexOf(':')));
+                        if (Number.isInteger(n) && n > 0) seen.add(n);
+                    });
                     shown.set(file, seen);
-                    return {
-                        output: window
-                            .map((line, i) => `${start + i}: ${line}`)
-                            .join('\n'),
-                    };
+                    return { output: out.join('\n') };
                 },
             },
             {
@@ -251,6 +288,22 @@ export function createGapCheck(
         }
 
         const system = systemPrompt(from, input.userLanguage);
+        const head = prompt(input, contextWindow);
+        // The first message is never shortened safely: past half the window
+        // the compressor would cut the requirement and the diff, and the
+        // agent could overturn a state from code it can't relate to them.
+        const headTokens =
+            estimateTextTokens(system, { worstCase: true }) +
+            estimateTextTokens(head, { worstCase: true });
+        if (contextWindow && headTokens > contextWindow * HEAD_WINDOW_SHARE) {
+            return undefined;
+        }
+        // The compressor counts the first message the ordinary way; what that
+        // misses, and the answer, stay out of its budget.
+        const undercount = Math.max(
+            0,
+            headTokens - estimateTextTokens(system) - estimateTextTokens(head),
+        );
         await run(
             {
                 id: 'business-rules-gap-check',
@@ -264,23 +317,30 @@ export function createGapCheck(
                     { name: 'gap-check-answered', shouldStop: () => answered },
                     // Every file read stays in the conversation for the next
                     // step: on a small window, ten of them outgrow it.
-                    ...(window
+                    ...(contextWindow
                         ? [
                               new CompressionPolicy(
-                                  new ContextWindowCompressor(window, {
+                                  new ContextWindowCompressor(contextWindow, {
                                       overheadTokens: estimateOverheadTokens(
                                           system,
                                           registry.list(),
                                       ),
+                                      safetyMarginTokens:
+                                          Math.ceil(
+                                              contextWindow *
+                                                  COMPRESSOR_MARGIN_SHARE,
+                                          ) +
+                                          GAP_CHECK_OUTPUT_TOKENS +
+                                          undercount,
                                   }),
                               ),
                           ]
                         : []),
                 ],
                 maxSteps: MAX_STEPS,
-                maxOutputTokens: 800,
+                maxOutputTokens: GAP_CHECK_OUTPUT_TOKENS,
             },
-            prompt(input, window),
+            head,
         );
 
         return settled?.note ? settled : undefined;

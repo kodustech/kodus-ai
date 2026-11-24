@@ -4,7 +4,11 @@ import {
     diffTokenBudget,
     fitDiff,
     formatPullRequestDiff,
+    sliceWhole,
 } from './pull-request-diff';
+
+/** How the budget counts: what the tokenizer can't encode, at its worst. */
+const worst = (text: string) => estimateTextTokens(text, { worstCase: true });
 
 /** SVG path data: few characters per token, the shape behind #2233. */
 const svgPatch = (chars: number) => {
@@ -105,7 +109,7 @@ describe("fitDiff within the model's window (#2233)", () => {
             tokens,
         });
         expect(diff.length).toBeLessThan(200_000);
-        expect(estimateTextTokens(sent)).toBeLessThanOrEqual(tokens);
+        expect(worst(sent)).toBeLessThanOrEqual(tokens);
         expect(unseenFiles).toContain('icons/big.svg');
         expect(sent).toContain('=== FILE: src/a.ts');
     });
@@ -115,7 +119,7 @@ describe("fitDiff within the model's window (#2233)", () => {
             chars: 200_000,
             tokens: 5_000,
         });
-        expect(estimateTextTokens(sent)).toBeLessThanOrEqual(5_000);
+        expect(worst(sent)).toBeLessThanOrEqual(5_000);
         expect(sent.length).toBeGreaterThan(0);
         expect(unseenFiles).toEqual(['(rest of the diff)']);
     });
@@ -136,7 +140,7 @@ describe('diffTokenBudget (#2233)', () => {
                 promptTokens: 10_000,
                 outputTokens: 20_000,
             }),
-        ).toBe(60_000);
+        ).toBe(55_000);
     });
 
     it('leaves nothing for the diff when the window cannot hold the prompt and the answer', () => {
@@ -159,7 +163,7 @@ describe("diffFor within the model's window (#2233)", () => {
             })),
         );
         const sent = diffFor(diff, {}, { chars: 24_000, tokens: 2_000 });
-        expect(estimateTextTokens(sent)).toBeLessThanOrEqual(2_000);
+        expect(worst(sent)).toBeLessThanOrEqual(2_000);
         expect(sent).toContain('Also changed, not shown here');
     });
 });
@@ -177,5 +181,52 @@ describe('fitDiff counts what the tokenizer cannot encode at its worst', () => {
         });
         expect(estimateTextTokens(blob)).toBeLessThan(30_000);
         expect(unseenFiles).toEqual(['public/logo.html']);
+    });
+});
+
+describe('cuts that stay within the window and stay valid text', () => {
+    it("keeps a second look's diff under the character cap but over the tokens, instead of sending none", () => {
+        const diff = formatPullRequestDiff([
+            {
+                filename: 'src/a.ts',
+                patch: Array.from(
+                    { length: 120 },
+                    (_, i) => `+export const value${i} = compute(${i});`,
+                ).join('\n'),
+            },
+            {
+                filename: 'dist/app.min.js',
+                patch: `+${'a=b+c;d=e*f;'.repeat(300)}`,
+            },
+        ]);
+        expect(diff.length).toBeLessThan(24_000);
+        const tokens = Math.floor(worst(diff) * 0.9);
+        const sent = diffFor(diff, {}, { chars: 24_000, tokens });
+        expect(sent.length).toBeGreaterThan(0);
+        expect(worst(sent)).toBeLessThanOrEqual(tokens);
+    });
+
+    it('sends no diff, and names every file, when the window has no room for one', () => {
+        const diff = formatPullRequestDiff([
+            { filename: 'src/a.ts', patch: '+export const a = 1;' },
+            { filename: 'src/b.ts', patch: '+export const b = 2;' },
+        ]);
+        expect(fitDiff(diff, { chars: 200_000, tokens: 0 })).toEqual({
+            diff: '',
+            unseenFiles: ['src/a.ts', 'src/b.ts'],
+        });
+        expect(diffFor(diff, {}, { chars: 24_000, tokens: 0 })).toBe('');
+    });
+
+    it('never ends a cut on half of an emoji', () => {
+        const isLoneHigh = (text: string) => {
+            const last = text.charCodeAt(text.length - 1);
+            return last >= 0xd800 && last <= 0xdbff;
+        };
+        const emoji = '+' + '😀'.repeat(50_000);
+        const { diff: sent } = fitDiff(emoji, { chars: 200_000, tokens: 777 });
+        expect(sent.length).toBeGreaterThan(0);
+        expect(isLoneHigh(sent)).toBe(false);
+        expect(isLoneHigh(sliceWhole('a😀', 2))).toBe(false);
     });
 });

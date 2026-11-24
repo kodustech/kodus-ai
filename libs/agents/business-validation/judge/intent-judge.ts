@@ -25,8 +25,7 @@ import {
 
 const DEFAULT_LANGUAGE = 'en-US';
 const PARSER_FALLBACK_FRAGMENT = 'error parsing validation result';
-/** The most the analyzer may write: room the call keeps in the model's window. */
-export const ANALYZER_MAX_OUTPUT_TOKENS = 20_000;
+import { analyzerOutputTokens } from './model-window';
 /** Verify passes per validation; requirements past this keep the analyzer's state. */
 const MAX_VERIFIED_CLAIMS = 8;
 
@@ -172,7 +171,8 @@ export class IntentJudge {
                             { role: 'user', content: prompt },
                         ],
                         {
-                            maxTokens: ANALYZER_MAX_OUTPUT_TOKENS,
+                            maxTokens: analyzerOutputTokens(this.model)
+                                .requested,
                             submitResultTool: true,
                             // The limit must stop the model call, not only the
                             // wait: an abandoned call kept running (and billing)

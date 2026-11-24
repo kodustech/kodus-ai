@@ -13,10 +13,11 @@ import {
     DEFAULT_BUSINESS_LOGIC_SETTINGS,
     resolveBusinessLogicSettings,
 } from './settings';
+import { extractTaskReferences } from './task-references';
 import { resolveTasks } from './task-resolver';
 import { buildTaskTrackers } from './trackers/tracker-catalog';
 import { buildBusinessRulesAnalysisPrompt } from './judge/analysis-prompt.builder';
-import { ANALYZER_MAX_OUTPUT_TOKENS } from './judge/intent-judge';
+import { analyzerOutputTokens } from './judge/model-window';
 import { formatPullRequestDiff } from './pull-request-diff';
 
 jest.mock('./task-resolver', () => {
@@ -120,6 +121,31 @@ describe('BusinessValidationService · a referenced task the tracker cannot find
         expect(outcome.message).toContain('PAY-42');
         expect(outcome.message).toContain('Jira');
         expect(outcome.message).not.toContain("doesn't reference a task");
+    });
+
+    it('keeps the guidance to reference a task when what it found is only a word like UTF-8', async () => {
+        const references = extractTaskReferences({
+            title: 'fix: handle UTF-8 BOM in the CSV importer',
+        });
+        const resolution = await resolveTasks(
+            references,
+            [
+                {
+                    name: 'Jira',
+                    canRead: (r) => r.kind === 'key',
+                    read: async () => ({ status: 'not_found' }),
+                    ownsReference: async () => false,
+                } as any,
+            ],
+            { organizationAndTeamData: { organizationId: 'org-1' } },
+        );
+        expect(resolution.kind).toBe('not_found');
+        const outcome = await decide(true, resolution, references);
+        expect(outcome.kind).toBe('task_required');
+        expect(outcome.message).toContain(
+            '`PROJ-123`, `Closes #123` or a link',
+        );
+        expect(outcome.message).toContain('UTF-8');
     });
 
     it('still says the PR names no task when it names none', async () => {
@@ -731,10 +757,45 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
         }
         return out.slice(0, chars);
     };
+    const worst = (text: string) =>
+        estimateTextTokens(text, { worstCase: true });
+    const task = {
+        tracker: 'Linear',
+        id: 'KOD-1',
+        title: 'New header icons',
+        description: 'Replace the header icons with the new set.',
+        acceptanceCriteria: [
+            'Icons render in the header',
+            'Old icons are removed',
+        ],
+    };
+    const assetPr = formatPullRequestDiff([
+        { filename: 'src/header.tsx', patch: svg(20_000) },
+        ...Array.from({ length: 8 }, (_, i) => ({
+            filename: `icons/icon-${i}.svg`,
+            patch: svg(20_000),
+        })),
+    ]);
 
-    it('sends a slot with a 32k-token input window no analyzer call over 32k tokens', async () => {
-        const window = 32_000;
-        const calls: string[] = [];
+    const codeFiles = (count: number) =>
+        formatPullRequestDiff(
+            Array.from({ length: count }, (_, i) => ({
+                filename: `src/header/part-${i}.ts`,
+                patch: Array.from(
+                    { length: 40 },
+                    (_, line) =>
+                        `+export const icon${i}_${line} = render('icon-${i}-${line}');`,
+                ).join('\n'),
+            })),
+        );
+    const codePr = codeFiles(12);
+
+    /** Runs the service's decision with a judge that records each call it gets. */
+    async function judgeCalls(
+        slot: Record<string, unknown>,
+        options: { diff?: string; task?: typeof task; body?: string } = {},
+    ) {
+        const calls: Array<{ text: string; diff: string }> = [];
         const service = new BusinessValidationService(
             {} as any,
             {} as any,
@@ -746,17 +807,13 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
             } as any,
         );
         const judge = {
-            modelSlot: {
-                provider: 'openai_compatible',
-                apiKey: '',
-                model: 'local-open-weights',
-                maxInputTokens: window,
-            },
+            modelSlot: { provider: 'openai_compatible', apiKey: '', ...slot },
             translate: async (m: string) => m,
             judge: async (input: any) => {
-                calls.push(
-                    `${input.instructions}\n${buildBusinessRulesAnalysisPrompt(input)}`,
-                );
+                calls.push({
+                    text: `${input.instructions}\n${buildBusinessRulesAnalysisPrompt(input)}`,
+                    diff: input.diff,
+                });
                 return {
                     needsMoreInfo: false,
                     status: 'meets_requirements',
@@ -770,52 +827,107 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
                 };
             },
         };
-        const diff = formatPullRequestDiff([
-            { filename: 'src/header.tsx', patch: svg(20_000) },
-            ...Array.from({ length: 8 }, (_, i) => ({
-                filename: `icons/icon-${i}.svg`,
-                patch: svg(20_000),
-            })),
-        ]);
-
         const outcome = await (service as any).decide(
             {
                 door: 'auto',
                 organizationAndTeamData: { organizationId: 'org-1' },
-                pullRequest: { number: 1, body: 'Closes KOD-1' },
-                diff,
+                pullRequest: {
+                    number: 1,
+                    body: options.body ?? 'Closes KOD-1',
+                },
+                diff: options.diff ?? assetPr,
             },
             resolveBusinessLogicSettings({}),
             {
                 kind: 'found',
                 attempts: [],
-                tasks: [
-                    {
-                        task: {
-                            tracker: 'Linear',
-                            id: 'KOD-1',
-                            title: 'New header icons',
-                            description:
-                                'Replace the header icons with the new set.',
-                            acceptanceCriteria: [
-                                'Icons render in the header',
-                                'Old icons are removed',
-                            ],
-                        },
-                    },
-                ],
+                tasks: [{ task: options.task ?? task }],
             },
             [ref('KOD-1')],
             ['Linear'],
             async () => judge,
         );
+        return { outcome, calls, slot: judge.modelSlot as any };
+    }
 
-        expect(diff.length).toBeLessThan(200_000);
+    it('reads part of the code on a 32k-token slot, and the call with its answer fits the window', async () => {
+        const { outcome, calls, slot } = await judgeCalls({
+            model: 'local-open-weights',
+            maxInputTokens: 32_000,
+        });
+        expect(assetPr.length).toBeLessThan(200_000);
         expect(calls).toHaveLength(1);
+        expect(calls[0].diff.length).toBeGreaterThan(0);
         expect(
-            estimateTextTokens(calls[0]) + ANALYZER_MAX_OUTPUT_TOKENS,
-        ).toBeLessThanOrEqual(window);
+            worst(calls[0].text) + analyzerOutputTokens(slot).reserved,
+        ).toBeLessThanOrEqual(32_000);
         expect(outcome.kind).toBe('validated');
         expect(outcome.unseenFiles.length).toBeGreaterThan(0);
+    });
+
+    it('still reads code on a 16k-token slot', async () => {
+        const { calls, slot } = await judgeCalls(
+            { model: 'local-open-weights', maxInputTokens: 16_000 },
+            { diff: codePr },
+        );
+        expect(calls[0].diff.length).toBeGreaterThan(0);
+        expect(
+            worst(calls[0].text) + analyzerOutputTokens(slot).reserved,
+        ).toBeLessThanOrEqual(16_000);
+    });
+
+    it("keeps room for the slot's own answer limit, which the call sends whatever the judge asks", async () => {
+        const { calls } = await judgeCalls(
+            {
+                model: 'local-open-weights',
+                maxInputTokens: 64_000,
+                maxOutputTokens: 32_000,
+            },
+            { diff: codeFiles(60) },
+        );
+        expect(worst(calls[0].text) + 32_000).toBeLessThanOrEqual(64_000);
+    });
+
+    it('sizes the call for a fallback with a smaller window than the primary', async () => {
+        const { calls } = await judgeCalls({
+            model: 'big-window',
+            maxInputTokens: 1_000_000,
+            fallback: {
+                provider: 'openai_compatible',
+                apiKey: '',
+                model: 'small-window',
+                maxInputTokens: 32_000,
+            },
+        });
+        expect(worst(calls[0].text)).toBeLessThanOrEqual(32_000);
+    });
+
+    it('counts a base64 image pasted in the PR description at its real size', async () => {
+        const image = `![logo](data:image/png;base64,${Buffer.alloc(18_000, 7).toString('base64').replace(/A/g, 'Bq9')})`;
+        const { calls, slot } = await judgeCalls(
+            { model: 'local-open-weights', maxInputTokens: 64_000 },
+            { body: `Closes KOD-1\n\n${image}`, diff: codeFiles(60) },
+        );
+        expect(
+            worst(calls[0].text) + analyzerOutputTokens(slot).reserved,
+        ).toBeLessThanOrEqual(64_000);
+    });
+
+    it('says the task is too large for the model, and asks it nothing, when no file fits beside it', async () => {
+        const { outcome, calls } = await judgeCalls(
+            { model: 'local-open-weights', maxInputTokens: 32_000 },
+            {
+                task: {
+                    ...task,
+                    description: 'Replace the header icons. '.repeat(6_000),
+                },
+            },
+        );
+        expect(calls).toHaveLength(0);
+        expect(outcome).toMatchObject({
+            kind: 'skipped',
+            reason: 'too_large_for_model',
+        });
+        expect(outcome.message).toContain('32,000 tokens');
     });
 });

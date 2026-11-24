@@ -43,12 +43,36 @@ export const FALLBACK_CHARS_PER_TOKEN = 3;
 
 /**
  * The fallback for a caller whose limit is a hard one (a request that must
- * fit the model's window): one token per character. Dense text runs far
+ * fit the model's window): one token per ASCII character. Dense text runs far
  * below 3 characters per token in o200k_base — measured 1.14 for SVG path
  * data, 1.45 for base64, 1.75 for hex — so the ordinary fallback can let
  * such a text through at less than half its real size.
  */
 export const WORST_CASE_CHARS_PER_TOKEN = 1;
+
+/**
+ * The worst case for one non-ASCII UTF-16 code unit: a byte-level BPE never
+ * spends more than a token per UTF-8 byte, and a code unit is at most three
+ * bytes (a surrogate pair is four bytes over two units). o200k spends 1.5 per
+ * unit on 🫠 and 2 on 𠮷 and U+2000.
+ */
+const WORST_CASE_TOKENS_PER_NON_ASCII_UNIT = 3;
+
+/** Tokens a text can never exceed: what `worstCase` counts uncounted text at. */
+function worstCaseTokens(length: number, nonAscii: number): number {
+    return (
+        Math.ceil((length - nonAscii) / WORST_CASE_CHARS_PER_TOKEN) +
+        nonAscii * WORST_CASE_TOKENS_PER_NON_ASCII_UNIT
+    );
+}
+
+function nonAsciiUnits(text: string): number {
+    let count = 0;
+    for (let i = 0; i < text.length; i++) {
+        if (text.charCodeAt(i) > 0x7f) count++;
+    }
+    return count;
+}
 
 let encoder: Tiktoken | null = null;
 let encoderFailed = false;
@@ -204,11 +228,7 @@ function isWhitespace(code: number): boolean {
  * linear pass over the text; no regex (a `\S{n,}` scan would itself be
  * O(n·k)).
  */
-function countTokens(
-    enc: Tiktoken,
-    text: string,
-    charsPerToken = FALLBACK_CHARS_PER_TOKEN,
-): number {
+function countTokens(enc: Tiktoken, text: string, worstCase = false): number {
     if (text.length <= MAX_ENCODED_RUN_CHARS) {
         return enc.encode_ordinary(text).length;
     }
@@ -217,7 +237,7 @@ function countTokens(
     let runStart = 0;
     let runIsWhitespace = isWhitespace(text.charCodeAt(0));
     let longRuns = false;
-    // Non-ASCII code units in the current (non-whitespace) run.
+    // Non-ASCII code units in the current run.
     let runNonAscii = 0;
     const flushRun = (runEnd: number) => {
         const length = runEnd - runStart;
@@ -228,9 +248,12 @@ function countTokens(
                 text.slice(segmentStart, runStart),
             ).length;
         }
-        tokens += runIsWhitespace
-            ? Math.ceil(length / charsPerToken)
-            : Math.ceil((length - runNonAscii) / charsPerToken) + runNonAscii;
+        tokens += worstCase
+            ? worstCaseTokens(length, runNonAscii)
+            : runIsWhitespace
+              ? Math.ceil(length / FALLBACK_CHARS_PER_TOKEN)
+              : Math.ceil((length - runNonAscii) / FALLBACK_CHARS_PER_TOKEN) +
+                runNonAscii;
         segmentStart = runEnd;
     };
     for (let i = 0; i < text.length; i++) {
@@ -242,7 +265,7 @@ function countTokens(
             runIsWhitespace = whitespace;
             runNonAscii = 0;
         }
-        if (!whitespace && code > 0x7f) runNonAscii++;
+        if (code > 0x7f) runNonAscii++;
     }
     flushRun(text.length);
     if (!longRuns) return enc.encode_ordinary(text).length;
@@ -259,9 +282,9 @@ export function estimateTextTokens(
         cache?: boolean;
         /**
          * Count what the tokenizer can't (it failed to load, or a run too
-         * long to encode) at WORST_CASE_CHARS_PER_TOKEN: for a limit the
-         * text must never exceed. Not memoized, so a cached ordinary count
-         * never answers it.
+         * long to encode) at its worst: a token per ASCII character, three
+         * per other code unit. For a limit the text must never exceed. Not
+         * memoized, so a cached ordinary count never answers it.
          */
         worstCase?: boolean;
     },
@@ -269,9 +292,7 @@ export function estimateTextTokens(
     if (!text) {
         return 0;
     }
-    const charsPerToken = options?.worstCase
-        ? WORST_CASE_CHARS_PER_TOKEN
-        : FALLBACK_CHARS_PER_TOKEN;
+    const worstCase = options?.worstCase === true;
     const useMemo = options?.cache !== false && !options?.worstCase;
     let hit: number | undefined;
     if (useMemo) {
@@ -283,11 +304,13 @@ export function estimateTextTokens(
     const enc = getEncoder();
     if (enc) {
         try {
-            const tokens = countTokens(enc, text, charsPerToken);
+            const tokens = countTokens(enc, text, worstCase);
             return useMemo ? remember(text, tokens) : tokens;
         } catch {
             // fall through to the char estimate
         }
     }
-    return Math.ceil(text.length / charsPerToken);
+    return worstCase
+        ? worstCaseTokens(text.length, nonAsciiUnits(text))
+        : Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN);
 }

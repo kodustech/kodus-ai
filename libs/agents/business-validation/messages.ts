@@ -120,10 +120,11 @@ I looked for ${tried.join(', ')}, and ${tried.length > 1 ? 'none of them exists'
 }
 
 /**
- * The PR names a task, no tracker has it, and the repository asks for one:
- * say what was looked for and where. A key the tracker can't see (another
- * project, no permission) reads the same as a typo from here, so the author
- * gets both ways out.
+ * The repository asks for a task and none the PR names was found. What was
+ * looked for can be a real key the tracker can't see (#2422) or a word that
+ * only looks like one (`UTF-8`, a branch's `404`): the guidance to reference
+ * the task comes first, the connection check only for a reference that is
+ * the task.
  */
 export function taskRequiredNotFoundMessage(
     attempts: ResolutionAttempt[],
@@ -134,10 +135,10 @@ export function taskRequiredNotFoundMessage(
     }
     return `## 🤔 Which task is this?
 
-I looked for ${tried.join(', ')}, and ${tried.length > 1 ? 'none of them was found' : 'it was not found'}. This repository asks for a task so Kody can check the PR against it.
+This repository asks for a task so Kody can check the PR against it, and none was found: I looked for ${tried.join(', ')}.
 
 ### 💡 Next step
-If the reference is right, check that the Kodus connection can see that project. Otherwise fix the reference in the title, description or branch. Then comment ${RERUN}.`;
+Reference the task in the title, description or branch (\`PROJ-123\`, \`Closes #123\` or a link) and comment ${RERUN}. If ${tried.length > 1 ? 'one of these is' : 'that is'} the task, check that the Kodus connection can see its project.`;
 }
 
 export function trackerUnavailableMessage(
@@ -154,6 +155,12 @@ export function diffUnavailableMessage(): string {
     return `## 🤔 Need Pull Request Diff
 
 I found the task, but I couldn't load the pull request diff, so I can't compare the implementation with it. Try ${RERUN} again.`;
+}
+
+export function tooLargeForModelMessage(contextWindowTokens: number): string {
+    return `## 🤔 Too large for the model
+
+The task, the pull request description and this PR's changes don't fit the input window of the model that checks business logic (${contextWindowTokens.toLocaleString('en-US')} tokens): not one changed file fits beside the task. Nothing was checked. A model with a larger window in the Business Logic settings, or a shorter task, lets Kody read the code.`;
 }
 
 export function judgeFailedMessage(): string {

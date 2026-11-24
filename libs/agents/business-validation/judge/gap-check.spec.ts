@@ -396,7 +396,55 @@ describe("createGapCheck within the model's window (#2233)", () => {
         expect(estimateTextTokens(diff)).toBeLessThanOrEqual(4_000 + 50);
     });
 
-    it('shortens the files read so far before the next step once they outgrow the window', async () => {
+    const textOf = (value: unknown): string =>
+        typeof value === 'string'
+            ? value
+            : Array.isArray(value)
+              ? value.map(textOf).join('\n')
+              : value && typeof value === 'object'
+                ? Object.values(value).map(textOf).join('\n')
+                : '';
+    const worst = (text: string) =>
+        estimateTextTokens(text, { worstCase: true });
+
+    it('reads a one-line SVG cut by line and by a share of a small window', async () => {
+        let output = '';
+        await createGapCheck(
+            async (spec) => {
+                output = String(
+                    (
+                        await spec.tools
+                            .get('read_file')!
+                            .execute({ path: 'icons/logo.svg' }, {} as any)
+                    ).output,
+                );
+            },
+            { contextWindowTokens: 16_000 },
+        )({
+            ...input,
+            reader: {
+                listFiles: async () => [],
+                readFile: async () =>
+                    `<svg>\n<path d="${'M1.5,2.5L3.5,4.5z'.repeat(1_700)}"/>\n</svg>`,
+            },
+        });
+        expect(output).toContain('(line cut)');
+        expect(worst(output)).toBeLessThanOrEqual(16_000 * 0.2);
+    });
+
+    it('skips the second look when the task alone would take half of a small window', async () => {
+        let ran = false;
+        const settled = await createGapCheck(
+            async () => {
+                ran = true;
+            },
+            { contextWindowTokens: 8_000 },
+        )({ ...input, taskText: 'task '.repeat(6_700) });
+        expect(ran).toBe(false);
+        expect(settled).toBeUndefined();
+    });
+
+    it('keeps the files read, the answer and the overhead within a 16k window once they outgrow it', async () => {
         let spec: AgentSpec | undefined;
         await createGapCheck(
             async (s) => {
@@ -423,7 +471,14 @@ describe("createGapCheck within the model's window (#2233)", () => {
                         type: 'tool-result',
                         toolCallId: `c${i}`,
                         toolName: 'read_file',
-                        output: { type: 'text', value: svg(12_000) },
+                        output: {
+                            type: 'text',
+                            value: Array.from(
+                                { length: 200 },
+                                (_, line) =>
+                                    `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                            ).join('\n'),
+                        },
                     },
                 ],
             },
@@ -436,9 +491,12 @@ describe("createGapCheck within the model's window (#2233)", () => {
                 ),
             )
         ).find((d) => d?.messages);
-        expect(directives?.messages).toBeDefined();
+        expect(worst(textOf(messages))).toBeGreaterThan(16_000);
+        const overhead =
+            worst(spec!.systemPrompt ?? '') +
+            worst(JSON.stringify(spec!.tools.list()));
         expect(
-            estimateTextTokens(JSON.stringify(directives!.messages)),
-        ).toBeLessThan(estimateTextTokens(JSON.stringify(messages)));
+            worst(textOf(directives!.messages)) + overhead + 800,
+        ).toBeLessThanOrEqual(16_000);
     });
 });

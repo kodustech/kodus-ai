@@ -143,6 +143,21 @@ describe('estimateTextTokens worstCase', () => {
         expect(estimateTextTokens(run)).toBeLessThan(run.length / 2);
     });
 
+    it('never counts a run of emoji, CJK or wide spaces under what o200k counts', () => {
+        const enc = get_encoding('o200k_base');
+        for (const run of [
+            '🫠'.repeat(1_001),
+            '𠮷'.repeat(1_001),
+            '\u2000'.repeat(1_001),
+            'ü'.repeat(1_001),
+        ]) {
+            expect(
+                estimateTextTokens(run, { worstCase: true }),
+            ).toBeGreaterThanOrEqual(enc.encode_ordinary(run).length);
+        }
+        enc.free();
+    });
+
     it('counts ordinary text the same as without it', () => {
         const text =
             'export function sum(a: number, b: number) { return a + b; }';

@@ -68,7 +68,7 @@ export function fitDiff(
     const chunks = fileChunks(diff);
     if (!chunks.length) {
         return {
-            diff: cutToTokens(diff.slice(0, chars), tokens),
+            diff: cutToTokens(sliceWhole(diff, chars), tokens),
             unseenFiles: ['(rest of the diff)'],
         };
     }
@@ -79,9 +79,14 @@ export function fitDiff(
     for (const chunk of chunks) {
         // The character check first: it is free, and it keeps a huge file
         // from being tokenized only to be left out.
-        const withinChars = used + chunk.text.length <= chars;
-        const count = withinChars ? tokensOf(chunk.text) : 0;
-        if (withinChars && usedTokens + count <= tokens) {
+        // Nor is a file tokenized once the tokens are spent: on a small
+        // window an asset-heavy PR would tokenize every file it can't keep.
+        const room =
+            used + chunk.text.length <= chars &&
+            usedTokens < tokens &&
+            !exceedsByPrefix(chunk.text, tokens - usedTokens);
+        const count = room ? tokensOf(chunk.text) : 0;
+        if (room && usedTokens + count <= tokens) {
             kept.push(chunk.text);
             used += chunk.text.length;
             usedTokens += count;
@@ -92,17 +97,62 @@ export function fitDiff(
     return { diff: kept.join(''), unseenFiles };
 }
 
+/**
+ * Whether a text can't fit `remaining` tokens, judged from a prefix: a file
+ * far longer than the room left is counted only as far as it takes to know
+ * (17 SVGs of 150k characters took 1.4s to leave out at a 1,000-token budget).
+ * A prefix with more tokens than the room means the whole has more too, so
+ * the answer is right whatever the probe's length; the length only sets the
+ * cost. A short probe settles dense text (SVG, base64), a longer one code.
+ */
+function exceedsByPrefix(text: string, remaining: number): boolean {
+    if (remaining === Infinity) {
+        return false;
+    }
+    for (const charsPerToken of PROBE_CHARS_PER_TOKEN) {
+        const probe = remaining * charsPerToken;
+        if (text.length <= probe) {
+            return false;
+        }
+        if (diffTokens(sliceWhole(text, probe)) > remaining + 1) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/** The probes' lengths, in characters per token of room left. */
+const PROBE_CHARS_PER_TOKEN = [2, 6];
+
 /** A text without file headers, shortened until it is within `tokens`. */
 function cutToTokens(text: string, tokens: number): string {
     let cut = text;
-    for (let i = 0; i < 4 && tokens !== Infinity; i++) {
+    for (let i = 0; i < SHRINK_STEPS && tokens !== Infinity; i++) {
         const count = diffTokens(cut);
         if (count <= tokens) {
             return cut;
         }
-        cut = cut.slice(0, Math.floor((cut.length * tokens * 0.95) / count));
+        cut = sliceWhole(cut, Math.floor((cut.length * tokens * 0.9) / count));
     }
     return tokens === Infinity || diffTokens(cut) <= tokens ? cut : '';
+}
+
+/** Shrinks before giving up: each step cuts in proportion, then 10% more. */
+const SHRINK_STEPS = 8;
+
+/**
+ * The first `end` characters, without splitting a surrogate pair: a lone
+ * high surrogate is invalid in the JSON body, and Anthropic rejects it.
+ */
+export function sliceWhole(text: string, end: number): string {
+    if (end <= 0) {
+        return '';
+    }
+    if (end >= text.length) {
+        return text;
+    }
+    const last = text.charCodeAt(end - 1);
+    return text.slice(0, last >= 0xd800 && last <= 0xdbff ? end - 1 : end);
 }
 
 /**
@@ -126,9 +176,11 @@ export function diffTokenBudget(params: {
 
 /**
  * The counter is o200k_base, not every provider's tokenizer: this much of the
- * window is kept for the difference.
+ * window is kept for the difference. Tokenizers that split every digit (Qwen,
+ * Gemini's SentencePiece) count a digit-heavy SVG about 1.10x what o200k
+ * does, so 10% was not enough.
  */
-const WINDOW_SAFETY_MARGIN = 0.1;
+const WINDOW_SAFETY_MARGIN = 0.15;
 
 /** The files the diff changes, in order. */
 export function changedFileNames(diff: string): string[] {
@@ -171,13 +223,16 @@ export function diffFor(
     let room = chars;
     let picked = diffWithin(diff, focus, room);
     // Shrink the character room until the pick is within the model's tokens:
-    // the pick keeps its order and its list of files left out.
-    for (let i = 0; i < 4 && tokens !== undefined; i++) {
+    // the pick keeps its order and its list of files left out. The room
+    // starts from what was picked: a diff under the cap is shorter than it.
+    for (let i = 0; i < SHRINK_STEPS && tokens !== undefined; i++) {
         const count = diffTokens(picked);
         if (count <= tokens) {
             return picked;
         }
-        room = Math.floor((room * tokens * 0.95) / count);
+        room = Math.floor(
+            (Math.min(room, picked.length) * tokens * 0.9) / count,
+        );
         picked = room > 0 ? diffWithin(diff, focus, room) : '';
     }
     return tokens === undefined || diffTokens(picked) <= tokens ? picked : '';
@@ -193,7 +248,7 @@ function diffWithin(
     }
     const chunks = fileChunks(diff);
     if (!chunks.length) {
-        return `${diff.slice(0, budget)}\n… (cut)`;
+        return `${sliceWhole(diff, budget)}\n… (cut)`;
     }
     const cited = new Set(focus.files ?? []);
     const terms = requirementTerms(focus.requirement ?? '');
@@ -220,7 +275,7 @@ function diffWithin(
             used += chunk.text.length;
         } else if (free >= MIN_CUT_CHARS) {
             const cut = `\n… (cut: read the rest of ${chunk.file} with read_file)\n`;
-            kept.push(chunk.text.slice(0, free - cut.length) + cut);
+            kept.push(sliceWhole(chunk.text, free - cut.length) + cut);
             used = budget;
         } else {
             left.push(chunk.file);
