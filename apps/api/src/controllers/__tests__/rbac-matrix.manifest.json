@@ -1859,6 +1859,17 @@
     }
   },
   {
+    "key": "runtime-environments.controller.ts#getEnvironmentSuite",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/environments/:id/suite",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "runtime-environments.controller.ts#listBlockers",
     "httpMethod": "GET",
     "urlPath": "/runtime/environments/:id/blockers",
@@ -1954,6 +1965,17 @@
       "owner": "allow",
       "billing_manager": "deny",
       "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "runtime-environments.controller.ts#resumeSuiteSelection",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/environments/:id/suite/selection/resume",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
       "contributor": "deny"
     }
   },
@@ -2343,6 +2365,28 @@
     }
   },
   {
+    "key": "runtime-runs.controller.ts#getSuite",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/runs/:id/suite",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#getSuiteArtifact",
+    "httpMethod": "GET",
+    "urlPath": "/runtime/runs/:id/suite/artifacts",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "runtime-runs.controller.ts#listRuns",
     "httpMethod": "GET",
     "urlPath": "/runtime/runs",
@@ -2351,6 +2395,17 @@
       "billing_manager": "deny",
       "repo_admin": "allow",
       "contributor": "allow"
+    }
+  },
+  {
+    "key": "runtime-runs.controller.ts#retrySuite",
+    "httpMethod": "POST",
+    "urlPath": "/runtime/runs/:id/suite/retry",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
     }
   },
   {
