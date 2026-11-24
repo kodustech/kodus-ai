@@ -33,6 +33,11 @@ import { StartSecurityScanUseCase } from './application/start-security-scan.use-
 import { GetSecurityScansUseCase } from './application/get-security-scans.use-case';
 import { CancelSecurityScanUseCase } from './application/cancel-security-scan.use-case';
 import { DeepScanGate } from './application/deep-scan.gate';
+import { SecurityScanSchedulesUseCase } from './application/security-scan-schedules.use-case';
+import {
+    SECURITY_SCAN_SCHEDULE_REPOSITORY_TOKEN,
+    SecurityScanScheduleRepository,
+} from './infrastructure/security-scan-schedule.repository';
 import {
     SECURITY_SCAN_QUEUE_PROBE_TOKEN,
     SecurityScanQueueProbe,
@@ -82,6 +87,11 @@ import {
         GetSecurityScansUseCase,
         CancelSecurityScanUseCase,
         DeepScanGate,
+        {
+            provide: SECURITY_SCAN_SCHEDULE_REPOSITORY_TOKEN,
+            useClass: SecurityScanScheduleRepository,
+        },
+        SecurityScanSchedulesUseCase,
     ],
     exports: [
         SECURITY_SCAN_REPOSITORY_TOKEN,
@@ -90,6 +100,7 @@ import {
         GetSecurityScansUseCase,
         CancelSecurityScanUseCase,
         DeepScanGate,
+        SecurityScanSchedulesUseCase,
     ],
 })
 export class SecurityScanModule {}

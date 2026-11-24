@@ -11,6 +11,7 @@ jest.mock('./scan-model', () => ({
 
 import { SecurityScanStatus } from '../domain/security-scan.types';
 import {
+    SCAN_MODEL_NOT_FOUND_MESSAGE,
     SCAN_QUEUE_UNAVAILABLE_MESSAGE,
     StartSecurityScanUseCase,
 } from './start-security-scan.use-case';
@@ -72,11 +73,12 @@ function useCaseWith(
         { getConfig: jest.fn(async () => null) } as any,
         queueProbe as any,
     );
-    const start = () =>
+    const start = (extra: Record<string, unknown> = {}) =>
         useCase.execute({
             organizationAndTeamData: { organizationId: 'org-1', teamId: 't' },
             repositoryId: 'repo-1',
             budget: { maxUsd: 5 },
+            ...extra,
         } as any);
     return {
         scans,
@@ -492,5 +494,48 @@ describe('StartSecurityScanUseCase — a duplicate key on create', () => {
         scans.create.mockRejectedValueOnce(error);
 
         await expect(start()).rejects.toBe(error);
+    });
+});
+
+describe('StartSecurityScanUseCase — how the scan runs', () => {
+    it('is incremental unless asked to read everything again', async () => {
+        const { scans, start } = useCaseWith(null);
+
+        await start();
+        await start({ mode: 'full' });
+
+        expect(scans.create.mock.calls[0][0].mode).toBe('incremental');
+        expect(scans.create.mock.calls[1][0].mode).toBe('full');
+    });
+
+    it('runs on the model picked for it, and keeps that choice for its continuations', async () => {
+        (resolveScanModel as jest.Mock).mockResolvedValueOnce({
+            model: {
+                modelName: 'anthropic:claude-opus',
+                slot: { provider: 'anthropic', model: 'claude-opus', byokModelId: 'm-opus' },
+            },
+            rates: { input: { default: 1e-6 }, output: { default: 2e-6 } },
+        });
+        const { scans, start } = useCaseWith(null);
+
+        await start({ modelId: 'm-opus' });
+
+        expect(resolveScanModel).toHaveBeenLastCalledWith(
+            expect.objectContaining({ modelId: 'm-opus' }),
+        );
+        expect(scans.create.mock.calls[0][0]).toMatchObject({
+            modelId: 'm-opus',
+            modelName: 'anthropic:claude-opus',
+        });
+    });
+
+    it('refuses a picked model that is no longer configured, instead of running on another', async () => {
+        // The pick resolves to the routing's model when its id is gone.
+        const { scans, start } = useCaseWith(null);
+
+        await expect(start({ modelId: 'm-deleted' })).rejects.toThrow(
+            SCAN_MODEL_NOT_FOUND_MESSAGE,
+        );
+        expect(scans.create).not.toHaveBeenCalled();
     });
 });

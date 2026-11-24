@@ -31,6 +31,7 @@ import {
 } from '@libs/issues/domain/scan-fingerprint';
 
 import { validateBudget } from '../domain/budget-meter';
+import type { SecurityScanMode } from '../domain/coverage-ledger';
 import type { VulnClass } from '../domain/surface/surface.types';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 import { STALE_SCAN_AFTER } from './get-security-scans.use-case';
@@ -67,7 +68,19 @@ export interface StartSecurityScanInput {
     repositoryId: string;
     budget: SecurityScanBudget;
     requestedBy?: { userId?: string; email?: string };
+    /**
+     * `incremental` (the default) reads only what changed since an earlier
+     * scan's conclusions, or was never read; `full` reads everything again.
+     */
+    mode?: SecurityScanMode;
+    /** A model of the organization's BYOK config to run this scan on. */
+    modelId?: string;
+    /** The schedule starting it, when one does. */
+    scheduleId?: string;
 }
+
+export const SCAN_MODEL_NOT_FOUND_MESSAGE =
+    'The model picked for this scan is not in your AI providers any more. Pick another, or leave it to the Deep scan routing.';
 
 export const DEFAULT_BRANCH_UNREADABLE_MESSAGE =
     "Could not read the repository's default branch from its Git provider. Try again in a moment.";
@@ -102,18 +115,10 @@ export class StartSecurityScanUseCase {
     async execute(input: StartSecurityScanInput): Promise<SecurityScanRecord> {
         const orgTeam = input.organizationAndTeamData;
 
-        const repositories =
-            (await this.integrationConfigService.findIntegrationConfigFormatted<
-                ConfiguredRepository[]
-            >(IntegrationConfigKey.REPOSITORIES, orgTeam)) ?? [];
-        const repository = repositories.find(
-            (r) => String(r.id) === String(input.repositoryId),
+        const repository = await this.configuredRepository(
+            orgTeam,
+            input.repositoryId,
         );
-        if (!repository) {
-            throw new NotFoundException(
-                'This repository is not connected to the team.',
-            );
-        }
 
         const { model, rates } = await resolveScanModel({
             organizationAndTeamData: orgTeam,
@@ -121,37 +126,25 @@ export class StartSecurityScanUseCase {
             pricingResolver: this.pricingResolver,
             pricingOverrides: (await this.spendLimitConfig.getConfig(orgTeam))
                 ?.modelPricing,
+            modelId: input.modelId,
         });
         if (!model.slot) {
             throw new BadRequestException(SCAN_NEEDS_BYOK_MESSAGE);
+        }
+        // A picked model that is gone resolves to the routing's: said, not
+        // silently run on another model.
+        if (input.modelId && model.slot.byokModelId !== input.modelId) {
+            throw new BadRequestException(SCAN_MODEL_NOT_FOUND_MESSAGE);
         }
         const budgetError = validateBudget(input.budget, !!rates);
         if (budgetError) {
             throw new BadRequestException(budgetError);
         }
 
-        // A failed lookup throws (a 5xx, worth retrying); only a confirmed
-        // absence is the caller's to fix.
-        const platform =
-            await this.codeManagementService.findTypeIntegration(orgTeam);
-        // The platform is half the repository's identity (an id is only
-        // unique on it): without an active integration there is no knowing
-        // which repository this is, nor a way to clone it.
-        if (!platform) {
-            throw new BadRequestException(NO_CODE_INTEGRATION_MESSAGE);
-        }
-        const repositoryKey = {
-            platform: String(platform),
-            host: repositoryHost(repository.http_url),
-            id: String(repository.id),
-        };
-        // Read access uses this same complete identity. Queuing a hostless
-        // scan would spend the team's BYOK budget on a record it cannot see.
-        if (!repositoryKey.host) {
-            throw new BadRequestException(
-                'The repository has no readable Git host. Reconnect it before starting a security scan.',
-            );
-        }
+        const { platform, repositoryKey } = await this.keyOf(
+            orgTeam,
+            repository,
+        );
 
         await this.assertQueueAvailable();
 
@@ -232,6 +225,9 @@ export class StartSecurityScanUseCase {
                     reported: resumed.reported,
                 }),
                 modelName: model.modelName,
+                ...(input.modelId ? { modelId: input.modelId } : {}),
+                mode: input.mode ?? 'incremental',
+                ...(input.scheduleId ? { scheduleId: input.scheduleId } : {}),
                 requestedBy: input.requestedBy,
             })
             .catch(async (error) => {
@@ -279,6 +275,69 @@ export class StartSecurityScanUseCase {
         }
 
         return scan;
+    }
+
+    /**
+     * The identity a scan of this team's repository is stored under (its
+     * platform, instance and id), or the reason it cannot be scanned.
+     */
+    async repositoryKeyOf(
+        orgTeam: OrganizationAndTeamData,
+        repositoryId: string,
+    ): Promise<ScanRepositoryKey> {
+        const repository = await this.configuredRepository(
+            orgTeam,
+            repositoryId,
+        );
+        return (await this.keyOf(orgTeam, repository)).repositoryKey;
+    }
+
+    private async configuredRepository(
+        orgTeam: OrganizationAndTeamData,
+        repositoryId: string,
+    ): Promise<ConfiguredRepository> {
+        const repositories =
+            (await this.integrationConfigService.findIntegrationConfigFormatted<
+                ConfiguredRepository[]
+            >(IntegrationConfigKey.REPOSITORIES, orgTeam)) ?? [];
+        const repository = repositories.find(
+            (r) => String(r.id) === String(repositoryId),
+        );
+        if (!repository) {
+            throw new NotFoundException(
+                'This repository is not connected to the team.',
+            );
+        }
+        return repository;
+    }
+
+    private async keyOf(
+        orgTeam: OrganizationAndTeamData,
+        repository: ConfiguredRepository,
+    ) {
+        // A failed lookup throws (a 5xx, worth retrying); only a confirmed
+        // absence is the caller's to fix.
+        const platform =
+            await this.codeManagementService.findTypeIntegration(orgTeam);
+        // The platform is half the repository's identity (an id is only
+        // unique on it): without an active integration there is no knowing
+        // which repository this is, nor a way to clone it.
+        if (!platform) {
+            throw new BadRequestException(NO_CODE_INTEGRATION_MESSAGE);
+        }
+        const repositoryKey = {
+            platform: String(platform),
+            host: repositoryHost(repository.http_url),
+            id: String(repository.id),
+        };
+        // Read access uses this same complete identity. Queuing a hostless
+        // scan would spend the team's BYOK budget on a record it cannot see.
+        if (!repositoryKey.host) {
+            throw new BadRequestException(
+                'The repository has no readable Git host. Reconnect it before starting a security scan.',
+            );
+        }
+        return { platform, repositoryKey };
     }
 
     /**
