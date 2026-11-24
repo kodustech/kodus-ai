@@ -47,7 +47,7 @@ Kody busca referencias a tareas en el título del PR, el nombre de la rama y la 
 - Claves como `PROJ-123` (Jira, Linear y la mayoría de los gestores)
 - `#123` y `owner/repo#123` (Git issues; un número que corresponde a un pull request se ignora)
 - `AB#123` (Azure Boards)
-- Enlaces a Linear, Jira, Notion, issues de GitHub/GitLab y work items de Azure
+- Enlaces a Linear, Jira (Cloud, o Server y Data Center en tu propio dominio: cualquier enlace `/browse/PROJ-123`), Notion, issues de GitHub/GitLab y work items de Azure
 
 Una referencia solo cuenta cuando el gestor devuelve una tarea con ese id exacto, así que `UTF-8` o `gpt-5` en un título nunca se confunden con tareas. Una clave en minúsculas en el título (`feat(kod-10)`) cuenta cuando tu gestor tiene ese equipo o proyecto; un id de proyecto de Linear (`P-KOD-1`) nunca cuenta.
 
@@ -93,7 +93,7 @@ Una brecha le dice al autor que rehaga trabajo, así que Kody contrasta cada una
 
 ### Responder al comentario
 
-Responde al comentario de Business Logic y menciona a `@kody`. Kody lee un comentario como respuesta cuando está en el hilo de ese comentario (GitLab, Bitbucket, Azure Repos), lo cita, o nombra el requisito, su estado tal como lo escribe el comentario (MISSING, PARTIAL) o el id de la tarea; cualquier otro comentario va al chat.
+Responde al comentario de Business Logic y menciona a `@kody`. Kody lee un comentario como respuesta cuando está en el hilo de ese comentario (GitLab, Bitbucket, Azure Repos), lo cita (su título o las palabras de un requisito), o nombra el requisito, su estado tal como lo escribe el comentario (MISSING, PARTIAL) o el id de la tarea; cualquier otro comentario va al chat.
 
 - **Discrepar**: "Está cubierto en `useDrag.ts`". Kody vuelve a comprobar lo que señalaste y lo marca como MET o dice qué revisó y lo mantiene.
 - **Aceptar un hallazgo** (alguien que no es el autor del PR: en GitHub, con permiso de escritura en el repositorio; en GitLab, Developer o superior en el repositorio; en Bitbucket, Azure Repos y Forgejo, un miembro de la organización que la plataforma lista): "El reordenamiento con teclado está fuera del alcance, movido a SAA-102". Kody confirma que SAA-102 existe, marca la fila como **ACCEPTED** con quién la aceptó, y deja de estar pendiente de corregir. La decisión se mantiene en las comprobaciones posteriores, aunque Kody redacte el requisito de forma un poco distinta, mientras el texto de la tarea no cambie; una vez editada la tarea, solo un requisito redactado exactamente como antes la conserva.

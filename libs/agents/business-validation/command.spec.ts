@@ -46,7 +46,27 @@ describe('replyFor', () => {
         expect(reply).toMatch(/Kody · Business Logic comment/);
     });
 
-    it('says the comment was updated when an earlier run left one', () => {
-        expect(replyFor(validated, 'updated')).toMatch(/is updated/);
+    it('says the comment was updated, and with what, when the result changed', () => {
+        const reply = replyFor(validated, 'updated', true);
+        expect(reply).toMatch(/result changed/);
+        expect(reply).toMatch(/SAA-96 met/);
+        expect(reply).toMatch(/is updated/);
+    });
+
+    it('claims nothing about the result when there was no earlier run to compare with', () => {
+        const reply = replyFor(validated, 'updated', undefined);
+        expect(reply).toMatch(/is updated/);
+        expect(reply).not.toMatch(/changed|same result/);
+    });
+
+    it('says the result is the same, not that anything was updated, when nothing changed (#2423)', () => {
+        const reply = replyFor(
+            { ...validated, passed: false },
+            'updated',
+            false,
+        );
+        expect(reply).toMatch(/same result as before/);
+        expect(reply).toMatch(/SAA-96 has open requirements/);
+        expect(reply).not.toMatch(/updated/);
     });
 });

@@ -59,7 +59,9 @@ import {
     resolvesSuggestionThread,
     statusesAtOrAbove,
 } from '@libs/platformData/domain/pullRequests/implementation-status';
-import { resolveContextWindow } from '@libs/llm/model-context-window';
+import { structuredCallAnswerTokens } from '@libs/llm/structured-review-call';
+import { slotContextWindow } from '@libs/llm/slot-window';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import {
     prompt_checkSuggestionImplementation,
     type ImplementationCheckSuggestion,
@@ -67,7 +69,10 @@ import {
 import type { ChangedFilesSource } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import pLimit from 'p-limit';
 
-/** Share of the model's context window one file's prompt may take. */
+/**
+ * Share of the model's context window one file's prompt may take when the
+ * slot sets no answer limit: the rest is kept for the answer.
+ */
 const IMPLEMENTATION_CHECK_PROMPT_SHARE = 0.75;
 /** Files of one PR checked at the same time. */
 const IMPLEMENTATION_CHECK_CONCURRENCY = 4;
@@ -299,12 +304,16 @@ export class SuggestionService implements ISuggestionService {
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
                 );
-            const maxPromptTokens = Math.floor(
-                resolveContextWindow({
-                    byokMaxInputTokens: byokConfig?.maxInputTokens,
-                    modelName: byokConfig?.model || '',
-                }) * IMPLEMENTATION_CHECK_PROMPT_SHARE,
-            );
+            // The smaller of the slot's and its fallback's window (LLM.run
+            // re-sends the call to the fallback), else the env model's, less
+            // the answer the call declares on either (a structured call: no
+            // thinking by default), else the quarter of the window it always
+            // kept.
+            const window = slotContextWindow(byokConfig ?? undefined);
+            const answerTokens =
+                (await structuredCallAnswerTokens(byokConfig ?? undefined)) ??
+                Math.ceil(window * (1 - IMPLEMENTATION_CHECK_PROMPT_SHARE));
+            const maxPromptTokens = Math.max(0, window - answerTokens);
 
             const requests = [...byFile].map(([filename, asks]) => ({
                 file: { filename, patch: patches.get(filename) },
@@ -316,9 +325,13 @@ export class SuggestionService implements ISuggestionService {
                     file,
                     suggestions: asked,
                 });
-                // ~3 characters per token: generous for code, so a prompt that
-                // fits here fits the model.
-                if (Math.ceil(prompt.length / 3) <= maxPromptTokens) {
+                // Counted at its worst: 3 characters a token let a dense
+                // patch (an SVG, a fixture: ~1.2 a token) through at less
+                // than half its size (#2233).
+                if (
+                    estimateTextTokens(prompt, { worstCase: true }) <=
+                    maxPromptTokens
+                ) {
                     return true;
                 }
                 for (const { id } of asked) {

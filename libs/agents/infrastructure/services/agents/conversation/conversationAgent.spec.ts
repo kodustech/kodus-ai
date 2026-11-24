@@ -10,6 +10,7 @@ import { mockTextModel } from '../__test-utils__/mock-model';
 // return our mock model so the agent's real loop runs without touching BYOK.
 const modelRef: { model: any } = { model: null };
 jest.mock('@libs/llm/model-invocation', () => ({
+    declaredAnswerTokens: async (_slot: unknown, answer: number) => answer,
     resolveModelConfig: () => ({
         model: modelRef.model,
         callOptions: {},
@@ -31,6 +32,7 @@ jest.mock('@langfuse/tracing', () => ({
 }));
 
 import { setLlmObservability } from '@libs/llm/llm-observability';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { openOnFirstUse } from '@libs/sandbox/domain/open-on-first-use';
 import { MockLanguageModelV3 } from 'ai/test';
 
@@ -89,7 +91,7 @@ function mockSequenceModel(texts: string[]): MockLanguageModelV3 {
 
 afterEach(() => setLlmObservability(undefined));
 
-function build() {
+function build(slot: Record<string, unknown> | null = null) {
     // Cost is recorded by LLM.run's observability span (the port), not by the
     // agent. Register a spy port to assert the span carries the conversation attrs.
     const runAiSdkLLMInSpan = jest.fn((p: any) => p.exec());
@@ -101,7 +103,7 @@ function build() {
         // native: the agent asks the service for the conversation slot;
         // null → the env/managed default. resolveAgentModel is mocked, so the
         // harness wiring runs regardless of the resolved slot.
-        resolveTaskSlot: jest.fn().mockResolvedValue(null),
+        resolveTaskSlot: jest.fn().mockResolvedValue(slot),
     };
     const mcpManagerService = {
         getConnections: jest.fn().mockResolvedValue([]),
@@ -136,6 +138,54 @@ describe('ConversationAgentProvider (harness wiring)', () => {
                 }),
             }),
         );
+    });
+
+    it("keeps what it sends the model within the slot's window (#2233)", async () => {
+        const prompts: unknown[] = [];
+        modelRef.model = new MockLanguageModelV3({
+            doGenerate: async (options: any) => {
+                prompts.push(options.prompt);
+                return {
+                    content: [{ type: 'text', text: 'reviewed' }],
+                    finishReason: { unified: 'stop', raw: 'stop' },
+                    usage: {
+                        inputTokens: {
+                            total: 10,
+                            noCache: 10,
+                            cacheRead: 0,
+                            cacheWrite: 0,
+                        },
+                        outputTokens: { total: 5, text: 5, reasoning: 0 },
+                    },
+                    warnings: [],
+                } as any;
+            },
+        });
+        const { provider } = build({
+            provider: 'openai_compatible',
+            model: 'local-open-weights',
+            apiKey: '',
+            maxInputTokens: 32_000,
+            maxOutputTokens: 4_000,
+        });
+        const diff = Array.from(
+            { length: 6_000 },
+            (_, line) => `+export const value${line} = compute('${line}');`,
+        ).join('\n');
+        expect(estimateTextTokens(diff)).toBeGreaterThan(60_000);
+
+        const res = await provider.execute(`Review this diff:\n${diff}`, ctx);
+
+        expect(res).toContain('reviewed');
+        expect(prompts.length).toBeGreaterThan(0);
+        for (const prompt of prompts) {
+            // What the model receives, with the 4k answer it may write.
+            expect(
+                estimateTextTokens(JSON.stringify(prompt), {
+                    worstCase: true,
+                }) + 4_000,
+            ).toBeLessThanOrEqual(32_000);
+        }
     });
 
     it('falls back when the model produces no usable text', async () => {

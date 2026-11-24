@@ -11,6 +11,7 @@ import type {
     AgentSpec,
 } from '@libs/agent-harness/domain/contracts/agent.contract';
 import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
+import type { AgentPolicy } from '@libs/agent-harness/domain/contracts/policy.contract';
 import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 import type {
     ToolContext,
@@ -91,6 +92,9 @@ export interface BuildVerifierSpecParams {
     /** System prompt override — the convention verifier passes its own. The
      *  HV2 prompt when absent. */
     systemPrompt?: string;
+    /** The finder's compression, so the files a verify run reads and re-sends
+     *  on every step stay within the model's window (#2233). */
+    compression?: AgentPolicy;
 }
 
 export function buildVerifierAgentSpec(
@@ -165,6 +169,7 @@ export function buildVerifierAgentSpec(
                 // discards; on the last step they can only answer.
                 noToolsOnLastStep: true,
             }),
+            ...(params.compression ? [params.compression] : []),
         ],
         maxSteps: params.maxSteps ?? 6,
         // CAPTURE: the runner materializes submitVerdict's payload into
@@ -371,6 +376,8 @@ function collectVerifierToolCalls(state: RunState): Verdict['toolCalls'] {
 
 export interface LlmVerifierParams {
     modelId: string;
+    /** The finder's compression policy (see BuildVerifierSpecParams). */
+    compression?: AgentPolicy;
     /** Failover target model id — threaded to the verifier spec so strict tool
      *  use accounts for it (a Gemini→OpenAI failover must not send strict). */
     fallbackModelId?: string;
@@ -449,6 +456,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             tools: params.tools,
             maxSteps: params.lightMaxSteps ?? 7,
             providerOptions: params.providerOptions,
+            compression: params.compression,
         });
         this.fullSpec = buildVerifierAgentSpec({
             modelId: params.modelId,
@@ -458,6 +466,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             tools: params.tools,
             maxSteps: params.fullMaxSteps ?? 10,
             providerOptions: params.providerOptions,
+            compression: params.compression,
         });
     }
 

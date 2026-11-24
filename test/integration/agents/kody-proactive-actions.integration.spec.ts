@@ -13,6 +13,8 @@
  * must keep reaching the model with the matching action named.
  */
 jest.mock('@libs/llm/model-invocation', () => ({
+    // The conversation keeps the answer it declares out of its window.
+    declaredAnswerTokens: async (_slot: unknown, answer: number) => answer,
     resolveModelConfig: () => ({
         model: scriptedModel.current,
         callOptions: {},
@@ -354,10 +356,14 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
         it('puts the finding the thread answers, with the rule it broke, in front of the agent', async () => {
             const turn = await runTurn(scenarioById('rule-too-broad'));
             const prompt = `${turn.systemPrompt}\n${turn.userPrompt}`;
-            expect(prompt).toContain('Validate the request body before using it.');
+            expect(prompt).toContain(
+                'Validate the request body before using it.',
+            );
             expect(prompt).toContain(SCENARIO_RULE_ID);
             const plain = await runTurn(scenarioById('already-fixed'));
-            expect(`${plain.systemPrompt}\n${plain.userPrompt}`).not.toContain(SCENARIO_RULE_ID);
+            expect(`${plain.systemPrompt}\n${plain.userPrompt}`).not.toContain(
+                SCENARIO_RULE_ID,
+            );
         });
 
         it('instructs the agent to evaluate whether the exchange is worth persisting', async () => {

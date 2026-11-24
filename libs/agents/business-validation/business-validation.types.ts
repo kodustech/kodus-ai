@@ -258,6 +258,7 @@ export type SkipReason =
     | 'task_not_found'
     | 'tracker_unavailable'
     | 'diff_unavailable'
+    | 'too_large_for_model'
     | 'judge_failed';
 
 /** One task judged against the PR. */

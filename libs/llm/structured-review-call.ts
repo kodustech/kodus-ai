@@ -53,7 +53,10 @@ import {
     isJsonSchemaUnsupportedError,
     type ByokModelOptions,
 } from '@libs/llm/byok-to-vercel';
-import { resolveModelConfig } from '@libs/llm/model-invocation';
+import {
+    declaredAnswerTokens,
+    resolveModelConfig,
+} from '@libs/llm/model-invocation';
 import { declaredEnvModel, resolveEnvProvider } from '@libs/llm/managed-slot';
 import { agentModelIdentity } from '@libs/llm/model-identity';
 import {
@@ -279,6 +282,39 @@ function askProviderModule<T>(
         });
         return fallback;
     }
+}
+
+/**
+ * The answer a structured call on this slot declares, for the window to hold:
+ * the slot's own `maxOutputTokens` (else what the provider is sent with none),
+ * with reasoning resolved as this executor does it (`none` by default, off
+ * under a `suppress-thinking` plan). `LLM.run` re-sends the call to the
+ * fallback, so the larger of the two. Undefined when neither declares one.
+ */
+export async function structuredCallAnswerTokens(
+    slot: NormalizedModel | undefined,
+): Promise<number | undefined> {
+    const declaredBy = (model: NormalizedModel | undefined) =>
+        declaredAnswerTokens(
+            model,
+            model?.maxOutputTokens && model.maxOutputTokens > 0
+                ? model.maxOutputTokens
+                : undefined,
+            {
+                reasoningEffortDefault: 'none',
+                suppressReasoning:
+                    resolveStructuredPlan(model) === 'suppress-thinking',
+            },
+        );
+    const answers = (
+        await Promise.all([
+            declaredBy(slot),
+            ...(slot?.fallback
+                ? [declaredBy(slot.fallback as NormalizedModel)]
+                : []),
+        ])
+    ).filter((tokens): tokens is number => tokens !== undefined);
+    return answers.length ? Math.max(...answers) : undefined;
 }
 
 /**

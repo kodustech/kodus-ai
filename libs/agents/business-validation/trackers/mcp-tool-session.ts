@@ -17,6 +17,12 @@ export class TaskNotFoundError extends Error {}
 export class TrackerUnavailableError extends Error {}
 
 /**
+ * The connection itself failed: every call of the session will fail the same
+ * way, unlike one tool call that errored.
+ */
+export class TrackerConnectionError extends TrackerUnavailableError {}
+
+/**
  * A tool the org turned off on the connection: the tracker answers, but is
  * set up so this read can't run. A setup problem, never an outage.
  */
@@ -145,7 +151,7 @@ export class McpToolSession {
                 await adapter.connect();
             } catch (error) {
                 await adapter.disconnect().catch(() => undefined);
-                throw new TrackerUnavailableError(
+                throw new TrackerConnectionError(
                     error instanceof Error ? error.message : String(error),
                 );
             }

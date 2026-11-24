@@ -113,6 +113,35 @@ describe('extractTaskReferences', () => {
         ]);
     });
 
+    it("reads a Jira Server or Data Center link on the company's own host", () => {
+        const refs = extractTaskReferences({
+            body: [
+                'Implements https://tracker.acme.com/browse/PAY-123',
+                'and https://acme.com/jira/browse/OPS-9.',
+                'Board: https://tracker.acme.com/projects/PAY/issues/PAY-124',
+            ].join('\n'),
+        });
+        expect(
+            refs.map((r) => [r.kind, r.id, 'host' in r ? r.host : undefined]),
+        ).toEqual([
+            ['key', 'PAY-123', undefined],
+            ['key', 'OPS-9', undefined],
+            ['key', 'PAY-124', undefined],
+        ]);
+    });
+
+    it("reads no task from a link that only shares a word with a Jira path, or a Git host's own /browse/", () => {
+        expect(
+            ids({
+                body: [
+                    'https://docs.acme.com/browse/catalog and https://acme.com/projects/web/issues',
+                    'https://bitbucket.org/acme/web/browse/PAY-123',
+                    'https://bitbucket.acme.com/projects/PAY/repos/web/browse/PAY-123',
+                ].join('\n'),
+            }),
+        ).toEqual([]);
+    });
+
     it('reads Azure Boards AB# references', () => {
         expect(ids({ title: 'feat(AB#27): scale servings' })).toEqual([
             'work_item:27',

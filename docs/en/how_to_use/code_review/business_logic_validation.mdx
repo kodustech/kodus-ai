@@ -47,7 +47,7 @@ Kody looks for task references in the PR title, branch name and description, in 
 - Keys like `PROJ-123` (Jira, Linear and most trackers)
 - `#123` and `owner/repo#123` (Git issues; a number that is a pull request is ignored)
 - `AB#123` (Azure Boards)
-- Links to Linear, Jira, Notion, GitHub/GitLab issues and Azure work items
+- Links to Linear, Jira (Cloud, or Server and Data Center on your own domain: any `/browse/PROJ-123` link), Notion, GitHub/GitLab issues and Azure work items
 
 A reference only counts once the tracker returns a task with that exact id, so `UTF-8` or `gpt-5` in a title are never mistaken for tasks. A lower-case key in the title (`feat(kod-10)`) counts when your tracker has that team or project; a Linear project id (`P-KOD-1`) never does.
 
@@ -93,7 +93,7 @@ A gap tells the author to redo work, so Kody holds each one to the code:
 
 ### Replying to the comment
 
-Reply to the Business Logic comment and mention `@kody`. Kody reads a comment as a reply when it is posted in that comment's thread (GitLab, Bitbucket, Azure Repos), quotes it, or names the requirement, its state as the comment writes it (MISSING, PARTIAL) or the task id; any other comment goes to the chat.
+Reply to the Business Logic comment and mention `@kody`. Kody reads a comment as a reply when it is posted in that comment's thread (GitLab, Bitbucket, Azure Repos), quotes it (its title or a requirement's words), or names the requirement, its state as the comment writes it (MISSING, PARTIAL) or the task id; any other comment goes to the chat.
 
 - **Disagree**: "It's covered in `useDrag.ts`". Kody re-checks what you pointed at and either marks it MET or says what it looked at and keeps it.
 - **Accept a finding** (someone other than the PR's author: on GitHub, with write access to the repository; on GitLab, Developer or above on the repository; on Bitbucket, Azure Repos and Forgejo, a member of the organization the platform lists): "Keyboard reordering is out of scope, moved to SAA-102". Kody confirms SAA-102 exists, marks the row **ACCEPTED** with who accepted it, and it is no longer left to fix. The decision stays on later re-checks, even when Kody words the requirement a little differently, as long as the task's text is unchanged; once the task is edited, only a requirement worded exactly as before keeps it.

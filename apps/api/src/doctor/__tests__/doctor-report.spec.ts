@@ -26,6 +26,13 @@ describe('doctor report', () => {
         );
     });
 
+    it('verdict: a ? that could hide a ✘ is UNVERIFIED, above DEGRADED and below NOT_RUNNING', () => {
+        const hiding: DoctorResult = { ...r('unknown'), blocking: true };
+        expect(verdictOf([r('ok'), hiding])).toBe('UNVERIFIED');
+        expect(verdictOf([r('warn'), hiding])).toBe('UNVERIFIED');
+        expect(verdictOf([r('fail'), hiding])).toBe('NOT_RUNNING');
+    });
+
     it('orders worst first and keeps check order within a status', () => {
         const sorted = sortResults([
             r('ok', 'ok1'),
