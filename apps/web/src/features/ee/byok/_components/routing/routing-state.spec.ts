@@ -1,0 +1,67 @@
+import type { LLMConfigStatus } from "@services/organizationParameters/fetch";
+
+import { routingModelLabels } from "./routing-state";
+
+const slot = (
+    modelId: string,
+    model: string,
+    extra: Partial<LLMConfigStatus["models"][number]> = {},
+) =>
+    ({
+        modelId,
+        model,
+        providerId: "together",
+        ...extra,
+    }) as LLMConfigStatus["models"][number];
+
+describe("routingModelLabels", () => {
+    it("names a pinned model and its alias by id, and the same id on two connections by connection", () => {
+        const labels = routingModelLabels([
+            slot("alias", "deepseek-ai/DeepSeek-V4.1-Flash"),
+            slot("pin", "deepseek-ai/DeepSeek-V4.1-Flash-1017"),
+            slot("openai", "gpt-5.4", { providerId: "openai" }),
+            slot("openrouter", "openai/gpt-5.4", { providerId: "openrouter" }),
+            slot("env", "gpt-5.4-2026-03-05", { managed: true }),
+        ]);
+
+        expect(labels.get("alias")).toBe(
+            "DeepSeek V4.1 Flash (deepseek-ai/DeepSeek-V4.1-Flash)",
+        );
+        expect(labels.get("pin")).toBe(
+            "DeepSeek V4.1 Flash (deepseek-ai/DeepSeek-V4.1-Flash-1017)",
+        );
+        expect(labels.get("openai")).toBe("GPT 5.4 · OpenAI");
+        expect(labels.get("openrouter")).toBe("GPT 5.4 · OpenRouter");
+        expect(labels.get("env")).toBe("GPT 5.4");
+    });
+
+    it("names two routes on one gateway by id, not by ordinal", () => {
+        const labels = routingModelLabels([
+            slot("a", "openai/gpt-4o", {
+                credentialId: "gw",
+                providerId: "openai_compatible",
+            }),
+            slot("b", "azure/gpt-4o", {
+                credentialId: "gw",
+                providerId: "openai_compatible",
+            }),
+        ]);
+        expect(labels.get("a")).toBe("GPT 4o (openai/gpt-4o)");
+        expect(labels.get("b")).toBe("GPT 4o (azure/gpt-4o)");
+    });
+
+    it("names the same id on another connection by connection when its label carries an id", () => {
+        const gateway = {
+            credentialId: "gw",
+            providerId: "openai_compatible",
+        } as const;
+        const labels = routingModelLabels([
+            slot("a", "gpt-4o", gateway),
+            slot("b", "azure/gpt-4o", gateway),
+            slot("c", "gpt-4o", { credentialId: "oa", providerId: "openai" }),
+        ]);
+        expect(labels.get("a")).toBe("GPT 4o (gpt-4o) · OpenAI-compatible");
+        expect(labels.get("b")).toBe("GPT 4o (azure/gpt-4o)");
+        expect(labels.get("c")).toBe("GPT 4o (gpt-4o) · OpenAI");
+    });
+});

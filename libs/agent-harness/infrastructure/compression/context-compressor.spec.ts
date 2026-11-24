@@ -5,6 +5,10 @@
  * keeping the message structure valid for the AI SDK (no orphaned tool result:
  * every `tool` message stays paired with the assistant turn it answers).
  */
+import { createHash } from 'crypto';
+
+import { MEMO_MAX_CHARS } from './token-estimator';
+
 import {
     clampMessagesToBudget,
     compressMessages,
@@ -131,7 +135,10 @@ describe('structured tool-result output survives truncation (PR#302 regression)'
     // { type, value } shape and only shrink the inner text.
     function structuredWindow(valueChars: number): ModelMessage[] {
         return [
-            { role: 'user', content: 'Review this diff:\n' + 'x'.repeat(2_000) },
+            {
+                role: 'user',
+                content: 'Review this diff:\n' + 'x'.repeat(2_000),
+            },
             {
                 role: 'assistant',
                 content: [
@@ -178,7 +185,9 @@ describe('structured tool-result output survives truncation (PR#302 regression)'
         const window = structuredWindow(1);
         (window.find((m) => m.role === 'tool')!.content as any[])[0].output = {
             type: 'future-output-type',
-            value: { data: Array.from({ length: 4_000 }, (_, i) => `item${i}`) },
+            value: {
+                data: Array.from({ length: 4_000 }, (_, i) => `item${i}`),
+            },
         };
         const budget = 500;
         const clamped = clampMessagesToBudget(window, budget);
@@ -202,26 +211,34 @@ describe('structured tool-result output survives truncation (PR#302 regression)'
     // reaches budget (#1574). Once truncated the value is no longer valid JSON,
     // so it is re-typed to `text` — a provider-serializable lossy preview.
     it.each([
-        ['object', { files: Array.from({ length: 4_000 }, (_, i) => `f${i}.ts`) }],
+        [
+            'object',
+            { files: Array.from({ length: 4_000 }, (_, i) => `f${i}.ts`) },
+        ],
         ['array', Array.from({ length: 5_000 }, (_, i) => `f${i}.ts`)],
-    ])('shrinks a large json output (%s value) and re-types it to text', (_label, jsonValue) => {
-        const window = structuredWindow(1);
-        (window.find((m) => m.role === 'tool')!.content as any[])[0].output = {
-            type: 'json',
-            value: jsonValue,
-        };
-        const budget = 500;
-        const clamped = clampMessagesToBudget(window, budget);
-        const out = firstToolOutput(clamped);
+    ])(
+        'shrinks a large json output (%s value) and re-types it to text',
+        (_label, jsonValue) => {
+            const window = structuredWindow(1);
+            (
+                window.find((m) => m.role === 'tool')!.content as any[]
+            )[0].output = {
+                type: 'json',
+                value: jsonValue,
+            };
+            const budget = 500;
+            const clamped = clampMessagesToBudget(window, budget);
+            const out = firstToolOutput(clamped);
 
-        // Re-typed to a serializable text preview (no longer a json blob that
-        // lies about being parseable)...
-        expect(out.type).toBe('text');
-        expect(typeof out.value).toBe('string');
-        expect(out.value.endsWith('…[truncated]')).toBe(true);
-        // ...and the hard clamp actually reached budget.
-        expect(estimateMessagesTokens(clamped)).toBeLessThanOrEqual(budget);
-    });
+            // Re-typed to a serializable text preview (no longer a json blob that
+            // lies about being parseable)...
+            expect(out.type).toBe('text');
+            expect(typeof out.value).toBe('string');
+            expect(out.value.endsWith('…[truncated]')).toBe(true);
+            // ...and the hard clamp actually reached budget.
+            expect(estimateMessagesTokens(clamped)).toBeLessThanOrEqual(budget);
+        },
+    );
 });
 
 describe('compressMessages (soft pass) still structurally preserves tool turns', () => {
@@ -230,5 +247,104 @@ describe('compressMessages (soft pass) still structurally preserves tool turns',
         const compressed = compressMessages(msgs, []);
         const toolMsg = compressed.find((m) => m.role === 'tool');
         expect(Array.isArray(toolMsg?.content)).toBe(true);
+    });
+});
+
+describe('estimateMessagesTokens — per-run counts', () => {
+    const head = () =>
+        ({
+            role: 'user',
+            // Above the 200k-char bound below which counts are not kept.
+            content: 'diff and graph context '.repeat(9_000),
+        }) as any;
+
+    it('reuses the count of a rebuilt message with the same content', () => {
+        const counts = new Map<string, number>();
+        const first = estimateMessagesTokens([head()], counts);
+        expect(counts.size).toBe(1);
+        // Seed the key with a marker: a lookup returns it, a recount would not.
+        const [key] = counts.keys();
+        counts.set(key, 7);
+        expect(estimateMessagesTokens([head()], counts)).toBe(7);
+        expect(first).toBe(estimateMessagesTokens([head()]));
+    });
+
+    it('keeps a digest per message, never the serialized text', () => {
+        const counts = new Map<string, number>();
+        const big = {
+            role: 'user',
+            content: 'const value = compute(input);\n'.repeat(20_000),
+        } as any;
+        estimateMessagesTokens([big, head()], counts);
+        expect(counts.size).toBe(2);
+        // A 600k-char head held as a key would stay alive for the whole run,
+        // and a SHA-1 key could be collided by content the PR controls.
+        const sha256 = (msg: unknown) =>
+            createHash('sha256').update(JSON.stringify(msg)).digest('base64');
+        expect([...counts.keys()].sort()).toEqual(
+            [sha256(big), sha256(head())].sort(),
+        );
+    });
+});
+
+describe('estimateMessagesTokens — per-run counts bounds', () => {
+    const big = (tag: string) =>
+        ({
+            role: 'user',
+            content:
+                `${tag} ` + 'const value = compute(input);\n'.repeat(7_000),
+        }) as any;
+    const sha256 = (msg: unknown) =>
+        createHash('sha256').update(JSON.stringify(msg)).digest('base64');
+
+    it('keeps the head while newer entries fill the map (LRU on hit)', () => {
+        const counts = new Map<string, number>();
+        estimateMessagesTokens([big('head')], counts);
+        for (let i = 0; i < 255; i++) counts.set(`filler-${i}`, 1);
+        estimateMessagesTokens([big('head')], counts); // hit: now the newest
+        estimateMessagesTokens([big('other')], counts); // evicts one entry
+        expect(counts.size).toBe(256);
+        expect(counts.has(sha256(big('head')))).toBe(true);
+        expect(counts.has('filler-0')).toBe(false);
+    });
+
+    it('never holds more than 256 entries', () => {
+        const counts = new Map<string, number>();
+        for (let i = 0; i < 256; i++) counts.set(`filler-${i}`, 1);
+        estimateMessagesTokens([big('new')], counts);
+        expect(counts.size).toBe(256);
+    });
+
+    it('keeps only messages above MEMO_MAX_CHARS serialized chars', () => {
+        // A user message whose JSON is exactly `chars` long.
+        const sized = (chars: number) => {
+            const empty = JSON.stringify({ role: 'user', content: '' }).length;
+            return { role: 'user', content: 'a'.repeat(chars - empty) } as any;
+        };
+        const atBound = sized(MEMO_MAX_CHARS);
+        expect(JSON.stringify(atBound)).toHaveLength(MEMO_MAX_CHARS);
+
+        const counts = new Map<string, number>();
+        estimateMessagesTokens([atBound], counts);
+        expect(counts.size).toBe(0);
+        estimateMessagesTokens([sized(MEMO_MAX_CHARS + 1)], counts);
+        expect(counts.size).toBe(1);
+    });
+
+    it('counts a message whose toJSON gives undefined as the uncached path does', () => {
+        const odd = [
+            { role: 'user', content: 'x', toJSON: () => undefined },
+        ] as any[];
+        expect(estimateMessagesTokens(odd, new Map())).toBe(
+            estimateMessagesTokens(odd),
+        );
+    });
+
+    it('counts null and non-objects as the uncached path does', () => {
+        const counts = new Map<string, number>();
+        const odd = [null, undefined, 42] as any[];
+        expect(estimateMessagesTokens(odd, counts)).toBe(
+            estimateMessagesTokens(odd),
+        );
     });
 });

@@ -17,11 +17,12 @@
 import {
     estimateTextTokens,
     FALLBACK_CHARS_PER_TOKEN,
+    MEMO_MAX_CHARS,
 } from '@libs/llm/token-estimate';
 
 // Re-export the lifted primitives so existing agent-harness callers (and the
 // spec) keep importing them from this module.
-export { estimateTextTokens, FALLBACK_CHARS_PER_TOKEN };
+export { estimateTextTokens, FALLBACK_CHARS_PER_TOKEN, MEMO_MAX_CHARS };
 
 /**
  * Token count of a message-like value. Objects are JSON-serialized first so the

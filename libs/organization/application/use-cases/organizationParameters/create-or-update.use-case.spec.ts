@@ -24,6 +24,10 @@ function buildUseCase(
     existing?: unknown,
     options: {
         kodusGate?: { isEnabledFor: (org?: string) => Promise<boolean> };
+        /** Each team's stored code review config. */
+        teamConfigs?: unknown[];
+        /** Each team's status; active when absent. */
+        teamStatuses?: string[];
     } = {},
 ) {
     const persisted: { value?: any } = {};
@@ -51,12 +55,31 @@ function buildUseCase(
     const kodusGate = options.kodusGate ?? {
         isEnabledFor: jest.fn(async () => true),
     };
+    const teamConfigs = options.teamConfigs ?? [];
+    const teams = teamConfigs.map((_, i) => ({
+        uuid: `team-${i}`,
+        name: `Team ${i}`,
+        status: options.teamStatuses?.[i] ?? 'active',
+    }));
+    const teamService = {
+        // Honors the status filter, as the repository does.
+        find: jest.fn(async (_filter: unknown, statuses?: string[]) =>
+            teams.filter((t) => !statuses || statuses.includes(t.status)),
+        ),
+    };
+    const parametersService = {
+        findByKey: jest.fn(async (_key: unknown, org: { teamId: string }) => ({
+            configValue: teamConfigs[Number(org.teamId.split('-')[1])],
+        })),
+    };
     const useCase = new CreateOrUpdateOrganizationParametersUseCase(
         organizationParametersService as any,
         request,
         eventEmitter,
         telemetry,
         kodusGate as any,
+        parametersService as any,
+        teamService as any,
     );
 
     return {
@@ -64,6 +87,7 @@ function buildUseCase(
         persisted,
         createOrUpdateConfig,
         organizationParametersService,
+        teamService,
     };
 }
 
@@ -525,7 +549,9 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                         id: 'cred-brand-new',
                         provider: 'openai_compatible',
                         apiKey: '',
-                        settings: { baseURL: 'https://api.novita.ai/v3/openai' },
+                        settings: {
+                            baseURL: 'https://api.novita.ai/v3/openai',
+                        },
                     },
                 ],
                 models: [
@@ -1155,8 +1181,103 @@ describe('platform-funded (`kodus`) credential — keyless by design, cloud-only
         await expect(
             saveByok(
                 useCase,
-                v2({ credentials: [{ id: 'cred-openai', provider: 'openai' }] }),
+                v2({
+                    credentials: [{ id: 'cred-openai', provider: 'openai' }],
+                }),
             ),
         ).rejects.toThrow(BadRequestException);
+    });
+});
+
+describe('the Ultra trio while a review mode is Ultra', () => {
+    const key = encrypt('sk-test');
+    const withTrio = (ultraModelIds?: string[]) =>
+        v2({
+            credentials: [
+                { id: 'cred-openai', provider: 'openai', apiKey: key },
+            ],
+            models: [
+                { id: 'a', credentialId: 'cred-openai', model: 'gpt-5' },
+                { id: 'b', credentialId: 'cred-openai', model: 'gpt-5-mini' },
+                { id: 'c', credentialId: 'cred-openai', model: 'gpt-6' },
+            ],
+            routing: {
+                mode: 'manual',
+                defaultModelId: 'a',
+                ...(ultraModelIds && { ultraModelIds }),
+            } as any,
+        });
+
+    it('refuses clearing it while a scope of any team runs Ultra, naming the scopes', async () => {
+        const { useCase, createOrUpdateConfig } = buildUseCase(
+            withTrio(['a', 'b', 'c']),
+            {
+                teamConfigs: [
+                    { configs: { reviewMode: 'balanced' } },
+                    {
+                        configs: {},
+                        repositories: [
+                            {
+                                name: 'api',
+                                configs: {
+                                    riskReviewRouting: { riskFound: 'ultra' },
+                                },
+                            },
+                        ],
+                    },
+                ],
+            },
+        );
+        await expect(saveByok(useCase, withTrio())).rejects.toThrow(
+            /Ultra review is the review mode in repository "api" of team "Team 1"/,
+        );
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('a removed team still on Ultra does not hold the trio', async () => {
+        const { useCase, persisted } = buildUseCase(withTrio(['a', 'b', 'c']), {
+            teamConfigs: [
+                { configs: { reviewMode: 'heavy' } },
+                { configs: { reviewMode: 'ultra' } },
+            ],
+            teamStatuses: ['active', 'removed'],
+        });
+        await saveByok(useCase, withTrio());
+        expect(persisted.value.routing.ultraModelIds).toBeUndefined();
+    });
+
+    it('refuses a trio that becomes one model through two providers while a scope runs Ultra', async () => {
+        const existing = withTrio(['a', 'b', 'c']);
+        const next = withTrio(['a', 'b', 'd']);
+        next.models.push({
+            id: 'd',
+            credentialId: 'cred-openai',
+            model: 'openai/gpt-5',
+        });
+        const { useCase, createOrUpdateConfig } = buildUseCase(existing, {
+            teamConfigs: [{ configs: { reviewMode: 'ultra' } }],
+        });
+        await expect(saveByok(useCase, next)).rejects.toThrow(
+            /Ultra review is the review mode in the global settings/,
+        );
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('saves a cleared trio when no scope runs Ultra', async () => {
+        const { useCase, persisted } = buildUseCase(withTrio(['a', 'b', 'c']), {
+            teamConfigs: [{ configs: { reviewMode: 'heavy' } }],
+        });
+        await saveByok(useCase, withTrio());
+        expect(persisted.value).toBeDefined();
+        expect(persisted.value.routing?.ultraModelIds).toBeUndefined();
+    });
+
+    it('an edit that keeps the trio reads no team config', async () => {
+        const { useCase, teamService } = buildUseCase(
+            withTrio(['a', 'b', 'c']),
+            { teamConfigs: [{ configs: { reviewMode: 'ultra' } }] },
+        );
+        await saveByok(useCase, withTrio(['c', 'b', 'a']));
+        expect(teamService.find).not.toHaveBeenCalled();
     });
 });

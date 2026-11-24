@@ -275,10 +275,11 @@
             "type": "string",
             "enum": [
                 "balanced",
-                "heavy"
+                "heavy",
+                "ultra"
             ],
             "default": "balanced",
-            "description": "How deep a pull request review goes. balanced runs the main reviewer; heavy adds nine specialist reviewers for higher recall, at the cost of more model calls. A review command can ask for the other mode with --heavy or --balanced."
+            "description": "How deep a pull request review goes. balanced runs the main reviewer; heavy adds nine specialist reviewers for higher recall, at the cost of more model calls; ultra runs the heavy review on three of the organization's own models and merges them into one set of comments. A review command can ask for another mode with --heavy, --balanced or --ultra."
         },
         "showStatusFeedback": {
             "type": "boolean",
@@ -586,14 +587,16 @@
                     "type": "string",
                     "enum": [
                         "balanced",
-                        "heavy"
+                        "heavy",
+                        "ultra"
                     ]
                 },
                 "riskFound": {
                     "type": "string",
                     "enum": [
                         "balanced",
-                        "heavy"
+                        "heavy",
+                        "ultra"
                     ]
                 }
             }

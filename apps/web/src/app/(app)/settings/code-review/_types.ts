@@ -96,12 +96,12 @@ export type CodeReviewGlobalConfig = {
     reviewOptions: CodeReviewOptions;
     ignoredTitleKeywords: string[];
     automatedReviewActive: boolean;
-    reviewMode?: "balanced" | "heavy";
+    reviewMode?: "balanced" | "heavy" | "ultra";
     riskAssessmentActive?: boolean;
     riskCriteria?: RiskCriterion[];
     riskReviewRouting?: {
-        noRisk: "balanced" | "heavy";
-        riskFound: "balanced" | "heavy";
+        noRisk: "balanced" | "heavy" | "ultra";
+        riskFound: "balanced" | "heavy" | "ultra";
     };
     showStatusFeedback: boolean;
     reviewCadence?: ReviewCadence;

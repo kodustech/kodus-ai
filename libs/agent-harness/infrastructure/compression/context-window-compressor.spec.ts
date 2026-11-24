@@ -11,6 +11,24 @@ import type { AgentMessage } from '@libs/agent-harness/domain/contracts/run-stat
 
 import { ContextWindowCompressor } from './context-window-compressor';
 import { estimateMessagesTokens } from './context-compressor';
+import { estimateTextTokens, estimateValueTokens } from './token-estimator';
+
+// Counts the real tokenizer calls, so a test can see a recount.
+jest.mock('./token-estimator', () => {
+    const actual = jest.requireActual('./token-estimator');
+    return {
+        ...actual,
+        estimateTextTokens: jest.fn(actual.estimateTextTokens),
+        // The uncached path tokenizes through this one instead.
+        estimateValueTokens: jest.fn(actual.estimateValueTokens),
+    };
+});
+const tokenizerCalls = estimateTextTokens as jest.MockedFunction<
+    typeof estimateTextTokens
+>;
+const uncachedCalls = estimateValueTokens as jest.MockedFunction<
+    typeof estimateValueTokens
+>;
 
 function toModel(messages: AgentMessage[]) {
     return messages.map((m) => ({ role: m.role, content: m.content }) as any);
@@ -126,5 +144,34 @@ describe('ContextWindowCompressor', () => {
             (m) => m.role === 'tool',
         );
         expect(Array.isArray(toolMsg?.content)).toBe(true);
+    });
+});
+
+describe('ContextWindowCompressor — per-run token counts', () => {
+    const head = (): AgentMessage[] => [
+        { role: 'user', content: 'Review this diff:\n' + codeLike(250_000) },
+    ];
+
+    it("keeps a run's head counted while another run churns its own messages", () => {
+        const runA = new ContextWindowCompressor(200_000);
+        const runB = new ContextWindowCompressor(200_000);
+        runA.maybeCompress(head());
+        // More distinct messages than one run's counts hold: a store shared
+        // between runs would evict runA's head here.
+        // Large messages only (small ones skip the counts); the tokenizer is
+        // stubbed for this churn to keep the test fast.
+        const base = 'x '.repeat(100_001);
+        tokenizerCalls.mockImplementation(() => 1);
+        for (let i = 0; i < 300; i++) {
+            runB.maybeCompress([{ role: 'user', content: `${base}${i}` }]);
+        }
+        tokenizerCalls.mockImplementation(
+            jest.requireActual('./token-estimator').estimateTextTokens,
+        );
+        tokenizerCalls.mockClear();
+        uncachedCalls.mockClear();
+        runA.maybeCompress(head());
+        expect(tokenizerCalls).not.toHaveBeenCalled();
+        expect(uncachedCalls).not.toHaveBeenCalled();
     });
 });
