@@ -18,6 +18,7 @@ import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { TypeOrmSql } from '@libs/runtime/api/infrastructure/typeorm-sql';
 
 import { PublishRuntimeRequestUseCase } from './application/publish-runtime-request.use-case';
+import { PublishSuiteCheckUseCase } from './application/publish-suite-check.use-case';
 import { RedriveRuntimePublicationsUseCase } from './application/redrive-runtime-publications.use-case';
 import { RUNTIME_PR_CHECK_SLOT_STORE_TOKEN } from './domain/pull-request-check-slot';
 import { RUNTIME_PR_COMMENT_SLOT_STORE_TOKEN } from './domain/pull-request-comment-slot';
@@ -141,6 +142,7 @@ import { TypeOrmRunTargetStore } from './infrastructure/typeorm-run-target.store
             inject: [DataSource],
         },
         PublishRuntimeRequestUseCase,
+        PublishSuiteCheckUseCase,
         RuntimePublishRequestedConsumer,
         // Re-drives final publications the broker lost (publication-redrive.ts).
         RedriveRuntimePublicationsUseCase,

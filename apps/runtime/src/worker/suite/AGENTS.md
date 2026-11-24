@@ -14,6 +14,7 @@ The runtime-worker's side of running a repository's own e2e suite (docs/runtime/
 - Not done yet: cancelling a running suite (the workflow's long step has no cancel signal), a real count of main's drift (needs a commit listing from the product), the suite's publication and its Run stage (steps 15 and 16). Not done in the engine: `suite.retries.main` 2 (D1), the re-run cap derived from the failed specs (a flat `RERUN_TIMEOUT_MS` of 12 min), fail fast inside a shard (`runDetached` has no cancel), `timedOut` of a spec (the parsers do not report it), selection and re-push (`select`, `planRepush`), the JUnit reporter flag the design adds to the command.
 - Production wiring (build-plan step 15's predecessor, section 11): `suite-service.ts` `SuiteService.run(cmd, step)` is the body of the DBOS workflow `runtimeSuite` (`runtime-suites` queue, workflow id `suite:<suiteRunId>`, `RunEngineService.startSuite`): step `suite:start` reads the recipe's `suite` block from the environment's setup record (`suite-config.ts` `suiteConfigOf`; none, or a baseline with `baseline: false`, is `off` and no run row) and, for a baseline, marks its request started (`PgSuiteBaselineRequests.markStarted`: the product reads with a read-only role, so the worker answers it); step `suite:run` lists the specs, runs the engine and returns a slim result. The engine is idempotent (a finished run is answered, a claim is acquired by its key, a command starts once), so a step that runs again after a crash finishes what was left; the engine's own I/O is not journalled one call at a time. A run that cannot start (`template_missing`, `no_host`, `list_failed`, `no_repository`, `no_specs`) ends `neutral`. `spec-lister.ts` `TemplateSpecLister` lists main's spec files on a template host (shard `LIST_HOST_SHARD` 61, side `base` at `mainSha`, one `find` under the glob's fixed directory), and `libs/runtime/suite` `specListOf` puts the PR's added and removed files (`changedFiles`, `removedFiles` of the command) on that list; `suite-environment.ts` `suiteEnvironment` acquires each claim with a download token of its own (the cell revokes a token once it fetched with it: the command carries `repoToken` and `moreRepoTokens`) and renews each claim as consumer `suite` until it is released; `suite-adapters.ts` `PlacementSuiteDemand` (the demand rows over `PgSuiteDemand`, on the perRun pool placement would choose; no such pool fails every shard at once) and `mainHistoryOf` (the worker holds no Git history: a merge base that is not main's head is put one commit behind, a drift of at least one, never zero).
 - `testing.ts`: `SuiteClock`, `FakeSuiteEnvironment` (a suite command in fake time), the in-memory twins of the stores (`InMemorySuiteRuns`, `InMemorySuiteSpecStats`, `InMemorySuiteBaselines`; same public methods and rules as the Postgres ones), `FakeSuiteDemand` and `FakeSuiteCell` (acquire, exec and release of a whole suite engine in fake time: each spec ends with the outcome the scenario gives its side and attempt, and the runner's JUnit is real text). Specs only.
+- Publishing (build-plan step 15): `suite-publisher.ts` `SuitePublisher` (`started`: the check opened `in_progress` when the suite starts; `finished`: closed with the conclusion of the run's stored state, from the stored results, classification, selection, baseline and drift, so a replay publishes the same thing; a baseline or an environment with no suite publishes nothing). The service calls it in the steps `publish:suite-started` and `publish:suite-final`, which retry like a Run's publish steps; `worker/publish/amqp-suite-publish-requester.ts` writes the message. The run keeps `selection` (how the specs were chosen, set at create from `SuiteInputs.selection`), `baseline_sha` and `base_drift` (migration 54).
 
 ## Does not own
 - The balance, classification, selection and order rules: `libs/runtime/suite`.
@@ -37,7 +38,7 @@ The runtime-worker's side of running a repository's own e2e suite (docs/runtime/
 
 ## Module map
 
-Files (11, tests apart): `detached-exec.ts`, `pg-suite-baselines.ts`, `pg-suite-runs.ts`, `pg-suite-spec-stats.ts`, `spec-lister.ts`, `suite-adapters.ts`, `suite-config.ts`, `suite-engine.ts`, `suite-environment.ts`, `suite-service.ts`, `testing.ts`
+Files (12, tests apart): `detached-exec.ts`, `pg-suite-baselines.ts`, `pg-suite-runs.ts`, `pg-suite-spec-stats.ts`, `spec-lister.ts`, `suite-adapters.ts`, `suite-config.ts`, `suite-engine.ts`, `suite-environment.ts`, `suite-publisher.ts`, `suite-service.ts`, `testing.ts`
 
 Imports these Runtime modules:
 
@@ -48,6 +49,7 @@ Imports these Runtime modules:
 - [`libs/runtime/environment`](../../../../../libs/runtime/environment/AGENTS.md)
 - [`libs/runtime/placement`](../../../../../libs/runtime/placement/AGENTS.md)
 - [`libs/runtime/protocol`](../../../../../libs/runtime/protocol/AGENTS.md)
+- [`libs/runtime/run`](../../../../../libs/runtime/run/AGENTS.md)
 - [`libs/runtime/suite`](../../../../../libs/runtime/suite/AGENTS.md)
 
 Imported by:
@@ -55,5 +57,6 @@ Imported by:
 - [`apps/runtime/src/worker`](../AGENTS.md)
 - [`apps/runtime/src/worker/commands`](../commands/AGENTS.md)
 - [`apps/runtime/src/worker/dbos`](../dbos/AGENTS.md)
+- [`apps/runtime/src/worker/publish`](../publish/AGENTS.md)
 
 <!-- module-map:end -->

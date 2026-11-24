@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 
 import type { SuiteMode } from '@libs/runtime/contracts/runtime-commands';
-import type { Classification } from '@libs/runtime/suite';
+import type { Classification, SuiteSelectionReport } from '@libs/runtime/suite';
 
 /**
  * The suite run, its shards and its per-spec results (docs/runtime/e2e-suites.md section 7): runtime_suite_runs,
@@ -26,6 +26,8 @@ export interface SuiteRunRecord {
     mergeBase?: string;
     mainSha: string;
     requestedAt: Date;
+    /** How the specs were chosen (docs section 6.1): the whole suite with the reason, or the selection. Absent: the run never said. */
+    selection?: SuiteSelectionReport;
 }
 
 export interface StoredSuiteRun extends SuiteRunRecord {
@@ -34,11 +36,16 @@ export interface StoredSuiteRun extends SuiteRunRecord {
     finishedAt?: Date;
     /** Whose fault each red test was (docs section 9), written once with the conclusion; absent for a baseline and for a run that ended before it. */
     classification?: Classification;
+    /** The baseline the run was judged against (its main sha) and how many main commits it was behind (8.2). */
+    baselineSha?: string;
+    baseDrift?: number;
 }
 
 /** What a run ends with beside its state. */
 export interface SuiteRunEnd {
     classification?: Classification;
+    baselineSha?: string;
+    baseDrift?: number;
 }
 
 export interface SuiteShardPlan {
@@ -81,6 +88,9 @@ const runOf = (x: Record<string, any>): StoredSuiteRun => ({
     requestedAt: x.requested_at,
     ...(x.finished_at ? { finishedAt: x.finished_at } : {}),
     ...(x.classification ? { classification: x.classification } : {}),
+    ...(x.selection && Object.keys(x.selection).length ? { selection: x.selection } : {}),
+    ...(x.baseline_sha ? { baselineSha: x.baseline_sha } : {}),
+    ...(x.base_drift !== null && x.base_drift !== undefined ? { baseDrift: x.base_drift } : {}),
 });
 
 export class PgSuiteRuns {
@@ -88,9 +98,9 @@ export class PgSuiteRuns {
 
     async create(r: SuiteRunRecord): Promise<{ created: boolean }> {
         const out = await this.pool.query(
-            `INSERT INTO runtime.runtime_suite_runs (suite_run_id, organization_id, environment_id, repository_id, mode, pr_number, pr_sha, merge_base, main_sha, requested_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (suite_run_id) DO NOTHING`,
-            [r.suiteRunId, r.organizationId, r.environmentId, r.repositoryId, r.mode, r.prNumber ?? null, r.prSha ?? null, r.mergeBase ?? null, r.mainSha, r.requestedAt],
+            `INSERT INTO runtime.runtime_suite_runs (suite_run_id, organization_id, environment_id, repository_id, mode, pr_number, pr_sha, merge_base, main_sha, requested_at, selection)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb) ON CONFLICT (suite_run_id) DO NOTHING`,
+            [r.suiteRunId, r.organizationId, r.environmentId, r.repositoryId, r.mode, r.prNumber ?? null, r.prSha ?? null, r.mergeBase ?? null, r.mainSha, r.requestedAt, JSON.stringify(r.selection ?? {})],
         );
         return { created: (out.rowCount ?? 0) > 0 };
     }
@@ -112,8 +122,8 @@ export class PgSuiteRuns {
     /** The first conclusion stays: a run that ended is never moved again. */
     async finish(organizationId: string, suiteRunId: string, state: SuiteRunState, at: Date, end: SuiteRunEnd = {}): Promise<void> {
         await this.pool.query(
-            `UPDATE runtime.runtime_suite_runs SET state = $3, finished_at = $4, classification = $5::jsonb, updated_at = now() WHERE organization_id = $1 AND suite_run_id = $2 AND finished_at IS NULL`,
-            [organizationId, suiteRunId, state, at, end.classification ? JSON.stringify(end.classification) : null],
+            `UPDATE runtime.runtime_suite_runs SET state = $3, finished_at = $4, classification = $5::jsonb, baseline_sha = $6, base_drift = $7, updated_at = now() WHERE organization_id = $1 AND suite_run_id = $2 AND finished_at IS NULL`,
+            [organizationId, suiteRunId, state, at, end.classification ? JSON.stringify(end.classification) : null, end.baselineSha ?? null, end.baseDrift ?? null],
         );
     }
 

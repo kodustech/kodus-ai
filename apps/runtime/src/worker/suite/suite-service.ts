@@ -13,6 +13,7 @@ import { suiteConfigOf, type ResolvedSuite } from './suite-config';
 import type { SuiteEnvironment } from './suite-environment';
 import { type SuiteHostDemand, SuiteEngine, type SuiteTemplates } from './suite-engine';
 import { TemplateSpecLister } from './spec-lister';
+import type { SuitePublisher } from './suite-publisher';
 
 export const SUITE_SERVICE = Symbol('SUITE_SERVICE');
 /** The suite run store the worker's handlers and service read and write (`PgSuiteRuns`). */
@@ -47,6 +48,8 @@ export interface SuiteServiceDeps {
     /** The baseline request a baseline run answers: marked started once the workflow holds it, so the product does not issue it again. */
     baselineRequests?: Pick<PgSuiteBaselineRequests, 'markStarted'>;
     clock: { now(): number; sleep(ms: number): Promise<void> };
+    /** The suite's check: opened when the run starts, closed with its conclusion. Absent: nothing is published. */
+    publisher?: Pick<SuitePublisher, 'started' | 'finished'>;
 }
 
 export type SuiteServiceResult =
@@ -75,7 +78,12 @@ export class SuiteService {
     async run(cmd: RuntimeSuiteRequested, step: SuiteStep): Promise<SuiteServiceResult> {
         const started = await step('suite:start', () => this.start(cmd));
         if ('status' in started) return started;
-        return step('suite:run', () => this.runEngine(cmd, started));
+        // Publish steps retry (run-engine.service.ts `isPublishStep`): a broker that restarts never ends the suite without its check.
+        const publisher = this.d.publisher;
+        if (publisher) await step('publish:suite-started', () => publisher.started(cmd));
+        const result = await step('suite:run', () => this.runEngine(cmd, started));
+        if (publisher) await step('publish:suite-final', () => publisher.finished(cmd, result, { ...(started.suite.config.cwd ? { cwd: started.suite.config.cwd } : {}) }));
+        return result;
     }
 
     private async start(cmd: RuntimeSuiteRequested): Promise<Started | Extract<SuiteServiceResult, { status: 'off' }>> {

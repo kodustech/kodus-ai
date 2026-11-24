@@ -47,6 +47,8 @@ import { PgSuiteBaselines } from './suite/pg-suite-baselines';
 import { PgSuiteRuns } from './suite/pg-suite-runs';
 import { PgSuiteSpecStats } from './suite/pg-suite-spec-stats';
 import { PlacementSuiteDemand } from './suite/suite-adapters';
+import { SuitePublisher } from './suite/suite-publisher';
+import { AmqpSuitePublishRequester } from './publish/amqp-suite-publish-requester';
 import { SUITE_RUNS, SUITE_SERVICE, SuiteService } from './suite/suite-service';
 import { PgStuckSource, StuckDetector } from './maintenance/stuck-detector';
 import { ADMISSION_COORDINATOR, AdmissionCoordinator } from './dbos/admission-coordinator';
@@ -303,8 +305,8 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                 {
                     // The e2e suite's workflow body (docs/runtime/e2e-suites.md section 11): the recipe's suite block, the spec list, the engine.
                     provide: SUITE_SERVICE,
-                    inject: [RUNTIME_PG_POOL, RUN_DEPS_FACTORY, ENVIRONMENT_SETUP_STORE, SUITE_RUNS],
-                    useFactory: (pool: Pool, deps: RunDependenciesFactory, setups: EnvironmentSetupStore, runs: PgSuiteRuns) => {
+                    inject: [RUNTIME_PG_POOL, RUN_DEPS_FACTORY, ENVIRONMENT_SETUP_STORE, SUITE_RUNS, AmqpConnection],
+                    useFactory: (pool: Pool, deps: RunDependenciesFactory, setups: EnvironmentSetupStore, runs: PgSuiteRuns, amqp: AmqpConnection) => {
                         const templates = new PgEnvTemplates(pool);
                         const pools = new PgHostPoolReader(pool);
                         const demand = new PgSuiteDemand(pool);
@@ -318,6 +320,8 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                             templates: { hasReady: (organizationId, environmentId) => templates.hasReady(organizationId, environmentId) },
                             headroom: async () => config.suiteMaxHosts,
                             baselineRequests: new PgSuiteBaselineRequests(pool),
+                            // The suite's own check goes to the product on the Runtime's publish route.
+                            publisher: new SuitePublisher(runs, new AmqpSuitePublishRequester(amqp)),
                             clock: { now: () => Date.now(), sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)) },
                         });
                     },

@@ -7,6 +7,7 @@ The publisher's use cases, in the product worker: one delivery of a `RuntimePubl
 - The outcomes and errors every publisher shares: `publication-outcome.ts` `RefusalReason`, `PublishOutcome`, `PublishOptions` (`fallback`), `PublicationBusyError`, `PublicationFailedError` (both thrown so the broker retries), `PublishTarget`.
 - The PR comment: `comment-publisher.ts` `CommentPublisher.publish` (slot acquired with a bounded wait, `commentOrderOf` against stale phases, edit or create, `createPending` and adoption of Kody's own marked comment with `isOwnComment` and `recoveredCommentRef`).
 - The check: `check-publisher.ts` `CheckPublisher.publish` (`checkNameOf` per environment, the `awaiting_approval` run carried to the final key, `MAX_CHECK_CREATE_ATTEMPTS`, the failed fallback, a commit status when the connection cannot create check runs, skipped at once when the token may not write one, and a late `awaiting_approval` phase skipped once the verdict is on the PR).
+- The suite's own check: `publish-suite-check.use-case.ts` `PublishSuiteCheckUseCase.execute` (the suite event of the same queue: strict schema, key per phase, target from the product's record under the suite's `targetId`, one claim per key, the check slot of `Kody Runtime e2e`, then a commit status or a check run opened when the suite starts and closed with the conclusion of the report's state; annotations go 50 a request, the first with the close and the rest in follow-up updates of the same check run, which never reopen it).
 - Replies on reproduced review suggestions: `reply-publisher.ts` `ReplyPublisher.publish`, one key per suggestion, also run on a duplicate so a redelivery finishes the leftovers.
 - The redrive sweep: `redrive-runtime-publications.use-case.ts` `RedriveRuntimePublicationsUseCase.sweep` (reserve, then the same `execute`, fallback, give up).
 - The skipped-trigger answer: `skipped-trigger-reply.ts` `SkippedTriggerReplyPublisher.answer`, bound by `libs/runtime/api/runtime-api.module.ts` under `RUNTIME_SKIPPED_TRIGGER_REPLY_TOKEN` for the trigger use case.
@@ -34,12 +35,13 @@ The publisher's use cases, in the product worker: one delivery of a `RuntimePubl
 
 ## Module map
 
-Files (7, tests apart): `check-publisher.ts`, `comment-publisher.ts`, `publication-outcome.ts`, `publish-runtime-request.use-case.ts`, `redrive-runtime-publications.use-case.ts`, `reply-publisher.ts`, `skipped-trigger-reply.ts`
+Files (8, tests apart): `check-publisher.ts`, `comment-publisher.ts`, `publication-outcome.ts`, `publish-runtime-request.use-case.ts`, `publish-suite-check.use-case.ts`, `redrive-runtime-publications.use-case.ts`, `reply-publisher.ts`, `skipped-trigger-reply.ts`
 
 Imports these Runtime modules:
 
 - [`libs/runtime-publish/domain`](../domain/AGENTS.md)
 - [`libs/runtime/run`](../../runtime/run/AGENTS.md)
+- [`libs/runtime/suite`](../../runtime/suite/AGENTS.md)
 
 Imported by:
 

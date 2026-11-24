@@ -51,3 +51,12 @@ export function checkOrderOf(msg: Pick<RuntimePublishRequested, 'check' | 'repor
     if (!Number.isFinite(at)) return undefined;
     return at * 10 + (final ? 9 : 1);
 }
+
+/**
+ * The order of the suite's check: the suite run's request time in ms, then its phase (1 running, 9 the verdict), as
+ * `checkOrderOf` orders a Run's. A different check name, so a different slot: the Run's check is never ordered against it.
+ */
+export function suiteCheckOrderOf(requestedAt: string, final: boolean): number | undefined {
+    const at = Date.parse(requestedAt);
+    return Number.isFinite(at) ? at * 10 + (final ? 9 : 1) : undefined;
+}

@@ -72,6 +72,23 @@ const commitStatusStateMap: Record<CheckConclusion, GithubCommitStatusState> = {
     [CheckConclusion.TIMED_OUT]: 'error',
 };
 
+/** The output of a check run as GitHub takes it: the annotations in their wire names, and nothing added when there are none. */
+function toGithubOutput(output: NonNullable<UpdateCheckRunParams['output']>) {
+    const { annotations, ...rest } = output;
+    if (!annotations?.length) return rest;
+    return {
+        ...rest,
+        annotations: annotations.map((a) => ({
+            path: a.path,
+            start_line: a.startLine,
+            end_line: a.endLine,
+            annotation_level: a.level,
+            ...(a.title ? { title: a.title } : {}),
+            message: a.message,
+        })),
+    };
+}
+
 /** GitHub refuses a commit status description longer than this. */
 const COMMIT_STATUS_DESCRIPTION_MAX = 140;
 
@@ -431,7 +448,7 @@ export class GithubChecksService implements IChecksAdapter {
                 head_sha: headSha,
                 status: checkStatusMap[status] || GithubCheckStatus.IN_PROGRESS,
                 started_at: new Date().toISOString(),
-                output,
+                output: output && toGithubOutput(output),
             });
 
             this.logger.log({
@@ -582,7 +599,7 @@ export class GithubChecksService implements IChecksAdapter {
             }
 
             if (output) {
-                updateData.output = output;
+                updateData.output = toGithubOutput(output);
             }
 
             if (name) {

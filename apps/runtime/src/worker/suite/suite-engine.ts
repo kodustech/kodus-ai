@@ -23,6 +23,7 @@ import {
     type SpecResult,
     type SpecStats,
     type SuiteFailure,
+    type SuiteSelectionReport,
     type SuiteSpecFile,
     testKey,
     type TestResult,
@@ -74,6 +75,8 @@ export interface SuiteInputs {
     mainHistory?: readonly string[];
     /** The digest of the whole suite (the block and the full spec list); absent: of `config` and `specs`. A selection passes the whole suite's. */
     suiteDigest?: string;
+    /** How the specs were chosen (the whole suite with the reason, or the selection): kept on the run for its check. */
+    selection?: SuiteSelectionReport;
 }
 
 /** Whether the environment has a ready template to start a main host from, and a way to ask for a build (9.5). */
@@ -188,6 +191,8 @@ interface RunCtx {
     /** The shards whose demand row is kept alive while the run lives. */
     demandShards: Set<number>;
     lastDemandAt: number;
+    /** What the PR run was judged against: the baseline it could use (7.1) and how far main was ahead of the merge base (8.2). */
+    judged?: { baselineSha?: string; baseDrift: number };
 }
 
 /** The test's last failed attempt as a signature: what makes two failures "the same". */
@@ -209,6 +214,7 @@ export class SuiteEngine {
             ...(req.mergeBase ? { mergeBase: req.mergeBase } : {}),
             mainSha: req.mainSha,
             requestedAt: new Date(req.requestedAt),
+            ...(inputs.selection ? { selection: inputs.selection } : {}),
         });
         if (!created.created) {
             const held = await runs.get(req.organizationId, req.suiteRunId);
@@ -480,6 +486,8 @@ export class SuiteEngine {
         const plan = planReruns({ specsRun: ran, failures: testFailures });
         const rerunSpecs = new Set(plan.rerunSpecs);
         const { baseline, baseDrift } = await this.baselineOf(ctx);
+        const usableBaseline = !!baseline && baseline.exactMergeBase && baseline.digestMatches && baseline.commitsBehindMain <= BASELINE_MAX_COMMITS_BEHIND;
+        ctx.judged = { ...(usableBaseline ? { baselineSha: baseline!.sha } : {}), baseDrift };
 
         let prRerun: Record<string, Rerun> = {};
         let main: Parameters<typeof classifyFailures>[0]['main'] = { state: 'ran', results: {} };
@@ -622,7 +630,7 @@ export class SuiteEngine {
         );
         if (ctx.req.mode === 'baseline') await this.recordBaseline(ctx, firstPass);
         const state = this.stateOf(ctx, firstPass, classification);
-        await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, state, new Date(this.d.clock.now()), classification ? { classification } : {});
+        await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, state, new Date(this.d.clock.now()), { ...(classification ? { classification } : {}), ...(ctx.judged ? { ...(ctx.judged.baselineSha ? { baselineSha: ctx.judged.baselineSha } : {}), baseDrift: ctx.judged.baseDrift } : {}) });
         return { suiteRunId: ctx.req.suiteRunId, state, replayed: false, firstPass, ...(classification ? { classification } : {}) };
     }
 

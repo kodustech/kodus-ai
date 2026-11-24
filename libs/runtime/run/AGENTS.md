@@ -5,6 +5,7 @@ The Run and the setup as both sides of the queue see them: the outbox messages b
 ## Owns
 - Outbox messages: `run-messages.ts` (`RuntimeRunRequestedSchema`, `RuntimeRunCancelRequestedSchema`, `RuntimePullRequestObservedSchema`, `RuntimePublishRequestedSchema`, the exchange, queues and routing keys, `runtimeOutboxMessage`, `MAX_DIFF_BYTES`).
 - The Run's states and verdict: `run-state.ts` `canTransition`, `assertTransition`, `decideRunVerdict`, `checkConclusionFor`.
+- The suite's part of a Run (docs/runtime/e2e-suites.md sections 10.1 and 10.2): `suite-publish.ts` (`RuntimeSuitePublishRequestedSchema`, `SUITE_PUBLISH_EVENT`, `suitePublishKey`, `suitePublishEnvelope`: the suite's own check travels the publish queue under its own event name, with a structured `SuiteReport` and the `targetId` the product stored), `suite-verdict.ts` (`suiteFindingsOf`: a regression is a finding of kind `e2e_regression`; `suiteUnclassifiedCount`, which `decideRunVerdict` reads as `suiteUnclassified`: undecided failures make a green Run `partly_tested`, never `no_regressions`).
 - Which changed lines ran: `exercised-lines.ts` `exercisedSummaryOf` (measured files summed, unknown ones in neither count), `exercisedShortfall` ("N of M changed lines ran" below the threshold: a green Run becomes partly tested in `decideRunVerdict`, nothing else changes), `exercisedFact`; the report's `exercised` (`ReportExercisedSchema`).
 - What the product shows: `run-report.ts` (`RuntimeRunReportSchema`, `RuntimeRunProgressSchema`), `replay-lanes.ts` `replayLanesOf`, `response-diff.ts` `responseDiffOf`, `leaf-changes.ts` `leafChanges` (the leaves that differ inside an object or array field of a finding, computed after the gate from its two stored values: cleaned, secret keys redacted, 200 leaves and depth 16 at most; a pure reorder is one change), `boot-failure.ts` `bootFailureOf`, `reproduction.ts` `reproductionFor`, `reproductionManifest`.
 - The projection and stream contracts: `run-projection.ts` (`RunProjectionReader`, `RunProjectionStore`, `LIVE_RUN_STATES`), `run-stream.ts` (`RunStreamStore`, opaque offsets).
@@ -39,7 +40,7 @@ The Run and the setup as both sides of the queue see them: the outbox messages b
 
 ## Module map
 
-Files (21, tests apart): `boot-failure.ts`, `environment-setup.ts`, `exercised-lines.ts`, `index.ts`, `leaf-changes.ts`, `pr-title.ts`, `recipe-author-version.ts`, `recipe-inference.ts`, `recipe-resources.ts`, `recipe.ts`, `replay-lanes.ts`, `reproduction.ts`, `response-diff.ts`, `run-messages.ts`, `run-projection.ts`, `run-report.ts`, `run-state.ts`, `run-stream.ts`, `run-workspace.ts`, `sealed-secret.ts`, `setup-repo-tokens.ts`
+Files (23, tests apart): `boot-failure.ts`, `environment-setup.ts`, `exercised-lines.ts`, `index.ts`, `leaf-changes.ts`, `pr-title.ts`, `recipe-author-version.ts`, `recipe-inference.ts`, `recipe-resources.ts`, `recipe.ts`, `replay-lanes.ts`, `reproduction.ts`, `response-diff.ts`, `run-messages.ts`, `run-projection.ts`, `run-report.ts`, `run-state.ts`, `run-stream.ts`, `run-workspace.ts`, `sealed-secret.ts`, `setup-repo-tokens.ts`, `suite-publish.ts`, `suite-verdict.ts`
 
 Imports these Runtime modules:
 
@@ -50,6 +51,7 @@ Imports these Runtime modules:
 - [`libs/runtime/protocol`](../protocol/AGENTS.md)
 - [`libs/runtime/redaction`](../redaction/AGENTS.md)
 - [`libs/runtime/run/adapters`](adapters/AGENTS.md)
+- [`libs/runtime/suite`](../suite/AGENTS.md)
 
 Imported by:
 
@@ -76,6 +78,7 @@ Imported by:
 - [`apps/runtime/src/worker/run`](../../../apps/runtime/src/worker/run/AGENTS.md)
 - [`apps/runtime/src/worker/secrets`](../../../apps/runtime/src/worker/secrets/AGENTS.md)
 - [`apps/runtime/src/worker/setup`](../../../apps/runtime/src/worker/setup/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../../../apps/runtime/src/worker/suite/AGENTS.md)
 - [`libs/runtime-publish/application`](../../runtime-publish/application/AGENTS.md)
 - [`libs/runtime-publish/domain`](../../runtime-publish/domain/AGENTS.md)
 - [`libs/runtime-publish/infrastructure`](../../runtime-publish/infrastructure/AGENTS.md)

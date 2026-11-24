@@ -23,18 +23,20 @@ export interface CoverageMapInput {
     specs: Readonly<Record<string, readonly string[]>>;
 }
 
-export type FullReason =
-    | 'manifest'
-    | 'lockfile'
-    | 'config'
-    | 'shared_routing'
-    | 'uncovered_file'
-    | 'map_missing'
-    | 'map_stale'
-    | 'map_digest'
-    | 'noise_file'
-    | 'ready_for_review'
-    | 'baseline';
+export const FULL_REASONS = [
+    'manifest',
+    'lockfile',
+    'config',
+    'shared_routing',
+    'uncovered_file',
+    'map_missing',
+    'map_stale',
+    'map_digest',
+    'noise_file',
+    'ready_for_review',
+    'baseline',
+] as const;
+export type FullReason = (typeof FULL_REASONS)[number];
 
 export interface SelectInput {
     /** The spec files at the PR sha. */

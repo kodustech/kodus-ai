@@ -28,11 +28,12 @@ function world(scenario: FakeSuiteWorld, over: { deps?: Partial<SuiteEngineDeps>
     const clock = new SuiteClock();
     const cell = new FakeSuiteCell(clock, scenario);
     const baselines = new InMemorySuiteBaselines();
-    const engine = new SuiteEngine({ env: cell, runs: new InMemorySuiteRuns(clock), stats: new InMemorySuiteSpecStats(), demand: new FakeSuiteDemand(clock), clock, baselines, ...over.deps });
+    const runs = new InMemorySuiteRuns(clock);
+    const engine = new SuiteEngine({ env: cell, runs, stats: new InMemorySuiteSpecStats(), demand: new FakeSuiteDemand(clock), clock, baselines, ...over.deps });
     const specs = Object.keys(scenario.specs);
     const inputs = (extra: Partial<SuiteInputs> = {}): SuiteInputs => ({ config, specs: specs.map((path) => ({ path, sizeBytes: 100 })), ...over.inputs, ...extra });
     const digest = suiteDigestOf(config, specs);
-    return { cell, baselines, engine, digest, inputs };
+    return { cell, baselines, engine, digest, inputs, runs };
 }
 const classOf = (o: { classification?: { tests: Array<{ spec: string; class: string }> } }) => Object.fromEntries((o.classification?.tests ?? []).map((t) => [t.spec, t.class]));
 const history = (n: number) => Array.from({ length: n }, (_, i) => (i === 0 ? MAIN : sha((i + 9).toString(16).slice(-1)) .slice(0, 38) + String(i).padStart(2, '0')));
@@ -117,5 +118,14 @@ describe('a PR run with a baseline', () => {
         const w = world({ specs: { ...oks, 'reg.cy.ts': { pr: [{ fail: ERR }] } } });
         const out = await w.engine.run(prRequest({ mergeBase: hist[3] }), w.inputs({ mainHistory: hist }));
         expect(out.classification?.tests[0]).toMatchObject({ class: 'regression_unconfirmed', baseDrift: 3 });
+    });
+
+    it('keeps on the run how the specs were chosen, the baseline it used and how far main had moved', async () => {
+        const w = world({ specs: { ...oks, 'red.cy.ts': { pr: [{ fail: ERR }] } } });
+        const hist = history(3);
+        seed(w, { sha: hist[1], specs: { 'red.cy.ts': { status: 'passed', durationMs: 1000 }, ...Object.fromEntries(Object.keys(oks).map((k) => [k, { status: 'passed' as const, durationMs: 1000 }])) } });
+        await w.engine.run(prRequest({ mergeBase: hist[1] }), w.inputs({ mainHistory: hist, selection: { mode: 'full', reason: 'map_missing', total: 11 } }));
+        const run = await w.runs.get(ORG, 'sr-1');
+        expect(run).toMatchObject({ selection: { mode: 'full', reason: 'map_missing', total: 11 }, baselineSha: hist[1], baseDrift: 1 });
     });
 });

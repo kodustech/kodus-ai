@@ -121,6 +121,21 @@ describe('GithubChecksService', () => {
         });
     });
 
+    describe('createCheckRun annotations', () => {
+        it('sends the first annotations with the create, in the wire shape', async () => {
+            mockOctokit.checks.create.mockResolvedValue({ data: { id: 7 } });
+            await service.createCheckRun({
+                organizationAndTeamData: mockOrganizationAndTeamData,
+                repository: mockRepository,
+                headSha: 'sha',
+                status: CheckStatus.IN_PROGRESS,
+                name: 'Kody Runtime e2e',
+                output: { title: 't', summary: 's', annotations: [{ path: 'a.ts', startLine: 3, endLine: 3, level: 'failure', message: 'm' }] },
+            });
+            expect(mockOctokit.checks.create.mock.calls[0][0].output.annotations).toEqual([{ path: 'a.ts', start_line: 3, end_line: 3, annotation_level: 'failure', message: 'm' }]);
+        });
+    });
+
     describe('createCheckRun', () => {
         it('should create a check run with status IN_PROGRESS', async () => {
             const mockResponse = { data: { id: 100 } };
@@ -218,6 +233,40 @@ describe('GithubChecksService', () => {
                 conclusion: 'success',
             });
             expect(result).toBe(true);
+        });
+
+        it('sends the annotations of the output in the wire shape GitHub takes, a warning or a failure on a line', async () => {
+            mockOctokit.checks.update.mockResolvedValue({});
+
+            await service.updateCheckRun({
+                organizationAndTeamData: mockOrganizationAndTeamData,
+                repository: mockRepository,
+                checkRunId: 100,
+                status: CheckStatus.IN_PROGRESS,
+                output: {
+                    title: 't',
+                    summary: 's',
+                    annotations: [
+                        { path: 'cypress/e2e/a.cy.ts', startLine: 12, endLine: 12, level: 'failure', title: 'works', message: 'expected 3' },
+                        { path: 'cypress/e2e/b.cy.ts', startLine: 1, endLine: 1, level: 'warning', message: 'timeout' },
+                    ],
+                },
+            });
+
+            expect(mockOctokit.checks.update.mock.calls[0][0].output).toEqual({
+                title: 't',
+                summary: 's',
+                annotations: [
+                    { path: 'cypress/e2e/a.cy.ts', start_line: 12, end_line: 12, annotation_level: 'failure', title: 'works', message: 'expected 3' },
+                    { path: 'cypress/e2e/b.cy.ts', start_line: 1, end_line: 1, annotation_level: 'warning', message: 'timeout' },
+                ],
+            });
+        });
+
+        it('sends an output with no annotations exactly as before', async () => {
+            mockOctokit.checks.update.mockResolvedValue({});
+            await service.updateCheckRun({ organizationAndTeamData: mockOrganizationAndTeamData, repository: mockRepository, checkRunId: 100, output: { title: 't', summary: 's' } });
+            expect(mockOctokit.checks.update.mock.calls[0][0].output).toEqual({ title: 't', summary: 's' });
         });
 
         it('should handle string checkRunId', async () => {

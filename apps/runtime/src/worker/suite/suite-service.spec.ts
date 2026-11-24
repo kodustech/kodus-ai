@@ -28,7 +28,8 @@ const request = (over: Partial<RuntimeSuiteRequested> = {}): RuntimeSuiteRequest
     requestedAt: '2026-11-23T12:00:00.000Z', key: 'sr-1', repoToken: 'sealed:v1:t0', moreRepoTokens: ['sealed:v1:t1', 'sealed:v1:t2', 'sealed:v1:t3', 'sealed:v1:t4'], ...over,
 });
 
-function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean } = {}) {
+function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean } = {}) {
+    const published: string[] = [];
     const clock = new SuiteClock();
     const main = over.main ?? ['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts'];
     const specs = over.specs ?? Object.fromEntries(main.map((p) => [p.replace(/^apps\/dashboard\//, ''), {}]));
@@ -57,8 +58,9 @@ function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuit
         templates: { hasReady: async () => over.ready ?? true },
         baselineRequests: { markStarted: async (_o, _e, sha) => void baselineStarted.push(sha) },
         clock,
+        ...(over.publisher ? { publisher: { started: async (c) => void published.push(`started:${c.mode}`), finished: async (_c, r, s) => void published.push(`finished:${r.status}:${s.cwd}`) } } : {}),
     };
-    return { service: new SuiteService(deps), cell, runs, baselines, demand, tokens, baselineStarted };
+    return { service: new SuiteService(deps), cell, runs, baselines, demand, tokens, baselineStarted, published };
 }
 
 describe('running a suite as a workflow', () => {
@@ -138,5 +140,25 @@ describe('running a suite as a workflow', () => {
         const out = await w.service.run(request({ repositoryFullName: undefined }), passthrough);
         expect(out).toMatchObject({ status: 'unavailable', reason: 'no_repository', state: 'neutral' });
         expect(w.cell.acquires).toEqual([]);
+    });
+
+    it('opens the check before the engine runs and closes it after, each as a publish step, with the suite directory for the annotation paths', async () => {
+        const w = world({ publisher: true });
+        const steps: string[] = [];
+        await w.service.run(request(), async (name, fn) => {
+            steps.push(name);
+            return fn();
+        });
+        expect(steps).toEqual(['suite:start', 'publish:suite-started', 'suite:run', 'publish:suite-final']);
+        expect(w.published).toEqual(['started:ci', 'finished:ran:apps/dashboard']);
+    });
+
+    it('publishes the reason a run could not start, and nothing for an environment with no suite', async () => {
+        const unavailable = world({ ready: false, publisher: true });
+        await unavailable.service.run(request(), passthrough);
+        expect(unavailable.published).toEqual(['started:ci', 'finished:unavailable:apps/dashboard']);
+        const off = world({ recipe: null, publisher: true });
+        await off.service.run(request(), passthrough);
+        expect(off.published).toEqual([]);
     });
 });

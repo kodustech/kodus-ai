@@ -34,6 +34,19 @@ export class UnknownCheckConclusionError extends Error {
 // always the latest run's outcome — state lives in title/summary instead.
 export const KODY_CHECK_RUN_NAME = 'Kody Code Review';
 
+/**
+ * One annotation on a line of a file in the check run (GitHub's check run annotations). A request takes at most 50; the
+ * caller sends more in follow-up updates of the same check run. Platforms without annotations ignore them.
+ */
+export interface CheckRunAnnotation {
+    path: string;
+    startLine: number;
+    endLine: number;
+    level: 'notice' | 'warning' | 'failure';
+    title?: string;
+    message: string;
+}
+
 export interface CreateCheckRunParams {
     organizationAndTeamData: OrganizationAndTeamData;
     repository: {
@@ -47,6 +60,7 @@ export interface CreateCheckRunParams {
         title: string;
         summary: string;
         text?: string;
+        annotations?: CheckRunAnnotation[];
     };
 }
 
@@ -74,6 +88,7 @@ export interface UpdateCheckRunParams {
         title: string;
         summary: string;
         text?: string;
+        annotations?: CheckRunAnnotation[];
     };
 }
 

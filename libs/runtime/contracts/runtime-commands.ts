@@ -436,6 +436,8 @@ export const RuntimeSuiteRequestedSchema = z
         organizationId: id,
         environmentId: id,
         repositoryId: id,
+        /** The id the product stored the publish target under (the Run's id in Run mode); absent: the suite run's own id. */
+        targetId: id.optional(),
         /** `owner/name`, which the claim's download needs; the setup command carries it the same way. */
         repositoryFullName: RepositoryFullNameSchema.optional(),
         mode: z.enum(SUITE_MODES),

@@ -14,6 +14,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 - `hosts.ts` `hostsToAsk` (one host per shard, at most the pool headroom, at least one) and `spreadOnto` (every spec onto the shards that got a host, balanced by the stored durations; the missing shards carry none).
 - `digest.ts` `suiteDigestOf`: the digest of a suite (the block's command, runner, directory, results glob and env, and the sorted spec list) that keys a baseline; timeouts and the shard ceiling do not move it.
 - `spec-list.ts` `specListOf`: the spec files one run executes: main's listing under the recipe's glob, plus the specs the PR adds, minus the ones it removes (paths read relative to the suite directory), or exactly the specs a retry names.
+- `report.ts` `buildSuiteReport` (the structured report of section 10.1 from a run's stored state, its first-pass results and its classification: totals, red tests by class, how the specs were chosen, the baseline and the drift, at most `ANNOTATIONS_MAX` 200 annotations, regressions first, each with the failing line of the spec read from the error's stack, a message cut to 400 characters), `suiteConclusionOf` (D4: a regression fails, flaky and pre-existing never do, unclassified is neutral; the run's state carries timed out and cancelled), `pageAnnotations` (GitHub takes `ANNOTATION_PAGE` 50 a request), `failingLineOf`. Never a sentence of the Runtime's own: the product writes the words.
 
 ## Does not own
 - Storing results, baselines and durations, the shard hosts, the detached command and its polling, publishing: later steps of the build plan (section 17), in the runtime-worker and `libs/runtime-publish`.
@@ -35,7 +36,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 
 ## Module map
 
-Files (13, tests apart): `balance.ts`, `classifier.ts`, `digest.ts`, `error-signature.ts`, `hosts.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `repush.ts`, `select.ts`, `spec-list.ts`, `types.ts`
+Files (14, tests apart): `balance.ts`, `classifier.ts`, `digest.ts`, `error-signature.ts`, `hosts.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `report.ts`, `repush.ts`, `select.ts`, `spec-list.ts`, `types.ts`
 
 Imports these Runtime modules:
 
@@ -44,5 +45,8 @@ Imports these Runtime modules:
 Imported by:
 
 - [`apps/runtime/src/worker/suite`](../../../apps/runtime/src/worker/suite/AGENTS.md)
+- [`libs/runtime-publish/application`](../../runtime-publish/application/AGENTS.md)
+- [`libs/runtime-publish/domain`](../../runtime-publish/domain/AGENTS.md)
+- [`libs/runtime/run`](../run/AGENTS.md)
 
 <!-- module-map:end -->

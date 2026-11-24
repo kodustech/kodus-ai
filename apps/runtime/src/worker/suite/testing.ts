@@ -97,7 +97,7 @@ export class InMemorySuiteRuns implements Pick<PgSuiteRuns, 'create' | 'get' | '
     }
     async finish(organizationId: string, suiteRunId: string, state: SuiteRunState, at: Date, end: SuiteRunEnd = {}) {
         const r = this.runs.get(suiteRunId);
-        if (r && r.organizationId === organizationId && !r.finishedAt) Object.assign(r, { state, finishedAt: at, ...(end.classification ? { classification: end.classification } : {}) });
+        if (r && r.organizationId === organizationId && !r.finishedAt) Object.assign(r, { state, finishedAt: at, ...(end.classification ? { classification: end.classification } : {}), ...(end.baselineSha ? { baselineSha: end.baselineSha } : {}), ...(end.baseDrift !== undefined ? { baseDrift: end.baseDrift } : {}) });
     }
     async savePlan(organizationId: string, suiteRunId: string, shards: readonly SuiteShardPlan[]) {
         if (this.runs.get(suiteRunId)?.organizationId !== organizationId) return;

@@ -71,7 +71,8 @@ export const VISUAL_CHANGE_ONLY_REASON = 'Visual change only. Is this appearance
  * the PR. A finding on the new code (it fails the check), not a difference
  * from main's behavior.
  */
-export const FINDING_KINDS = ['behavior_change', 'pr_destabilizes_machine', 'new_endpoint_error'] as const;
+/** `e2e_regression`: a test of the repository's own e2e suite that failed on the PR twice and passed on main (docs/runtime/e2e-suites.md section 10.2). */
+export const FINDING_KINDS = ['behavior_change', 'pr_destabilizes_machine', 'new_endpoint_error', 'e2e_regression'] as const;
 export type FindingKind = (typeof FINDING_KINDS)[number];
 
 /** Set by the intent classifier; intended findings never lead to success. */

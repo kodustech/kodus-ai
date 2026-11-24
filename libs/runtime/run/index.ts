@@ -13,3 +13,5 @@ export * from './sealed-secret';
 export * from './adapters/file-run-stream.store';
 export * from './setup-repo-tokens';
 export * from './pr-title';
+export * from './suite-publish';
+export * from './suite-verdict';

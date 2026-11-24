@@ -250,6 +250,12 @@ export interface VerdictInput {
      * 2026-11-18, docs/runtime/egress-allowlist.md §15).
      */
     prEgressDenied?: string[];
+    /**
+     * The failures of the repository's e2e suite that are neither a regression nor ruled out (unclassified, unconfirmed,
+     * probable): a Run that would be green is partly tested, never "no regressions" with part of the suite unknown
+     * (docs/runtime/e2e-suites.md section 10.2). A regression of the suite is a finding among `probes`.
+     */
+    suiteUnclassified?: number;
 }
 
 export interface VerdictOutcome {
@@ -319,6 +325,12 @@ export function decideRunVerdict(input: VerdictInput): VerdictOutcome {
     if (notRun > 0 && verdictState !== 'regression') {
         verdictState = 'partly_tested';
         forcedNeutral.push(`${notRun} kept check${notRun > 1 ? 's' : ''} could not run`);
+    }
+    // The suite's undecided failures hold a green Run back, as an unrun kept check does; a regression stays one.
+    const suiteUndecided = input.suiteUnclassified ?? 0;
+    if (suiteUndecided > 0 && verdictState !== 'regression') {
+        verdictState = 'partly_tested';
+        forcedNeutral.push(`${suiteUndecided} e2e failure${suiteUndecided > 1 ? 's' : ''} not classified`);
     }
     if (input.blockedOutbound) forcedNeutral.push(`${input.blockedOutbound} blocked outbound request${input.blockedOutbound > 1 ? 's' : ''}`);
     if (input.dependencyChangeUntested) forcedNeutral.push('dependency change not behavior-tested');

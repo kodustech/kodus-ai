@@ -14,7 +14,8 @@ describe('the suite in the worker module', () => {
     it('provides the run store of the suites and the service the workflow runs', () => {
         const pool = { query: jest.fn() } as any;
         expect(provider(SUITE_RUNS).useFactory(pool)).toBeInstanceOf(PgSuiteRuns);
-        const service = provider(SUITE_SERVICE).useFactory(pool, { envForSuite: jest.fn() }, { get: jest.fn() }, provider(SUITE_RUNS).useFactory(pool));
+        const service = provider(SUITE_SERVICE).useFactory(pool, { envForSuite: jest.fn() }, { get: jest.fn() }, provider(SUITE_RUNS).useFactory(pool), { publish: jest.fn() });
         expect(service).toBeInstanceOf(SuiteService);
+        expect((service as any).d.publisher).toBeDefined();
     });
 });

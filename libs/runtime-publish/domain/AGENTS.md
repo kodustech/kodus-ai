@@ -8,6 +8,7 @@ The publisher's rules, ports and wording: where a Run publishes, when a delivery
 - One comment per PR and environment: `pull-request-comment-slot.ts` `PullRequestCommentSlotStore`, `COMMENT_SLOT_LEASE_MS`; `publish-environment.ts` `publishEnvironmentOf`, `checkNameOf`, `commentMarkerOf`.
 - The redrive policy: `publication-redrive.ts` `isFinalPublication`, `storableRequestOf` (256 KiB, check summary dropped first), `nextRedriveStep`, `hasFallback`, `REDRIVE_AFTER_MS`, `MAX_REDRIVE_ATTEMPTS`, `REDRIVE_BATCH`; `runtime-publication.ts` `isStaleForRedrive`.
 - What reaches the PR: `render-runtime-comment.ts` (`renderProgressComment`, `renderReportComment`, `renderCheckOutput`, `renderBareCheckOutput`, `renderSuggestionReply`, `renderUndeliveredReportComment`, `renderUndeliveredCheckOutput`, `partlyTestedReasons`, `code`, `runtimeLinks`, `RUNTIME_COMMENT_MARKER`); `render-skipped-trigger.ts` `renderSkippedTriggerReply`, `skippedTriggerReplyKey`, `skippedTriggerMarker`.
+- What the suite check says: `render-suite-check.ts` `renderSuiteCheckOutput`, `suiteCheckNameOf` (`Kody Runtime e2e`, with the environment when the PR is in a member repository): title, summary table, the selection sentence for each `FullReason`, the baseline and the drift with the "update the branch to confirm" hint; every sentence is the product's. `pull-request-check-slot.ts` `suiteCheckOrderOf` orders it.
 - What the Run page says was published: `run-publication-view.ts` `runPublicationViewOf`.
 - What the publisher needs from the product: `runtime-publish.ports.ts` (repository resolver, code management, checks, comment author, suggestion resolver, metrics, preview offer, `CHECKS_PLATFORMS`, `KODY_RUNTIME_CHECK_NAME`); `pull-request-observation-gate.ts` `RuntimePullRequestGate`.
 
@@ -36,13 +37,14 @@ The publisher's rules, ports and wording: where a Run publishes, when a delivery
 
 ## Module map
 
-Files (11, tests apart): `publication-redrive.ts`, `publish-environment.ts`, `pull-request-check-slot.ts`, `pull-request-comment-slot.ts`, `pull-request-observation-gate.ts`, `render-runtime-comment.ts`, `render-skipped-trigger.ts`, `run-publication-view.ts`, `run-target.ts`, `runtime-publication.ts`, `runtime-publish.ports.ts`
+Files (12, tests apart): `publication-redrive.ts`, `publish-environment.ts`, `pull-request-check-slot.ts`, `pull-request-comment-slot.ts`, `pull-request-observation-gate.ts`, `render-runtime-comment.ts`, `render-skipped-trigger.ts`, `render-suite-check.ts`, `run-publication-view.ts`, `run-target.ts`, `runtime-publication.ts`, `runtime-publish.ports.ts`
 
 Imports these Runtime modules:
 
 - [`libs/runtime/api/application`](../../runtime/api/application/AGENTS.md)
 - [`libs/runtime/contracts`](../../runtime/contracts/AGENTS.md)
 - [`libs/runtime/run`](../../runtime/run/AGENTS.md)
+- [`libs/runtime/suite`](../../runtime/suite/AGENTS.md)
 
 Imported by:
 

@@ -3,7 +3,7 @@
 The publisher's adapters: the broker consumer and the redrive cron that drive the use cases, the product-Postgres stores behind the domain's store ports, the product readers behind its other ports, and the OpenTelemetry metrics. They run in the product worker; the API uses the target and publication stores and the Run page reader (`libs/runtime/api/runtime-api.module.ts`). `RuntimePublishModule` (`../runtime-publish.module.ts`) binds them.
 
 ## Owns
-- Deliveries from the Runtime: `runtime-publish-requested.consumer.ts` `RuntimePublishRequestedConsumer` on `RUNTIME_PUBLISH_QUEUE`, channel `RUNTIME_PUBLISH_CHANNEL`, errors to the shared RabbitMQ handler (delayed retry, then dead letter).
+- Deliveries from the Runtime: `runtime-publish-requested.consumer.ts` `RuntimePublishRequestedConsumer` on `RUNTIME_PUBLISH_QUEUE` (a delivery named `runtime.suite.publish_requested` goes to `PublishSuiteCheckUseCase`, every other to the Run's use case), channel `RUNTIME_PUBLISH_CHANNEL`, errors to the shared RabbitMQ handler (delayed retry, then dead letter).
 - The redrive tick: `runtime-publication-redrive.cron.ts` `RuntimePublicationRedriveCron` (`RUNTIME_CRON_SCHEDULES.publicationRedrive`, never two sweeps at once in one process).
 - `runtime_publications`: `typeorm-publication.store.ts` `TypeOrmPublicationStore` (atomic `claim` as one conditional UPDATE, else INSERT … ON CONFLICT DO NOTHING; `hasPublishedVerdict`, `findStale`, `reserveRedrive`, `giveUp`) and `TypeOrmPublicationReader` (the API's org-scoped, bounded read, without the stored request).
 - `runtime_pr_comments`: `typeorm-comment-slot.store.ts` `TypeOrmCommentSlotStore` (lease upsert keyed by org, repo, PR and environment key; writes only under the holder's lease).

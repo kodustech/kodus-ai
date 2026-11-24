@@ -1212,6 +1212,14 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         // the engine has gone (the check, the annotations, the Run's findings). Null for a baseline and for a run that ended before it.
         sql: `ALTER TABLE runtime.runtime_suite_runs ADD COLUMN IF NOT EXISTS classification jsonb;`,
     },
+    {
+        version: 54,
+        name: 'the baseline a suite run was judged against and how far main had moved',
+        // docs/runtime/e2e-suites.md 8.2: the check names the baseline commit and the drift in main commits ("update the branch
+        // to confirm"). Set with the conclusion; null where the run used no baseline or ended before it. `selection` (v51) holds how the specs were chosen.
+        sql: `ALTER TABLE runtime.runtime_suite_runs ADD COLUMN IF NOT EXISTS baseline_sha text;
+        ALTER TABLE runtime.runtime_suite_runs ADD COLUMN IF NOT EXISTS base_drift integer;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

@@ -4,6 +4,7 @@ How a Run hands its result to the product: one AMQP adapter of the `PublishReque
 
 ## Owns
 - `amqp-publish-requester.ts` `AmqpPublishRequester.request`: validates the message with `RuntimePublishRequestedSchema`, wraps it in the Runtime envelope (`runtimeEnvelope`, `workflowType` `RUNTIME_PUBLISH`), uses the publication key as `messageId`, and resolves only on the broker's confirm.
+- `amqp-suite-publish-requester.ts` `AmqpSuitePublishRequester.request`: the same for the suite's own check (`RuntimeSuitePublishRequestedSchema`, event `runtime.suite.publish_requested`, same exchange and routing key, the publication key as `messageId`).
 - `PUBLISH_CONFIRM_TIMEOUT_MS` (10 s): no confirm in time fails the step instead of hanging it.
 
 ## Does not own
@@ -27,11 +28,12 @@ How a Run hands its result to the product: one AMQP adapter of the `PublishReque
 
 ## Module map
 
-Files (1, tests apart): `amqp-publish-requester.ts`
+Files (2, tests apart): `amqp-publish-requester.ts`, `amqp-suite-publish-requester.ts`
 
 Imports these Runtime modules:
 
 - [`apps/runtime/src/worker/run`](../run/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../suite/AGENTS.md)
 - [`libs/runtime/run`](../../../../../libs/runtime/run/AGENTS.md)
 
 Imported by:

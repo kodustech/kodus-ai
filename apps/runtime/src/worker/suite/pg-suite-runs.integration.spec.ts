@@ -95,4 +95,16 @@ const run: SuiteRunRecord = {
         expect(stored?.state).toBe('failed');
         expect(stored?.classification).toEqual(classification);
     });
+
+    it('keeps how the specs were chosen from the start, and the baseline and the drift the run was judged with at its end', async () => {
+        const selection = { mode: 'full', reason: 'map_missing', total: 12 } as const;
+        await store.create({ ...run, selection });
+        expect((await store.get('org-a', run.suiteRunId))?.selection).toEqual(selection);
+        await store.finish('org-a', run.suiteRunId, 'passed', new Date('2026-11-23T12:30:00.000Z'), { baselineSha: 'c'.repeat(40), baseDrift: 3 });
+        const stored = await store.get('org-a', run.suiteRunId);
+        expect(stored).toMatchObject({ baselineSha: 'c'.repeat(40), baseDrift: 3 });
+        // A run that never said how it chose has no selection to report.
+        await store.create({ ...run, suiteRunId: '0b5c2f6e-6f1d-4c53-9a43-1d1f5f3a9c12' });
+        expect((await store.get('org-a', '0b5c2f6e-6f1d-4c53-9a43-1d1f5f3a9c12'))?.selection).toBeUndefined();
+    });
 });
