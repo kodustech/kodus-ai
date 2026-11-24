@@ -308,7 +308,7 @@ function observeRepeatCheck() {
     const real = mod.checkRepeats;
     mod.checkRepeats = async (...a) => {
         const out = await real(...a);
-        repeatChecks.getStore()?.push(out);
+        repeatChecks.getStore()?.push({ ...out, input: a[0] });
         return out;
     };
 }
@@ -456,7 +456,30 @@ async function once(c, judgeKey) {
             label: r.label,
             revisesSuggestionId: r.revisesSuggestionId ?? null,
         })),
-        repeatCheck: { model: checks.map((r) => r.model).join(',') || null },
+        repeatCheck: {
+            model: checks.map((r) => r.model).join(',') || null,
+            // What the check judged and how: replayable offline.
+            calls: checks.map((r) => {
+                const brief = (f) => ({
+                    label: f.label,
+                    relevantFile: f.relevantFile,
+                    relevantLinesStart: f.relevantLinesStart,
+                    relevantLinesEnd: f.relevantLinesEnd,
+                    suggestionContent: f.suggestionContent,
+                    oneSentenceSummary: f.oneSentenceSummary,
+                    existingCode: f.existingCode,
+                    revisesSuggestionId: f.revisesSuggestionId,
+                    brokenKodyRulesIds: f.brokenKodyRulesIds,
+                });
+                const tagOf = (f) =>
+                    r.repeats?.some((x) => x.finding === f) ? 'repeat'
+                        : r.reversals?.some((x) => x.finding === f) ? 'reversal'
+                            : r.withheld?.includes(f) ? 'withheld'
+                                : r.revisions?.some((x) => x.finding === f) ? 'kept-linked'
+                                    : 'kept';
+                return (r.input || []).map((f) => ({ verdict: tagOf(f), ...brief(f) }));
+            }),
+        },
         discarded: review.discarded.length,
         sandboxCalls: counter.calls,
         sandboxFailed: counter.failed,
