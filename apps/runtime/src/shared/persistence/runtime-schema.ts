@@ -1303,6 +1303,13 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         sql: `ALTER TABLE runtime.runtime_suite_runs ADD COLUMN IF NOT EXISTS first_pass_ms bigint;
         ALTER TABLE runtime.runtime_suite_runs ADD COLUMN IF NOT EXISTS rerun_ms bigint;`,
     },
+    {
+        version: 60,
+        name: 'the hosts of a run found by their bound key',
+        // The e2e suite tab reads a suite run's hosts by the prefix of their bound key (`suite:<org>/<run>/`), and the table keeps every
+        // terminated host for the retention window: without this each page view scans it whole. text_pattern_ops serves the prefix LIKE.
+        sql: `CREATE INDEX IF NOT EXISTS runtime_hosts_org_bound_key_idx ON runtime.runtime_hosts (organization_id, bound_key text_pattern_ops) WHERE bound_key IS NOT NULL;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */
