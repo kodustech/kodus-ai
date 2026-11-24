@@ -100,46 +100,39 @@ const hostReversalClaim = (expect) => ({
 });
 
 // ---------------------------------------------------------------------------
-// A point the developer answered in its thread. The diff touches the same
-// function without changing what the comment was about.
+// A point the developer answered in its thread. This round edits the same
+// line without fixing what the comment was about.
 // ---------------------------------------------------------------------------
-const labelRepo = {
-    'src/users/label.ts': lines(
-        "import type { User } from './types';",
-        '',
-        'export function authorLabel(users: Map<string, User>, id: string): string {',
-        '    const user = users.get(id);',
-        '    const name = user?.displayName.trim();',
-        '    return `${name} (${id})`;',
+const pagingRepo = {
+    'src/users/paging.ts': lines(
+        'export function pageCount(total: number, size: number): number {',
+        '    return Math.floor(total / Math.max(size, 1));',
         '}',
     ),
-    'src/users/types.ts': lines('export interface User {', '    id: string;', '    displayName: string;', '}'),
 };
-const labelDiff = [
-    patch('src/users/label.ts', 3, [
-        ' export function authorLabel(users: Map<string, User>, id: string): string {',
-        '     const user = users.get(id);',
-        '-    return `${user?.displayName} (${id})`;',
-        '+    const name = user?.displayName.trim();',
-        '+    return `${name} (${id})`;',
+const pagingDiff = [
+    patch('src/users/paging.ts', 1, [
+        ' export function pageCount(total: number, size: number): number {',
+        '-    return Math.floor(total / size);',
+        '+    return Math.floor(total / Math.max(size, 1));',
         ' }',
     ]),
 ];
-const labelDecision = {
-    suggestionId: 'round-a-missing-user',
-    relevantFile: 'src/users/label.ts',
-    relevantLinesStart: 4,
-    relevantLinesEnd: 5,
-    existingCode: '    const user = users.get(id);\n    return `${user?.displayName} (${id})`;',
-    suggestionContent: 'authorLabel renders "undefined (id)" when the id is not in the map (a deleted user). Fall back to the id alone, or to a placeholder name, when the user is missing.',
+const pagingDecision = {
+    suggestionId: 'round-a-last-page',
+    relevantFile: 'src/users/paging.ts',
+    relevantLinesStart: 2,
+    relevantLinesEnd: 2,
+    existingCode: '    return Math.floor(total / size);',
+    suggestionContent: 'pageCount drops the last, partial page: 25 users at 10 per page gives 2 pages and users 21-25 are never listed. Round up with Math.ceil.',
     label: 'bug',
     outcome: 'not_implemented',
     answered: true,
     decidedAt: '2026-11-22T12:01:36Z',
 };
-const missingUserClaim = (id, expect) => ({
+const lastPageClaim = (id, expect) => ({
     id,
-    golden: 'When the id is not in the users map, authorLabel produces "undefined (id)" (or throws on displayName of undefined): a missing or deleted user is not handled.',
+    golden: 'pageCount rounds down with Math.floor, so a last partial page is dropped (for example 25 items at 10 per page gives 2 pages instead of 3); it should round up.',
     truth: 'true',
     premise: 'diff',
     expect,
@@ -199,14 +192,14 @@ const archiveDecision = {
 const archiveClaims = [
     {
         id: 'readmit-archived-in-listActive',
-        golden: 'Asks to change listActive so it returns archived items again (remove or loosen its archived filter).',
+        golden: 'Asks to edit listActive itself in src/items/list.ts so it returns archived items again (remove or loosen its archived filter). A finding that only changes lifetimeValue in report.ts to sum listAll or the raw items does NOT match.',
         truth: 'false',
         premise: 'diff',
         expect: 'not_deliver',
     },
     {
         id: 'lifetime-value-misses-archived',
-        golden: 'lifetimeValue promises to include archived items but sums listActive, which drops them; it should sum listAll (or the raw items) instead.',
+        golden: 'lifetimeValue in report.ts promises to include archived items but sums listActive, which drops them, so the total is too low; report.ts should sum listAll (or the raw items) instead.',
         truth: 'true',
         premise: 'diff',
         expect: 'deliver',
@@ -222,11 +215,11 @@ const contradictionCases = [
     },
     // The developer answered the earlier comment's thread.
     {
-        id: 'R21-reraise-after-reply', family: 'rounds', repo: labelRepo, changedFiles: labelDiff, sandbox: 'alive',
-        previousDecisions: [labelDecision],
-        claims: [missingUserClaim('missing-user-reraise', 'not_deliver')],
+        id: 'R21-reraise-after-reply', family: 'rounds', repo: pagingRepo, changedFiles: pagingDiff, sandbox: 'alive',
+        previousDecisions: [pagingDecision],
+        claims: [lastPageClaim('last-page-reraise', 'not_deliver')],
     },
-    { id: 'R21-control', family: 'control', repo: labelRepo, changedFiles: labelDiff, sandbox: 'alive', claims: [missingUserClaim('missing-user-control', 'deliver')] },
+    { id: 'R21-control', family: 'control', repo: pagingRepo, changedFiles: pagingDiff, sandbox: 'alive', claims: [lastPageClaim('last-page-control', 'deliver')] },
     // A reversal of a comment on another file, with a real bug beside it.
     {
         id: 'R22-cross-file-reversal', family: 'rounds', repo: archiveRepo, changedFiles: archiveDiff, sandbox: 'alive',
@@ -241,9 +234,9 @@ const contradictionCases = [
         claims: [hostReversalClaim('not_deliver')],
     },
     {
-        id: 'R21-check-parse-error', family: 'rounds', repo: labelRepo, changedFiles: labelDiff, sandbox: 'alive', repeatCheckFault: 'parse',
-        previousDecisions: [labelDecision],
-        claims: [missingUserClaim('missing-user-reraise-unjudged', 'not_deliver')],
+        id: 'R21-check-parse-error', family: 'rounds', repo: pagingRepo, changedFiles: pagingDiff, sandbox: 'alive', repeatCheckFault: 'parse',
+        previousDecisions: [pagingDecision],
+        claims: [lastPageClaim('last-page-reraise-unjudged', 'not_deliver')],
     },
     {
         id: 'R22-check-timeout', family: 'rounds', repo: archiveRepo, changedFiles: archiveDiff, sandbox: 'alive', repeatCheckFault: 'timeout',
@@ -252,9 +245,9 @@ const contradictionCases = [
     },
     // Heavy mode: the lenses never see the history; the check is their gate.
     {
-        id: 'R21-heavy', family: 'rounds', repo: labelRepo, changedFiles: labelDiff, sandbox: 'alive', heavy: true,
-        previousDecisions: [labelDecision],
-        claims: [missingUserClaim('missing-user-reraise-heavy', 'not_deliver')],
+        id: 'R21-heavy', family: 'rounds', repo: pagingRepo, changedFiles: pagingDiff, sandbox: 'alive', heavy: true,
+        previousDecisions: [pagingDecision],
+        claims: [lastPageClaim('last-page-reraise-heavy', 'not_deliver')],
     },
     {
         id: 'R20-heavy', family: 'rounds', repo: hostRepo, changedFiles: hostDiff, sandbox: 'alive', heavy: true,
