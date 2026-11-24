@@ -1,5 +1,8 @@
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
 
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+
+import { formatPullRequestDiff } from '../pull-request-diff';
 import type { AgentRun } from '../trackers/task-finder';
 import { createGapCheck, type RepositoryReader } from './gap-check';
 
@@ -363,5 +366,343 @@ describe('createGapCheck', () => {
                 throw new Error('model down');
             })(input),
         ).rejects.toThrow('model down');
+    });
+});
+
+describe("createGapCheck within the model's window (#2233)", () => {
+    const svg = (chars: number) => {
+        let out = '';
+        for (let i = 0; out.length < chars; i++) {
+            out += `+<path d="M${i % 97}.${i % 7} ${i % 13}.5L${i % 31} ${i % 11}z"/>\n`;
+        }
+        return out.slice(0, chars);
+    };
+    const bigDiff = formatPullRequestDiff(
+        Array.from({ length: 10 }, (_, i) => ({
+            filename: `icons/icon-${i}.svg`,
+            patch: svg(10_000),
+        })),
+    );
+
+    it('puts no more diff in the first message than a quarter of a small window', async () => {
+        let message = '';
+        await createGapCheck(
+            async (_spec, prompt) => {
+                message = prompt;
+            },
+            { contextWindowTokens: 16_000 },
+        )({ ...input, diff: bigDiff });
+        const diff = message.slice(message.indexOf('<pr_diff'));
+        expect(estimateTextTokens(diff)).toBeLessThanOrEqual(4_000 + 50);
+    });
+
+    const textOf = (value: unknown): string =>
+        typeof value === 'string'
+            ? value
+            : Array.isArray(value)
+              ? value.map(textOf).join('\n')
+              : value && typeof value === 'object'
+                ? Object.values(value).map(textOf).join('\n')
+                : '';
+    const worst = (text: string) =>
+        estimateTextTokens(text, { worstCase: true });
+
+    it('reads a one-line SVG cut by line and by a share of a small window', async () => {
+        let output = '';
+        await createGapCheck(
+            async (spec) => {
+                output = String(
+                    (
+                        await spec.tools
+                            .get('read_file')!
+                            .execute({ path: 'icons/logo.svg' }, {} as any)
+                    ).output,
+                );
+            },
+            { contextWindowTokens: 16_000 },
+        )({
+            ...input,
+            reader: {
+                listFiles: async () => [],
+                readFile: async () =>
+                    `<svg>\n<path d="${'M1.5,2.5L3.5,4.5z'.repeat(1_700)}"/>\n</svg>`,
+            },
+        });
+        expect(output).toContain('(line cut)');
+        expect(worst(output)).toBeLessThanOrEqual(16_000 * 0.2);
+    });
+
+    it('stops a read of many long lines at a fifth of a small window and says where to read on', async () => {
+        let output = '';
+        await createGapCheck(
+            async (spec) => {
+                output = String(
+                    (
+                        await spec.tools
+                            .get('read_file')!
+                            .execute({ path: 'src/strings.ts' }, {} as any)
+                    ).output,
+                );
+            },
+            { contextWindowTokens: 16_000 },
+        )({
+            ...input,
+            reader: {
+                listFiles: async () => [],
+                readFile: async () =>
+                    Array.from(
+                        { length: 400 },
+                        (_, i) =>
+                            `export const label${i} = '${'value word '.repeat(40)}';`,
+                    ).join('\n'),
+            },
+        });
+        expect(output).toContain('(read on with fromLine');
+        expect(worst(output)).toBeLessThanOrEqual(16_000 * 0.2 + 20);
+    });
+
+    it("keeps room for the slot's own answer limit when it shortens the files read", async () => {
+        let spec: AgentSpec | undefined;
+        await createGapCheck(
+            async (s) => {
+                spec = s;
+            },
+            { contextWindowTokens: 16_000, outputTokens: 8_000 },
+        )(input);
+        // One recent read under the compressor's soft threshold: only the
+        // answer room decides whether it is shortened before the call.
+        const messages = [
+            { role: 'user', content: 'the prompt' },
+            {
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: 'c0',
+                        toolName: 'read_file',
+                        input: { path: 'src/values.ts' },
+                    },
+                ],
+            },
+            {
+                role: 'tool',
+                content: [
+                    {
+                        type: 'tool-result',
+                        toolCallId: 'c0',
+                        toolName: 'read_file',
+                        output: {
+                            type: 'text',
+                            value: Array.from(
+                                { length: 800 },
+                                (_, line) =>
+                                    `${line + 1}: export const v${line} = load('${line}');`,
+                            ).join('\n'),
+                        },
+                    },
+                ],
+            },
+        ];
+        const directives = (
+            await Promise.all(
+                spec!.policies.map((p) =>
+                    p.prepareStep?.({ messages, stepNumber: 2 } as any),
+                ),
+            )
+        ).find((d) => d?.messages);
+        const sent = directives?.messages ?? messages;
+        const overhead =
+            worst(spec!.systemPrompt ?? '') +
+            worst(JSON.stringify(spec!.tools.list()));
+        expect(worst(textOf(sent)) + overhead + 8_000).toBeLessThanOrEqual(
+            16_000,
+        );
+    });
+
+    it("fits the first message beside the slot's whole answer when that answer takes most of the window", async () => {
+        let spec: AgentSpec | undefined;
+        let message = '';
+        await createGapCheck(
+            async (s, prompt) => {
+                spec = s;
+                message = prompt;
+            },
+            { contextWindowTokens: 64_000, outputTokens: 52_000 },
+        )({ ...input, diff: bigDiff });
+        expect(message).toContain('<pr_diff');
+        expect(
+            worst(spec!.systemPrompt ?? '') +
+                worst(message) +
+                worst(JSON.stringify(spec!.tools.list())) +
+                52_000,
+        ).toBeLessThanOrEqual(64_000);
+    });
+
+    it("skips the second look when the slot's answer fills the window", async () => {
+        let ran = false;
+        const settled = await createGapCheck(
+            async () => {
+                ran = true;
+            },
+            { contextWindowTokens: 32_000, outputTokens: 32_000 },
+        )({ ...input, diff: bigDiff });
+        expect(ran).toBe(false);
+        expect(settled).toBeUndefined();
+    });
+
+    it('skips the second look when the task alone would take half of a small window', async () => {
+        let ran = false;
+        const settled = await createGapCheck(
+            async () => {
+                ran = true;
+            },
+            { contextWindowTokens: 8_000 },
+        )({ ...input, taskText: 'task '.repeat(6_700) });
+        expect(ran).toBe(false);
+        expect(settled).toBeUndefined();
+    });
+
+    it('keeps a task with a pasted table of numbers, the files read and the answer within the window', async () => {
+        // Wrapped lines with no space: serialized as JSON they read as one
+        // run the compressor counts at 3 characters a token; o200k makes
+        // about 1.2 of them.
+        let seed = 7;
+        const values = Array.from({ length: 14_000 }, () => {
+            seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+            return seed % 256;
+        });
+        const table = (values.join(',').match(/.{1,76}/g) ?? []).join('\n');
+        let spec: AgentSpec | undefined;
+        let head = '';
+        await createGapCheck(
+            async (s, prompt) => {
+                spec = s;
+                head = prompt;
+            },
+            { contextWindowTokens: 64_000, outputTokens: 12_000 },
+        )({
+            ...input,
+            taskText: `Load the gamma table below.\n${table}`,
+        });
+        expect(head).toContain(table.slice(0, 200));
+        const reads = Array.from({ length: 10 }, (_, i) => [
+            {
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: `c${i}`,
+                        toolName: 'read_file',
+                        input: { path: `src/f${i}.ts` },
+                    },
+                ],
+            },
+            {
+                role: 'tool',
+                content: [
+                    {
+                        type: 'tool-result',
+                        toolCallId: `c${i}`,
+                        toolName: 'read_file',
+                        output: {
+                            type: 'text',
+                            value: Array.from(
+                                { length: 200 },
+                                (_, line) =>
+                                    `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                            ).join('\n'),
+                        },
+                    },
+                ],
+            },
+        ]).flat();
+        const messages = [{ role: 'user', content: head }, ...reads];
+        const directives = (
+            await Promise.all(
+                spec!.policies.map((p) =>
+                    p.prepareStep?.({ messages, stepNumber: 10 } as any),
+                ),
+            )
+        ).find((d) => d?.messages);
+        const sent = directives?.messages ?? messages;
+        const overhead =
+            worst(spec!.systemPrompt ?? '') +
+            worst(JSON.stringify(spec!.tools.list()));
+        expect(worst(textOf(sent)) + overhead + 12_000).toBeLessThanOrEqual(
+            64_000,
+        );
+        // Fitting is not dropping: the task stays whole, and every read
+        // still answers its call, from its first line on.
+        const kept = sent as typeof messages;
+        expect(textOf(kept[0].content)).toContain(table);
+        const results = kept
+            .flatMap((m): any[] => (Array.isArray(m.content) ? m.content : []))
+            .filter((part) => part.type === 'tool-result');
+        expect(results.map((r) => r.toolCallId)).toEqual(
+            reads
+                .filter((m) => m.role === 'tool')
+                .map((m) => (m.content as any[])[0].toolCallId),
+        );
+        results.forEach((result, i) =>
+            expect(textOf(result.output)).toContain(
+                `1: export const v0 = load('${i}-0');`,
+            ),
+        );
+    });
+
+    it('keeps the files read, the answer and the overhead within a 16k window once they outgrow it', async () => {
+        let spec: AgentSpec | undefined;
+        await createGapCheck(
+            async (s) => {
+                spec = s;
+            },
+            { contextWindowTokens: 16_000 },
+        )(input);
+        const reads = Array.from({ length: 10 }, (_, i) => [
+            {
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: `c${i}`,
+                        toolName: 'read_file',
+                        input: { path: `src/f${i}.ts` },
+                    },
+                ],
+            },
+            {
+                role: 'tool',
+                content: [
+                    {
+                        type: 'tool-result',
+                        toolCallId: `c${i}`,
+                        toolName: 'read_file',
+                        output: {
+                            type: 'text',
+                            value: Array.from(
+                                { length: 200 },
+                                (_, line) =>
+                                    `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                            ).join('\n'),
+                        },
+                    },
+                ],
+            },
+        ]).flat();
+        const messages = [{ role: 'user', content: 'the prompt' }, ...reads];
+        const directives = (
+            await Promise.all(
+                spec!.policies.map((p) =>
+                    p.prepareStep?.({ messages, stepNumber: 10 } as any),
+                ),
+            )
+        ).find((d) => d?.messages);
+        expect(worst(textOf(messages))).toBeGreaterThan(16_000);
+        const overhead =
+            worst(spec!.systemPrompt ?? '') +
+            worst(JSON.stringify(spec!.tools.list()));
+        expect(
+            worst(textOf(directives!.messages)) + overhead + 800,
+        ).toBeLessThanOrEqual(16_000);
     });
 });

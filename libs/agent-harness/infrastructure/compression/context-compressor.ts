@@ -92,6 +92,22 @@ interface ToolCallRecord {
  */
 export type MessageTokenCounts = Map<string, number>;
 const MAX_RUN_COUNTS = 256;
+
+/** Counts kept at the worst case (see `worstCaseTokenCounts`). */
+const WORST_CASE_COUNTS = new WeakSet<MessageTokenCounts>();
+
+/**
+ * Per-run counts whose every message is counted at its worst
+ * (`estimateTextTokens`' `worstCase`): exact where the tokenizer reaches,
+ * a token per character where it can't (a run too long to encode). Every
+ * count of a compression pass reads the same map, so the whole pass, its
+ * clamp included, measures the same way.
+ */
+export function worstCaseTokenCounts(): MessageTokenCounts {
+    const counts: MessageTokenCounts = new Map();
+    WORST_CASE_COUNTS.add(counts);
+    return counts;
+}
 /**
  * Only messages above this many serialized chars go in the per-run counts:
  * one compression pass can write hundreds of smaller ones, which pushed the
@@ -136,11 +152,12 @@ export function estimateMessagesTokens(
         }
         // Same count estimateValueTokens gives: the serialized message.
         const serialized = serializeForCount(msg);
+        const worstCase = WORST_CASE_COUNTS.has(counts);
         // JSON has no text for it: 0, as estimateValueTokens counts it,
         // without serializing a second time.
         if (serialized === undefined) continue;
         if (serialized.length <= RUN_COUNT_MIN_CHARS) {
-            total += estimateTextTokens(serialized);
+            total += estimateTextTokens(serialized, { worstCase });
             continue;
         }
         const key = countKey(serialized);
@@ -151,7 +168,7 @@ export function estimateMessagesTokens(
             counts.delete(key);
             counts.set(key, tokens);
         } else {
-            tokens = estimateTextTokens(serialized);
+            tokens = estimateTextTokens(serialized, { worstCase });
             if (counts.size >= MAX_RUN_COUNTS) {
                 counts.delete(counts.keys().next().value as string);
             }

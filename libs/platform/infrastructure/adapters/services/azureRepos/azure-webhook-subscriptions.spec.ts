@@ -1278,4 +1278,43 @@ describe('AzureReposService webhook subscriptions (issue #1956)', () => {
             expect(helper.deleteWebhookById).not.toHaveBeenCalled();
         });
     });
+
+    // ── the self-hosted doctor reads the same token check (#1987) ─────────
+    describe('diagnoseRepositoryAccess hook state', () => {
+        function diagnose(subscriptions: AzureRepoSubscription[]) {
+            jest.spyOn(service as any, 'getRepoById').mockResolvedValue(REPO_A);
+            (helper as any).getCommits = jest.fn().mockResolvedValue([]);
+            (service as any).azureReposRequestHelper.getCommits = (
+                helper as any
+            ).getCommits;
+            helper.listSubscriptionsByProject.mockResolvedValue(subscriptions);
+            return service.diagnoseRepositoryAccess({
+                organizationAndTeamData: orgTeam,
+                repository: { id: REPO_A.id, name: REPO_A.name },
+            });
+        }
+
+        it('present when a subscription for the repository carries a token this install accepts', async () => {
+            const result = await diagnose(allSubscriptionsFor([REPO_A]));
+            expect(result.hook).toBe('present');
+        });
+
+        it('stale when every subscription for the repository carries a token this install rejects', async () => {
+            const result = await diagnose(
+                EVENT_TYPES.map((eventType) =>
+                    subscriptionFor(REPO_A, eventType, {
+                        consumerInputs: {
+                            url: `${WEBHOOK_URL}?token=not-a-valid-token`,
+                        } as any,
+                    }),
+                ),
+            );
+            expect(result.hook).toBe('stale');
+        });
+
+        it('missing when no subscription points at this install for the repository', async () => {
+            const result = await diagnose(allSubscriptionsFor([REPO_B]));
+            expect(result.hook).toBe('missing');
+        });
+    });
 });

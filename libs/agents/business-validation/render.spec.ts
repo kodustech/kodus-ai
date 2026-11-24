@@ -240,3 +240,112 @@ describe('a met task', () => {
         expect(comment).not.toContain('met: Parent');
     });
 });
+
+describe('the met summary names each row once', () => {
+    it('names two rows by their own words when their labels read the same (AC #1 and AC01)', () => {
+        const met = outcome({ passed: true });
+        met.passed = true;
+        const [first] = met.checks[0].verdict.requirements!;
+        met.checks[0].verdict.requirements = [
+            {
+                ...first,
+                state: 'met',
+                source: 'AC #1',
+                requirement: 'Persists per user',
+            },
+            {
+                ...first,
+                state: 'met',
+                source: 'AC01',
+                requirement: 'Defaults to comfortable',
+            },
+        ];
+        met.checks[0].verdict.outOfScope = [];
+        const comment = renderComment(met);
+        expect(comment).not.toContain('AC01, AC01');
+        expect(comment).toContain('Persists per user');
+        expect(comment).toContain('Defaults to comfortable');
+    });
+});
+
+describe('one criterion, however the model spells it', () => {
+    it('reads AC1, AC-1, AC #1 and AC01 as the same criterion, AC01', () => {
+        for (const source of ['AC1', 'AC-1', 'AC #1', 'ac#01', 'AC01']) {
+            const sample = outcome();
+            sample.checks[0].verdict.requirements![0].source = source;
+            expect(renderComment(sample)).toContain('<sub>AC01</sub>');
+        }
+    });
+
+    it('reads a long run of zeros that is no criterion without stalling', () => {
+        const sample = outcome();
+        // The model writes `source` freely: `AC` + 30k zeros + `x` took 5.9s
+        // under the old `0*(\\d+)` pattern, 0ms now.
+        const source = `AC${'0'.repeat(30_000)}x`;
+        sample.checks[0].verdict.requirements![0].source = source;
+        const started = Date.now();
+        expect(renderComment(sample)).toContain(source);
+        expect(Date.now() - started).toBeLessThan(1_000);
+        sample.checks[0].verdict.requirements![0].source = 'AC007';
+        expect(renderComment(sample)).toContain('<sub>AC07</sub>');
+    });
+
+    it('names two met rows apart when their words share a long beginning', () => {
+        const met = outcome({ passed: true });
+        met.passed = true;
+        const [first] = met.checks[0].verdict.requirements!;
+        const given =
+            'Given a signed-in user on the account settings page, when they ';
+        met.checks[0].verdict.requirements = [
+            {
+                ...first,
+                state: 'met',
+                source: 'AC1',
+                requirement: `${given}save, the name is stored`,
+            },
+            {
+                ...first,
+                state: 'met',
+                source: 'AC01',
+                requirement: `${given}cancel, nothing changes`,
+            },
+        ];
+        met.checks[0].verdict.outOfScope = [];
+        const summary = renderComment(met)
+            .split('\n')
+            .find((line) => line.includes(' met: '))!;
+        expect(
+            summary.split('Given a signed-in user').length - 1,
+        ).toBeLessThanOrEqual(1);
+        expect(summary).toContain('save');
+        expect(summary).toContain('cancel');
+    });
+
+    it('names three met rows apart when two of them differ only late', () => {
+        const met = outcome({ passed: true });
+        met.passed = true;
+        const [first] = met.checks[0].verdict.requirements!;
+        const page =
+            'Given a signed-in user on the account settings page when they ';
+        const save = `${page}save their profile after validating the submitted fields then the `;
+        met.checks[0].verdict.requirements = [
+            `${save}display name is persisted`,
+            `${save}timezone is persisted`,
+            `${page}cancel the edit then no changes are persisted`,
+        ].map((requirement) => ({
+            ...first,
+            state: 'met' as const,
+            source: 'Parent',
+            requirement,
+        }));
+        met.checks[0].verdict.outOfScope = [];
+        const summary = renderComment(met)
+            .split('\n')
+            .find((line) => line.includes(' met: '))!;
+        const names = summary
+            .slice(summary.indexOf(' met: ') + 6)
+            .split(/, (?=…)/);
+        expect(names).toHaveLength(3);
+        expect(new Set(names).size).toBe(3);
+    });
+});

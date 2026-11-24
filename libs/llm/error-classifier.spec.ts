@@ -365,6 +365,22 @@ describe('classifyLLMError', () => {
             );
         });
 
+        // Anthropic answers an overflow with HTTP 400 in its own words. Read
+        // as REQUEST_REJECTED, the PR summary re-sent the same prompt instead
+        // of splitting it (#2681 review).
+        it.each([
+            'prompt is too long: 212345 tokens > 200000 maximum',
+            'input length and `max_tokens` exceed context limit: 170256 + 64000 > 200000, decrease input length or `max_tokens` and try again',
+        ])('Anthropic "%s" → CONTEXT_OVERFLOW', (message) => {
+            const err = Object.assign(new Error(message), {
+                name: 'AI_APICallError',
+                statusCode: 400,
+            });
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.CONTEXT_OVERFLOW,
+            );
+        });
+
         // Production 2026-10-29: a gateway caps the request body instead of
         // the token count. Read as UNKNOWN, the PR summary never retried on a
         // smaller budget and failed outright.

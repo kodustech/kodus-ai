@@ -5694,16 +5694,25 @@ export class AzureReposService implements Omit<
                                 projectId,
                             },
                         );
-                    result.hook = subscriptions.some(
+                    const ours = subscriptions.filter(
                         (subscription) =>
                             subscription.publisherInputs?.repository ===
                                 params.repository.id &&
                             subscription.consumerInputs?.url?.includes(
                                 webhookUrl,
                             ),
-                    )
-                        ? 'present'
-                        : 'missing';
+                    );
+                    // A token minted before CODE_MANAGEMENT_SECRET or the
+                    // webhook token changed gets every delivery a 403.
+                    result.hook = !ours.length
+                        ? 'missing'
+                        : ours.some((subscription) =>
+                                this.hasUsableWebhookToken(
+                                    subscription.consumerInputs?.url,
+                                ),
+                            )
+                          ? 'present'
+                          : 'stale';
                 } catch (error) {
                     result.error ??= summarizeProviderError(error);
                 }

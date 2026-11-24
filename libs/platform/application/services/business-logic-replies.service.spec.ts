@@ -13,8 +13,16 @@ const run = {
     comment: { id: 501 },
     trackers: ['Linear'],
     unseenFiles: [],
-    references: [],
-    attempts: [],
+    references: [
+        {
+            kind: 'key',
+            id: 'SAA-96',
+            raw: 'SAA-96',
+            source: 'title',
+            intent: 'closes',
+        },
+    ],
+    attempts: [{ reference: 'SAA-96', tracker: 'Linear', status: 'found' }],
     door: 'auto',
     createdAt: new Date(),
     tasks: [
@@ -324,6 +332,10 @@ describe('BusinessLogicReplies', () => {
             movedTo: 'SAA-102',
         });
         expect(published.result.outcome.passed).toBe(true);
+        // The run it answers is carried, so the next re-check compares with
+        // the same lookups and says "same result" when nothing moved (#2423).
+        expect(published.result.attempts).toEqual(run.attempts);
+        expect(published.result.references).toEqual(run.references);
         expect(result).toMatchObject({
             handled: true,
             reply: expect.stringContaining('Nothing is left to merge'),
