@@ -1391,6 +1391,9 @@ describe('ValidatePrerequisitesStage', () => {
                 await stage.execute(makeContext());
 
                 expect(
+                    mockCodeBaseConfigService.getKodusConfigFile,
+                ).toHaveBeenCalledTimes(2);
+                expect(
                     mockCodeManagementService.createIssueComment,
                 ).toHaveBeenCalledTimes(2);
             });
