@@ -97,7 +97,7 @@ export type SuiteServiceResult =
     /** The environment has no suite to run: no run row. */
     | { status: 'off'; reason: 'no_suite' | 'baseline_disabled' }
     /** The run could not start; it ended neutral, with the reason. */
-    | { status: 'unavailable'; suiteRunId: string; state: 'neutral'; reason: 'template_missing' | 'no_host' | 'list_failed' | 'no_repository' | 'no_specs' };
+    | { status: 'unavailable'; suiteRunId: string; state: 'neutral'; reason: 'template_missing' | 'no_host' | 'list_failed' | 'no_repository' | 'no_specs'; blocker?: string };
 
 interface Started {
     suite: ResolvedSuite;
@@ -182,7 +182,7 @@ export class SuiteService {
         );
         if (listing.status === 'unavailable') {
             await demand.end().catch(() => undefined);
-            return this.unavailable(cmd, listing.reason);
+            return this.unavailable(cmd, listing.reason, listing.blocker);
         }
         const common = { glob: s.suite.specsGlob, ...(s.suite.config.cwd ? { cwd: s.suite.config.cwd } : {}), listed: listing.specs, changedFiles: cmd.changedFiles, removedFiles: cmd.removedFiles };
         // A baseline is main alone: the PR's files are not part of it.
@@ -384,9 +384,9 @@ export class SuiteService {
     }
 
     /** The run row that says why nothing ran: neutral, never a failure of the PR. */
-    private async unavailable(cmd: RuntimeSuiteRequested, reason: Extract<SuiteServiceResult, { status: 'unavailable' }>['reason']): Promise<SuiteServiceResult> {
+    private async unavailable(cmd: RuntimeSuiteRequested, reason: Extract<SuiteServiceResult, { status: 'unavailable' }>['reason'], blocker?: string): Promise<SuiteServiceResult> {
         await this.d.runs.create(this.runRecord(cmd));
         await this.d.runs.finish(cmd.organizationId, cmd.suiteRunId, 'neutral', new Date(this.d.clock.now()));
-        return { status: 'unavailable', suiteRunId: cmd.suiteRunId, state: 'neutral', reason };
+        return { status: 'unavailable', suiteRunId: cmd.suiteRunId, state: 'neutral', reason, ...(blocker ? { blocker } : {}) };
     }
 }

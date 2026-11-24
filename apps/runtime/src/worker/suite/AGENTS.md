@@ -57,6 +57,7 @@ Imports these Runtime modules:
 - [`apps/runtime/src/worker`](../AGENTS.md)
 - [`apps/runtime/src/worker/canary`](../canary/AGENTS.md)
 - [`apps/runtime/src/worker/dbos`](../dbos/AGENTS.md)
+- [`apps/runtime/src/worker/env`](../env/AGENTS.md)
 - [`apps/runtime/src/worker/publish`](../publish/AGENTS.md)
 - [`apps/runtime/src/worker/run`](../run/AGENTS.md)
 - [`apps/runtime/src/worker/setup`](../setup/AGENTS.md)

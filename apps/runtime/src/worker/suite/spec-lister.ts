@@ -4,7 +4,7 @@ import { isBlocked } from '@libs/runtime/environment';
 import type { SuiteSpecFile } from '@libs/runtime/suite';
 
 import type { SuiteEnvironment } from './suite-environment';
-import { HOST_WAIT_MS, type SuiteHostDemand, type SuiteTemplates } from './suite-engine';
+import { acquireSuiteClaim, HOST_WAIT_MS, type SuiteHostDemand, type SuiteTemplates } from './suite-engine';
 
 /** The demand row and claim of the spec listing: beside the plan's shards 0..N-1 and the fresh (62) and main (63) hosts. */
 export const LIST_HOST_SHARD = 61;
@@ -14,7 +14,8 @@ const EXEC_TIMEOUT_MS = 60_000;
 const SAFE_DIR = /^[A-Za-z0-9_.\/@+-]{1,256}$/;
 const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
-export type SpecListing = { status: 'listed'; specs: SuiteSpecFile[] } | { status: 'unavailable'; reason: 'template_missing' | 'no_host' | 'list_failed' };
+/** `blocker`: the signature the claim was refused with, so a neutral suite says why (never a free message). */
+export type SpecListing = { status: 'listed'; specs: SuiteSpecFile[] } | { status: 'unavailable'; reason: 'template_missing' | 'no_host' | 'list_failed'; blocker?: string };
 
 export interface SpecListerDeps {
     env: SuiteEnvironment;
@@ -38,7 +39,7 @@ export class TemplateSpecLister {
         if (this.d.templates && !(await this.d.templates.hasReady(run.organizationId, run.environmentId))) return { status: 'unavailable', reason: 'template_missing' };
         await this.d.demand.request({ organizationId: run.organizationId, environmentId: run.environmentId, suiteRunId: run.suiteRunId, shards: [LIST_HOST_SHARD] });
         if (!(await this.hostCame(run))) return { status: 'unavailable', reason: 'no_host' };
-        const claim = await this.d.env.acquire({
+        const claim = await acquireSuiteClaim(this.d.env, {
             organizationId: run.organizationId,
             environmentId: run.environmentId,
             runId: run.suiteRunId,
@@ -47,8 +48,11 @@ export class TemplateSpecLister {
             idempotencyKey: `suite:${run.suiteRunId}:${LIST_HOST_SHARD}:list`,
             suiteRunId: run.suiteRunId,
             shard: LIST_HOST_SHARD,
-        });
-        if (isBlocked(claim)) return { status: 'unavailable', reason: 'no_host' };
+        }, this.d.clock, this.d.clock.now() + HOST_WAIT_MS);
+        if (isBlocked(claim)) {
+            const blocker = claim.blockers[0]?.signature;
+            return { status: 'unavailable', reason: 'no_host', ...(blocker ? { blocker } : {}) };
+        }
         try {
             const r = await this.d.env.exec(claim.claimId, {
                 stepId: `${run.suiteRunId}-list`,

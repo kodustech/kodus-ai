@@ -151,7 +151,8 @@ describe('re-running what failed in the first pass', () => {
         const w = world({ specs: { ...oks, 'reg.cy.ts': { pr: [{ fail: ERR }] }, }, blocked: (r) => r.shard === 63 });
         const out = await w.run();
         expect(classOf(out)).toEqual({ 'reg.cy.ts': 'failed_unconfirmed' });
-        expect(w.cell.acquires.filter((a) => a.shard === 63)).toHaveLength(2);
+        // Two attempts at a main host, each asked again while it waits for room (one idempotency key per attempt).
+        expect(new Set(w.cell.acquires.filter((a) => a.shard === 63).map((a) => a.idempotencyKey)).size).toBe(2);
         expect(out.classification?.tests[0].finding).toBe(false);
     });
 

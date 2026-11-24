@@ -1,6 +1,6 @@
 import { SUITE_ARTIFACT_BUDGET_BYTES } from '@libs/runtime/contracts/evidence';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
-import { type EnvironmentRuntime, isBlocked } from '@libs/runtime/environment';
+import { type AcquireRequest, type Blocked, type Claim, type EnvironmentRuntime, isBlocked } from '@libs/runtime/environment';
 import type { EnvError, StepResult } from '@libs/runtime/environment';
 import {
     balanceSpecs,
@@ -40,6 +40,7 @@ import type { SuiteArtifactKeeper } from './suite-artifacts';
 import { execInService } from './suite-environment';
 import type { Canary } from '../canary/canary';
 import type { SuiteShardHost } from '../../shared/persistence/suite-demand';
+import { acquireWaitingForRoom } from '../env/capacity-wait';
 
 export type { SuiteShardHost };
 
@@ -143,6 +144,20 @@ export interface SuiteEngineDeps {
 
 /** How long the engine waits for the hosts it asked for before it goes on with the ones that came (design section 5). */
 export const HOST_WAIT_MS = 10 * 60_000;
+
+/**
+ * A suite claim on its own perRun host. The fleet reports a host ready once its cell registered, which can be before
+ * the cell told the hub its room: the reservation then answers "no capacity, host starting". A refusal for room is a
+ * pause (ADR-070), so it is asked again with the same idempotency key until `until`, as every other claim does.
+ */
+export async function acquireSuiteClaim(
+    env: Pick<EnvironmentRuntime, 'acquire'>,
+    req: AcquireRequest,
+    clock: { now(): number; sleep(ms: number): Promise<void> },
+    until: number,
+): Promise<Claim | Blocked> {
+    return (await acquireWaitingForRoom(env, req, { until, now: () => new Date(clock.now()), sleep: (ms) => clock.sleep(ms) })).claim;
+}
 const HOST_POLL_MS = 5_000;
 /** The demand row lives 120 s unless asked again; the engine asks again at this pace while the run lives. */
 const DEMAND_REFRESH_MS = 45_000;
@@ -428,7 +443,7 @@ export class SuiteEngine {
         ctx.demandShards.add(shard);
         await this.requestDemand(ctx, [shard]);
         if (!(await this.waitForHosts(ctx, [shard])).includes(shard) || this.cancelled(ctx)) return undefined;
-        const claim = await this.d.env.acquire({
+        const claim = await acquireSuiteClaim(this.d.env, {
             organizationId: req.organizationId,
             environmentId: req.environmentId,
             runId: req.suiteRunId,
@@ -437,10 +452,15 @@ export class SuiteEngine {
             idempotencyKey: `suite:${req.suiteRunId}:${shard}:${attempt}`,
             suiteRunId: req.suiteRunId,
             shard,
-        });
+        }, this.d.clock, this.claimDeadline(ctx));
         if (isBlocked(claim)) return undefined;
         ctx.claims.push(claim.claimId);
         return claim.claimId;
+    }
+
+    /** How long a shard's claim may wait for room on its host: the host wait, never past the suite's deadline. */
+    private claimDeadline(ctx: RunCtx): number {
+        return Math.min(this.d.clock.now() + HOST_WAIT_MS, ctx.inputs.deadlineAt ?? Infinity);
     }
 
     // ---- one shard
@@ -455,7 +475,7 @@ export class SuiteEngine {
             for (const s of runnable) shard.missing.set(s, 'not_run');
             return;
         }
-        const claim = await this.d.env.acquire({
+        const claim = await acquireSuiteClaim(this.d.env, {
             organizationId: req.organizationId,
             environmentId: req.environmentId,
             runId: req.suiteRunId,
@@ -464,7 +484,7 @@ export class SuiteEngine {
             idempotencyKey: `suite:${req.suiteRunId}:${shard.shard}`,
             suiteRunId: req.suiteRunId,
             shard: shard.shard,
-        });
+        }, this.d.clock, this.claimDeadline(ctx));
         if (isBlocked(claim)) {
             for (const s of runnable) shard.missing.set(s, 'infra');
             return;

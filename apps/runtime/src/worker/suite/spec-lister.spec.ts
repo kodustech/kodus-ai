@@ -8,7 +8,7 @@ const ref = { organizationId: 'org-a', environmentId: 'env-1', suiteRunId: 'run-
 
 const ok = (stdout: string, over: Partial<StepResult> = {}): StepResult => ({ stepId: 's', exitCode: 0, stdout, stderr: '', truncated: false, durationMs: 1, transport: 'ok', ...over });
 
-function world(over: { stdout?: string; exec?: Partial<StepResult>; ready?: boolean; blocked?: boolean } = {}) {
+function world(over: { stdout?: string; exec?: Partial<StepResult>; ready?: boolean; blocked?: boolean; roomAfter?: number } = {}) {
     const clock = new SuiteClock();
     const demand = new FakeSuiteDemand(clock);
     const acquired: AcquireRequest[] = [];
@@ -17,7 +17,9 @@ function world(over: { stdout?: string; exec?: Partial<StepResult>; ready?: bool
     const env = {
         acquire: async (r: AcquireRequest) => {
             acquired.push(r);
-            return over.blocked ? ({ status: 'blocked', blockers: [] } as Blocked) : ({ claimId: 'claim-list' } as Claim);
+            // The host's cell registered but has not told the hub its room yet: the first asks wait for room.
+            if (over.roomAfter !== undefined && acquired.length <= over.roomAfter) return { status: 'blocked', blockers: [{ kind: 'resources', signature: 'no_capacity', message: 'host starting' }] } as Blocked;
+            return over.blocked ? ({ status: 'blocked', blockers: [{ signature: 'capacity_wait' }] } as unknown as Blocked) : ({ claimId: 'claim-list' } as Claim);
         },
         exec: async (_c: string, r: ExecRequest) => {
             commands.push(r);
@@ -30,6 +32,13 @@ function world(over: { stdout?: string; exec?: Partial<StepResult>; ready?: bool
 }
 
 describe('listing the spec files of a suite on a template host of main', () => {
+    it('asks again while the host it waited for has not reported its room yet, then lists', async () => {
+        const w = world({ stdout: '  120 e2e/a.spec.js\n', roomAfter: 2 });
+        expect(await w.lister.list(ref, { specsGlob: 'e2e/*.spec.js' })).toEqual({ status: 'listed', specs: [{ path: 'e2e/a.spec.js', sizeBytes: 120 }] });
+        expect(w.acquired).toHaveLength(3);
+        expect(new Set(w.acquired.map((r) => r.idempotencyKey)).size).toBe(1);
+    });
+
     it('acquires a suite claim on the template host at main, lists under the glob directory only, and releases it', async () => {
         const w = world({ stdout: '  120 cypress/e2e/a.cy.ts\n  300 cypress/e2e/sub/b.cy.ts\n  420 total\n' });
         const out = await w.lister.list(ref, { cwd: 'apps/dashboard', specsGlob: 'cypress/e2e/**/*.cy.ts' });
@@ -60,7 +69,7 @@ describe('listing the spec files of a suite on a template host of main', () => {
         const failed = world();
         failed.demand.failed.add(LIST_HOST_SHARD);
         expect(await failed.lister.list(ref, { specsGlob: 'e2e/**/*.ts' })).toEqual({ status: 'unavailable', reason: 'no_host' });
-        expect(await world({ blocked: true }).lister.list(ref, { specsGlob: 'e2e/**/*.ts' })).toEqual({ status: 'unavailable', reason: 'no_host' });
+        expect(await world({ blocked: true }).lister.list(ref, { specsGlob: 'e2e/**/*.ts' })).toEqual({ status: 'unavailable', reason: 'no_host', blocker: 'capacity_wait' });
         expect(await world({ stdout: '  1 a.ts\n', exec: { truncated: true } }).lister.list(ref, { specsGlob: 'e2e/**/*.ts' })).toEqual({ status: 'unavailable', reason: 'list_failed' });
         expect(await world({ exec: { exitCode: 1 } }).lister.list(ref, { specsGlob: 'e2e/**/*.ts' })).toEqual({ status: 'unavailable', reason: 'list_failed' });
     });
