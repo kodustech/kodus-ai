@@ -138,6 +138,23 @@ export function globMatcher(glob: string): (path: string) => boolean {
     };
 }
 
+/** What Kodus says when it drops a suite block the model wrote. */
+export const SUITE_DROPPED = 'recipe: removed the suite block you wrote; Kodus writes it from the CI evidence after the checks';
+
+/**
+ * The recipe without a top-level `suite:` block: the block and the indented, blank or comment lines under it, up to the next
+ * top-level key. The model is told the suite block is not its to write, yet writes one when the CI runs an e2e suite (a
+ * synthetic monorepo on dev: its whole repair was refused for it).
+ */
+export function withoutSuiteBlock(text: string): { text: string; dropped: boolean } {
+    const lines = text.split('\n');
+    const at = lines.findIndex((l) => /^suite\s*:/.test(l));
+    if (at < 0) return { text, dropped: false };
+    let end = at + 1;
+    while (end < lines.length && (lines[end].trim() === '' || /^[\s#]/.test(lines[end]))) end++;
+    return { text: [...lines.slice(0, at), ...lines.slice(end)].join('\n'), dropped: true };
+}
+
 export const RECIPE_AUTHOR_LIMITS = {
     maxSteps: 16,
     /** Input plus output tokens of one run; past it the run stops. */
@@ -681,7 +698,9 @@ export function recipeAuthorTools(
                 required: ['recipe'],
             },
             execute: async (input: any) => {
-                const text = typeof input?.recipe === 'string' ? input.recipe : '';
+                // The suite block is Kodus's, from the CI evidence (suite-block.ts): one the model wrote is dropped, not refused.
+                const submitted = withoutSuiteBlock(typeof input?.recipe === 'string' ? input.recipe : '');
+                const text = submitted.text;
                 const notes = typeof input?.notes === 'string' ? input.notes.slice(0, 1_000) : undefined;
                 if (!text.trim()) {
                     state.gaveUp = true;
@@ -731,8 +750,9 @@ export function recipeAuthorTools(
                     // The Node build rules too: the model fixes a slow or unpinned build here, before a boot spends half an hour on it.
                     { nodeBuild: true },
                 );
-                const adjusted = check.adjusted?.length ? check.adjusted : undefined;
-                const changed = adjusted ? `Kodus changed your compose files before checking them:\n${adjusted.map((a) => `- ${a}`).join('\n')}` : '';
+                const adjustedAll = [...(submitted.dropped ? [SUITE_DROPPED] : []), ...(check.adjusted ?? [])];
+                const adjusted = adjustedAll.length ? adjustedAll : undefined;
+                const changed = adjusted ? `Kodus changed your submission before checking it:\n${adjusted.map((a) => `- ${a}`).join('\n')}` : '';
                 if (!check.ok) {
                     state.rejected.push(check.errors);
                     refused.set(key, state.rejected.length);

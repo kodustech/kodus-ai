@@ -539,3 +539,12 @@ describe('loop detection (DockSmith)', () => {
         expect(prompts.join('\n')).toContain('container_name: dropped');
     });
 });
+
+describe('a suite block the model wrote', () => {
+    it('is dropped from the recipe, with what is under it, up to the next top-level key; a recipe without one is unchanged', () => {
+        const { withoutSuiteBlock } = jest.requireActual('./recipe-author.agent');
+        const recipe = 'version: 1\nsuite:\n  runner: cypress\n  # the CI job\n\n  shards: 3\nservices:\n  compose:\n    public: app\n';
+        expect(withoutSuiteBlock(recipe)).toEqual({ text: 'version: 1\nservices:\n  compose:\n    public: app\n', dropped: true });
+        expect(withoutSuiteBlock('version: 1\nservices: {}\n')).toEqual({ text: 'version: 1\nservices: {}\n', dropped: false });
+    });
+});
