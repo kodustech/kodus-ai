@@ -27,11 +27,14 @@ import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side"
 type DeleteMemberModalProps = {
     teamId: string;
     platformName: string;
+    /** The Git connection to reset; the workspace's only one when absent. */
+    connectionId?: string;
 };
 
 export const ResetIntegrationModal = ({
     teamId,
     platformName,
+    connectionId,
 }: DeleteMemberModalProps) => {
     const [enabled, setEnabled] = useState(false);
     const { invalidateQueries, resetQueries, generateQueryKey } =
@@ -45,7 +48,7 @@ export const ResetIntegrationModal = ({
         magicModal.lock();
 
         try {
-            await deleteIntegration(teamId);
+            await deleteIntegration(teamId, connectionId);
 
             toast({
                 variant: "success",
@@ -95,7 +98,7 @@ export const ResetIntegrationModal = ({
         magicModal.lock();
 
         try {
-            await deleteIntegrationAndRepositories(teamId);
+            await deleteIntegrationAndRepositories(teamId, connectionId);
 
             toast({
                 variant: "success",
@@ -169,8 +172,8 @@ export const ResetIntegrationModal = ({
                 </DialogHeader>
 
                 <p className="text-sm">
-                    You will be able to configure a new Git provider after this
-                    operation.
+                    Only this connection is removed. The workspace&apos;s other Git
+                    connections and their repositories stay as they are.
                 </p>
 
                 <DialogFooter className="flex flex-col gap-3">

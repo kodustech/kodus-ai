@@ -30,10 +30,12 @@ export function getConnectionsOnClient(teamId: string) {
             isSetupComplete: boolean;
             hasConnection: boolean;
             category:
-                | "COMMUNICATION"
-                | "PROJECT_MANAGEMENT"
-                | "CODE_MANAGEMENT";
+                "COMMUNICATION" | "PROJECT_MANAGEMENT" | "CODE_MANAGEMENT";
             config?: { [key: string]: string };
+            /** The Git connection (code management only). */
+            connectionId?: string;
+            connectionName?: string | null;
+            reviewEnabled?: boolean;
         }>
     >;
 }
@@ -47,10 +49,12 @@ export function getConnections(teamId: string) {
             isSetupComplete: boolean;
             hasConnection: boolean;
             category:
-                | "COMMUNICATION"
-                | "PROJECT_MANAGEMENT"
-                | "CODE_MANAGEMENT";
+                "COMMUNICATION" | "PROJECT_MANAGEMENT" | "CODE_MANAGEMENT";
             config?: { [key: string]: string };
+            /** The Git connection (code management only). */
+            connectionId?: string;
+            connectionName?: string | null;
+            reviewEnabled?: boolean;
         }>
     >;
 }

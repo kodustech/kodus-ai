@@ -4,6 +4,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import type { INTEGRATIONS_KEY } from "@enums";
 import { useAsyncAction } from "@hooks/use-async-action";
+import { useConfig } from "@providers/ConfigProvider";
+import {
+    clearConnectionIntent,
+    startNewConnectionIntent,
+} from "@services/codeManagement/connection-intent";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { getConnectionsOnClient } from "@services/setup/fetch";
@@ -11,7 +16,6 @@ import { deleteCookie, setCookie } from "cookies-next/client";
 import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import integrationFactory from "src/core/integrations/integrationFactory";
 import { useAllTeams } from "src/core/providers/all-teams-context";
-import { useConfig } from "@providers/ConfigProvider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import type { AwaitedReturnType } from "src/core/types";
 import { safeArray } from "src/core/utils/safe-array";
@@ -21,6 +25,8 @@ import { openProviderModal } from "./helpers";
 
 export const ProviderOptionButton = (props: {
     provider: keyof typeof CODE_MANAGEMENT_PLATFORMS;
+    /** Add a Git connection beside the workspace's others, with this name. */
+    newConnection?: { name?: string };
 }) => {
     const platformData = CODE_MANAGEMENT_PLATFORMS[props.provider];
     const canCreate = usePermission(Action.Create, ResourceType.GitSettings);
@@ -43,9 +49,13 @@ export const ProviderOptionButton = (props: {
 
         if (!integrationConnector) return;
 
-        const findConnection = safeArray(connections).find(
-            (c) => c.platformName.toLowerCase() === provider.toLowerCase(),
-        );
+        // A new connection is never the workspace's existing one.
+        const findConnection = props.newConnection
+            ? undefined
+            : safeArray(connections).find(
+                  (c) =>
+                      c.platformName.toLowerCase() === provider.toLowerCase(),
+              );
 
         integrationConnector.connect(
             findConnection?.hasConnection ?? false,
@@ -57,6 +67,11 @@ export const ProviderOptionButton = (props: {
 
     const [handleIntegrationClick, { loading }] = useAsyncAction(async () => {
         deleteCookie("selectedTeam");
+        if (props.newConnection) {
+            startNewConnectionIntent(props.newConnection.name);
+        } else {
+            clearConnectionIntent();
+        }
 
         const connections = await getConnectionsOnClient(teamId);
         const team = teams.find((t) => t.uuid === teamId);
@@ -69,8 +84,13 @@ export const ProviderOptionButton = (props: {
                 setCookie("selectedTeam", JSON.stringify(team));
                 goToProviderOauthPage(props.provider, connections);
             },
-            onSaveToken: () => {
-                router.push("/settings/git/repositories");
+            onSaveToken: (integrationId) => {
+                router.push(
+                    integrationId
+                        ? `/settings/git/repositories?connectionId=${encodeURIComponent(integrationId)}`
+                        : "/settings/git/repositories",
+                );
+                router.refresh();
             },
         });
     });

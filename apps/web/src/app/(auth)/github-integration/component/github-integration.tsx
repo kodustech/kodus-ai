@@ -156,7 +156,12 @@ export default function GithubIntegrationClient() {
                     setOrganizationName(team.name);
                     setStep("success");
                     deleteCookie("selectedTeam");
-                    router.replace("/settings/git/repositories");
+                    const connectionId = response?.data?.integrationId;
+                    router.replace(
+                        connectionId
+                            ? `/settings/git/repositories?connectionId=${encodeURIComponent(connectionId)}`
+                            : "/settings/git/repositories",
+                    );
                     return;
                 }
 

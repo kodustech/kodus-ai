@@ -25,6 +25,7 @@ import {
 import { getAutoLicenseAssignmentConfig } from "src/lib/services/organizationParameters/fetch";
 
 import { GitProviders } from "./_components/_providers";
+import { AddConnectionButton } from "./_components/add-connection";
 import { GitConnectedProvider } from "./_components/connected-provider";
 import { IgnoredUsersCard } from "./_components/ignored-users-card";
 import { ReviewAllRepositoriesCard } from "./_components/review-all-repositories-card";
@@ -102,9 +103,11 @@ export default async function GitSettings() {
               })
             : [];
 
-    const gitConnection = connections.find(
+    const gitConnections = connections.filter(
         (c) => c.category === "CODE_MANAGEMENT",
     );
+    const gitConnection = gitConnections[0];
+    const severalConnections = gitConnections.length > 1;
 
     const hasFilters =
         (autoLicenseAssignmentConfig?.ignoredUsers?.length ?? 0) > 0 ||
@@ -117,6 +120,7 @@ export default async function GitSettings() {
     // 3. a team reviewing every repository may have none yet while the first sync runs;
     if (
         gitConnection &&
+        !severalConnections &&
         connectedRepositories.length === 0 &&
         repositorySelection.mode !== "all" &&
         pathname === "/settings/git"
@@ -137,7 +141,10 @@ export default async function GitSettings() {
 
                 {gitConnection && (
                     <Page.HeaderActions>
-                        <GitConnectedProvider connection={gitConnection} />
+                        {!severalConnections && (
+                            <GitConnectedProvider connection={gitConnection} />
+                        )}
+                        <AddConnectionButton />
                     </Page.HeaderActions>
                 )}
             </Page.Header>
@@ -167,6 +174,38 @@ export default async function GitSettings() {
                                 variant="card"
                                 message="Failed to load connections. Please try again."
                             />
+                        ) : severalConnections ? (
+                            <div className="flex flex-col gap-8">
+                                {gitConnections.map((connection) => (
+                                    <section
+                                        key={connection.connectionId}
+                                        className="flex flex-col gap-4">
+                                        <GitConnectedProvider
+                                            connection={connection}
+                                            showConnectionActions
+                                        />
+                                        <GitRepositoriesTable
+                                            platformName={
+                                                connection.platformName
+                                            }
+                                            repositories={connectedRepositories.filter(
+                                                (repository) =>
+                                                    (
+                                                        repository as {
+                                                            connectionId?: string;
+                                                        }
+                                                    ).connectionId ===
+                                                    connection.connectionId,
+                                            )}
+                                            webhookFailures={webhookFailures}
+                                            webhookFailuresUnavailable={
+                                                webhookFailuresUnavailable
+                                            }
+                                            reviewsAllRepositories={false}
+                                        />
+                                    </section>
+                                ))}
+                            </div>
                         ) : gitConnection ? (
                             <>
                                 <ReviewAllRepositoriesCard

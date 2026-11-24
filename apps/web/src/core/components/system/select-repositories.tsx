@@ -39,6 +39,8 @@ export const SelectRepositories = (props: {
      * previously-picked repo never silently disappears from the list.
      */
     filterRepository?: (repository: Repository) => boolean;
+    /** List one Git connection's repositories; every connection's when absent. */
+    connectionId?: string;
 }) => {
     const {
         data: allRepositories = [],
@@ -46,7 +48,12 @@ export const SelectRepositories = (props: {
         isError,
         error,
         refetch,
-    } = useGetRepositories(props.teamId);
+    } = useGetRepositories(
+        props.teamId,
+        undefined,
+        undefined,
+        props.connectionId,
+    );
 
     const repositories = useMemo(
         () =>

@@ -35,6 +35,8 @@ import { IntegrationCategory } from "src/core/types";
 export const SelectRepositoriesModal = (props: {
     platformName: string;
     selectedRepositories: Repository[];
+    /** The Git connection whose repositories are picked. */
+    connectionId?: string;
 }) => {
     const router = useRouter();
     const { teamId } = useSelectedTeamId();
@@ -64,6 +66,7 @@ export const SelectRepositoriesModal = (props: {
             selectedRepositories,
             teamId,
             (current, total) => setUploadProgress({ current, total }),
+            props.connectionId,
         );
 
         const codeReview: {
@@ -166,6 +169,7 @@ export const SelectRepositoriesModal = (props: {
                             <SelectRepositories
                                 open={open}
                                 teamId={teamId}
+                                connectionId={props.connectionId}
                                 onOpenChange={setOpen}
                                 selectedRepositories={selectedRepositories}
                                 onFinishLoading={() =>

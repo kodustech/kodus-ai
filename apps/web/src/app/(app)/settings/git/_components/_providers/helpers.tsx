@@ -20,7 +20,7 @@ const onSaveToken = async (params: {
     authMode?: AuthMode;
     integrationKey: INTEGRATIONS_KEY;
     integrationType: PlatformType;
-    onSuccess: () => void;
+    onSuccess: (integrationId?: string) => void;
 }) => {
     const integrationResponse = await createCodeManagementIntegration({
         integrationType: params.integrationType,
@@ -37,7 +37,7 @@ const onSaveToken = async (params: {
 
     switch (integrationResponse.data.status) {
         case "SUCCESS": {
-            params.onSuccess();
+            params.onSuccess(integrationResponse.data.integrationId);
             break;
         }
 
@@ -72,7 +72,7 @@ const onSaveToken = async (params: {
 
 const openBitbucketModal = async (props: {
     teamId: string;
-    onSaveToken: () => void;
+    onSaveToken: (integrationId?: string) => void;
 }) =>
     magicModal.show(() => (
         <BitbucketModal
@@ -100,7 +100,7 @@ const openBitbucketModal = async (props: {
 
 const openAzureReposModal = async (props: {
     teamId: string;
-    onSaveToken: () => void;
+    onSaveToken: (integrationId?: string) => void;
 }) =>
     magicModal.show(() => (
         <AzureReposModal
@@ -120,7 +120,7 @@ const openAzureReposModal = async (props: {
 const openGithubModal = async (props: {
     teamId: string;
     onGoToOauth: () => void;
-    onSaveToken: () => void;
+    onSaveToken: (integrationId?: string) => void;
     githubEnterpriseServerPatEnabled: boolean;
 }) =>
     magicModal.show(() => (
@@ -144,7 +144,7 @@ const openGithubModal = async (props: {
 
 const openForgejoModal = async (props: {
     teamId: string;
-    onSaveToken: () => void;
+    onSaveToken: (integrationId?: string) => void;
 }) =>
     magicModal.show(() => (
         <ForgejoModal
@@ -164,7 +164,7 @@ const openForgejoModal = async (props: {
 const openGitlabModal = async (props: {
     teamId: string;
     onGoToOauth: () => void;
-    onSaveToken: () => void;
+    onSaveToken: (integrationId?: string) => void;
 }) =>
     magicModal.show(() => (
         <GitlabModal
@@ -192,7 +192,7 @@ export const openProviderModal = ({
     provider: INTEGRATIONS_KEY;
     teamId: string;
     onGoToOauth: () => void;
-    onSaveToken: () => void;
+    onSaveToken: (integrationId?: string) => void;
     githubEnterpriseServerPatEnabled: boolean;
 }) => {
     switch (provider) {

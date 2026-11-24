@@ -10,11 +10,18 @@ export function useGetRepositories(
     teamId: string,
     organizationSelected?: any,
     filters?: { isSelected?: boolean },
+    /** A Git connection of the workspace; every connection when absent. */
+    connectionId?: string,
 ) {
     return useFetch<Repository[]>(
         CODE_MANAGEMENT_API_PATHS.GET_REPOSITORIES_ORG,
         {
-            params: { teamId, organizationSelected, ...(filters || {}) },
+            params: {
+                teamId,
+                organizationSelected,
+                ...(filters || {}),
+                ...(connectionId ? { connectionId } : {}),
+            },
         },
         undefined,
         {

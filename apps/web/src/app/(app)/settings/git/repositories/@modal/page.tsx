@@ -25,17 +25,19 @@ const providers = {
     },
 } as const satisfies Record<string, { readableName: string }>;
 
-export default async function GitRepositories() {
+export default async function GitRepositories({
+    searchParams,
+}: {
+    searchParams: Promise<{ connectionId?: string }>;
+}) {
     const teamId = await getGlobalSelectedTeamId();
+    const { connectionId: requestedConnectionId } = await searchParams;
 
     let connectionsError = false;
-    const [connectionsResult, selectedRepositories] = await Promise.all([
-        getConnections(teamId).catch(() => {
-            connectionsError = true;
-            return [];
-        }),
-        getIntegrationConfig({ teamId }),
-    ]);
+    const connectionsResult = await getConnections(teamId).catch(() => {
+        connectionsError = true;
+        return [];
+    });
 
     if (connectionsError) {
         return (
@@ -46,10 +48,21 @@ export default async function GitRepositories() {
         );
     }
 
-    const gitConnection = safeArray(connectionsResult).find(
+    const gitConnections = safeArray(connectionsResult).filter(
         (c) => c.category === "CODE_MANAGEMENT",
     );
+    // The named connection, or the workspace's only one.
+    const gitConnection = requestedConnectionId
+        ? gitConnections.find((c) => c.connectionId === requestedConnectionId)
+        : gitConnections.length === 1
+          ? gitConnections[0]
+          : undefined;
     if (!gitConnection) redirect("/settings/git");
+
+    const selectedRepositories = await getIntegrationConfig({
+        teamId,
+        connectionId: gitConnection.connectionId,
+    });
 
     const provider =
         providers[
@@ -58,8 +71,9 @@ export default async function GitRepositories() {
 
     return (
         <SelectRepositoriesModal
-            platformName={provider.readableName}
+            platformName={gitConnection.connectionName ?? provider.readableName}
             selectedRepositories={selectedRepositories}
+            connectionId={gitConnection.connectionId}
         />
     );
 }

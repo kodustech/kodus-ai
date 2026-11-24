@@ -63,6 +63,11 @@ export const CODE_MANAGEMENT_API_PATHS = {
         "/code-management/hook-failures",
     ),
 
+    CONNECTION: (connectionId: string) =>
+        pathToApiUrl(`/integration/connections/${connectionId}`),
+    CONNECTION_ACCESS: (connectionId: string) =>
+        pathToApiUrl(`/integration/connections/${connectionId}/access`),
+
     REPOSITORY_SELECTION: pathToApiUrl("/code-management/repository-selection"),
     REPOSITORY_SELECTION_PREVIEW: pathToApiUrl(
         "/code-management/repository-selection/preview",
