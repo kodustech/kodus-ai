@@ -151,12 +151,15 @@ describe('BusinessLogicPublisher', () => {
             request.organizationAndTeamData,
         );
 
-        // The run carries the verdict it wrote, which the next re-check reads.
+        // The run carries the exact signature the compare path will read; a
+        // 64-hex shape check would pass for the hash of anything (#2669 review).
         expect(first.runs.create).toHaveBeenCalledWith(
             expect.objectContaining({
                 comment: expect.objectContaining({
                     id: 501,
-                    signature: expect.stringMatching(/^[0-9a-f]{64}$/),
+                    signature: commentSignature(
+                        signatureText(validated('missing')),
+                    ),
                 }),
             }),
         );
@@ -272,6 +275,55 @@ describe('BusinessLogicPublisher', () => {
         });
         const changed = await other.publisher.publish({ request, result });
         expect(changed.changed).toBe(true);
+    });
+
+    it('bounds the per-PR queue: another platform never waits, and a hung publish stops gating after the cap', async () => {
+        jest.useFakeTimers();
+        try {
+            const { publisher, service, code } = build();
+            const result = {
+                outcome: validated('missing'),
+                references: [],
+                attempts: [],
+                trackers: ['Linear'],
+            };
+
+            // The first GitHub publish never settles (a hung provider call).
+            service.commentFor.mockImplementationOnce(
+                () => new Promise(() => undefined),
+            );
+            void publisher.publish({ request, result });
+
+            // A GitLab project with the same numeric ids is a different PR:
+            // its publish must not queue behind the hung GitHub one.
+            const gitlab = await publisher.publish({
+                request: {
+                    ...request,
+                    platformType: PlatformType.GITLAB,
+                },
+                result,
+            });
+            expect(gitlab.comment).toBe('created');
+            expect(code.createIssueComment).toHaveBeenCalledTimes(1);
+
+            // A second GitHub publish shares the key, but the cap lets it
+            // through instead of waiting on the hung publish forever.
+            let settled = false;
+            const next = publisher
+                .publish({ request, result })
+                .then((published) => {
+                    settled = true;
+                    return published;
+                });
+            await jest.advanceTimersByTimeAsync(60_000);
+            expect(settled).toBe(false);
+
+            await jest.advanceTimersByTimeAsync(5 * 60_000);
+            await expect(next).resolves.toMatchObject({ comment: 'created' });
+            expect(code.createIssueComment).toHaveBeenCalledTimes(2);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('compares the comment text, not the clock it was written at', () => {

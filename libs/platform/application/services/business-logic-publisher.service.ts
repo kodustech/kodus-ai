@@ -51,6 +51,12 @@ import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/pri
 
 import { withRepositoryReader } from './business-logic-repository-reader';
 
+/**
+ * How long the per-PR publish queue waits on a publish before letting the next
+ * one start. A hung provider call must not block every later re-check.
+ */
+const PUBLISH_QUEUE_WAIT_MS = 5 * 60 * 1000;
+
 /** The PR a door acts on, so its files can pick the directory's settings. */
 export interface PullRequestScope {
     number: number;
@@ -362,10 +368,27 @@ export class BusinessLogicPublisher {
             () => this.publishOne(input),
             () => this.publishOne(input),
         );
-        const settled = mine.catch(() => undefined);
-        this.queue.set(key, settled);
+        // The queue only gates the NEXT publish. If this one never settles (a
+        // platform, tracker or model call that hangs), keeping its pending
+        // promise as the gate would block every later re-check of the PR
+        // forever and their replies would never be posted. Cap the gate and
+        // let the chain drain through the timeout; the caller still awaits the
+        // real publish below.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const gate = Promise.race([
+            mine.catch(() => undefined),
+            new Promise<void>((resolve) => {
+                timer = setTimeout(resolve, PUBLISH_QUEUE_WAIT_MS);
+                timer.unref?.();
+            }),
+        ]).finally(() => {
+            if (timer) {
+                clearTimeout(timer);
+            }
+        });
+        this.queue.set(key, gate);
         return mine.finally(() => {
-            if (this.queue.get(key) === settled) {
+            if (this.queue.get(key) === gate) {
                 this.queue.delete(key);
             }
         });
@@ -652,8 +675,12 @@ function turnKey(input: PublishInput): string | undefined {
     if (!repository?.id || !pullRequest?.number) {
         return undefined;
     }
+    // A repository id is only unique within one platform: GitHub repo 123 and
+    // GitLab project 123 in one organization would otherwise share a queue
+    // slot and serialize unrelated PRs against each other.
     return [
         organizationAndTeamData.organizationId,
+        input.request.platformType ?? '',
         repository.id,
         pullRequest.number,
     ].join(':');
