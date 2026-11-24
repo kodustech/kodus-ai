@@ -146,3 +146,97 @@ describe('SecurityScanSchedulesUseCase', () => {
         expect(got.map((s) => s.repository.id)).toEqual(['repo-2']);
     });
 });
+
+describe('SecurityScanSchedulesUseCase: filing a finished run', () => {
+    const exporting = schedule({
+        lastScanId: 'scan-9',
+        lastRunAt: '2026-11-24T03:00:00.000Z',
+        exportTo: { integrationId: 'int-linear', destinationNote: 'team SEC', minSeverity: 'high' },
+    });
+    function withExport(scanOver: Record<string, unknown> = {}, found: any[] = [{ uuid: 'i1' }, { uuid: 'i2' }]) {
+        const schedules = {
+            findExporting: jest.fn(async () => [exporting]),
+            recordRun: jest.fn(async () => undefined),
+        };
+        const scans = {
+            findById: jest.fn(async () => ({
+                uuid: 'scan-9',
+                status: 'completed',
+                startedAt: '2026-11-24T03:00:05.000Z',
+                createdAt: '2026-11-24T03:00:00.000Z',
+                ...scanOver,
+            })),
+            update: jest.fn(async () => null),
+        };
+        const issues = { findScanIssuesToExport: jest.fn(async () => found) };
+        const exporter = {
+            execute: jest.fn(async ({ issueIds }: any) =>
+                issueIds.map((issueId: string) => ({ issueId, status: 'created', url: `https://linear.app/${issueId}` })),
+            ),
+        };
+        const useCase = new SecurityScanSchedulesUseCase(
+            schedules as any,
+            {} as any,
+            {} as any,
+            scans as any,
+            issues as any,
+            exporter as any,
+        );
+        return { useCase, schedules, scans, issues, exporter };
+    }
+
+    it("files the run's new findings from the schedule's severity up, once", async () => {
+        const { useCase, scans, issues, exporter } = withExport();
+
+        expect(await useCase.exportFinished()).toBe(2);
+
+        expect(issues.findScanIssuesToExport).toHaveBeenCalledWith({
+            organizationId: 'org-1',
+            scanId: 'scan-9',
+            since: '2026-11-24T03:00:05.000Z',
+            severities: ['high', 'critical'],
+            integrationId: 'int-linear',
+            limit: 25,
+        });
+        expect(exporter.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                issueIds: ['i1', 'i2'],
+                integrationId: 'int-linear',
+                destinationNote: 'team SEC',
+                requestedBy: 'schedule',
+            }),
+        );
+        expect(scans.update).toHaveBeenCalledWith('scan-9', { exportedAt: expect.any(String) });
+    });
+
+    it('waits for the run to end', async () => {
+        const { useCase, exporter } = withExport({ status: 'running' });
+
+        await useCase.exportFinished();
+
+        expect(exporter.execute).not.toHaveBeenCalled();
+    });
+
+    it('does not file a run twice', async () => {
+        const { useCase, exporter } = withExport({ exportedAt: '2026-11-24T04:00:00.000Z' });
+
+        await useCase.exportFinished();
+
+        expect(exporter.execute).not.toHaveBeenCalled();
+    });
+
+    it('says on the schedule why nothing could be filed, and does not retry it forever', async () => {
+        const { useCase, schedules, scans, exporter } = withExport();
+        exporter.execute.mockResolvedValue([
+            { issueId: 'i1', status: 'failed', error: 'the destination is public' },
+        ] as any);
+
+        await useCase.exportFinished();
+
+        expect(scans.update).toHaveBeenCalledWith('scan-9', { exportedAt: expect.any(String) });
+        expect(schedules.recordRun).toHaveBeenCalledWith(
+            'sch-1',
+            expect.objectContaining({ lastError: 'the destination is public' }),
+        );
+    });
+});

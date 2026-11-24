@@ -5,7 +5,7 @@ import { RELEASE_INDEX } from '@libs/core/infrastructure/database/mongo/release-
 
 import type { SecurityScanBudget } from '../domain/security-scan.types';
 import type { SecurityScanMode } from '../domain/coverage-ledger';
-import type { ScanCadence } from '../domain/scan-schedule';
+import type { ScanCadence, ScanExportTarget } from '../domain/scan-schedule';
 
 /** A repository's deep scan schedule: one per repository. */
 @Schema({ collection: 'security_scan_schedules', timestamps: true })
@@ -30,6 +30,9 @@ export class SecurityScanScheduleModel extends CoreDocument {
 
     @Prop({ type: String })
     public modelId?: string;
+
+    @Prop({ type: Object })
+    public exportTo?: ScanExportTarget;
 
     @Prop({ type: Boolean, default: true })
     public enabled: boolean;

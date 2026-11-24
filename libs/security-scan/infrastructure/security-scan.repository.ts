@@ -532,6 +532,7 @@ function toRecord(doc: any): SecurityScanRecord {
         ...(o.modelId ? { modelId: o.modelId } : {}),
         ...(o.mode ? { mode: o.mode } : {}),
         ...(o.scheduleId ? { scheduleId: o.scheduleId } : {}),
+        ...(o.exportedAt ? { exportedAt: o.exportedAt } : {}),
         requestedBy: o.requestedBy,
         error: o.error,
         startedAt: o.startedAt,

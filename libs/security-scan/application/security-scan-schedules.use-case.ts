@@ -20,9 +20,24 @@ import type { SecurityScanMode } from '../domain/coverage-ledger';
 import {
     nextRunAt,
     SCAN_CADENCES,
+    severitiesFrom,
     type ScanCadence,
+    type ScanExportTarget,
     type SecurityScanSchedule,
 } from '../domain/scan-schedule';
+import { SecurityScanStatus } from '../domain/security-scan.types';
+import {
+    ISecurityScanRepository,
+    SECURITY_SCAN_REPOSITORY_TOKEN,
+} from '../infrastructure/security-scan.repository';
+import {
+    IIssuesService,
+    ISSUES_SERVICE_TOKEN,
+} from '@libs/issues/domain/contracts/issues.service.contract';
+import {
+    EXPORT_MAX_ISSUES,
+    ExportScanIssuesUseCase,
+} from './export-scan-issues.use-case';
 import type { SecurityScanBudget } from '../domain/security-scan.types';
 import {
     ISecurityScanScheduleRepository,
@@ -43,6 +58,8 @@ export interface SaveScheduleInput {
     budget: SecurityScanBudget;
     mode?: SecurityScanMode;
     modelId?: string;
+    /** Where each run's new findings are filed when it ends. */
+    exportTo?: ScanExportTarget;
     enabled?: boolean;
     requestedBy?: { userId?: string; email?: string };
 }
@@ -54,6 +71,11 @@ export class SecurityScanSchedulesUseCase {
         private readonly schedules: ISecurityScanScheduleRepository,
         private readonly startSecurityScan: StartSecurityScanUseCase,
         private readonly deepScanGate: DeepScanGate,
+        @Inject(SECURITY_SCAN_REPOSITORY_TOKEN)
+        private readonly scans: ISecurityScanRepository,
+        @Inject(ISSUES_SERVICE_TOKEN)
+        private readonly issuesService: IIssuesService,
+        private readonly exportScanIssues: ExportScanIssuesUseCase,
     ) {}
 
     /** The organization's schedules, within the repositories the caller sees. */
@@ -102,6 +124,7 @@ export class SecurityScanSchedulesUseCase {
                 budget: input.budget,
                 mode: input.mode ?? 'incremental',
                 modelId: input.modelId,
+                exportTo: input.exportTo,
                 enabled: input.enabled !== false,
                 nextRunAt: nextRunAt(input.cadence, now).toISOString(),
                 createdBy: input.requestedBy,
@@ -201,5 +224,98 @@ export class SecurityScanSchedulesUseCase {
             }
         }
         return started;
+    }
+
+    /**
+     * Files the new findings of each schedule's last run, once it ended, in
+     * the plugin the schedule names: at most EXPORT_MAX_ISSUES per schedule
+     * per call, the rest on the next. A run is done exporting when nothing
+     * is left, or when an attempt filed nothing (said on the schedule).
+     * Returns how many findings were filed.
+     */
+    async exportFinished(): Promise<number> {
+        let filed = 0;
+        for (const schedule of await this.schedules.findExporting(50)) {
+            const target = schedule.exportTo;
+            if (!target || !schedule.lastScanId) continue;
+            const scan = await this.scans.findById(schedule.lastScanId);
+            if (
+                !scan ||
+                scan.exportedAt ||
+                ![
+                    SecurityScanStatus.COMPLETED,
+                    SecurityScanStatus.STOPPED_BY_BUDGET,
+                ].includes(scan.status)
+            ) {
+                continue;
+            }
+            const done = async (lastError?: string) => {
+                await this.scans.update(scan.uuid, {
+                    exportedAt: new Date().toISOString(),
+                });
+                if (lastError) {
+                    await this.schedules
+                        .recordRun(schedule.uuid, {
+                            lastRunAt: schedule.lastRunAt ?? scan.createdAt,
+                            lastError,
+                        })
+                        .catch(() => undefined);
+                }
+            };
+            try {
+                const issues = await this.issuesService.findScanIssuesToExport({
+                    organizationId: schedule.organizationId,
+                    scanId: scan.uuid,
+                    since: scan.startedAt ?? scan.createdAt,
+                    severities: severitiesFrom(target.minSeverity),
+                    integrationId: target.integrationId,
+                    limit: EXPORT_MAX_ISSUES,
+                });
+                if (!issues.length) {
+                    await done();
+                    continue;
+                }
+                const results = await this.exportScanIssues.execute({
+                    organizationAndTeamData: {
+                        organizationId: schedule.organizationId,
+                        teamId: schedule.teamId,
+                    },
+                    issueIds: issues.map((i) => i.uuid),
+                    integrationId: target.integrationId,
+                    destinationNote: target.destinationNote,
+                    readableRepositoryIds: null,
+                    requestedBy: 'schedule',
+                });
+                const created = results.filter(
+                    (r) => r.status === 'created',
+                ).length;
+                filed += created;
+                if (!created) {
+                    await done(
+                        results.find((r) => r.error)?.error ??
+                            'The findings could not be filed in the plugin.',
+                    );
+                } else if (issues.length < EXPORT_MAX_ISSUES) {
+                    await done();
+                }
+            } catch (error) {
+                await done(
+                    error instanceof HttpException
+                        ? error.message
+                        : 'The findings could not be filed in the plugin.',
+                );
+                logger.warn({
+                    message: 'Scheduled deep scan export failed',
+                    context: SecurityScanSchedulesUseCase.name,
+                    error,
+                    metadata: {
+                        organizationId: schedule.organizationId,
+                        scheduleId: schedule.uuid,
+                        scanId: scan.uuid,
+                    },
+                });
+            }
+        }
+        return filed;
     }
 }

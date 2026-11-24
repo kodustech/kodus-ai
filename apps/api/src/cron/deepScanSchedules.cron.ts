@@ -8,8 +8,9 @@ const API_CRON_DEEP_SCAN_SCHEDULES =
     process.env.API_CRON_DEEP_SCAN_SCHEDULES || '*/15 * * * *';
 
 /**
- * Starts the deep scans their schedules have due. Every API instance runs it:
- * each schedule is claimed before it starts, so none starts twice.
+ * Starts the deep scans their schedules have due, and files the new findings
+ * of finished ones in the plugin a schedule names. Every API instance runs
+ * it: each schedule is claimed before it starts, so none starts twice.
  */
 @Injectable()
 export class DeepScanSchedulesCronProvider {
@@ -23,11 +24,12 @@ export class DeepScanSchedulesCronProvider {
     async handleCron(): Promise<void> {
         try {
             const started = await this.schedules.runDue();
-            if (started > 0) {
+            const filed = await this.schedules.exportFinished();
+            if (started > 0 || filed > 0) {
                 this.logger.log({
-                    message: 'Scheduled deep scans started',
+                    message: 'Scheduled deep scans started or filed',
                     context: DeepScanSchedulesCronProvider.name,
-                    metadata: { started },
+                    metadata: { started, filed },
                 });
             }
         } catch (error) {

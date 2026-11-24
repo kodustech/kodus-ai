@@ -93,6 +93,9 @@ export class SecurityScanModel extends CoreDocument {
     @Prop({ type: String })
     public scheduleId?: string;
 
+    @Prop({ type: String })
+    public exportedAt?: string;
+
     @Prop({ type: Object })
     public requestedBy?: { userId?: string; email?: string };
 

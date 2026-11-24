@@ -19,6 +19,11 @@ export interface SecurityScanSchedule {
     mode: SecurityScanMode;
     /** The model the scheduled scans run on; the routing's when unset. */
     modelId?: string;
+    /**
+     * Where each run's new findings are filed when it ends, through one of
+     * the organization's plugins; none when unset.
+     */
+    exportTo?: ScanExportTarget;
     enabled: boolean;
     nextRunAt: string;
     lastRunAt?: string;
@@ -56,4 +61,19 @@ export function nextRunAt(
         }
     }
     return next;
+}
+
+/** A plugin a schedule files its new findings in, from a severity up. */
+export interface ScanExportTarget {
+    integrationId: string;
+    /** Where in that tool: "Linear team SEC". */
+    destinationNote?: string;
+    minSeverity: 'critical' | 'high' | 'medium' | 'low';
+}
+
+const SEVERITY_ORDER = ['low', 'medium', 'high', 'critical'] as const;
+
+/** The severities at or above `min`. */
+export function severitiesFrom(min: ScanExportTarget['minSeverity']): string[] {
+    return SEVERITY_ORDER.slice(SEVERITY_ORDER.indexOf(min));
 }

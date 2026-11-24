@@ -154,6 +154,17 @@ export class SaveSecurityScanScheduleDto {
     modelId?: string;
 
     @ApiPropertyOptional({
+        description:
+            "File each run's new findings, from minSeverity up, in one of the organization's plugins (GET /security-scans/export-destinations).",
+    })
+    @IsOptional()
+    exportTo?: {
+        integrationId: string;
+        destinationNote?: string;
+        minSeverity: 'critical' | 'high' | 'medium' | 'low';
+    };
+
+    @ApiPropertyOptional({
         description: 'Pause the schedule without deleting it.',
     })
     @IsOptional()
@@ -405,6 +416,26 @@ export class SecurityScansController {
             },
             mode: body.mode,
             modelId: body.modelId,
+            exportTo: body.exportTo?.integrationId
+                ? {
+                      integrationId: String(body.exportTo.integrationId),
+                      ...(body.exportTo.destinationNote
+                          ? {
+                                destinationNote: String(
+                                    body.exportTo.destinationNote,
+                                ).slice(0, 300),
+                            }
+                          : {}),
+                      minSeverity: [
+                          'critical',
+                          'high',
+                          'medium',
+                          'low',
+                      ].includes(body.exportTo.minSeverity)
+                          ? body.exportTo.minSeverity
+                          : 'high',
+                  }
+                : undefined,
             enabled: body.enabled,
             requestedBy: {
                 userId: this.request.user?.uuid,
