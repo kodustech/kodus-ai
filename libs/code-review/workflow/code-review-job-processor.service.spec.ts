@@ -774,6 +774,13 @@ describe('CodeReviewJobProcessorService', () => {
                     () => new Promise(() => {}), // never settles
                 );
 
+                // Installed before the run starts: a spy added after the run
+                // resolves can never see a call made during it, which made the
+                // assertion below vacuous (#1902 review).
+                const notifySpy = jest.spyOn(
+                    service as any,
+                    'notifyReviewFailed',
+                );
                 const run = service.process('job-1');
                 // Attach the resolve handler BEFORE the timers fire so the
                 // lease-lost unblock is never momentarily unhandled.
@@ -803,10 +810,6 @@ describe('CodeReviewJobProcessorService', () => {
                             data.status === JobStatus.FAILED,
                     ),
                 ).toBe(false);
-                const notifySpy = jest.spyOn(
-                    service as any,
-                    'notifyReviewFailed',
-                );
                 expect(notifySpy).not.toHaveBeenCalled();
             } finally {
                 jest.useRealTimers();

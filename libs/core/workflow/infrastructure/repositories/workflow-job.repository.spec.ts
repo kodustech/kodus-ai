@@ -100,6 +100,7 @@ describe('WorkflowJobRepository — lease-based stale-job reclaim (#1830)', () =
         from: jest.Mock;
         getRawMany: jest.Mock;
         whereInIds: jest.Mock;
+        limit: jest.Mock;
     };
     let repository: { createQueryBuilder: jest.Mock };
     let repo: WorkflowJobRepository;
@@ -119,6 +120,7 @@ describe('WorkflowJobRepository — lease-based stale-job reclaim (#1830)', () =
             from: jest.fn().mockReturnThis(),
             getRawMany: jest.fn().mockResolvedValue([]),
             whereInIds: jest.fn().mockReturnThis(),
+            limit: jest.fn().mockReturnThis(),
         };
         repository = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
         repo = new WorkflowJobRepository(repository as any);
@@ -134,14 +136,21 @@ describe('WorkflowJobRepository — lease-based stale-job reclaim (#1830)', () =
         expect(qb.where).toHaveBeenCalledWith('job.status = :status', {
             status: JobStatus.PROCESSING,
         });
-        expect(qb.andWhere).toHaveBeenCalledWith(
-            expect.stringContaining('leaseExpiresAt'),
-            { now, olderThan },
+        const predicate = qb.andWhere.mock.calls[0][0] as string;
+        // Pin both branches' operators: a live (renewed) lease stays unmatched,
+        // and a legacy row is only stale once its updatedAt aged out.
+        expect(predicate).toContain(
+            '(job."leaseExpiresAt" IS NOT NULL AND job."leaseExpiresAt" < :now)',
         );
-        // A live job (renewed, unexpired lease) must never be matched.
-        expect(qb.andWhere.mock.calls[0][0]).not.toContain(
-            'leaseExpiresAt > :now',
+        expect(predicate).toContain(
+            '(job."leaseExpiresAt" IS NULL AND job."updatedAt" < :olderThan)',
         );
+        expect(qb.andWhere).toHaveBeenCalledWith(expect.any(String), {
+            now,
+            olderThan,
+        });
+        // One pass may not claim more rows than the write's bind-parameter budget.
+        expect(qb.limit).toHaveBeenCalledWith(1000);
     });
 
     it('requeues a stale job to PENDING and increments retryCount, clearing the lease', async () => {
@@ -163,6 +172,10 @@ describe('WorkflowJobRepository — lease-based stale-job reclaim (#1830)', () =
         expect(setArgs.status).toBe(JobStatus.PENDING);
         expect(setArgs.leaseOwner).toBeNull();
         expect(setArgs.leaseExpiresAt).toBeNull();
+        // Requeuing must burn a retry, otherwise `retryCount < maxRetries`
+        // stays true forever and the same stale job is requeued endlessly.
+        expect(setArgs.retryCount).toEqual(expect.any(Function));
+        expect(setArgs.retryCount()).toContain('"retryCount" + 1');
         expect(qb.whereInIds).toHaveBeenCalledWith(['job-1']);
         // Re-assert PROCESSING in the UPDATE so a job that completed between
         // the SELECT and this write is not clobbered back to PENDING.

@@ -75,7 +75,14 @@ export interface JobLeaseRenewal {
 export function startJobLeaseRenewal(
     options: JobLeaseRenewalOptions,
 ): JobLeaseRenewal {
-    const intervalMs = options.intervalMs ?? JOB_LEASE_RENEW_INTERVAL_MS;
+    // A caller-supplied 0 (or negative) is an absent cadence, not a request
+    // to renew on every tick: `??` alone would arm setInterval with 0 ms and
+    // turn the renewal into a tight loop of leaseExpiresAt writes.
+    const requestedIntervalMs = options.intervalMs ?? 0;
+    const intervalMs =
+        requestedIntervalMs > 0
+            ? requestedIntervalMs
+            : JOB_LEASE_RENEW_INTERVAL_MS;
 
     let timer: ReturnType<typeof setInterval> | undefined;
     let stopped = false;

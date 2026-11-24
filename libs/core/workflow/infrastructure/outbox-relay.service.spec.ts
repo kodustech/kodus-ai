@@ -219,6 +219,14 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
                 call[0].lastError,
             ]),
         );
+        // The loss-window alert counts rows by this prefix; dropping it
+        // silently zeroes `lostInWindow`.
+        expect(
+            (byUuid.get('job-budget-spent') as string).startsWith('Orphaned:'),
+        ).toBe(true);
+        expect(
+            (byUuid.get('job-never-leased') as string).startsWith('Orphaned:'),
+        ).toBe(true);
         expect(byUuid.get('job-budget-spent')).toContain('lease expired');
         expect(byUuid.get('job-budget-spent')).toContain(
             'Retry budget exhausted',

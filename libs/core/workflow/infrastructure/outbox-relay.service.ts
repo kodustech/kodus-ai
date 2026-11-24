@@ -616,9 +616,9 @@ export class OutboxRelayService
                 (job) => job.leaseExpiresAt == null,
             );
             const leaseExpiredReason =
-                'Worker died while job was PROCESSING (job lease expired) — reclaimed by stale-job watchdog.';
+                `${REAPED_LAST_ERROR_PREFIX} Worker died while job was PROCESSING (job lease expired) — reclaimed by stale-job watchdog.`;
             const unleasedReason =
-                'Job left PROCESSING without a lease (this workflow type does not take one) — reclaimed by stale-job watchdog, never retried.';
+                `${REAPED_LAST_ERROR_PREFIX} Job left PROCESSING without a lease (this workflow type does not take one) — reclaimed by stale-job watchdog, never retried.`;
 
             // Fire both writes concurrently and settle BOTH before counting:
             // sequenced awaits meant a rejection on the first write skipped the

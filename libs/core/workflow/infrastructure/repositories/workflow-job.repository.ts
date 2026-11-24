@@ -27,6 +27,9 @@ import { stripNulCharsWithReport } from './strip-nul';
  */
 const LEGACY_PROCESSING_STALE_MS = 180 * 60_000;
 
+/** Rows one reaper pass may claim, well under Postgres' 65,535-parameter cap. */
+const STALE_JOB_REAP_BATCH = 1000;
+
 @Injectable()
 export class WorkflowJobRepository implements IWorkflowJobRepository {
     private readonly logger = createLogger(WorkflowJobRepository.name);
@@ -471,6 +474,12 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                         '(job."leaseExpiresAt" IS NULL AND job."updatedAt" < :olderThan))',
                     { now: params.now, olderThan: params.olderThan },
                 )
+                // Bounded batch: every uuid becomes one bind parameter in the
+                // requeue/fail IN lists, and PostgreSQL caps a statement at
+                // 65,535 parameters. A mass worker death must not make the
+                // reclaim write itself fail on every cycle; a capped batch
+                // drains the backlog over successive runs.
+                .limit(STALE_JOB_REAP_BATCH)
                 .getRawMany();
 
             return (result ?? []) as StaleWorkflowJobReapResult[];
@@ -610,42 +619,6 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         }
     }
 
-    async getExecutionHistory(_jobId: string): Promise<IJobExecutionHistory[]> {
-        // TODO: Implement execution history tracking if needed
-        // For now, return empty array as we don't have a separate execution_history table
-        return [];
-    }
-
-    private mapToInterface(model: WorkflowJobModel): IWorkflowJob {
-        return {
-            id: model.uuid,
-            correlationId: model.correlationId,
-            workflowType: model.workflowType,
-            handlerType: model.handlerType,
-            payload: model.payload,
-            status: model.status,
-            priority: model.priority,
-            retryCount: model.retryCount,
-            maxRetries: model.maxRetries,
-            organizationAndTeamData: model.organizationId
-                ? {
-                      organizationId: model.organizationId,
-                      teamId: model.teamId,
-                  }
-                : undefined,
-            errorClassification: model.errorClassification,
-            lastError: model.lastError,
-            scheduledAt: model.scheduledAt,
-            startedAt: model.startedAt,
-            completedAt: model.completedAt,
-            currentStage: model.currentStage,
-            metadata: model.metadata,
-            waitingForEvent: model.waitingForEvent,
-            pipelineState: model.pipelineState,
-            createdAt: model.createdAt,
-            updatedAt: model.updatedAt,
-        };
-    }
     async cancelActiveByCorrelation(params: {
         correlationId: string;
         workflowType: string;
@@ -892,6 +865,8 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
             lastError: model.lastError,
             scheduledAt: model.scheduledAt,
             startedAt: model.startedAt,
+            leaseOwner: model.leaseOwner,
+            leaseExpiresAt: model.leaseExpiresAt,
             completedAt: model.completedAt,
             currentStage: model.currentStage,
             metadata: model.metadata,

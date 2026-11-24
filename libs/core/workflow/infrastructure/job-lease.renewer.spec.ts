@@ -107,6 +107,29 @@ describe('startJobLeaseRenewal (#1830)', () => {
         controller.abort();
     });
 
+    it('treats a zero or negative interval as absent and falls back to the default', async () => {
+        const logger = { error: jest.fn() };
+        const renew = jest.fn().mockRejectedValueOnce(new Error('db down'));
+        const controller = new AbortController();
+
+        startJobLeaseRenewal({
+            signal: controller.signal,
+            renew,
+            logger: logger as any,
+            intervalMs: 0,
+        });
+
+        jest.advanceTimersByTime(JOB_LEASE_RENEW_INTERVAL_MS);
+        await Promise.resolve();
+
+        expect(renew).toHaveBeenCalledTimes(1);
+        expect(logger.error.mock.calls[0][0].metadata.intervalMs).toBe(
+            JOB_LEASE_RENEW_INTERVAL_MS,
+        );
+
+        controller.abort();
+    });
+
     it('never treats a failed write as a lost lease, and keeps renewing', async () => {
         const onLeaseLost = jest.fn();
         const onRenewError = jest.fn();
@@ -161,6 +184,7 @@ describe('startJobLeaseRenewal (#1830)', () => {
     });
 
     it('resets the consecutive-failure count on a successful tick', async () => {
+        const logger = { error: jest.fn() } as any;
         const onLeaseLost = jest.fn();
         const renew = jest
             .fn()
@@ -173,6 +197,7 @@ describe('startJobLeaseRenewal (#1830)', () => {
             organizationId: 'org-1',
             signal: controller.signal,
             renew,
+            logger,
             onLeaseLost,
         });
 
@@ -186,6 +211,13 @@ describe('startJobLeaseRenewal (#1830)', () => {
         jest.advanceTimersByTime(JOB_LEASE_RENEW_INTERVAL_MS); // failure 1 again
         await Promise.resolve();
         expect(onLeaseLost).not.toHaveBeenCalled();
+
+        // Without the reset the second failure reports 2; with it, 1 again.
+        expect(
+            logger.error.mock.calls.map(
+                (call: any[]) => call[0].metadata.consecutiveFailures,
+            ),
+        ).toEqual([1, 1]);
 
         controller.abort();
     });
