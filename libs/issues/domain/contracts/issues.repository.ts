@@ -4,7 +4,11 @@ import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 import { IssuesEntity } from '../entities/issues.entity';
-import { IIssue, IIssueOccurrence } from '../interfaces/issues.interface';
+import {
+    IIssue,
+    IIssueExport,
+    IIssueOccurrence,
+} from '../interfaces/issues.interface';
 import { IContributingSuggestion } from '../interfaces/kodyIssuesManagement.interface';
 
 export const ISSUES_REPOSITORY_TOKEN = Symbol.for('IssuesRepository');
@@ -223,6 +227,26 @@ export interface IIssuesRepository {
      * becomes an occurrence there, and it is dismissed as a duplicate.
      */
     foldScanIssueInto(params: FoldScanIssueParams): Promise<boolean>;
+
+    /** Records where an issue was filed through a plugin. */
+    recordIssueExport(
+        organizationId: string,
+        issueId: string,
+        exported: IIssueExport,
+    ): Promise<void>;
+
+    /**
+     * Open issues a scan opened, at or above a severity, not yet filed
+     * through this plugin: what a schedule exports when its scan ends.
+     */
+    findScanIssuesToExport(params: {
+        organizationId: string;
+        scanId: string;
+        since: string;
+        severities: string[];
+        integrationId: string;
+        limit: number;
+    }): Promise<IssuesEntity[]>;
 
     /** Records that these issues were compared with the others just now. */
     markScanIssuesConsolidated(

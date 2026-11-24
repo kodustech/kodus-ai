@@ -34,6 +34,8 @@ import { GetSecurityScansUseCase } from './application/get-security-scans.use-ca
 import { CancelSecurityScanUseCase } from './application/cancel-security-scan.use-case';
 import { DeepScanGate } from './application/deep-scan.gate';
 import { SecurityScanSchedulesUseCase } from './application/security-scan-schedules.use-case';
+import { ExportScanIssuesUseCase } from './application/export-scan-issues.use-case';
+import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
 import {
     SECURITY_SCAN_SCHEDULE_REPOSITORY_TOKEN,
     SecurityScanScheduleRepository,
@@ -64,6 +66,7 @@ import {
         forwardRef(() => IssuesModule),
         forwardRef(() => IntegrationConfigModule),
         forwardRef(() => OrganizationModule),
+        forwardRef(() => McpCoreModule),
     ],
     providers: [
         {
@@ -92,6 +95,7 @@ import {
             useClass: SecurityScanScheduleRepository,
         },
         SecurityScanSchedulesUseCase,
+        ExportScanIssuesUseCase,
     ],
     exports: [
         SECURITY_SCAN_REPOSITORY_TOKEN,
@@ -101,6 +105,7 @@ import {
         CancelSecurityScanUseCase,
         DeepScanGate,
         SecurityScanSchedulesUseCase,
+        ExportScanIssuesUseCase,
     ],
 })
 export class SecurityScanModule {}

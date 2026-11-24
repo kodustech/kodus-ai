@@ -10,6 +10,7 @@ import {
 import {
     IIssue,
     IIssueEvidence,
+    IIssueExport,
     IIssueOccurrence,
     IIssueOwner,
     IssueSource,
@@ -49,6 +50,7 @@ export class IssuesEntity implements Entity<IIssue> {
     public occurrences?: IIssueOccurrence[];
     public fingerprintAliases?: string[];
     public duplicateOf?: string;
+    public exports?: IIssueExport[];
 
     constructor(issue: IIssue) {
         this.uuid = issue.uuid;
@@ -81,6 +83,7 @@ export class IssuesEntity implements Entity<IIssue> {
         this.occurrences = issue.occurrences;
         this.fingerprintAliases = issue.fingerprintAliases;
         this.duplicateOf = issue.duplicateOf;
+        this.exports = issue.exports;
     }
 
     public static create(issue: IIssue): IssuesEntity {
@@ -119,6 +122,7 @@ export class IssuesEntity implements Entity<IIssue> {
             occurrences: this.occurrences,
             fingerprintAliases: this.fingerprintAliases,
             duplicateOf: this.duplicateOf,
+            exports: this.exports,
         };
     }
 
@@ -154,6 +158,7 @@ export class IssuesEntity implements Entity<IIssue> {
             occurrences: this.occurrences,
             fingerprintAliases: this.fingerprintAliases,
             duplicateOf: this.duplicateOf,
+            exports: this.exports,
         };
     }
 }

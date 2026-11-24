@@ -23,6 +23,7 @@ import { IssuesEntity } from '@libs/issues/domain/entities/issues.entity';
 import { normalizeScanPath } from '@libs/issues/domain/scan-fingerprint';
 import {
     IIssue,
+    IIssueExport,
     IIssueOccurrence,
     IIssueOwner,
     IssueSource,
@@ -614,6 +615,41 @@ export class IssuesRepository implements IIssuesRepository {
             },
         );
         return (dismissed?.modifiedCount ?? 0) > 0;
+    }
+
+    async recordIssueExport(
+        organizationId: string,
+        issueId: string,
+        exported: IIssueExport,
+    ): Promise<void> {
+        await this.issuesModel.updateOne(
+            { _id: issueId, organizationId },
+            { $push: { exports: exported } },
+        );
+    }
+
+    async findScanIssuesToExport(params: {
+        organizationId: string;
+        scanId: string;
+        since: string;
+        severities: string[];
+        integrationId: string;
+        limit: number;
+    }): Promise<IssuesEntity[]> {
+        const docs = await this.issuesModel
+            .find({
+                'organizationId': params.organizationId,
+                'source': IssueSource.SECURITY_SCAN,
+                'status': IssueStatus.OPEN,
+                'lastSeenScanId': params.scanId,
+                'createdAt': { $gte: new Date(params.since) },
+                'severity': { $in: params.severities as SeverityLevel[] },
+                'exports.integrationId': { $ne: params.integrationId },
+            } as Record<string, unknown>)
+            .sort({ createdAt: 1 })
+            .limit(params.limit)
+            .exec();
+        return mapSimpleModelsToEntities(docs, IssuesEntity);
     }
 
     async markScanIssuesConsolidated(

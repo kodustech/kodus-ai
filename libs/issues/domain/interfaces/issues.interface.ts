@@ -113,6 +113,20 @@ export interface IIssue {
     duplicateOf?: string;
     /** When this issue was last compared with the others for a shared root cause. */
     consolidatedAt?: string;
+    /** Where it was filed in the team's own tools, through a plugin. */
+    exports?: IIssueExport[];
+}
+
+export interface IIssueExport {
+    /** The plugin connection it was filed through. */
+    integrationId: string;
+    /** The plugin's name, as the team sees it (Linear, Jira, GitHub). */
+    destination: string;
+    url?: string;
+    ticketId?: string;
+    exportedAt: string;
+    /** Who asked: a person's email, or `schedule`. */
+    by?: string;
 }
 
 export interface IIssueOccurrence {

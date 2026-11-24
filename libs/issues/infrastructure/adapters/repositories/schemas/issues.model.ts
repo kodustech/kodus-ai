@@ -10,6 +10,7 @@ import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import {
     IIssueEvidence,
+    IIssueExport,
     IIssueOccurrence,
     IIssueOwner,
     IssueSource,
@@ -113,6 +114,9 @@ export class IssuesModel extends CoreDocument {
 
     @Prop({ type: String, required: false })
     public consolidatedAt?: string;
+
+    @Prop({ type: [Object], required: false })
+    public exports?: IIssueExport[];
 }
 
 export const IssuesSchema = SchemaFactory.createForClass(IssuesModel);
