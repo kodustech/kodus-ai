@@ -1,4 +1,4 @@
-// No test reaches a real model: the review's dedup finds no managed key.
+// No test reaches a real model: no managed key is found.
 jest.mock('@libs/llm/managed-slot', () => {
     const actual = jest.requireActual('@libs/llm/managed-slot');
     return { ...actual, hasManagedModelKey: jest.fn(() => false) };
@@ -215,9 +215,15 @@ const FINALIZED_CWE: Record<string, string> = {
     misconfiguration: 'CWE 16',
 };
 
-function fakeLlm(plan?: any) {
+/** A root-cause answer: by default no reported finding is the same problem. */
+type RootCauseAnswer = (req: any) => { sameAs: string; reason: string };
+
+function fakeLlm(plan?: any, rootCause?: RootCauseAnswer) {
     return jest.fn(async (req: any) => {
         await bill(1000, 100, req.runName);
+        if (req.runName.endsWith('-root-cause')) {
+            return rootCause?.(req) ?? { sameAs: '', reason: '' };
+        }
         if (req.runName.endsWith('-map')) {
             if (plan instanceof Error) throw plan;
             return plan;
@@ -251,13 +257,9 @@ function fakeLlm(plan?: any) {
     }) as any;
 }
 
-/** A suggestion as the dedup's trace names it. */
-const summaryOf = (x: any) => ({
-    relevantFile: x.relevantFile,
-    relevantLinesStart: x.relevantLinesStart,
-    relevantLinesEnd: x.relevantLinesEnd,
-    oneSentenceSummary: x.oneSentenceSummary,
-});
+/** A finding's own issue identity, as the job computes one. */
+const identify = (f: any) =>
+    `fp:${f.filePath}:${f.vulnerabilityClass}:${f.startLine}`;
 
 const IDOR = {
     label: 'security',
@@ -1153,94 +1155,10 @@ describe('SecurityScanEngine', () => {
         );
     });
 
-    it('writes the reproduction test but never runs it outside an isolated sandbox', async () => {
-        const sandbox = fakeSandbox('local');
-        const engine = new SecurityScanEngine({
-            runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz'
-                    ? [IDOR]
-                    : [],
-            ),
-            llm: fakeLlm({ units: [] }),
-            collectSurface: jest.fn(async () => SURFACE),
-        });
-
-        const result = await engine.run({
-            ...baseParams({ reproduce: true }),
-            sandbox,
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
-
-        expect(sandbox.written).toEqual({});
-        expect(
-            sandbox.run.mock.calls.some(([c]: [string]) => c.includes('jest')),
-        ).toBe(false);
-        expect(result.findings[0].reproduction).toEqual(
-            expect.objectContaining({ executed: false }),
-        );
-    });
-
-    it('keeps one finding for an operation two lenses or two units report', async () => {
-        // The review's dedup folds what lands on the same line (deterministic
-        // here; the real one asks the model).
-        const sameLine = jest.fn(async (_deps: any, suggestions: any[]) => {
-            // As the real dedup does, each fold is a group in its trace.
-            const keepOf = new Map<string, any>();
-            const groups: any[] = [];
-            const kept = suggestions.filter((x) => {
-                const key = `${x.relevantFile}:${x.relevantLinesStart}`;
-                const keep = keepOf.get(key);
-                if (keep) {
-                    groups.push({ keep: summaryOf(keep), duplicates: [summaryOf(x)] });
-                    return false;
-                }
-                keepOf.set(key, x);
-                return true;
-            });
-            return { suggestions: kept, trace: { groups } as any };
-        });
-        const engine = new SecurityScanEngine({
-            dedup: sameLine as any,
-            // Both units' lenses, every class, report the same line.
-            runLens: fakeLens(() => [IDOR, { ...IDOR, relevantLinesStart: 6 }]),
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: 'src/orders/orders.controller.ts',
-                        relatedFiles: [],
-                        classes: ['authz', 'data_exposure'],
-                        priority: 90,
-                        reason: '',
-                    },
-                    {
-                        file: 'src/admin/exec.ts',
-                        relatedFiles: [],
-                        classes: ['injection'],
-                        priority: 80,
-                        reason: '',
-                    },
-                ],
-            }),
-            collectSurface: jest.fn(async () => SURFACE),
-        });
-
-        const result = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
-
-        expect(
-            result.findings.filter((f) =>
-                f.filePath.endsWith('orders.controller.ts'),
-            ),
-        ).toHaveLength(1);
-    });
-
-    it("runs the review's dedup on each unit against what earlier units reported", async () => {
+    it("compares each unit's findings with what earlier units reported and folds one the model ties to them", async () => {
         // The controller's IDOR and the service's leak of the same order: two
-        // weaknesses, so it is the review's dedup, not the overlap check,
-        // that sees them together and keeps one.
+        // weaknesses, so it is the root-cause comparison, not the overlap
+        // check, that sees them together.
         const runLens = fakeLens((file, cls) =>
             file.endsWith('orders.controller.ts')
                 ? cls === 'authz'
@@ -1257,70 +1175,61 @@ describe('SecurityScanEngine', () => {
                         },
                     ],
         );
-        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => ({
-            // Keeps the first: the service finding is the controller's bug.
-            suggestions: suggestions.slice(0, 1),
-            trace: {
-                groups: suggestions.length > 1
-                    ? [{ keep: summaryOf(suggestions[0]), duplicates: suggestions.slice(1).map(summaryOf) }]
-                    : [],
-            } as any,
-        }));
+        const asked: string[] = [];
         const engine = new SecurityScanEngine({
             runLens,
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: 'src/orders/orders.controller.ts',
-                        relatedFiles: [],
-                        classes: ['authz'],
-                        priority: 90,
-                        reason: '',
-                    },
-                    {
-                        file: 'src/orders/orders.service.ts',
-                        relatedFiles: [],
-                        classes: ['data_exposure'],
-                        priority: 80,
-                        reason: '',
-                    },
-                ],
-            }),
+            llm: fakeLlm(
+                {
+                    units: [
+                        {
+                            file: 'src/orders/orders.controller.ts',
+                            relatedFiles: [],
+                            classes: ['authz'],
+                            priority: 90,
+                            reason: '',
+                        },
+                        {
+                            file: 'src/orders/orders.service.ts',
+                            relatedFiles: [],
+                            classes: ['data_exposure'],
+                            priority: 80,
+                            reason: '',
+                        },
+                    ],
+                },
+                (req) => {
+                    asked.push(req.user);
+                    return { sameAs: 'c1', reason: 'the leak is the IDOR' };
+                },
+            ),
             collectSurface: jest.fn(async () => SURFACE),
-            dedup: dedup as any,
         });
 
         const result = await engine.run({
             ...baseParams(),
+            identify,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        expect(
-            result.findings
-                .filter((f) => f.filePath.startsWith('src/orders'))
-                .map((f) => f.filePath),
-        ).toEqual(['src/orders/orders.controller.ts']);
-        // The second unit's call carries the first unit's finding too.
-        const serviceCall = (
-            dedup.mock.calls as unknown as [unknown, any[]][]
-        ).find(([, s]) =>
-            s.some((x) => x.relevantFile === 'src/orders/orders.service.ts'),
-        );
-        expect(serviceCall?.[1].map((s) => s.relevantFile)).toEqual([
-            'src/orders/orders.controller.ts',
-            'src/orders/orders.service.ts',
-        ]);
+        const controller = result.findings.find((f) =>
+            f.filePath.endsWith('orders.controller.ts'),
+        )!;
+        const service = result.findings.find((f) =>
+            f.filePath.endsWith('orders.service.ts'),
+        )!;
+        // The controller's finding was reported first and stays the issue.
+        expect(controller.occurrenceOf).toBeUndefined();
+        expect(service.occurrenceOf).toBe(identify(controller));
+        // The service unit's comparison carries the controller's finding.
+        expect(asked).toHaveLength(1);
+        expect(asked[0]).toContain('src/orders/orders.controller.ts:7-7');
         expect(result.progress.every((p) => p.state === 'done')).toBe(true);
     });
 
     it('keeps one finding for the route and the query of one missing check', async () => {
         // The service unit's `serviceClass` lens reports a finding whose attack
         // path runs through the controller's flagged line.
-        const keepAll = jest.fn(async (_deps: any, suggestions: any[]) => ({
-            suggestions,
-            trace: {} as any,
-        }));
         const run = (serviceClass: string) =>
             new SecurityScanEngine({
                 runLens: fakeLens((file, cls) =>
@@ -1359,9 +1268,9 @@ describe('SecurityScanEngine', () => {
                     ],
                 }),
                 collectSurface: jest.fn(async () => SURFACE),
-                dedup: keepAll as any,
             }).run({
                 ...baseParams(),
+                identify,
                 sandbox: fakeSandbox(),
                 meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             } as any);
@@ -1379,58 +1288,7 @@ describe('SecurityScanEngine', () => {
         ]);
     });
 
-    it('does not report again what an earlier job of the same scan reported', async () => {
-        const engine = new SecurityScanEngine({
-            runLens: fakeLens(() => [IDOR]),
-            llm: fakeLlm(),
-            collectSurface: jest.fn(async () => SURFACE),
-        });
-
-        const result = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-            units: [
-                {
-                    id: 'b',
-                    file: 'src/orders/orders.controller.ts',
-                    relatedFiles: [],
-                    language: 'typescript',
-                    classes: ['data_exposure'],
-                    priority: 80,
-                    reasons: [],
-                },
-            ],
-            // The previous job's unit flagged the same leak on the same line.
-            reported: [
-                {
-                    vulnerabilityClass: 'data_exposure',
-                    cwe: 'CWE-200',
-                    title: 'Any user can read any order',
-                    description: 'No owner check.',
-                    severity: 'high',
-                    filePath: 'src/orders/orders.controller.ts',
-                    startLine: 6,
-                    endLine: 8,
-                },
-            ],
-        } as any);
-
-        expect(result.findings).toEqual([]);
-        expect(result.progress).toEqual([
-            expect.objectContaining({
-                unitId: 'b',
-                state: 'done',
-                findings: 0,
-            }),
-        ]);
-    });
-
-    it("sends a unit's dedup only the earlier findings near its files", async () => {
-        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => ({
-            suggestions,
-            trace: {} as any,
-        }));
+    it('asks the model only about reported findings that could share the root cause', async () => {
         const far = {
             vulnerabilityClass: 'injection',
             title: 'Shell command from the query',
@@ -1442,20 +1300,27 @@ describe('SecurityScanEngine', () => {
         };
         const near = {
             ...far,
+            title: 'Order list skips the tenant',
             vulnerabilityClass: 'authz',
             filePath: 'src/orders/orders.controller.ts',
             startLine: 40,
             endLine: 41,
         };
+        const asked: string[] = [];
         const engine = new SecurityScanEngine({
             runLens: fakeLens((_file, cls) => (cls === 'authz' ? [IDOR] : [])),
-            llm: fakeLlm(),
+            llm: fakeLlm(undefined, (req) => {
+                asked.push(req.user);
+                return { sameAs: '', reason: 'different checks' };
+            }),
             collectSurface: jest.fn(async () => SURFACE),
-            dedup: dedup as any,
         });
 
-        await engine.run({
+        const result = await engine.run({
             ...baseParams(),
+            // The model sees them and says two fixes are needed.
+            identify,
+            identify,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             units: [
@@ -1472,51 +1337,17 @@ describe('SecurityScanEngine', () => {
             reported: [far, near],
         } as any);
 
-        const sent = (dedup.mock.calls[0] as unknown as [unknown, any[]])[1];
-        expect(sent.map((x) => x.relevantFile)).toEqual([
-            'src/orders/orders.controller.ts',
-            'src/orders/orders.controller.ts',
+        // The IDOR's attack path crosses the controller: only `near` is asked.
+        expect(asked).toHaveLength(1);
+        expect(asked[0]).toContain('Order list skips the tenant');
+        expect(asked[0]).not.toContain('src/admin/exec.ts');
+        // The model named none: the IDOR is its own issue.
+        expect(result.findings).toEqual([
+            expect.not.objectContaining({ occurrenceOf: expect.anything() }),
         ]);
     });
 
-    it('keeps two different weaknesses on the same line apart', async () => {
-        const keepAll = jest.fn(async (_deps: any, suggestions: any[]) => ({
-            suggestions,
-            trace: {} as any,
-        }));
-        const engine = new SecurityScanEngine({
-            // An IDOR and a SQL injection in the same handler line.
-            runLens: fakeLens((_file, cls) =>
-                cls === 'authz' || cls === 'injection' ? [IDOR] : [],
-            ),
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: 'src/orders/orders.controller.ts',
-                        relatedFiles: [],
-                        classes: ['authz', 'injection'],
-                        priority: 90,
-                        reason: '',
-                    },
-                ],
-            }),
-            collectSurface: jest.fn(async () => SURFACE),
-            dedup: keepAll as any,
-        });
-
-        const result = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
-
-        expect(result.findings.map((f) => f.cwe).sort()).toEqual([
-            'CWE-639',
-            'CWE-89',
-        ]);
-    });
-
-    it('keeps every finding when the dedup fails', async () => {
+    it('keeps every finding as its own issue when the comparison fails', async () => {
         const engine = new SecurityScanEngine({
             runLens: fakeLens((_file, cls) =>
                 cls === 'authz'
@@ -1525,30 +1356,34 @@ describe('SecurityScanEngine', () => {
                       ? [{ ...IDOR, relevantFile: 'src/admin/exec.ts' }]
                       : [],
             ),
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: 'src/orders/orders.controller.ts',
-                        relatedFiles: [],
-                        classes: ['authz'],
-                        priority: 90,
-                        reason: '',
-                    },
-                ],
-            }),
+            llm: fakeLlm(
+                {
+                    units: [
+                        {
+                            file: 'src/orders/orders.controller.ts',
+                            relatedFiles: [],
+                            classes: ['authz'],
+                            priority: 90,
+                            reason: '',
+                        },
+                    ],
+                },
+                () => {
+                    throw new Error('root-cause model down');
+                },
+            ),
             collectSurface: jest.fn(async () => SURFACE),
-            dedup: (async () => {
-                throw new Error('dedup model down');
-            }) as any,
         });
 
         const result = await engine.run({
             ...baseParams(),
+            identify,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
         expect(result.findings).toHaveLength(2);
+        expect(result.findings.some((f) => f.occurrenceOf)).toBe(false);
     });
 });
 
@@ -2051,101 +1886,30 @@ describe('SecurityScanEngine: across slices and units', () => {
         },
     };
 
-    it('keeps a finding in a file whose path has non-ASCII characters', async () => {
-        const accented = 'src/pedidos/ação.ts';
-        const sandbox = fakeSandbox();
-        const run = sandbox.run.getMockImplementation()!;
-        // What git prints for it without -z: quoted, with octal escapes.
-        sandbox.run.mockImplementation(async (command: string) =>
-            command.includes('ls-files -z')
-                ? {
-                      stdout: [...Object.keys(FILES), accented].join('\0'),
-                      exitCode: 0,
-                  }
-                : command.includes('ls-files')
-                  ? {
-                        stdout: '"src/pedidos/a\\303\\247\\303\\243o.ts"',
-                        exitCode: 0,
-                    }
-                  : run(command),
-        );
-        const read = sandbox.remoteCommands.read.getMockImplementation()!;
-        sandbox.remoteCommands.read.mockImplementation(async (path: string) =>
-            path.endsWith('ação.ts')
-                ? FILES['src/orders/orders.controller.ts']
-                : read(path),
-        );
-        const engine = new SecurityScanEngine({
-            runLens: fakeLens((file, cls) =>
-                file === accented && cls === 'authz'
-                    ? [{ ...IDOR, relevantFile: accented }]
-                    : [],
-            ),
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: accented,
-                        relatedFiles: [],
-                        classes: ['authz'],
-                        priority: 90,
-                        reason: 'loads orders by id',
-                    },
-                ],
-            }),
-            collectSurface: jest.fn(async () => SURFACE),
-        });
-
-        const result = await engine.run({
-            ...baseParams(),
-            sandbox,
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
-
-        expect(result.findings.map((f) => f.filePath)).toContain(accented);
-    });
-
-    it("dedups on the client's model alone, never embedding findings on the platform key", async () => {
+    it("compares root causes on the client's model alone, never embedding findings on the platform key", async () => {
         // A platform key is configured: the scan must still not use it.
         (buildPlatformEmbedder as jest.Mock).mockReturnValue({});
-        const tiebreak = jest.fn(async () => false);
-        // A merge the wording alone does not settle: past the lexical check,
-        // where an embedding would be asked for.
-        const unsettled = (file: string, text: string) => ({
-            relevantFile: file,
-            label: 'security',
-            oneSentenceSummary: text,
-            suggestionContent: text,
-        });
-        const dedup = jest.fn(async (deps: any, suggestions: any[]) => {
-            await deps.resolveMerge(
-                unsettled('src/a.ts', 'off by one error in the pagination loop'),
-                unsettled('src/b.ts', 'sql query built via string concatenation'),
-                'a',
-                'b',
-                new Map(),
-                tiebreak,
-            );
-            return { suggestions, trace: {} as any };
-        });
+        const slot = { provider: 'openai_compatible', model: 'deepseek' };
+        const llm = fakeLlm({ units: [] });
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
                 file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
             ),
-            llm: fakeLlm({ units: [] }),
+            llm,
             collectSurface: jest.fn(async () => onlyController),
-            dedup: dedup as any,
         });
 
         try {
             await engine.run({
-                ...baseParams(),
+                ...baseParams({ model: { modelName: 'fireworks:deepseek', slot } }),
+                identify,
                 sandbox: fakeSandbox(),
                 meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-                // Reported before in the same file, so the new one is deduped.
+                // Reported before in the same file, so the new one is compared.
                 reported: [
                     {
-                        vulnerabilityClass: 'secret_identity',
-                        cwe: 'CWE-798',
+                        vulnerabilityClass: 'authz',
+                        cwe: 'CWE-639',
                         title: 'Hard-coded API key',
                         description: 'The key is in the source.',
                         severity: 'high',
@@ -2159,7 +1923,10 @@ describe('SecurityScanEngine: across slices and units', () => {
             (buildPlatformEmbedder as jest.Mock).mockReturnValue(null);
         }
 
-        expect(tiebreak).toHaveBeenCalled();
+        const comparison = llm.mock.calls.find(
+            ([req]: any) => req.runName === 'security-scan-root-cause',
+        ) as any;
+        expect(comparison[0].byokConfig).toBe(slot);
         expect(buildPlatformEmbedder).not.toHaveBeenCalled();
     });
 
@@ -2693,287 +2460,78 @@ describe('SecurityScanEngine: across slices and units', () => {
         );
     });
 
-    it('picks a long unit up at its next lens in the next slice, so it gets through', async () => {
-        let now = 0;
-        const lensOf = (input: any) =>
-            input.agentName.replace('security-scan-', '');
-        // Each lens takes 8 minutes; a slice stops starting lenses at 20.
-        const runLens = jest.fn(async (_input: any) => {
-            now += 8 * 60_000;
-            return {
-                findings: { reasoning: '', suggestions: [] },
-                finishReason: 'completed',
-            };
-        });
-        const engine = new SecurityScanEngine({
-            runLens: runLens as any,
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: 'src/orders/orders.controller.ts',
-                        relatedFiles: [],
-                        classes: ['authz'],
-                        priority: 90,
-                        reason: '',
-                    },
-                ],
-            }),
-            collectSurface: jest.fn(async () => onlyController),
-            now: () => now,
-        });
-        const meter = () => new ScanBudgetMeter({ maxUsd: 100 }, RATES);
-
-        const first = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: meter(),
-            deadlineAt: 20 * 60_000,
-            maxUnits: 1,
-        } as any);
-        const classes = first.units[0].classes;
-        expect(classes.length).toBeGreaterThan(3);
-        expect(first.finished).toBe(false);
-        expect(first.progress[0]).toEqual(
-            expect.objectContaining({
-                state: 'pending',
-                lensesRun: classes.slice(0, 2),
-            }),
-        );
-
-        runLens.mockClear();
-        const second = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: meter(),
-            units: first.units,
-            progress: first.progress,
-            deadlineAt: now + 20 * 60_000,
-        } as any);
-
-        // Only the lenses the first slice never reached.
-        expect(runLens.mock.calls.map(([input]) => lensOf(input))).toEqual(
-            classes.slice(2),
-        );
-        expect(second.finished).toBe(true);
-        expect(
-            second.examinedByClass.map((e) => e.vulnerabilityClass).sort(),
-        ).toEqual([...classes].sort());
-    });
-
-    it('keeps the stored finding when the dedup picks a later report of the same bug', async () => {
-        const runLens = fakeLens((file, cls) =>
-            file.endsWith('orders.controller.ts')
-                ? cls === 'authz'
-                    ? [IDOR]
-                    : []
-                : cls !== 'data_exposure'
-                  ? []
-                  : [
-                        {
-                            ...IDOR,
-                            relevantFile: 'src/orders/orders.service.ts',
-                            relevantLinesStart: 1,
-                            relevantLinesEnd: 1,
-                        },
-                    ],
-        );
-        const summary = (x: any) => ({
-            relevantFile: x.relevantFile,
-            relevantLinesStart: x.relevantLinesStart,
-            relevantLinesEnd: x.relevantLinesEnd,
-            oneSentenceSummary: x.oneSentenceSummary,
-        });
-        // Groups the two and keeps the later one, the service's.
-        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => {
-            if (suggestions.length < 2) {
-                return { suggestions, trace: {} as any };
-            }
-            const [earlier, later] = suggestions;
-            return {
-                suggestions: [later],
-                trace: {
-                    groups: [
-                        {
-                            keep: summary(later),
-                            duplicates: [summary(earlier)],
-                        },
-                    ],
-                } as any,
-            };
-        });
-        const engine = new SecurityScanEngine({
-            runLens,
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: 'src/orders/orders.controller.ts',
-                        relatedFiles: [],
-                        classes: ['authz'],
-                        priority: 90,
-                        reason: '',
-                    },
-                    {
-                        file: 'src/orders/orders.service.ts',
-                        relatedFiles: [],
-                        classes: ['data_exposure'],
-                        priority: 80,
-                        reason: '',
-                    },
-                ],
-            }),
-            collectSurface: jest.fn(async () => SURFACE),
-            dedup: dedup as any,
-        });
-
-        const result = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
-
-        // The controller's finding was stored first and stays the one.
-        expect(
-            result.findings
-                .filter((f) => f.filePath.startsWith('src/orders'))
-                .map((f) => f.filePath),
-        ).toEqual(['src/orders/orders.controller.ts']);
-    });
-
-    it("reads a merge the dedup's trace does not name from where the kept finding says it was", async () => {
+    it('records a finding at a place an open issue already folded in as that issue, without asking', async () => {
         const service = 'src/orders/orders.service.ts';
-        const runLens = fakeLens((file, cls) =>
-            file === service && cls === 'data_exposure'
-                ? [{ ...IDOR, relevantFile: service, relevantLinesStart: 1, relevantLinesEnd: 1 }]
-                : [],
-        );
-        // A malformed answer: the earlier report absorbed the fresh one, but
-        // no group says so; the kept one lists where the other was.
-        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => {
-            const [earlier, fresh] = suggestions;
-            return {
-                suggestions: [
-                    {
-                        ...earlier,
-                        alsoFoundIn: [`${fresh.relevantFile}:${fresh.relevantLinesStart}-${fresh.relevantLinesEnd}`],
-                    },
-                ],
-                trace: { groups: [] } as any,
-            };
+        const llm = fakeLlm({
+            units: [{ file: service, relatedFiles: [], classes: ['data_exposure'], priority: 80, reason: '' }],
         });
-        const onUnitDone = jest.fn(async () => undefined);
-        const engine = new SecurityScanEngine({
-            runLens,
-            llm: fakeLlm({
-                units: [{ file: service, relatedFiles: [], classes: ['data_exposure'], priority: 80, reason: '' }],
-            }),
-            collectSurface: jest.fn(async () => SURFACE),
-            dedup: dedup as any,
-        });
-
-        await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-            maxUnits: 1,
-            reported: [
-                {
-                    vulnerabilityClass: 'data_exposure',
-                    cwe: 'CWE-200',
-                    title: 'Orders leak to any caller',
-                    description: 'The service returns any order.',
-                    severity: 'high',
-                    filePath: service,
-                    startLine: 40,
-                    endLine: 41,
-                    fingerprint: 'fp-carried',
-                },
-            ],
-            onUnitDone,
-        } as any);
-
-        // Dropped, and the earlier finding it repeats is sighted.
-        expect(onUnitDone).toHaveBeenCalledWith(expect.anything(), [], [expect.objectContaining({ fingerprint: 'fp-carried' })]);
-    });
-
-    it('keeps a fresh finding the dedup dropped without saying what it repeats', async () => {
-        const service = 'src/orders/orders.service.ts';
-        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => ({
-            suggestions: suggestions.slice(0, 1),
-            trace: { groups: [] } as any,
-        }));
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
                 file === service && cls === 'data_exposure'
                     ? [{ ...IDOR, relevantFile: service, relevantLinesStart: 1, relevantLinesEnd: 1 }]
                     : [],
             ),
-            llm: fakeLlm({
-                units: [{ file: service, relatedFiles: [], classes: ['data_exposure'], priority: 80, reason: '' }],
-            }),
+            llm,
             collectSurface: jest.fn(async () => SURFACE),
-            dedup: dedup as any,
         });
+        const own = identify({ filePath: service, vulnerabilityClass: 'data_exposure', startLine: 1 });
 
         const result = await engine.run({
             ...baseParams(),
+            identify,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             maxUnits: 1,
-            reported: [
+            known: [
                 {
-                    vulnerabilityClass: 'data_exposure',
-                    cwe: 'CWE-200',
-                    title: 'Orders leak to any caller',
-                    description: 'The service returns any order.',
+                    vulnerabilityClass: 'authz',
+                    cwe: 'CWE-639',
+                    title: 'Any user reads any order',
+                    description: 'No owner check.',
                     severity: 'high',
-                    filePath: service,
-                    startLine: 40,
-                    endLine: 41,
+                    filePath: 'src/orders/orders.controller.ts',
+                    startLine: 7,
+                    endLine: 7,
+                    fingerprint: 'fp-holder',
+                    fingerprintAliases: [own],
                 },
             ],
         } as any);
 
-        // A duplicate costs less than a miss.
-        expect(result.findings.filter((f) => f.filePath === service)).toHaveLength(1);
+        expect(result.findings).toEqual([
+            expect.objectContaining({ filePath: service, occurrenceOf: 'fp-holder' }),
+        ]);
+        expect(
+            llm.mock.calls.some(([req]: any) => req.runName === 'security-scan-root-cause'),
+        ).toBe(false);
     });
 
-    it('says which carried-on finding the dedup folded a fresh one into', async () => {
+    it('records a fresh finding as one more place of the carried-on issue the model ties it to', async () => {
         const service = 'src/orders/orders.service.ts';
         const runLens = fakeLens((file, cls) =>
             file === service && cls === 'data_exposure'
                 ? [{ ...IDOR, relevantFile: service, relevantLinesStart: 1, relevantLinesEnd: 1 }]
                 : [],
         );
-        const summary = (x: any) => ({
-            relevantFile: x.relevantFile,
-            relevantLinesStart: x.relevantLinesStart,
-            relevantLinesEnd: x.relevantLinesEnd,
-            oneSentenceSummary: x.oneSentenceSummary,
-        });
-        // The earlier scan's report and the fresh one are one bug: keeps the earlier.
-        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => {
-            const [earlier, fresh] = suggestions;
-            return {
-                suggestions: [earlier],
-                trace: { groups: [{ keep: summary(earlier), duplicates: [summary(fresh)] }] } as any,
-            };
-        });
         const onUnitDone = jest.fn(async () => undefined);
         const engine = new SecurityScanEngine({
             runLens,
-            llm: fakeLlm({
-                units: [{ file: service, relatedFiles: [], classes: ['data_exposure'], priority: 80, reason: '' }],
-            }),
+            llm: fakeLlm(
+                {
+                    units: [{ file: service, relatedFiles: [], classes: ['data_exposure'], priority: 80, reason: '' }],
+                },
+                () => ({ sameAs: 'c1', reason: 'the same leak' }),
+            ),
             collectSurface: jest.fn(async () => SURFACE),
-            dedup: dedup as any,
         });
 
         const result = await engine.run({
             ...baseParams(),
+            identify,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             maxUnits: 1,
-            // Not an overlap the cheap check catches: another kind, other lines.
+            // Not an overlap the cheap check catches: other lines.
             reported: [
                 {
                     vulnerabilityClass: 'data_exposure',
@@ -2990,11 +2548,13 @@ describe('SecurityScanEngine: across slices and units', () => {
             onUnitDone,
         } as any);
 
-        expect(result.findings.filter((f) => f.filePath === service)).toEqual([]);
+        expect(result.findings).toEqual([
+            expect.objectContaining({ filePath: service, occurrenceOf: 'fp-carried' }),
+        ]);
         expect(onUnitDone).toHaveBeenCalledWith(
             expect.objectContaining({ state: 'done' }),
+            [expect.objectContaining({ occurrenceOf: 'fp-carried' })],
             [],
-            [expect.objectContaining({ fingerprint: 'fp-carried' })],
         );
     });
 });

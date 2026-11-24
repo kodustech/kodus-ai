@@ -74,6 +74,8 @@ export interface SecurityScanOutcomeCounts {
     resolved: number;
     /** Findings the independent check refuted: never reported. */
     refuted?: number;
+    /** Open issues folded into another one with the same root cause. */
+    consolidated?: number;
 }
 
 /** The files a lens of one class read to the end. */
@@ -172,6 +174,12 @@ export interface ScanFinding {
      * takes this scan's code, lines, evidence and owner.
      */
     storedAs?: string;
+    /**
+     * The identity of the issue this finding is one more place of: the same
+     * root cause, reached or repeated elsewhere. Stored as an occurrence on
+     * that issue, never as an issue of its own nor over its body.
+     */
+    occurrenceOf?: string;
     vulnerabilityClass: VulnClass;
     cwe?: string;
     title: string;
@@ -219,7 +227,12 @@ export type ScanReportedFinding = Pick<
     | 'startLine'
     | 'endLine'
 > &
-    Partial<Pick<ScanFinding, 'attackPath'>> & {
+    Partial<Pick<ScanFinding, 'attackPath' | 'symbol'>> & {
         /** The issue it was stored as: a scan carrying it on sights it too. */
         fingerprint?: string;
+        /**
+         * The identities of the places folded into this issue as occurrences:
+         * a finding found again at one of them is that occurrence again.
+         */
+        fingerprintAliases?: string[];
     };

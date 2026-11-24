@@ -386,6 +386,60 @@ ${fenced(params.code)}
 Verify it and call submitVerdict with keep, severity, assumption and rationale.`;
 }
 
+export const ROOT_CAUSE_SYSTEM_PROMPT = `You decide whether a new security finding is the same problem as one already reported, so a developer gets one issue per thing to fix instead of one per place a scanner noticed it.
+
+${DATA_NOT_INSTRUCTIONS}
+
+The same problem:
+- One fix closes both: the same missing check seen at the route, at the handler and at the query it reaches; the same unvalidated value at the guard and at its caller; the same token minted, accepted and never expired.
+- One only exists because of the other: a denial of service or a data leak an endpoint allows because it has no authentication is that missing authentication.
+- The same unsafe setting or call repeated where one change pattern fixes every copy and the cause is shared: TLS verification turned off in each database config, host-key checking disabled in each deploy script.
+
+Not the same problem:
+- Two different weaknesses that need two different fixes in the same code: an SQL injection and an XSS in one handler.
+- Two endpoints that each lack their own check, written separately, even if the bug is of the same kind.
+- A finding that is broader or narrower but would still be open after the other is fixed.
+
+Answer with the id of the reported finding that is the same problem, or an empty string when none is. When unsure, answer empty: two issues for one bug cost a developer a minute, one issue for two bugs hides one.`;
+
+export function buildRootCauseUserPrompt(params: {
+    finding: RootCauseFindingText;
+    candidates: Array<RootCauseFindingText & { id: string }>;
+}): string {
+    const describe = (f: RootCauseFindingText) =>
+        [
+            `${f.title}${f.cwe ? ` (${f.cwe})` : ''}`,
+            `at ${f.filePath}:${f.startLine}-${f.endLine}${f.symbol ? ` in ${f.symbol}` : ''}`,
+            f.attackPath?.length
+                ? `path: ${f.attackPath
+                      .slice(0, 6)
+                      .map((s) => `${s.file}:${s.line}`)
+                      .join(' -> ')}`
+                : '',
+            f.description.slice(0, 1200),
+        ]
+            .filter(Boolean)
+            .join('\n');
+    return `New finding:
+${fenced(describe(params.finding))}
+
+Already reported:
+${params.candidates.map((c) => `id ${c.id}:\n${fenced(describe(c))}`).join('\n\n')}
+
+Return sameAs: the id of the reported finding that is the same problem, or "" when none is; and reason: one sentence.`;
+}
+
+export interface RootCauseFindingText {
+    title: string;
+    cwe?: string;
+    filePath: string;
+    startLine: number;
+    endLine: number;
+    symbol?: string;
+    description: string;
+    attackPath?: { file: string; line: number }[];
+}
+
 export const REPRO_SYSTEM_PROMPT = `You write one automated test that demonstrates a confirmed security vulnerability in a repository, using the test framework the repository already uses.
 
 The test must PASS while the vulnerability is present (it asserts the attacker's success: the other user's record is returned, the injected command ran, the internal URL was requested) and FAIL once the fix is applied. Exercise the vulnerable function directly, with mocks or in-memory fakes for the database and the network: the test runs offline, without the application's services, secrets or a server. Do not test anything else.

@@ -1,4 +1,4 @@
-import { fingerprintOf } from '../domain/finding-fingerprint';
+import { fingerprintOf, ownFingerprintOf } from '../domain/finding-fingerprint';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -57,7 +57,17 @@ import {
     ISecurityScanRepository,
     SECURITY_SCAN_REPOSITORY_TOKEN,
 } from '../infrastructure/security-scan.repository';
-import { SecurityScanEngine } from './security-scan-engine';
+import {
+    SecurityScanEngine,
+    type SecurityScanModel,
+} from './security-scan-engine';
+import {
+    consolidateOpenIssues,
+    occurrenceOf,
+    type RootCauseCall,
+} from './scan-consolidation';
+import { LLM } from '@libs/llm/llm';
+import { runWithUsageMeter } from '@libs/llm/usage-meter';
 import { ScanOwnerResolver } from './scan-owner-resolver';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 import {
@@ -489,6 +499,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             units: scan.units,
             progress: scan.progress,
             reported: scan.reported,
+            identify: (finding) => ownFingerprintOf(scan, finding),
             // The same bug found again keeps the issue it is, whichever
             // place this scan's dedup would keep.
             known: (
@@ -783,6 +794,12 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             scanStartedAt: scan.startedAt ?? new Date().toISOString(),
         });
 
+        // Issues earlier scans opened for one root cause fold into one, now
+        // that this scan's sightings and resolutions are on record.
+        counts.consolidated =
+            (counts.consolidated ?? 0) +
+            (await this.consolidateIssues(scan, model, meter, signal));
+
         await this.kodyIssuesManagement
             .clearIssuesCache(scan.organizationId)
             .catch(() => undefined);
@@ -805,12 +822,134 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         };
     }
 
+    /**
+     * Folds the repository's open issues that share a root cause: each issue
+     * not compared since it last changed is compared with the rest, on the
+     * scan's model and within its spend cap, for at most
+     * CONSOLIDATION_WINDOW_MS. What is left is compared by a later scan.
+     * Returns how many issues were folded into another.
+     */
+    private async consolidateIssues(
+        scan: SecurityScanRecord,
+        model: SecurityScanModel,
+        meter: ScanBudgetMeter,
+        signal: AbortSignal | undefined,
+    ): Promise<number> {
+        const scope = {
+            organizationId: scan.organizationId,
+            repositoryPlatform: scan.repository.platform as PlatformType,
+            repositoryHost: scan.repository.host ?? '',
+            repositoryId: scan.repository.id,
+        };
+        if (meter.isExhausted() || !model.slot) {
+            return 0;
+        }
+        try {
+            const open = (await this.issuesService.findOpenScanFindings(scope)).map(
+                (f) => ({
+                    ...f,
+                    vulnerabilityClass: f.vulnerabilityClass as VulnClass,
+                    severity: f.severity as ScanFinding['severity'],
+                }),
+            );
+            const subjects = new Set(
+                open
+                    .filter(
+                        (f) =>
+                            !f.consolidatedAt ||
+                            (!!f.lastSeenAt && f.consolidatedAt < f.lastSeenAt),
+                    )
+                    .map((f) => f.fingerprint),
+            );
+            if (!subjects.size || open.length < 2) {
+                return 0;
+            }
+            const stopAt = Date.now() + CONSOLIDATION_WINDOW_MS;
+            const call: RootCauseCall = (request) =>
+                LLM.run({
+                    byokConfig: model.slot,
+                    schema: request.schema,
+                    system: request.system,
+                    user: request.user,
+                    runName: request.runName,
+                    organizationId: scan.organizationId,
+                }) as Promise<{ sameAs: string; reason: string }>;
+            const { absorbed, compared } = await runWithUsageMeter(
+                meter,
+                () =>
+                    consolidateOpenIssues(call, open, subjects, {
+                        isFinal: () => meter.isExhausted() || !!signal?.aborted,
+                        shouldStop: () =>
+                            Date.now() >= stopAt ||
+                            meter.isExhausted() ||
+                            !!signal?.aborted,
+                    }),
+                {
+                    organizationId: scan.organizationId,
+                    teamId: scan.teamId,
+                    repositoryId: scan.repository.id,
+                },
+            );
+            let folded = 0;
+            for (const { issue, into } of absorbed) {
+                if (
+                    await this.issuesService.foldScanIssueInto({
+                        ...scope,
+                        fingerprint: issue.fingerprint,
+                        into: into.fingerprint,
+                    })
+                ) {
+                    folded++;
+                }
+            }
+            await this.issuesService.markScanIssuesConsolidated({
+                ...scope,
+                fingerprints: compared,
+                at: new Date().toISOString(),
+            });
+            return folded;
+        } catch (error) {
+            // Folding duplicates is housekeeping: the scan's own result stands.
+            logger.warn({
+                message: `Security scan ${scan.uuid} could not fold duplicate issues`,
+                context: SecurityScanJobProcessor.name,
+                error,
+                metadata: {
+                    scanId: scan.uuid,
+                    organizationId: scan.organizationId,
+                    repositoryId: scan.repository.id,
+                },
+            });
+            return 0;
+        }
+    }
+
     private async storeFinding(
         scan: SecurityScanRecord,
         finding: ScanFinding,
         commitSha: string | undefined,
         owners: ScanOwnerResolver,
     ) {
+        if (finding.occurrenceOf) {
+            // One more place of an issue's root cause: recorded on that issue.
+            const folded = await this.issuesService.addScanFindingOccurrence({
+                organizationId: scan.organizationId,
+                repositoryPlatform: scan.repository.platform as PlatformType,
+                repositoryHost: scan.repository.host ?? '',
+                repositoryId: scan.repository.id,
+                holderFingerprint: finding.occurrenceOf,
+                occurrence: occurrenceOf(
+                    finding,
+                    ownFingerprintOf(scan, finding),
+                ),
+                scanId: scan.uuid,
+            });
+            if (folded) {
+                return folded.outcome;
+            }
+            // The issue it belongs to is gone: the place is an issue of its own.
+            finding.occurrenceOf = undefined;
+        }
         try {
             const owner = await owners.ownerOf(finding.filePath);
             const { outcome } = await this.issuesService.upsertScanFinding({
@@ -906,6 +1045,9 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         } as any);
     }
 }
+
+/** How long the end of a scan may spend folding duplicate issues. */
+const CONSOLIDATION_WINDOW_MS = 6 * 60 * 1000;
 
 /**
  * The issue body: what the auditor wrote and how to fix it. The attack path

@@ -8,6 +8,8 @@ import {
     mapSimpleModelToEntity,
 } from '@libs/core/infrastructure/repositories/mappers';
 import {
+    AddScanOccurrenceParams,
+    FoldScanIssueParams,
     IIssuesRepository,
     MarkScanFindingsSeenParams,
     OpenScanFinding,
@@ -21,6 +23,7 @@ import { IssuesEntity } from '@libs/issues/domain/entities/issues.entity';
 import { normalizeScanPath } from '@libs/issues/domain/scan-fingerprint';
 import {
     IIssue,
+    IIssueOccurrence,
     IIssueOwner,
     IssueSource,
 } from '@libs/issues/domain/interfaces/issues.interface';
@@ -267,6 +270,43 @@ export class IssuesRepository implements IIssuesRepository {
         // only if what was read still holds: another worker creating it, a
         // person dismissing or deleting it in between sends it round again.
         let existing = await this.issuesModel.findOne(filter).exec();
+        // A place already folded into another issue (its own issue folded
+        // as a duplicate, or recorded as an occurrence there) is that issue
+        // found again, never an issue of its own.
+        const scope = {
+            organizationId: finding.organizationId,
+            repositoryPlatform: finding.repository.platform,
+            repositoryHost: finding.repository.host ?? '',
+            repositoryId: finding.repository.id,
+        };
+        const holder =
+            existing?.duplicateOf ??
+            (existing
+                ? undefined
+                : (
+                      await this.issuesModel
+                          .findOne(
+                              {
+                                  ...filter,
+                                  fingerprint: { $ne: finding.fingerprint },
+                                  fingerprintAliases: finding.fingerprint,
+                                  source: IssueSource.SECURITY_SCAN,
+                              },
+                              { fingerprint: 1 },
+                          )
+                          .exec()
+                  )?.fingerprint);
+        if (holder && holder !== finding.fingerprint) {
+            const folded = await this.addScanFindingOccurrence({
+                ...scope,
+                holderFingerprint: holder,
+                occurrence: occurrenceOfUpsert(finding),
+                scanId: finding.lastSeenScanId,
+            });
+            if (folded) {
+                return folded;
+            }
+        }
         // A duplicate key with nothing under the filter: another index, or
         // the winner deleted already. Retried, and thrown if it never clears.
         let collision: unknown;
@@ -448,6 +488,149 @@ export class IssuesRepository implements IIssuesRepository {
         return { outcome: 'still_open', guard, update: { $set: refreshed } };
     }
 
+    async addScanFindingOccurrence(
+        params: AddScanOccurrenceParams,
+    ): Promise<{ issue: IssuesEntity; outcome: ScanFindingOutcome } | null> {
+        const scope = scanScope(params);
+        let target = params.holderFingerprint;
+        for (let attempt = 0; attempt < 4; attempt++) {
+            const holder = await this.issuesModel
+                .findOne({ ...scope, fingerprint: target })
+                .lean()
+                .exec();
+            if (!holder) {
+                return null;
+            }
+            // Folded into another issue since: the place goes there.
+            if (holder.duplicateOf && holder.duplicateOf !== target) {
+                target = holder.duplicateOf;
+                continue;
+            }
+            const now = new Date().toISOString();
+            const update = withOccurrence(holder, {
+                ...params.occurrence,
+                lastSeenScanId: params.scanId,
+            });
+            const dismissed = holder.status === IssueStatus.DISMISSED;
+            const reopen = holder.status === IssueStatus.RESOLVED;
+            const doc = await this.issuesModel.findOneAndUpdate(
+                {
+                    _id: holder._id,
+                    status: holder.status,
+                    occurrences: holder.occurrences ?? { $exists: false },
+                },
+                {
+                    $set: {
+                        ...update,
+                        // Seen through this place: not resolved as unseen.
+                        lastSeenScanId: params.scanId,
+                        lastSeenAt: now,
+                        consecutiveScanMisses: 0,
+                        ...(dismissed ? { severity: holder.severity } : {}),
+                        ...(reopen ? { status: IssueStatus.OPEN } : {}),
+                    },
+                    ...(reopen ? { $unset: { resolvedAt: '' } } : {}),
+                },
+                { new: true },
+            );
+            if (doc) {
+                return {
+                    issue: mapSimpleModelToEntity(doc, IssuesEntity),
+                    outcome: dismissed
+                        ? 'dismissed'
+                        : reopen
+                          ? 'reopened'
+                          : 'merged',
+                };
+            }
+        }
+        throw new Error(
+            'Scan finding occurrence kept changing while it was stored',
+        );
+    }
+
+    async foldScanIssueInto(params: FoldScanIssueParams): Promise<boolean> {
+        const scope = scanScope(params);
+        if (params.fingerprint === params.into) {
+            return false;
+        }
+        const [folded, holder] = await Promise.all([
+            this.issuesModel
+                .findOne({
+                    ...scope,
+                    fingerprint: params.fingerprint,
+                    status: IssueStatus.OPEN,
+                })
+                .lean()
+                .exec(),
+            this.issuesModel
+                .findOne({ ...scope, fingerprint: params.into })
+                .lean()
+                .exec(),
+        ]);
+        if (!folded || !holder || holder.duplicateOf) {
+            return false;
+        }
+        // The folded issue's place and the places it already held.
+        const places: IIssueOccurrence[] = [
+            {
+                fingerprint: folded.fingerprint,
+                title: folded.title,
+                cwe: folded.cwe,
+                filePath: folded.filePath,
+                startLine: folded.startLine ?? 1,
+                endLine: folded.endLine ?? folded.startLine ?? 1,
+                symbol: folded.symbol,
+                severity: String(folded.severity ?? ''),
+                vulnerabilityClass: folded.vulnerabilityClass,
+                lastSeenScanId: folded.lastSeenScanId,
+            },
+            ...(folded.occurrences ?? []),
+        ];
+        let update: Record<string, unknown> = {};
+        let state: Partial<IIssue> = holder;
+        for (const place of places) {
+            update = withOccurrence(state, place);
+            state = { ...state, ...update } as Partial<IIssue>;
+        }
+        const moved = await this.issuesModel.updateOne(
+            {
+                _id: holder._id,
+                occurrences: holder.occurrences ?? { $exists: false },
+            },
+            { $set: update },
+        );
+        if (!moved?.modifiedCount) {
+            return false;
+        }
+        const dismissed = await this.issuesModel.updateOne(
+            { _id: folded._id, status: IssueStatus.OPEN },
+            {
+                $set: {
+                    status: IssueStatus.DISMISSED,
+                    duplicateOf: holder.fingerprint,
+                    consolidatedAt: new Date().toISOString(),
+                },
+            },
+        );
+        return (dismissed?.modifiedCount ?? 0) > 0;
+    }
+
+    async markScanIssuesConsolidated(
+        params: ScanRepositoryScope & { fingerprints: string[]; at: string },
+    ): Promise<void> {
+        if (!params.fingerprints.length) {
+            return;
+        }
+        await this.issuesModel.updateMany(
+            {
+                ...scanScope(params),
+                fingerprint: { $in: [...new Set(params.fingerprints)] },
+            },
+            { $set: { consolidatedAt: params.at } },
+        );
+    }
+
     async findOpenScanFindingAreas(
         params: ScanRepositoryScope,
     ): Promise<OpenScanFindingArea[]> {
@@ -501,6 +684,10 @@ export class IssuesRepository implements IIssuesRepository {
                     'startLine': 1,
                     'endLine': 1,
                     'evidence.attackPath': 1,
+                    'symbol': 1,
+                    'fingerprintAliases': 1,
+                    'consolidatedAt': 1,
+                    'lastSeenAt': 1,
                 },
             )
             .lean()
@@ -518,6 +705,10 @@ export class IssuesRepository implements IIssuesRepository {
                 startLine: d.startLine ?? 1,
                 endLine: d.endLine ?? d.startLine ?? 1,
                 attackPath: d.evidence?.attackPath,
+                symbol: d.symbol,
+                fingerprintAliases: d.fingerprintAliases,
+                consolidatedAt: d.consolidatedAt,
+                lastSeenAt: d.lastSeenAt,
             }));
     }
 
@@ -664,6 +855,67 @@ export class IssuesRepository implements IIssuesRepository {
 
         return resolved + (result?.modifiedCount ?? 0);
     }
+}
+
+/** One repository's scan issues, as every scan query reads them. */
+function scanScope(params: ScanRepositoryScope) {
+    return {
+        'organizationId': params.organizationId,
+        'repository.platform': params.repositoryPlatform,
+        'repository.host': params.repositoryHost,
+        'repository.id': params.repositoryId,
+        'source': IssueSource.SECURITY_SCAN,
+    };
+}
+
+/** The most places one issue lists; the oldest go first. */
+const MAX_OCCURRENCES = 50;
+
+/**
+ * An issue's occurrences and aliases with one more place: the same place
+ * replaced, not listed twice, and the issue as severe as its worst place.
+ */
+function withOccurrence(
+    issue: Partial<IIssue>,
+    place: IIssueOccurrence,
+): Pick<IIssue, 'occurrences' | 'fingerprintAliases' | 'severity'> {
+    const own = place.fingerprint === issue.fingerprint;
+    return {
+        occurrences: own
+            ? (issue.occurrences ?? [])
+            : [
+                  ...(issue.occurrences ?? []).filter(
+                      (o) => o.fingerprint !== place.fingerprint,
+                  ),
+                  place,
+              ].slice(-MAX_OCCURRENCES),
+        fingerprintAliases: own
+            ? (issue.fingerprintAliases ?? [])
+            : [
+                  ...new Set([
+                      ...(issue.fingerprintAliases ?? []),
+                      place.fingerprint,
+                  ]),
+              ],
+        severity: moreSevere(
+            issue.severity,
+            place.severity ?? '',
+        ) as SeverityLevel,
+    };
+}
+
+function occurrenceOfUpsert(finding: ScanFindingUpsert): IIssueOccurrence {
+    return {
+        fingerprint: finding.fingerprint,
+        title: finding.title,
+        cwe: finding.cwe,
+        filePath: normalizeScanPath(finding.filePath),
+        startLine: finding.startLine ?? 1,
+        endLine: finding.endLine ?? finding.startLine ?? 1,
+        symbol: finding.symbol,
+        severity: finding.severity,
+        vulnerabilityClass: finding.vulnerabilityClass,
+    };
 }
 
 const SEVERITY_RANK = new Map(

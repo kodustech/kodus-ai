@@ -12,6 +12,7 @@ jest.mock(
 );
 
 import { SecurityScanEngine } from './security-scan-engine';
+import { LLM } from '@libs/llm/llm';
 import {
     ScanFailure,
     SecurityScanJobProcessor,
@@ -114,6 +115,9 @@ function setup(engineResult: any, scan = scanRecord()) {
         findOpenScanFindingAreas: jest.fn(async () => [
             { filePath: 'src/orders.ts', vulnerabilityClass: 'authz' },
         ]),
+        addScanFindingOccurrence: jest.fn(async (..._args: unknown[]) => ({ outcome: 'merged' }) as any),
+        foldScanIssueInto: jest.fn(async (..._args: unknown[]) => true),
+        markScanIssuesConsolidated: jest.fn(async (..._args: unknown[]) => undefined),
     };
     const kodyIssuesManagement = { clearIssuesCache: jest.fn(async () => undefined) };
 
@@ -1180,5 +1184,109 @@ describe('durable unit accounting', () => {
         await processor.process('job-1');
         expect(lastUpdate(scans).spend.inputTokens).toBe(200_000);
         expect(lastUpdate(scans).spend.outputTokens).toBe(8_000);
+    });
+});
+
+describe('SecurityScanJobProcessor: one issue per root cause', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('records a finding folded into another issue on that issue, never as an issue of its own', async () => {
+        const { processor, issuesService, scans } = setup({
+            unitEvents: [[
+                { unitId: 'u1', state: 'done', findings: 1 },
+                [{ ...finding, filePath: 'src/orders.routes.ts', occurrenceOf: 'fp-holder' }],
+            ]],
+            result: finishedResult(),
+        });
+
+        await processor.process('job-1');
+
+        expect(issuesService.upsertScanFinding).not.toHaveBeenCalled();
+        expect(issuesService.addScanFindingOccurrence).toHaveBeenCalledWith(
+            expect.objectContaining({
+                holderFingerprint: 'fp-holder',
+                scanId: 'scan-1',
+                occurrence: expect.objectContaining({
+                    filePath: 'src/orders.routes.ts',
+                    fingerprint: expect.any(String),
+                }),
+            }),
+        );
+        const occurrence = (issuesService.addScanFindingOccurrence.mock.calls[0] as any)[0].occurrence;
+        expect(occurrence.fingerprint).not.toBe('fp-holder');
+        // A resumed scan sights the holder through it.
+        const [, , , reported] = scans.recordUnit.mock.calls[0] as unknown as [unknown, unknown, unknown, any[]];
+        expect(reported.map((r) => r.fingerprint)).toEqual(['fp-holder']);
+        expect(lastUpdate(scans).outcome.created).toBe(0);
+    });
+
+    it('stores the finding as its own issue when the issue it was folded into is gone', async () => {
+        const { processor, issuesService } = setup({
+            unitEvents: [[
+                { unitId: 'u1', state: 'done', findings: 1 },
+                [{ ...finding, occurrenceOf: 'fp-gone' }],
+            ]],
+            result: finishedResult(),
+        });
+        issuesService.addScanFindingOccurrence.mockResolvedValueOnce(null);
+
+        await processor.process('job-1');
+
+        expect(issuesService.upsertScanFinding).toHaveBeenCalledWith(
+            expect.objectContaining({ fingerprint: expect.not.stringMatching(/^fp-gone$/) }),
+        );
+    });
+
+    it('folds open issues that share a root cause at the end of the scan, and records what it compared', async () => {
+        const { processor, issuesService, scans } = setup({ unitEvents: [], result: finishedResult({ findings: [] }) });
+        const open = [
+            { ...finding, fingerprint: 'fp-auth', severity: 'critical', cwe: 'CWE-862' },
+            { ...finding, fingerprint: 'fp-dos', severity: 'high', cwe: 'CWE-400', startLine: 30, endLine: 31 },
+        ];
+        // The engine's own read happens first; the sweep reads them again.
+        issuesService.findOpenScanFindings.mockResolvedValue(open as any);
+        const run = jest.spyOn(LLM, 'run').mockResolvedValue({ sameAs: 'c1', reason: 'the DoS is the missing auth' } as any);
+
+        await processor.process('job-1');
+
+        expect(run).toHaveBeenCalledWith(
+            expect.objectContaining({ runName: 'security-scan-root-cause' }),
+        );
+        expect(issuesService.foldScanIssueInto).toHaveBeenCalledWith(
+            expect.objectContaining({ fingerprint: 'fp-dos', into: 'fp-auth' }),
+        );
+        expect(issuesService.markScanIssuesConsolidated).toHaveBeenCalledWith(
+            expect.objectContaining({ fingerprints: expect.arrayContaining(['fp-auth', 'fp-dos']) }),
+        );
+        expect(lastUpdate(scans).outcome.consolidated).toBe(1);
+        expect(lastUpdate(scans).status).toBe(SecurityScanStatus.COMPLETED);
+    });
+
+    it('compares nothing again that has not changed since it was last compared', async () => {
+        const { processor, issuesService } = setup({ unitEvents: [], result: finishedResult({ findings: [] }) });
+        issuesService.findOpenScanFindings.mockResolvedValue([
+            { ...finding, fingerprint: 'a', consolidatedAt: '2026-11-24T10:00:00Z', lastSeenAt: '2026-11-24T09:00:00Z' },
+            { ...finding, fingerprint: 'b', consolidatedAt: '2026-11-24T10:00:00Z', lastSeenAt: '2026-11-24T09:00:00Z' },
+        ] as any);
+        const run = jest.spyOn(LLM, 'run');
+
+        await processor.process('job-1');
+
+        expect(run).not.toHaveBeenCalled();
+        expect(issuesService.foldScanIssueInto).not.toHaveBeenCalled();
+    });
+
+    it('finishes the scan when folding fails', async () => {
+        const { processor, issuesService, scans } = setup({ unitEvents: [], result: finishedResult({ findings: [] }) });
+        issuesService.findOpenScanFindings.mockResolvedValue([
+            { ...finding, fingerprint: 'a' },
+            { ...finding, fingerprint: 'b' },
+        ] as any);
+        issuesService.foldScanIssueInto.mockRejectedValue(new Error('mongo down'));
+        jest.spyOn(LLM, 'run').mockResolvedValue({ sameAs: 'c1', reason: '' } as any);
+
+        await processor.process('job-1');
+
+        expect(lastUpdate(scans).status).toBe(SecurityScanStatus.COMPLETED);
     });
 });

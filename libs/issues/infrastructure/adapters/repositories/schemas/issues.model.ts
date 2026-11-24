@@ -10,6 +10,7 @@ import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import {
     IIssueEvidence,
+    IIssueOccurrence,
     IIssueOwner,
     IssueSource,
 } from '@libs/issues/domain/interfaces/issues.interface';
@@ -100,6 +101,18 @@ export class IssuesModel extends CoreDocument {
 
     @Prop({ type: String })
     public lastMissedScanId?: string;
+
+    @Prop({ type: [Object], required: false })
+    public occurrences?: IIssueOccurrence[];
+
+    @Prop({ type: [String], required: false })
+    public fingerprintAliases?: string[];
+
+    @Prop({ type: String, required: false })
+    public duplicateOf?: string;
+
+    @Prop({ type: String, required: false })
+    public consolidatedAt?: string;
 }
 
 export const IssuesSchema = SchemaFactory.createForClass(IssuesModel);

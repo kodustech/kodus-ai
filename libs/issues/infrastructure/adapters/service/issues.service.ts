@@ -6,6 +6,8 @@ import { IssueStatus } from '@libs/core/infrastructure/config/types/general/issu
 import {
     IIssuesRepository,
     ISSUES_REPOSITORY_TOKEN,
+    AddScanOccurrenceParams,
+    FoldScanIssueParams,
     MarkScanFindingsSeenParams,
     OpenScanFinding,
     OpenScanFindingArea,
@@ -167,6 +169,22 @@ export class IssuesService implements IIssuesService {
         params: MarkScanFindingsSeenParams,
     ): Promise<{ sighted: number; reopened: number }> {
         return this.issuesRepository.markScanFindingsSeen(params);
+    }
+
+    async addScanFindingOccurrence(
+        params: AddScanOccurrenceParams,
+    ): Promise<{ issue: IssuesEntity; outcome: ScanFindingOutcome } | null> {
+        return this.issuesRepository.addScanFindingOccurrence(params);
+    }
+
+    async foldScanIssueInto(params: FoldScanIssueParams): Promise<boolean> {
+        return this.issuesRepository.foldScanIssueInto(params);
+    }
+
+    async markScanIssuesConsolidated(
+        params: ScanRepositoryScope & { fingerprints: string[]; at: string },
+    ): Promise<void> {
+        return this.issuesRepository.markScanIssuesConsolidated(params);
     }
 
     async changedSince(organizationId: string, since: Date): Promise<boolean> {

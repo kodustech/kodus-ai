@@ -22,10 +22,6 @@ import type {
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { createLogger } from '@libs/core/log/logger';
-import {
-    createFindingDedupDeps,
-    deduplicateFindings,
-} from '@libs/code-review/infrastructure/agents/engine/finding-dedup';
 
 import type { ScanBudgetMeter } from '../domain/budget-meter';
 import { enclosingSymbol } from '../domain/enclosing-symbol';
@@ -44,6 +40,7 @@ import {
     VERIFY_SYSTEM_PROMPT,
 } from '../domain/scan-prompts';
 import { verifyScanFinding, type ScanVerifier } from './scan-verifier';
+import { sameRootCause, type RootCauseCall } from './scan-consolidation';
 import {
     heuristicUnits,
     isSourceFile,
@@ -111,8 +108,6 @@ export interface SecurityScanEngineDeps {
     ) => Promise<AgentLoopOutput>;
     llm?: typeof LLM.run;
     collectSurface?: typeof collectSurface;
-    /** The review's own dedup (finding-dedup.ts), run on each unit's findings. */
-    dedup?: typeof deduplicateFindings;
     /** The independent check each finding takes before it is reported. */
     verify?: ScanVerifier;
     now?: () => number;
@@ -148,6 +143,12 @@ export interface SecurityScanEngineParams {
      * whatever the pattern scan draws, so a fix can resolve them.
      */
     revisit?: Array<{ filePath: string; vulnerabilityClass: string }>;
+    /**
+     * A finding's own issue identity (ownFingerprintOf): names the issue a
+     * finding folded into another is one more place of. Without it no
+     * finding is folded into another.
+     */
+    identify?: (finding: ScanFinding) => string;
     /** Write and run a reproduction test for each finding (needs E2B). */
     reproduce: boolean;
     onPlanned?: (units: ScanUnit[], languages: string[]) => Promise<void>;
@@ -226,7 +227,6 @@ export class SecurityScanEngine {
     private readonly runLens: NonNullable<SecurityScanEngineDeps['runLens']>;
     private readonly llm: typeof LLM.run;
     private readonly collect: typeof collectSurface;
-    private readonly dedup: typeof deduplicateFindings;
     private readonly verifier: ScanVerifier;
     private readonly now: () => number;
 
@@ -234,7 +234,6 @@ export class SecurityScanEngine {
         this.runLens = deps.runLens ?? runAgentLoopViaCore;
         this.llm = deps.llm ?? LLM.run.bind(LLM);
         this.collect = deps.collectSurface ?? collectSurface;
-        this.dedup = deps.dedup ?? deduplicateFindings;
         this.verifier = deps.verify ?? verifyScanFinding;
         this.now = deps.now ?? Date.now;
     }
@@ -572,7 +571,7 @@ export class SecurityScanEngine {
 
             // The unit ran beside units folded in after it started: what they
             // reported was not in its view yet. Past the cap the meter refuses
-            // the dedup's request, and every finding is kept.
+            // the root-cause comparison, and every finding is kept.
             const reported = [
                 ...known,
                 ...(params.reported ?? []),
@@ -586,12 +585,7 @@ export class SecurityScanEngine {
                 sighted.push(...repeats);
                 return !repeats.length;
             });
-            result.findings = await this.withoutDuplicates(
-                params,
-                fresh,
-                nearby(reported, unit, result.findings),
-                sighted,
-            );
+            result.findings = await this.consolidate(params, fresh, reported);
 
             const unitProgress: ScanUnitProgress = {
                 unitId: unit.id,
@@ -722,13 +716,6 @@ export class SecurityScanEngine {
         };
     }
 
-    /**
-     * The same bug reached from two entry points (the route, the controller
-     * and the DAO of one missing check) is one finding. The review's dedup
-     * decides it, comparing the unit's findings with everything the scan
-     * already reported; a unit finding it folds into another is dropped. A
-     * dedup failure keeps every finding: a duplicate costs less than a miss.
-     */
     /** This run's open issues of earlier scans (SecurityScanEngineParams.known). */
     private known: ReadonlySet<ScanReportedFinding> = new Set();
 
@@ -851,174 +838,83 @@ export class SecurityScanEngine {
         }
     }
 
-    private async withoutDuplicates(
+    /**
+     * One issue per root cause: each fresh finding is compared with what the
+     * scan and the repository's open issues already hold that it could share
+     * a cause with, and one the model ties to another becomes one more place
+     * of that issue (`occurrenceOf`). A place an issue already folded in is
+     * that issue again without asking. A failed comparison, or one the cap
+     * refuses, keeps the finding as its own issue: a duplicate costs less
+     * than a miss.
+     */
+    private async consolidate(
         params: SecurityScanEngineParams,
         fresh: ScanFinding[],
         earlier: ScanReportedFinding[],
-        /** Receives the earlier findings a dropped fresh one repeated. */
-        sighted: ScanReportedFinding[] = [],
     ): Promise<ScanFinding[]> {
-        if (!fresh.length || fresh.length + earlier.length < 2) {
+        const identify = params.identify;
+        if (!identify || !fresh.length) {
             return fresh;
         }
-        const all = [...earlier, ...fresh];
-        const asSuggestion = (f: ScanReportedFinding, i: number) => ({
-            id: `scan-${i}`,
-            relevantFile: f.filePath,
-            relevantLinesStart: f.startLine,
-            relevantLinesEnd: f.endLine,
-            label: 'security',
-            severity: f.severity,
-            oneSentenceSummary: f.title,
-            suggestionContent: f.description,
-        });
-        try {
-            params.signal?.throwIfAborted();
-            const { suggestions, trace } = await scanAwait(
-                this.dedup(
-                    // Findings go to the client's own model alone (#2451): never
-                    // embedded on the platform key, the BYOK tiebreak decides.
-                    (this.dedupDeps ??= createFindingDedupDeps({
-                        logger,
+        const identityOf = (f: ScanReportedFinding): string =>
+            f.fingerprint ??
+            (f as ScanFinding).occurrenceOf ??
+            (f as ScanFinding).storedAs ??
+            identify(f as ScanFinding);
+        const pool: ScanReportedFinding[] = earlier.map((f) => ({
+            ...f,
+            fingerprint: identityOf(f),
+        }));
+        const call: RootCauseCall = (request) =>
+            this.modelCall(params, {
+                byokConfig: params.model.slot,
+                schema: request.schema,
+                system: request.system,
+                user: request.user,
+                runName: request.runName,
+                organizationId: params.organizationId,
+            });
+        for (const finding of fresh) {
+            // Stored as the open issue it repeats in place: that issue already.
+            if (finding.storedAs) {
+                pool.push({ ...finding, fingerprint: finding.storedAs });
+                continue;
+            }
+            const own = identify(finding);
+            const holder = pool.find((p) =>
+                p.fingerprintAliases?.includes(own),
+            );
+            if (holder?.fingerprint && holder.fingerprint !== own) {
+                finding.occurrenceOf = holder.fingerprint;
+                continue;
+            }
+            try {
+                params.signal?.throwIfAborted();
+                const same = await sameRootCause(call, finding, pool);
+                if (same?.match.fingerprint && same.match.fingerprint !== own) {
+                    finding.occurrenceOf = same.match.fingerprint;
+                    continue;
+                }
+            } catch (error) {
+                if (!params.signal?.aborted) {
+                    logger.warn({
+                        message:
+                            'Security scan could not compare a finding for a shared root cause; kept as its own issue',
                         context: SecurityScanEngine.name,
-                        platformEmbeddings: false,
-                    })),
-                    all.map(asSuggestion) as any,
-                    0,
-                    params.model.slot,
-                    { organizationId: params.organizationId } as any,
-                ),
-                params.signal,
-            );
-            const kept = new Set(suggestions.map((s) => s.id));
-            // An earlier finding is already stored: when the dedup kept a
-            // fresh one in its place, the fresh one is the duplicate, so the
-            // bug keeps the one identity it has.
-            const indicesOf = new Map<string, number[]>();
-            all.forEach((f, i) => {
-                const key = dedupKey(asSuggestion(f, i));
-                indicesOf.set(key, [...(indicesOf.get(key) ?? []), i]);
-            });
-            for (const group of trace?.groups ?? []) {
-                const replacesEarlier = group.duplicates.some((d) =>
-                    (indicesOf.get(dedupKey(d)) ?? []).some(
-                        (i) => i < earlier.length,
-                    ),
-                );
-                if (replacesEarlier) {
-                    for (const i of indicesOf.get(dedupKey(group.keep)) ?? []) {
-                        if (i >= earlier.length) kept.delete(`scan-${i}`);
-                    }
+                        error,
+                        metadata: {
+                            organizationId: params.organizationId,
+                            teamId: params.teamId,
+                            repositoryId: params.repositoryId,
+                        },
+                    });
                 }
             }
-            // An earlier finding grouped with a fresh one dropped here was
-            // found again.
-            const named = new Set<number>();
-            for (const group of trace?.groups ?? []) {
-                const members = [group.keep, ...group.duplicates].flatMap(
-                    (m) => indicesOf.get(dedupKey(m)) ?? [],
-                );
-                members.forEach((i) => named.add(i));
-                const droppedFresh = members.filter(
-                    (i) => i >= earlier.length && !kept.has(`scan-${i}`),
-                );
-                const earlierMembers = members.filter(
-                    (i) => i < earlier.length,
-                );
-                const keptFresh = members.some(
-                    (i) => i >= earlier.length && kept.has(`scan-${i}`),
-                );
-                // Grouped only with open issues of earlier scans: the fresh
-                // one is stored as the first, which keeps its identity and
-                // takes this scan's data.
-                if (
-                    droppedFresh.length &&
-                    !keptFresh &&
-                    this.refreshes(
-                        fresh[droppedFresh[0] - earlier.length],
-                        earlierMembers.map((i) => earlier[i]),
-                        sighted,
-                    )
-                ) {
-                    kept.add(`scan-${droppedFresh[0]}`);
-                } else if (droppedFresh.length) {
-                    for (const i of earlierMembers) sighted.push(earlier[i]);
-                }
-            }
-            // A merge the trace does not name (a keep the model repeated
-            // across groups): the kept finding lists where the absorbed one
-            // was. Read from there; without it, a dropped fresh finding is
-            // kept, a duplicate costing less than a miss.
-            const locationOf = (i: number) => {
-                const s = asSuggestion(all[i], i);
-                return `${s.relevantFile}:${s.relevantLinesStart}-${s.relevantLinesEnd}`;
-            };
-            // Each listed location, to the kept finding that lists it.
-            const holderAt = new Map<string, number>();
-            for (const s of suggestions as Array<{
-                id?: string;
-                alsoFoundIn?: string[];
-            }>) {
-                const at = Number(s.id?.replace(/^scan-/, ''));
-                if (!Number.isInteger(at)) continue;
-                for (const location of s.alsoFoundIn ?? []) {
-                    if (!holderAt.has(location)) holderAt.set(location, at);
-                }
-            }
-            const holderOf = (i: number) => holderAt.get(locationOf(i));
-            for (let i = 0; i < all.length; i++) {
-                if (named.has(i) || kept.has(`scan-${i}`)) continue;
-                const holder = holderOf(i);
-                if (i >= earlier.length) {
-                    if (holder === undefined) {
-                        kept.add(`scan-${i}`);
-                    } else if (holder < earlier.length) {
-                        if (
-                            this.refreshes(
-                                fresh[i - earlier.length],
-                                [earlier[holder]],
-                                sighted,
-                            )
-                        ) {
-                            kept.add(`scan-${i}`);
-                        } else {
-                            sighted.push(earlier[holder]);
-                        }
-                    }
-                } else if (holder !== undefined && holder >= earlier.length) {
-                    // An earlier finding absorbed into a fresh one: the bug
-                    // keeps the identity it has.
-                    if (
-                        !this.refreshes(
-                            fresh[holder - earlier.length],
-                            [earlier[i]],
-                            sighted,
-                        )
-                    ) {
-                        kept.delete(`scan-${holder}`);
-                        sighted.push(earlier[i]);
-                    }
-                }
-            }
-            return fresh.filter((_, i) =>
-                kept.has(`scan-${earlier.length + i}`),
-            );
-        } catch (error) {
-            logger.warn({
-                message: 'Security scan dedup failed; keeping every finding',
-                context: SecurityScanEngine.name,
-                error,
-                metadata: {
-                    organizationId: params.organizationId,
-                    teamId: params.teamId,
-                    repositoryId: params.repositoryId,
-                },
-            });
-            return fresh;
+            pool.push({ ...finding, fingerprint: own });
         }
+        return fresh;
     }
 
-    private dedupDeps: ReturnType<typeof createFindingDedupDeps> | undefined;
 
     /**
      * Every file, never cut: a finding is kept only when its file is listed,
@@ -2206,8 +2102,8 @@ function shellQuote(value: string): string {
  * lines are one finding, and so are the route, the handler and the query of
  * one missing check (one sits on the other's attack path). Two different
  * weaknesses on neighbouring lines, a SQL injection and an XSS in one handler,
- * stay two: the review's dedup that runs next judges what text alone shows
- * is one bug.
+ * stay two: the root-cause comparison that runs next judges what text alone
+ * shows is one bug.
  */
 function isDuplicate(
     existing: ScanReportedFinding[],
@@ -2252,29 +2148,6 @@ function onAttackPath(
     );
 }
 
-/** How a dedup trace entry is matched back to the finding it summarizes. */
-function dedupKey(s: {
-    relevantFile?: string;
-    relevantLinesStart?: number;
-    relevantLinesEnd?: number;
-    oneSentenceSummary?: string;
-}): string {
-    return [
-        s.relevantFile,
-        s.relevantLinesStart,
-        s.relevantLinesEnd,
-        s.oneSentenceSummary,
-    ].join('\u0000');
-}
-
-/** At most this many earlier findings go to one unit's dedup call. */
-const DEDUP_EARLIER_LIMIT = 40;
-
-/**
- * The earlier findings a unit's findings could duplicate: those in a file the
- * unit read or one of its findings' attack paths crosses, newest first. The
- * dedup call's size stays bounded however long the scan runs.
- */
 /** The stored identities of the findings, where they have one. */
 /** The stored findings among these, once each by fingerprint. */
 function withFingerprint(
@@ -2287,21 +2160,6 @@ function withFingerprint(
         }
     }
     return [...byFingerprint.values()];
-}
-
-function nearby(
-    earlier: ScanReportedFinding[],
-    unit: ScanUnit,
-    fresh: ScanFinding[],
-): ScanReportedFinding[] {
-    const files = new Set([unit.file, ...unit.relatedFiles]);
-    for (const finding of fresh) {
-        files.add(finding.filePath);
-        for (const step of finding.attackPath) files.add(step.file);
-    }
-    return earlier
-        .filter((f) => files.has(f.filePath))
-        .slice(-DEDUP_EARLIER_LIMIT);
 }
 
 function sampleListing(listing: string[], limit: number): string[] {

@@ -210,6 +210,8 @@ describe('IssuesRepository — security-scan findings', () => {
         const model = modelWith(null);
         model.findOne
             .mockImplementationOnce(() => exec(null))
+            // No issue holds it as a folded place.
+            .mockImplementationOnce(() => exec(null))
             .mockImplementationOnce(() =>
                 exec({ _id: 'i-1', status: IssueStatus.OPEN }),
             );
@@ -757,5 +759,173 @@ describe('single issue status transition', () => {
         expect(findByIdAndUpdate).toHaveBeenCalledWith('issue-1', expect.objectContaining({
             $set: expect.objectContaining({status}), $unset: {resolvedAt: ''},
         }), {new: true});
+    });
+});
+
+describe('IssuesRepository — one issue per root cause', () => {
+    const query = (value: unknown) => ({
+        exec: jest.fn(async () => value),
+        lean: () => ({ exec: jest.fn(async () => value) }),
+    });
+    const scope = {
+        organizationId: 'org-1',
+        repositoryPlatform: PlatformType.GITHUB,
+        repositoryHost: '',
+        repositoryId: 'repo-1',
+    };
+    const place = {
+        fingerprint: 'fp-route',
+        title: 'Route reaches the order with no owner check',
+        cwe: 'CWE-862',
+        filePath: 'src/orders/orders.routes.ts',
+        startLine: 3,
+        endLine: 3,
+        severity: 'critical',
+    };
+
+    function modelOf(docs: Record<string, any>) {
+        return {
+            findOne: jest.fn((filter: any) =>
+                query(docs[filter.fingerprint] ?? null),
+            ),
+            findOneAndUpdate: jest.fn(async (filter: any, update: any) => ({
+                ...docs[Object.keys(docs).find((k) => docs[k]._id === filter._id)!],
+                ...(update.$set ?? {}),
+            })),
+            updateOne: jest.fn(async () => ({ modifiedCount: 1 })),
+            updateMany: jest.fn(async () => ({ modifiedCount: 1 })),
+            create: jest.fn(),
+        };
+    }
+
+    it('records a place of the same root cause on the issue that holds it, as seen', async () => {
+        const model = modelOf({
+            'fp-1': { _id: 'i-1', fingerprint: 'fp-1', status: IssueStatus.OPEN, severity: 'high' },
+        });
+        const repository = new IssuesRepository(model as any);
+
+        const result = await repository.addScanFindingOccurrence({
+            ...scope,
+            holderFingerprint: 'fp-1',
+            occurrence: place,
+            scanId: 'scan-3',
+        });
+
+        expect(result?.outcome).toBe('merged');
+        const [filter, update] = model.findOneAndUpdate.mock.calls[0] as any;
+        expect(filter).toMatchObject({ _id: 'i-1', status: IssueStatus.OPEN });
+        expect(update.$set).toMatchObject({
+            occurrences: [{ ...place, lastSeenScanId: 'scan-3' }],
+            fingerprintAliases: ['fp-route'],
+            severity: 'critical',
+            lastSeenScanId: 'scan-3',
+            consecutiveScanMisses: 0,
+        });
+    });
+
+    it('replaces a place found again instead of listing it twice, and reopens a resolved issue', async () => {
+        const model = modelOf({
+            'fp-1': {
+                _id: 'i-1',
+                fingerprint: 'fp-1',
+                status: IssueStatus.RESOLVED,
+                severity: 'high',
+                occurrences: [{ ...place, startLine: 1, endLine: 1 }],
+                fingerprintAliases: ['fp-route'],
+            },
+        });
+        const repository = new IssuesRepository(model as any);
+
+        const result = await repository.addScanFindingOccurrence({
+            ...scope,
+            holderFingerprint: 'fp-1',
+            occurrence: place,
+            scanId: 'scan-3',
+        });
+
+        expect(result?.outcome).toBe('reopened');
+        const [, update] = model.findOneAndUpdate.mock.calls[0] as any;
+        expect(update.$set.occurrences).toHaveLength(1);
+        expect(update.$set.occurrences[0].startLine).toBe(3);
+        expect(update.$set.fingerprintAliases).toEqual(['fp-route']);
+        expect(update.$set.status).toBe(IssueStatus.OPEN);
+        expect(update.$unset).toEqual({ resolvedAt: '' });
+    });
+
+    it('follows an issue folded into another to the one that holds it', async () => {
+        const model = modelOf({
+            'fp-old': { _id: 'i-0', fingerprint: 'fp-old', status: IssueStatus.DISMISSED, duplicateOf: 'fp-1' },
+            'fp-1': { _id: 'i-1', fingerprint: 'fp-1', status: IssueStatus.OPEN, severity: 'high' },
+        });
+        const repository = new IssuesRepository(model as any);
+
+        await repository.addScanFindingOccurrence({
+            ...scope,
+            holderFingerprint: 'fp-old',
+            occurrence: place,
+            scanId: 'scan-3',
+        });
+
+        expect((model.findOneAndUpdate.mock.calls[0] as any)[0]._id).toBe('i-1');
+    });
+
+    it('stores a fresh finding at a folded place on the issue that holds it, never as a new issue', async () => {
+        const holder = { _id: 'i-1', fingerprint: 'fp-1', status: IssueStatus.OPEN, severity: 'high' };
+        const model = modelOf({ 'fp-1': holder });
+        // Its own identity matches no issue; one issue lists it as a place.
+        model.findOne.mockImplementation((filter: any) =>
+            query(
+                filter.fingerprintAliases === 'fp-route'
+                    ? holder
+                    : filter.fingerprint === 'fp-1'
+                      ? holder
+                      : null,
+            ),
+        );
+        const repository = new IssuesRepository(model as any);
+
+        const { outcome } = await repository.upsertScanFinding({
+            ...finding,
+            fingerprint: 'fp-route',
+            lastSeenScanId: 'scan-3',
+        } as any);
+
+        expect(outcome).toBe('merged');
+        expect(model.create).not.toHaveBeenCalled();
+    });
+
+    it('folds an issue into the one it shares a root cause with and dismisses it as a duplicate', async () => {
+        const model = modelOf({
+            'fp-dos': {
+                _id: 'i-2',
+                fingerprint: 'fp-dos',
+                status: IssueStatus.OPEN,
+                title: 'Unbounded login-init floods the store',
+                cwe: 'CWE-400',
+                filePath: 'src/cli/login.ts',
+                startLine: 9,
+                endLine: 12,
+                severity: 'high',
+                occurrences: [place],
+            },
+            'fp-1': { _id: 'i-1', fingerprint: 'fp-1', status: IssueStatus.OPEN, severity: 'medium' },
+        });
+        const repository = new IssuesRepository(model as any);
+
+        const folded = await repository.foldScanIssueInto({
+            ...scope,
+            fingerprint: 'fp-dos',
+            into: 'fp-1',
+        });
+
+        expect(folded).toBe(true);
+        const [holderFilter, holderUpdate] = model.updateOne.mock.calls[0] as any;
+        expect(holderFilter._id).toBe('i-1');
+        expect(holderUpdate.$set.fingerprintAliases).toEqual(['fp-dos', 'fp-route']);
+        expect(holderUpdate.$set.occurrences.map((o: any) => o.fingerprint)).toEqual(['fp-dos', 'fp-route']);
+        expect(holderUpdate.$set.severity).toBe('critical');
+        const [foldedFilter, foldedUpdate] = model.updateOne.mock.calls[1] as any;
+        expect(foldedFilter).toEqual({ _id: 'i-2', status: IssueStatus.OPEN });
+        expect(foldedUpdate.$set).toMatchObject({ status: IssueStatus.DISMISSED, duplicateOf: 'fp-1' });
     });
 });
