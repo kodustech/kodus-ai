@@ -466,6 +466,28 @@ function fromUrl(url: string, source: ReferenceSource): Candidate | undefined {
             : undefined;
     }
 
+    // Jira Server and Data Center live on the company's own host
+    // (`tracker.acme.com`, `acme.com/jira`), where a host rule can't find
+    // them; `/browse/KEY-1` and `/projects/<P>/issues/KEY-1` are Jira's own
+    // paths whatever the host. Left unread, the PR was told it references no
+    // task (#2422) while the same key in prose was read. It is read as that
+    // key, with no host: such a Jira is often connected as a custom plugin,
+    // which a `jira` host would turn away.
+    const jiraKey =
+        path.match(/\/browse\/([A-Za-z][A-Za-z0-9_]*-\d+)\/?$/)?.[1] ??
+        path.match(
+            /\/projects\/[^/]+\/issues\/([A-Za-z][A-Za-z0-9_]*-\d+)\/?$/,
+        )?.[1];
+    if (jiraKey) {
+        return {
+            kind: 'key',
+            id: jiraKey.toUpperCase(),
+            raw: url,
+            source,
+            url,
+        };
+    }
+
     // GitHub, GitLab (`/-/issues/`), Bitbucket, Forgejo: …/<owner>/<repo>/issues/<n>.
     // GitLab 18 and 19 serve the same issue at `…/-/work_items/<iid>`, and a
     // group's work items (epics) share that shape under `/groups/`, where

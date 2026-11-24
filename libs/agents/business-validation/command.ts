@@ -25,24 +25,35 @@ export function commandArgument(
  * What the command replies once the outcome is on the PR. A verdict, a task
  * too thin or a typo went into the Business Logic comment, so the reply only
  * points there; anything else is the reason nothing was checked. The first
- * run posts that comment, so it can't say the comment was updated.
+ * run posts that comment, so it can't say the comment was updated. On a
+ * re-check it says whether the result changed (#2423): an edit that keeps
+ * the same verdict is not news.
  */
 export function replyFor(
     outcome: BusinessValidationOutcome,
     comment: 'created' | 'updated' | 'none',
+    /** On an edited comment: whether the result differs from the last one. */
+    changed?: boolean,
 ): string {
     if (outcome.kind === 'skipped') {
         return outcome.message;
     }
+    const verdict =
+        outcome.kind === 'validated'
+            ? `${outcome.checks.map((c) => c.task.id).join(', ')} ${outcome.passed ? 'met' : 'has open requirements'}`
+            : undefined;
     if (comment === 'none') {
         return outcome.kind === 'validated'
-            ? `Business logic re-checked: ${outcome.checks.map((c) => c.task.id).join(', ')} ${outcome.passed ? 'met' : 'has open requirements'}.`
+            ? `Business logic re-checked: ${verdict}.`
             : outcome.message;
     }
     if (comment === 'created') {
         return 'Business logic checked. The result is in the Kody · Business Logic comment on this pull request.';
     }
-    return 'Business logic re-checked. The Kody · Business Logic comment on this pull request is updated.';
+    if (changed === false) {
+        return `Business logic re-checked: same result as before${verdict ? `, ${verdict}` : ''}. The Kody · Business Logic comment on this pull request shows it.`;
+    }
+    return `Business logic re-checked${changed ? `: the result changed${verdict ? `, ${verdict}` : ''}` : ''}. The Kody · Business Logic comment on this pull request is updated.`;
 }
 
 /** Text given to the command that is not a reference is the task itself. */

@@ -80,6 +80,46 @@ export function toRunTasks(result: BusinessValidationResult): RunTask[] {
     return [];
 }
 
+/**
+ * Whether two runs reached the same result, as the author reads it: the
+ * outcome, each task's verdict, and how many of its requirements and
+ * out-of-scope changes stand in each state, accepted or not. Wording is left
+ * out: the judge restates a requirement in other words from one run to the
+ * next, and that is not a change the author has to act on.
+ */
+export function sameResult(
+    previous: Pick<
+        NewValidationRun,
+        'outcome' | 'skipReason' | 'passed' | 'tasks'
+    >,
+    next: Pick<NewValidationRun, 'outcome' | 'skipReason' | 'passed' | 'tasks'>,
+): boolean {
+    return resultKey(previous) === resultKey(next);
+}
+
+function resultKey(
+    run: Pick<NewValidationRun, 'outcome' | 'skipReason' | 'passed' | 'tasks'>,
+): string {
+    return JSON.stringify([
+        run.outcome,
+        run.skipReason ?? null,
+        run.passed ?? null,
+        (run.tasks ?? [])
+            .map((task) => [
+                task.tracker,
+                task.id,
+                task.passed,
+                (task.requirements ?? [])
+                    .map((r) => `${r.state}:${r.accepted ? 1 : 0}`)
+                    .sort(),
+                (task.outOfScope ?? [])
+                    .map((o) => `${o.accepted ? 1 : 0}`)
+                    .sort(),
+            ])
+            .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+    ]);
+}
+
 export function buildRun(
     request: BusinessValidationRequest,
     result: BusinessValidationResult,
