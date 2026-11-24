@@ -709,7 +709,8 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         // release (the review, #2628) still records when it gave it back.
         const use = this.leaseIdToUse.get(leaseId);
         this.leaseIdToUse.delete(leaseId);
-        if (use) use.releasedAt = new Date();
+        const releasedAt = new Date();
+        if (use) use.releasedAt = releasedAt;
 
         const updated = await this.leaseRepo.decrementLease(prKey);
         this.leaseIdToPrKey.delete(leaseId);
@@ -842,7 +843,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 return;
             }
 
-            const killAt = new Date(Date.now() + idleMs);
+            // The idle window starts when the caller gave the sandbox back, not
+            // after the Mongo writes above: otherwise it runs a few ms long.
+            const killAt = new Date(releasedAt.getTime() + idleMs);
             await this.leaseRepo.setKillAt(prKey, killAt);
             if (use) use.stopAt = killAt;
 
