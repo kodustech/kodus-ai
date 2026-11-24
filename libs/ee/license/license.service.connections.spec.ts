@@ -92,11 +92,24 @@ describe('LicenseService per Git connection', () => {
 
     it('treats a workspace billing has no licence for as nothing to bind', async () => {
         const { service, post } = makeService();
-        post.mockRejectedValue({ response: { status: 404 } });
+        post.mockRejectedValue({
+            response: { status: 404, data: { error: 'LICENSE_NOT_FOUND' } },
+        });
 
         await expect(
             service.bindPrimaryConnection(workspace, 'gh-a'),
         ).resolves.toBe(true);
+    });
+
+    it('treats a billing service without the bind route as a failed bind', async () => {
+        const { service, post } = makeService();
+        post.mockRejectedValue({
+            response: { status: 404, data: 'Cannot POST /api/billing/connections/primary' },
+        });
+
+        await expect(
+            service.bindPrimaryConnection(workspace, 'gh-a'),
+        ).resolves.toBe(false);
     });
 
     it('releases a removed connection without throwing', async () => {

@@ -393,7 +393,15 @@ export class LicenseService implements ILicenseService {
             });
             return true;
         } catch (error) {
-            if ((error as AxiosError)?.response?.status === 404) {
+            // Billing's own "no licence for this workspace": nothing to bind.
+            // A 404 without that body is a billing service that predates the
+            // route, and must not read as bound.
+            const response = (error as AxiosError<{ error?: string }>)
+                ?.response;
+            if (
+                response?.status === 404 &&
+                response.data?.error === 'LICENSE_NOT_FOUND'
+            ) {
                 return true;
             }
             this.logger.error({
