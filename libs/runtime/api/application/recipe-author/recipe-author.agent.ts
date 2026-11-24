@@ -16,6 +16,7 @@ import { AUTHORED_FILE_LIMITS, type AuthoredFile, type AuthoredWorkspace, checkA
 import { directoryExistsCheck, fileExists, modelView, READ_LIMITS, type RepoReader, RepoPathError, repoPath } from './repo-reader';
 import { ciEvidence } from './ci-evidence';
 import { appendSuiteBlock } from './suite-block';
+import type { PullRequestPaths } from './pull-request-focus';
 import { factsBlock, repositoryFacts, workspaceFactsBlock } from './repository-facts';
 import {
     ClearStaleReadsPolicy,
@@ -259,6 +260,12 @@ export interface RecipeAuthorInput {
      * no Google Fonts host, and the Facts say so.
      */
     recommendedEgress?: boolean;
+    /**
+     * The changed paths of the repository's open pull requests (the primary's
+     * in a workspace), read by the product. The Facts then say which apps
+     * they change, the ones the Runs will test.
+     */
+    pullRequests?: readonly PullRequestPaths[];
 }
 
 /** The files `single` mode puts in the prompt, when they exist at the commit. */
@@ -398,7 +405,7 @@ Rules:
 - An app that serves pages a browser loads runs its production server under NODE_ENV=production, built and started the way the framework documents, even where the repository's development compose file or Dockerfile runs a dev server (then write your own files): Next.js next build then next start; React Router react-router build then react-router-serve ./build/server/index.js; Remix remix build (remix vite:build with Vite) then remix-serve on the server build; Nuxt nuxt build then node .output/server/index.mjs; SvelteKit with adapter-node vite build then node build; a Vite or Astro site vite build then vite preview --host 0.0.0.0 (astro preview --host 0.0.0.0). The browser probes load its pages: a dev server compiles each page on its first request and keeps a reload socket open. Start the dev server only when the app has no production start, or its build cannot run here, and then say so in notes.
 - Read the files that decide the boot, in this order, and stop once you can write the recipe: the CI workflows that boot or test the app, compose files, Dockerfiles, the root manifests (package.json or the equivalent, .env.example), then the README's run section. Find files by name with ${FIND_FILES_TOOL} instead of listing directory after directory.
 - The Facts block of the first message was computed from the commit: trust it and do not read a file again only to confirm it.
-- Boot what the CI e2e workflow boots (the CI evidence block, when the first message has one: its services, seeds, emulators, build and start commands) and the apps the pull requests touch, not the easiest app of a monorepo. Boot a smaller app than that only when it is the only one that fits the sandbox, and say why in notes (what the target needs that the sandbox cannot give); a budget of steps is not a reason, so read the CI evidence first and the target's own files next.
+- Boot what the CI e2e workflow boots (the CI evidence block, when the first message has one: its services, seeds, emulators, build and start commands) and the apps the pull requests touch (the Facts line "open pull requests change", when there is one), not the easiest app of a monorepo. Boot a smaller app than that only when it is the only one that fits the sandbox, and say why in notes (what the target needs that the sandbox cannot give); a budget of steps is not a reason, so read the CI evidence first and the target's own files next.
 
 The build reaches package registries and the read-only hosts of the Kodus recommended list only (npm, PyPI, Docker Hub, Debian and Alpine, Go, Maven, GitHub release downloads, Google Fonts...); any other host fails it:
 - Nx: ENV NX_NO_CLOUD=true NX_DISABLE_REMOTE_CACHE=true NX_DAEMON=false NX_SKIP_NX_CACHE=true in every stage that runs nx; an Nx Cloud token in nx.json does not change that.
@@ -803,6 +810,7 @@ export async function authorRecipe(
         .filter((t) => !single || t.name === SUBMIT_RECIPE_TOOL)
         .map((t) => counted(t, state));
     // No model and no tool call: a failed read only leaves the block out.
+    const prFacts = input.pullRequests?.length ? { pullRequests: input.pullRequests } : {};
     const facts = workspace
         ? workspaceFactsBlock(
               await Promise.all(
@@ -810,11 +818,11 @@ export async function authorRecipe(
                       alias: r.alias,
                       fullName: r.fullName,
                       primary: r.role === 'primary',
-                      facts: await repositoryFacts(r.reader).catch(() => []),
+                      facts: await repositoryFacts(r.reader, r.role === 'primary' ? prFacts : {}).catch(() => []),
                   })),
               ),
           )
-        : factsBlock(await repositoryFacts(deps.reader).catch(() => []));
+        : factsBlock(await repositoryFacts(deps.reader, prFacts).catch(() => []));
     const orgFacts = input.recommendedEgress === false ? `\n${RECOMMENDED_LIST_OFF_FACT}` : '';
     const allFacts = facts ? `${facts}${orgFacts}` : orgFacts ? `Facts (verified, computed before you started; each names its source):${orgFacts}` : '';
     // The primary repository's CI only: a member repository is read when the model asks. No model, no tool call; a failed read leaves it out.

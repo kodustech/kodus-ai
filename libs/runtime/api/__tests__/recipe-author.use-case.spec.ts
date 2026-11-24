@@ -140,10 +140,26 @@ function make(
         recommendedEnabled?: boolean;
         usage?: InMemoryLlmUsage;
         now?: () => Date;
+        /** The repository's open pull requests and the paths each changes; 'fails' makes the listing throw. */
+        openPullRequests?: Array<{ number: number; updatedAt: string; paths: string[] }> | 'fails';
     } = {},
 ) {
     const usage = opts.usage ?? new InMemoryLlmUsage();
-    const { git, calls } = fakeGit(opts.files);
+    const { git: base, calls } = fakeGit(opts.files);
+    const open = opts.openPullRequests;
+    const git: Partial<RuntimeGitPort> = open
+        ? {
+              ...base,
+              listOpenPullRequests: async () => {
+                  if (open === 'fails') throw new Error('Git API down');
+                  return open.map((pr) => ({ number: pr.number, headSha: 'f'.repeat(40), updatedAt: pr.updatedAt }));
+              },
+              getPullRequestDiff: async (i) => ({
+                  files: (open as Exclude<typeof open, 'fails'>).find((pr) => pr.number === i.prNumber)!.paths.map((path) => ({ path, patch: '' })) as any,
+                  truncated: false,
+              }),
+          }
+        : base;
     const record = opts.setup === undefined ? setup() : opts.setup;
     const setups = { get: jest.fn(async (org: string, env: string) => (record && record.organizationId === org && record.environmentId === env ? record : null)) };
     const products = { get: jest.fn(async (org: string, env: string) => (org === ORG && env === 'env-1' ? product : null)) };
@@ -206,6 +222,25 @@ describe('POST /internal/runtime/recipe-author', () => {
                 pending: false,
             }),
         ]);
+    });
+
+    it('tells Kody which apps the open pull requests change, so it boots the app the Runs test, not the easiest one', async () => {
+        const prompts = scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const t = make({
+            openPullRequests: [
+                { number: 3, updatedAt: '2026-11-20T10:00:00Z', paths: ['apps/dashboard/src/a.ts'] },
+                { number: 4, updatedAt: '2026-11-21T10:00:00Z', paths: ['apps/dashboard/src/b.ts', 'apps/landing/index.ts'] },
+            ],
+        });
+        await t.uc.execute({ authorization: bearer(), body: { sha: SHA } });
+        expect(prompts[0]).toContain('open pull requests change: apps/dashboard (2 of 2), apps/landing (1 of 2)');
+    });
+
+    it('a Git API that fails to list the open pull requests leaves the fact out; the author still runs', async () => {
+        const prompts = scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: GOOD } }]);
+        const out = await make({ openPullRequests: 'fails' }).uc.execute({ authorization: bearer(), body: { sha: SHA } });
+        expect(out).toMatchObject({ status: 'submitted', recipe: GOOD });
+        expect(prompts[0]).not.toContain('- open pull requests change:');
     });
 
     it("answers no_recipe with Kody's reason when it finds nothing to boot", async () => {

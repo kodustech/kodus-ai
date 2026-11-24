@@ -1,5 +1,6 @@
 import * as yaml from 'js-yaml';
 
+import { type PullRequestPaths, pullRequestFocusFact } from './pull-request-focus';
 import type { RepoReader } from './repo-reader';
 import { UNTRUSTED_YAML } from '@libs/runtime/protocol/yaml-limits';
 
@@ -69,8 +70,12 @@ function shownPaths(paths: string[]): string {
     return `${safe.slice(0, LISTED).join(', ')}${more > 0 ? ` (+${more} more)` : ''}`;
 }
 
-/** The facts of one commit; a read that fails only leaves its fact out. */
-export async function repositoryFacts(reader: RepoReader): Promise<RepositoryFact[]> {
+/**
+ * The facts of one commit; a read that fails only leaves its fact out. With
+ * the open pull requests' changed paths, also which workspace members they
+ * change (pull-request-focus.ts).
+ */
+export async function repositoryFacts(reader: RepoReader, opts: { pullRequests?: readonly PullRequestPaths[] } = {}): Promise<RepositoryFact[]> {
     const facts: RepositoryFact[] = [];
     const add = (fact: string, source: string) => facts.push({ fact, source });
     // An unreadable listing leaves the facts it would have given out, as any failed read here.
@@ -118,6 +123,10 @@ export async function repositoryFacts(reader: RepoReader): Promise<RepositoryFac
         }
     }
     if (globs.length) add(`workspace monorepo: ${globs.slice(0, 12).join(', ')}`, globSource);
+    if (opts.pullRequests?.length) {
+        const focus = pullRequestFocusFact(opts.pullRequests, globs);
+        if (focus) add(focus.fact, focus.source);
+    }
 
     for (const [f, tool] of [
         ['turbo.json', 'Turborepo'],

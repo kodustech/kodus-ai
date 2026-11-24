@@ -60,6 +60,7 @@ import { RUNTIME_RECIPE_AUTHOR_RECEIPTS, type RecipeAuthorOutcome, type RecipeAu
 import { openSetupToken } from '../setup-token';
 import { type AuthoredFile, checkAuthoredSubmission } from '../recipe-author/authored-files-policy';
 import { GitRepoReader } from '../recipe-author/git-repo-reader';
+import { PULL_REQUEST_FOCUS_LIMITS, type PullRequestPaths } from '../recipe-author/pull-request-focus';
 import {
     authorRecipe,
     AUTHOR_INSTRUCTIONS_CHANGED,
@@ -92,6 +93,8 @@ const said = (text: string, max: number) => redactPatterns(text).text.slice(0, m
  * failed" with no recipe.
  */
 export const RECIPE_AUTHOR_TIMEOUT_MS = 10 * 60_000;
+/** How long the open pull requests' paths may take before the author runs without them. */
+export const OPEN_PULL_REQUESTS_TIMEOUT_MS = 20_000;
 /**
  * How long a call holds its attempt: the run's own ceiling and a margin. A
  * call still holding it past this died with its API instance, and the next
@@ -217,6 +220,32 @@ export class RuntimeRecipeAuthorUseCase {
      * stops with it instead of spending the setup's budget on an answer
      * nobody reads; the 5-minute ceiling stands either way.
      */
+    /**
+     * The changed paths of the repository's open pull requests, the most
+     * recently updated first, for the author's Facts (pull-request-focus.ts).
+     * A hint only: a platform with no listing, a failed call or a slow Git API
+     * leaves it empty and the author runs as before.
+     */
+    private async openPullRequestPaths(repo: { organizationId: string; teamId: string; repositoryId: string; repositoryName: string }): Promise<PullRequestPaths[]> {
+        if (!this.git.listOpenPullRequests) return [];
+        const read = async (): Promise<PullRequestPaths[]> => {
+            const listed = await this.git.listOpenPullRequests!(repo);
+            if (listed === 'unsupported_platform') return [];
+            const recent = [...listed].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')).slice(0, PULL_REQUEST_FOCUS_LIMITS.pullRequests);
+            const diffs = await Promise.allSettled(recent.map((pr) => this.git.getPullRequestDiff({ ...repo, prNumber: pr.number, headSha: pr.headSha })));
+            return diffs.flatMap((d, i) => (d.status === 'fulfilled' ? [{ number: recent[i].number, paths: d.value.files.map((f) => f.path) }] : []));
+        };
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const late = new Promise<PullRequestPaths[]>((resolve) => {
+            timer = setTimeout(() => resolve([]), OPEN_PULL_REQUESTS_TIMEOUT_MS);
+        });
+        try {
+            return await Promise.race([read().catch(() => [] as PullRequestPaths[]), late]);
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
     async execute(input: { authorization?: string; body: unknown; signal?: AbortSignal }): Promise<RecipeAuthorResponse> {
         // Only a setup token: a Run token never asks for a recipe.
         const claims = openSetupToken(this.config, input.authorization, this.now(), 'recipe author');
@@ -463,6 +492,7 @@ export class RuntimeRecipeAuthorUseCase {
         const runner = new ObservedRunner(agent.runner);
         // Unreadable (no read URL, a database down): the default, on.
         const recommendedEgress = this.egress ? await this.egress.settings(claims.organizationId).then((s) => s.recommendedEnabled, () => true) : true;
+        const pullRequests = await this.openPullRequestPaths({ ...orgTeam, repositoryId: claims.repositoryId, repositoryName: product.repositoryName });
         let result: Awaited<ReturnType<typeof authorRecipe>>;
         try {
             result = await authorRecipe(
@@ -477,6 +507,7 @@ export class RuntimeRecipeAuthorUseCase {
                     // with gave a recipe on 10/10 against 8/10, with 12% fewer input tokens. Prefetch did not pay.
                     context: { clearStaleReads: true },
                     ...(recommendedEgress ? {} : { recommendedEgress: false }),
+                    ...(pullRequests.length ? { pullRequests } : {}),
                     ...(previous ? { previous } : {}),
                     maxTokens: reservation.tokens,
                     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(RECIPE_AUTHOR_TIMEOUT_MS)]) : AbortSignal.timeout(RECIPE_AUTHOR_TIMEOUT_MS),
