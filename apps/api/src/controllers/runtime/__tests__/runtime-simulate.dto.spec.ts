@@ -10,7 +10,7 @@ describe('Runtime simulation selection DTO and controller', () => {
         const body = await parse({ prNumbers: [4, 7, 9, 10, 11] });
         const execute = jest.fn(async () => ({ runs: [] }));
         const unused = undefined as never;
-        const controller = new RuntimeEnvironmentsController(unused, unused, unused, unused, unused, unused, unused, unused, unused, unused, { execute } as never, unused, unused);
+        const controller = new RuntimeEnvironmentsController(unused, unused, unused, unused, unused, unused, unused, unused, unused, unused, { execute } as never, unused, unused, unused, unused);
         await controller.simulateRun({ user: { uuid: 'fixture-user' } } as any, 'fixture-env', body);
         expect(execute).toHaveBeenCalledWith({ user: { uuid: 'fixture-user' }, environmentId: 'fixture-env', body: expect.objectContaining({ prNumbers: [4, 7, 9, 10, 11] }) });
     });
