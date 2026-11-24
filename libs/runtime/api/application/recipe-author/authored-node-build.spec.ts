@@ -335,3 +335,28 @@ describe("Node build: the Node release the repository's .npmrc pins", () => {
         expect(await lint(NOCODB, `FROM nginx:1.27 AS web\n${build('node:24.14.0-bookworm-slim')}`)).toEqual([]);
     });
 });
+
+// A design partner's build failed with "Cannot find namespace 'google'", which its own CI never showed: an install under
+// NODE_ENV=production leaves the type packages and the build tools out.
+describe('an install under NODE_ENV=production', () => {
+    const YARN1 = { 'package.json': JSON.stringify({ name: 'web' }), 'yarn.lock': '# yarn lockfile v1\n' };
+    it('is refused when NODE_ENV=production is set before it, with the fix for its package manager', async () => {
+        const npm = await lint(SINGLE_PACKAGE, `${FROM}ENV NODE_ENV=production\nCOPY package.json package-lock.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build\n`);
+        expect(npm.join('\n')).toMatch(/:5 RUN npm ci installs under NODE_ENV=production.*--include=dev/);
+        const yarn = await lint(YARN1, `${FROM}COPY package.json yarn.lock ./\nRUN NODE_ENV=production yarn install --frozen-lockfile\n`);
+        expect(yarn.join('\n')).toMatch(/installs under NODE_ENV=production.*--production=false/);
+    });
+
+    it('passes when NODE_ENV=production comes after the install and the build, or the install says what it omits', async () => {
+        expect(
+            (await lint(SINGLE_PACKAGE, `${FROM}COPY package.json package-lock.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build\nENV NODE_ENV=production\nCMD ["npm","start"]\n`)).join('\n'),
+        ).not.toMatch(/NODE_ENV=production/);
+        expect((await lint(SINGLE_PACKAGE, `${FROM}ENV NODE_ENV=production\nCOPY package.json package-lock.json ./\nRUN npm ci --include=dev\n`)).join('\n')).not.toMatch(/NODE_ENV=production/);
+        expect((await lint(SINGLE_PACKAGE, `${FROM}ENV NODE_ENV=production\nCOPY package.json package-lock.json ./\nRUN npm ci --omit=dev\n`)).join('\n')).not.toMatch(/NODE_ENV=production/);
+    });
+
+    it('leaves Yarn Berry alone: it ignores NODE_ENV', async () => {
+        const out = await lint(YARN_MONOREPO, `${FROM}ENV NODE_ENV=production\nCOPY --parents package.json yarn.lock .yarnrc.yml .yarn/releases apps/*/package.json packages/*/package.json ./\nRUN yarn install --immutable\n`);
+        expect(out.join('\n')).not.toMatch(/installs under NODE_ENV=production/);
+    });
+});

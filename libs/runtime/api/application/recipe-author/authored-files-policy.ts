@@ -870,6 +870,24 @@ export function checkNodeBuild(path: string, content: string, facts: NodeBuildFa
         });
     }
 
+    // An install under NODE_ENV=production leaves the devDependencies out: the type packages, TypeScript and the bundler the
+    // build then needs (a design partner's build: "Cannot find namespace 'google'", which its CI never showed). Yarn Berry
+    // ignores NODE_ENV; an install that says what it omits (--omit=dev, --prod) chose it.
+    const berry = (facts.packageManager?.name === 'yarn' && majorOf(facts.packageManager.version) >= 2) || facts.installFiles.includes('.yarnrc.yml');
+    walkStages(content, facts.workspaceGlobs, (i, stage) => {
+        if (i.keyword !== 'RUN') return;
+        for (const c of commandsOf(flagsOf(i.args).rest)) {
+            if (installKind(c) !== 'install' || (c.words[0] === 'yarn' && berry) || c.words[0] === 'bun') continue;
+            if ((c.env.get('NODE_ENV') ?? stage.env.get('NODE_ENV')) !== 'production') continue;
+            if (c.words.some((w) => /^--(omit|include|only|prod|production|dev)\b/.test(w))) continue;
+            const keep = c.words[0] === 'npm' ? '--include=dev' : c.words[0] === 'pnpm' ? '--prod=false' : '--production=false';
+            errors.push(
+                `${path}:${i.line} RUN ${c.words.join(' ').slice(0, 120)} installs under NODE_ENV=production, so it leaves out the devDependencies: the type packages (@types/*), TypeScript and the bundler the build needs (it then fails with errors such as Cannot find namespace). Set NODE_ENV=production only for the start, after the install and the build (an ENV after them, or the compose file's environment), or install with ${keep}.`,
+            );
+            return;
+        }
+    });
+
     // No dependency tree copied between stages: under gVisor that copy is a per-file cost (twenty's COPY of /app/node_modules took 439 s).
     for (const c of dependencyTreeCopies(content, facts.workspaceGlobs)) {
         errors.push(
