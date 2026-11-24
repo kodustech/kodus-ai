@@ -1,6 +1,32 @@
-import { analyzeCodeStructure } from './analyze-code-structure';
+import {
+    analyzeCodeStructure,
+    supportsCodeStructureAnalysis,
+} from './analyze-code-structure';
 
 describe('analyzeCodeStructure', () => {
+    it.each(['types.d.ts', 'types.d.mts', 'types.d.cts', 'TYPES.D.MTS'])(
+        'excludes declaration file %s without attempting code generation',
+        (path) => {
+            expect(supportsCodeStructureAnalysis(path)).toBe(false);
+            expect(
+                analyzeCodeStructure(
+                    path,
+                    'export declare function example(): void;',
+                ),
+            ).toBeNull();
+        },
+    );
+    it.each(['source.ts', 'source.mts', 'source.cts'])(
+        'still measures implementation file %s',
+        (path) => {
+            expect(
+                analyzeCodeStructure(
+                    path,
+                    'export function example() { return true; }',
+                ),
+            ).toEqual({ functions: 1, functionsNeedingAttention: 0 });
+        },
+    );
     it('finds a deeply nested function without counting nested functions twice', () => {
         const result = analyzeCodeStructure(
             'src/service.ts',

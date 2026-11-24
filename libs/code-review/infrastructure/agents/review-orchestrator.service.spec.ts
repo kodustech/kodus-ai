@@ -44,7 +44,7 @@ const ALL_ON: ReviewOptions = {
 
 function inputFor(
     reviewOptions: ReviewOptions,
-    reviewMode: 'fast' | 'normal' | 'deep' = 'normal',
+    reviewMode: 'fast' | 'balanced' | 'deep' = 'balanced',
 ) {
     return {
         reviewOptions,

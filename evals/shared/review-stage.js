@@ -214,7 +214,8 @@ function observeFinderPasses() {
                     if (prop !== 'run') return Reflect.get(target, prop, receiver);
                     return async (spec, runInput, runCtx) => {
                         const fid = runInput?.telemetry?.functionId;
-                        const label = fid === agentName ? 'generalist' : fid === `${agentName}-synthesis-rescue` ? 'synthesis-rescue' : null;
+                        // Heavy mode's lenses run as `${agentName}-lens-<id>`.
+                        const label = fid === agentName ? 'generalist' : fid === `${agentName}-synthesis-rescue` ? 'synthesis-rescue' : fid?.startsWith(`${agentName}-lens-`) ? fid.slice(agentName.length + 1) : null;
                         // Any other run (the verifier's) is counted by the step around it.
                         if (!label) return target.run(spec, runInput, runCtx);
                         const startedAt = Date.now();
@@ -248,7 +249,11 @@ function observeFinderPasses() {
             // Every candidate the verify judged, with the pass it came from: a
             // generalist finding the rescue repeated word for word was merged into
             // the generalist's (production's merge key).
-            const fromGeneralist = new Set(run.passes.filter((p) => p.label === 'generalist').flatMap((p) => (p.recovered || p.findings).map(findingKey)));
+            // The first pass that produced a key names its origin, generalist first.
+            const originOf = new Map();
+            for (const p of [...run.passes].sort((a, b) => (b.label === 'generalist') - (a.label === 'generalist'))) {
+                for (const key of (p.recovered || p.findings).map(findingKey)) if (!originOf.has(key)) originOf.set(key, p.label);
+            }
             const first = run.verify.find((p) => p.pass === 'verify');
             run.candidates = (first?.candidates || []).map((key, index) => {
                 const v = first;
@@ -258,7 +263,7 @@ function observeFinderPasses() {
                 const gateDrop = gateIndex >= 0 ? gate.dropped.find((d) => d.index === gateIndex) : null;
                 return {
                     index,
-                    origin: fromGeneralist.has(key) ? 'generalist' : 'synthesis-rescue',
+                    origin: originOf.get(key) || 'synthesis-rescue',
                     verify: v.skipped ? 'not-run' : dropped ? 'dropped' : gateDrop ? 'dropped-by-evidence-gate' : 'kept',
                     rationale: dropped?.rationale ?? gateDrop?.rationale ?? null,
                 };
@@ -321,6 +326,11 @@ function kodyRulesRepository(rules = []) {
     let doc = rules.length ? { uuid: `eval-kody-rules-${EVAL_ORG.organizationId}`, organizationId: EVAL_ORG.organizationId, rules } : null;
     return {
         findByOrganizationId: async (organizationId) => (doc && doc.organizationId === organizationId ? KodyRulesEntity.create(doc) : null),
+        // The rules the review reads: every rule but the deleted ones.
+        findLiveRulesByOrganizationId: async (organizationId) =>
+            doc && doc.organizationId === organizationId
+                ? KodyRulesEntity.create({ ...doc, rules: (doc.rules || []).filter((r) => r.status !== 'deleted') })
+                : null,
         create: async (kodyRules) => {
             doc = { uuid: `eval-kody-rules-${kodyRules.organizationId}`, ...kodyRules };
             return KodyRulesEntity.create(doc);
@@ -392,7 +402,7 @@ async function teamStore({ language, memories = [], rules = [], codeReviewConfig
  * listing and reads the review does there (the coding-agent instructions a case
  * gives); without it that branch lists nothing.
  */
-function platform({ baseRef, prFiles, prCommits, content, targetBranchFiles = {} }) {
+function platform({ baseRef, prFiles, prCommits, content, targetBranchFiles = {}, filesSinceLastReview }) {
     const onTarget = (ref) => ref === baseRef;
     return {
         // A read on the target branch answers from targetBranchFiles; any other
@@ -410,6 +420,7 @@ function platform({ baseRef, prFiles, prCommits, content, targetBranchFiles = {}
         getTypeIntegration: async () => 'GITHUB',
         getDefaultBranch: async () => baseRef,
         getFilesByPullRequestId: async () => prFiles,
+        ...(filesSinceLastReview ? { getChangedFilesSinceLastCommit: filesSinceLastReview } : {}),
         getCommitsForPullRequestForCodeReview: async () => prCommits,
         // Only when the case gives the target branch files: a review that lists
         // nothing there behaves as before this listing existed.
@@ -543,10 +554,10 @@ async function changedFilesThroughStage(context, codeManagement) {
 
 // The repository the review reads: a mirror of the platform's refs for the PR,
 // or a repository written for the eval. `head` is the ref content is read at.
-async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, baseSha, repoFiles, repoBase, baseFiles }) {
+async function repositoryFor({ repo, prNumber, headRef, headSha, baseRef, baseSha, repoFiles, repoBase, baseFiles, lastReviewedFiles }) {
     if (repoFiles) {
-        const inline = await inlineMirror(repoFiles, baseFiles ? { baseFiles } : { base: repoBase });
-        return { cloneUrl: inline.cloneUrl, branch: inline.branch, baseBranch: inline.base, head: inline.branch, prNumber: undefined, commit: false, cleanup: inline.cleanup };
+        const inline = await inlineMirror(repoFiles, baseFiles ? { baseFiles, lastReviewedFiles } : { base: repoBase });
+        return { cloneUrl: inline.cloneUrl, branch: inline.branch, baseBranch: inline.base, head: inline.branch, lastReviewed: inline.lastReviewed, prNumber: undefined, commit: false, cleanup: inline.cleanup };
     }
     const cloneUrl = await mirrorFor({ repo, prNumber, headSha, baseRef, baseSha });
     return { cloneUrl, branch: headRef, baseBranch: baseRef, head: prNumber ? `refs/pull/${prNumber}/head` : `refs/eval/${headSha}`, prNumber: prNumber || undefined, commit: !prNumber && !!headSha, headSha, cleanup: async () => undefined };
@@ -635,6 +646,7 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
         repoFiles: pr.repoFiles,
         repoBase: pr.repoBase,
         baseFiles: pr.baseFiles,
+        lastReviewedFiles: pr.lastReviewedFiles,
     });
     try {
         // `baseFiles`: the platform's file list between the two trees, read from the mirror.
@@ -645,6 +657,7 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
             prCommits: pr.commits || [],
             content: (file) => contentAt(repo.cloneUrl, repo.head, file),
             targetBranchFiles: pr.targetBranchFiles,
+            filesSinceLastReview: repo.lastReviewed && (({ lastCommit }) => pullRequestFiles(repo.cloneUrl, lastCommit.sha, repo.branch)),
         });
         const codeReviewConfig = await routedTeamConfig({
             team,
@@ -668,9 +681,12 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
                 base: { ref: pr.baseRef || 'main', repo: { fullName: repository.fullName } },
             },
             codeReviewConfig,
+            // `@kody review --heavy`: the generalist plus the M3 lenses.
+            ...(pr.heavy ? { heavy: true } : {}),
             // ValidateNewCommitsStage on a first review: every commit of the PR.
             prAllCommits: pr.commits || [],
             prCommits: pr.commits || [],
+            ...(repo.lastReviewed ? { lastExecution: { lastAnalyzedCommit: repo.lastReviewed } } : {}),
             previousDecisions,
             pipelineMetadata: {},
         };

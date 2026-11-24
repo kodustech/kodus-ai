@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { AiProvidersPageSkeleton } from "@components/system/page-skeletons";
 import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
@@ -61,16 +62,14 @@ import {
 } from "../_components/_modals/edit-key/credential-config";
 import {
     buildByokBlob,
-    findReusableCredential,
     credentialSettingsFromConfig,
+    findReusableCredential,
     modelFieldsFromConfig,
     normalizeEndpoint,
 } from "../_components/byok-write";
 import { credentialSettingsOverride } from "../_components/credential-settings-override";
 import { SuccessClaim } from "../_components/success-claim";
 import { formatModelLabel } from "../_data/model-label";
-import { AiProvidersPageSkeleton } from "@components/system/page-skeletons";
-
 import { isPlatformFundedProvider } from "../_data/platform-funded";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
 import {
@@ -78,7 +77,7 @@ import {
     useKodusCreditBalance,
 } from "../_hooks/use-kodus-credit-balance";
 import type { BYOKConfig, BYOKConnectInput } from "../_types";
-import { maskKey } from "../_utils";
+import { maskKey, visibleModelLabels } from "../_utils";
 
 const ENDPOINT_NEEDS_KEY_MESSAGE =
     "No key is stored for this endpoint — paste its API key.";
@@ -417,7 +416,8 @@ export function ByokManualPageClient({
     // Title label: derive from the id — so the header reads "Edit Kimi K2.6" /
     // "Edit Deepseek V4 Pro", never a raw id.
     const editLabel = existingConfig?.model
-        ? formatModelLabel(existingConfig.model)
+        ? (visibleModelLabels(existing).get(editModelId ?? "") ??
+          formatModelLabel(existingConfig.model))
         : "";
     const awsBearerToken = form.watch("awsBearerToken");
     const awsAccessKeyId = form.watch("awsAccessKeyId");
@@ -1069,6 +1069,7 @@ export function ByokManualPageClient({
                                                             : undefined
                                                     }
                                                     lockedInUse={modelInUse}
+                                                    lockedLabel={editLabel}
                                                 />
                                             </Suspense>
                                         </ErrorBoundary>

@@ -1,6 +1,6 @@
 ---
 name: kodus-pr-suggestions-resolver
-description: Use when the user wants to fetch, triage, or implement Kodus suggestions for an existing remote pull request via `kodus pr suggestions`, `--pr-url`, or `--pr-number`.
+description: Use when the user wants to fetch, triage, or implement Kodus suggestions for an existing remote pull request via `kodus pr suggestions`, `--pr-url`, or `--pr-number`, or asks how Kody reviewed a pull request (review history, past runs, why a review failed) via `kodus pr reviews`.
 ---
 
 # Kodus PR Suggestions Resolver
@@ -59,3 +59,16 @@ Provide a concise report covering:
 - Suggestions skipped (with reasons).
 - Tests/builds run and outcomes.
 - Remaining uncertainties or follow-ups needed.
+
+## Review history of a pull request
+
+When the user asks whether, when or how Kody reviewed a PR (past runs, a failed or skipped review, how many suggestions were sent), use:
+
+```
+kodus pr reviews <pr-number> [--repo <owner/repo>] [--repo-id <id>] [--team <team>] [--limit <n>] --json
+```
+
+- Without `--repo`/`--repo-id`, the repository comes from this checkout's `origin` remote.
+- Runs come newest first: `automationExecution.status` (`success`, `error`, `partial_error`, `skipped`, `in_progress`, `pending`), `automationExecution.errorMessage`, `suggestionsCount.sent`/`filtered`, `reviewedCommitSha`.
+- `truncated: true` means older runs exist; raise `--limit` if the user needs them.
+- Needs a logged-in user (`kodus auth login`). With a team key it fails with an auth error: tell the user to log in.

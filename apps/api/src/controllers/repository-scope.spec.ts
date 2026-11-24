@@ -1,5 +1,6 @@
 import { AbilityBuilder, createMongoAbility } from '@casl/ability';
 import { ForbiddenException } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import {
@@ -10,6 +11,7 @@ import { AppAbility } from '@libs/identity/domain/permissions/types/permissions.
 
 import { FindByOrganizationIdKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-by-organization-id.use-case';
 
+import { KodyRulesTenantGuard } from '../guards/kody-rules-tenant.guard';
 import { KodyRulesController } from './kodyRules.controller';
 import { ParametersController } from './parameters.controller';
 import { PullRequestController } from './pullRequest.controller';
@@ -82,22 +84,6 @@ describe('repository scope — pull requests', () => {
 });
 
 describe('repository scope — kody rules', () => {
-    it('GET /kody-rules/check-sync-status refuses a repository outside the scope', async () => {
-        const execute = jest.fn();
-        const controller = make(KodyRulesController, {
-            checkSyncStatusUseCase: { execute },
-            cacheService: {
-                getFromCache: jest.fn().mockResolvedValue({ cached: true }),
-                addToCache: jest.fn(),
-            },
-        });
-
-        await expect(
-            controller.checkSyncStatus('team-1', OTHER),
-        ).rejects.toBeInstanceOf(ForbiddenException);
-        expect(execute).not.toHaveBeenCalled();
-    });
-
     it('POST /kody-rules/generate-kody-rules refuses a repository outside the scope', async () => {
         const execute = jest.fn();
         const controller = make(KodyRulesController, {
@@ -113,30 +99,63 @@ describe('repository scope — kody rules', () => {
         expect(execute).not.toHaveBeenCalled();
     });
 
-    it('GET /kody-rules/imported/count refuses a repository outside the scope', async () => {
-        const count = jest.fn();
-        const controller = make(KodyRulesController, {
-            manageImportedKodyRulesUseCase: { count },
-        });
-
-        await expect(
-            controller.countImportedRules(OTHER, 'team-1'),
-        ).rejects.toBeInstanceOf(ForbiddenException);
-        expect(count).not.toHaveBeenCalled();
-    });
-
-    it('POST /kody-rules/imported/manage refuses a repository outside the scope', async () => {
+    it('POST /kody-rules/generate-kody-rules without a list narrows a scoped member to their repositories', async () => {
         const execute = jest.fn();
         const controller = make(KodyRulesController, {
-            manageImportedKodyRulesUseCase: { execute },
+            generateKodyRulesUseCase: { execute },
         });
 
-        await expect(
-            controller.manageImportedRules({
-                repositoryId: OTHER,
-                action: 'pause',
+        await controller.generateKodyRules({ teamId: 'team-1' });
+
+        expect(execute.mock.calls[0][0].repositoriesIds).toEqual([ALLOWED]);
+        expect(
+            controller.authorizationService.getRepositoryScope,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: Action.Create,
+                resource: ResourceType.KodyRules,
+                user: expect.objectContaining({ uuid: expect.anything() }),
             }),
-        ).rejects.toBeInstanceOf(ForbiddenException);
+        );
+    });
+
+    // No scope (null) is a member who reaches every repository: the use case
+    // gets the request as sent and generates for all of them.
+    it('POST /kody-rules/generate-kody-rules without a list keeps every repository for an unscoped member', async () => {
+        const execute = jest.fn();
+        const controller = make(KodyRulesController, {
+            generateKodyRulesUseCase: { execute },
+        });
+        controller.authorizationService.getRepositoryScope.mockResolvedValue(
+            null,
+        );
+
+        await controller.generateKodyRules({ teamId: 'team-1' });
+
+        expect(execute.mock.calls[0][0]).toEqual({ teamId: 'team-1' });
+    });
+
+    // An empty list means "every repository" to the use case, so a member
+    // scoped to no repository must not reach it.
+    it('POST /kody-rules/generate-kody-rules refuses a member scoped to no repository', async () => {
+        const execute = jest.fn();
+        const controller = make(KodyRulesController, {
+            generateKodyRulesUseCase: { execute },
+        });
+        controller.authorizationService.getRepositoryScope.mockResolvedValue(
+            [],
+        );
+
+        for (const body of [
+            { teamId: 'team-1' },
+            { teamId: 'team-1', repositoriesIds: [] },
+        ]) {
+            await expect(controller.generateKodyRules(body)).rejects.toThrow(
+                new ForbiddenException(
+                    'No repository in your scope to generate rules for',
+                ),
+            );
+        }
         expect(execute).not.toHaveBeenCalled();
     });
 
@@ -171,6 +190,28 @@ describe('repository scope — kody rules', () => {
  * `@CheckPolicies(checkRepoPermissions(...))`, evaluated here against the
  * ability of a member scoped to `my-repo`.
  */
+/**
+ * These routes take one `repositoryId` and leave its check to
+ * KodyRulesTenantGuard (its own spec covers the check); here, that the
+ * guard stays on them.
+ */
+describe('repository scope — Kody Rules routes guarded by KodyRulesTenantGuard', () => {
+    it.each([
+        'checkSyncStatus',
+        'countImportedRules',
+        'syncIdeRules',
+        'fastSyncIdeRules',
+        'resyncIdeRules',
+    ])('%s runs KodyRulesTenantGuard', (handler) => {
+        const guards = Reflect.getMetadata(
+            GUARDS_METADATA,
+            (KodyRulesController.prototype as any)[handler],
+        ) as unknown[];
+
+        expect(guards).toContain(KodyRulesTenantGuard);
+    });
+});
+
 describe('repository scope — route policies', () => {
     const ability = (() => {
         const { can, build } = new AbilityBuilder<AppAbility>(
@@ -200,24 +241,6 @@ describe('repository scope — route policies', () => {
             PullRequestController,
             'getPullRequestFiles',
             (repositoryId: string) => ({ query: { repositoryId } }),
-        ],
-        [
-            'POST /kody-rules/sync-ide-rules',
-            KodyRulesController,
-            'syncIdeRules',
-            (repositoryId: string) => ({ body: { repositoryId } }),
-        ],
-        [
-            'POST /kody-rules/fast-sync-ide-rules',
-            KodyRulesController,
-            'fastSyncIdeRules',
-            (repositoryId: string) => ({ body: { repositoryId } }),
-        ],
-        [
-            'POST /kody-rules/resync-ide-rules',
-            KodyRulesController,
-            'resyncIdeRules',
-            (repositoryId: string) => ({ body: { repositoryId } }),
         ],
         [
             'POST /parameters/preview-pr-summary',

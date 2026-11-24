@@ -1,102 +1,103 @@
 ---
 title: "Sandbox & AST Graph"
-description: "Kodus がリポジトリをどうパースするか（kodus-graph）、どこで実行されるか（サンドボックスモード）、そして各モードをいつ選ぶか。"
+description: "Kodus がリポジトリをどのように解析するか（kodus-graph）、どこで実行されるか（サンドボックスモード）、そして各モードをいつ選ぶべきか。"
 icon: "box"
 ---
 
-PR を適切なコンテキストでレビューするため、Kodus はリポジトリ全体を
-**AST グラフ**（ノード + エッジ）にパースし、cross-file コンテキスト
-取得、提案の検証、エージェントへの入力に使用します。パーサーは
-**サンドボックス**内で実行され、`git clone`、依存関係のインストール、
-CLI の実行を API プロセスから分離して行います。
+適切なコンテキストで PR をレビューするため、Kodus はリポジトリ全体を
+**AST グラフ**（ノードとエッジ）に解析し、それを使って cross-file
+コンテキストを取得し、提案を検証し、エージェントに入力します。パーサーは
+**サンドボックス**内で実行されるため、API プロセスから隔離された状態で `git clone`、依存関係のインストール、
+CLI の実行ができます。
 
-このページでは、選択できるサンドボックスモード、AST グラフとは何か、
-そしてキャッシュが PR レベルのレビューを高速に保つ仕組みを説明します。
+同じサンドボックスは、レビューエージェントに、チェックアウトされたリポジトリに対するファイルツール（検索、ファイル読み取り、
+ディレクトリ一覧）も提供します。レビューでも `@kody`
+の会話でも同様です。
+
+このページでは、選択できるサンドボックスのモード、AST
+グラフとは何か、キャッシュによって PR レベルのレビューがどのように高速に保たれるかを説明します。
 
 ## AST グラフの仕組み
 
 Kodus は [`@kodus/kodus-graph`](https://www.npmjs.com/package/@kodus/kodus-graph)
-を使用します。これはリポジトリを走査して JSON グラフ（関数、クラス、
-ファイル、import、call）を出力する CLI です。CLI は **worker イメージ
-（`kodus-ai-worker`）にプリインストール**されているため、`local` モード
-では追加のセットアップは不要です。
+を使います。これはリポジトリをたどって JSON グラフ（関数、クラス、
+ファイル、インポート、呼び出し）を出力する CLI です。この CLI は **Kodus のイメージに
+プリインストールされている**（`kodus-ai-worker` を含む）ため、`local` モードでは追加のセットアップ手順はありません。
 
-ライフサイクル:
+ライフサイクル：
 
-1. **リポジトリを選択したとき**（セットアップ時、または後で UI で
-   リポジトリを追加するとき） — Kodus は `AstGraphBuild` ジョブを
-   キューに入れ、デフォルトブランチに対して `kodus-graph parse --all`
-   を実行し、結果を Postgres（`ast_graph_*` テーブル）に永続化し、
-   リポジトリをインデックス済みとマークします。これはバックグラウンド
-   で実行されるため、PR を開く前に完了を待つ必要はありません。
-2. **PR がデフォルトブランチにマージされたとき** — webhook ハンドラー
-   が増分リビルドをキューに入れ、変更されたファイルのみを再パース
-   して差分をキャッシュされたグラフにマージします。フルリビルドなし
-   でキャッシュが新鮮に保たれます。
-3. **すべての PR レビュー時** — Kodus はキャッシュされたグラフを
-   ロードし、PR で触れられたファイルのみをパースし、エージェントに
-   絞ったサブグラフを入力します。これがホットパスで、リポジトリ全体
-   を再パースすることはありません。
+1. **リポジトリを選択したとき**（セットアップ中、または UI であとからリポジトリを追加したとき）— Kodus は
+   `AstGraphBuild` ジョブをキューに入れます。このジョブはデフォルトブランチに対して
+   `kodus-graph parse --all` を実行し、結果を Postgres（`ast_graph_*` テーブル）に保存し、
+   リポジトリをインデックス済みとしてマークします。これはバックグラウンドで行われるため、
+   完了を待たずに PR を開けます。
+2. **PR がデフォルトブランチにマージされたとき** — webhook ハンドラーが
+   増分リビルドをキューに入れます。変更されたファイルだけを再解析し、
+   差分をキャッシュ済みのグラフにマージします。500 ファイルを超える変更を含むマージでは、
+   代わりに完全なリビルドが実行されます。
+3. **すべての PR レビューで** — Kodus はキャッシュ済みのグラフを読み込み、PR が触れた
+   ファイルだけを解析して、エージェントに絞り込まれたサブグラフを渡します。
+   これがホットパスであり、リポジトリ全体を再解析することはありません。
 
-このキャッシュこそが大規模リポジトリのレビューを実用的にするものです:
-フルビルドはリポジトリのオンボーディング時に一度だけ実行され、それ
-以降のすべての PR は Postgres から読み込みます。
+キャッシュのおかげで、大規模リポジトリのレビューが現実的になります。最初のビルドは
+リポジトリのオンボーディング時に 1 回だけ実行され、それ以降のすべての PR は Postgres から読み取ります。
 
-## サンドボックスモード
+## サンドボックスのモード
 
-サンドボックスは `.env` の `SANDBOX_PROVIDER` で選択します:
+サンドボックスは、`.env` の `SANDBOX_PROVIDER` で選択します。
 
 | モード | 動作 | トレードオフ |
 |---|---|---|
-| **`local`** _（インストーラーのデフォルト）_ | `kodus-graph` を `worker` コンテナ内で実行。Bun と CLI がプリインストール済み。 | 外部依存なし。大規模リポジトリでは worker のメモリが必要。 |
-| **`e2b`** | ジョブごとにリモートの [E2B](https://e2b.dev) サンドボックスを起動。`API_E2B_KEY` が必要。 | 強力な分離、巨大リポジトリにスケール。**有料の第三者サービス**。 |
-| **`auto`** | `API_E2B_KEY` が設定されている場合は `e2b` を使用、それ以外はサンドボックスなしにフォールバック。 | 段階的なロールアウト（例: `none` から `e2b` への移行）に便利。 |
-| **`none`** | サンドボックスなし。AST グラフと cross-file コンテキストを無効化。 | レビューはあまり豊かではなくなります（call-graph コンテキストなし、cross-file 解析なし）。 |
+| **`local`** _（インストーラーのデフォルト）_ | `kodus-graph` を `worker` コンテナ自体の中で実行します。Bun と CLI はプリインストールされています。 | 外部への依存がありません。worker コンテナの CPU とメモリを共有します。 |
+| **`e2b`** | ジョブごとにリモートの [E2B](https://e2b.dev) サンドボックスを起動します。`API_E2B_KEY` が必要です。 | 強力な分離があり、巨大なリポジトリにも対応できます。**有料のサードパーティサービスです。** |
+| **`auto`** | `API_E2B_KEY` が設定されている場合は `e2b` を使い、そうでなければ `local` を使います。 | `SANDBOX_PROVIDER` を設定しない場合の動作です。 |
+| **`null`** | サンドボックスなし。 | レビューは diff しか参照できません。cross-file コンテキストもコードグラフもありません。 |
 
 ### モードの選び方
 
-- **始めたばかりで「とにかく動かしたい」** → `local`。インストーラーの
-  デフォルトで、外部アカウントは不要です。
-- **リポジトリが巨大（数百万 LOC）または厳格な分離が必要**
-  → `e2b`。[e2b.dev](https://e2b.dev) でサインアップし、`API_E2B_KEY`
-  を設定し、`SANDBOX_PROVIDER=e2b` に切り替えます。
-- **明示的にサンドボックスを実行したくない** → `none`。レビュー
-  エージェントは cross-file コンテキストなしで実行され、提案は機能
-  しますが情報が少なくなります。
+- **まず始めたい、「とにかく動かしたい」** → `local`。これが
+  インストーラーのデフォルトで、外部アカウントは一切不要です。
+- **リポジトリが非常に大きい、または厳格な分離が必要** →
+  `e2b`。[e2b.dev](https://e2b.dev) にサインアップし、`API_E2B_KEY` を設定して、
+  `SANDBOX_PROVIDER=e2b` に切り替えます。
 
-## 既存のセルフホストインストールの移行
+`API_E2B_KEY` なしで `SANDBOX_PROVIDER=e2b` を設定すると、レビューはサンドボックスなしになります。
+cross-file コンテキストもコードグラフもありません。`SANDBOX_PROVIDER=local` のまま
+`API_E2B_KEY` だけを設定した場合は、ローカルのサンドボックスが維持されます。
 
-AST グラフ以前のバージョンからアップグレードした場合、**すでに選択
-されているリポジトリ**にはまだグラフがありません — ビルドは**新しい**
-リポジトリ選択時にのみ自動的にトリガーされます。それらをインデックス
-するには、インストーラーに同梱されている backfill スクリプトを実行
-します:
+サンドボックスをオフにするには、`SANDBOX_PROVIDER=null` を設定します。オフの場合は `./scripts/doctor.sh` が警告を表示します。`./scripts/validate-env.sh` が `null` を拒否する場合は、インストーラーの `.env.example` に記載された有効値を確認してください。古いインストーラーのスキーマに記載されている `none` は、ワーカーでは `auto` として扱われます。
+
+## 既存のセルフホスト環境の移行
+
+AST グラフより前のリリースからアップグレードした場合、**すでに選択済みのリポジトリ**にはまだグラフがありません。ビルドが
+自動的に実行されるのは、**新しい**リポジトリを選択したときだけです。それらをインデックスするには、
+インストーラーに同梱のバックフィルスクリプトを実行します。
 
 ```bash
-# kodus-installer ディレクトリから、スタックが実行中の状態で:
+# From the kodus-installer directory, with the stack running:
 ./scripts/backfill-ast-graph.sh
 ```
 
-これは、インスタンス内のすべてのチームを走査し、`astGraphStatus` が
-`NULL`、`PENDING`、または `FAILED` である選択されたリポジトリごとに
-`AstGraphBuild` ジョブをキューに入れます。ビルドはバックグラウンドで
-実行されるため、完了を待たずに Kodus を使い続けられます。
+このスクリプトはインスタンス内のすべてのチームをたどり、グラフのステータスが未設定、`pending`、または
+`failed` の選択済みリポジトリごとに `AstGraphBuild`
+ジョブをキューに入れます。ビルドはバックグラウンドで実行されるため、完了するまでの間も
+Kodus を使い続けられます。
 
-このスクリプトは**冪等**です: 再実行すると `READY` のリポジトリは
-スキップされ、`BUILDING` のジョブは再キューイングされず、自由に停止
-および再開できます。
+このスクリプトは**冪等**です。再実行しても、すでに
+`ready` のリポジトリはスキップされ、`building` のジョブが再度キューに入ることはなく、
+自由に中断して再開できます。
 
-よく使うフラグ:
+主なフラグ：
 
 ```bash
-./scripts/backfill-ast-graph.sh --org <id>          # 1 つの組織に制限
-./scripts/backfill-ast-graph.sh --org <id> --team <id>  # 1 つのチームのみ
-./scripts/backfill-ast-graph.sh --force             # READY のリポジトリも再ビルド
-./scripts/backfill-ast-graph.sh --limit 50          # チームあたりのジョブ上限（デフォルト: 10）
-./scripts/backfill-ast-graph.sh --dry-run           # チームを列挙、キューイングはしない
+./scripts/backfill-ast-graph.sh --org <id>          # restrict to one org
+./scripts/backfill-ast-graph.sh --org <id> --team <id>  # one team only
+./scripts/backfill-ast-graph.sh --force             # also rebuild ready graphs
+./scripts/backfill-ast-graph.sh --limit 50          # cap jobs per team (default: 10)
+./scripts/backfill-ast-graph.sh --dry-run           # list teams, enqueue nothing
 ```
 
-worker ログで進捗を確認できます:
+進捗は、worker のログで確認できます。
 
 ```bash
 docker compose logs -f worker | grep -i ast-graph
@@ -105,70 +106,64 @@ docker compose logs -f worker | grep -i ast-graph
 ## 設定
 
 ```bash
-# セルフホストのデフォルト — worker コンテナ内で実行。
+# Default for self-hosted — runs in the worker container.
 SANDBOX_PROVIDER=local
 
-# または、より強力な分離のために E2B（有料）を使用。
+# Or use E2B (paid) for stronger isolation.
 SANDBOX_PROVIDER=e2b
 API_E2B_KEY=your-e2b-api-key
 ```
 
-[e2b.dev](https://e2b.dev) で E2B にサインアップし、ダッシュボードで
-API キーを生成し、`.env` に貼り付けてスタックを再起動してください。
+E2B には [e2b.dev](https://e2b.dev) でサインアップし、ダッシュボードで API キーを生成して、
+`.env` に追加し、`./scripts/install.sh` をもう一度実行します。
 
-## どこで何が動くか
+`local` モードでは、worker は 120 秒の制限時間でリポジトリをクローンします。非常に大きなモノレポを
+ゆっくりクローンすると、この時間を超えることがあり、その場合レビューはサンドボックスなしで実行されます。
+制限時間をミリ秒で引き上げます。
+
+```bash
+API_SANDBOX_CLONE_TIMEOUT_MS=300000
+```
+
+## 何がどこで実行されるか
 
 ```mermaid
 flowchart LR
     pr[PR webhook] --> worker[worker]
-    worker -->|local モード| sandbox_local[kodus-graph CLI<br/>worker コンテナ内]
-    worker -.->|e2b モード| sandbox_e2b[E2B リモートサンドボックス<br/>kodus-graph はそこで実行]
+    worker -->|local mode| sandbox_local[kodus-graph CLI<br/>inside worker container]
+    worker -.->|e2b mode| sandbox_e2b[E2B remote sandbox<br/>kodus-graph runs there]
     sandbox_local --> graph[(Postgres • ast_graph_*)]
     sandbox_e2b --> graph
-    graph --> agent[code review エージェント]
+    graph --> agent[code-review agent]
 ```
 
 ## リソースのサイジング
 
-`local` サンドボックスは `worker` コンテナ内で `git clone` と
-`kodus-graph parse` を実行するため、worker の RAM 余裕が重要です:
-
-- **小〜中規模リポジトリ（< 100k LOC）** — デフォルトの 8GB ホストで十分。
-- **大規模リポジトリ（100k〜1M LOC）** — worker コンテナに通常使用に
-  加えて 4〜8GB の RAM を割り当て、ホスト合計で 16GB の RAM を検討。
-- **巨大モノレポ（> 1M LOC）** — パースをホスト外で行うため `e2b` に
-  切り替えます。
-
-Postgres のフットプリントはリポジトリ数と履歴の深さに応じて拡大します
-— 大まかな目安としてインデックス済みリポジトリあたり ~10〜50MB を見込んで
-ください。
+`local` サンドボックスは、`git clone` と `kodus-graph parse` を
+`worker` コンテナ内で実行するため、worker のメモリ制限がそれらにも適用されます。Helm
+チャートは、worker に `1536Mi` の制限を設定します。グラフのビルド中にメモリ不足で worker が強制終了される場合は、
+`services.worker.resources` で制限を引き上げるか、
+`e2b` を使ってホスト外で解析します。
 
 ## トラブルシューティング
 
-**レビューに cross-file コンテキストが含まれない（`local` モード）:**
+**レビューに cross-file コンテキストが含まれない（`local` モード）：**
 
-worker のログで `kodus-graph` のインストールまたはパースのエラーを
-確認します:
-
-```bash
-docker compose logs -f worker | grep -i kodus-graph
-```
-
-インストール手順が失敗する場合は、worker コンテナがインターネットに
-アクセスできることを確認してください（イメージがそれらなしでビルド
-された場合、初回起動時に bun と CLI を取得する必要があります）。
-
-**`e2b` ジョブがハングするか起動しない:**
-
-`API_E2B_KEY` が設定されており有効であることを確認します:
+worker のログで、クローンまたは `kodus-graph` の解析エラーを確認します。
 
 ```bash
-docker compose exec worker printenv API_E2B_KEY
+docker compose logs -f worker | grep -iE "sandbox|kodus-graph"
 ```
 
-E2B ダッシュボードでアクティブセッションとクォータ使用量を確認できます。
+worker がクローンするには、Git プロバイダーへのネットワークアクセスが必要です。`./scripts/doctor.sh` は、選択済みのリポジトリに対して読み取り専用の
+`git ls-remote` を実行し、失敗を報告します。
 
-**AST を完全に無効化したい（テスト、デバッグ）:**
+**`e2b` のジョブがハングする、または起動に失敗する：**
 
-`SANDBOX_PROVIDER=none` を設定して worker を再起動します。レビューは
-グラフステージをスキップし、LLM の素の差分ビューで実行されます。
+`API_E2B_KEY` が設定されていて有効であることを確認します。
+
+```bash
+docker compose exec worker sh -c 'if [ -n "$API_E2B_KEY" ]; then echo "API_E2B_KEY is set"; else echo "API_E2B_KEY is missing"; fi'
+```
+
+E2B のダッシュボードには、ライブセッションとクォータの使用状況が表示されます。

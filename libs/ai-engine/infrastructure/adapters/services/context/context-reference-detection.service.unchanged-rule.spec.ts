@@ -163,6 +163,49 @@ describe('reference detection — unchanged kody rule text', () => {
         });
     });
 
+    // A rule that already resolved a file, whose next detection gets a reply
+    // with no reference list.
+    describe('a reply with no usable answer over stored references', () => {
+        const TEXT = 'Endpoints must follow the contract in docs/api.md';
+        const ANSWER = JSON.stringify([
+            { filePath: 'docs/api.md', originalText: 'docs/api.md' },
+        ]);
+
+        it('is recorded as a failed detection, not as a clean one, so the next write retries it', async () => {
+            llmRun.mockResolvedValueOnce(ANSWER);
+            llmRun.mockResolvedValueOnce('I could not find any references.');
+            const { service, store } = makeServices();
+
+            await save(service, TEXT);
+            // A new text, so the stored answer is not reused.
+            const id = await save(service, `${TEXT} and docs/errors.md`);
+
+            expect(id).toBeDefined();
+            expect(store.revisions[1].metadata.syncErrorsCount).toBe(1);
+            await expect(
+                service.lastDetectionFailed('kodyRule', 'rule-1'),
+            ).resolves.toBe(true);
+        });
+
+        it('clears once a later write gets an answer', async () => {
+            llmRun.mockResolvedValueOnce(ANSWER);
+            llmRun.mockResolvedValueOnce('I could not find any references.');
+            llmRun.mockResolvedValueOnce(ANSWER);
+            const { service, store } = makeServices();
+
+            await save(service, TEXT);
+            await save(service, `${TEXT} and docs/errors.md`);
+            // The failed detection is what the third write clears.
+            expect(store.revisions[1].metadata.syncErrorsCount).toBe(1);
+            await save(service, `${TEXT} and docs/errors.md`);
+
+            expect(store.revisions[2].metadata.syncErrorsCount).toBe(0);
+            await expect(
+                service.lastDetectionFailed('kodyRule', 'rule-1'),
+            ).resolves.toBe(false);
+        });
+    });
+
     describe('a rule that references a file', () => {
         const TEXT = 'Endpoints must follow the contract in docs/api.md';
         const ANSWER = JSON.stringify([
@@ -179,7 +222,11 @@ describe('reference detection — unchanged kody rule text', () => {
             expect(llmRun).toHaveBeenCalledTimes(1);
             expect(resolve).toHaveBeenCalledTimes(2);
             expect(resolve.mock.calls[1][0]).toEqual([
-                { filePath: 'docs/api.md', originalText: 'docs/api.md' },
+                {
+                    filePath: 'docs/api.md',
+                    fileName: 'docs/api.md',
+                    originalText: 'docs/api.md',
+                },
             ]);
         });
 

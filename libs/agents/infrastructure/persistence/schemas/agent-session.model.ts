@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 
 import { CoreDocument } from '@libs/core/infrastructure/repositories/model/mongodb';
+import { RELEASE_INDEX } from '@libs/core/infrastructure/database/mongo/release-indexes/release-index-definitions';
 
 /**
  * Mongo model for `kodus-agent-sessions` — the conversation record that used to
@@ -46,7 +47,6 @@ interface PersistedSessionData {
     // below are NON-UNIQUE and background: building them over the existing
     // legacy `@kodus/flow` documents cannot fail on duplicate threadIds and
     // does not block startup. (A unique build WOULD have failed — see below.)
-    autoIndex: true,
 })
 export class AgentSessionModel extends CoreDocument {
     /** Session id (legacy callers keyed reads on this). */
@@ -108,7 +108,8 @@ export class AgentSessionModel extends CoreDocument {
     sessionData: PersistedSessionData;
 }
 
-export const AgentSessionSchema = SchemaFactory.createForClass(AgentSessionModel);
+export const AgentSessionSchema =
+    SchemaFactory.createForClass(AgentSessionModel);
 
 // Upsert/lookup key. Deliberately NOT unique: the legacy flow engine could
 // write multiple documents per threadId (a new session per TTL window), so a
@@ -124,6 +125,21 @@ AgentSessionSchema.index(
 AgentSessionSchema.index(
     { 'sessionData.organizationId': 1, 'sessionData.teamId': 1 },
     { name: 'idx_org_team', background: true },
+);
+
+// A conversation the thread has not touched in 30 days expires. `updatedAt`
+// (Mongoose `timestamps`) moves on every append, so the clock restarts with
+// each reply. The TTL that existed before pointed at a top-level
+// `lastActivityTimestamp` these documents never had (it lives under
+// `sessionData`, as a number, which a TTL ignores anyway), so nothing ever
+// expired. Documents written before `updatedAt` existed are not reached by
+// this; scripts/purge-legacy-agent-sessions.ts removes those once.
+// Defined in release-index-definitions.ts, which the index migration builds too.
+export const AGENT_SESSION_TTL_SECONDS =
+    RELEASE_INDEX.agentSessionTtl.options.expireAfterSeconds;
+AgentSessionSchema.index(
+    RELEASE_INDEX.agentSessionTtl.key,
+    RELEASE_INDEX.agentSessionTtl.options,
 );
 
 export const AgentSessionModelInstance = {

@@ -26,6 +26,8 @@ import { ChatWithKodyFromGitUseCase } from '@libs/platform/application/use-cases
 import { GenerateIssuesFromPrClosedUseCase } from '@libs/issues/application/use-cases/generate-issues-from-pr-closed.use-case';
 import { EnqueueCodeReviewJobUseCase } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
+import { CarryReviewCheckToMergeQueueUseCase } from '@libs/platform/application/use-cases/codeManagement/carry-review-check-to-merge-queue.use-case';
+import { SyncAllRepositoriesUseCase } from '@libs/platform/application/use-cases/codeManagement/sync-all-repositories.use-case';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { INTEGRATION_CONFIG_SERVICE_TOKEN } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
@@ -254,6 +256,14 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test', false);
                         },
                     },
                     {
+                        provide: CarryReviewCheckToMergeQueueUseCase,
+                        useValue: { execute: jest.fn() },
+                    },
+                    {
+                        provide: SyncAllRepositoriesUseCase,
+                        useValue: { syncInstallation: jest.fn() },
+                    },
+                    {
                         provide: OUTBOX_MESSAGE_REPOSITORY_TOKEN,
                         // create() is awaited via .catch() on the PR-closed
                         // path, so the mock has to return a promise.
@@ -351,7 +361,7 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test', false);
         });
 
         describe('Webhook "closed" with PR in DB → uses cache', () => {
-            it('should NOT call Git API and pass DB data through the whole flow', async () => {
+            it('should NOT call Git API and tell the save the stored files did not change', async () => {
                 // PR exists in MongoDB from a previous "opened" event
                 await insertPRInDB();
 
@@ -361,12 +371,8 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test', false);
                     event: 'pull_request',
                 };
 
-                // Simulate webhook arriving at handler
                 await handler.execute(webhookParams);
 
-                // Git API must NOT be called by SavePullRequestUseCase
-                // Note: the handler itself may call getFilesByPullRequestId for Kody Rules sync on merge,
-                // but SavePullRequestUseCase should not call it for the "closed" action
                 expect(
                     mockPullRequestsService.aggregateAndSaveDataStructure,
                 ).toHaveBeenCalledTimes(1);
@@ -374,30 +380,13 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test', false);
                 const callArgs =
                     mockPullRequestsService.aggregateAndSaveDataStructure.mock
                         .calls[0];
-                const filesArg = callArgs[2];
-                const commitsArg = callArgs[7];
 
-                // Data must come FROM THE DATABASE, mapped to API format
-                expect(filesArg).toHaveLength(2);
-
-                // 'filename' must be the FULL PATH (from DB 'path'), not the short name
-                expect(filesArg[0].filename).toBe('src/from-db.ts');
-                expect(filesArg[1].filename).toBe('src/from-db-2.ts');
-
-                // 'additions'/'deletions' must be mapped from DB 'added'/'deleted'
-                expect(filesArg[0].additions).toBe(10);
-                expect(filesArg[0].deletions).toBe(5);
-                expect(filesArg[1].additions).toBe(20);
-                expect(filesArg[1].deletions).toBe(0);
-
-                // Other fields must be preserved (including patch from MongoDB Mixed type)
-                expect(filesArg[0].patch).toBe('@@ cached');
-                expect(filesArg[0].sha).toBe('file-sha-1');
-                expect(filesArg[0].status).toBe('modified');
-
-                expect(commitsArg).toHaveLength(2);
-                expect(commitsArg[0].sha).toBe('db-sha-aaa');
-                expect(commitsArg[1].sha).toBe('db-sha-bbb');
+                // Nothing is read back to be re-saved: the save keeps the
+                // stored files and commits (proven against a real save in
+                // save.webhook-writes.integration.spec.ts).
+                expect(callArgs[2]).toEqual([]);
+                expect(callArgs[7]).toEqual([]);
+                expect(callArgs[9]).toEqual({ filesUnchanged: true });
             });
         });
 

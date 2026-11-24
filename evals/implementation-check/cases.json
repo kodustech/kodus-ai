@@ -1,0 +1,1438 @@
+[
+  {
+    "id": "ts-admin-or-owner-fixed",
+    "checks": "typescript with-fix suggestion: marks implemented a fix made as suggested",
+    "kind": "with-fix",
+    "edit": "fixed",
+    "suggestions": [
+      {
+        "id": "sugg-ts-admin-or-owner",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript",
+        "label": "bug",
+        "severity": "critical",
+        "oneSentenceSummary": "Team admin/owner check requires both roles",
+        "suggestionContent": "The permission check uses `&&`, so only a user who is both a team admin and a team owner passes. A user who is either one should be allowed to add guests. Use `||` between `isTeamAdmin` and `isTeamOwner`.",
+        "fullExplanation": "The permission check uses `&&`, so only a user who is both a team admin and a team owner passes. A user who is either one should be allowed to add guests. Use `||` between `isTeamAdmin` and `isTeamOwner`.",
+        "existingCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "relevantLinesStart": 46,
+        "relevantLinesEnd": 48,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "status": "modified",
+        "patch": "@@ -44,7 +44,7 @@\n   if (!booking) throw new TRPCError({ code: \"NOT_FOUND\", message: \"booking_not_found\" });\n \n   const isTeamAdminOrOwner =\n-    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n+    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n     (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));\n \n   const isOrganizer = booking.userId === user.id;"
+      }
+    ],
+    "expected": {
+      "sugg-ts-admin-or-owner": "implemented"
+    }
+  },
+  {
+    "id": "ts-admin-or-owner-different",
+    "checks": "typescript with-fix suggestion: marks implemented the problem fixed another way",
+    "kind": "with-fix",
+    "edit": "different",
+    "suggestions": [
+      {
+        "id": "sugg-ts-admin-or-owner",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript",
+        "label": "bug",
+        "severity": "critical",
+        "oneSentenceSummary": "Team admin/owner check requires both roles",
+        "suggestionContent": "The permission check uses `&&`, so only a user who is both a team admin and a team owner passes. A user who is either one should be allowed to add guests. Use `||` between `isTeamAdmin` and `isTeamOwner`.",
+        "fullExplanation": "The permission check uses `&&`, so only a user who is both a team admin and a team owner passes. A user who is either one should be allowed to add guests. Use `||` between `isTeamAdmin` and `isTeamOwner`.",
+        "existingCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "relevantLinesStart": 46,
+        "relevantLinesEnd": 48,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "status": "modified",
+        "patch": "@@ -43,9 +43,12 @@\n \n   if (!booking) throw new TRPCError({ code: \"NOT_FOUND\", message: \"booking_not_found\" });\n \n-  const isTeamAdminOrOwner =\n-    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n-    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));\n+  const teamId = booking.eventType?.teamId ?? 0;\n+  const [teamAdmin, teamOwner] = await Promise.all([\n+    isTeamAdmin(user.id, teamId),\n+    isTeamOwner(user.id, teamId),\n+  ]);\n+  const isTeamAdminOrOwner = Boolean(teamAdmin) || Boolean(teamOwner);\n \n   const isOrganizer = booking.userId === user.id;\n "
+      }
+    ],
+    "expected": {
+      "sugg-ts-admin-or-owner": "implemented"
+    }
+  },
+  {
+    "id": "ts-admin-or-owner-untouched",
+    "checks": "typescript with-fix suggestion: leaves not implemented when only other code in the file changed",
+    "kind": "with-fix",
+    "edit": "untouched",
+    "suggestions": [
+      {
+        "id": "sugg-ts-admin-or-owner",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript",
+        "label": "bug",
+        "severity": "critical",
+        "oneSentenceSummary": "Team admin/owner check requires both roles",
+        "suggestionContent": "The permission check uses `&&`, so only a user who is both a team admin and a team owner passes. A user who is either one should be allowed to add guests. Use `||` between `isTeamAdmin` and `isTeamOwner`.",
+        "fullExplanation": "The permission check uses `&&`, so only a user who is both a team admin and a team owner passes. A user who is either one should be allowed to add guests. Use `||` between `isTeamAdmin` and `isTeamOwner`.",
+        "existingCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "relevantLinesStart": 46,
+        "relevantLinesEnd": 48,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "status": "modified",
+        "patch": "@@ -78,7 +78,7 @@\n   );\n \n   if (uniqueGuests.length === 0)\n-    throw new TRPCError({ code: \"BAD_REQUEST\", message: \"emails_must_be_unique_valid\" });\n+    throw new TRPCError({ code: \"BAD_REQUEST\", message: \"guest_emails_must_be_unique_and_valid\" });\n \n   const guestsFullDetails = uniqueGuests.map((guest) => {\n     return {"
+      }
+    ],
+    "expected": {
+      "sugg-ts-admin-or-owner": "not_implemented"
+    }
+  },
+  {
+    "id": "ts-admin-or-owner-declined",
+    "checks": "typescript with-fix suggestion: leaves not implemented when the lines were edited but the problem kept",
+    "kind": "with-fix",
+    "edit": "declined",
+    "suggestions": [
+      {
+        "id": "sugg-ts-admin-or-owner",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript",
+        "label": "bug",
+        "severity": "critical",
+        "oneSentenceSummary": "Team admin/owner check requires both roles",
+        "suggestionContent": "The permission check uses `&&`, so only a user who is both a team admin and a team owner passes. A user who is either one should be allowed to add guests. Use `||` between `isTeamAdmin` and `isTeamOwner`.",
+        "fullExplanation": "The permission check uses `&&`, so only a user who is both a team admin and a team owner passes. A user who is either one should be allowed to add guests. Use `||` between `isTeamAdmin` and `isTeamOwner`.",
+        "existingCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "relevantLinesStart": 46,
+        "relevantLinesEnd": 48,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "status": "modified",
+        "patch": "@@ -43,9 +43,9 @@\n \n   if (!booking) throw new TRPCError({ code: \"NOT_FOUND\", message: \"booking_not_found\" });\n \n-  const isTeamAdminOrOwner =\n-    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n-    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));\n+  const teamId = booking.eventType?.teamId ?? 0;\n+  // Adding guests to a team booking stays restricted to users who are both admin and owner.\n+  const isTeamAdminOrOwner = (await isTeamAdmin(user.id, teamId)) && (await isTeamOwner(user.id, teamId));\n \n   const isOrganizer = booking.userId === user.id;\n "
+      }
+    ],
+    "expected": {
+      "sugg-ts-admin-or-owner": "not_implemented"
+    }
+  },
+  {
+    "id": "ts-guest-email-case-fixed",
+    "checks": "typescript without-fix suggestion: marks implemented a fix made as suggested",
+    "kind": "without-fix",
+    "edit": "fixed",
+    "suggestions": [
+      {
+        "id": "sugg-ts-guest-email-case",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript",
+        "label": "security",
+        "severity": "high",
+        "oneSentenceSummary": "Guest emails are compared case-sensitively",
+        "suggestionContent": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "fullExplanation": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "",
+        "relevantLinesStart": 74,
+        "relevantLinesEnd": 78,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "status": "modified",
+        "patch": "@@ -73,8 +73,8 @@\n \n   const uniqueGuests = guests.filter(\n     (guest) =>\n-      !booking.attendees.some((attendee) => guest === attendee.email) &&\n-      !blacklistedGuestEmails.includes(guest)\n+      !booking.attendees.some((attendee) => guest.toLowerCase() === attendee.email.toLowerCase()) &&\n+      !blacklistedGuestEmails.includes(guest.toLowerCase())\n   );\n \n   if (uniqueGuests.length === 0)"
+      }
+    ],
+    "expected": {
+      "sugg-ts-guest-email-case": "implemented"
+    }
+  },
+  {
+    "id": "ts-guest-email-case-different",
+    "checks": "typescript without-fix suggestion: marks implemented the problem fixed another way",
+    "kind": "without-fix",
+    "edit": "different",
+    "suggestions": [
+      {
+        "id": "sugg-ts-guest-email-case",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript",
+        "label": "security",
+        "severity": "high",
+        "oneSentenceSummary": "Guest emails are compared case-sensitively",
+        "suggestionContent": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "fullExplanation": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "",
+        "relevantLinesStart": 74,
+        "relevantLinesEnd": 78,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "status": "modified",
+        "patch": "@@ -71,11 +71,10 @@\n     ? process.env.BLACKLISTED_GUEST_EMAILS.split(\",\").map((email) => email.toLowerCase())\n     : [];\n \n-  const uniqueGuests = guests.filter(\n-    (guest) =>\n-      !booking.attendees.some((attendee) => guest === attendee.email) &&\n-      !blacklistedGuestEmails.includes(guest)\n-  );\n+  const attendeeEmails = new Set(booking.attendees.map((attendee) => attendee.email.toLowerCase()));\n+  const uniqueGuests = guests\n+    .map((guest) => guest.trim().toLowerCase())\n+    .filter((guest) => !attendeeEmails.has(guest) && !blacklistedGuestEmails.includes(guest));\n \n   if (uniqueGuests.length === 0)\n     throw new TRPCError({ code: \"BAD_REQUEST\", message: \"emails_must_be_unique_valid\" });"
+      }
+    ],
+    "expected": {
+      "sugg-ts-guest-email-case": "implemented"
+    }
+  },
+  {
+    "id": "ts-guest-email-case-untouched",
+    "checks": "typescript without-fix suggestion: leaves not implemented when only other code in the file changed",
+    "kind": "without-fix",
+    "edit": "untouched",
+    "suggestions": [
+      {
+        "id": "sugg-ts-guest-email-case",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript",
+        "label": "security",
+        "severity": "high",
+        "oneSentenceSummary": "Guest emails are compared case-sensitively",
+        "suggestionContent": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "fullExplanation": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "",
+        "relevantLinesStart": 74,
+        "relevantLinesEnd": 78,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "status": "modified",
+        "patch": "@@ -82,7 +82,7 @@\n \n   const guestsFullDetails = uniqueGuests.map((guest) => {\n     return {\n-      name: \"\",\n+      name: guest.split(\"@\")[0],\n       email: guest,\n       timeZone: organizer.timeZone,\n       locale: organizer.locale,"
+      }
+    ],
+    "expected": {
+      "sugg-ts-guest-email-case": "not_implemented"
+    }
+  },
+  {
+    "id": "ts-guest-email-case-declined",
+    "checks": "typescript without-fix suggestion: leaves not implemented when the lines were edited but the problem kept",
+    "kind": "without-fix",
+    "edit": "declined",
+    "suggestions": [
+      {
+        "id": "sugg-ts-guest-email-case",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript",
+        "label": "security",
+        "severity": "high",
+        "oneSentenceSummary": "Guest emails are compared case-sensitively",
+        "suggestionContent": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "fullExplanation": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "",
+        "relevantLinesStart": 74,
+        "relevantLinesEnd": 78,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "status": "modified",
+        "patch": "@@ -71,10 +71,9 @@\n     ? process.env.BLACKLISTED_GUEST_EMAILS.split(\",\").map((email) => email.toLowerCase())\n     : [];\n \n+  // Emails are matched exactly as entered; the input form already normalises them.\n   const uniqueGuests = guests.filter(\n-    (guest) =>\n-      !booking.attendees.some((attendee) => guest === attendee.email) &&\n-      !blacklistedGuestEmails.includes(guest)\n+    (guest) => !booking.attendees.some((attendee) => attendee.email === guest) && !blacklistedGuestEmails.includes(guest)\n   );\n \n   if (uniqueGuests.length === 0)"
+      }
+    ],
+    "expected": {
+      "sugg-ts-guest-email-case": "not_implemented"
+    }
+  },
+  {
+    "id": "ts-guest-email-case-partial",
+    "checks": "typescript without-fix suggestion: marks partially implemented when one of its two asks was done",
+    "kind": "without-fix",
+    "edit": "partial",
+    "suggestions": [
+      {
+        "id": "sugg-ts-guest-email-case",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript",
+        "label": "security",
+        "severity": "high",
+        "oneSentenceSummary": "Guest emails are compared case-sensitively",
+        "suggestionContent": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "fullExplanation": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "",
+        "relevantLinesStart": 74,
+        "relevantLinesEnd": 78,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "status": "modified",
+        "patch": "@@ -74,7 +74,7 @@\n   const uniqueGuests = guests.filter(\n     (guest) =>\n       !booking.attendees.some((attendee) => guest === attendee.email) &&\n-      !blacklistedGuestEmails.includes(guest)\n+      !blacklistedGuestEmails.includes(guest.toLowerCase())\n   );\n \n   if (uniqueGuests.length === 0)"
+      }
+    ],
+    "expected": {
+      "sugg-ts-guest-email-case": "partially_implemented"
+    }
+  },
+  {
+    "id": "py-sender-keyerror-fixed",
+    "checks": "python with-fix suggestion: marks implemented a fix made as suggested",
+    "kind": "with-fix",
+    "edit": "fixed",
+    "suggestions": [
+      {
+        "id": "sugg-py-sender-keyerror",
+        "relevantFile": "src/sentry/integrations/github/integration.py",
+        "language": "python",
+        "label": "bug",
+        "severity": "high",
+        "oneSentenceSummary": "KeyError when the installation has no sender metadata",
+        "suggestionContent": "`integration.metadata[\"sender\"][\"login\"]` raises `KeyError` for installations created before the sender was stored. Read it with `.get` and fail the step with the error page when the sender is missing.",
+        "fullExplanation": "`integration.metadata[\"sender\"][\"login\"]` raises `KeyError` for installations created before the sender was stored. Read it with `.get` and fail the step with the error page when the sender is missing.",
+        "existingCode": "        if (\n            pipeline.fetch_state(\"github_authenticated_user\")\n            != integration.metadata[\"sender\"][\"login\"]\n        ):\n            return error(request, self.active_organization)",
+        "improvedCode": "        sender_login = integration.metadata.get(\"sender\", {}).get(\"login\")\n        if (\n            sender_login is None\n            or pipeline.fetch_state(\"github_authenticated_user\") != sender_login\n        ):\n            return error(request, self.active_organization)",
+        "relevantLinesStart": 501,
+        "relevantLinesEnd": 505,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "src/sentry/integrations/github/integration.py",
+        "status": "modified",
+        "patch": "@@ -498,9 +498,10 @@\n             return error(request, self.active_organization)\n \n         # Check that the authenticated GitHub user is the same as who installed the app.\n+        sender_login = integration.metadata.get(\"sender\", {}).get(\"login\")\n         if (\n-            pipeline.fetch_state(\"github_authenticated_user\")\n-            != integration.metadata[\"sender\"][\"login\"]\n+            sender_login is None\n+            or pipeline.fetch_state(\"github_authenticated_user\") != sender_login\n         ):\n             return error(request, self.active_organization)\n "
+      }
+    ],
+    "expected": {
+      "sugg-py-sender-keyerror": "implemented"
+    }
+  },
+  {
+    "id": "py-sender-keyerror-different",
+    "checks": "python with-fix suggestion: marks implemented the problem fixed another way",
+    "kind": "with-fix",
+    "edit": "different",
+    "suggestions": [
+      {
+        "id": "sugg-py-sender-keyerror",
+        "relevantFile": "src/sentry/integrations/github/integration.py",
+        "language": "python",
+        "label": "bug",
+        "severity": "high",
+        "oneSentenceSummary": "KeyError when the installation has no sender metadata",
+        "suggestionContent": "`integration.metadata[\"sender\"][\"login\"]` raises `KeyError` for installations created before the sender was stored. Read it with `.get` and fail the step with the error page when the sender is missing.",
+        "fullExplanation": "`integration.metadata[\"sender\"][\"login\"]` raises `KeyError` for installations created before the sender was stored. Read it with `.get` and fail the step with the error page when the sender is missing.",
+        "existingCode": "        if (\n            pipeline.fetch_state(\"github_authenticated_user\")\n            != integration.metadata[\"sender\"][\"login\"]\n        ):\n            return error(request, self.active_organization)",
+        "improvedCode": "        sender_login = integration.metadata.get(\"sender\", {}).get(\"login\")\n        if (\n            sender_login is None\n            or pipeline.fetch_state(\"github_authenticated_user\") != sender_login\n        ):\n            return error(request, self.active_organization)",
+        "relevantLinesStart": 501,
+        "relevantLinesEnd": 505,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "src/sentry/integrations/github/integration.py",
+        "status": "modified",
+        "patch": "@@ -498,10 +498,11 @@\n             return error(request, self.active_organization)\n \n         # Check that the authenticated GitHub user is the same as who installed the app.\n-        if (\n-            pipeline.fetch_state(\"github_authenticated_user\")\n-            != integration.metadata[\"sender\"][\"login\"]\n-        ):\n+        try:\n+            sender_login = integration.metadata[\"sender\"][\"login\"]\n+        except KeyError:\n             return error(request, self.active_organization)\n+        if pipeline.fetch_state(\"github_authenticated_user\") != sender_login:\n+            return error(request, self.active_organization)\n \n         return pipeline.next_step()"
+      }
+    ],
+    "expected": {
+      "sugg-py-sender-keyerror": "implemented"
+    }
+  },
+  {
+    "id": "py-sender-keyerror-untouched",
+    "checks": "python with-fix suggestion: leaves not implemented when only other code in the file changed",
+    "kind": "with-fix",
+    "edit": "untouched",
+    "suggestions": [
+      {
+        "id": "sugg-py-sender-keyerror",
+        "relevantFile": "src/sentry/integrations/github/integration.py",
+        "language": "python",
+        "label": "bug",
+        "severity": "high",
+        "oneSentenceSummary": "KeyError when the installation has no sender metadata",
+        "suggestionContent": "`integration.metadata[\"sender\"][\"login\"]` raises `KeyError` for installations created before the sender was stored. Read it with `.get` and fail the step with the error page when the sender is missing.",
+        "fullExplanation": "`integration.metadata[\"sender\"][\"login\"]` raises `KeyError` for installations created before the sender was stored. Read it with `.get` and fail the step with the error page when the sender is missing.",
+        "existingCode": "        if (\n            pipeline.fetch_state(\"github_authenticated_user\")\n            != integration.metadata[\"sender\"][\"login\"]\n        ):\n            return error(request, self.active_organization)",
+        "improvedCode": "        sender_login = integration.metadata.get(\"sender\", {}).get(\"login\")\n        if (\n            sender_login is None\n            or pipeline.fetch_state(\"github_authenticated_user\") != sender_login\n        ):\n            return error(request, self.active_organization)",
+        "relevantLinesStart": 501,
+        "relevantLinesEnd": 505,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "src/sentry/integrations/github/integration.py",
+        "status": "modified",
+        "patch": "@@ -432,7 +432,7 @@\n             return error(request, self.active_organization)\n \n         authenticated_user_info = get_user_info(payload[\"access_token\"])\n-        if \"login\" not in authenticated_user_info:\n+        if not authenticated_user_info.get(\"login\"):\n             return error(request, self.active_organization)\n \n         pipeline.bind_state(\"github_authenticated_user\", authenticated_user_info[\"login\"])"
+      }
+    ],
+    "expected": {
+      "sugg-py-sender-keyerror": "not_implemented"
+    }
+  },
+  {
+    "id": "py-sender-keyerror-declined",
+    "checks": "python with-fix suggestion: leaves not implemented when the lines were edited but the problem kept",
+    "kind": "with-fix",
+    "edit": "declined",
+    "suggestions": [
+      {
+        "id": "sugg-py-sender-keyerror",
+        "relevantFile": "src/sentry/integrations/github/integration.py",
+        "language": "python",
+        "label": "bug",
+        "severity": "high",
+        "oneSentenceSummary": "KeyError when the installation has no sender metadata",
+        "suggestionContent": "`integration.metadata[\"sender\"][\"login\"]` raises `KeyError` for installations created before the sender was stored. Read it with `.get` and fail the step with the error page when the sender is missing.",
+        "fullExplanation": "`integration.metadata[\"sender\"][\"login\"]` raises `KeyError` for installations created before the sender was stored. Read it with `.get` and fail the step with the error page when the sender is missing.",
+        "existingCode": "        if (\n            pipeline.fetch_state(\"github_authenticated_user\")\n            != integration.metadata[\"sender\"][\"login\"]\n        ):\n            return error(request, self.active_organization)",
+        "improvedCode": "        sender_login = integration.metadata.get(\"sender\", {}).get(\"login\")\n        if (\n            sender_login is None\n            or pipeline.fetch_state(\"github_authenticated_user\") != sender_login\n        ):\n            return error(request, self.active_organization)",
+        "relevantLinesStart": 501,
+        "relevantLinesEnd": 505,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "src/sentry/integrations/github/integration.py",
+        "status": "modified",
+        "patch": "@@ -498,10 +498,9 @@\n             return error(request, self.active_organization)\n \n         # Check that the authenticated GitHub user is the same as who installed the app.\n-        if (\n-            pipeline.fetch_state(\"github_authenticated_user\")\n-            != integration.metadata[\"sender\"][\"login\"]\n-        ):\n+        # Every installation stores its sender at creation, so the key is always present.\n+        authenticated_user = pipeline.fetch_state(\"github_authenticated_user\")\n+        if authenticated_user != integration.metadata[\"sender\"][\"login\"]:\n             return error(request, self.active_organization)\n \n         return pipeline.next_step()"
+      }
+    ],
+    "expected": {
+      "sugg-py-sender-keyerror": "not_implemented"
+    }
+  },
+  {
+    "id": "py-oauth-static-state-fixed",
+    "checks": "python kody-rule suggestion: marks implemented a fix made as suggested",
+    "kind": "kody-rule",
+    "edit": "fixed",
+    "suggestions": [
+      {
+        "id": "sugg-py-oauth-static-state",
+        "relevantFile": "src/sentry/integrations/github/integration.py",
+        "language": "python",
+        "label": "kody_rules",
+        "severity": "medium",
+        "oneSentenceSummary": "OAuth state is the static pipeline signature",
+        "suggestionContent": "The OAuth `state` is `pipeline.signature`, the same value for the whole pipeline, so it does not protect this callback against CSRF. Generate a random state per authorization request, bind it to the pipeline, and compare the callback's state against it.\n\nKody rule violation: [OAuth state is random per request](https://app.kodus.io/settings/code-review/global/kody-rules/rule-oauth-state)",
+        "fullExplanation": "The OAuth `state` is `pipeline.signature`, the same value for the whole pipeline, so it does not protect this callback against CSRF. Generate a random state per authorization request, bind it to the pipeline, and compare the callback's state against it.\n\nKody rule violation: [OAuth state is random per request](https://app.kodus.io/settings/code-review/global/kody-rules/rule-oauth-state)",
+        "existingCode": "        if not request.GET.get(\"state\"):\n            state = pipeline.signature\n",
+        "improvedCode": "",
+        "relevantLinesStart": 401,
+        "relevantLinesEnd": 413,
+        "brokenKodyRulesIds": [
+          "rule-oauth-state"
+        ],
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "src/sentry/integrations/github/integration.py",
+        "status": "modified",
+        "patch": "@@ -399,7 +399,8 @@\n             pipeline.bind_state(\"installation_id\", installation_id)\n \n         if not request.GET.get(\"state\"):\n-            state = pipeline.signature\n+            state = secrets.token_urlsafe(32)\n+            pipeline.bind_state(\"oauth_state\", state)\n \n             redirect_uri = absolute_uri(\n                 reverse(\"sentry-extension-setup\", kwargs={\"provider_id\": \"github\"})\n@@ -409,7 +410,7 @@\n             )\n \n         # At this point, we are past the GitHub \"authorize\" step\n-        if request.GET.get(\"state\") != pipeline.signature:\n+        if not constant_time_compare(request.GET.get(\"state\", \"\"), pipeline.fetch_state(\"oauth_state\") or \"\"):\n             return error(request, self.active_organization)\n \n         # similar to OAuth2CallbackView.get_token_params"
+      }
+    ],
+    "expected": {
+      "sugg-py-oauth-static-state": "implemented"
+    }
+  },
+  {
+    "id": "py-oauth-static-state-different",
+    "checks": "python kody-rule suggestion: marks implemented the problem fixed another way",
+    "kind": "kody-rule",
+    "edit": "different",
+    "suggestions": [
+      {
+        "id": "sugg-py-oauth-static-state",
+        "relevantFile": "src/sentry/integrations/github/integration.py",
+        "language": "python",
+        "label": "kody_rules",
+        "severity": "medium",
+        "oneSentenceSummary": "OAuth state is the static pipeline signature",
+        "suggestionContent": "The OAuth `state` is `pipeline.signature`, the same value for the whole pipeline, so it does not protect this callback against CSRF. Generate a random state per authorization request, bind it to the pipeline, and compare the callback's state against it.\n\nKody rule violation: [OAuth state is random per request](https://app.kodus.io/settings/code-review/global/kody-rules/rule-oauth-state)",
+        "fullExplanation": "The OAuth `state` is `pipeline.signature`, the same value for the whole pipeline, so it does not protect this callback against CSRF. Generate a random state per authorization request, bind it to the pipeline, and compare the callback's state against it.\n\nKody rule violation: [OAuth state is random per request](https://app.kodus.io/settings/code-review/global/kody-rules/rule-oauth-state)",
+        "existingCode": "        if not request.GET.get(\"state\"):\n            state = pipeline.signature\n",
+        "improvedCode": "",
+        "relevantLinesStart": 401,
+        "relevantLinesEnd": 413,
+        "brokenKodyRulesIds": [
+          "rule-oauth-state"
+        ],
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "src/sentry/integrations/github/integration.py",
+        "status": "modified",
+        "patch": "@@ -399,7 +399,8 @@\n             pipeline.bind_state(\"installation_id\", installation_id)\n \n         if not request.GET.get(\"state\"):\n-            state = pipeline.signature\n+            state = uuid4().hex\n+            request.session[\"github_oauth_state\"] = state\n \n             redirect_uri = absolute_uri(\n                 reverse(\"sentry-extension-setup\", kwargs={\"provider_id\": \"github\"})\n@@ -409,7 +410,7 @@\n             )\n \n         # At this point, we are past the GitHub \"authorize\" step\n-        if request.GET.get(\"state\") != pipeline.signature:\n+        if request.GET.get(\"state\") != request.session.pop(\"github_oauth_state\", None):\n             return error(request, self.active_organization)\n \n         # similar to OAuth2CallbackView.get_token_params"
+      }
+    ],
+    "expected": {
+      "sugg-py-oauth-static-state": "implemented"
+    }
+  },
+  {
+    "id": "py-oauth-static-state-untouched",
+    "checks": "python kody-rule suggestion: leaves not implemented when only other code in the file changed",
+    "kind": "kody-rule",
+    "edit": "untouched",
+    "suggestions": [
+      {
+        "id": "sugg-py-oauth-static-state",
+        "relevantFile": "src/sentry/integrations/github/integration.py",
+        "language": "python",
+        "label": "kody_rules",
+        "severity": "medium",
+        "oneSentenceSummary": "OAuth state is the static pipeline signature",
+        "suggestionContent": "The OAuth `state` is `pipeline.signature`, the same value for the whole pipeline, so it does not protect this callback against CSRF. Generate a random state per authorization request, bind it to the pipeline, and compare the callback's state against it.\n\nKody rule violation: [OAuth state is random per request](https://app.kodus.io/settings/code-review/global/kody-rules/rule-oauth-state)",
+        "fullExplanation": "The OAuth `state` is `pipeline.signature`, the same value for the whole pipeline, so it does not protect this callback against CSRF. Generate a random state per authorization request, bind it to the pipeline, and compare the callback's state against it.\n\nKody rule violation: [OAuth state is random per request](https://app.kodus.io/settings/code-review/global/kody-rules/rule-oauth-state)",
+        "existingCode": "        if not request.GET.get(\"state\"):\n            state = pipeline.signature\n",
+        "improvedCode": "",
+        "relevantLinesStart": 401,
+        "relevantLinesEnd": 413,
+        "brokenKodyRulesIds": [
+          "rule-oauth-state"
+        ],
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "src/sentry/integrations/github/integration.py",
+        "status": "modified",
+        "patch": "@@ -435,7 +435,7 @@\n         if \"login\" not in authenticated_user_info:\n             return error(request, self.active_organization)\n \n-        pipeline.bind_state(\"github_authenticated_user\", authenticated_user_info[\"login\"])\n+        pipeline.bind_state(\"github_authenticated_user\", authenticated_user_info[\"login\"].lower())\n         return pipeline.next_step()\n \n "
+      }
+    ],
+    "expected": {
+      "sugg-py-oauth-static-state": "not_implemented"
+    }
+  },
+  {
+    "id": "py-oauth-static-state-declined",
+    "checks": "python kody-rule suggestion: leaves not implemented when the lines were edited but the problem kept",
+    "kind": "kody-rule",
+    "edit": "declined",
+    "suggestions": [
+      {
+        "id": "sugg-py-oauth-static-state",
+        "relevantFile": "src/sentry/integrations/github/integration.py",
+        "language": "python",
+        "label": "kody_rules",
+        "severity": "medium",
+        "oneSentenceSummary": "OAuth state is the static pipeline signature",
+        "suggestionContent": "The OAuth `state` is `pipeline.signature`, the same value for the whole pipeline, so it does not protect this callback against CSRF. Generate a random state per authorization request, bind it to the pipeline, and compare the callback's state against it.\n\nKody rule violation: [OAuth state is random per request](https://app.kodus.io/settings/code-review/global/kody-rules/rule-oauth-state)",
+        "fullExplanation": "The OAuth `state` is `pipeline.signature`, the same value for the whole pipeline, so it does not protect this callback against CSRF. Generate a random state per authorization request, bind it to the pipeline, and compare the callback's state against it.\n\nKody rule violation: [OAuth state is random per request](https://app.kodus.io/settings/code-review/global/kody-rules/rule-oauth-state)",
+        "existingCode": "        if not request.GET.get(\"state\"):\n            state = pipeline.signature\n",
+        "improvedCode": "",
+        "relevantLinesStart": 401,
+        "relevantLinesEnd": 413,
+        "brokenKodyRulesIds": [
+          "rule-oauth-state"
+        ],
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "src/sentry/integrations/github/integration.py",
+        "status": "modified",
+        "patch": "@@ -399,7 +399,8 @@\n             pipeline.bind_state(\"installation_id\", installation_id)\n \n         if not request.GET.get(\"state\"):\n-            state = pipeline.signature\n+            # The pipeline signature is unique per pipeline, which is enough as an OAuth state here.\n+            state = str(pipeline.signature)\n \n             redirect_uri = absolute_uri(\n                 reverse(\"sentry-extension-setup\", kwargs={\"provider_id\": \"github\"})"
+      }
+    ],
+    "expected": {
+      "sugg-py-oauth-static-state": "not_implemented"
+    }
+  },
+  {
+    "id": "java-subgroups-null-fixed",
+    "checks": "java without-fix suggestion: marks implemented a fix made as suggested",
+    "kind": "without-fix",
+    "edit": "fixed",
+    "suggestions": [
+      {
+        "id": "sugg-java-subgroups-null",
+        "relevantFile": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+        "language": "java",
+        "label": "bug",
+        "severity": "critical",
+        "oneSentenceSummary": "getSubGroupsCount returns null",
+        "suggestionContent": "`getSubGroupsCount()` returns `null` when the group was removed concurrently, but the `GroupModel` contract says it never returns null and callers unbox it. Return `0L` when the model is gone.",
+        "fullExplanation": "`getSubGroupsCount()` returns `null` when the group was removed concurrently, but the `GroupModel` contract says it never returns null and callers unbox it. Return `0L` when the model is gone.",
+        "existingCode": "    public Long getSubGroupsCount() {\n        if (isUpdated()) return updated.getSubGroupsCount();\n        GroupModel model = modelSupplier.get();\n        return model == null ? null : model.getSubGroupsCount();\n    }",
+        "improvedCode": "",
+        "relevantLinesStart": 272,
+        "relevantLinesEnd": 276,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+        "status": "modified",
+        "patch": "@@ -272,7 +272,7 @@\n     public Long getSubGroupsCount() {\n         if (isUpdated()) return updated.getSubGroupsCount();\n         GroupModel model = modelSupplier.get();\n-        return model == null ? null : model.getSubGroupsCount();\n+        return model == null ? 0L : model.getSubGroupsCount();\n     }\n \n     @Override"
+      }
+    ],
+    "expected": {
+      "sugg-java-subgroups-null": "implemented"
+    }
+  },
+  {
+    "id": "java-subgroups-null-different",
+    "checks": "java without-fix suggestion: marks implemented the problem fixed another way",
+    "kind": "without-fix",
+    "edit": "different",
+    "suggestions": [
+      {
+        "id": "sugg-java-subgroups-null",
+        "relevantFile": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+        "language": "java",
+        "label": "bug",
+        "severity": "critical",
+        "oneSentenceSummary": "getSubGroupsCount returns null",
+        "suggestionContent": "`getSubGroupsCount()` returns `null` when the group was removed concurrently, but the `GroupModel` contract says it never returns null and callers unbox it. Return `0L` when the model is gone.",
+        "fullExplanation": "`getSubGroupsCount()` returns `null` when the group was removed concurrently, but the `GroupModel` contract says it never returns null and callers unbox it. Return `0L` when the model is gone.",
+        "existingCode": "    public Long getSubGroupsCount() {\n        if (isUpdated()) return updated.getSubGroupsCount();\n        GroupModel model = modelSupplier.get();\n        return model == null ? null : model.getSubGroupsCount();\n    }",
+        "improvedCode": "",
+        "relevantLinesStart": 272,
+        "relevantLinesEnd": 276,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+        "status": "modified",
+        "patch": "@@ -272,7 +272,11 @@\n     public Long getSubGroupsCount() {\n         if (isUpdated()) return updated.getSubGroupsCount();\n         GroupModel model = modelSupplier.get();\n-        return model == null ? null : model.getSubGroupsCount();\n+        if (model == null) {\n+            return Long.valueOf(0);\n+        }\n+        Long count = model.getSubGroupsCount();\n+        return count == null ? Long.valueOf(0) : count;\n     }\n \n     @Override"
+      }
+    ],
+    "expected": {
+      "sugg-java-subgroups-null": "implemented"
+    }
+  },
+  {
+    "id": "java-subgroups-null-untouched",
+    "checks": "java without-fix suggestion: leaves not implemented when only other code in the file changed",
+    "kind": "without-fix",
+    "edit": "untouched",
+    "suggestions": [
+      {
+        "id": "sugg-java-subgroups-null",
+        "relevantFile": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+        "language": "java",
+        "label": "bug",
+        "severity": "critical",
+        "oneSentenceSummary": "getSubGroupsCount returns null",
+        "suggestionContent": "`getSubGroupsCount()` returns `null` when the group was removed concurrently, but the `GroupModel` contract says it never returns null and callers unbox it. Return `0L` when the model is gone.",
+        "fullExplanation": "`getSubGroupsCount()` returns `null` when the group was removed concurrently, but the `GroupModel` contract says it never returns null and callers unbox it. Return `0L` when the model is gone.",
+        "existingCode": "    public Long getSubGroupsCount() {\n        if (isUpdated()) return updated.getSubGroupsCount();\n        GroupModel model = modelSupplier.get();\n        return model == null ? null : model.getSubGroupsCount();\n    }",
+        "improvedCode": "",
+        "relevantLinesStart": 272,
+        "relevantLinesEnd": 276,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+        "status": "modified",
+        "patch": "@@ -265,7 +265,8 @@\n     @Override\n     public Stream<GroupModel> getSubGroupsStream(String search, Boolean exact, Integer firstResult, Integer maxResults) {\n         if (isUpdated()) return updated.getSubGroupsStream(search, exact, firstResult, maxResults);\n-        return modelSupplier.get().getSubGroupsStream(search, exact, firstResult, maxResults);\n+        GroupModel model = modelSupplier.get();\n+        return model == null ? Stream.empty() : model.getSubGroupsStream(search, exact, firstResult, maxResults);\n     }\n \n     @Override"
+      }
+    ],
+    "expected": {
+      "sugg-java-subgroups-null": "not_implemented"
+    }
+  },
+  {
+    "id": "java-subgroups-null-declined",
+    "checks": "java without-fix suggestion: leaves not implemented when the lines were edited but the problem kept",
+    "kind": "without-fix",
+    "edit": "declined",
+    "suggestions": [
+      {
+        "id": "sugg-java-subgroups-null",
+        "relevantFile": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+        "language": "java",
+        "label": "bug",
+        "severity": "critical",
+        "oneSentenceSummary": "getSubGroupsCount returns null",
+        "suggestionContent": "`getSubGroupsCount()` returns `null` when the group was removed concurrently, but the `GroupModel` contract says it never returns null and callers unbox it. Return `0L` when the model is gone.",
+        "fullExplanation": "`getSubGroupsCount()` returns `null` when the group was removed concurrently, but the `GroupModel` contract says it never returns null and callers unbox it. Return `0L` when the model is gone.",
+        "existingCode": "    public Long getSubGroupsCount() {\n        if (isUpdated()) return updated.getSubGroupsCount();\n        GroupModel model = modelSupplier.get();\n        return model == null ? null : model.getSubGroupsCount();\n    }",
+        "improvedCode": "",
+        "relevantLinesStart": 272,
+        "relevantLinesEnd": 276,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+        "status": "modified",
+        "patch": "@@ -272,7 +272,8 @@\n     public Long getSubGroupsCount() {\n         if (isUpdated()) return updated.getSubGroupsCount();\n         GroupModel model = modelSupplier.get();\n-        return model == null ? null : model.getSubGroupsCount();\n+        // null tells the caller the group no longer exists\n+        return (model != null) ? model.getSubGroupsCount() : null;\n     }\n \n     @Override"
+      }
+    ],
+    "expected": {
+      "sugg-java-subgroups-null": "not_implemented"
+    }
+  },
+  {
+    "id": "go-rows-not-limit-fixed",
+    "checks": "go with-fix suggestion: marks implemented a fix made as suggested",
+    "kind": "with-fix",
+    "edit": "fixed",
+    "suggestions": [
+      {
+        "id": "sugg-go-rows-not-limit",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go",
+        "label": "bug",
+        "severity": "low",
+        "oneSentenceSummary": "Zero updated rows reported as device limit reached",
+        "suggestionContent": "When the update touches no row the device may simply not exist, yet the code returns `ErrDeviceLimitReached`. Return a distinct not-found error so callers can tell the two apart.",
+        "fullExplanation": "When the update touches no row the device may simply not exist, yet the code returns `ErrDeviceLimitReached`. Return a distinct not-found error so callers can tell the two apart.",
+        "existingCode": "\t\tif rowsAffected == 0 {\n\t\t\treturn ErrDeviceLimitReached\n\t\t}",
+        "improvedCode": "\t\tif rowsAffected == 0 {\n\t\t\treturn ErrDeviceNotFound\n\t\t}",
+        "relevantLinesStart": 95,
+        "relevantLinesEnd": 97,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "status": "modified",
+        "patch": "@@ -16,6 +16,7 @@\n const anonymousDeviceExpiration = 30 * 24 * time.Hour\n \n var ErrDeviceLimitReached = fmt.Errorf(\"device limit reached\")\n+var ErrDeviceNotFound = fmt.Errorf(\"device not found\")\n \n type AnonDBStore struct {\n \tsqlStore    db.DB\n@@ -93,7 +94,7 @@\n \t\t}\n \n \t\tif rowsAffected == 0 {\n-\t\t\treturn ErrDeviceLimitReached\n+\t\t\treturn ErrDeviceNotFound\n \t\t}\n \n \t\treturn nil"
+      }
+    ],
+    "expected": {
+      "sugg-go-rows-not-limit": "implemented"
+    }
+  },
+  {
+    "id": "go-rows-not-limit-different",
+    "checks": "go with-fix suggestion: marks implemented the problem fixed another way",
+    "kind": "with-fix",
+    "edit": "different",
+    "suggestions": [
+      {
+        "id": "sugg-go-rows-not-limit",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go",
+        "label": "bug",
+        "severity": "low",
+        "oneSentenceSummary": "Zero updated rows reported as device limit reached",
+        "suggestionContent": "When the update touches no row the device may simply not exist, yet the code returns `ErrDeviceLimitReached`. Return a distinct not-found error so callers can tell the two apart.",
+        "fullExplanation": "When the update touches no row the device may simply not exist, yet the code returns `ErrDeviceLimitReached`. Return a distinct not-found error so callers can tell the two apart.",
+        "existingCode": "\t\tif rowsAffected == 0 {\n\t\t\treturn ErrDeviceLimitReached\n\t\t}",
+        "improvedCode": "\t\tif rowsAffected == 0 {\n\t\t\treturn ErrDeviceNotFound\n\t\t}",
+        "relevantLinesStart": 95,
+        "relevantLinesEnd": 97,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "status": "modified",
+        "patch": "@@ -93,7 +93,7 @@\n \t\t}\n \n \t\tif rowsAffected == 0 {\n-\t\t\treturn ErrDeviceLimitReached\n+\t\t\treturn fmt.Errorf(\"anonymous device %s: %w\", device.DeviceID, sql.ErrNoRows)\n \t\t}\n \n \t\treturn nil"
+      }
+    ],
+    "expected": {
+      "sugg-go-rows-not-limit": "implemented"
+    }
+  },
+  {
+    "id": "go-rows-not-limit-untouched",
+    "checks": "go with-fix suggestion: leaves not implemented when only other code in the file changed",
+    "kind": "with-fix",
+    "edit": "untouched",
+    "suggestions": [
+      {
+        "id": "sugg-go-rows-not-limit",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go",
+        "label": "bug",
+        "severity": "low",
+        "oneSentenceSummary": "Zero updated rows reported as device limit reached",
+        "suggestionContent": "When the update touches no row the device may simply not exist, yet the code returns `ErrDeviceLimitReached`. Return a distinct not-found error so callers can tell the two apart.",
+        "fullExplanation": "When the update touches no row the device may simply not exist, yet the code returns `ErrDeviceLimitReached`. Return a distinct not-found error so callers can tell the two apart.",
+        "existingCode": "\t\tif rowsAffected == 0 {\n\t\t\treturn ErrDeviceLimitReached\n\t\t}",
+        "improvedCode": "\t\tif rowsAffected == 0 {\n\t\t\treturn ErrDeviceNotFound\n\t\t}",
+        "relevantLinesStart": 95,
+        "relevantLinesEnd": 97,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "status": "modified",
+        "patch": "@@ -167,7 +167,10 @@\n \n func (s *AnonDBStore) DeleteDevice(ctx context.Context, deviceID string) error {\n \terr := s.sqlStore.WithDbSession(ctx, func(dbSession *sqlstore.DBSession) error {\n-\t\t_, err := dbSession.Exec(\"DELETE FROM anon_device WHERE device_id = ?\", deviceID)\n+\t\t_, err := dbSession.Exec(\"DELETE FROM anon_device WHERE device_id = ? \", deviceID)\n+\t\tif err != nil {\n+\t\t\ts.log.Debug(\"failed to delete anonymous device\", \"device\", deviceID, \"error\", err)\n+\t\t}\n \t\treturn err\n \t})\n "
+      }
+    ],
+    "expected": {
+      "sugg-go-rows-not-limit": "not_implemented"
+    }
+  },
+  {
+    "id": "go-rows-not-limit-declined",
+    "checks": "go with-fix suggestion: leaves not implemented when the lines were edited but the problem kept",
+    "kind": "with-fix",
+    "edit": "declined",
+    "suggestions": [
+      {
+        "id": "sugg-go-rows-not-limit",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go",
+        "label": "bug",
+        "severity": "low",
+        "oneSentenceSummary": "Zero updated rows reported as device limit reached",
+        "suggestionContent": "When the update touches no row the device may simply not exist, yet the code returns `ErrDeviceLimitReached`. Return a distinct not-found error so callers can tell the two apart.",
+        "fullExplanation": "When the update touches no row the device may simply not exist, yet the code returns `ErrDeviceLimitReached`. Return a distinct not-found error so callers can tell the two apart.",
+        "existingCode": "\t\tif rowsAffected == 0 {\n\t\t\treturn ErrDeviceLimitReached\n\t\t}",
+        "improvedCode": "\t\tif rowsAffected == 0 {\n\t\t\treturn ErrDeviceNotFound\n\t\t}",
+        "relevantLinesStart": 95,
+        "relevantLinesEnd": 97,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "status": "modified",
+        "patch": "@@ -92,7 +92,8 @@\n \t\t\treturn err\n \t\t}\n \n-\t\tif rowsAffected == 0 {\n+\t\t// No row updated: the device is over the limit window, report it as the limit.\n+\t\tif rowsAffected < 1 {\n \t\t\treturn ErrDeviceLimitReached\n \t\t}\n "
+      }
+    ],
+    "expected": {
+      "sugg-go-rows-not-limit": "not_implemented"
+    }
+  },
+  {
+    "id": "rb-embed-import-fixed",
+    "checks": "ruby without-fix suggestion: marks implemented a fix made as suggested",
+    "kind": "without-fix",
+    "edit": "fixed",
+    "suggestions": [
+      {
+        "id": "sugg-rb-embed-import",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby",
+        "label": "security",
+        "severity": "medium",
+        "oneSentenceSummary": "Imported-from footer breaks on nil contents and injects the URL",
+        "suggestionContent": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "fullExplanation": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "existingCode": "    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"",
+        "improvedCode": "",
+        "relevantLinesStart": 13,
+        "relevantLinesEnd": 13,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "app/models/topic_embed.rb",
+        "status": "modified",
+        "patch": "@@ -10,7 +10,9 @@\n   def self.import(user, url, title, contents)\n     return unless url =~ /^https?\\:\\/\\//\n \n-    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"\n+    contents ||= ''\n+    safe_url = ERB::Util.html_escape(url)\n+    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{safe_url}'>#{safe_url}</a>\")}</small>\\n\"\n \n     embed = TopicEmbed.where(embed_url: url).first\n     content_sha1 = Digest::SHA1.hexdigest(contents)"
+      }
+    ],
+    "expected": {
+      "sugg-rb-embed-import": "implemented"
+    }
+  },
+  {
+    "id": "rb-embed-import-different",
+    "checks": "ruby without-fix suggestion: marks implemented the problem fixed another way",
+    "kind": "without-fix",
+    "edit": "different",
+    "suggestions": [
+      {
+        "id": "sugg-rb-embed-import",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby",
+        "label": "security",
+        "severity": "medium",
+        "oneSentenceSummary": "Imported-from footer breaks on nil contents and injects the URL",
+        "suggestionContent": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "fullExplanation": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "existingCode": "    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"",
+        "improvedCode": "",
+        "relevantLinesStart": 13,
+        "relevantLinesEnd": 13,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "app/models/topic_embed.rb",
+        "status": "modified",
+        "patch": "@@ -10,7 +10,8 @@\n   def self.import(user, url, title, contents)\n     return unless url =~ /^https?\\:\\/\\//\n \n-    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"\n+    link = ActionController::Base.helpers.link_to(url, url)\n+    contents = \"#{contents}\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: link)}</small>\\n\"\n \n     embed = TopicEmbed.where(embed_url: url).first\n     content_sha1 = Digest::SHA1.hexdigest(contents)"
+      }
+    ],
+    "expected": {
+      "sugg-rb-embed-import": "implemented"
+    }
+  },
+  {
+    "id": "rb-embed-import-untouched",
+    "checks": "ruby without-fix suggestion: leaves not implemented when only other code in the file changed",
+    "kind": "without-fix",
+    "edit": "untouched",
+    "suggestions": [
+      {
+        "id": "sugg-rb-embed-import",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby",
+        "label": "security",
+        "severity": "medium",
+        "oneSentenceSummary": "Imported-from footer breaks on nil contents and injects the URL",
+        "suggestionContent": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "fullExplanation": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "existingCode": "    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"",
+        "improvedCode": "",
+        "relevantLinesStart": 13,
+        "relevantLinesEnd": 13,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "app/models/topic_embed.rb",
+        "status": "modified",
+        "patch": "@@ -33,7 +33,7 @@\n       # Update the topic if it changed\n       if content_sha1 != embed.content_sha1\n         revisor = PostRevisor.new(post)\n-        revisor.revise!(user, absolutize_urls(url, contents), skip_validations: true, bypass_rate_limiter: true)\n+        revisor.revise!(user, absolutize_urls(url, contents), skip_validations: true, bypass_rate_limiter: true, skip_revision: true)\n         embed.update_column(:content_sha1, content_sha1)\n       end\n     end"
+      }
+    ],
+    "expected": {
+      "sugg-rb-embed-import": "not_implemented"
+    }
+  },
+  {
+    "id": "rb-embed-import-declined",
+    "checks": "ruby without-fix suggestion: leaves not implemented when the lines were edited but the problem kept",
+    "kind": "without-fix",
+    "edit": "declined",
+    "suggestions": [
+      {
+        "id": "sugg-rb-embed-import",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby",
+        "label": "security",
+        "severity": "medium",
+        "oneSentenceSummary": "Imported-from footer breaks on nil contents and injects the URL",
+        "suggestionContent": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "fullExplanation": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "existingCode": "    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"",
+        "improvedCode": "",
+        "relevantLinesStart": 13,
+        "relevantLinesEnd": 13,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "app/models/topic_embed.rb",
+        "status": "modified",
+        "patch": "@@ -10,7 +10,9 @@\n   def self.import(user, url, title, contents)\n     return unless url =~ /^https?\\:\\/\\//\n \n-    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"\n+    # The URL was already checked against the http(s) pattern above.\n+    footer = \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"\n+    contents << footer\n \n     embed = TopicEmbed.where(embed_url: url).first\n     content_sha1 = Digest::SHA1.hexdigest(contents)"
+      }
+    ],
+    "expected": {
+      "sugg-rb-embed-import": "not_implemented"
+    }
+  },
+  {
+    "id": "rb-embed-import-partial",
+    "checks": "ruby without-fix suggestion: marks partially implemented when one of its two asks was done",
+    "kind": "without-fix",
+    "edit": "partial",
+    "suggestions": [
+      {
+        "id": "sugg-rb-embed-import",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby",
+        "label": "security",
+        "severity": "medium",
+        "oneSentenceSummary": "Imported-from footer breaks on nil contents and injects the URL",
+        "suggestionContent": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "fullExplanation": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "existingCode": "    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"",
+        "improvedCode": "",
+        "relevantLinesStart": 13,
+        "relevantLinesEnd": 13,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "app/models/topic_embed.rb",
+        "status": "modified",
+        "patch": "@@ -10,6 +10,7 @@\n   def self.import(user, url, title, contents)\n     return unless url =~ /^https?\\:\\/\\//\n \n+    contents ||= ''\n     contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"\n \n     embed = TopicEmbed.where(embed_url: url).first"
+      }
+    ],
+    "expected": {
+      "sugg-rb-embed-import": "partially_implemented"
+    }
+  },
+  {
+    "id": "js-origin-indexof-fixed",
+    "checks": "javascript kody-rule suggestion: marks implemented a fix made as suggested",
+    "kind": "kody-rule",
+    "edit": "fixed",
+    "suggestions": [
+      {
+        "id": "sugg-js-origin-indexof",
+        "relevantFile": "app/assets/javascripts/embed.js",
+        "language": "javascript",
+        "label": "kody_rules",
+        "severity": "medium",
+        "oneSentenceSummary": "postMessage origin checked with indexOf",
+        "suggestionContent": "`discourseUrl.indexOf(e.origin)` accepts any origin that is a substring of the Discourse URL, so a prefix origin passes. Compare `e.origin` exactly with the origin of `discourseUrl`.\n\nKody rule violation: [Exact origin match on postMessage](https://app.kodus.io/settings/code-review/global/kody-rules/rule-postmessage-origin)",
+        "fullExplanation": "`discourseUrl.indexOf(e.origin)` accepts any origin that is a substring of the Discourse URL, so a prefix origin passes. Compare `e.origin` exactly with the origin of `discourseUrl`.\n\nKody rule violation: [Exact origin match on postMessage](https://app.kodus.io/settings/code-review/global/kody-rules/rule-postmessage-origin)",
+        "existingCode": "    if (discourseUrl.indexOf(e.origin) === -1) { return; }",
+        "improvedCode": "    if (e.origin !== new URL(discourseUrl).origin) { return; }",
+        "relevantLinesStart": 17,
+        "relevantLinesEnd": 17,
+        "brokenKodyRulesIds": [
+          "rule-postmessage-origin"
+        ],
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "app/assets/javascripts/embed.js",
+        "status": "modified",
+        "patch": "@@ -14,7 +14,7 @@\n \n   function postMessageReceived(e) {\n     if (!e) { return; }\n-    if (discourseUrl.indexOf(e.origin) === -1) { return; }\n+    if (e.origin !== new URL(discourseUrl).origin) { return; }\n \n     if (e.data) {\n       if (e.data.type === 'discourse-resize' && e.data.height) {"
+      }
+    ],
+    "expected": {
+      "sugg-js-origin-indexof": "implemented"
+    }
+  },
+  {
+    "id": "js-origin-indexof-different",
+    "checks": "javascript kody-rule suggestion: marks implemented the problem fixed another way",
+    "kind": "kody-rule",
+    "edit": "different",
+    "suggestions": [
+      {
+        "id": "sugg-js-origin-indexof",
+        "relevantFile": "app/assets/javascripts/embed.js",
+        "language": "javascript",
+        "label": "kody_rules",
+        "severity": "medium",
+        "oneSentenceSummary": "postMessage origin checked with indexOf",
+        "suggestionContent": "`discourseUrl.indexOf(e.origin)` accepts any origin that is a substring of the Discourse URL, so a prefix origin passes. Compare `e.origin` exactly with the origin of `discourseUrl`.\n\nKody rule violation: [Exact origin match on postMessage](https://app.kodus.io/settings/code-review/global/kody-rules/rule-postmessage-origin)",
+        "fullExplanation": "`discourseUrl.indexOf(e.origin)` accepts any origin that is a substring of the Discourse URL, so a prefix origin passes. Compare `e.origin` exactly with the origin of `discourseUrl`.\n\nKody rule violation: [Exact origin match on postMessage](https://app.kodus.io/settings/code-review/global/kody-rules/rule-postmessage-origin)",
+        "existingCode": "    if (discourseUrl.indexOf(e.origin) === -1) { return; }",
+        "improvedCode": "    if (e.origin !== new URL(discourseUrl).origin) { return; }",
+        "relevantLinesStart": 17,
+        "relevantLinesEnd": 17,
+        "brokenKodyRulesIds": [
+          "rule-postmessage-origin"
+        ],
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "app/assets/javascripts/embed.js",
+        "status": "modified",
+        "patch": "@@ -12,9 +12,11 @@\n   comments.appendChild(iframe);\n \n \n+  var discourseOrigin = discourseUrl.replace(/^(https?:\\/\\/[^\\/]+).*$/, \"$1\");\n+\n   function postMessageReceived(e) {\n     if (!e) { return; }\n-    if (discourseUrl.indexOf(e.origin) === -1) { return; }\n+    if (e.origin !== discourseOrigin) { return; }\n \n     if (e.data) {\n       if (e.data.type === 'discourse-resize' && e.data.height) {"
+      }
+    ],
+    "expected": {
+      "sugg-js-origin-indexof": "implemented"
+    }
+  },
+  {
+    "id": "js-origin-indexof-untouched",
+    "checks": "javascript kody-rule suggestion: leaves not implemented when only other code in the file changed",
+    "kind": "kody-rule",
+    "edit": "untouched",
+    "suggestions": [
+      {
+        "id": "sugg-js-origin-indexof",
+        "relevantFile": "app/assets/javascripts/embed.js",
+        "language": "javascript",
+        "label": "kody_rules",
+        "severity": "medium",
+        "oneSentenceSummary": "postMessage origin checked with indexOf",
+        "suggestionContent": "`discourseUrl.indexOf(e.origin)` accepts any origin that is a substring of the Discourse URL, so a prefix origin passes. Compare `e.origin` exactly with the origin of `discourseUrl`.\n\nKody rule violation: [Exact origin match on postMessage](https://app.kodus.io/settings/code-review/global/kody-rules/rule-postmessage-origin)",
+        "fullExplanation": "`discourseUrl.indexOf(e.origin)` accepts any origin that is a substring of the Discourse URL, so a prefix origin passes. Compare `e.origin` exactly with the origin of `discourseUrl`.\n\nKody rule violation: [Exact origin match on postMessage](https://app.kodus.io/settings/code-review/global/kody-rules/rule-postmessage-origin)",
+        "existingCode": "    if (discourseUrl.indexOf(e.origin) === -1) { return; }",
+        "improvedCode": "    if (e.origin !== new URL(discourseUrl).origin) { return; }",
+        "relevantLinesStart": 17,
+        "relevantLinesEnd": 17,
+        "brokenKodyRulesIds": [
+          "rule-postmessage-origin"
+        ],
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "app/assets/javascripts/embed.js",
+        "status": "modified",
+        "patch": "@@ -9,6 +9,7 @@\n   iframe.width = \"100%\";\n   iframe.frameBorder = \"0\";\n   iframe.scrolling = \"no\";\n+  iframe.title = \"Discourse comments\";\n   comments.appendChild(iframe);\n \n "
+      }
+    ],
+    "expected": {
+      "sugg-js-origin-indexof": "not_implemented"
+    }
+  },
+  {
+    "id": "js-origin-indexof-declined",
+    "checks": "javascript kody-rule suggestion: leaves not implemented when the lines were edited but the problem kept",
+    "kind": "kody-rule",
+    "edit": "declined",
+    "suggestions": [
+      {
+        "id": "sugg-js-origin-indexof",
+        "relevantFile": "app/assets/javascripts/embed.js",
+        "language": "javascript",
+        "label": "kody_rules",
+        "severity": "medium",
+        "oneSentenceSummary": "postMessage origin checked with indexOf",
+        "suggestionContent": "`discourseUrl.indexOf(e.origin)` accepts any origin that is a substring of the Discourse URL, so a prefix origin passes. Compare `e.origin` exactly with the origin of `discourseUrl`.\n\nKody rule violation: [Exact origin match on postMessage](https://app.kodus.io/settings/code-review/global/kody-rules/rule-postmessage-origin)",
+        "fullExplanation": "`discourseUrl.indexOf(e.origin)` accepts any origin that is a substring of the Discourse URL, so a prefix origin passes. Compare `e.origin` exactly with the origin of `discourseUrl`.\n\nKody rule violation: [Exact origin match on postMessage](https://app.kodus.io/settings/code-review/global/kody-rules/rule-postmessage-origin)",
+        "existingCode": "    if (discourseUrl.indexOf(e.origin) === -1) { return; }",
+        "improvedCode": "    if (e.origin !== new URL(discourseUrl).origin) { return; }",
+        "relevantLinesStart": 17,
+        "relevantLinesEnd": 17,
+        "brokenKodyRulesIds": [
+          "rule-postmessage-origin"
+        ],
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "app/assets/javascripts/embed.js",
+        "status": "modified",
+        "patch": "@@ -14,7 +14,7 @@\n \n   function postMessageReceived(e) {\n     if (!e) { return; }\n-    if (discourseUrl.indexOf(e.origin) === -1) { return; }\n+    if (!e.origin || discourseUrl.indexOf(e.origin) < 0) { return; }\n \n     if (e.data) {\n       if (e.data.type === 'discourse-resize' && e.data.height) {"
+      }
+    ],
+    "expected": {
+      "sugg-js-origin-indexof": "not_implemented"
+    }
+  },
+  {
+    "id": "multi-same-file",
+    "checks": "Several suggestions in one check: judges two suggestions in one file apart: one fixed, one left",
+    "kind": "multi",
+    "edit": "multi",
+    "suggestions": [
+      {
+        "id": "sugg-ts-admin-or-owner",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript",
+        "label": "bug",
+        "severity": "critical",
+        "oneSentenceSummary": "Team admin/owner check requires both roles",
+        "suggestionContent": "The permission check uses `&&`, so only a user who is both a team admin and a team owner passes. A user who is either one should be allowed to add guests. Use `||` between `isTeamAdmin` and `isTeamOwner`.",
+        "fullExplanation": "The permission check uses `&&`, so only a user who is both a team admin and a team owner passes. A user who is either one should be allowed to add guests. Use `||` between `isTeamAdmin` and `isTeamOwner`.",
+        "existingCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "relevantLinesStart": 46,
+        "relevantLinesEnd": 48,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      },
+      {
+        "id": "sugg-ts-guest-email-case",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript",
+        "label": "security",
+        "severity": "high",
+        "oneSentenceSummary": "Guest emails are compared case-sensitively",
+        "suggestionContent": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "fullExplanation": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "",
+        "relevantLinesStart": 74,
+        "relevantLinesEnd": 78,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "status": "modified",
+        "patch": "@@ -44,7 +44,7 @@\n   if (!booking) throw new TRPCError({ code: \"NOT_FOUND\", message: \"booking_not_found\" });\n \n   const isTeamAdminOrOwner =\n-    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n+    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n     (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));\n \n   const isOrganizer = booking.userId === user.id;\n@@ -82,7 +82,7 @@\n \n   const guestsFullDetails = uniqueGuests.map((guest) => {\n     return {\n-      name: \"\",\n+      name: guest.split(\"@\")[0],\n       email: guest,\n       timeZone: organizer.timeZone,\n       locale: organizer.locale,"
+      }
+    ],
+    "expected": {
+      "sugg-ts-admin-or-owner": "implemented",
+      "sugg-ts-guest-email-case": "not_implemented"
+    }
+  },
+  {
+    "id": "multi-cross-file",
+    "checks": "Several suggestions in one check: judges suggestions in two files apart: one declined, one fixed",
+    "kind": "multi",
+    "edit": "multi",
+    "suggestions": [
+      {
+        "id": "sugg-py-sender-keyerror",
+        "relevantFile": "src/sentry/integrations/github/integration.py",
+        "language": "python",
+        "label": "bug",
+        "severity": "high",
+        "oneSentenceSummary": "KeyError when the installation has no sender metadata",
+        "suggestionContent": "`integration.metadata[\"sender\"][\"login\"]` raises `KeyError` for installations created before the sender was stored. Read it with `.get` and fail the step with the error page when the sender is missing.",
+        "fullExplanation": "`integration.metadata[\"sender\"][\"login\"]` raises `KeyError` for installations created before the sender was stored. Read it with `.get` and fail the step with the error page when the sender is missing.",
+        "existingCode": "        if (\n            pipeline.fetch_state(\"github_authenticated_user\")\n            != integration.metadata[\"sender\"][\"login\"]\n        ):\n            return error(request, self.active_organization)",
+        "improvedCode": "        sender_login = integration.metadata.get(\"sender\", {}).get(\"login\")\n        if (\n            sender_login is None\n            or pipeline.fetch_state(\"github_authenticated_user\") != sender_login\n        ):\n            return error(request, self.active_organization)",
+        "relevantLinesStart": 501,
+        "relevantLinesEnd": 505,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      },
+      {
+        "id": "sugg-java-subgroups-null",
+        "relevantFile": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+        "language": "java",
+        "label": "bug",
+        "severity": "critical",
+        "oneSentenceSummary": "getSubGroupsCount returns null",
+        "suggestionContent": "`getSubGroupsCount()` returns `null` when the group was removed concurrently, but the `GroupModel` contract says it never returns null and callers unbox it. Return `0L` when the model is gone.",
+        "fullExplanation": "`getSubGroupsCount()` returns `null` when the group was removed concurrently, but the `GroupModel` contract says it never returns null and callers unbox it. Return `0L` when the model is gone.",
+        "existingCode": "    public Long getSubGroupsCount() {\n        if (isUpdated()) return updated.getSubGroupsCount();\n        GroupModel model = modelSupplier.get();\n        return model == null ? null : model.getSubGroupsCount();\n    }",
+        "improvedCode": "",
+        "relevantLinesStart": 272,
+        "relevantLinesEnd": 276,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "src/sentry/integrations/github/integration.py",
+        "status": "modified",
+        "patch": "@@ -498,10 +498,9 @@\n             return error(request, self.active_organization)\n \n         # Check that the authenticated GitHub user is the same as who installed the app.\n-        if (\n-            pipeline.fetch_state(\"github_authenticated_user\")\n-            != integration.metadata[\"sender\"][\"login\"]\n-        ):\n+        # Every installation stores its sender at creation, so the key is always present.\n+        authenticated_user = pipeline.fetch_state(\"github_authenticated_user\")\n+        if authenticated_user != integration.metadata[\"sender\"][\"login\"]:\n             return error(request, self.active_organization)\n \n         return pipeline.next_step()"
+      },
+      {
+        "filename": "model/infinispan/src/main/java/org/keycloak/models/cache/infinispan/GroupAdapter.java",
+        "status": "modified",
+        "patch": "@@ -272,7 +272,7 @@\n     public Long getSubGroupsCount() {\n         if (isUpdated()) return updated.getSubGroupsCount();\n         GroupModel model = modelSupplier.get();\n-        return model == null ? null : model.getSubGroupsCount();\n+        return model == null ? 0L : model.getSubGroupsCount();\n     }\n \n     @Override"
+      }
+    ],
+    "expected": {
+      "sugg-py-sender-keyerror": "not_implemented",
+      "sugg-java-subgroups-null": "implemented"
+    }
+  },
+  {
+    "id": "multi-three-files",
+    "checks": "Several suggestions in one check: judges three suggestions in three files: fixed, untouched, declined",
+    "kind": "multi",
+    "edit": "multi",
+    "suggestions": [
+      {
+        "id": "sugg-rb-embed-import",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby",
+        "label": "security",
+        "severity": "medium",
+        "oneSentenceSummary": "Imported-from footer breaks on nil contents and injects the URL",
+        "suggestionContent": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "fullExplanation": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "existingCode": "    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"",
+        "improvedCode": "",
+        "relevantLinesStart": 13,
+        "relevantLinesEnd": 13,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      },
+      {
+        "id": "sugg-go-rows-not-limit",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go",
+        "label": "bug",
+        "severity": "low",
+        "oneSentenceSummary": "Zero updated rows reported as device limit reached",
+        "suggestionContent": "When the update touches no row the device may simply not exist, yet the code returns `ErrDeviceLimitReached`. Return a distinct not-found error so callers can tell the two apart.",
+        "fullExplanation": "When the update touches no row the device may simply not exist, yet the code returns `ErrDeviceLimitReached`. Return a distinct not-found error so callers can tell the two apart.",
+        "existingCode": "\t\tif rowsAffected == 0 {\n\t\t\treturn ErrDeviceLimitReached\n\t\t}",
+        "improvedCode": "\t\tif rowsAffected == 0 {\n\t\t\treturn ErrDeviceNotFound\n\t\t}",
+        "relevantLinesStart": 95,
+        "relevantLinesEnd": 97,
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      },
+      {
+        "id": "sugg-js-origin-indexof",
+        "relevantFile": "app/assets/javascripts/embed.js",
+        "language": "javascript",
+        "label": "kody_rules",
+        "severity": "medium",
+        "oneSentenceSummary": "postMessage origin checked with indexOf",
+        "suggestionContent": "`discourseUrl.indexOf(e.origin)` accepts any origin that is a substring of the Discourse URL, so a prefix origin passes. Compare `e.origin` exactly with the origin of `discourseUrl`.\n\nKody rule violation: [Exact origin match on postMessage](https://app.kodus.io/settings/code-review/global/kody-rules/rule-postmessage-origin)",
+        "fullExplanation": "`discourseUrl.indexOf(e.origin)` accepts any origin that is a substring of the Discourse URL, so a prefix origin passes. Compare `e.origin` exactly with the origin of `discourseUrl`.\n\nKody rule violation: [Exact origin match on postMessage](https://app.kodus.io/settings/code-review/global/kody-rules/rule-postmessage-origin)",
+        "existingCode": "    if (discourseUrl.indexOf(e.origin) === -1) { return; }",
+        "improvedCode": "    if (e.origin !== new URL(discourseUrl).origin) { return; }",
+        "relevantLinesStart": 17,
+        "relevantLinesEnd": 17,
+        "brokenKodyRulesIds": [
+          "rule-postmessage-origin"
+        ],
+        "deliveryStatus": "sent",
+        "implementationStatus": "not_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "app/models/topic_embed.rb",
+        "status": "modified",
+        "patch": "@@ -10,7 +10,9 @@\n   def self.import(user, url, title, contents)\n     return unless url =~ /^https?\\:\\/\\//\n \n-    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"\n+    contents ||= ''\n+    safe_url = ERB::Util.html_escape(url)\n+    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{safe_url}'>#{safe_url}</a>\")}</small>\\n\"\n \n     embed = TopicEmbed.where(embed_url: url).first\n     content_sha1 = Digest::SHA1.hexdigest(contents)"
+      },
+      {
+        "filename": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "status": "modified",
+        "patch": "@@ -167,7 +167,10 @@\n \n func (s *AnonDBStore) DeleteDevice(ctx context.Context, deviceID string) error {\n \terr := s.sqlStore.WithDbSession(ctx, func(dbSession *sqlstore.DBSession) error {\n-\t\t_, err := dbSession.Exec(\"DELETE FROM anon_device WHERE device_id = ?\", deviceID)\n+\t\t_, err := dbSession.Exec(\"DELETE FROM anon_device WHERE device_id = ? \", deviceID)\n+\t\tif err != nil {\n+\t\t\ts.log.Debug(\"failed to delete anonymous device\", \"device\", deviceID, \"error\", err)\n+\t\t}\n \t\treturn err\n \t})\n "
+      },
+      {
+        "filename": "app/assets/javascripts/embed.js",
+        "status": "modified",
+        "patch": "@@ -14,7 +14,7 @@\n \n   function postMessageReceived(e) {\n     if (!e) { return; }\n-    if (discourseUrl.indexOf(e.origin) === -1) { return; }\n+    if (!e.origin || discourseUrl.indexOf(e.origin) < 0) { return; }\n \n     if (e.data) {\n       if (e.data.type === 'discourse-resize' && e.data.height) {"
+      }
+    ],
+    "expected": {
+      "sugg-rb-embed-import": "implemented",
+      "sugg-go-rows-not-limit": "not_implemented",
+      "sugg-js-origin-indexof": "not_implemented"
+    }
+  },
+  {
+    "id": "keeps-partial-ts",
+    "checks": "typescript suggestion: keeps a recorded partial when a later push leaves the code alone",
+    "kind": "without-fix",
+    "edit": "keeps",
+    "suggestions": [
+      {
+        "id": "sugg-ts-guest-email-case",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript",
+        "label": "security",
+        "severity": "high",
+        "oneSentenceSummary": "Guest emails are compared case-sensitively",
+        "suggestionContent": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "fullExplanation": "Guest emails are compared as typed: `Foo@x.com` slips past the lowercased blacklist, and an existing attendee written with different casing is added again. Lowercase each guest email before comparing it with the blacklist, and compare attendee emails case-insensitively.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "",
+        "relevantLinesStart": 74,
+        "relevantLinesEnd": 78,
+        "deliveryStatus": "sent",
+        "implementationStatus": "partially_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "status": "modified",
+        "patch": "@@ -82,7 +82,7 @@\n \n   const guestsFullDetails = uniqueGuests.map((guest) => {\n     return {\n-      name: \"\",\n+      name: guest.split(\"@\")[0],\n       email: guest,\n       timeZone: organizer.timeZone,\n       locale: organizer.locale,"
+      }
+    ],
+    "expected": {
+      "sugg-ts-guest-email-case": "partially_implemented"
+    }
+  },
+  {
+    "id": "keeps-partial-rb",
+    "checks": "ruby suggestion: keeps a recorded partial when a later push leaves the code alone",
+    "kind": "without-fix",
+    "edit": "keeps",
+    "suggestions": [
+      {
+        "id": "sugg-rb-embed-import",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby",
+        "label": "security",
+        "severity": "medium",
+        "oneSentenceSummary": "Imported-from footer breaks on nil contents and injects the URL",
+        "suggestionContent": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "fullExplanation": "`contents <<` raises `NoMethodError` when `contents` is nil, and the URL is interpolated into the HTML unescaped, so a crafted feed URL injects markup. Default `contents` to an empty string and escape the URL with `ERB::Util.html_escape`.",
+        "existingCode": "    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"",
+        "improvedCode": "",
+        "relevantLinesStart": 13,
+        "relevantLinesEnd": 13,
+        "deliveryStatus": "sent",
+        "implementationStatus": "partially_implemented"
+      }
+    ],
+    "changedFiles": [
+      {
+        "filename": "app/models/topic_embed.rb",
+        "status": "modified",
+        "patch": "@@ -34,7 +34,7 @@\n       # Update the topic if it changed\n       if content_sha1 != embed.content_sha1\n         revisor = PostRevisor.new(post)\n-        revisor.revise!(user, absolutize_urls(url, contents), skip_validations: true, bypass_rate_limiter: true)\n+        revisor.revise!(user, absolutize_urls(url, contents), skip_validations: true, bypass_rate_limiter: true, skip_revision: true)\n         embed.update_column(:content_sha1, content_sha1)\n       end\n     end"
+      }
+    ],
+    "expected": {
+      "sugg-rb-embed-import": "partially_implemented"
+    }
+  }
+]

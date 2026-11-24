@@ -1,5 +1,10 @@
 import { api } from './api/index.js';
+import { cockpitApi } from './api/cockpit.api.js';
 import { gitService } from './git.service.js';
+import {
+    LOGIN_REQUIRED_HINT,
+    userContextService,
+} from './user-context.service.js';
 import type { ConfigRepository } from '../types/config.js';
 import { CommandError } from '../utils/command-errors.js';
 import { resolveTeamKeyAccess } from '../utils/team-key-auth.js';
@@ -71,7 +76,38 @@ class RepoConfigService {
         };
     }
 
-    async listRepositories(): Promise<ListedRepository[]> {
+    /**
+     * Logged in, the team's selected repositories come from the endpoint the
+     * web app lists them with; a team key keeps /cli/config/repositories.
+     */
+    async listRepositories(
+        options: { team?: string } = {},
+    ): Promise<ListedRepository[]> {
+        const credential = await userContextService.resolveCredential();
+        if (credential.kind === 'user') {
+            const ctx = await userContextService.resolve('Repository list', {
+                team: options.team,
+            });
+            const repositories = await cockpitApi.listSelectedRepositories(
+                ctx.accessToken,
+                ctx.teamId,
+            );
+            return (repositories ?? []).map((repository) => ({
+                id: repository.id,
+                fullName:
+                    repository.full_name ||
+                    (repository.organizationName
+                        ? `${repository.organizationName}/${repository.name}`
+                        : repository.name),
+            }));
+        }
+        if (options.team) {
+            throw new CommandError(
+                'AUTH_REQUIRED',
+                `--team requires a logged-in user; a team key lists its own team. ${LOGIN_REQUIRED_HINT}`,
+            );
+        }
+
         const config = await this.loadTeamKeyConfig();
         const repositories = await api.config.getSelectedRepositories(
             config.teamKey,

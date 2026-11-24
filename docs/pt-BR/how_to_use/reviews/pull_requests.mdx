@@ -1,0 +1,62 @@
+---
+title: "Pull requests"
+description: "Acompanhe cada review da Kody, filtre pelo resultado e abra os apontamentos de qualquer pull request."
+---
+
+**Reviews → Pull requests** lista os pull requests em que a Kody rodou, com o resultado de cada review. Está aberta para Owners, Repo Admins e Contributors em todos os planos, e atualiza enquanto os reviews rodam. A aba **CLI** ao lado lista os [CLI reviews](/pt-BR/how_to_use/reviews/cli_reviews).
+
+## A lista
+
+Cada linha é um pull request. Um PR revisado mais de uma vez é uma única linha.
+
+| Coluna | O que mostra |
+| --- | --- |
+| **Pull request** | Número, título, repositório, branch de origem, quando foi aberto e o autor. O título abre a tela de review; o ícone de seta abre o PR no seu provider Git |
+| **Reviews** | Quantas vezes a Kody revisou o PR e há quanto tempo |
+| **Suggestions** | Duas contagens: entregues no PR (ícone de check) e retidas pela sua configuração de review (ícone de filtro) |
+| **Status** | O último review: **Success**, **Review failed**, **In Progress**, **Skipped**, **Partial Error** ou **Pending**. **Merged** o substitui quando o PR é mesclado |
+
+Clique em uma linha para expandi-la. Ela lista cada review do PR com o status, a duração, o commit que ele revisou e uma timeline das etapas que rodou. **Open full review** abre a tela de review.
+
+Quando o review registra seu modo, cada execução mostra um selo **Balanced** ou **Heavy**. A linha do PR mostra o modo da execução mais recente que revisou o PR. Em execuções Heavy com dados de especialistas, expanda **Specialist Agents** na timeline para ver a duração, as chamadas de ferramentas, os achados e eventuais motivos de falha de cada agente. **Findings** conta os achados mantidos após a verificação, antes da remoção de duplicados. Esse detalhamento da timeline entrou depois da versão self-hosted 2.2.11.
+
+Quando um review teve sucesso, mas trabalhou com menos do que deveria, por exemplo sem um checkout do repositório ou com algumas Kody Rules não avaliadas, o review expandido lista o que foi perdido. Esses avisos aparecem só aqui, não no pull request.
+
+## Atalhos
+
+Três contadores no canto superior direito filtram a lista quando clicados:
+
+- **Reviewed today**: PRs distintos que a Kody revisou hoje (UTC). Adicione um filtro **Status** para restringir, por exemplo, aos reviews que falharam.
+- **Kody skipped**: PRs em que a Kody foi acionada mas que pulou e nunca revisou por causa de configuração (sem licença, BYOK, cadência manual ou pausada, usuário ignorado). É o backlog atual, não um número diário, e abre a sua própria lista.
+- **Needs attention**: PRs abertos em que a Kody entregou uma sugestão que o autor ainda não aplicou. Pode atrasar até a próxima verificação de implementação.
+
+## Filtros
+
+Busque por **título**, **número** ou **autor**, depois restrinja com:
+
+- **Repository**
+- **Authors**: o padrão oculta PRs de autores que as suas configurações de review excluem; **All authors** mostra todos e **Excluded authors** mostra só os excluídos
+- **Suggestions**: **Has suggestions** ou **No suggestions**
+- **Date**: um intervalo de datas de review, a partir dos presets (**Last week**, **Last 15 days**, **Last month**, **Last 3 months**) ou datas personalizadas
+- **PR state**: **Open** ou **Closed**, o estado do próprio pull request
+- **Status**: como o review foi (**Success**, **Error**, **Partial error**, **Skipped**, **In progress**, **Pending**)
+
+Os filtros ativos aparecem como chips que você pode remover, e **Clear all** os redefine. Os filtros ficam na URL, então você pode compartilhar uma visão filtrada.
+
+## A tela de review
+
+Clique no título de um PR para abrir a tela **Code Review** dele. Ela mostra os apontamentos de todos os reviews do PR sobre o diff.
+
+- **Esquerda**: os arquivos alterados, como uma árvore de pastas ou agrupados por papel com **Group by role**. Os arquivos com apontamentos são marcados, e você pode marcar arquivos como vistos.
+- **Centro**: o cabeçalho do PR com uma aba **Review** e uma aba **Commits**, uma barra com o número de bugs potenciais e flags e quantos arquivos você já viu, e o diff em visão unificada ou dividida. Os apontamentos da Kody ficam inline sob as linhas a que se referem.
+- **Direita**: os apontamentos agrupados por severidade (**Critical**, **High**, **Medium**, **Low**). Clique em um para ir até ele.
+
+Os apontamentos critical e high recebem o rótulo **Potential Bug**, os medium **Suggestion** e os low **Nit**. Um apontamento mostra a explicação da Kody, um **Suggested fix** ou **Recommendation**, e botões para **Copy fix**, **Copy AI prompt** (um prompt que você pode colar em um agente de código para aplicar a correção) e **Open on provider**.
+
+Se o review não produziu apontamentos, a tela diz por quê, por exemplo **Nothing to flag.**, **Review failed — nothing to show.** ou **Review skipped.**
+
+As sugestões sobre o pull request como um todo, em vez de sobre um arquivo, não são mostradas nesta tela.
+
+Atalhos: **J** e **K** vão para o arquivo seguinte e o anterior, **B** oculta ou mostra a árvore de arquivos, e **Esc** limpa o arquivo selecionado.
+
+Quando você abre uma sugestão a partir de [Suggestions](/pt-BR/how_to_use/cockpit/suggestions) com **Open in PR review**, a tela rola até esse apontamento.

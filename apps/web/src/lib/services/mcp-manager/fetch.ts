@@ -43,6 +43,7 @@ export const getMCPPluginById = ({
         provider: string;
         allowedTools: Array<string>;
         isConnected: boolean;
+        connectionStatus?: MCP_CONNECTION_STATUS;
         isDefault?: boolean;
         connectionId?: string;
         mcpConnectionId?: string;

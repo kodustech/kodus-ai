@@ -1,48 +1,97 @@
 ---
-title: "如何修复 GitHub 或 GitLab 的 webhook 问题"
-description: "调试和解决 Git 提供商与 Kodus 之间的 webhook 连接问题。"
+title: "如何修复 webhook 问题"
+description: "调试和解决 Git 提供商与 Kodus 之间的 webhook 投递问题。"
 ---
 
-Webhooks 是 Kodus 了解 PR 何时打开或更新的方式。如果它们不工作，审查将不会触发。
+Webhooks 是 Kodus 了解 PR 何时被打开、更新或评论的方式。如果它们不工作,审查将不会触发。
 
-## 诊断问题
+使用 GitHub App 时,事件来自该 App 自己的 webhook。对于其他所有连接,当您在 **Repositories** 上保存选择时,Kodus 会在每个代码库上创建一个 webhook。
+
+## 首先检查 Repositories
+
+当提供商拒绝创建 webhook 时,**Repositories** 会显示一条警告,**A repository has no webhook** 或 **N repositories have no webhook**,并列出每个代码库及原因。Kodus 永远不会收到这些代码库上拉取请求的通知,因此不会运行任何审查。通常的原因是凭据无法管理 webhooks:
+
+### 各 Git 平台的 webhook 权限
+
+| 提供商 | 凭据需要什么 |
+| --- | --- |
+| GitHub (token) | 对代码库 webhooks 的读写权限:`admin:repo_hook`,或细粒度令牌上的 **Webhooks: Read and write** |
+| GitLab | 项目上的 **Maintainer** 或 **Owner** 角色 |
+| Bitbucket Cloud | 对代码库的管理员权限以及 `read:webhook:bitbucket` 和 `write:webhook:bitbucket` |
+| Bitbucket Data Center | **Repository admin** 权限 |
+| Azure DevOps | 项目上的 **Edit subscriptions**(Project Administrators 拥有该权限) |
+| Forgejo | 对代码库的管理员权限以及 `write:repository` 范围 |
+
+修复权限后,再次保存选择(**Save selected repositories**)。开启 **Review every repository** 时,Kodus 会在每次同步时重试这些代码库。
+
+只有在开启 **Review every repository** 时,Azure DevOps 的拒绝才会显示在这里。如果是选定的代码库,请在 **Project settings** → **Service hooks** 下检查订阅。
+
+## 检查投递
 
 ### GitHub
 
-1. 前往代码库**设置** → **Webhooks**
+1. 前往您的代码库 **Settings** → **Webhooks**
 2. 找到 Kodus webhook
-3. 点击并检查**最近投递**
-4. 查找失败的投递（非 2xx 状态码）
+3. 点击它并检查 **Recent Deliveries**
+4. 查找失败的投递(非 2xx 状态码)
+
+如果是您为自托管实例创建的 GitHub App,请改为在该 App 设置中检查 **Advanced** → **Recent Deliveries**。
 
 ### GitLab
 
-1. 前往项目**设置** → **Webhooks**
+1. 前往您的项目 **Settings** → **Webhooks**
 2. 找到 Kodus webhook
 3. 检查投递历史中的错误
+
+### Azure DevOps
+
+打开 **Project settings** → **Service hooks** 并检查该订阅的历史记录。
+
+## 检查 URL 是否到达 Kodus
+
+Webhooks 由一个独立的服务(端口 3332)处理,而不是 API 或 web 应用。发送一个该服务无需真实事件即可接受的请求:
+
+```bash
+curl -i -X POST https://kodus-webhooks.yourdomain.com/github/webhook \
+  -H 'Content-Type: application/json' \
+  -H 'X-GitHub-Event: ping' \
+  -d '{}'
+```
+
+返回 `200` 且内容为 `Webhook ignored (event not supported)` 表示请求已到达 webhooks 服务。返回 `404`、重定向或 HTML 页面则表示该 URL 指向的是 API 或 web 应用:请修复该 URL 或您的反向代理。对于其他提供商,请使用 `/gitlab/webhook`、`/bitbucket/webhook` 或 `/forgejo/webhook`。Azure Repos 在没有 `token` 参数时会返回 `403 Unauthorized`,这同样证明路由是正确的。
+
+`200` 仅表示服务接受了请求。Kodus 会丢弃来自 **Repositories** 上未选中的代码库的事件。
 
 ## 常见修复
 
 ### Webhook URL 错误或过期
 
-如果您更改了 Kodus 部署 URL，请在 Git 提供商设置中更新 webhook URL。
+每个提供商的 URL 来自其环境变量:
+
+| 提供商 | 变量 | 路径 |
+| --- | --- | --- |
+| GitHub | `API_GITHUB_CODE_MANAGEMENT_WEBHOOK` | `/github/webhook` |
+| GitLab | `API_GITLAB_CODE_MANAGEMENT_WEBHOOK` | `/gitlab/webhook` |
+| Bitbucket | `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` | `/bitbucket/webhook` |
+| Azure DevOps | `GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK` | `/azure-repos/webhook` |
+| Forgejo | `API_FORGEJO_CODE_MANAGEMENT_WEBHOOK` | `/forgejo/webhook` |
+
+Kodus 通过 URL 匹配现有的 webhooks。更改 URL 后,请重启 API 并再次保存选择:Kodus 会创建一个新的 webhook,并保留旧的 webhook 不动。请在您的 Git 提供商中删除旧的 webhook。
 
 ### SSL 证书问题
 
-如果您自托管，请确保 SSL 证书有效。GitHub 和 GitLab 拒绝具有无效证书的 webhooks。
+Kodus 在 GitHub 和 GitLab 上创建的 webhooks 开启了 SSL 验证;其他提供商使用它们自己的默认值。如果您是自托管,请确保您的 SSL 证书有效,否则提供商会拒绝投递。
 
 ### 防火墙阻止
 
-如果 Kodus 在防火墙后面，请确保 Git 提供商的 IP 范围可以到达 webhook 端点。
+如果 Kodus 在防火墙后面,请确保 Git 提供商的 IP 范围可以到达 webhook 端点。
 
 ### Webhook 已删除
 
-每当在侧边栏的 **Repositories** 中保存代码库选择（**Add repository** → **Save selected repositories**）时，Kodus 都会注册缺失的 webhook，因此保存一次选择变更即可重新注册它。您也可以手动添加 webhook URL。
+在 **Repositories** 上保存选择(**Add repository** → **Save selected repositories**)会注册任何缺失的 webhook。您也可以手动添加:[GitHub](/zh/how_to_deploy/platforms/github/github_webhook)、[GitLab](/zh/how_to_deploy/platforms/gitlab/gitlab_webhook)、[Bitbucket](/zh/how_to_deploy/platforms/bitbucket/bitbucket_webhook)、[Azure DevOps](/zh/how_to_deploy/platforms/azure_devops/azdevops_webhook) 或 [Forgejo](/zh/how_to_deploy/platforms/forgejo/forgejo_webhook)。
 
 ## 测试
 
 大多数 Git 提供商允许您**重新投递**最近的 webhook 载荷。使用此功能测试而无需创建新 PR。
 
-有关平台特定指南，请参阅：
-- [GitHub webhooks](/zh/how_to_deploy/platforms/github/github_webhook)
-- [GitLab webhooks](/zh/how_to_deploy/platforms/gitlab/gitlab_webhook)
-- [Bitbucket webhooks](/zh/how_to_deploy/platforms/bitbucket/bitbucket_webhook)
+自托管:在安装器文件夹中运行 `./scripts/doctor.sh`。它的 Git 检查会报告令牌无法读取或评论的代码库、没有 Kodus webhook 的代码库,以及 webhook URL 是否已设置并在过去 7 天内收到过事件。

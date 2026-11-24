@@ -24,6 +24,7 @@ const makeRepository = () => {
         getOne: jest.fn().mockResolvedValue(null),
         getMany: jest.fn().mockResolvedValue([]),
         getRawMany: jest.fn().mockResolvedValue([]),
+        getExists: jest.fn().mockResolvedValue(false),
     };
     const typeormRepository = {
         createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
@@ -202,10 +203,49 @@ describe('AutomationExecutionRepository.findEligiblePullRequestRefsForApprovalBy
         expect(queryBuilder.setParameters).toHaveBeenCalledWith(
             expect.objectContaining({
                 teamAutomationId: 'team-automation-1',
-                successStatus: AutomationStatus.SUCCESS,
+                reviewStatuses: [
+                    AutomationStatus.SUCCESS,
+                    AutomationStatus.PARTIAL_ERROR,
+                ],
                 inProgressStatus: AutomationStatus.IN_PROGRESS,
                 allowNoCommentKinds: ['approve', 'hold', 'out-of-scope'],
             }),
         );
+        expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+            'success.status IN (:...reviewStatuses)',
+        );
+    });
+});
+
+describe('AutomationExecutionRepository.hasPullRequestExecutionWithDataKey', () => {
+    const params = {
+        teamAutomationId: 'ta-1',
+        repositoryId: 'repo-1',
+        pullRequestNumber: 42,
+        key: 'licenseNoticePostedAt',
+    };
+
+    it('looks for the key on any execution of that PR', async () => {
+        const { repository, queryBuilder } = makeRepository();
+
+        await repository.hasPullRequestExecutionWithDataKey(params);
+
+        expect(queryBuilder.where).toHaveBeenCalledWith(
+            'automation_execution.team_automation_id = :teamAutomationId',
+            { teamAutomationId: 'ta-1' },
+        );
+        expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+            'automation_execution.repositoryId = :repositoryId',
+            { repositoryId: 'repo-1' },
+        );
+        expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+            'automation_execution.pullRequestNumber = :pullRequestNumber',
+            { pullRequestNumber: 42 },
+        );
+        expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+            '"automation_execution"."dataExecution"->>:key IS NOT NULL',
+            { key: 'licenseNoticePostedAt' },
+        );
+        expect(queryBuilder.getExists).toHaveBeenCalled();
     });
 });

@@ -23,7 +23,9 @@ function sugg(over: Partial<FinderSuggestion> = {}): FinderSuggestion {
     };
 }
 
-function result(over: Partial<FinderWithVerifyResult> = {}): FinderWithVerifyResult {
+function result(
+    over: Partial<FinderWithVerifyResult> = {},
+): FinderWithVerifyResult {
     return {
         reasoning: 'r',
         kept: [],
@@ -33,6 +35,7 @@ function result(over: Partial<FinderWithVerifyResult> = {}): FinderWithVerifyRes
         unverified: [],
         droppedByQuoteCheck: [],
         finderState: { steps: [], usage: {} } as any,
+        recallStates: [],
         verifyUsage: {} as any,
         recallUsage: {} as any,
         passStats: [],
@@ -50,9 +53,15 @@ describe('review-finding', () => {
         it('differs by file, line, content and agent', () => {
             const base = sugg();
             const id = makeFindingId(base, 'bug');
-            expect(makeFindingId(sugg({ relevantFile: 'src/b.ts' }), 'bug')).not.toBe(id);
-            expect(makeFindingId(sugg({ relevantLinesStart: 99 }), 'bug')).not.toBe(id);
-            expect(makeFindingId(sugg({ suggestionContent: 'other' }), 'bug')).not.toBe(id);
+            expect(
+                makeFindingId(sugg({ relevantFile: 'src/b.ts' }), 'bug'),
+            ).not.toBe(id);
+            expect(
+                makeFindingId(sugg({ relevantLinesStart: 99 }), 'bug'),
+            ).not.toBe(id);
+            expect(
+                makeFindingId(sugg({ suggestionContent: 'other' }), 'bug'),
+            ).not.toBe(id);
             expect(makeFindingId(base, 'security')).not.toBe(id);
         });
     });
@@ -61,14 +70,22 @@ describe('review-finding', () => {
         it('tags kept findings as surviving the verify gate, with evidence', () => {
             const r = result({
                 kept: [sugg()],
-                keptEvidence: [{ strongFiles: ['src/a.ts'], weakFiles: [] } as any],
+                keptEvidence: [
+                    { strongFiles: ['src/a.ts'], weakFiles: [] } as any,
+                ],
             });
-            const [f] = buildFindingsFromVerify(r, { agent: 'bug', pass: 'initial' });
+            const [f] = buildFindingsFromVerify(r, {
+                agent: 'bug',
+                pass: 'initial',
+            });
             expect(f.gates).toEqual([
                 { gate: 'found', outcome: 'survived' },
                 { gate: 'verify', outcome: 'survived' },
             ]);
-            expect(f.evidence).toEqual({ strongFiles: ['src/a.ts'], weakFiles: [] });
+            expect(f.evidence).toEqual({
+                strongFiles: ['src/a.ts'],
+                weakFiles: [],
+            });
             expect(diedAt(f)).toBeUndefined();
             expect(f.provenance.agent).toBe('bug');
             expect(f.provenance.pass).toBe('initial');
@@ -85,7 +102,10 @@ describe('review-finding', () => {
                     },
                 ],
             });
-            const [f] = buildFindingsFromVerify(r, { agent: 'security', pass: 'synthesis' });
+            const [f] = buildFindingsFromVerify(r, {
+                agent: 'security',
+                pass: 'synthesis',
+            });
             expect(diedAt(f)).toBe('verify');
             expect(f.gates.at(-1)).toEqual({
                 gate: 'verify',
@@ -109,7 +129,10 @@ describe('review-finding', () => {
                             parseMode: 'tool' as const,
                         },
                         {
-                            finding: sugg({ severity: 'low', label: 'performance' }),
+                            finding: sugg({
+                                severity: 'low',
+                                label: 'performance',
+                            }),
                             evidence: 'y',
                             verifierEvidence: EMPTY_EVIDENCE,
                             parseMode: 'tool' as const,
@@ -126,12 +149,18 @@ describe('review-finding', () => {
             expect(report.bySeverity.high).toEqual({ found: 2, dropped: 1 });
             expect(report.bySeverity.low).toEqual({ found: 1, dropped: 1 });
             expect(report.byLabel.bug).toEqual({ found: 2, dropped: 1 });
-            expect(report.byLabel.performance).toEqual({ found: 1, dropped: 1 });
+            expect(report.byLabel.performance).toEqual({
+                found: 1,
+                dropped: 1,
+            });
         });
 
         it('buckets missing severity/label under "unknown"', () => {
             const findings = buildFindingsFromVerify(
-                result({ kept: [sugg({ severity: undefined, label: undefined })], keptEvidence: [EMPTY_EVIDENCE] }),
+                result({
+                    kept: [sugg({ severity: undefined, label: undefined })],
+                    keptEvidence: [EMPTY_EVIDENCE],
+                }),
                 { agent: 'bug', pass: 'initial' },
             );
             const report = summarizeFunnel(findings);

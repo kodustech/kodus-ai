@@ -540,6 +540,16 @@ describe('sanitizeFindingsResult — provider shapes (#2112)', () => {
             expect(r!.suggestions[0].relevantFile).toBe('src/cart/totals.ts');
         });
 
+        it('a single finding sent as suggestions:{…} instead of an array is wrapped', () => {
+            const r = run({ reasoning: 'one', suggestions: finding() });
+            expect(r!.suggestions).toHaveLength(1);
+            expect(r!.suggestions[0].relevantFile).toBe('src/cart/totals.ts');
+        });
+
+        it('an object-valued suggestions that is not a finding is still unusable', () => {
+            expect(run({ reasoning: 'r', suggestions: { count: 2 } })).toBeNull();
+        });
+
         it('FPARSE-07 — a {name, parameters} tool-call wrapper is unwrapped', () => {
             const r = run({
                 name: 'submitResult',

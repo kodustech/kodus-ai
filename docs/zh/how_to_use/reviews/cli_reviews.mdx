@@ -1,0 +1,31 @@
+---
+title: "CLI 审查"
+description: "查看您的团队使用 Kodus CLI 运行的审查、运行者以及发现的问题。"
+---
+
+**Reviews → CLI** 列出您的团队使用 [Kodus CLI](/zh/how_to_use/cli/introduction) 在终端中运行的审查。它位于[拉取请求](/zh/how_to_use/reviews/pull_requests)标签页旁边,所有者、代码库管理员和贡献者可以打开。在有人运行 CLI 审查之前,它会显示 *No CLI reviews yet*。
+
+## 列表
+
+| 列 | 显示内容 |
+| --- | --- |
+| **When** | 审查在多久之前运行 |
+| **User** | 运行它的 Kodus 账户,否则是 git 邮箱,再否则是 *Anonymous*。其下一行会说明它使用的是 **Team** 密钥(并显示密钥名称)还是 **Personal** 登录;当本地 git 邮箱与账户不同时,还会显示 `git:` 和该本地 git 邮箱 |
+| **Repo** | 被审查的代码库 |
+| **Branch** | 被审查的分支 |
+| **Commit** | 提交的短哈希 |
+| **Status** | **Success**、**Error**、**In Progress**、**Skipped**、**Partial Error** 或 **Pending** |
+| **Issues** | 审查发现的问题数量 |
+| **Duration** | 审查耗时 |
+
+在窄屏幕上会隐藏分支、提交和耗时。
+
+点击某一行可展开它。它会显示审查时间线(包含每个阶段的状态、耗时和开始时间)、任何错误消息、Kodus CLI 版本,以及审查产生的建议,每条建议都带有严重性、类别、文件和行号、说明以及建议的更改。在审查仍在运行时,建议可能会以非最终的预览形式出现。
+
+## 筛选器
+
+- **Search by user email**
+- **Repository**
+- **Date**:**Today**、**Last 7 days** 或 **Last 30 days**
+
+右上角的 **Reviewed today** 计数器显示您的团队今天运行了多少次 CLI 审查,点击后会将列表筛选为这些审查。生效的筛选条件会显示为标签,**Clear all** 可重置它们,URL 会保留它们,因此可以分享筛选后的视图。

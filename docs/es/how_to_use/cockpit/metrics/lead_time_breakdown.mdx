@@ -5,74 +5,49 @@ description: "Desglosa tu ciclo de desarrollo en fases de codificación, recogid
 
 ## Qué es el Desglose del Lead Time
 
-El Desglose del Lead Time te da una vista detallada de tu proceso de desarrollo al dividir el tiempo total del ciclo en tres fases clave: tiempo de codificación, tiempo de recogida y tiempo de revisión. Esto te ayuda a identificar exactamente dónde ocurren los cuellos de botella en tu flujo de trabajo.
+El Desglose del Lead Time (Lead Time Breakdown) divide el tiempo desde el primer commit de un PR hasta su cierre en tres fases: tiempo de codificación, tiempo de recogida y tiempo de revisión. Muestra dónde se ralentiza tu flujo de trabajo.
+
+En el Cockpit, es el gráfico **Lead Time Breakdown** de la pestaña **Productivity**: una barra apilada por semana, con **Coding Time**, **Pickup Time** y **Review Time** en horas. Haz clic en un nombre debajo del gráfico para ocultar o mostrar esa fase.
 
 ## Cómo lo Calculamos
 
-Rastreamos automáticamente el tiempo invertido en cada fase de tu proceso de desarrollo, desde el primer commit hasta la fusión del PR.
-
-**Lo que Rastreamos:**
-- **Tiempo de Codificación**: Tiempo de desarrollo activo (desde el primer commit hasta el último commit)
-- **Tiempo de Recogida**: Tiempo entre el último commit y la creación del PR
-- **Tiempo de Revisión**: Tiempo desde la creación del PR hasta la fusión
-
-**Lo que No Contamos:**
-- Tiempo antes del primer commit (planificación, diseño)
-- Tiempo después de la fusión (despliegue, etc.)
-- PRs fallidos o abandonados
-
-**Cómo se Calcula:**
 ```
-Tiempo de Codificación = (Hora del Último Commit) - (Hora del Primer Commit)
-Tiempo de Recogida = (Hora de Apertura del PR) - (Hora del Último Commit)  
-Tiempo de Revisión = (Hora de Cierre del PR) - (Hora de Apertura del PR)
+Coding Time = (Last Commit Time) - (First Commit Time)
+Pickup Time = (PR Opened Time) - (Last Commit Time)
+Review Time = (PR Closed Time) - (PR Opened Time)
 ```
 
-Usamos el percentil 75 (P75) para cada fase para filtrar los valores atípicos y mostrarte el rendimiento típico.
+- **Coding Time**: desde el primer hasta el último commit del PR, incluidos los commits enviados después de abrir el PR.
+- **Pickup Time**: desde el último commit hasta que se abre el PR. Es negativo para un PR que recibió nuevos commits después de abrirse.
+- **Review Time**: desde que se abre el PR hasta que se cierra, mergeado o no.
 
-## Por qué es Importante
+Para cada semana, cada fase es el percentil 75 (P75) de los PRs cerrados esa semana, de modo que los valores atípicos inusualmente largos no la distorsionen. Un PR cuyo valor para una fase es exactamente cero, como el tiempo de codificación de un PR de un solo commit, se excluye del P75 de esa fase. Solo cuentan los commits hechos hasta 30 días antes de que se abriera el PR, porque los commits más antiguos en una rama con rebase suelen pertenecer a otro trabajo. Un PR sin datos de commits se excluye.
+
+No se cuenta el tiempo antes del primer commit (planificación, diseño) ni después del cierre (despliegue).
+
+## Por qué Importa
 
 Comprender dónde se invierte el tiempo te ayuda a optimizar la parte correcta de tu proceso:
 
-- **Tiempo de Codificación**: Muestra la eficiencia del desarrollo
-- **Tiempo de Recogida**: Revela cuellos de botella en el flujo de trabajo
-- **Tiempo de Revisión**: Indica la efectividad del proceso de revisión
+- **Coding Time**: muestra la eficiencia del desarrollo
+- **Pickup Time**: revela cuellos de botella del flujo de trabajo entre terminar el código y pedir la revisión
+- **Review Time**: indica la efectividad del proceso de revisión
 
 ## Cómo Mejorar
 
-### Reducir el Tiempo de Codificación
-- **Requisitos Claros**: Asegurarse de que los desarrolladores entiendan qué construir
-- **Funciones Más Pequeñas**: Dividir los cambios grandes en partes manejables
-- **Programación en Pareja**: Colaborar para resolver problemas complejos más rápido
-- **Reutilización de Código**: Aprovechar los patrones y componentes existentes
+### Reducir el Coding Time
+- Aclarar los requisitos antes de empezar el trabajo
+- Dividir las funcionalidades grandes en partes manejables
+- Trabajar en pareja en los problemas complejos
 
-### Reducir el Tiempo de Recogida
-- **Creación Inmediata del PR**: Crear PRs justo después de terminar el código
-- **Automatización del Flujo de Trabajo**: Usar herramientas para optimizar la creación de PRs
-- **Definición Clara de "Terminado"**: Saber exactamente cuándo el código está listo
-- **Reducir el Cambio de Contexto**: Centrarse en completar una tarea a la vez
+### Reducir el Pickup Time
+- Abrir el PR justo después de terminar el código
+- Automatizar la creación y la configuración del PR
+- Definir cuándo el código está listo para revisión
 
-### Reducir el Tiempo de Revisión
-- **Pautas de Revisión**: Establecer expectativas claras para los revisores
-- **Verificaciones Automatizadas**: Usar herramientas para detectar problemas antes de la revisión
-- **Rotación de Revisiones**: Distribuir la carga de trabajo de revisión en el equipo
-- **Respuestas Rápidas**: Responder con prontitud a los comentarios de revisión
-
-## Cuellos de Botella Comunes
-
-### Tiempo de Codificación
-- **Requisitos Poco Claros**: Los desarrolladores no saben qué construir
-- **Funciones Complejas**: Cambios demasiado grandes o complejos
-- **Deuda Técnica**: Trabajar alrededor de problemas de código existentes
-- **Dependencias**: Esperar otros componentes o servicios
-
-### Tiempo de Recogida
-- **Ineficiencia del Flujo de Trabajo**: Pasos manuales que ralentizan el proceso
-- **Cambio de Contexto**: Moverse entre múltiples tareas
-- **Falta de Automatización**: Creación y configuración manual de PRs
-
-### Tiempo de Revisión
-- **PRs Grandes**: Cambios demasiado grandes para revisar rápidamente
-- **Disponibilidad de Revisores**: No hay suficientes personas disponibles para revisar
-- **Cambios Poco Claros**: PRs difíciles de entender
-- **Backlog de Revisión**: Demasiados PRs esperando revisión
+### Reducir el Review Time
+- Establecer expectativas claras para los revisores
+- Usar verificaciones automatizadas para detectar problemas antes de la revisión
+- Distribuir la carga de revisión en el equipo
+- Responder con prontitud a los comentarios de revisión
+- Mantener los PRs pequeños

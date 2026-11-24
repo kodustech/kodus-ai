@@ -188,6 +188,10 @@ export const codeReviewConfigRemovePropertiesNotInType = (
     const expectedKeys: LiteralUnion<keyof CodeReviewGlobalConfig>[] = [
         "automatedReviewActive",
         "showStatusFeedback",
+        "reviewMode",
+        "riskAssessmentActive",
+        "riskCriteria",
+        "riskReviewRouting",
         "reviewCadence",
         "baseBranches",
         "ignoredTitleKeywords",
@@ -196,6 +200,7 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         "reviewOptions",
         "kodusConfigFileOverridesWebPreferences",
         "pullRequestApprovalActive",
+        "approvalPolicies",
         "approvalLabels",
         "approvalAuthors",
         "approvalRiskActive",

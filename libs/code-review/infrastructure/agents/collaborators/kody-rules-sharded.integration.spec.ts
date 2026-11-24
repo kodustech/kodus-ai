@@ -1,15 +1,13 @@
 /**
  * Wiring validation for the sharded kody-rules path (#1449): the NEW integration
  * points beyond the pure judge (already unit-tested) are (a) ShardViolation →
- * real mapAgentFindings → CodeSuggestion, and (b) T2 reference-inline. Both are
- * exercised here with the REAL shared collaborators and no LLM — the live LLM
- * call is generic infra and the prompt/recall is validated separately by
- * evals/kody-rules/sharded-experiment.js.
+ * real mapAgentFindings → CodeSuggestion, and (b) which rules count as judged
+ * without their referenced files. Both are exercised here with the REAL shared
+ * collaborators and no LLM — the live LLM call is generic infra and the
+ * prompt/recall is validated separately by evals/kody-rules/sharded-experiment.js.
  */
 import {
     judgeKodyRulesSharded,
-    inlineRuleReferences,
-    inlineLoadedReferences,
     findUnresolvedReferenceRules,
     RunJudge,
 } from './kody-rules-sharded.judge';
@@ -25,7 +23,12 @@ const file = (filename: string, patch: string): any => ({
 
 describe('sharded kody-rules — judge → mapAgentFindings wiring (#1449)', () => {
     const rules = [
-        { uuid: 'no-console', title: 'no console', rule: 'no console.log', path: '**/*.ts' },
+        {
+            uuid: 'no-console',
+            title: 'no console',
+            rule: 'no console.log',
+            path: '**/*.ts',
+        },
     ];
     const changedFiles = [file('src/a.ts', '5 +console.log(1)')];
 
@@ -102,173 +105,6 @@ describe('sharded kody-rules — judge → mapAgentFindings wiring (#1449)', () 
     });
 });
 
-describe('sharded kody-rules — T2 reference-inline (#1449)', () => {
-    it('appends the referenced file content to the rule text', async () => {
-        const read = async (path: string) =>
-            path === '.cursor/rules/imports.mdc'
-                ? 'Do not import package:http/http.dart'
-                : '';
-        const out = await inlineRuleReferences(
-            [
-                {
-                    uuid: 'r1',
-                    title: 'imports',
-                    rule: 'Follow the imports convention.',
-                    sourcePath: '.cursor/rules/imports.mdc',
-                },
-            ],
-            read,
-        );
-        expect(out[0].rule).toContain('Follow the imports convention.');
-        expect(out[0].rule).toContain('Do not import package:http/http.dart');
-        expect(out[0].rule).toContain('.cursor/rules/imports.mdc');
-    });
-
-    it('leaves the rule untouched when it has no sourcePath', async () => {
-        const out = await inlineRuleReferences(
-            [{ uuid: 'r1', title: 't', rule: 'plain rule' }],
-            async () => 'x',
-        );
-        expect(out[0].rule).toBe('plain rule');
-    });
-
-    it('degrades gracefully to the rule text when the read throws', async () => {
-        const out = await inlineRuleReferences(
-            [{ uuid: 'r1', title: 't', rule: 'plain', sourcePath: 'missing.md' }],
-            async () => {
-                throw new Error('file not found');
-            },
-        );
-        expect(out[0].rule).toBe('plain'); // no regression, judged on text alone
-    });
-
-    it('returns rules unchanged when there is no sandbox (read undefined)', async () => {
-        const out = await inlineRuleReferences(
-            [{ uuid: 'r1', title: 't', rule: 'plain', sourcePath: 'x.md' }],
-            undefined,
-        );
-        expect(out[0].rule).toBe('plain');
-    });
-});
-
-/**
- * Regression: a rule that cites repo files via `@file:` markers in its BODY is
- * stored "context-os-only" — only a `contextReferenceId` on the rule, resolved
- * through the Context OS (loader -> ContextPack -> file content). The code-review
- * path reads rules raw (no UI enrichment), so `externalReferences` is NOT on the
- * rule and `sourcePath` is null. The sharded path only inlined `sourcePath`, so
- * the referenced file never reached the shard and the model saw the bare
- * "@file:X" marker — the root cause of the recall miss (customer rule 4902…, and
- * proven in runtime with a `@file:CLAUDE.md` rule).
- *
- * `inlineLoadedReferences` takes the loader's resolved map (uuid -> refs WITH
- * content) and appends that content to the rule text.
- */
-describe('sharded kody-rules — Context OS references inline into the shard', () => {
-    const rule = () => ({
-        uuid: 'r-ctx',
-        title: 'Validate data against the project conventions',
-        rule: 'Siga exatamente essas regras para validar os dados: @file:CLAUDE.md',
-        sourcePath: null,
-        contextReferenceId: 'ctx-abc',
-    });
-
-    it('inlines the resolved reference content (contextReferenceId path)', () => {
-        const map = new Map([
-            [
-                'r-ctx',
-                [
-                    {
-                        filePath: 'CLAUDE.md',
-                        content: '# Conventions\nAlways validate input before persisting.',
-                    },
-                ],
-            ],
-        ]);
-
-        const out = inlineLoadedReferences([rule() as any], map);
-
-        // The judge must see the ACTUAL file content, not the "@file:" marker.
-        expect(out[0].rule).toContain('Always validate input before persisting');
-        expect(out[0].rule).toContain('CLAUDE.md');
-        // Original rule text is preserved.
-        expect(out[0].rule).toContain('validar os dados');
-    });
-
-    it('inlines multiple resolved references for one rule', () => {
-        const map = new Map([
-            [
-                'r-ctx',
-                [
-                    { filePath: 'DESIGN.md', content: 'design conventions here' },
-                    { filePath: 'src/resolver.js', content: 'resolver logic here' },
-                ],
-            ],
-        ]);
-        const out = inlineLoadedReferences([rule() as any], map);
-        expect(out[0].rule).toContain('design conventions here');
-        expect(out[0].rule).toContain('resolver logic here');
-    });
-
-    it('leaves the rule untouched when the map has no entry for its uuid', () => {
-        const out = inlineLoadedReferences(
-            [rule() as any],
-            new Map([['other-uuid', [{ filePath: 'x', content: 'y' }]]]),
-        );
-        expect(out[0].rule).toBe(rule().rule);
-    });
-
-    it('degrades to the rule text when the resolved content is empty', () => {
-        const out = inlineLoadedReferences(
-            [rule() as any],
-            new Map([['r-ctx', [{ filePath: 'CLAUDE.md', content: '' }]]]),
-        );
-        expect(out[0].rule).toBe(rule().rule);
-    });
-
-    it('returns rules unchanged when the references map is empty or absent', () => {
-        expect(inlineLoadedReferences([rule() as any], new Map())[0].rule).toBe(
-            rule().rule,
-        );
-        expect(inlineLoadedReferences([rule() as any], undefined)[0].rule).toBe(
-            rule().rule,
-        );
-    });
-
-    // The augmented rule is re-embedded into every file shard, so the budget
-    // must cap the TOTAL appended text per rule — not each ref independently —
-    // or a multi-ref / large-ref rule balloons the input by the file count.
-    it('caps the TOTAL inlined content per rule at maxRefChars across refs', () => {
-        const base = { uuid: 'r1', title: 't', rule: 'base rule text' };
-        const map = new Map([
-            [
-                'r1',
-                [
-                    { filePath: 'a.md', content: 'X'.repeat(100) },
-                    { filePath: 'b.md', content: 'Y'.repeat(100) },
-                ],
-            ],
-        ]);
-        const out = inlineLoadedReferences([base as any], map, undefined, 50);
-        const contentChars = (out[0].rule!.match(/[XY]/g) || []).length;
-        expect(contentChars).toBeLessThanOrEqual(50);
-        expect(contentChars).toBeGreaterThan(0);
-    });
-
-    it('truncates a single oversized reference to the budget', () => {
-        const base = { uuid: 'r1', title: 't', rule: 'base' };
-        const out = inlineLoadedReferences(
-            [base as any],
-            new Map([['r1', [{ filePath: 'big.md', content: 'Z'.repeat(10000) }]]]),
-            undefined,
-            100,
-        );
-        const z = (out[0].rule!.match(/Z/g) || []).length;
-        expect(z).toBeLessThanOrEqual(100);
-        expect(z).toBeGreaterThan(0);
-    });
-});
-
 describe('findUnresolvedReferenceRules — surfaces judge-blind rules', () => {
     const r = (over: Record<string, unknown> = {}) => ({
         uuid: 'r1',
@@ -291,6 +127,17 @@ describe('findUnresolvedReferenceRules — surfaces judge-blind rules', () => {
         expect(out.map((x) => x.uuid)).toEqual(['r1']);
     });
 
+    // A rule written with no @file mention still gets a context reference,
+    // with no file to load: nothing was lost, so it is not judged blind.
+    it('does NOT flag a rule whose reference names no file', () => {
+        const out = findUnresolvedReferenceRules(
+            [r() as any, r({ uuid: 'r2' }) as any],
+            new Map(),
+            new Set(['r1']),
+        );
+        expect(out.map((x) => x.uuid)).toEqual(['r2']);
+    });
+
     it('does NOT flag a rule whose entry has real content', () => {
         const out = findUnresolvedReferenceRules(
             [r() as any],
@@ -301,7 +148,7 @@ describe('findUnresolvedReferenceRules — surfaces judge-blind rules', () => {
 
     // The gap: a whitespace-only reference file passes the loader's
     // `typeof === 'string'` guard, so the map entry exists, but
-    // inlineLoadedReferences inlines nothing (content.trim() empty) — must
+    // collectLoadedReferences keeps nothing (content.trim() empty) — must
     // still be treated as unresolved so it is surfaced.
     it('flags a rule whose entries are all empty/whitespace content', () => {
         const out = findUnresolvedReferenceRules(
@@ -580,7 +427,8 @@ describe('sharded kody-rules — PreviousDecision rule-title resolution (PR #189
                 relevantFile: 'src/a.ts',
                 relevantLinesStart: 5,
                 relevantLinesEnd: 5,
-                suggestionContent: 'This log call needs to follow team logging standards.',
+                suggestionContent:
+                    'This log call needs to follow team logging standards.',
                 label: 'security',
                 // No brokenKodyRulesIds — general finder, not a Kody Rule.
                 outcome: 'implemented',
@@ -608,7 +456,7 @@ describe('sharded kody-rules — PreviousDecision rule-title resolution (PR #189
     // Eval-backed (PR #1895 investigation): dropping a general decision that
     // explained why a helper is already safe made the judge invent a false
     // positive in 3/3 runs; keeping it, labeled, stayed silent in 3/3.
-    it('preserves a general decision\'s full explanatory content, so context that avoided a false positive (safeCompare is already constant-time) is never silently lost', async () => {
+    it("preserves a general decision's full explanatory content, so context that avoided a false positive (safeCompare is already constant-time) is never silently lost", async () => {
         const rules = [
             {
                 uuid: 'rule-crypto-uuid',
@@ -642,7 +490,12 @@ describe('sharded kody-rules — PreviousDecision rule-title resolution (PR #189
             return [];
         };
 
-        await judgeKodyRulesSharded({ changedFiles, rules, runJudge, previousDecisions });
+        await judgeKodyRulesSharded({
+            changedFiles,
+            rules,
+            runJudge,
+            previousDecisions,
+        });
 
         // A "remove general decisions" design would have deleted this
         // Suggestion line entirely — the eval showed that loses the only

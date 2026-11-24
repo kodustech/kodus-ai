@@ -16,7 +16,9 @@ contexto o ejecutar acciones durante un flujo de trabajo.
 
 MCP Manager es el servicio backend que gestiona esas conexiones MCP para
 Kodus. Lleva un registro de los proveedores, integraciones y herramientas permitidas por
-workspace, y luego expone ese catálogo a la API de Kodus.
+workspace, y luego expone ese catálogo a la API de Kodus. Escucha en el puerto 3101,
+responde `GET /health` y guarda sus datos en el schema `mcp-manager` de tu
+base de datos PostgreSQL. Crea y migra ese schema por sí mismo cuando inicia.
 
 - Registro central de proveedores MCP (Kodus y personalizados)
 - Almacena metadatos de integración (estado de conexión, URL MCP, herramientas permitidas)
@@ -31,6 +33,35 @@ graph TD
     C --> F[Custom]
 ```
 
+## Habilitar MCP Manager
+
+MCP Manager es opcional.
+
+<Tabs>
+  <Tab title="Docker Compose">
+    Define esto en `.env` y luego ejecuta `./scripts/install.sh`. El instalador inicia el contenedor `kodus-mcp-manager` cuando `API_MCP_SERVER_ENABLED` es `true`.
+
+    ```env
+    API_MCP_SERVER_ENABLED=true
+    API_KODUS_SERVICE_MCP_MANAGER=http://kodus-mcp-manager:3101
+    API_KODUS_MCP_SERVER_URL=https://kodus-api.yourdomain.com/mcp
+    API_MCP_MANAGER_REDIRECT_URI=https://kodus-web.yourdomain.com/setup/mcp/oauth
+    ```
+
+    - `API_KODUS_SERVICE_MCP_MANAGER` es cómo la API y el worker alcanzan el servicio. Usa el nombre del contenedor, no `localhost`.
+    - `API_KODUS_MCP_SERVER_URL` es la URL pública del servidor MCP de Kodus en tu API.
+    - `API_MCP_MANAGER_REDIRECT_URI` es adonde vuelve el navegador después de un inicio de sesión con OAuth. Usa tu URL web pública.
+    - `./scripts/generate-secrets.sh` genera `API_MCP_MANAGER_JWT_SECRET` y `API_MCP_MANAGER_ENCRYPTION_SECRET`.
+  </Tab>
+  <Tab title="Kubernetes">
+    El chart despliega MCP Manager y habilita el endpoint `/mcp` de la API por defecto. Deriva `API_MCP_MANAGER_REDIRECT_URI` de tu host web. Para desactivar MCP Manager, define `services.mcp-manager.enabled=false`. Para desactivar también el endpoint de la API, establece `global.config.API_MCP_SERVER_ENABLED` en `"false"`. Consulta [Kubernetes y OpenShift](/es/how_to_deploy/deploy_kodus/kubernetes).
+  </Tab>
+</Tabs>
+
+`API_MCP_SERVER_ENABLED=true` también activa el servidor MCP de Kodus en la API en `POST /mcp`. Acepta una clave de API de equipo (`x-team-key: kodus_...` o `Authorization: Bearer kodus_...`) de los clientes MCP.
+
+Para conectar un cliente como Cursor o Claude Desktop a tu instancia, consulta [Servidor MCP de Kodus](/es/how_to_deploy/deploy_kodus/mcp_server).
+
 ## Plugins en Kodus
 
 Todo lo registrado en MCP Manager aparece en la página **Plugins** de Kodus
@@ -43,15 +74,12 @@ la barra lateral.
 
 ## Proveedores
 
+`API_MCP_MANAGER_MCP_PROVIDERS` lista los proveedores que MCP Manager carga. Por defecto es `kodusmcp,custom`, y esos son los únicos dos valores que acepta.
+
 ### Proveedor Kodus
 
-El proveedor Kodus agrupa los MCPs de primera parte gestionados por Kodus, incluyendo el
-Kodus MCP, Context7 MCP y Kodus Docs MCP.
+El proveedor Kodus es el catálogo de MCPs de primera parte y curados: Kodus Docs, Git Issues, Sentry, Exa Search, Kodus OSV, Linear, Atlassian Rovo, Notion y Fireflies. Git Issues lo sirve tu propia API. Los demás se conectan al endpoint MCP alojado del proveedor, por lo que el worker necesita acceso HTTPS saliente a ellos. El inicio de sesión es OAuth, un token o ninguno, según el MCP.
 
 ### Proveedores personalizados
 
-Puedes agregar proveedores personalizados para integrar sistemas internos o plataformas de terceros.
-En despliegues auto-hospedados, lista el proveedor en
-`API_MCP_MANAGER_MCP_PROVIDERS` y luego implementa el proveedor en el código fuente de MCP Manager.
-La implementación de referencia se encuentra aquí:
-[repositorio kodus-mcp-manager](https://github.com/kodustech/kodus-mcp-manager#-adding-a-new-provider)
+Agrega tu propio servidor MCP desde la página **Plugins** con **Add Plugin** en **Add Custom Plugin**. Dale un nombre, la URL del servidor y un protocolo (`http` o `sse`), y luego elige cómo se autentica: ninguna, bearer token, basic, header con API key u OAuth 2.0. Los plugins personalizados pertenecen a tu organización. Consulta [Instalar un plugin personalizado](/es/cookbook/custom-plugin-install).

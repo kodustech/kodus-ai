@@ -11,7 +11,7 @@ Una vez conectado, Kodus revisa automáticamente cada pull request. Analiza el c
 
 ### Plataformas compatibles
 
-- **GitHub** — mediante la aplicación de GitHub (o un token de acceso personal)
+- **GitHub** — mediante la GitHub App (o un token de acceso personal)
 - **GitLab** — mediante OAuth (o un token de acceso personal)
 - **Bitbucket** — mediante token de API
 - **Azure DevOps** (Azure Repos) — mediante token de acceso personal
@@ -20,7 +20,7 @@ Una vez conectado, Kodus revisa automáticamente cada pull request. Analiza el c
 ### Qué se analiza
 
 Por defecto, Kodus verifica las categorías que puedes activar o desactivar en **Code review → What to review**, además de tus propias reglas:
-- Problemas de seguridad (inyección SQL, XSS, secretos codificados de forma fija)
+- Problemas de seguridad (inyección SQL, XSS, secretos hardcodeados)
 - Problemas de rendimiento (consultas N+1, índices faltantes)
 - Errores potenciales (punteros nulos, fugas de recursos, brechas en el manejo de errores)
 - Cumplimiento de lógica de negocio (valida contra los requisitos de la tarea vinculada)
@@ -28,17 +28,23 @@ Por defecto, Kodus verifica las categorías que puedes activar o desactivar en *
 
 ### Opciones de cadencia de revisión
 
-Define la cadencia en **Code review → General**, en **Enable Automated Code Review** → **Review Cadence**.
+Define la cadencia en **Code review → General**, en **Automated code review** → **Review Cadence**.
 
 | Modo | Comportamiento |
 |------|----------------|
-| **Automático** | Revisa cada push — retroalimentación continua |
-| **Pausa automática** | Se pausa durante pushes rápidos (por ejemplo, 3 en 15 minutos) para evitar ruido |
-| **Manual** | Solo revisa cuando comentas `@kody start-review` |
+| **Automatic** | Revisa cada push, para un feedback continuo |
+| **Auto-pause** | Pausa un PR después de una ráfaga de revisiones (por defecto: 3 en 15 minutos) para evitar ruido |
+| **Manual** | Revisa el PR cuando se abre y, después, solo cuando comentas `@kody start-review` |
+
+También puedes ejecutar una revisión bajo demanda en cualquier PR con `@kody start-review`. Consulta [Flujo de Revisión de Código](/es/how_to_use/code_review/flow) para ver todos los comandos y los motivos por los que se omite una revisión.
+
+### Qué pasa después de la revisión
+
+Kody también puede aprobar PRs limpios (consulta [Auto-aprobación](/es/how_to_use/code_review/configs/auto_approve)) y pedir cambios ante problemas críticos (consulta [Política de Revisión](/es/how_to_use/code_review/policy)). Ambos están desactivados por defecto. Kodus nunca mergea un PR.
 
 ## Primeros pasos
 
-1. Crea un espacio de trabajo en [kodus.io](https://kodus.io) o [aloja Kodus tú mismo](/es/how_to_deploy/deploy_kodus/generic_vm)
+1. Crea un workspace en [kodus.io](https://kodus.io) o [aloja Kodus tú mismo](/es/how_to_deploy/deploy_kodus/generic_vm)
 2. Conecta tu proveedor de Git (GitHub, GitLab, Bitbucket, Azure DevOps o Forgejo)
 3. Selecciona qué repositorios monitorear
 4. Abre un PR — Kodus lo revisa automáticamente
@@ -47,4 +53,5 @@ Para la configuración específica de cada plataforma, consulta:
 - [Configuración de GitHub](/es/knowledge_base/how-to-set-up-ai-code-review-on-github)
 - [Configuración de GitLab](/es/knowledge_base/how-to-set-up-ai-code-review-on-gitlab)
 - [Configuración de Azure DevOps](/es/knowledge_base/how-to-set-up-ai-code-review-on-azure-devops)
-- [Configuración de Bitbucket](/es/how_to_deploy/platforms/bitbucket/bitbucket_webhook)
+- [Configuración de Bitbucket](/es/knowledge_base/how-to-set-up-ai-code-review-on-bitbucket)
+- [Configuración de Forgejo](/es/knowledge_base/how-to-set-up-ai-code-review-on-forgejo)

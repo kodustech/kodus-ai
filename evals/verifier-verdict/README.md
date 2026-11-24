@@ -44,8 +44,11 @@ parser cannot read. Production reaches the verdict through `JSON.parse`, which
 accepts only `true`/`false`, so a Python-style `{"keep": False}` correctly
 fail-opens — reading it as a refutation here would score a healthy run as a lost
 verdict. The key, by contrast, IS matched loosely (`normalizeKeyName` lowercases
-it and strips `_-` before production compares it). Such rows are counted and
-printed under the shapes the parser does not read by design, never gated.
+it and strips `_-` before production compares it). A `keep` spelled as a
+string or a number (`"false"`, `"no"`, `0`) IS a delivered verdict for the
+code-review verifier, which reads it (`coerceKeep`); the business-rules harness
+fails open on it by contract, so on those rows the two extractors are expected
+to differ.
 
 Proven both ways: revert the text path and the refutation rows go RED with the
 production rationale `no parseable verdict — kept by default`; restore it and

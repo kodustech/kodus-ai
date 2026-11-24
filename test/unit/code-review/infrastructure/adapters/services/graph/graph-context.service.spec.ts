@@ -215,6 +215,127 @@ describe('GraphContextService', () => {
 
             expect(result).toBeDefined();
         });
+
+        it('should pass baseBranch to the legacy fallback on error', async () => {
+            mockAstGraphRepo.exportSubgraphJsonString.mockRejectedValue(
+                new Error('DB connection lost'),
+            );
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            await service.generateContext(
+                mockSandbox,
+                changedFiles,
+                REPO_ID,
+                'main',
+            );
+
+            const allRunCalls = mockSandbox.run.mock.calls.map(
+                (call) => call[0] as string,
+            );
+            expect(
+                allRunCalls.some(
+                    (cmd) =>
+                        cmd.includes('git show') && cmd.includes('origin/main'),
+                ),
+            ).toBe(true);
+        });
+
+        it('should pass baseBranch to the legacy fallback when repo not found', async () => {
+            mockRepositoryRepo.findById.mockResolvedValue(null);
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            await service.generateContext(
+                mockSandbox,
+                changedFiles,
+                REPO_ID,
+                'main',
+            );
+
+            const allRunCalls = mockSandbox.run.mock.calls.map(
+                (call) => call[0] as string,
+            );
+            expect(
+                allRunCalls.some(
+                    (cmd) =>
+                        cmd.includes('git show') && cmd.includes('origin/main'),
+                ),
+            ).toBe(true);
+        });
+
+        it('should run the legacy fallback once and reject when repo is not found and it fails', async () => {
+            mockRepositoryRepo.findById.mockResolvedValue(null);
+            const legacySpy = jest.spyOn(service, 'generateContextLegacy');
+            mockSandbox.writeFile.mockRejectedValue(new Error('disk full'));
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            await expect(
+                service.generateContext(
+                    mockSandbox,
+                    changedFiles,
+                    REPO_ID,
+                    'main',
+                ),
+            ).rejects.toThrow('disk full');
+
+            expect(legacySpy).toHaveBeenCalledTimes(1);
+        });
+        it('should fall back to legacy when the context output cannot be read, and reject when the fallback cannot read it either', async () => {
+            // #2207: a failed context.xml read used to come back as '', so
+            // neither the fallback nor CALLGRAPH_FAILED ever ran.
+            const legacySpy = jest.spyOn(service, 'generateContextLegacy');
+            mockSandbox.readFile.mockRejectedValue(new Error('read timed out'));
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            await expect(
+                service.generateContext(
+                    mockSandbox,
+                    changedFiles,
+                    REPO_ID,
+                    'main',
+                ),
+            ).rejects.toThrow('context.xml could not be read: read timed out');
+
+            expect(legacySpy).toHaveBeenCalledWith(
+                mockSandbox,
+                changedFiles,
+                'main',
+            );
+        });
+
+        it('should return the legacy context when only the DB-baseline read fails', async () => {
+            const legacySpy = jest.spyOn(service, 'generateContextLegacy');
+            mockSandbox.readFile
+                .mockRejectedValueOnce(new Error('read timed out'))
+                .mockResolvedValueOnce('legacy context');
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            await expect(
+                service.generateContext(
+                    mockSandbox,
+                    changedFiles,
+                    REPO_ID,
+                    'main',
+                ),
+            ).resolves.toBe('legacy context');
+
+            // The second read is the fallback's own, not a retry of the first.
+            expect(legacySpy).toHaveBeenCalledWith(
+                mockSandbox,
+                changedFiles,
+                'main',
+            );
+            expect(mockSandbox.readFile).toHaveBeenCalledTimes(2);
+        });
     });
 
     describe('generateContextLegacy', () => {
@@ -272,16 +393,30 @@ describe('GraphContextService', () => {
             expect(result).toBe(promptContent);
         });
 
-        it('should return empty string on failure (non-blocking)', async () => {
+        it('should rethrow on failure so the stage can record CALLGRAPH_FAILED', async () => {
             mockSandbox.run.mockRejectedValue(new Error('sandbox crashed'));
             const changedFiles = createChangedFiles(['src/handler.ts']);
 
-            const result = await service.generateContextLegacy(
-                mockSandbox,
-                changedFiles,
-            );
+            await expect(
+                service.generateContextLegacy(mockSandbox, changedFiles),
+            ).rejects.toThrow('sandbox crashed');
+        });
 
-            expect(result).toBe('');
+        it('should reject when the context output cannot be read, so the stage can record CALLGRAPH_FAILED, but not when it is empty', async () => {
+            const changedFiles = createChangedFiles(['src/handler.ts'], {
+                withPatch: true,
+            });
+
+            mockSandbox.readFile.mockRejectedValue(new Error('read timed out'));
+            await expect(
+                service.generateContextLegacy(mockSandbox, changedFiles),
+            ).rejects.toThrow('context.xml could not be read: read timed out');
+
+            // A file that was read and is empty is an empty context.
+            mockSandbox.readFile.mockResolvedValue('');
+            await expect(
+                service.generateContextLegacy(mockSandbox, changedFiles),
+            ).resolves.toBe('');
         });
 
         it('should pass baseBranch to buildBaseGraphFromGit when provided', async () => {

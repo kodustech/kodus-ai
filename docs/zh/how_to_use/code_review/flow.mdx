@@ -1,132 +1,127 @@
 ---
 title: "代码审查流程"
-description: "一次 Kody 审查从头到尾如何运行:何时触发、何时跳过、你会得到什么,以及每个状态表情的含义。"
+description: "一次 Kody 审查从头到尾如何运行:何时触发、何时跳过、你会得到什么,以及每个状态的含义。"
 ---
 
-## 概述
+要立即审查已连接仓库中的 PR，请在 PR 上发表评论，并以 `@kody review` 开头。如果没有看到审查，[查看跳过原因](#kody-何时跳过)。
 
-Kody 自动或按需审查您的 PR，添加清晰的建议，并帮助您的团队决定何时合并。以下是其工作原理的简单用户视图。
+## 你会得到什么
 
-参考：<a href="https://www.figma.com/board/ZZJcIJMJWGuyzRGMh3w5di/Kodus-Code-Review-Flow?node-id=4-274" target="_blank">Figma 看板</a>
+- 带有具体建议的内联评论。
+- PR 摘要(如果启用)。
+- 可选的批准或请求更改。请参阅[审查策略](/zh/how_to_use/code_review/policy)。
+- 在 GitHub(作为 GitHub App 安装)和 Forgejo 上,PR head 提交上会有一个 **Kody Code Review** 检查:完成、完成但有警告、失败或跳过。它报告的是审查是否运行,而不是 PR 是否有发现。
+- PR 上显示审查状态的表情反应。
 
+## 什么会触发审查
 
-## Kody 何时运行
+**自动触发**:拉取请求被打开、有新提交推送到其中,或者草稿被标记为可以审查时(除 Forgejo 之外的所有提供方)。除非关闭了 **Review draft pull requests**,否则 Kody 会审查草稿。
 
-- PR 打开时
-- 新提交推送到 PR（取决于节奏设置）
-- 通过评论手动触发：`@kody start-review`
+### PR 评论命令
 
-## Kody 何时跳过
+**按需触发**:在 PR 上发表评论。命令必须位于评论的开头:
 
-- 自上次运行以来没有新提交
-- 仅有合并提交且没有实际更改
-- 所有更改的文件都被配置的模式忽略
-- PR 超过配置的文件限制
-- 配置无效或缺失
+| 命令 | 作用 |
+| --- | --- |
+| `@kody start-review` 或 `@kody review` | 审查自上次审查以来的提交(首次审查则审查整个 PR)。会恢复已暂停的 PR。 |
+| `@kody review --force` | 再次审查整个 PR,即使没有新提交。 |
+| `@kody review --heavy` 或 `--balanced` | 为本次运行选择审查模式。请参阅 [Routing](/zh/how_to_use/code_review/configs/routing)。 |
+| `@kody review focus on the auth logic` | 引导审查。请参阅[引导审查](/zh/how_to_use/code_review/review_directive)。 |
+| `@kody -v <agent>` | 在整个 PR 上运行一个[自定义智能体](/zh/how_to_use/code_review/custom_agents)。 |
+| `@kody -v business-logic` | 对照任务检查 PR。请参阅[业务逻辑验证](/zh/how_to_use/code_review/business_logic_validation)。 |
+| `@kody <question>` | 开始一段关于 PR 或某条建议的对话。 |
 
-<Note>
-  要覆盖跳过并强制重新审查（例如"没有新提交"之后），请评论 `@kody review --force`。
-</Note>
+审查命令会忽略 **Automated code review**、**Review Cadence**、**Ignore title keywords**、**Base Branches** 和 **Review draft pull requests**。许可证、被忽略的作者和被忽略的文件仍然适用。
 
-## Kody 做什么
+如果该 PR 上已有审查在运行,命令会等待,并在当前审查结束后运行。在此期间到达的推送不会启动第二次审查:请评论 `@kody review` 来审查它。
 
-- 解析应用哪些设置（全局 → 代码库 → 目录）并验证它们
-- 收集此 PR 的相关差异和上下文
-- 运行 PR 级检查（例如，启用时的自定义规则和跨文件分析）
-- 审查更改的文件，重点关注差异
-- 过滤和优先排序建议以减少噪音（相关性、严重性、去重、保护措施）
-- 发布内联评论，并在适用时发布 PR 级摘要
-- 如果启用了这些策略，可选择批准或请求更改
-- 记住上次分析的提交，以保持后续审查的增量性
-
-## 您会得到什么
-
-- 带有具体建议的内联评论
-- 可选的 PR 级摘要，突出显示重点
-- 可选状态：已批准或请求更改（如果启用）
+在 GitHub 上,当 Kody 以用户账户(个人访问令牌)进行审查时,对已被审查过的 PR 点击 Kody 上的 **Re-request review**,效果等同于 `@kody start-review`。
 
 ## 状态反应
 
-Kody 使用表情符号反应直接在您的 Git 提供商中显示代码审查的实时状态。无需猜测她是在工作、完成还是遇到问题。她总是用最新状态替换之前的表情符号（例如：🚀 → 🎉、👀 或 😕）。
+Kody 在你的 Git 提供方中以表情反应显示审查的状态,并用最新的状态替换之前的状态(例如先 🚀 然后 🎉)。
 
 <Note>
-**原生反应**在 GitHub、GitLab 和 Forgejo 上可用。
+  **原生反应**在 GitHub、GitLab 和 Forgejo 上可用。
 
-  Azure DevOps 和 Bitbucket 没有反应 API,因此 Kody 会把状态表情作为**评论**发布 ——
-  在那里你会看到 👀(跳过)、😕(错误)和 👎(无许可证),但看不到 🚀 / 🎉 的进度组合。
+  Azure DevOps 和 Bitbucket 没有反应 API,因此 Kody 会把状态表情作为**评论**发布:👀(跳过)、😕(错误)和 👎(无许可证),但没有 🚀 和 🎉 这一组。
 </Note>
 
-### 每个表情符号的含义
+### 每个表情的含义
 
-- 🚀 处理中 — Kody 正在处理您的代码：
-  - 分析文件
-  - 检查规则和策略
-  - 生成建议
-- 🎉 已完成 — 审查已完成：
-  - 所有评论已发布
-  - 分析完成
-  - 您可以查看建议
-- 👀 已跳过 — 审查被跳过。常见原因包括：
-  - 自上次运行以来没有新提交
-  - 仅检测到合并提交
-  - PR/MR 超过配置的文件限制
-  - 没有相关文件可审查（忽略模式）
-  - 分支未配置为审查
-  - PR/MR 处于草稿模式（如果配置为跳过草稿）
-- 😕 错误 — 出现问题：
-  - 审查期间出现临时技术问题
-  - 重试；如果问题持续存在，请加入我们的 [Discord 社区](https://discord.gg/TFZBRk9fT6)
+- 🚀 处理中:Kody 正在进行审查。
+- 🎉 已完成:审查已结束,评论已发布。
+- 👀 已跳过:审查没有运行。请参阅 [Kody 何时跳过](#kody-何时跳过)。
+- 👎 无许可证:PR 作者没有许可证。GitLab 显示锁(🔒)。
+- 😕 错误:审查失败。使用 `@kody start-review` 重新运行。如果持续失败,请查看[故障排除](/zh/how_to_use/code_review/troubleshooting)或在 [Discord](https://discord.gg/TFZBRk9fT6) 上提问。
 
 ### 反应出现的位置
 
-- 自动审查（PR 打开或新提交）：对 PR/MR 描述的反应（线程顶部）
-- 手动审查（评论 `@kody start-review`）：对您调用 Kody 的评论的反应
+- 自动审查:在 PR 描述上。
+- 审查命令:在你的评论上。
 
-### 示例场景
+### 关闭跳过和阻止反馈
 
-- 新 PR（自动）：运行时 🚀 → 完成时 🎉
-- 手动命令：您的评论上 🚀 → 完成时 🎉
-- 自上次运行以来无更改：👀 反应
-- 临时问题：😕 反应
+**Code review → General → Review feedback → Show status feedback** 控制 👀 和 👎 反应以及订阅评论。关闭后,Kody 仍会显示 🚀、🎉 和 😕。**Automated code review** 关闭时,Kody 不会对它跳过的 PR 做出反应。
 
-### 常见问题
+## Kody 何时跳过
 
-**我看不到反应**
-- GitHub / GitLab / Forgejo:✅ 原生反应
-- Azure DevOps / Bitbucket:❌ 无反应 API —— 请查看作为评论发布的状态表情
+除非关闭了状态反馈,否则 Kody 会在被跳过的审查上显示 👀。无论如何它都会记录原因。原因会显示在 **Kody Code Review** 检查中(GitHub App 和 Forgejo)。因配置而被阻止的 PR(许可证、手动或已暂停的节奏、被忽略的作者)会列在 **Pull Requests** 页面的 **Kody skipped** 下。
 
-**为什么表情符号改变了？**
-- 正常——Kody 替换之前的状态（🚀 → 🎉/👀/😕）
+| 原因 | 为什么 | 怎么做 |
+| --- | --- | --- |
+| Automated Review is disabled | **Automated code review** 已关闭。 | 开启它,或评论 `@kody start-review`。 |
+| Title Ignored | 标题包含 **Ignore title keywords** 中的某一项。 | 移除该关键词,或评论 `@kody start-review`。 |
+| Draft PR Skipped | **Review draft pull requests** 已关闭。 | 将 PR 标记为可审查,或开启该设置。 |
+| Branch Mismatch | 目标分支不是默认分支,也不在 **Base Branches** 中。 | 将该分支添加到 **Base Branches**。 |
+| PR is Closed, PR is Locked | 自动审查会跳过已关闭和已合并的 PR,`@kody review --force` 也一样。普通的 `@kody review` 会审查已关闭或已合并的 PR。已锁定的 PR 不会被审查。 | 重新打开或解锁该 PR,或在已关闭的 PR 上评论 `@kody review`。 |
+| No New Commits | 最新的提交已被审查过。 | 评论 `@kody review --force`。 |
+| Only Merge Commits | 新提交仅仅合并了另一个分支。 | 推送代码更改,或评论 `@kody review --force`。 |
+| Rebase Without Changes | 变基没有改变已审查代码中的任何内容。 | 评论 `@kody review --force`。 |
+| No Files Changed, No changed files in this pull request, All Files Ignored | 此次运行没有符合条件的更改文件。已删除的文件会被排除。仅当本次运行的自定义智能体明确包含某个忽略文件时，该文件才可参与审查。对自上次审查以来没有新提交的 PR 使用审查命令时，也可能出现此结果。 | 检查 **Ignored files**,或评论 `@kody review --force` 来审查整个 PR。 |
+| Too Many Files | 主审查和自定义智能体合计有超过 2,000 个可审查文件。 | 拆分该 PR。 |
+| Changes Unreadable, Provider Rate Limited | Git 提供方没有完整返回 diff,或对请求进行了限流。 | 稍后重新运行审查。 |
+| User is ignored by configuration | PR 作者被 **Repositories → PR author filters** 排除。 | 请参阅[自动许可证分配](/zh/how_to_use/auto_license_assignment#pr-作者过滤器)。 |
+| Code reviews are disabled for the centralized config repository, or for the global Kody Rules source repository | Kody 不会审查保存共享设置或规则的代码库。 | 审查另一个代码库。 |
+| User Not Licensed | PR 作者没有许可证。 | 分配许可证,或开启[自动许可证分配](/zh/how_to_use/auto_license_assignment)。 |
+| No Active Subscription, Plan Limit Exceeded, Trial Reviews Used Up, BYOK Configuration Required, Subscription Check Unavailable | 该组织目前无法运行审查。除非关闭了 **Show status feedback**,否则 Kody 还会在 PR 上发表评论。 | 按评论操作。请参阅[限制与定价](/zh/how_to_use/pricing)。 |
+| PR is paused, Manual mode requires @kody start-review | **Review Cadence** 为 Auto-pause 或 Manual。 | 评论 `@kody start-review`。 |
 
-**我看到了 👀 但想要审查**
-- 可能被跳过了：没有新提交、仅合并、忽略的文件或文件限制
-- 修复：评论 `@kody review --force` — 如果没有新提交，普通的 `start-review` 会再次跳过
-
-**我看到了 😕**
-- 使用 `@kody start-review` 重试。如果问题持续存在，请查看[故障排除](/zh/how_to_use/code_review/troubleshooting)或 [Discord](https://discord.gg/TFZBRk9fT6)
+<Note>
+  `--force` 会重新运行因"已审查过"而被跳过的审查。它不会覆盖许可证、套餐或文件数量限制导致的跳过,也不会覆盖已关闭或已合并的 PR。
+</Note>
 
 ## 重要设置
 
-- 自动与手动审查以及后续节奏(**Code review → General**)
-- Ignored files 和范围内的基础分支(**Code review → General**)
-- 自定义规则和跨文件分析
-- 严重性阈值(以前称为审查过滤器):**Minimum severity to post**,以及它是否对 Kody Rules 生效(**Code review → What to review**)
-- 文件限制和超时
+- [更改审查时机](/zh/how_to_use/code_review/configs/general)。配置自动审查、审查节奏、草稿、目标分支和忽略文件。
+- [更改报告内容](/zh/how_to_use/code_review/configs/what_to_review)。选择审查类别和最低严重级别。
+- [选择审查深度和模型](/zh/how_to_use/code_review/configs/routing)。选择 Balanced 或 Heavy，并查看实际使用的模型。
+- [控制自动批准](/zh/how_to_use/code_review/policy)。了解何时请求变更，何时批准审查通过的 PR。
+- [排查审查问题](/zh/how_to_use/code_review/troubleshooting)。查找审查未运行或输出与预期不符的原因。
 
-<CardGroup cols={2}>
-  <Card title="通用配置" icon="sliders" href="/zh/how_to_use/code_review/configs/general">
-    配置模式、节奏、分支和建议选项
-  </Card>
-  <Card title="审查策略" icon="shield-check" href="/zh/how_to_use/code_review/policy">
-    了解建议与阻塞以及何时启用每种
-  </Card>
-  <Card title="故障排除" icon="triangle-exclamation" href="/zh/how_to_use/code_review/troubleshooting">
-    修复常见问题并了解限制
-  </Card>
-</CardGroup>
+## 审查节奏
+
+**Code review → General → Automated code review** 用于开启或关闭自动审查。**Review Cadence** 决定首次审查之后的推送会发生什么:
+
+- **Automatic:** 每次推送都会被审查。
+- **Auto-pause:** Kody 会统计它在 **Time window (minutes)** 内对该 PR 完成的审查次数。当次数达到 **Pushes to trigger pause**(默认 15 分钟内 3 次)时,下一次推送会暂停该 PR,Kody 会评论 "Auto-paused – comment @kody start-review when you're ready."。在有人评论 `@kody start-review` 之前,推送都会被跳过。
+- **Manual:** 首次审查在 PR 打开时运行。之后的推送会被跳过,直到有人评论 `@kody start-review`。
+
+## Kody 做什么
+
+1. 检查 PR 是否可以被审查:许可证、过滤器、节奏和新提交。
+2. 解析适用的设置(全局、代码库、目录)并验证它们。
+3. 当[风险评估](/zh/how_to_use/code_review/configs/risk)开启时,评估该 PR 并选择审查模式。
+4. 加载已更改的文件和上下文,跳过被忽略的文件。
+5. 如果在 **What Kody writes** 中启用,则发布开场评论。
+6. 如果 PR 引用了任务且 **Business Logic** 已开启,则对照任务检查 PR。
+7. 审查更改:发现问题,应用 Kody Rules 和自定义智能体,验证每条发现,移除重复项,并应用 **Minimum severity to post**。
+8. 发布内联评论、PR 级评论和摘要。
+9. 如果启用,批准 PR 或请求更改。
+
+Kody 会记住最后一次审查的提交,因此下一次审查只涵盖此后发生的更改。在变基或强制推送之后,如果能够将新的 diff 与它审查过的 diff 进行比较,Kody 只审查发生变化的部分,否则审查整个 PR。
 
 ## 提示
 
-- 保持 PR 小型——大型差异会降低审查质量
-- 在 PR 描述中链接规范/工单
-- 处理反馈后使用 `@kody start-review` 重新运行
+- 保持 PR 小型。大型 diff 会降低审查质量。
+- 在 PR 标题、分支或描述中链接任务,以便 Kody 对照任务检查 PR。

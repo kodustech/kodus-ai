@@ -1,356 +1,247 @@
 ---
 title: "概述"
-description: "Kody 规则是您的团队设置的可自定义指南,用于自动执行代码质量、一致性、安全性和可维护性。"
+description: "Kody Rules 是您团队自己的审查标准：Kody 在每个拉取请求上运行的检查，以及 Kody 带入每次审查和对话的上下文。"
 ---
 
-<Frame caption="仓库范围下的 Code review → Kody Rules：待审核项、Review Rules 与 Memories 标签页、筛选器和规则表">
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="all-plans" detail="适用于所有套餐。Free 和无许可证的自托管环境每次审查最多运行 10 条启用的规则，含记忆。Teams 和 Enterprise 不限制启用的规则数量。">
+    <Badge icon="layer-group" stroke>所有套餐</Badge>
+  </FeatureBadge>
+</div>
+
+<Frame caption="仓库作用域下的 Code review → Kody Rules：待审核项、Review Rules 与 Memories 标签页、筛选器和规则表">
   <img src="/images/kody-rules.png" alt="Kody Rules page" />
 </Frame>
 
-## Kody Rules 界面中的两种类型
+## 在哪里找到
 
-Kody 规则分为两个类别，通过侧边栏 **Code review → Kody Rules** 下的 **Review Rules** 和 **Memories** 选项卡管理。在 **Code review** 分组顶部的范围选择器中选择 **Global**（或某个代码库 / 目录），以决定您正在编辑的级别。
+在 **Code review** 分组顶部的作用域选择器中选择 **Global**、某个仓库或某个目录，然后打开 **Kody Rules**。您在该页面上创建或更改的所有内容都应用于您选择的作用域。各作用域如何组合，请参阅[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)。
+
+页面标题栏有三个操作：
+
+- **Configuration**：为该作用域创建和批准规则与记忆的方式。
+- **Discovery**：[规则库](/zh/how_to_use/code_review/configs/rules_library)。显示在 **Review Rules** 标签页上。
+- **New rule**（在 **Memories** 标签页上为 **New memory**）。
+
+## 两种类型
 
 <Tabs>
   <Tab title="审查规则">
-    传统代码审查规则，在专门的代码审查阶段运行。它们分析文件差异和 PR 元数据以强制执行编码标准。
+    在代码审查期间运行并将违规报告为建议的检查。
 
-    - 应用于**文件级**（执行模式 **Per file**）或**拉取请求级**（执行模式 **Per PR**）
-    - 支持变量、文件引用和 MCP 函数
-    - 在自动代码审查期间触发
+    - **Per file** 规则对每个变更文件运行一次，并以行内评论的形式给出。
+    - **Per PR** 规则对整个拉取请求运行一次，并发布一条 PR 评论。
+    - 每条规则都有严重性，并且可以限定路径。
   </Tab>
 
   <Tab title="记忆">
-    持久的上下文指令，注入到所有提示和对话中。记忆让 Kody 学习并保留你的代码库是如何工作的，从而让未来的审查和建议更贴合上下文。
+    Kody 在代码审查和与 Kody 的对话中作为高优先级上下文使用的背景知识。记忆描述您的代码库是如何工作的；它不是检查，也没有严重性。
 
-    - 作为**高优先级上下文**注入到代码审查、跨文件分析和对话中
-    - 通过**与 Kody 对话**或**在 UI 中手动**创建
-    - 范围可限定为**目录**、**代码库**或**组织**级别
-    - 支持 AI 生成记忆的审批工作流
+    - 通过在 PR 评论中与 Kody 对话，或使用 **New memory** 创建。
+    - 作用域可限定为目录、仓库或整个组织。
   </Tab>
 </Tabs>
 
-## 审查规则
+## 创建审查规则
 
-### 创建自定义规则
+在 **Review Rules** 标签页中，点击 **New rule**（列表为空时为 **Write a rule**）。
 
-根据团队的确切需求定义规则。在 **Review Rules** 选项卡中，点击 **New rule**（列表为空时为 **Write a rule**）打开规则对话框。审查规则可以应用于两个不同的级别，通过 **Execution mode** 字段选择：**[文件级](#文件级规则)**（**Per file**）和**[拉取请求级](#拉取请求级规则)**（**Per PR**）。两个级别都支持变量、文件引用和 MCP 函数来构建强大的、上下文感知的规则。
+| 字段 | 作用 |
+|-------|--------------|
+| **Rule name** | 最多 300 个字符。 |
+| **Execution mode** | **Per file** 或 **Per PR**。 |
+| **Path** | 把 **Per file** 规则限定到匹配文件的 glob。多个 glob 用逗号分隔；匹配其中任意一个的文件都会被检查。留空表示所有文件。**Per PR** 规则不使用该字段，在目录作用域下也不可编辑，因为此时规则属于该目录作用域（何时生效请参阅[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)）。 |
+| **Instructions** | Kody 应该检查什么以及如何判断。必填。新建规则时可以 **Start with a popular template**。**Variables** 菜单会插入 `fileDiff` 或 `pr_title` 之类的名称，可用于引用 Kody 看到的 diff 和 PR 详情。 |
+| **Severity** | **Critical**、**High**（默认）、**Medium** 或 **Low**。 |
+| **Advanced settings** | **Inheritable**（默认开启）和 **Code examples**：一个 **Bad example** 和一个 **Good example**。 |
 
-#### 变量、文件引用和 MCP 函数
+严重性决定发现如何标注。低于某个严重性的发现是否发布，则在[严重性阈值](/zh/how_to_use/code_review/configs/suggestion_control#对-kody-rules-应用阈值)中设置。
 
-规则可以通过变量、文件引用和 MCP 函数访问丰富的上下文。以下是可用的内容：
+### Kody 看到什么
 
-**变量：**
+- **Per file：** 该文件的 diff、文件其余部分（在足够小时），以及 PR 标题和描述（前 1,000 个字符）。
+- **Per PR：** PR 标题和描述（前 1,000 个字符）、变更文件列表以及每个文件的 diff。在非常大的 PR 上，超出 diff 预算的文件只按名称列出。
 
-变量表示规则执行期间可用的上下文数据。了解可用的内容有助于您通过将变量与 MCP 函数和文件引用相结合来编写更好的规则。
+Kody 只会报告拉取请求新增或修改的行上的违规。指令中指明了语言的规则（"在 Ruby 文件中，……"）会限定为该语言的文件，Kody 在您保存规则时判断这一点。
 
-- **文件级**：
-  - `fileDiff` - 对正在分析的单个文件所做的特定更改
+### 在规则中引用文件
 
-- **PR 级**：
-  - `pr_title` - 拉取请求的标题
-  - `pr_description` - 拉取请求的描述/正文
-  - `pr_total_additions` - 添加的总行数
-  - `pr_total_deletions` - 删除的总行数
-  - `pr_total_files` - 更改的文件总数
-  - `pr_total_lines_changed` - 修改的总行数
-  - `pr_files_diff` - 整个拉取请求中所有更改的完整差异
-  - `pr_tags` - 与拉取请求关联的标签
-  - `pr_author` - 拉取请求的作者
-  - `pr_number` - 拉取请求编号
+在指令中按路径提及文件，例如 `@file:docs/architecture.md`，Kody 在判断规则时就会获得其内容。
 
-在规则指令中使用这些变量来访问上下文数据（**Instructions** 编辑器中的 **Variables** 菜单会插入所选执行模式下可用的变量），并将它们与 MCP 函数相结合以获取其他信息或执行动态分析。
+- Kody 在您保存规则时查找文件引用。编辑器旁边的状态会显示它们何时解析完成，以及任何无法读取的文件。
+- 文件从拉取请求的目标分支读取。
+- 使用仓库中的真实路径，而不是占位符。
 
-**文件引用：**
+### 示例
 
-在规则指令中直接引用文件以比较代码、验证模式、强制一致性并利用现有模板或标准。
+<Tabs>
+  <Tab title="Per file">
+    - **Rule name：** 避免在循环终止条件中使用相等运算符
+    - **Path：** `src/**/*.ts`
+    - **Severity：** Critical
+    - **Instructions：** 在循环条件中使用 `==` 或 `!=`，如果永远不会命中确切值，可能导致无限循环。
 
-- **`@file:path/to/file.ts`** - 引用您正在编辑规则的同一代码库中的文件
-  - 在引用当前代码库中的模板、示例或配置文件时使用
-  - 示例：`@file:src/services/userService.ts`
+    **Bad example**
 
-- **`@repo:org/project`** - 引用另一个代码库中的文件或在代码库上下文外配置规则时
-  - 在跨多个代码库强制一致性或引用共享标准时使用
-  - 示例：`@repo:team/api-standards`
+    ```typescript
+    // Infinite if the increment is not exactly 1
+    for (let i = 0; i != 10; i += 2) {
+      console.log(i);
+    }
+    ```
 
-**文件引用的工作原理：**
+    **Good example**
 
-- 当您保存规则时，Kody 会自动识别文件引用
-- 引用在后台解析——观察编辑器旁边的状态指示器以确认完成
-- 使用准确的 blob 样式路径（例如 `src/utils/helpers.ts`）而不是占位符
-- 文件内容注入规则上下文，允许 Kody 比较、验证或强制模式
-- 在文件级和拉取请求级规则中都有效
+    ```typescript
+    for (let i = 0; i < 10; i += 2) {
+      console.log(i);
+    }
+    ```
+  </Tab>
 
-**MCP 函数：**
+  <Tab title="Per PR">
+    - **Rule name：** 新路由必须注册
+    - **Execution mode：** Per PR
+    - **Instructions：** 当 PR 向控制器添加路由时，检查它是否也已添加到 `@file:routes.json`。
 
-规则可以使用 MCP（模型上下文协议）函数来获取其他数据和上下文。您可以使用在工作区的[插件](/zh/how_to_use/code_review/plugins)页面中连接的任何 MCP 工具或服务器。规则编辑器中已不再提供 MCP 选择器。
+    Per PR 规则还可以检查的其他内容：
 
-可用函数包括：
+    - PR 描述说明了添加或移除了什么。
+    - 每个变更的 service 文件在 PR 中都有对应的测试文件。
+    - PR 变更的文件数不超过设定的数量。
+  </Tab>
+</Tabs>
 
-- 代码库操作：列出代码库、获取代码库文件、内容和语言
-- PR 分析：获取拉取请求详细信息、列出提交、分析 PR 文件内容
-- 文件内容检索：获取文件内容和差异
-- 跨文件验证：跨多个文件执行高级分析
-- 自定义集成：您作为插件连接的任何 MCP 服务器（Jira、自定义工具等）
+## 添加规则的其他方式
 
-MCP 函数在规则评估期间执行，使规则能够适应当前代码库状态并获取实时数据。
+- **[规则库](/zh/how_to_use/code_review/configs/rules_library)：** 通过 **Discovery** 添加现成的规则和规则包。
+- **[代码库规则](/zh/how_to_use/code_review/configs/repository_rules)：** 在您的仓库的 `.kody/rules` 中，每条规则一个 markdown 文件。
+- **[全局规则源](/zh/how_to_use/code_review/configs/global_rule_sources)：** 把标准仓库中的规则文件导入为全局规则。
+- **[自动规则生成](/zh/how_to_use/code_review/learning/kody_rules_generation)：** Kody 根据审查者过去的评论起草规则。
+- **在审查讨论串中：** 让 Kody 创建、更改或移除规则，例如 `@kody update this rule to ignore test files`。以这种方式创建的规则显示 **MCP/Agent** 来源，并在 **Pending review** 中等待。
 
-**最佳实践：**
+## 规则列表
 
-- 使用特定的文件路径而不是通用占位符
-- 引用代表团队标准的稳定文件
-- 在保存规则之前测试文件引用是否存在以避免解析错误
-- 结合变量、文件引用和 MCP 函数进行全面验证
+列表显示所选作用域的规则，以及从更高作用域继承的规则。点击某一行会在侧边面板中打开该规则，其中有 **Pause** 或 **Resume**、**Edit**（没有编辑权限时为 **View**）和删除。
 
-#### 文件级规则
+使用筛选器旁边的表格或卡片视图开关；该选择会保存在您的浏览器中。搜索会查找标题、路径、指令和示例（按 `/` 聚焦）。列表上方的严重性标签按严重性筛选。
 
-分析单个文件以捕获特定代码文件中的问题。
+**Filters** 让您按最近更新、严重性或名称排序，显示或隐藏继承的规则和 **Disabled Rules**，并按来源、按 **Has sync errors**（所引用文件无法读取的规则）或按 **Paused only** 筛选。
 
-**可用上下文：**
+### Origin
 
-请参阅上面的[变量、文件引用和 MCP 函数](#变量文件引用和-mcp-函数)部分了解详情。此级别可用：`fileDiff` 变量、文件引用（`@file`、`@repo`）和 MCP 函数。
+| 来源 | 规则来自哪里 |
+|--------|--------------------------|
+| **Manual** | 在应用中编写。 |
+| **Library** | 从规则库添加。 |
+| **Auto-sync** | 仓库中的规则文件，保持同步。 |
+| **Kody-generated** | 根据过去的审查起草。 |
+| **Onboarding** | 在引导期间建议。 |
+| **MCP/Agent** | 通过 Kodus MCP 工具创建：由 Kody 在审查讨论串中创建，或由 MCP 客户端创建。 |
+| **CLI** | 使用 Kodus CLI 创建。 |
+| **Agent file** | 在这些文件不再变成规则之前，从编码代理文件导入。已冻结。参见[编码代理指令](/zh/how_to_use/code_review/configs/rules_file_detection#从编码代理文件导入的规则)。 |
 
-**您可以做什么：**
+### Status
 
-- 使用 `@file` 或 `@repo` 与参考文件进行比较
-- 使用 MCP 函数获取相关文件或代码库数据
-- 结合变量、文件引用和 MCP 函数来验证模式、检查一致性或强制架构规则
+| 状态 | 含义 |
+|--------|---------|
+| **Active** | 在每个新 PR 上检查。 |
+| **Paused** | 保留在列表中，在每个 PR 上跳过。 |
+| **Paused by Kody** | 被 **Pause ignored and noisy rules** 暂停。 |
+| **Locked** | 因 Free 套餐限制而跳过（见下文）。 |
+| **Disabled** | 为该作用域标记为禁用的继承规则。审查仍会应用它；请参阅[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)。 |
+| **Pending add**、**Pending edit**、**Pending delete** | 变更正在[集中式配置](/zh/how_to_use/code_review/configs/centralized_config)拉取请求中等待。 |
 
-**如何配置：**
+### 批量操作
 
-- **Rule name**：清楚地定义规则目的
-- **Execution mode**：**Per file**（默认）
-- **Path**：使用 glob 模式将规则限制为特定文件或目录（留空则应用于所有文件）
-- **Instructions**：使用 `fileDiff`，使用 `@file`/`@repo` 引用文件，并调用 MCP 函数以编写具有丰富上下文的强大规则。新规则可以使用 **Start with a popular template**
-- **Severity**：设置为 Critical、High（默认）、Medium 或 Low
-- **Advanced settings**：**Inheritable**（默认开启；参见[规则继承](/zh/how_to_use/code_review/configs/rules_inheritance)）和 **Code examples**（**Bad example** / **Good example**）
+在 **Review Rules** 标签页中，勾选规则（或 **Select all visible**），即可一起 **Pause**、**Resume** 或 **Delete**。只能选择当前作用域的规则，不能选择继承的规则。
 
-**配置示例：**
+### 影响与使用情况
 
-📋 **规则**: "避免在循环终止条件中使用相等运算符（==、!=）。"
+侧边面板会显示最近 30 天的 **Impact** 区块：规则触发了多少次、在多少个拉取请求上触发，以及最近的建议。在 Cockpit 可用的地方（Teams 和 Enterprise 套餐以及试用），它还会显示有多少建议被采纳，以及点赞和点踩反馈，表格会多出 **Usage** 列。需要关注的规则会带有标签：
 
-📁 **路径**: `src/**/*.ts`
+- **Stale：** 最近 30 天没有触发。
+- **Ignored：** 至少触发了 5 次，且其建议被采纳的比例不超过 20%。
+- **Noisy：** 至少触发了 5 次，至少有 3 个点踩，点踩多于点赞，且点踩占其建议的至少 10%。
 
-⚠️ **严重性**: 严重
+### Pause ignored and noisy rules
 
-📝 **说明**: "使用相等运算符（== 或 !=）如果不匹配确切值，可能导致无限循环。"
+在 Teams 和 Enterprise 套餐上，**Configuration → Pause ignored and noisy rules** 会每天一次暂停该作用域中最近 30 天结果为 **Ignored** 或 **Noisy** 的有效规则，包括手工编写的规则。它们会显示 **Paused by Kody** 以及背后的数据。管理员会收到通知，并且可以随时 **Resume** 规则；恢复之后，只统计它之后标记的内容。通过[集中式配置](/zh/how_to_use/code_review/configs/centralized_config)管理的规则不会被暂停。默认关闭。
 
-**❌ 错误示例：**
+## 规则限制
 
-```typescript
-// 如果增量不完全为 1，则存在无限循环的风险
-for (let i = 0; i != 10; i += 2) {
-  console.log(i); // 将打印 0, 2, 4, 6, 8, 10, 12, 14... 永远
-}
-
-// 如果在迭代期间修改数组，则存在风险
-let items = [1, 2, 3, 4, 5];
-for (let i = 0; i != items.length; i++) {
-  if (items[i] === 3) {
-    items.push(6); // 修改长度，可能导致无限循环
-  }
-}
-```
-
-**✅ 良好示例：**
-
-```typescript
-// 安全：循环将始终终止
-for (let i = 0; i < 10; i += 2) {
-  console.log(i); // 将打印 0, 2, 4, 6, 8 并停止
-}
-
-// 即使修改数组也是安全的
-let items = [1, 2, 3, 4, 5];
-for (let i = 0; i < items.length; i++) {
-  if (items[i] === 3) {
-    items.push(6); // 循环仍将安全终止
-  }
-}
-```
-
-#### 拉取请求级规则
-
-分析整个拉取请求以进行跨文件验证和 PR 特定要求。
-
-**可用上下文：**
-
-请参阅上面的[变量、文件引用和 MCP 函数](#变量文件引用和-mcp-函数)部分了解详情。此级别可用：PR 变量（`pr_title`、`pr_description`、`pr_files_diff` 等）、文件引用（`@file`、`@repo`）和 MCP 函数。
-
-**您可以做什么：**
-
-- 使用 `pr_title`、`pr_description`、`pr_author` 等变量验证 PR 元数据
-- 使用 `@file` 或 `@repo` 引用配置文件或模板
-- 使用 MCP 函数获取其他上下文（例如，检查相关文件是否存在，根据代码库结构验证）
-- 结合 PR 变量、文件引用和 MCP 函数来创建全面的验证规则
-
-**如何配置：**
-
-创建过程与文件级规则相同，但您必须将 **Execution mode** 设置为 **Per PR**（此模式下 **Path** 不适用）。这种更广泛的上下文使能够分析跨文件依赖关系和整体 PR 质量。
-
-**示例：**
-
-- 每个服务文件必须有相应的测试文件
-- PR 描述必须完整，清楚地说明添加或删除了什么
-- 在控制器中创建新路由时，必须在 routes.json 中注册
-- 使用 `pr_total_lines_changed` 标记超过大小限制的 PR
-- 结合 `pr_files_diff` 和 MCP 函数来验证跨文件依赖关系
-- 引用 `@file:routes.json` 以确保注册新路由
-- 使用 MCP 函数检查修改的服务文件是否存在测试文件
-
-#### 编写强大的规则
-
-结合变量、MCP 函数和文件引用来创建具有丰富上下文的复杂规则。以下是每个级别可用的内容：
-
-**文件级组合：**
-
-- 使用 `fileDiff` 分析文件中的特定更改
-- 使用 `@file:path/to/template.ts` 引用相关文件以与模式进行比较
-- 调用 MCP 函数以获取代码库数据或检查相关文件是否存在
-- **示例**："分析 `fileDiff` 并确保它遵循 `@file:src/utils/example.ts` 中的模式。使用 MCP 验证相关测试文件是否存在。"
-
-**PR 级组合：**
-
-- 使用 PR 变量（`pr_title`、`pr_description`、`pr_files_diff` 等）验证 PR 元数据和大小
-- 使用 `@file:config.json` 或 `@repo:org/shared-config` 引用配置文件以强制一致性
-- 调用 MCP 函数执行跨文件验证、检查代码库结构或获取提交历史
-- **示例**："如果 `pr_files_diff` 包含新路由，验证它们是否在 `@file:routes.json` 中注册。使用 MCP 检查所有修改的服务文件是否存在相应的测试文件。"
-
-**跨代码库验证：**
-
-- 使用 `@repo:org/project` 引用其他代码库中的文件以保持项目之间的一致性
-- 与 MCP 函数结合以根据共享标准或模板进行验证
-- **示例**："确保 API 端点遵循 `@repo:org/api-standards` 中定义的模式。使用 MCP 获取最新的标准文档。"
-
-**动态分析：**
-
-- MCP 函数在规则评估期间执行，使规则能够适应当前代码库状态
-- 获取有关文件、提交或代码库结构的实时数据
-- **示例**："使用 MCP 检查当前代码库结构并确保新文件遵循现有目录模式。"
-
-这种组合使规则不仅理解代码更改，还理解代码库、团队实践和项目要求的更广泛上下文。
-
-### 从规则库导入
-
-立即利用经过验证的最佳实践：
-
-- 在 **Code review → Kody Rules**（**Review Rules** 选项卡）中，点击 **Discovery** 打开规则库（**Rules Marketplace**）。当规则列表为空时，也可以通过 **Browse the library** 进入，或在 ⌘K 命令面板中搜索 **Rules library**。
-- 从 **Featured** 开始，或切换到 **Browse** 搜索完整目录，并按 **Severity**、**Language** 或 **Packs** 过滤规则。
-- 打开一条规则并点击 **Add to my rules**，使用旁边的代码库选择器选择 **Global** 或应获得该规则的代码库（及目录）。
-
-**示例：**
-
-- 安全性："禁止使用不安全的 MD5 哈希。"
-- 可维护性："将 React 组件限制为少于 150 行。"
+云端 **Free** 套餐的组织（或订阅已取消或已过期的组织）以及没有有效许可证的自托管实例，每次审查最多运行 **10 条有效规则**，最早创建的优先。这 10 条把 Global、仓库和目录规则合在一起计算，记忆也计入。超出限制的规则会以 **Locked** 保留在列表中，在每个 PR 上都会被跳过，页面上的横幅会说明有多少条。付费云端套餐和已授权的自托管实例没有限制。
 
 ## 记忆
 
-记忆是持久的上下文指令，Kody 从团队的对话和编码实践中学习。与只在代码审查期间运行的审查规则不同，记忆会被注入到所有提示和对话中，以提供持续的高优先级上下文，并改善未来的建议质量。
+记忆是 Kody 记在心里的简短陈述：您的系统如何工作、团队已经决定了什么。记忆帮助 Kody 避免重复对您的仓库做出错误假设。
 
-### 记忆的工作原理
-
-- **全面注入**：记忆被包含在代码审查分析（跨文件、安全保障、PR 级规则）和对话交互中
-- **高优先级上下文**：AI 将记忆视为高优先级指导，确保团队约定得到一致应用
-- **未来建议更好**：记忆帮助 Kody 停止反复对仓库做出同样的错误假设
-- **智能去重**：创建新记忆时，Kody 使用基于 LLM 的解析机制来决定是创建、跳过（如果重复）还是更新现有记忆
+- 记忆会被添加到代码审查和与 Kody 对话的上下文中。
+- 当 Kody 即将保存一条记忆时，它会检查现有记忆，然后创建它、作为重复项跳过它，或更新一条现有记忆。
 
 ### 创建记忆
 
-有两种创建记忆的方式：
-
-#### 通过对话
-
-创建记忆最自然的方式是通过 PR 评论中与 Kody 的对话。Kody 检测显式和隐式的保存约定意图：
-
-**显式** — 直接要求 Kody 记住：
+**在 PR 评论中。** 让 Kody 记住某件事，它就会保存下来：
 
 ```
 @kody remember: this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
 ```
 
-```
-@kody please remember: this service follows hexagonal architecture and keeps adapters at the edge.
-```
-
-**隐式** — 陈述 Kody 捕获的偏好或约定：
+当您只是陈述上下文或团队偏好时，Kody 会提出保存并等待。回复 `@kody yes` 即可保存：
 
 ```
-@kody this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
+@kody in this service, tests usually live next to implementation files rather than in a central test folder.
 ```
 
-```
-@kody in this service, tests usually live next to the implementation files rather than in a central test folder.
-```
-
-```
-@kody the billing module is mid-migration, so prefer incremental fixes over broad refactors.
-```
+当 Kody 保存或更新记忆时，它会回复一个指向应用中该记忆的链接。
 
 <Info>
-  Kody 不会为临时指令（例如"立即修复"）、调试对话、问题、模糊陈述或明确限定于单个任务或 PR 的请求创建记忆。
+  Kody 不会保存临时性指令（"现在修复这个"）、调试闲聊、问题、含糊的陈述，或仅适用于某个任务或 PR 的请求。
 </Info>
 
-当记忆被创建或更新时，Kody 会回复确认并提供**直接链接**以在 UI 中查看记忆。
+**在应用中。** 选择作用域，打开 **Memories** 标签页，点击 **New memory**（列表为空时为 **Add a memory**），填写 **Memory name** 和 **Instructions**，然后点击 **Create memory**。
 
-#### 通过 UI
+### 记忆作用域
 
-您也可以手动创建记忆：
+| 作用域 | 适用于 |
+|-------|------------|
+| **Directory** | 已配置目录中的文件。在 PR 评论中创建的记忆也可以限定到某个路径，例如 `src/components/**`。 |
+| **Repository** | 整个仓库。 |
+| **Organization**（作用域选择器中的 **Global**） | 组织中的每个仓库。 |
 
-1. 在侧边栏 **Code review** 分组顶部的范围选择器中选择 **Global**（或代码库 / 目录），然后打开 **Kody Rules**。记忆会在您此处选择的范围内创建
-2. 切换到 **Memories** 选项卡
-3. 点击 **New memory**（列表为空时为 **Add a memory**）
-4. 填写 **Memory name** 和 **Instructions**，然后点击 **Create memory**
+## 批准
 
-### 记忆范围
+默认情况下，根据过去的审查生成的规则、在引导期间建议的规则以及 Kody 保存的记忆，在创建后立即生效。若要先审核它们，请打开 **Configuration** 并开启 **Kody knowledge approval**。
 
-每个记忆都有一个范围，决定其适用位置：
+开启批准后，这些内容会在 **Pending review** 中等待，直到被批准：
 
-| 范围 | 描述 | 示例 |
-|------|------|------|
-| **目录** | 适用于代码库中匹配 glob 模式的文件 | `src/components/ui`、`src/**/*.ts` |
-| **代码库** | 适用于整个代码库 | 代码库中的所有文件 |
-| **组织**（范围选择器中的 **Global**） | 适用于组织中的所有代码库 | 组织中的所有代码库 |
+- 根据过去的审查生成或在引导期间建议的规则；
+- Kody 在审查讨论串中保存的记忆；
+- 从仓库的规则文件同步的规则。通过[全局规则源](/zh/how_to_use/code_review/configs/global_rule_sources)导入的规则会立即生效。
 
-### LLM 生成记忆的审批
+通过 Kodus MCP 工具创建的规则（包括 Kody 在审查讨论串中创建的规则）无论设置如何，都始终在 **Pending review** 中等待。您手工编写、从规则库添加或使用 CLI 创建的规则会立即生效。
 
-默认情况下，AI 生成的记忆会自动激活。您可以要求在生效前进行手动审批：
+### Pending review
 
-1. 在您想要的范围（Global、某个代码库或某个目录）下前往 **Code review → Kody Rules**
-2. 点击 **Configuration** 打开侧边面板
-3. 启用 **Kody knowledge approval**
+**Review Rules** 和 **Memories** 标签页上的徽标显示待审数量。**Pending review** 部分（"Rules and memories awaiting approval."）将它们一起列出，每一项标记为 **Rule**、**Memory** 或 **Update**：
 
-启用后：
-- AI 生成的规则和记忆进入**待审状态**，在批准之前不会生效
-- **Review Rules** 和 **Memories** 选项卡上的徽章显示待审数量
-- 待审项目会出现在页面顶部的 **Pending review** 区域中，您可以在那里批准或丢弃它们（参见下方的[待审核](#待审核)）
-- 新规则/记忆的创建和对现有规则/记忆的更新都通过审批流程
+- **新规则和记忆：** **Approve** 以激活，或 **Discard** 以拒绝。
+- **更新：** 对现有项目的建议变更，以 diff 形式显示。**Update existing** 应用它，**Create new instead** 保留原项目并把建议作为单独的项目添加，**Discard** 拒绝它。
 
-您也可以在 `kodus-config.yml` 中设置：
-
-```yaml
-kodyKnowledgeApproval:
-    enabled: true
-```
-
-### 待审核
-
-**Pending review** 区域（"Rules and memories awaiting approval."）会将待审的规则和记忆一起列出，每一项都标记为 **Rule**、**Memory** 或 **Update**：
-
-- **新规则和记忆**：等待批准的 AI 生成项目。选择 **Approve** 激活该项目，或选择 **Discard** 拒绝它。
-- **更新**：对现有规则或记忆的建议更改，以差异形式显示。选择 **Update existing** 应用更改，选择 **Create new instead** 保留原有项目并将该建议添加为单独的项目，或选择 **Discard** 拒绝它。
-
-选择多个项目并使用 **Bulk actions**（**Approve N**、**Create as new (N)**、**Discard N**）一次性处理。
+选择多项并使用 **Bulk actions**（**Approve N**、**Create as new (N)**、**Discard N**）一次性处理它们。
 
 ## 下一步
 
 <CardGroup cols={3}>
-  <Card title="编码代理指令" icon="window" href="/zh/how_to_use/code_review/configs/rules_file_detection">
-    让 Kody 根据 CLAUDE.md、AGENTS.md、Cursor 和 Copilot 指令检查更改。
+  <Card title="规则库" icon="book-open" href="/zh/how_to_use/code_review/configs/rules_library">
+    添加现成的规则和规则包。
   </Card>
   <Card title="代码库规则" icon="folder" href="/zh/how_to_use/code_review/configs/repository_rules">
-    使用结构化的 markdown 文件直接在代码库中创建规则。
+    以 markdown 文件的形式把规则保存在您的仓库中。
   </Card>
-  <Card title="AI 生成" icon="sparkles" href="/zh/how_to_use/code_review/learning/kody_rules_generation">
-    让 AI 根据您的代码库模式和过去的审查生成规则。
+  <Card title="编码代理指令" icon="window" href="/zh/how_to_use/code_review/configs/rules_file_detection">
+    让 Kody 根据 CLAUDE.md、AGENTS.md、Cursor 和 Copilot 指令检查变更。
   </Card>
 </CardGroup>

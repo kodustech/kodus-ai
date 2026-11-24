@@ -1,0 +1,63 @@
+---
+title: "Activity logs"
+description: "Veja quem alterou Kody Rules, configurações de review, integrações e acessos na sua organização."
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="enterprise" detail="Disponível na Kodus Cloud com Enterprise ou um trial ativo.">
+    <Badge icon="shield-check" stroke>Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Requer uma licença Enterprise.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+</div>
+
+**Organization → Activity logs** é uma trilha de auditoria das alterações de configuração. A página se chama **User Activity Logs**. Owners, Repo Admins, Billing Managers e Contributors podem lê-la, e cada um vê todas as entradas da organização.
+
+| Seu plano | O que você vê |
+| --- | --- |
+| Enterprise, ou um trial | A página completa |
+| Free ou Teams | A entrada na barra lateral traz um cadeado, e a página abre uma prévia com um botão **See plans** |
+| Self-hosted com uma license key Enterprise | A página completa |
+| Self-hosted sem license key | O cadeado e uma prévia com um botão **Activate a license** |
+| Plano expirado, cancelado ou com pagamento falhado | O cadeado e a prévia |
+
+A API recusa a requisição em qualquer outro plano. O registro é verificado separadamente: a Kodus registra as alterações em todo plano válido, exceto o Free, e no self-hosted apenas com uma license key. As alterações feitas no Free, ou em uma instância self-hosted sem chave, nunca são registradas.
+
+## O que é registrado
+
+Alterações feitas no app, com quem as fez:
+
+- Configurações de code review, incluindo a remoção da configuração de um repositório ou diretório
+- Kody Rules
+- Repositórios selecionados para review
+- Integrações Git conectadas ou removidas
+- Mensagens de pull request
+- Configurações da organização
+- CLI keys
+- Convites de membros, mudanças de função e acesso a repositórios
+- Mudanças de status de seat
+
+## A lista
+
+Das mais recentes para as mais antigas. Cada linha tem:
+
+| Coluna | O que mostra |
+| --- | --- |
+| **Action** | **ADD**, **CREATE**, **EDIT**, **DELETE** ou **CLONE** |
+| **User** | O e-mail da pessoa que fez a alteração |
+| **Description** | O que mudou |
+| **Action Description** | Um rótulo curto para o tipo de alteração |
+| **Level** | Onde a alteração se aplica: **Main**, **Global**, **Repository** ou **Directory** |
+| **Date** | Há quanto tempo |
+
+Clique no ícone de olho em uma linha para abrir **Log Details**: o usuário, o nível, os horários de criação e atualização, e cada alteração da entrada. Clique em **Action**, **User**, **Level** ou **Date** para ordenar.
+
+## Busca e intervalo de datas
+
+A página carrega as 100 entradas mais recentes. Estes dois controles filtram essa lista, então entradas mais antigas não ficam acessíveis daqui:
+
+- **Search logs...**: busca no e-mail do usuário e nas descrições das alterações.
+- Intervalo de datas: **Today**, **Last week**, **Last 2 weeks**, **Last month**, **Last 3 months** ou datas personalizadas, até cerca de três meses.

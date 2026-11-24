@@ -20,6 +20,7 @@ import {
     ignoredFilesInAgentScope,
     selectCustomAgents,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
+import type { RiskAssessmentResult } from '@libs/code-review/domain/risk/risk-assessment';
 import type {
     CliToolConfig,
     CustomAgentConfig,
@@ -164,6 +165,7 @@ export async function provisionCustomAgentClis(params: {
     ignoredFiles?: readonly string[];
     /** `@kody -v <slug>`: only that agent runs, enabled or not. */
     onlyCustomAgent?: string;
+    riskAssessment?: RiskAssessmentResult;
     /** Set when this review must not run CLIs at all; each skipped CLI gets
      *  a warning with this reason. */
     skipReason?: string;
@@ -178,6 +180,7 @@ export async function provisionCustomAgentClis(params: {
     const candidates = selectCustomAgents(
         params.agents,
         params.onlyCustomAgent,
+        params.riskAssessment,
     ).filter(
         (agent) =>
             agent?.tools?.cli?.length &&

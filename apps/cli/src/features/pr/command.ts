@@ -3,6 +3,10 @@ import chalk from 'chalk';
 import ora from 'ora';
 import fs from 'fs/promises';
 import { reviewService } from '../../services/review.service.js';
+import {
+    pullRequestReviewsService,
+    type PullRequestReviewsResult,
+} from '../../services/pr-reviews.service.js';
 import { gitService } from '../../services/git.service.js';
 import type { GlobalOptions } from '../../types/cli.js';
 import type {
@@ -41,6 +45,15 @@ type PrSuggestionsOptions = {
     fields?: string;
 };
 
+type PrReviewsOptions = {
+    repo?: string;
+    repoId?: string;
+    team?: string;
+    limit?: string;
+    json?: boolean;
+    explain?: boolean;
+};
+
 type BusinessValidationOptions = {
     taskUrl?: string;
     taskId?: string;
@@ -66,6 +79,29 @@ export function createPrCommand(): Command {
             'Select response fields (JSON/agent mode only), e.g. summary,issues.file',
         )
         .action(prSuggestionsAction);
+
+    prCommand
+        .command('reviews')
+        .description(
+            'Review history of a pull request: every Kody run, newest first (requires kodus auth login)',
+        )
+        .argument('<pr-number>', 'Pull request number')
+        .option(
+            '--repo <repo>',
+            'Repository as owner/repo or name (default: this checkout origin)',
+        )
+        .option('--repo-id <id>', 'Repository ID (wins over --repo)')
+        .option(
+            '--team <team>',
+            'Team name or id (logged-in users with more than one team)',
+        )
+        .option('--limit <n>', 'Most recent runs to return (default 20)')
+        .option(
+            '--explain',
+            'Show commit freshness, routing, approval and specialist failures',
+        )
+        .option('--json', 'Output the review runs as JSON')
+        .action(prReviewsAction);
 
     prCommand
         .command('business-validation')
@@ -238,6 +274,191 @@ async function prSuggestionsAction(
             cliError(chalk.red(error.message));
         }
 
+        exitWithCode(normalized.exitCode);
+    }
+}
+
+const ROUTING_REASONS: Record<string, string> = {
+    'requested': 'explicit review command',
+    'risk-found': 'risk found',
+    'no-risk-found': 'no risk found',
+    'risk-unavailable': 'risk unavailable, configured fallback used',
+    'default': 'configured default',
+    'heavy-unavailable': 'Heavy unavailable for this workspace',
+};
+
+function printReviewRuns(
+    result: PullRequestReviewsResult,
+    explain = false,
+): void {
+    if (result.runs.length === 0) {
+        cliInfo(
+            chalk.yellow(
+                `No Kody reviews found for PR #${result.prNumber} in ${result.repository}.`,
+            ),
+        );
+        return;
+    }
+
+    const [latest] = result.runs;
+    cliInfo(chalk.bold(`PR #${result.prNumber} · ${latest.title}`));
+    cliInfo(chalk.dim(`${latest.repositoryName} · ${latest.url}`));
+    if (explain) {
+        cliInfo(`Current PR head: ${result.currentHeadSha ?? 'unavailable'}`);
+    }
+    cliInfo('');
+
+    for (const run of result.runs) {
+        const execution = run.automationExecution;
+        const when = execution?.createdAt ?? 'unknown date';
+        const sent = run.suggestionsCount?.sent ?? 0;
+        const filtered = run.suggestionsCount?.filtered ?? 0;
+        const commit = run.reviewedCommitSha
+            ? ` · commit ${run.reviewedCommitSha.slice(0, 7)}`
+            : '';
+        cliInfo(
+            `${when} · ${execution?.status ?? 'unknown'} · ${sent} sent, ${filtered} filtered${commit}`,
+        );
+        // The run's own errorMessage is often empty; the failing stage of
+        // the timeline says why, as the PR page's timeline does.
+        const failedStage = run.codeReviewTimeline?.find(
+            (stage) => stage.status === 'error' && stage.message,
+        );
+        const reason = execution?.errorMessage || failedStage?.message;
+        if (reason) {
+            const stage = failedStage?.stageLabel
+                ? `${failedStage.stageLabel}: `
+                : '';
+            cliInfo(
+                chalk.red(`  ${execution?.errorMessage ? '' : stage}${reason}`),
+            );
+        }
+        if (explain) {
+            if (run.recordedReviewedHeadSha) {
+                const freshness = result.currentHeadSha
+                    ? run.recordedReviewedHeadSha === result.currentHeadSha
+                        ? 'current head'
+                        : 'older or different head'
+                    : 'current head unavailable';
+                cliInfo(
+                    `  Reviewed commit: ${run.recordedReviewedHeadSha} (${freshness})`,
+                );
+            } else {
+                cliInfo('  Reviewed commit: unavailable');
+            }
+            if (run.reviewMode) {
+                const route =
+                    run.reviewRoutingReason &&
+                    Object.hasOwn(ROUTING_REASONS, run.reviewRoutingReason)
+                        ? ROUTING_REASONS[run.reviewRoutingReason]
+                        : undefined;
+                cliInfo(
+                    `  Routing: ${run.reviewMode} (${route || 'reason unavailable'})`,
+                );
+            }
+            if (run.approvalDecision) {
+                const { kind, reason, matchedPolicy } = run.approvalDecision;
+                cliInfo(
+                    `  Recorded approval decision: ${kind}${matchedPolicy ? ` (${matchedPolicy.name})` : ''}. ${reason}`,
+                );
+            }
+            for (const stage of run.codeReviewTimeline ?? []) {
+                if (
+                    stage.status === 'error' &&
+                    stage.stageName?.startsWith('AgentReview::custom-agent-') &&
+                    (stage !== failedStage || !!execution?.errorMessage)
+                ) {
+                    const agent =
+                        stage.stageLabel ??
+                        stage.stageName.replace(
+                            'AgentReview::custom-agent-',
+                            '',
+                        );
+                    cliInfo(`  ${agent}: ${stage.message ?? 'failed'}`);
+                }
+                for (const lens of stage.metadata?.specialists ?? []) {
+                    if (
+                        ['failed', 'stopped', 'no-result'].includes(lens.status)
+                    ) {
+                        const batch =
+                            lens.batchIndex === undefined
+                                ? ''
+                                : `, batch ${lens.batchIndex + 1}`;
+                        cliInfo(
+                            `  Specialist ${lens.label}${batch}: ${lens.status}${lens.error ? ` (${lens.error})` : ''}`,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    if (result.truncated) {
+        cliInfo('');
+        cliInfo(
+            chalk.dim(
+                `Showing the ${result.runs.length} most recent runs. Pass --limit for more.`,
+            ),
+        );
+    }
+}
+
+async function prReviewsAction(
+    prNumberArg: string,
+    options: PrReviewsOptions,
+    cmd: Command,
+): Promise<void> {
+    const globalOpts = cmd.optsWithGlobals() as GlobalOptions;
+    const ctx = createCommandContext('pr reviews', globalOpts);
+
+    try {
+        const prNumber = parseOptionalNumber(prNumberArg, '<pr-number>');
+        const limit = parseOptionalNumber(options.limit, '--limit');
+
+        const result = await pullRequestReviewsService.list({
+            prNumber: prNumber as number,
+            repository: options.repo,
+            repositoryId: options.repoId,
+            team: options.team,
+            limit,
+            ...(options.explain && { explain: true }),
+        });
+
+        if (ctx.isAgent) {
+            await emitAgentEnvelope(
+                buildAgentSuccessEnvelope(ctx.command, result, ctx.startedAt),
+                ctx.outputFile,
+            );
+            return;
+        }
+
+        if (options.json || globalOpts.format === 'json') {
+            cliInfo(JSON.stringify(result, null, 2));
+            return;
+        }
+
+        printReviewRuns(result, options.explain);
+    } catch (error) {
+        const normalized = normalizeCommandError(error);
+
+        if (ctx.isAgent) {
+            await emitAgentEnvelope(
+                buildAgentErrorEnvelope(
+                    ctx.command,
+                    {
+                        code: normalized.code,
+                        message: normalized.message,
+                        details: normalized.details,
+                    },
+                    ctx.startedAt,
+                ),
+                ctx.outputFile,
+            );
+            exitWithCode(normalized.exitCode > 0 ? normalized.exitCode : 1);
+            return;
+        }
+
+        cliError(chalk.red(normalized.message));
         exitWithCode(normalized.exitCode);
     }
 }

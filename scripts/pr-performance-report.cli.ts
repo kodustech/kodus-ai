@@ -1058,7 +1058,9 @@ Examples:
         console.error(`Using env file: ${envPath}`);
         console.error(`Connecting to MongoDB (database: ${dbName})...`);
 
-        client = new MongoClient(uri);
+        client = new MongoClient(uri, {
+            appName: 'kodus-script-pr-performance-report',
+        });
         await client.connect();
 
         const db = client.db(dbName);

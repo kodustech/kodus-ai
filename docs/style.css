@@ -1,3 +1,61 @@
+#content:has(> .kodus-feature-badges:first-child) {
+    margin-top: 0.875rem;
+}
+
+.kodus-feature-badges {
+    --badge-detail-bg: #fffdfa;
+    --badge-detail-fg: #332b25;
+    --badge-detail-border: #e3d8cd;
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem;
+    margin-bottom: 1.625rem;
+}
+
+.dark .kodus-feature-badges {
+    --badge-detail-bg: #21212c;
+    --badge-detail-fg: #efebe6;
+    --badge-detail-border: #3b3540;
+}
+
+.kodus-feature-badges button {
+    padding: 0.125rem 0;
+    border-radius: 0.5rem;
+    cursor: pointer;
+}
+
+.kodus-feature-badges button:focus-visible {
+    outline: 2px solid #d58a48;
+    outline-offset: 2px;
+}
+
+:root:not(.dark) .kodus-feature-badges button > [data-shape] {
+    --color-text: #604631;
+}
+
+.kodus-feature-badge-detail {
+    position: absolute;
+    z-index: 2;
+    inset-inline-start: 0;
+    inset-block-start: 100%;
+    width: min(100%, 22rem);
+    padding: 0.75rem 0.875rem;
+    border: 1px solid var(--badge-detail-border);
+    border-radius: 0.625rem;
+    background: var(--badge-detail-bg);
+    color: var(--badge-detail-fg);
+    box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 14%);
+    font-size: 0.875rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.kodus-feature-badge-detail[hidden] {
+    display: none;
+}
+
 #content-area:has(.kodus-changelog-release) #header .eyebrow {
     display: none;
 }

@@ -1,6 +1,8 @@
 import { convertToUnifiedDiffWithLineNumbers } from '@libs/common/utils/patch';
 import {
     judgeKodyRulesSharded,
+    PR_DESCRIPTION_BUDGET_CHARS,
+    buildShardViolationsWireSchema,
     shardViolationsSchema,
     shardViolationsWireSchema,
     RunJudge,
@@ -94,6 +96,77 @@ describe('shardViolationsSchema — model JSON parsing', () => {
         );
         // and the array itself is required at the top level
         expect(wire.required).toContain('violations');
+    });
+
+    describe('wire validate() on an off-schema shard reply', () => {
+        const violation = { ruleId: 'r-1', suggestionContent: 'x' };
+        const validate = (v: unknown) =>
+            (shardViolationsWireSchema as any).validate(v);
+
+        it.each([
+            ['{result:D}', { result: { violations: [violation] } }],
+            ['{data:D}', { data: { violations: [violation] } }],
+            [
+                '{result:{result:D}}',
+                { result: { result: { violations: [violation] } } },
+            ],
+            ['{content:D}', { content: { violations: [violation] } }],
+            ['{"0":D}', { '0': { violations: [violation] } }],
+            ['{Violations:[…]}', { Violations: [violation] }],
+            ['{issues:[…]}', { issues: [violation] }],
+            ['a single bare violation', violation],
+        ])('recovers the violation from %s', (_label, value) => {
+            const r = validate(value);
+            expect(r.success).toBe(true);
+            expect(r.value.violations).toHaveLength(1);
+            expect(r.value.violations[0].ruleId).toBe('r-1');
+        });
+
+        it.each([
+            ['an {error} object', { error: 'rate limited', code: 429 }],
+            [
+                'a provider envelope',
+                { choices: [{ message: { content: '{"violations":[]}' } }] },
+            ],
+            ['an unknown key', { answer: 'no violations found' }],
+        ])('rejects %s instead of reading it as a clean shard', (_l, value) => {
+            expect(validate(value).success).toBe(false);
+        });
+
+        it('keeps every violation of an index-keyed reply {"0":v,"1":v}', () => {
+            const r = validate({
+                '0': violation,
+                '1': { ...violation, ruleId: 'r-2' },
+            });
+            expect(r.success).toBe(true);
+            expect(r.value.violations.map((v: any) => v.ruleId)).toEqual([
+                'r-1',
+                'r-2',
+            ]);
+        });
+
+        it('reports a recovery and a rejection to the caller, nothing for a canonical reply', () => {
+            const events: any[] = [];
+            const schema = buildShardViolationsWireSchema((e) =>
+                events.push(e),
+            );
+            const check = (v: unknown) => (schema as any).validate(v);
+
+            check({ violations: [violation] });
+            expect(events).toEqual([]);
+
+            check({ result: { violations: [violation] } });
+            check({ error: 'rate limited', code: 429 });
+            expect(events).toEqual([
+                { kind: 'recovered', reason: 'unwrapped-result' },
+                { kind: 'rejected', keys: ['error', 'code'] },
+            ]);
+        });
+
+        it('still reads {} and {violations:[]} as a clean shard', () => {
+            expect(validate({}).value.violations).toEqual([]);
+            expect(validate({ violations: [] }).value.violations).toEqual([]);
+        });
     });
 
     it('wire schema validate() applies the lenient zod parse (missing keys → null)', () => {
@@ -206,19 +279,57 @@ function fakeJudge(
     const run: RunJudge = async ({ filename, ruleUuids }) => {
         calls.push({ filename, ruleUuids });
         const key = filename ?? '__PR__';
-        return (hits[key] || []).map(
-            (h): RawShardViolation => ({
-                ruleId: h.ruleId,
-                relevantLinesStart: h.line ?? 1,
-                suggestionContent: 'x',
-                oneSentenceSummary: 's',
-            }),
-        );
+        return (hits[key] || []).map((h): RawShardViolation => ({
+            ruleId: h.ruleId,
+            relevantLinesStart: h.line ?? 1,
+            suggestionContent: 'x',
+            oneSentenceSummary: 's',
+        }));
     };
     return { run, calls };
 }
 
 describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () => {
+    it('keeps repository evidence instructions on semantic and PR shards', async () => {
+        const runJudge = jest.fn(async (_shard: Parameters<RunJudge>[0]) => []);
+        await judgeKodyRulesSharded({
+            changedFiles: [
+                file('src/a.ts', '1 +console.log(1);'),
+                file('test/b.spec.ts', '1 +assert(result);'),
+            ],
+            rules: [
+                {
+                    uuid: 'detector',
+                    path: 'src/**',
+                    detector: { type: 'regex', pattern: 'console' },
+                },
+                {
+                    uuid: 'semantic',
+                    path: 'test/**',
+                    rule: 'Assert the output.',
+                },
+                {
+                    uuid: 'pr',
+                    scope: KodyRulesScope.PULL_REQUEST,
+                    rule: 'Check the intent.',
+                },
+            ],
+            detectorHits: new Map([['detector', new Map([['src/a.ts', [1]]])]]),
+            runJudge,
+        });
+        expect(runJudge.mock.calls).toHaveLength(3);
+        for (const [shard] of runJudge.mock.calls) {
+            const verifyRepositoryFacts = shard.filename !== 'src/a.ts';
+            expect(shard.verifyRepositoryFacts).toBe(verifyRepositoryFacts);
+            expect(shard.system.includes('needsRepositoryEvidence')).toBe(
+                verifyRepositoryFacts,
+            );
+            expect(shard.user.includes('needsRepositoryEvidence')).toBe(
+                verifyRepositoryFacts,
+            );
+        }
+    });
+
     it('issues one shard per changed file that has applicable rules', async () => {
         const { run, calls } = fakeJudge({});
         const res = await judgeKodyRulesSharded({
@@ -227,7 +338,12 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
                 file('src/b.ts', '1 +ok();'),
             ],
             rules: [
-                { uuid: 'r1', title: 'no any', rule: 'no any', path: '**/*.ts' },
+                {
+                    uuid: 'r1',
+                    title: 'no any',
+                    rule: 'no any',
+                    path: '**/*.ts',
+                },
             ],
             runJudge: run,
         });
@@ -372,7 +488,7 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         expect(res.violations[0].relevantFile).toBeUndefined();
     });
 
-    it('sends the FULL diff of every changed file to the PR-scope shard', async () => {
+    it('sends selected patches to the PR-scope shard and labels an incremental round', async () => {
         // Regression guard: the sharded refactor originally sent only file
         // NAMES to the PR shard, blinding content-dependent PR-scope rules
         // (the migration-safety rule missed 100% across every model — it
@@ -384,10 +500,12 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
             return [];
         };
         await judgeKodyRulesSharded({
+            incrementalDiff: true,
+            prFilePaths: ['src/odd\n```.ts'],
             changedFiles: [
                 file(
                     'db/migrate/add_index.rb',
-                    "6 +    add_index :cases, %i[provider_id last_digested_at]",
+                    '6 +    add_index :cases, %i[provider_id last_digested_at]',
                 ),
                 file('app/models/case.rb', '3 +  belongs_to :provider'),
             ],
@@ -403,6 +521,9 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         });
         expect(prUser).toContain('add_index :cases');
         expect(prUser).toContain('belongs_to :provider');
+        expect(prUser).toContain('Incremental round');
+        expect(prUser).toContain('````\n"src/odd\\n```.ts"\n````');
+        expect(prUser).not.toMatch(/full diff of every/i);
     });
 
     it('degrades an over-budget file to a name-only marker in the PR shard (never silently)', async () => {
@@ -437,9 +558,7 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         const run: RunJudge = async ({ filename }) => {
             n++;
             if (filename === 'src/a.ts') throw new Error('llm blew up');
-            return [
-                { ruleId: 1, suggestionContent: 'x' } as RawShardViolation,
-            ];
+            return [{ ruleId: 1, suggestionContent: 'x' } as RawShardViolation];
         };
         const res = await judgeKodyRulesSharded({
             changedFiles: [file('src/a.ts', '1 +x'), file('src/b.ts', '1 +y')],
@@ -492,7 +611,12 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
             await judgeKodyRulesSharded({
                 changedFiles: [file('src/a.ts', '1 +const x: any = 1;')],
                 rules: [
-                    { uuid: 'r1', title: 'no any', rule: 'no any', path: '**/*.ts' },
+                    {
+                        uuid: 'r1',
+                        title: 'no any',
+                        rule: 'no any',
+                        path: '**/*.ts',
+                    },
                 ],
                 runJudge: run,
                 languageLabel: 'Portuguese (Brazil)',
@@ -536,7 +660,12 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
             };
             const changedFiles = [file('src/a.ts', '1 +const x: any = 1;')];
             const rules = [
-                { uuid: 'r1', title: 'no any', rule: 'no any', path: '**/*.ts' },
+                {
+                    uuid: 'r1',
+                    title: 'no any',
+                    rule: 'no any',
+                    path: '**/*.ts',
+                },
             ];
             await judgeKodyRulesSharded({
                 changedFiles,
@@ -573,7 +702,11 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
                     scope: KodyRulesScope.PULL_REQUEST,
                 },
             ];
-            await judgeKodyRulesSharded({ changedFiles, rules, runJudge: runA });
+            await judgeKodyRulesSharded({
+                changedFiles,
+                rules,
+                runJudge: runA,
+            });
             await judgeKodyRulesSharded({
                 changedFiles,
                 rules,
@@ -598,7 +731,7 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
 
         // #2020: a violation repeated after the code moved to another file
         // must still be recognized — every shard sees the PR's history.
-        it('gives the FILE shard the PR\'s whole history, not only its own file', async () => {
+        it("gives the FILE shard the PR's whole history, not only its own file", async () => {
             let fileUser = '';
             const run: RunJudge = async ({ filename, user }) => {
                 if (filename === 'src/a.ts') fileUser = user;
@@ -609,7 +742,10 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
                 rules: [{ uuid: 'r1', title: 't', rule: 'r', path: '**/*.ts' }],
                 runJudge: run,
                 previousDecisions: [
-                    decision({ relevantFile: 'src/a.ts', suggestionContent: 'SAME FILE' }),
+                    decision({
+                        relevantFile: 'src/a.ts',
+                        suggestionContent: 'SAME FILE',
+                    }),
                     decision({
                         suggestionId: 'sug-2',
                         relevantFile: 'src/other.ts',
@@ -625,21 +761,46 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         // #2039: round A was a Kody Rule finding; a rule finding that revises an
         // earlier suggestion must be able to say which one.
         it('a violation can name the earlier suggestion it revises; null means none', async () => {
-            const run: RunJudge = async () => [
-                { ruleId: 1, relevantLinesStart: 1, relevantLinesEnd: 1, suggestionContent: 'revises', improvedCode: 'y', revisesSuggestionId: 'sug-1' },
-                { ruleId: 1, relevantLinesStart: 1, relevantLinesEnd: 1, suggestionContent: 'fresh', improvedCode: 'z', revisesSuggestionId: null },
-            ] as RawShardViolation[];
+            const run: RunJudge = async () =>
+                [
+                    {
+                        ruleId: 1,
+                        relevantLinesStart: 1,
+                        relevantLinesEnd: 1,
+                        suggestionContent: 'revises',
+                        improvedCode: 'y',
+                        revisesSuggestionId: 'sug-1',
+                    },
+                    {
+                        ruleId: 1,
+                        relevantLinesStart: 1,
+                        relevantLinesEnd: 1,
+                        suggestionContent: 'fresh',
+                        improvedCode: 'z',
+                        revisesSuggestionId: null,
+                    },
+                ] as RawShardViolation[];
             const out = await judgeKodyRulesSharded({
                 changedFiles: [file('src/a.ts', '1 +x')],
                 rules: [{ uuid: 'r1', title: 't', rule: 'r', path: '**/*.ts' }],
                 runJudge: run,
                 previousDecisions: [decision({ relevantFile: 'src/a.ts' })],
             });
-            const byText = Object.fromEntries(out.violations.map((v) => [v.suggestionContent, v]));
+            const byText = Object.fromEntries(
+                out.violations.map((v) => [v.suggestionContent, v]),
+            );
             expect(byText.revises.revisesSuggestionId).toBe('sug-1');
             expect('revisesSuggestionId' in byText.fresh).toBe(false);
             expect(shardViolationsWireSchema.jsonSchema).toMatchObject({
-                properties: { violations: { items: { required: expect.arrayContaining(['revisesSuggestionId']) } } },
+                properties: {
+                    violations: {
+                        items: {
+                            required: expect.arrayContaining([
+                                'revisesSuggestionId',
+                            ]),
+                        },
+                    },
+                },
             });
         });
 
@@ -661,7 +822,10 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
                 ],
                 runJudge: run,
                 previousDecisions: [
-                    decision({ relevantFile: 'src/a.ts', suggestionContent: 'FILE-LEVEL decision' }),
+                    decision({
+                        relevantFile: 'src/a.ts',
+                        suggestionContent: 'FILE-LEVEL decision',
+                    }),
                     decision({
                         suggestionId: 'sug-2',
                         relevantFile: undefined,
@@ -743,7 +907,25 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
 
 describe('judgeKodyRulesSharded — input edge cases', () => {
     it('runs no shard for an empty PR or an empty rule set', async () => {
-        const empty = { violations: [], shardsRun: 0, shardsErrored: 0 };
+        const empty = {
+            violations: [],
+            shardsRun: 0,
+            shardsErrored: 0,
+            referenceStats: {
+                shards: 0,
+                entries: 0,
+                chars: 0,
+                perUnitCopies: 0,
+            },
+            promptCacheStats: {
+                fileShards: 0,
+                groups: 0,
+                sharedGroups: 0,
+                siblings: 0,
+                siblingsAfterLeader: 0,
+                siblingsEarly: 0,
+            },
+        };
         const noFiles = fakeJudge({});
         expect(
             await judgeKodyRulesSharded({
@@ -812,7 +994,9 @@ describe('judgeKodyRulesSharded — input edge cases', () => {
             rules: [prRule],
             runJudge: runOmit,
         });
-        expect(includedPrompt).not.toContain('diff omitted — PR diff budget exceeded');
+        expect(includedPrompt).not.toContain(
+            'diff omitted — PR diff budget exceeded',
+        );
         expect(omittedPrompt).toContain(
             "## file: 'src/over.ts' (diff omitted — PR diff budget exceeded)",
         );
@@ -847,20 +1031,26 @@ describe('#1831 — the file-shard prompt asks for a complete, applicable findin
         // language for the diff block. #1831 needs a detector-derived finding to
         // carry an applicable improvedCode; those now come through this shard,
         // so asking here fixes the whole stream.
-        return captureUser([{ uuid: 'r1', title: 't', rule: 'no nil compare' }]).then((user) => {
+        return captureUser([
+            { uuid: 'r1', title: 't', rule: 'no nil compare' },
+        ]).then((user) => {
             expect(user).toContain('"improvedCode"');
             expect(user).toContain('"language"');
             // null stays legal: a rule like "use the structured logger" has no
             // line-level replacement the model can write without knowing the
             // project's logger, and inventing one is worse than omitting it.
-            expect(user).toMatch(/use null only when the fix cannot be expressed/);
+            expect(user).toMatch(
+                /use null only when the fix cannot be expressed/,
+            );
         });
     });
 
     it('tells the model to strip the diff prefix from existingCode', () => {
         // Without this, models copy the shard line verbatim — `266 +  console.log(`
         // — and the '+' leaks into the published comment and into anchoring.
-        return captureUser([{ uuid: 'r1', title: 't', rule: 'no nil compare' }]).then((user) => {
+        return captureUser([
+            { uuid: 'r1', title: 't', rule: 'no nil compare' },
+        ]).then((user) => {
             expect(user).toMatch(/strip the line-number and '\+' prefix/);
         });
     });
@@ -868,7 +1058,9 @@ describe('#1831 — the file-shard prompt asks for a complete, applicable findin
     it('keeps the candidate block out of a purely semantic shard', () => {
         // No detector rules in the review = byte-identical prompt to before
         // #1831, so nothing regresses for the orgs that have no T0 rules.
-        return captureUser([{ uuid: 'r1', title: 't', rule: 'no nil compare' }]).then((user) => {
+        return captureUser([
+            { uuid: 'r1', title: 't', rule: 'no nil compare' },
+        ]).then((user) => {
             expect(user).not.toContain('<Candidates>');
         });
     });
@@ -910,7 +1102,8 @@ describe('#1826 — the file shard receives the PR intent', () => {
 
     it('carries the PR title into the file-shard prompt', async () => {
         const user = await captureFileUser({
-            prTitle: 'refactor(orders): move date formatting to the shared helper',
+            prTitle:
+                'refactor(orders): move date formatting to the shared helper',
             prBody: 'Drop the inline toLocaleDateString call.',
         });
         expect(user).toContain(
@@ -920,7 +1113,10 @@ describe('#1826 — the file shard receives the PR intent', () => {
 
     it('truncates a description at the 1,000-character budget AND marks the cut', async () => {
         const body = 'x'.repeat(3000);
-        const user = await captureFileUser({ prTitle: 'fix: slider', prBody: body });
+        const user = await captureFileUser({
+            prTitle: 'fix: slider',
+            prBody: body,
+        });
 
         expect(user).toContain(`Description: ${'x'.repeat(1000)}\n`);
         expect(user).toContain('… (description truncated at 1000 characters)');
@@ -930,7 +1126,10 @@ describe('#1826 — the file shard receives the PR intent', () => {
 
     it('keeps a description at exactly the budget whole and unmarked', async () => {
         const body = 'y'.repeat(1000);
-        const user = await captureFileUser({ prTitle: 'fix: slider', prBody: body });
+        const user = await captureFileUser({
+            prTitle: 'fix: slider',
+            prBody: body,
+        });
 
         expect(user).toContain(`Description: ${body}`);
         expect(user).not.toContain('description truncated');
@@ -956,8 +1155,13 @@ describe('#1826 — the file shard receives the PR intent', () => {
         expect(withEmptyStrings).toBe(withNeither);
         expect(withWhitespace).toBe(withNeither);
     });
+});
 
-    it('leaves the PR-scope shard prompt unchanged', async () => {
+// ── QA 2026-11-21: a PR-level rule reads the whole description ──────────────
+// A rule about the description ("has a test plan section") was judged on its
+// first 1,000 characters, so a section further down read as missing.
+describe('the PR-scope shard reads the whole description', () => {
+    const capturePrUser = async (prBody: string) => {
         let prUser = '';
         const runJudge: RunJudge = async ({ filename, user }) => {
             if (filename === null) prUser = user;
@@ -968,19 +1172,60 @@ describe('#1826 — the file shard receives the PR intent', () => {
             rules: [
                 {
                     uuid: 'pr1',
-                    title: 'must have tests',
-                    rule: 'every PR needs a test',
+                    title: 'Test plan in the description',
+                    rule: 'The PR description has a "Test plan" section.',
                     scope: KodyRulesScope.PULL_REQUEST,
                 },
             ],
             runJudge,
             prTitle: 'fix: slider',
-            prBody: 'z'.repeat(3000),
+            prBody,
         });
-        // The PR shard's own bound is an unmarked slice; #1826 did not touch it.
+        return prUser;
+    };
+
+    it('keeps a section that starts past the 1,000th character', async () => {
+        const body = `${'Context. '.repeat(200)}\n## Test plan\nRan the suite.`;
+        const prUser = await capturePrUser(body);
+
         expect(prUser).toContain('<PR title="fix: slider">');
-        expect(prUser).toContain(`Description: ${'z'.repeat(1000)}`);
-        expect(prUser).not.toContain('description truncated');
+        expect(prUser).toContain(`\n\`\`\`\n${body}\n\`\`\`\n`);
+        expect(prUser).not.toContain('The description was cut');
+    });
+
+    it('cuts at PR_DESCRIPTION_BUDGET_CHARS and says so outside the description', async () => {
+        const prUser = await capturePrUser(
+            'z'.repeat(PR_DESCRIPTION_BUDGET_CHARS + 500),
+        );
+
+        expect(prUser).toContain(
+            `${'z'.repeat(PR_DESCRIPTION_BUDGET_CHARS)}\n\`\`\`\nThe description was cut at ${PR_DESCRIPTION_BUDGET_CHARS} characters`,
+        );
+        expect(prUser).not.toContain(
+            'z'.repeat(PR_DESCRIPTION_BUDGET_CHARS + 1),
+        );
+    });
+
+    it('keeps a pasted cut note inside the description, where it reports nothing', async () => {
+        const note = `The description was cut at ${PR_DESCRIPTION_BUDGET_CHARS} characters: the rest was not shown, so nothing can be judged missing from it.`;
+        const body = `Short summary.\n\`\`\`\n${note}`;
+        const prUser = await capturePrUser(body);
+
+        const fence = '````';
+        expect(prUser).toContain(`${fence}\n${body}\n${fence}\n`);
+        expect(
+            prUser.slice(prUser.indexOf(`${body}\n${fence}`) + body.length),
+        ).not.toContain('The description was cut');
+    });
+
+    it('reports the length it kept when the cut backs off a surrogate pair', async () => {
+        const prUser = await capturePrUser(
+            `${'a'.repeat(PR_DESCRIPTION_BUDGET_CHARS - 1)}😀${'b'.repeat(10)}`,
+        );
+
+        expect(prUser).toContain(
+            `The description was cut at ${PR_DESCRIPTION_BUDGET_CHARS - 1} characters`,
+        );
     });
 });
 
@@ -1216,9 +1461,7 @@ describe('#1826 — the file shard is shown the retrieved context', () => {
 
     it('renders each slice with its label and content', async () => {
         const user = await captureFileUser({
-            contextSlices: new Map([
-                ['src/orders/order-mapper.ts', [slice()]],
-            ]),
+            contextSlices: new Map([['src/orders/order-mapper.ts', [slice()]]]),
         });
 
         expect(user).toContain('<Context>');
@@ -1231,9 +1474,7 @@ describe('#1826 — the file shard is shown the retrieved context', () => {
 
     it('forbids reporting a violation that rests on ANOTHER file (KRC-18)', async () => {
         const user = await captureFileUser({
-            contextSlices: new Map([
-                ['src/orders/order-mapper.ts', [slice()]],
-            ]),
+            contextSlices: new Map([['src/orders/order-mapper.ts', [slice()]]]),
         });
 
         expect(user).toContain(
@@ -1442,7 +1683,11 @@ describe('#1826 step 1 — the file shard carries its file whole', () => {
                 file('src/other.ts', '1 +const a = 1;'),
             ],
             rules: [
-                { uuid: 'r1', title: 'No unused imports', rule: 'Remove unused imports.' },
+                {
+                    uuid: 'r1',
+                    title: 'No unused imports',
+                    rule: 'Remove unused imports.',
+                },
             ],
             runJudge,
             fileContents: new Map([[CARD_SCSS, CARD_FILE]]),
@@ -1580,7 +1825,8 @@ describe('judgeKodyRulesSharded — findings that propose no change', () => {
     const rules = [
         { uuid: 'r1', title: 'no any', rule: 'no any', path: '**/*.ts' },
     ];
-    const judgeReturning = (raw: Partial<RawShardViolation>): RunJudge =>
+    const judgeReturning =
+        (raw: Partial<RawShardViolation>): RunJudge =>
         async () => [
             {
                 ruleId: 1,
@@ -1593,7 +1839,9 @@ describe('judgeKodyRulesSharded — findings that propose no change', () => {
 
     it('drops a finding whose improvedCode is the existing code unchanged', async () => {
         const res = await judgeKodyRulesSharded({
-            changedFiles: [file('src/a.ts', "3 +import type { X } from './x';")],
+            changedFiles: [
+                file('src/a.ts', "3 +import type { X } from './x';"),
+            ],
             rules,
             runJudge: judgeReturning({
                 suggestionContent: 'No violation: this is a type-only import.',
@@ -1664,18 +1912,29 @@ describe('judgeKodyRulesSharded — findings on lines the PR did not add (shadow
         { filename: 'src/a.ts' },
     );
     // The dataset form the kody-rules eval feeds.
-    const datasetPatch = ['25  const a = 1;', '26  async load(raw: any[]) {', '27 +  const b = 2;'].join('\n');
+    const datasetPatch = [
+        '25  const a = 1;',
+        '26  async load(raw: any[]) {',
+        '27 +  const b = 2;',
+    ].join('\n');
 
-    const judgeAt = (line: number, end?: number): RunJudge => async () => [
-        {
-            ruleId: 1,
-            relevantLinesStart: line,
-            relevantLinesEnd: end ?? line,
-            suggestionContent: 'the import is unused now',
-            oneSentenceSummary: 'unused import',
-        } as RawShardViolation,
-    ];
-    const diffOnlyRule = { uuid: 'r1', title: 'no any', rule: 'no any', path: '**/*.ts' };
+    const judgeAt =
+        (line: number, end?: number): RunJudge =>
+        async () => [
+            {
+                ruleId: 1,
+                relevantLinesStart: line,
+                relevantLinesEnd: end ?? line,
+                suggestionContent: 'the import is unused now',
+                oneSentenceSummary: 'unused import',
+            } as RawShardViolation,
+        ];
+    const diffOnlyRule = {
+        uuid: 'r1',
+        title: 'no any',
+        rule: 'no any',
+        path: '**/*.ts',
+    };
     const run = async (
         patch: string,
         runJudge: RunJudge,
@@ -1701,20 +1960,23 @@ describe('judgeKodyRulesSharded — findings on lines the PR did not add (shadow
     it.each([
         ['production', productionPatch],
         ['dataset', datasetPatch],
-    ])('keeps a finding that cites only unchanged lines, and logs it (%s diff)', async (_name, patch) => {
-        const { res, shadow } = await run(patch, judgeAt(26));
-        expect(res.violations).toHaveLength(1);
-        expect(shadow).toHaveLength(1);
-        expect(shadow[0].metadata.findings).toEqual([
-            expect.objectContaining({
-                ruleUuid: 'r1',
-                linesStart: 26,
-                linesEnd: 26,
-                summary: 'unused import',
-                text: 'the import is unused now',
-            }),
-        ]);
-    });
+    ])(
+        'keeps a finding that cites only unchanged lines, and logs it (%s diff)',
+        async (_name, patch) => {
+            const { res, shadow } = await run(patch, judgeAt(26));
+            expect(res.violations).toHaveLength(1);
+            expect(shadow).toHaveLength(1);
+            expect(shadow[0].metadata.findings).toEqual([
+                expect.objectContaining({
+                    ruleUuid: 'r1',
+                    linesStart: 26,
+                    linesEnd: 26,
+                    summary: 'unused import',
+                    text: 'the import is unused now',
+                }),
+            ]);
+        },
+    );
 
     it('does not log a finding on an added line', async () => {
         const { res, shadow } = await run(productionPatch, judgeAt(27));
@@ -1739,7 +2001,11 @@ describe('judgeKodyRulesSharded — findings on lines the PR did not add (shadow
 
     it('does not log a finding without lines', async () => {
         const { res, shadow } = await run(productionPatch, async () => [
-            { ruleId: 1, suggestionContent: 'x', oneSentenceSummary: 's' } as RawShardViolation,
+            {
+                ruleId: 1,
+                suggestionContent: 'x',
+                oneSentenceSummary: 's',
+            } as RawShardViolation,
         ]);
         expect(res.violations).toHaveLength(1);
         expect(shadow).toEqual([]);

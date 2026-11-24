@@ -285,6 +285,18 @@ export function inspectFindingsResult(
         normalized = { reasoning, reason, suggestions: [finding] };
         recoveries.push('wrapped-single-finding');
     }
+    // One finding under `suggestions`, without the array around it.
+    const lone = isObject ? normalized.suggestions : undefined;
+    if (
+        lone &&
+        typeof lone === 'object' &&
+        !Array.isArray(lone) &&
+        typeof (lone as Record<string, unknown>).relevantFile === 'string' &&
+        typeof (lone as Record<string, unknown>).suggestionContent === 'string'
+    ) {
+        normalized = { ...normalized, suggestions: [lone] };
+        recoveries.push('wrapped-single-suggestion');
+    }
     const meta = {
         organizationId: telemetryMetadata?.organizationId,
         modelId: telemetryMetadata?.modelId,

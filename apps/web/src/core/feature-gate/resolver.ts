@@ -1,4 +1,7 @@
-import { evaluateCatalogGate } from "@libs/feature-gate/domain/decision";
+import {
+    evaluateCatalogGate,
+    isBetaFeaturesEnabled,
+} from "@libs/feature-gate/domain/decision";
 import { FEATURE_KEYS } from "@libs/feature-gate/domain/feature-keys";
 import type { ReleaseTrack } from "@libs/feature-gate/domain/release-track";
 import { PostHog } from "posthog-node";
@@ -68,10 +71,14 @@ export const isFeatureEnabled = async ({
                 entry?.stage === "beta" && !releaseTrackBeta
                     ? "beta"
                     : releaseTrack,
-            selfHostedBetaEnabled:
-                releaseTrackBeta || entry?.stage !== "beta"
-                    ? process.env.BETA_FEATURES === "true"
-                    : true,
+            // Self-hosted beta stays behind BETA_FEATURES whatever the
+            // feature: the release track only decides CLOUD beta, since the
+            // `track` input is ignored for a self-hosted audience (#2425).
+            // Read per call through the shared parser, so a flip of the env
+            // takes effect here and in the lib adapter at the same moment.
+            selfHostedBetaEnabled: isBetaFeaturesEnabled(
+                process.env.BETA_FEATURES,
+            ),
         });
 
         if (decision === "deny") return false;

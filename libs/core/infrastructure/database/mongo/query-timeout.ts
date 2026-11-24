@@ -64,3 +64,11 @@ export const __test__ = {
     DEFAULT_MONGO_QUERY_MAX_TIME_MS,
     MAX_MONGO_QUERY_MAX_TIME_MS,
 };
+
+/**
+ * Cap for the reads that legitimately walk a large slice of a collection in
+ * one go (batch scans behind a cursor, the credit sweep over a month of spans).
+ * Long enough for those, short enough that a degenerate plan cannot hold the
+ * primary for the 17 minutes the uncapped ones did.
+ */
+export const MONGO_LONG_QUERY_MAX_TIME_MS = 5 * 60_000;

@@ -12,9 +12,8 @@ If you want to run Kody with a GitHub App, you need to create one. This app enab
 
 Have your application domains ready:
 
-- **WEB_DOMAIN**: Your Frontend URL (e.g., `https://app.yourdomain.com` or `http://localhost:3000`)
-- **API_DOMAIN**: Your Backend/API URL (e.g., `https://api.yourdomain.com` or `http://localhost:3000` for monorepo/proxy setups)
-- **WEBHOOK_DOMAIN** (optional): Public domain for webhooks (e.g., `https://kodus-webhooks.yourdomain.com`). If you route `/.../webhook` on the API domain, you can use `API_DOMAIN`.
+- **WEB_DOMAIN**: Your Frontend URL (e.g., `https://app.yourdomain.com` or `http://localhost:3000`). Set `NEXTAUTH_URL` and `API_FRONTEND_URL` in your `.env` to the same URL.
+- **WEBHOOK_DOMAIN**: Public URL that reaches the webhooks service (e.g., `https://kodus-webhooks.yourdomain.com`). Your API domain works only if its reverse proxy routes `/github/webhook` to that service.
 
 ## Step 1: Create the GitHub App
 
@@ -22,11 +21,7 @@ Have your application domains ready:
 2. Click **New GitHub App**
 3. Fill in the basic information (Name, Homepage URL) according to your preference
 
-<img src="https://success.skyhighsecurity.com/@api/deki/files/66490/Click_newGithubApp.png?revision=1" alt="GitHub Apps settings page highlighting the New GitHub App button" />
-
 ## Step 2: Configure Callback and Setup URLs
-
-<img src="https://kodus.io/wp-content/uploads/2026/01/githuapp-urls.gif" alt="GitHub App Webhook" />
 
 This step is critical to ensure installation and redirection work properly. Fill in the fields below, replacing `WEB_DOMAIN` with your actual URL:
 
@@ -35,7 +30,7 @@ This step is critical to ensure installation and redirection work properly. Fill
   WEB_DOMAIN/api/auth/callback/github
   ```
   This URL is used to complete the authorization flow.
-  Keep **Allow wildcard matching** checked on it: when someone connects the app, GitHub confirms they can access the installation and sends them back to `WEB_DOMAIN/api/auth/callback/github/installation`, a subdirectory of this URL. If you turn wildcard matching off, add that URL as a second Callback URL.
+  Keep **Allow wildcard matching** checked on it: when someone connects the app, GitHub confirms they can access the installation and sends them back to `WEB_DOMAIN/api/auth/callback/github/installation`, a subdirectory of this URL. If you turn wildcard matching off, add that URL as a second Callback URL. Kodus builds that return URL from `API_FRONTEND_URL`, or from `NEXTAUTH_URL` when `API_FRONTEND_URL` is empty, so it must match your web URL. The installer's `.env.example` sets `API_FRONTEND_URL=http://localhost:3000`; change it.
 
 - **Setup URL**:
   ```
@@ -59,10 +54,11 @@ The webhook notifies Kodus about events in your pull requests.
   ```
 
 - Make sure the **Active** option is checked
+- Leave **Secret** empty
 
-## Configure repository permissions and events
+## Step 4: Set permissions and subscribe to events
 
-Under **Repository permissions**, configure the following access for the enabled features. Do not leave all permissions at **No access**.
+Under **Repository permissions**, set:
 
 | Permission | Access |
 | --- | --- |
@@ -70,15 +66,28 @@ Under **Repository permissions**, configure the following access for the enabled
 | Pull requests | Read and write |
 | Issues | Read and write |
 | Checks | Read and write |
+| Commit statuses | Read-only |
 | Metadata | Read-only |
 
-Contents write access is only needed for features that commit repository files; read-only is sufficient for reading code. Install the app on the intended repositories and approve any newly requested permissions on existing installations.
+Under **Organization permissions**, set **Members** to **Read-only**. Kody uses it to list the organization's members, for example in the PR author filters on **Repositories**.
 
-Subscribe to **Pull request**, **Pull request review comment**, **Issue comment**, and **Push**. The current webhook handler accepts these four event types; other events may return 200 while being ignored.
+Contents write access is only needed for features that commit repository files; read-only is sufficient for reading code. Commit statuses is read only to use your CI results as review evidence; without it Kody sees check runs only. Install the app on the intended repositories and approve any newly requested permissions on existing installations.
 
-## Step 4: Collect Credentials and Add to .env
+Under **Subscribe to events**, select:
 
-<img src="https://kodus.io/wp-content/uploads/2026/01/gthubapp-env.gif" alt="GitHub App Webhook" />
+- **Pull request**
+- **Pull request review comment**
+- **Issue comment**
+- **Push**
+- **Repository** (optional): lets Kody set up a repository created after the app was installed with access to all repositories as soon as GitHub reports it, when [Review every repository](/en/how_to_use/code_review/configs/review_all_repositories) is on.
+
+Kody ignores other events. GitHub still receives a `200` for them.
+
+### Merge queue
+
+Kody only acts on a **Push** to a merge queue branch (`gh-readonly-queue/...`) and ignores every other push. GitHub's merge queue tests each queued PR on that branch. On that push, Kody copies the PR's last finished `Kody Code Review` result onto the queue commit, so the check can stay required with a merge queue. No new review runs, and no permission beyond **Checks** is needed. If the PR has no finished Kody review, the check fails and the queue removes the PR; see [Troubleshooting](/en/how_to_use/code_review/troubleshooting).
+
+## Step 5: Collect Credentials and Add to .env
 
 Now you need to get the credentials generated by GitHub and add them to your Kodus environment variables.
 
@@ -89,6 +98,15 @@ At the top of your app's "About" page, copy the **App ID**.
 Add to your `.env`:
 ```
 API_GITHUB_APP_ID=your_app_id_here
+```
+
+### Client ID
+
+On the same page, copy the **Client ID**.
+
+Add to your `.env`:
+```
+GLOBAL_GITHUB_CLIENT_ID=your_client_id_here
 ```
 
 ### Client Secret
@@ -113,6 +131,8 @@ Add to your `.env`:
 API_GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY----- ..."
 ```
 
+Kodus accepts the key with its line breaks, or on one line with `\n` between the lines.
+
 ### Installation URL
 
 Open your GitHub App and click **Install App**. Copy the URL from the browser address bar (it looks like `https://github.com/apps/<app-slug>/installations/new`).
@@ -128,6 +148,7 @@ At the end, your configuration file should contain:
 
 ```bash
 API_GITHUB_APP_ID=123456
+GLOBAL_GITHUB_CLIENT_ID=Iv1.example123
 API_GITHUB_CLIENT_SECRET=example_secret_123
 API_GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY----- ..."
 WEB_GITHUB_INSTALL_URL="https://github.com/apps/your-app/installations/new"
@@ -135,13 +156,19 @@ WEB_GITHUB_INSTALL_URL="https://github.com/apps/your-app/installations/new"
 
 Click **Save Changes** on GitHub and restart your Kodus application to apply the changes.
 
-
 ## Verify the connection
 
-The webhook URL must reach the webhooks service, not the frontend login page. Use `API_DOMAIN` only if its reverse proxy routes `/github/webhook` to that service; do not assume `WEB_DOMAIN` or any 200/307 response proves correct delivery.
+The webhook URL must reach the webhooks service, not the frontend login page. A `200` or `307` response alone does not prove correct delivery; see [How to fix webhook issues](/en/knowledge_base/how-to-fix-webhook-issues) for a request that does.
 
 Keep **Redirect on update** enabled. After installing or changing repository access, finish the **Setup URL** browser round trip back to Kodus. A successful `ping` or an ignored `installation` event does not create the Kodus integration.
 
-In Kodus, open **Repositories** in the sidebar (formerly **Git Settings**) and confirm that the expected repository is listed. Then open a test pull request and check both the GitHub delivery response and Kodus webhook/worker logs. If connection is missing, check installation repository access, approved permissions, the Setup URL, and proxy routing.
+In Kodus, open **Repositories** in the sidebar and confirm that the expected repository is listed. Then open a test pull request and check both the GitHub delivery response and the Kodus webhooks and worker logs.
+
+If the connection is missing:
+
+- The person connecting must be able to see the installation on GitHub, for example an organization owner. Otherwise Kodus refuses the link.
+- An installation links to one Kodus organization. Connecting it to a second one is refused.
+- Start and finish the connection in the same browser within 10 minutes. After that GitHub's authorization expires and you start again.
+- Check the installation's repository access, the approved permissions, the Setup URL, the Callback URL and the proxy routing.
 
 [GitHub registration reference](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app).

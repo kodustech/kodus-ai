@@ -96,6 +96,34 @@ const inertParams = () => ({
     tools: new InMemoryToolRegistry([]),
 });
 
+it('reads the preceding branch when the requested range starts inside a condition', async () => {
+    const lines = Array.from({ length: 52 }, (_, i) => `line ${i + 1}`);
+    lines[28] = '    previous.status === "FAILED" ||';
+    lines[29] = '    previous.status === "PAUSED";';
+    const execute = jest.fn(async ({ startLine, endLine }) => ({
+        output: lines.slice(startLine - 1, endLine).join('\n'),
+    }));
+    const spec = buildVerifierAgentSpec({
+        ...inertParams(),
+        tools: new InMemoryToolRegistry([
+            {
+                name: 'readFile',
+                description: 'read source',
+                inputSchema: {},
+                execute,
+            },
+        ]),
+    });
+    const result = await spec.tools
+        .get('readFile')!
+        .execute(
+            { path: 'resume.ts', startLine: 30, endLine: 31 },
+            { runId: 'verify' },
+        );
+    expect(result.output).toContain('previous.status === "FAILED"');
+    expect(result.output).toContain('previous.status === "PAUSED"');
+});
+
 // =========================================================================
 // LAYER 1 — HAPPY PATH: correct schema shape → exact Verdict
 // =========================================================================
@@ -618,7 +646,7 @@ describe('backfill A — output-shape zoo (off-schema returns)', () => {
 // ---- B. Semantic-but-wrong -----------------------------------------------
 describe('backfill B — semantic-but-wrong value encodings', () => {
     // Row 21: boolean as string.
-    it.failing(
+    it(
         'row21: recovers keep:false from keep:"false" (boolean-as-string)',
         () => {
             expect(
@@ -629,7 +657,7 @@ describe('backfill B — semantic-but-wrong value encodings', () => {
     );
 
     // Row 22: boolean as yes/no.
-    it.failing(
+    it(
         'row22: recovers keep:false from keep:"no" (boolean-as-yes/no)',
         () => {
             expect(
@@ -639,7 +667,7 @@ describe('backfill B — semantic-but-wrong value encodings', () => {
     );
 
     // Row 23: boolean as number.
-    it.failing(
+    it(
         'row23: recovers keep:false from keep:0 (boolean-as-number)',
         () => {
             expect(
@@ -1225,4 +1253,39 @@ describe('verifier contract — verdict written as TEXT (#1937)', () => {
             { name: 'readFile', args: { path: 'a.ts' }, result: 'hit' },
         ]);
     });
+});
+
+describe('readFile range in verifier tools', () => {
+    it.each([
+        [100, 101, 80, 111],
+        [100, 200, 100, 200],
+    ])(
+        'preserves the requested tail for readFile(%i, %i)',
+        async (startLine, endLine, start, end) => {
+            const execute = jest.fn(async () => ({ output: '' }));
+            const tools = {
+                list: () => [
+                    {
+                        name: 'readFile',
+                        description: '',
+                        inputSchema: {},
+                        execute,
+                    },
+                ],
+            } as any;
+            const spec = buildVerifierAgentSpec({
+                systemPrompt: 's',
+                modelId: 'm',
+                tools,
+            });
+            await spec.tools
+                .get('readFile')!
+                .execute({ path: 'a', startLine, endLine }, {} as any);
+            expect(execute).toHaveBeenCalledWith(
+                { path: 'a', startLine: start, endLine: end },
+                {},
+            );
+        },
+    );
+
 });

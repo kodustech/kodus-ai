@@ -1,5 +1,5 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 
 import { SendOrgReportUseCase } from '@libs/cockpit/application/use-cases/send-org-report.use-case';
 import { environment } from '@libs/ee/configs/environment';
@@ -28,7 +28,7 @@ export class OrgReportCron {
         private readonly organizationService: IOrganizationService,
     ) {}
 
-    @Cron(process.env.API_CRON_ORG_REPORT || '0 9 1 * *', {
+    @GatedCron(process.env.API_CRON_ORG_REPORT || '0 9 1 * *', {
         name: 'org-report',
         timeZone: 'UTC',
     })

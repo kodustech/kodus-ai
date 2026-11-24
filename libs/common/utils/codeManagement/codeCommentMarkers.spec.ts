@@ -13,7 +13,9 @@ import {
     normalizeReviewDirective,
     isReviewCommand,
     isForceReviewCommand,
+    isHeavyReviewCommand,
     isKodyMentionNonReview,
+    requestedReviewModeOf,
 } from './codeCommentMarkers';
 
 describe('isReviewCommand', () => {
@@ -81,6 +83,20 @@ describe('isForceReviewCommand', () => {
             true,
         );
         expect(isForceReviewCommand('@KODY REVIEW --FORCE')).toBe(true);
+    });
+
+    it('matches --force anywhere on the first line, after other flags or focus text', () => {
+        expect(isForceReviewCommand('@kody review --heavy --force')).toBe(true);
+        expect(
+            isForceReviewCommand('@kody review the auth logic --force'),
+        ).toBe(true);
+        expect(
+            isForceReviewCommand('@mybot review --balanced --force', 'mybot'),
+        ).toBe(true);
+        expect(isForceReviewCommand('@kody review the forced retries')).toBe(
+            false,
+        );
+        expect(isForceReviewCommand('@kody review\n--force')).toBe(false);
     });
 
     it('rejects plain review commands, "force" mid-word and empty input', () => {
@@ -359,5 +375,161 @@ describe('normalizeReviewDirective (shared by the CLI --focus path)', () => {
         expect(normalizeReviewDirective('the `topCodes` sort logic')).toBe(
             'the `topCodes` sort logic',
         );
+    });
+});
+
+describe('isHeavyReviewCommand', () => {
+    it('matches --heavy in any position of a review command', () => {
+        expect(isHeavyReviewCommand('@kody review --heavy')).toBe(true);
+        expect(isHeavyReviewCommand('@kody review auth --heavy')).toBe(true);
+        expect(isHeavyReviewCommand('@kody review --heavy --force')).toBe(true);
+        expect(isHeavyReviewCommand('@kody start-review --heavy')).toBe(true);
+    });
+
+    it('does not match a bare `heavy`, a plain review or a non-command', () => {
+        expect(isHeavyReviewCommand('@kody review heavy checkout path')).toBe(
+            false,
+        );
+        expect(isHeavyReviewCommand('@kody review')).toBe(false);
+        expect(isHeavyReviewCommand('please run --heavy')).toBe(false);
+        expect(isHeavyReviewCommand(undefined)).toBe(false);
+    });
+
+    it('matches a custom bot username, keeping @kody as fallback', () => {
+        expect(isHeavyReviewCommand('@mybot review --heavy', 'mybot')).toBe(
+            true,
+        );
+        expect(isHeavyReviewCommand('@kody review --heavy', 'mybot')).toBe(
+            true,
+        );
+    });
+
+    it('leaves --heavy out of the review directive', () => {
+        expect(parseReviewDirective('@kody review --heavy the auth flow')).toBe(
+            'the auth flow',
+        );
+    });
+});
+
+describe('requestedReviewModeOf', () => {
+    it('reads --heavy and --balanced in any position of a review command', () => {
+        expect(requestedReviewModeOf('@kody review --heavy')).toBe('heavy');
+        expect(requestedReviewModeOf('@kody review --balanced')).toBe(
+            'balanced',
+        );
+        expect(requestedReviewModeOf('@kody review auth --balanced')).toBe(
+            'balanced',
+        );
+        expect(requestedReviewModeOf('@mybot review --balanced', 'mybot')).toBe(
+            'balanced',
+        );
+    });
+
+    it('lets --heavy win when both flags are passed', () => {
+        expect(requestedReviewModeOf('@kody review --balanced --heavy')).toBe(
+            'heavy',
+        );
+    });
+
+    it('asks for no mode without a flag, so the mode in settings applies', () => {
+        expect(requestedReviewModeOf('@kody review')).toBeUndefined();
+        expect(requestedReviewModeOf('@kody review --force')).toBeUndefined();
+        expect(
+            requestedReviewModeOf('@kody review balanced checkout path'),
+        ).toBeUndefined();
+        expect(requestedReviewModeOf(undefined)).toBeUndefined();
+    });
+
+    it('leaves --balanced out of the review directive', () => {
+        expect(
+            parseReviewDirective(
+                '@kody review --force --balanced the auth flow',
+            ),
+        ).toBe('the auth flow');
+        expect(
+            parseReviewDirective('@kody review the auth flow --balanced'),
+        ).toBe('the auth flow');
+    });
+});
+
+describe('review flags inside prose', () => {
+    it.each([
+        '@kody review check the --force-push path',
+        '@kody review the --forced flag',
+    ])('does not read %s as --force', (text) => {
+        expect(isForceReviewCommand(text)).toBe(false);
+    });
+
+    it('does not read --heavy-handed or --balanced-tree as a mode', () => {
+        expect(
+            requestedReviewModeOf('@kody review the --heavy-handed retry'),
+        ).toBeUndefined();
+        expect(
+            requestedReviewModeOf('@kody review the --balanced-tree insert'),
+        ).toBeUndefined();
+    });
+
+    it.each([
+        '@kody review --force, please',
+        '@kody review `--force`',
+        '@kody review (--force)',
+    ])('reads a flag followed by punctuation: %s', (text) => {
+        expect(isForceReviewCommand(text)).toBe(true);
+    });
+
+    it('keeps hyphenated focus words in the directive', () => {
+        expect(
+            parseReviewDirective('@kody review the API is well-balanced.'),
+        ).toBe('the API is well-balanced.');
+        expect(
+            requestedReviewModeOf('@kody review the API is well-balanced.'),
+        ).toBeUndefined();
+    });
+
+    it('reads --heavy followed by punctuation', () => {
+        expect(requestedReviewModeOf('@kody review `--heavy`')).toBe('heavy');
+        expect(requestedReviewModeOf('@kody review --balanced.')).toBe(
+            'balanced',
+        );
+    });
+
+    it('still reads the flags in any order, and keeps the prose ones in the directive', () => {
+        const text = '@kody review check the --force-push path --heavy --force';
+
+        expect(isForceReviewCommand(text)).toBe(true);
+        expect(requestedReviewModeOf(text)).toBe('heavy');
+        expect(parseReviewDirective(text)).toBe('check the --force-push path');
+    });
+});
+
+describe('--ultra', () => {
+    it('reads --ultra in any position, over --heavy and --balanced', () => {
+        expect(requestedReviewModeOf('@kody review --ultra')).toBe('ultra');
+        expect(requestedReviewModeOf('@kody start-review auth --ultra')).toBe(
+            'ultra',
+        );
+        expect(requestedReviewModeOf('@kody review --heavy --ultra')).toBe(
+            'ultra',
+        );
+        expect(requestedReviewModeOf('@mybot review --ultra', 'mybot')).toBe(
+            'ultra',
+        );
+    });
+
+    it('does not read a bare ultra or --ultra-fast as the flag', () => {
+        expect(
+            requestedReviewModeOf('@kody review ultra careful please'),
+        ).toBeUndefined();
+        expect(
+            requestedReviewModeOf('@kody review the --ultra-fast path'),
+        ).toBeUndefined();
+    });
+
+    it('leaves --ultra out of the review directive and keeps --force', () => {
+        expect(parseReviewDirective('@kody review --ultra')).toBeUndefined();
+        expect(
+            parseReviewDirective('@kody review --ultra --force the auth flow'),
+        ).toBe('the auth flow');
+        expect(isForceReviewCommand('@kody review --ultra --force')).toBe(true);
     });
 });

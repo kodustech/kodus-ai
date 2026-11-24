@@ -1,4 +1,11 @@
 import { createThreadId } from '@libs/common/utils/thread-id';
+import {
+    bitbucketWebhookSource,
+    forgejoWebhookSource,
+    githubWebhookSource,
+    gitlabWebhookSource,
+    type WebhookSource,
+} from '@libs/common/utils/webhooks/webhook-source-host';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
@@ -15,6 +22,13 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 import { WebhookContextService } from '@libs/platform/application/services/webhook-context.service';
+import {
+    bareId,
+    commenterCanWrite,
+    commenterOf,
+    commentRepositoryOf,
+    eventSenderOf,
+} from '@libs/platform/application/services/commenter-access';
 import {
     PermissionValidationService,
     ValidationErrorType,
@@ -46,6 +60,10 @@ import {
     IMessageClaimService,
     MESSAGE_CLAIM_SERVICE_TOKEN,
 } from '@libs/core/workflow/domain/contracts/message-claim.service.contract';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    type ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 
 import { PlatformResponsePolicyFactory } from './policies/platform-response.policy';
@@ -60,6 +78,7 @@ import {
     getOriginalKodyComment,
     getOthersReplies,
     prepareContext,
+    CONVERSATION_LICENSE_UNAVAILABLE_MESSAGE,
     CONVERSATION_PLAN_GATE_MESSAGE,
     isKodyComment,
     KODY_ACKNOWLEDGMENT_MESSAGE,
@@ -261,6 +280,12 @@ export class ChatWithKodyFromGitUseCase {
         private readonly businessLogicReplies?: BusinessLogicReplies,
         @Optional()
         private readonly webhookContextService?: WebhookContextService,
+
+        // Reads `conversation.implicitReplies` from the config cascade.
+        // Optional so lean wirings and specs still construct the use case.
+        @Optional()
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService?: ICodeBaseConfigService,
     ) {}
 
     async execute(params: WebhookParams): Promise<void> {
@@ -285,9 +310,23 @@ export class ChatWithKodyFromGitUseCase {
             claim = delivery.claim;
 
             const repository = this.getRepository(params);
+            // GitLab, Forgejo, GitHub Enterprise Server and Bitbucket Data
+            // Center repository ids are per instance: resolve the team on the
+            // instance that sent the comment.
+            const source =
+                params.platformType === PlatformType.FORGEJO
+                    ? forgejoWebhookSource(params.payload)
+                    : params.platformType === PlatformType.GITLAB
+                      ? gitlabWebhookSource(params.payload)
+                      : params.platformType === PlatformType.GITHUB
+                        ? githubWebhookSource(params.payload)
+                        : params.platformType === PlatformType.BITBUCKET
+                          ? bitbucketWebhookSource(params.payload)
+                          : undefined;
             const integrationConfig = await this.getIntegrationConfig(
                 params.platformType,
                 repository,
+                source,
             );
 
             // A repository connected in more than one organization: answer as
@@ -295,7 +334,11 @@ export class ChatWithKodyFromGitUseCase {
             // does, not as whichever integration is found first.
             const reviewing = this.webhookContextService
                 ? await this.webhookContextService
-                      .getContext(params.platformType, String(repository.id))
+                      .getContext(
+                          params.platformType,
+                          String(repository.id),
+                          source,
+                      )
                       .catch((error) => {
                           this.logger.warn({
                               message:
@@ -710,7 +753,7 @@ export class ChatWithKodyFromGitUseCase {
                 },
                 message,
                 sender: {
-                    login: replySender(params, this.getSender(params)).login,
+                    login: commenterOf(params).login,
                     // Asked only when someone tries to accept: listing members
                     // on every Kody mention costs a call per repository.
                     access: () =>
@@ -760,95 +803,22 @@ export class ChatWithKodyFromGitUseCase {
         organizationAndTeamData: OrganizationAndTeamData,
         repository: Repository,
     ): Promise<{ canWrite?: boolean; isAuthor: boolean }> {
-        const sender = replySender(params, this.getSender(params));
-        const isAuthor = isPullRequestAuthor(params, sender);
-        if (params.platformType === PlatformType.GITHUB) {
-            // The association rules out a contributor or a stranger, but
-            // COLLABORATOR and MEMBER come with read access too: ask for the
-            // permission.
-            const association = params.payload?.comment?.author_association;
-            if (
-                !sender.login ||
-                (typeof association === 'string' &&
-                    !['OWNER', 'MEMBER', 'COLLABORATOR'].includes(association))
-            ) {
-                return { isAuthor, canWrite: false };
-            }
-        }
-        if (
-            (params.platformType === PlatformType.GITHUB && sender.login) ||
-            (params.platformType === PlatformType.GITLAB && sender.id)
-        ) {
-            // GitLab's listed members include Guests and Reporters: ask for
-            // the level.
-            return {
-                isAuthor,
-                canWrite: await this.codeManagementService
-                    .userCanWrite(
-                        {
-                            organizationAndTeamData,
-                            repository: {
-                                id: String(repository.id),
-                                ...(params.platformType === PlatformType.GITHUB
-                                    ? {
-                                          name: repository.name,
-                                          owner: repository.owner,
-                                      }
-                                    : {}),
-                            },
-                            ...(params.platformType === PlatformType.GITHUB
-                                ? { login: sender.login }
-                                : { userId: sender.id as string | number }),
-                        },
-                        params.platformType,
-                    )
-                    .then((canWrite) => {
-                        if (canWrite === undefined) {
-                            throw new Error(
-                                `${params.platformType} could not say whether the commenter can write`,
-                            );
-                        }
-                        return canWrite;
-                    })
-                    .catch((error) => {
-                        this.logAccessFailure(
-                            error,
-                            params,
-                            organizationAndTeamData,
-                            repository,
-                        );
-                        throw error;
-                    }),
-            };
-        }
-        const members = await this.codeManagementService
-            .getListMembers(
-                { organizationAndTeamData },
-                params.platformType as PlatformType,
-            )
-            .catch((error) => {
-                this.logAccessFailure(
-                    error,
-                    params,
-                    organizationAndTeamData,
-                    repository,
-                );
-                throw error;
-            });
-        const id = bareId(sender.id);
-        const login = sender.login?.toLowerCase();
-        return {
-            isAuthor,
-            canWrite:
-                Array.isArray(members) &&
-                members.some(
-                    (m: { id?: unknown; name?: unknown }) =>
-                        (!!id && bareId(m.id) === id) ||
-                        (!!login &&
-                            typeof m.name === 'string' &&
-                            m.name.toLowerCase() === login),
-                ),
-        };
+        const isAuthor = isPullRequestAuthor(params, commenterOf(params));
+        const canWrite = await commenterCanWrite(
+            this.codeManagementService,
+            params,
+            organizationAndTeamData,
+            repository,
+        ).catch((error) => {
+            this.logAccessFailure(
+                error,
+                params,
+                organizationAndTeamData,
+                repository,
+            );
+            throw error;
+        });
+        return { isAuthor, canWrite };
     }
 
     /** A lookup that failed accepts nothing; the log says why. */
@@ -858,7 +828,7 @@ export class ChatWithKodyFromGitUseCase {
         organizationAndTeamData: OrganizationAndTeamData,
         repository: Repository,
     ): void {
-        const sender = replySender(params, this.getSender(params));
+        const sender = commenterOf(params);
         this.logger.error({
             message:
                 "Could not read the commenter's access: nothing was accepted",
@@ -1209,7 +1179,14 @@ export class ChatWithKodyFromGitUseCase {
                 normalizedComments,
                 params.platformType,
             );
-            const silence = implicitReplyGate(replyThread);
+            const silence =
+                implicitReplyGate(replyThread) ??
+                ((await this.implicitRepliesDisabled(
+                    organizationAndTeamData,
+                    repository,
+                ))
+                    ? 'disabled'
+                    : undefined);
             if (silence) {
                 this.logImplicitReplySilence(silence, silenceContext);
                 return;
@@ -1251,18 +1228,26 @@ export class ChatWithKodyFromGitUseCase {
         const permissionBlocked =
             !permission.allowed &&
             permission.errorType !== ValidationErrorType.NOT_ERROR;
+        // The license read never answered: the org may be paying, so this is
+        // our outage to report, not a plan to point at (#2452).
+        const licenseUnavailable =
+            permission.errorType === ValidationErrorType.LICENSE_UNAVAILABLE;
 
         // Nobody asked for Kody here, so the BYOK pointer would land on every
         // reply of every thread. Stay quiet; the log carries the reason.
         if (permissionBlocked && implicit) {
-            this.logImplicitReplySilence('plan_blocked', silenceContext);
+            this.logImplicitReplySilence(
+                licenseUnavailable ? 'license_unavailable' : 'plan_blocked',
+                silenceContext,
+            );
             return;
         }
 
         if (permissionBlocked) {
             this.logger.warn({
-                message:
-                    'Conversation blocked by plan policy (no BYOK outside trial); replying with BYOK guidance',
+                message: licenseUnavailable
+                    ? 'Conversation not run: the license check is unavailable; replying with a retry note'
+                    : 'Conversation blocked by plan policy (no BYOK outside trial); replying with BYOK guidance',
                 context: ChatWithKodyFromGitUseCase.name,
                 metadata: {
                     organizationAndTeamData,
@@ -1281,7 +1266,9 @@ export class ChatWithKodyFromGitUseCase {
                     comment.discussionId,
                 threadId: comment.threadId,
                 body: this.withKodyMarker(
-                    CONVERSATION_PLAN_GATE_MESSAGE,
+                    licenseUnavailable
+                        ? CONVERSATION_LICENSE_UNAVAILABLE_MESSAGE
+                        : CONVERSATION_PLAN_GATE_MESSAGE,
                     params.platformType,
                 ),
                 repository,
@@ -1642,11 +1629,17 @@ export class ChatWithKodyFromGitUseCase {
     private async getIntegrationConfig(
         platformType: PlatformType,
         repository: Repository,
+        source?: WebhookSource,
     ): Promise<IntegrationConfigEntity> {
         return await this.codeManagementService.findTeamAndOrganizationIdByConfigKey(
-            {
-                repository: repository,
-            },
+            source
+                ? {
+                      repository,
+                      host: source.host,
+                      repositoryFullName: source.repositoryFullName,
+                      dataCenterRepository: source.dataCenterRepository,
+                  }
+                : { repository },
             platformType,
         );
     }
@@ -1655,78 +1648,23 @@ export class ChatWithKodyFromGitUseCase {
         integrationConfig: IntegrationConfigEntity,
     ): OrganizationAndTeamData {
         return {
-            organizationId: integrationConfig?.integration?.organization?.uuid,
+            organizationId:
+                integrationConfig?.integration?.organization?.uuid ??
+                integrationConfig?.team?.organization?.uuid,
             teamId: integrationConfig?.team?.uuid,
         };
     }
 
     private getRepository(params: WebhookParams): Repository {
-        switch (params.platformType) {
-            case PlatformType.GITHUB: {
-                const fallbackRepository =
-                    this.extractRepositoryFromGitHubPullRequestUrl(params);
+        const repository = commentRepositoryOf(params);
 
-                return {
-                    name:
-                        params.payload?.repository?.name ||
-                        fallbackRepository.name ||
-                        '',
-                    id: params.payload?.repository?.id,
-                    owner:
-                        params.payload?.repository?.owner?.login ||
-                        fallbackRepository.owner ||
-                        '',
-                };
-            }
-            case PlatformType.GITLAB:
-                return {
-                    name: params.payload?.project?.name,
-                    id: params.payload?.project?.id,
-                    // `namespace` is GitLab's display name (for example,
-                    // "Junior Sartori"), not necessarily its URL path. Keep
-                    // the canonical path so GitLab clones use the project
-                    // slug, rather than an encoded display name.
-                    fullName: params.payload?.project?.path_with_namespace,
-                    owner:
-                        params.payload?.project?.namespace ||
-                        params.payload?.project?.path_with_namespace
-                            ?.split('/')
-                            ?.slice(0, -1)
-                            ?.join('/') ||
-                        '',
-                };
-            case PlatformType.BITBUCKET:
-                return {
-                    name: params.payload?.repository?.name,
-                    id:
-                        params.payload?.repository?.uuid?.slice(1, -1) ||
-                        params.payload?.repository?.id,
-                    owner:
-                        params.payload?.repository?.workspace?.slug ||
-                        params.payload?.repository?.owner?.username ||
-                        params.payload?.repository?.full_name
-                            ?.split('/')
-                            ?.at(0) ||
-                        '',
-                };
-            case PlatformType.AZURE_REPOS:
-                return {
-                    name: params.payload?.resource?.pullRequest?.repository
-                        ?.name,
-                    id: params.payload?.resource?.pullRequest?.repository?.id,
-                    owner:
-                        params.payload?.resource?.repository?.project?.name ||
-                        params.payload?.resourceContainers?.project?.id ||
-                        '',
-                };
-            default:
-                this.logger.warn({
-                    message: `Unsupported platform type: ${params.platformType}`,
-                    context: ChatWithKodyFromGitUseCase.name,
-                    metadata: { platformType: params.platformType },
-                });
-                return { name: '', id: '' };
-        }
+        // Webhook payloads carry the platform's numeric id (GitHub, GitLab,
+        // Azure), while the stored configuration keys are strings and every
+        // lookup compares them with `===`. Normalizing here keeps every caller
+        // on the same side of that comparison. A payload with no id is left as
+        // it was: callers already handle that shape.
+        if (repository.id == null) return repository;
+        return { ...repository, id: String(repository.id) };
     }
 
     private getRepositoryOwner(
@@ -2244,6 +2182,95 @@ export class ChatWithKodyFromGitUseCase {
     }
 
     /**
+     * `conversation.implicitReplies` for the PR's repository (#2576). Off means
+     * Kody answers an unmentioned reply in its own review thread only when
+     * someone writes `@kody`.
+     *
+     * Read through the config cascade at repository scope: the stored deltas
+     * merge with the repository's `kodus-config.yml`, which only applies when
+     * the repository enabled `kodusConfigFileOverridesWebPreferences`. The
+     * reply is not tied to a file, so a directory-scoped value is out of scope
+     * here. It is read after the free gate, never before: the gate silences
+     * most replies at no cost, and the read only happens for a reply that would
+     * otherwise reach the classifier, which costs a model call.
+     *
+     * A config that cannot be read keeps today's behaviour: the classifier
+     * decides, as it did before this setting existed.
+     */
+    private async implicitRepliesDisabled(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: Repository,
+    ): Promise<boolean> {
+        if (!this.codeBaseConfigService) {
+            return false;
+        }
+
+        try {
+            const config = await this.codeBaseConfigService.getSimpleConfig(
+                organizationAndTeamData,
+                { repositoryId: repository.id },
+            );
+
+            // `getSimpleConfig` merges the deltas stored on the config row; the
+            // repository's `kodus-config.yml` is a separate layer of the same
+            // cascade (`getMergedCodeReviewConfigs` reads it, and this setting
+            // is documented in `default-kodus-config.yml`). Read it here and let
+            // it win over the stored deltas, as the review pipeline does. A file
+            // that cannot be read leaves the stored decision in place.
+            let fileValue: boolean | undefined;
+            try {
+                const fileConfig =
+                    await this.codeBaseConfigService.getKodusConfigFile({
+                        organizationAndTeamData,
+                        repository,
+                        // The file only overrides the stored preferences when
+                        // the repository opted in, as in the review pipeline.
+                        // The loader defaults to true, so an undefined value
+                        // here would silently reverse that decision.
+                        overrideConfig:
+                            config?.kodusConfigFileOverridesWebPreferences ??
+                            false,
+                        // An invalid risk/approval block must not discard the
+                        // whole file: the pipeline isolates those fields and
+                        // keeps the rest, and `conversation` is one of them.
+                        tolerateReviewSettingsErrors: true,
+                    });
+                fileValue = fileConfig?.conversation?.implicitReplies;
+            } catch (error) {
+                this.logger.warn({
+                    message:
+                        'Could not read the repository kodus-config.yml: the stored conversation setting applies',
+                    context: ChatWithKodyFromGitUseCase.name,
+                    error,
+                    metadata: {
+                        organizationAndTeamData,
+                        repository: repository.name,
+                    },
+                });
+            }
+
+            if (fileValue !== undefined) {
+                return fileValue === false;
+            }
+
+            return config?.conversation?.implicitReplies === false;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not read the conversation settings: implicit replies stay as they were',
+                context: ChatWithKodyFromGitUseCase.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repository: repository.name,
+                },
+            });
+
+            return false;
+        }
+    }
+
+    /**
      * Kody's answers carry the same hidden marker as its review comments, so
      * the reply webhook they trigger is recognized as Kody's own without
      * depending on the bot's login. The second marker tells an answer apart
@@ -2290,39 +2317,7 @@ export class ChatWithKodyFromGitUseCase {
     }
 
     private getSender(params: WebhookParams): Sender {
-        switch (params.platformType) {
-            case PlatformType.GITHUB:
-                return {
-                    login: params.payload?.sender?.login,
-                    id: params.payload?.sender?.id,
-                };
-            case PlatformType.GITLAB:
-                return {
-                    login: params.payload?.user?.name,
-                    id: params.payload?.user?.id,
-                };
-            case PlatformType.BITBUCKET:
-                return {
-                    login:
-                        params.payload?.actor?.display_name ||
-                        params.payload?.actor?.nickname,
-                    id:
-                        params.payload?.actor?.uuid?.slice(1, -1) ||
-                        params.payload?.actor?.account_id,
-                };
-            case PlatformType.AZURE_REPOS:
-                return {
-                    login: params.payload?.resource?.comment?.author
-                        ?.displayName,
-                    id: params.payload?.resource?.comment?.author?.id,
-                };
-            default:
-                this.logger.warn({
-                    message: `Plataforma nu00e3o suportada: ${params.platformType}`,
-                    context: ChatWithKodyFromGitUseCase.name,
-                });
-                return { login: '', id: '' };
-        }
+        return eventSenderOf(params);
     }
 
     /**
@@ -2605,7 +2600,11 @@ export class ChatWithKodyFromGitUseCase {
                       )
                     : undefined,
         });
-        return replyFor(published.outcome, published.comment);
+        return replyFor(
+            published.outcome,
+            published.comment,
+            published.changed,
+        );
     }
 
     private async handleConversation(context: {
@@ -2732,6 +2731,8 @@ export class ChatWithKodyFromGitUseCase {
                 prNumber: pr.pullRequestNumber,
                 platform,
                 sandboxMetadata: { stage: 'conversation' },
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
             };
         } catch (err) {
             // Auth lookup or repo metadata fetch failed — log and let the lease
@@ -2845,13 +2846,6 @@ export class ChatWithKodyFromGitUseCase {
 }
 
 /** An id as platforms write it, without Bitbucket's braces. */
-function bareId(id: unknown): string | undefined {
-    if (id === undefined || id === null || id === '') {
-        return undefined;
-    }
-    return String(id).replace(/^\{|\}$/g, '');
-}
-
 /** Whether the commenter opened the pull request, as each platform names its author. */
 function isPullRequestAuthor(
     params: WebhookParams,
@@ -2888,18 +2882,6 @@ function isPullRequestAuthor(
         default:
             return false;
     }
-}
-
-/** Who replied: Forgejo names the commenter as the event's `sender`. */
-function replySender(
-    params: WebhookParams,
-    sender: { login?: string; id?: unknown },
-): { login: string; id?: unknown } {
-    if (params.platformType === PlatformType.FORGEJO) {
-        const user = params.payload?.comment?.user ?? params.payload?.sender;
-        return { login: user?.login ?? '', id: user?.id };
-    }
-    return { login: sender.login ?? '', id: sender.id };
 }
 
 function sameId(a: unknown, b: unknown): boolean {

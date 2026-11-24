@@ -1,0 +1,62 @@
+---
+title: "规则库"
+description: "浏览现成的 Kody Rules 和规则包,并将它们添加到全局、代码库或目录。"
+---
+
+规则库是一个现成的 [Kody Rules](/zh/how_to_use/code_review/configs/kody_rules) 目录,按主题分组为规则包。添加规则会把它复制到你的规则中,你可以像对待其他规则一样编辑、暂停或删除它。
+
+## 打开规则库
+
+- 在 **Code review → Kody Rules** 的 **Review Rules** 标签页中,点击 **Discovery**。
+- 在空的规则列表上,点击 **Browse the library**。列表还会显示三条可作为起点的规则库规则。
+- 在 ⌘K 命令面板中搜索 **Rules library**。
+
+面包屑 **Kody Rules → Rules Library** 会带你回到你来时的规则页面。
+
+## 查找规则
+
+规则库在左侧导航中有两种视图,**Featured** 和 **Browse**。
+
+- **Featured:** **Recommended for you** 会根据 Kody 最近在你已连接的代码库中标记的内容推荐相关的规则库规则(**Refresh** 会重新加载),其后是 **Plug and play** 集合和几个规则包。
+- **Browse:** 所有规则,每次显示 48 条(**Load more** 加载其余部分)。
+
+在 **Search rules...** 中输入内容会切换到 **Browse**。在 **Browse** 中,你可以按以下条件筛选:
+
+| 筛选 | 选项 |
+|--------|---------|
+| **Severity** | Low、Medium、High、Critical |
+| **Language** | JS/TS、Python、Java、C#、Dart、Ruby、PHP、Go、Kotlin、Rust |
+| **Packs** | 列表中的某个规则包,并显示其规则数量 |
+| **Collections** | **All rules** 或 **Plug and play** |
+
+当 Kodus 知道你团队所用的语言时,**Browse** 会按该语言筛选后打开;在 **Language** 中选择 **All** 可清除。**Reset** 会清除你设置的筛选条件。
+
+### 规则包
+
+规则包是围绕一个主题的一组规则,例如安全加固、测试、可观测性、无障碍、合规(GDPR、HIPAA、SOC 2、PCI DSS、LGPD)或某个技术栈(React、Next.js、Vue、Node.js、Python、PHP、Flutter)。**Browse all packs** 会打开 **Rules Packs** 页面,你可以在其中搜索规则包并查看示例规则;**Explore pack** 会在 **Browse** 中打开该规则包的规则。
+
+## 阅读规则
+
+每张卡片显示标题、严重性、语言,以及在可直接使用的规则上显示 **Plug-and-Play** 徽章。点击卡片即可打开:
+
+- **Why is it important?**
+- **Instructions**:Kody 检查的文本。
+- **Bad example** 和 **Good example**(如果规则有的话)。
+
+使用点赞和点踩为规则评分。你的投票会显示在卡片上。
+
+## 添加规则
+
+1. 打开一条规则,点击 **Add to my rules** 旁边的箭头。
+2. 选择添加到哪里:**Global**、一个或多个代码库,或目录。只会列出你有权创建规则的位置。选择 **Global** 只会将规则添加到全局,因为代码库会继承它。
+3. 点击 **Add to my rules**。确认信息会列出规则被添加到的位置。
+
+当你从空的 **Kody Rules** 页面上显示的三条规则中打开一条时,**Add to my rules** 会直接将其添加到该范围,并带你回到 **Kody Rules** 页面。
+
+添加的规则:
+
+- 处于启用状态,始终按 **Per file** 运行(即使规则库中的规则描述的是针对整个 PR 的检查),保留规则库中的严重性和示例,并显示 **Library** 来源;
+- 没有路径,因此适用于所有文件,但有两个例外:带有语言的规则仅限于该语言的文件,从目录范围内添加的规则会以该目录的第一层文件夹作为路径 `<folder>/**`;
+- 计入 Free 套餐 10 条启用规则的上限。超出后,规则仍会被添加,但处于 **Locked** 状态。请参阅[规则数量上限](/zh/how_to_use/code_review/configs/kody_rules#规则限制)。
+
+如果你的工作区使用[集中式配置](/zh/how_to_use/code_review/configs/centralized_config),则添加规则时会改为在配置代码库上打开一个拉取请求。

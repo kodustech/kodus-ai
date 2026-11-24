@@ -1,5 +1,7 @@
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import type { ReviewRoutingReason } from '@libs/code-review/domain/review-mode';
+import type { ApprovalDecision } from '@libs/code-review/domain/approval/approval-decision';
 
 export interface CodeReviewExecutionTimeline {
     uuid: string;
@@ -20,6 +22,14 @@ export interface EnrichedPullRequestResponse {
     title: string;
     status: string;
     merged: boolean;
+    /** The mode this execution reviewed in; absent when it reviewed nothing
+     *  (skipped, failed before the review). */
+    reviewMode?: 'balanced' | 'heavy' | 'ultra';
+    reviewRoutingReason?: ReviewRoutingReason;
+    approvalDecision?: Pick<
+        ApprovalDecision,
+        'kind' | 'reason' | 'matchedPolicy'
+    >;
     url: string;
     baseBranchRef: string;
     headBranchRef: string;
@@ -51,6 +61,7 @@ export interface EnrichedPullRequestResponse {
     // null when the PR has no delivered suggestion to land on.
     firstSentSuggestion?: { id: string; filePath: string } | null;
     reviewedCommitSha?: string;
+    recordedReviewedHeadSha?: string;
     reviewedCommitUrl?: string;
     compareUrl?: string;
     executionId?: string;

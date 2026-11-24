@@ -71,6 +71,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import {
     buildModelFromSlot,
+    getModelId,
     getModelName,
     runWithBYOKLimiter,
     getLimiterForSlot,
@@ -347,10 +348,75 @@ describe('getModelName — resolved slot vs env default', () => {
         }
     });
 
+    it('names a declared env model by its trimmed id, and an invalid one without undefined', () => {
+        const declared = {
+            API_LLM_PROVIDER_MODEL: 'gpt-x ',
+            API_LLM_PROVIDER: 'openai',
+            API_LLM_API_KEY: 'sk-x',
+        };
+        const saved = Object.fromEntries(
+            Object.keys(declared).map((k) => [k, process.env[k]]),
+        );
+        try {
+            Object.assign(process.env, declared);
+            expect(getModelName(undefined)).toBe('openai:gpt-x');
+
+            delete process.env.API_LLM_PROVIDER_MODEL;
+            expect(getModelName(undefined)).toBe('auto');
+
+            process.env.API_LLM_PROVIDER_MODEL = '   ';
+            expect(getModelName(undefined)).toBe('auto');
+        } finally {
+            for (const [k, v] of Object.entries(saved)) {
+                if (v === undefined) delete process.env[k];
+                else process.env[k] = v;
+            }
+        }
+    });
+
     it('undefined slot + defaultModelOverride → the overridden name', () => {
         expect(getModelName(undefined, 'gemini-2.5-flash')).toBe(
             'gemini-2.5-flash',
         );
+    });
+});
+
+describe('getModelId — the bare id getModelName labels', () => {
+    const prevEnvMode = process.env.API_LLM_PROVIDER_MODEL;
+
+    beforeEach(() => {
+        delete process.env.API_LLM_PROVIDER_MODEL;
+    });
+
+    afterAll(() => {
+        if (prevEnvMode === undefined) delete process.env.API_LLM_PROVIDER_MODEL;
+        else process.env.API_LLM_PROVIDER_MODEL = prevEnvMode;
+    });
+
+    it('is the slot model, without the provider prefix', () => {
+        expect(
+            getModelId({
+                provider: BYOKProvider.OPENAI,
+                apiKey: 'sk-x',
+                model: 'gpt-6.1-sol',
+            } as NormalizedModel),
+        ).toBe('gpt-6.1-sol');
+    });
+
+    it('is the env model, without the provider prefix', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        process.env.API_VERTEX_AI_API_KEY = 'sa';
+        try {
+            expect(getModelName(undefined)).toBe('google_vertex:gemini-2.5-pro');
+            expect(getModelId(undefined)).toBe('gemini-2.5-pro');
+        } finally {
+            delete process.env.API_VERTEX_AI_API_KEY;
+        }
+    });
+
+    it('matches getModelName where that already has no prefix', () => {
+        expect(getModelId(undefined)).toBe(getModelName(undefined));
+        expect(getModelId(undefined, 'gemini-2.5-flash')).toBe('gemini-2.5-flash');
     });
 });
 

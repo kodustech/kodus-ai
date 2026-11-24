@@ -1,5 +1,6 @@
 import { AutoRevokeRemovedLicenseSeatsUseCase } from './auto-revoke-removed-license-seats.use-case';
 import { BackfillAstGraphBuildUseCase } from './backfill-ast-graph-build.use-case';
+import { CarryReviewCheckToMergeQueueUseCase } from './carry-review-check-to-merge-queue.use-case';
 import { ChatWithKodyFromGitUseCase } from './chatWithKodyFromGit.use-case';
 import { CreateIntegrationUseCase } from './create-integration.use-case';
 import { CreatePRCodeReviewUseCase } from './create-prs-code-review.use-case';
@@ -9,6 +10,7 @@ import { DeleteIntegrationUseCase } from './delete-integration.use-case';
 import { FinishOnboardingUseCase } from './finish-onboarding.use-case';
 import { GetCodeManagementMemberListUseCase } from './get-code-management-members-list.use-case';
 import { GetCurrentCodeManagementUserUseCase } from './get-current-code-management-user.use-case';
+import { GetMemberLabelsUseCase } from './get-member-labels.use-case';
 import { GetPRsByRepoUseCase } from './get-prs-repo.use-case';
 import { GetPRsUseCase } from './get-prs.use-case';
 import { GetRepositoriesUseCase } from './get-repositories';
@@ -21,9 +23,17 @@ import { ReceiveWebhookUseCase } from './receiveWebhook.use-case';
 import { SearchCodeManagementUsersUseCase } from './search-code-management-users.use-case';
 import { TriggerBusinessValidationUseCase } from './trigger-business-validation.use-case';
 import { UpdateAutoLicenseAllowedUsersUseCase } from './update-auto-license-allowed-users.use-case';
+import {
+    GetRepositorySelectionUseCase,
+    PreviewAllRepositoriesUseCase,
+    SetRepositorySelectionUseCase,
+} from './repository-selection.use-cases';
+import { SyncAllRepositoriesUseCase } from './sync-all-repositories.use-case';
 
 export default [
+    CarryReviewCheckToMergeQueueUseCase,
     GetCodeManagementMemberListUseCase,
+    GetMemberLabelsUseCase,
     CreateIntegrationUseCase,
     CreateRepositoriesUseCase,
     BackfillAstGraphBuildUseCase,
@@ -46,4 +56,8 @@ export default [
     UpdateAutoLicenseAllowedUsersUseCase,
     PruneRemovedLicenseSeatsUseCase,
     AutoRevokeRemovedLicenseSeatsUseCase,
+    SyncAllRepositoriesUseCase,
+    GetRepositorySelectionUseCase,
+    SetRepositorySelectionUseCase,
+    PreviewAllRepositoriesUseCase,
 ];

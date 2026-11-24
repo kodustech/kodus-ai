@@ -1,0 +1,18 @@
+---
+title: "如何在 Forgejo 上设置 AI 代码审查"
+description: "将 Forgejo 连接到 Kodus，并选择要自动审查的仓库。"
+---
+
+Kodus 使用访问令牌连接到 Forgejo 实例,并通过代码库 webhooks 接收拉取请求事件。Forgejo 支持由社区维护。
+
+## 步骤
+
+1. **创建账户** — 在 [kodus.io](https://kodus.io) 或[自托管 Kodus](/zh/how_to_deploy/deploy_kodus/generic_vm)
+2. **连接 Forgejo** — 在入门引导的 **Connect your Git tool** 步骤中,打开 **Forgejo** 选项卡,点击 **Connect via token**,然后输入您的 **Forgejo Instance URL** 和 **Personal Access Token**(之后也可以从侧边栏的 **Repositories** 进行连接:在 **Connect a provider** 下点击 **Forgejo**)
+3. **选择代码库** — 选择 Kodus 应审查的 Forgejo 代码库,或在 **Repositories** 上开启[审查所有代码库](/zh/how_to_use/code_review/configs/review_all_repositories)
+4. **Webhooks** — 保存选择时,Kodus 会自动创建拉取请求 webhook。这需要对代码库拥有管理员权限,并且令牌需要 `write:repository` 范围。如果没有创建,**Repositories** 会列出该代码库及原因;请按照 [Forgejo Webhooks](/zh/how_to_deploy/platforms/forgejo/forgejo_webhook) 指南手动添加 webhook
+5. 在已选仓库中打开一个拉取请求。[查看 Kody 会发布什么以及如何确认审查状态](/zh/how_to_use/code_review/flow)。
+
+## 自定义配置
+
+通过 [kodus-config.yml](/zh/how_to_use/code_review/configs/general#kodus-config-yml) 自定义各仓库的审查配置。

@@ -1,0 +1,48 @@
+---
+title: "通知"
+description: "为每个角色选择哪些事件通过邮件或应用内通知您的组织。"
+---
+
+Kodus 会通过邮件和应用内通知,告知人们审查失败、付款问题或新的 Kody Rules 批次等事件。**Organization → Notifications** 按角色设置哪些事件使用哪个渠道。只有所有者可以打开它。
+
+## 通知中心
+
+侧边栏底部的铃铛会显示您的未读数量,并打开通知中心。**Mark all as read** 会将所有条目标为已读,条目在有对应页面时会链接到该页面。
+
+关键事件在通知未读期间,还会在应用顶部显示为横幅。
+
+## 通知设置
+
+该页面的标题为 **Notification settings**。每个受众对应一个标签页:**All Roles**、**Owner**、**Billing Manager**、**Repo Admin** 和 **Contributor**。每个标签页按类别列出事件,每个渠道(**Email** 和 **In-App**)各有一个开关,并带有事件类型的徽章:**Critical**、**Transactional** 或 **Informational**。使用 **Save settings** 保存。
+
+- **All Roles** 是每个角色都遵循的基线。
+- 在某个角色的标签页上更改开关,只会覆盖该角色的基线。该事件会标记为 **Overridden**,撤销图标(**Revert to All Roles config**)可恢复基线。
+- 每个事件都有内置接收者(见下表)。在保存规则之前,发送给特定角色的事件会对其他角色显示其渠道为关闭。
+
+保障账户正常使用的事件,例如邮箱确认、密码重置、邀请和 SSO 域名验证,始终会发送,不会出现在该页面上。
+
+### 事件
+
+| 类别 | 事件 | 类型 | 默认开启 | 内置接收者 |
+| --- | --- | --- | --- | --- |
+| **Team** | Member Removed | Transactional | Email, In-App | 被移除者(通过邮件),以及所有者(在应用中) |
+| | Role Changed | Informational | Email, In-App | 所有者 |
+| **Kody Rules** | Kody Rules Generated | Informational | Email, In-App | 每位活跃成员 |
+| | IDE Rules Synced | Informational | Email, In-App | 发起同步的人 |
+| | IDE Rule Sync Failed | Transactional | Email, In-App | 发起同步的人,以及所有者 |
+| | Rule File References Invalid | Transactional | Email, In-App | 在 IDE 同步之后,为发起同步的人;否则为创建这些规则的人。两者都未知时为所有者 |
+| | Kody Rules Paused Automatically | Informational | In-App | 所有者 |
+| | Weekly Digest of Paused Kody Rules | Informational | Email | 所有者 |
+| **Cockpit** | Repo Report | Informational | Email | 代码库管理员 |
+| | Org Report | Informational | Email | 所有者 |
+| **Billing** | Payment Failed | Critical | Email, In-App | 所有者和计费管理员 |
+| | Trial Expiring | Transactional | Email, In-App | 所有者和计费管理员 |
+| **Code Review** | Pull Request Auto-Approved | Informational | Email, In-App | PR 作者(如果是 Kodus 成员) |
+| | Code Review Failed | Transactional | Email, In-App | PR 作者(如果是 Kodus 成员),以及所有者 |
+| | Review Skipped (No License) | Informational | Email, In-App | PR 作者;如果作者不是 Kodus 成员,则为所有者 |
+| | Business Logic Task Source Unavailable | Transactional | In-App | 所有者 |
+| **BYOK** | BYOK LLM Errors Exceeded Threshold | Critical | Email, In-App | 所有者 |
+| **Spend Limit** | Monthly Spend Limit Threshold Reached | Informational | Email, In-App | 所有者 |
+| | Monthly Spend Limit Exceeded | Critical | Email, In-App | 所有者 |
+
+Billing 事件和 Cockpit 报告适用于云端。关于报告,请参阅[邮件报告](/zh/how_to_use/cockpit/overview#邮件报告)。

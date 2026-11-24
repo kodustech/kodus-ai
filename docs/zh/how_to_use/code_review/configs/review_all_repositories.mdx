@@ -1,0 +1,71 @@
+---
+title: "审查所有代码库"
+description: "让 Kody 审查你的 git 集成可见的每个代码库(包括之后新建的代码库),无需逐个添加。"
+---
+
+默认情况下,Kody 会审查你在 **Repositories** 中选择的代码库。开启 **Review every
+repository** 后,Kody 会审查所连接凭据可见的每个代码库,并自动接管之后新建的代码库。它在 GitHub、GitLab、Bitbucket Cloud、
+Bitbucket Data Center、Azure DevOps 和 Forgejo 上的工作方式相同,云端和自托管均适用。
+
+## 开启
+
+1. 在侧边栏中打开 **Repositories**。
+2. 打开 **Review every repository** 开关。
+3. 核对数量:Kody 会列出它将开始审查多少个代码库,以及跳过多少个。
+4. 点击 **Review every repository**。
+
+只有组织所有者可以开启或关闭该功能。
+
+Kody 会在后台设置这些代码库,卡片上会显示进度
+("Setting up repositories: 320 of 487.")。每个代码库的 webhook 就位后,拉取请求审查随即开始。
+
+<Note>
+  这些代码库上的审查与其他代码库上的审查计费方式相同,其中的拉取请求
+  作者可能会占用许可席位。
+</Note>
+
+## 审查范围
+
+- **凭据可见的每个代码库。** 在使用 Kodus 应用的 GitHub 上,指的是该应用已安装的
+  代码库。使用 GitHub 令牌时,指的是令牌可访问的所连接组织的代码库(对于个人账户,则是
+  该账户可访问的每个代码库)。在 GitLab 上,指的是令牌所属用户是成员的项目。
+- **不包括已归档的代码库。** 它们始终会被跳过。Azure DevOps 将已禁用的
+  代码库视为已归档;Kody 无法检测 Bitbucket Cloud 上已归档的代码库。
+- **不包括 fork 和镜像**,除非你在开启时勾选 **Also review forks and mirrors**。
+
+## 新代码库
+
+Kody 每 10 分钟检查一次新代码库,并按与手动添加代码库相同的方式设置它们:webhook、设置、代码图和近期拉取请求历史。
+
+- 在新代码库设置完成**之后**打开的拉取请求会照常获得审查。
+- 在此**之前**(即代码库创建后的最初几分钟内)打开的拉取请求,
+  会在下次推送时被审查,或者通过 `@kody start-review` 立即审查。
+- 在使用 Kodus 应用的 GitHub 上,新代码库会在 GitHub 通知后立即设置。对于
+  在应用安装(并授予所有代码库访问权限)之后创建的代码库,应用需要
+  **Repository** webhook 事件(自托管:请在你的 GitHub App 设置中添加)。
+
+自托管:检查间隔为 `API_CRON_SYNC_ALL_REPOSITORIES`(默认每 10 分钟)。
+
+## 排除某个代码库
+
+打开该代码库的代码审查设置,关闭 **Automated code review**(**Code review → General**)。Kody 在每次同步后都会保持该状态,其拉取请求作者也不会因自动
+审查而占用许可席位。`@kody` 命令在其上仍然可用。
+
+**Review every repository** 开启期间,无法在 **Repositories** 中手动添加或移除代码库:
+下次同步会把已移除的代码库重新加回来。
+
+## 代码库无法设置时
+
+Kody 需要在每个代码库上创建 webhook 的权限。当提供方拒绝时,
+该代码库会连同原因一起列在 **Repositories** 中,Kody 会在每次同步时重试。
+
+请参阅[各 Git 平台的 webhook 权限](/zh/knowledge_base/how-to-fix-webhook-issues#各-git-平台的-webhook-权限)。
+
+如果提供方在 Kody 设置大量代码库时对其限流,Kody 会停止并在
+下次同步时继续,因此规模较大的首次运行可能需要几个周期。代码图和拉取请求历史
+也会在后台经过若干周期完成。当同步停止或失败时,卡片会显示原因、上次成功同步的时间,以及还剩多少代码图和历史记录。
+
+## 关闭
+
+关闭 **Review every repository**。当前已在审查的代码库保持不变;
+不再添加新的代码库。

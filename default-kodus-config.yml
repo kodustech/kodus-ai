@@ -2,6 +2,7 @@ version: 2.0
 
 # general
 automatedReviewActive: true
+reviewMode: balanced # balanced | heavy
 showStatusFeedback: true
 kodusConfigFileOverridesWebPreferences: false
 reviewCadence:
@@ -9,6 +10,12 @@ reviewCadence:
     timeWindow: 15 # minutes
     pushesToTrigger: 3
 pullRequestApprovalActive: false
+approvalPolicies: []
+riskAssessmentActive: false
+riskCriteria: []
+riskReviewRouting:
+    noRisk: balanced
+    riskFound: heavy
 approvalLabels: []
 approvalAuthors: []
 approvalRiskActive: false
@@ -1151,6 +1158,14 @@ reviewOptions:
     performance: true
     security: true
     business_logic: true
+
+# conversation: how Kody takes part in the threads on a pull request
+conversation:
+    # true: Kody answers an unmentioned reply in its own review thread when it
+    # reads as addressed to Kody (the classifier decides). false: only an
+    # explicit @kody mention is answered, so a coding agent that replies to
+    # every finding does not start a conversation.
+    implicitReplies: true
 
 # business logic: checks each PR against the task it references
 businessLogic:

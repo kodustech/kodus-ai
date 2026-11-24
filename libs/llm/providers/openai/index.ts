@@ -22,8 +22,9 @@ import {
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
 import { registerProvider } from '../kernel/registry';
 import { isOpenAiReasoner, openaiReasoningConfig } from './reasoning';
-import { isOpenAiHost } from './endpoint';
+import { OPENAI_API_BASE_URL, isAzureOpenAiHost } from './endpoint';
 import { notStoredByOpenAi } from './not-stored';
+import { openAiPrefixCacheHint } from './prompt-cache';
 import { openAiModelListing } from './listing';
 import type {
     ModelCapabilities,
@@ -42,10 +43,7 @@ import {
     type ModelReasoningTraits,
     type StructuredOutputMode,
 } from '../kernel/reasoning-traits';
-import {
-    normalizeSdkResult,
-    normalizeSdkUsage,
-} from '../kernel/usage';
+import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
 import { reasoningEffortFromWire } from '../kernel/override-wire-spelling';
 import { EFFORT_TO_BUDGET } from '../kernel/effort-budget';
 
@@ -134,7 +132,10 @@ export const openaiModule: ProviderModule = {
             : 'json_object';
     },
 
-    build(cfg: ProviderBuildConfig, opts?: ProviderBuildOptions): LanguageModel {
+    build(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): LanguageModel {
         // apiKey is already DECRYPTED by the caller (byok-to-vercel).
         const apiKey = cfg.apiKey;
         const baseURL = cfg.baseURL;
@@ -183,10 +184,7 @@ export const openaiModule: ProviderModule = {
                               if (!('max_tokens' in body)) {
                                   return body;
                               }
-                              const {
-                                  max_tokens: maxTokens,
-                                  ...rest
-                              } = body;
+                              const { max_tokens: maxTokens, ...rest } = body;
                               return {
                                   ...rest,
                                   max_completion_tokens: maxTokens,
@@ -222,11 +220,11 @@ export const openaiModule: ProviderModule = {
                 ? { headers: { 'x-opencode-session': openCodeSessionId(cfg) } }
                 : {}),
         })(cfg.model);
-        // On OpenAI's own API, nothing is stored (not-stored.ts). Another host on
-        // the native id (a gateway) keeps whatever it does today.
-        return !baseURL || isOpenAiHost(baseURL)
-            ? notStoredByOpenAi(native)
-            : native;
+        // Nothing is stored, on OpenAI's API or behind the org's own gateway
+        // (not-stored.ts). Azure OpenAI reached through this id keeps the SDK
+        // default: its Responses API was not verified with `store: false` and
+        // an encrypted-reasoning loop, and one production credential runs on it.
+        return isAzureOpenAiHost(baseURL) ? native : notStoredByOpenAi(native);
     },
 
     reasoning(
@@ -325,6 +323,8 @@ export const openaiModule: ProviderModule = {
         return { openai: { reasoningEffort: effort } };
     },
 
+    prefixCacheHint: openAiPrefixCacheHint,
+
     // Per-model reasoning facts. openai_compatible thinking models (Kimi/DeepSeek)
     // come from the shared table; native OpenAI reasons on the o-series/gpt-5 line
     // and always does structured via response_format (no forced tool_choice), so
@@ -395,7 +395,8 @@ export const openaiModule: ProviderModule = {
             type: 'url',
             required: false,
             scope: 'top',
-            placeholder: 'https://api.openai.com/v1',
+            placeholder: OPENAI_API_BASE_URL,
+            offeredInForm: true,
         },
     ],
     providerOptionsNamespace: (id) =>
@@ -412,6 +413,30 @@ export const openaiModule: ProviderModule = {
             ? '{\n  "thinking": { "type": "enabled" }\n}'
             : '{\n  "reasoningEffort": "high",\n  "serviceTier": "flex"\n}',
     modelListing: openAiModelListing,
+    selfHostedEnv: (id) => {
+        if (id === 'openai') {
+            return {
+                apiKeyVars: ['API_OPEN_AI_API_KEY'],
+                baseURL: {
+                    legacyVar: 'API_OPENAI_FORCE_BASE_URL',
+                    default: 'https://api.openai.com/v1',
+                    nativeHost: 'api.openai.com',
+                },
+            };
+        }
+        if (id === 'openai_compatible') {
+            // No default: a forgotten base URL would send a third-party key to
+            // api.openai.com.
+            return {
+                apiKeyVars: ['API_OPEN_AI_API_KEY'],
+                baseURL: {
+                    legacyVar: 'API_OPENAI_FORCE_BASE_URL',
+                    required: true,
+                },
+            };
+        }
+        return null;
+    },
 };
 
 registerProvider(openaiModule);

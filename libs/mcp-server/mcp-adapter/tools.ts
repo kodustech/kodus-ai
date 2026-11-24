@@ -165,38 +165,53 @@ function enhanceMCPSchema(schema: unknown): unknown {
 
 /**
  * Convert multiple MCP tools to engine tools with validation
+ *
+ * A name listed by more than one server cannot be routed unambiguously:
+ * `registry.executeTool(name)` resolves a tool by name alone, so the caller
+ * would reach whichever server answers first. That name is therefore left
+ * out and reported through `onNameConflict`; every other tool stays
+ * available, so one collision no longer empties the whole tool set.
  */
 export function mcpToolsToEngineTools(
     mcpTools: MCPToolRawWithServer[],
+    onNameConflict?: (toolName: string, servers: string[]) => void,
 ): EngineTool[] {
+    const serversByToolName = new Map<string, Set<string>>();
+
+    for (const mcpTool of mcpTools) {
+        if (!mcpTool?.name) {
+            continue;
+        }
+
+        const servers =
+            serversByToolName.get(mcpTool.name) ?? new Set<string>();
+        servers.add(mcpTool.serverName ?? '');
+        serversByToolName.set(mcpTool.name, servers);
+    }
+
+    const conflictingNames = new Set<string>();
+
+    for (const [toolName, servers] of serversByToolName) {
+        if (servers.size <= 1) {
+            continue;
+        }
+
+        conflictingNames.add(toolName);
+        onNameConflict?.(toolName, [...servers]);
+    }
+
     const validTools: EngineTool[] = [];
-    const invalidTools: string[] = [];
-    const toolNameCounts = new Map<string, string[]>();
-
-    // Check for name conflicts
-    for (const mcpTool of mcpTools) {
-        const existing = toolNameCounts.get(mcpTool.name) || [];
-        if (mcpTool.serverName) {
-            existing.push(mcpTool.serverName);
-        }
-        toolNameCounts.set(mcpTool.name, existing);
-    }
-
-    // Handle conflicts
-    for (const [toolName, servers] of toolNameCounts) {
-        if (servers.length > 1) {
-            throw new Error(
-                `Tool name conflict detected: "${toolName}" exists in multiple servers: ${servers.join(', ')}. Please rename tools to ensure uniqueness.`,
-            );
-        }
-    }
 
     for (const mcpTool of mcpTools) {
+        if (conflictingNames.has(mcpTool?.name)) {
+            continue;
+        }
+
         try {
-            const engineTool = mcpToolToEngineTool(mcpTool);
-            validTools.push(engineTool);
+            validTools.push(mcpToolToEngineTool(mcpTool));
         } catch {
-            invalidTools.push(mcpTool.name);
+            // A tool whose schema cannot be converted is skipped on its own;
+            // the rest of the tool set stays available.
         }
     }
 

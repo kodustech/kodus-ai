@@ -3,26 +3,31 @@ title: "Como validar regras de negócio antes do merge"
 description: "Identifique requisitos ausentes, casos extremos esquecidos e lacunas de lógica no seu pull request antes que o código chegue à produção."
 ---
 
-Revisões de código normalmente focam na qualidade do código — segurança, performance, estilo. Mas frequentemente ignoram a pergunta: **esse código realmente faz o que o negócio pediu?** A Validação de Lógica de Negócio preenche essa lacuna.
+Os code reviews normalmente focam na qualidade do código: segurança, performance, estilo. Mas frequentemente deixam passar a pergunta: **esse código realmente faz o que o negócio pediu?** A Business Logic Validation preenche essa lacuna.
 
 ## O que é verificado
 
-O Kodus compara o diff do seu PR com os requisitos da tarefa e identifica:
+A Kody encontra a tarefa que um PR referencia, lê-a no seu task tracker e lista cada requisito com a situação dele no código. O resultado é um único comentário no PR, mantido atualizado. Cada requisito recebe um estado:
 
-- **Implementações ausentes** — critérios de aceitação não cobertos no código
-- **Implementações parciais** — requisitos apenas parcialmente atendidos
-- **Incompatibilidades de escopo** — quando o PR está trabalhando em uma área diferente do que a tarefa descreve
-- **Casos extremos** — cenários de negócio mencionados na tarefa mas não tratados
+| Estado | Significado |
+|---|---|
+| **MET** | O diff o implementa. |
+| **PARTIAL** | Parte do que o requisito diz está implementada. |
+| **MISSING** | Não há evidência no diff do PR, ou o código em que o PR se apoia não o faz. |
+| **CHECK MANUALLY** | Um requisito visual ou de fluxo, ou um que a Kody não consegue resolver pelo código. |
+| **NOT IN TASK** | Uma mudança que a tarefa não pede. |
+
+Cada linha cita o arquivo e a linha em que se baseia e diz o que mudar.
 
 ## Como usar
 
 ### Automático (padrão)
 
-Com a categoria **Business Logic** ativada em **Code review → What to review** (`business_logic: true` nas suas opções de revisão, habilitado por padrão), o Kodus valida automaticamente as regras de negócio durante cada revisão de PR quando um plugin de gerenciamento de tarefas está conectado.
+Com a categoria **Business Logic** ativada em **Code review → What to review** (ativada por padrão) e um task tracker conectado, a Kody verifica o PR na primeira revisão quando o título, o nome da branch ou a descrição do PR cita uma tarefa: `PROJ-123` ou um link da tarefa, ou `#123` no título ou na branch (`Closes #123` na descrição). Depois disso, ela verifica de novo quando alguém pede, ou a cada push se você definir **Re-check after a push**.
 
 ### Sob demanda
 
-Comente em qualquer PR com um link ou especificação inline:
+Comente no PR (não em uma linha de código):
 
 ```
 @kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
@@ -30,39 +35,31 @@ Comente em qualquer PR com um link ou especificação inline:
 
 ```
 @kody -v business-logic
-Pedidos acima de R$500 devem emitir créditos de cashback.
-Códigos de desconto não podem ser combinados com recompensas de fidelidade.
-Frete grátis aplica-se apenas a pedidos domésticos.
+Orders above $500 must issue cashback credits.
+Discount codes cannot be combined with loyalty rewards.
+Free shipping applies only to domestic orders.
 ```
+
+Sem uma tarefa depois do comando, a Kody verifica de novo as tarefas que o PR referencia. Com um texto de pelo menos 40 caracteres, ela verifica o PR contra o que você escreveu, e nenhum tracker é necessário.
 
 ## Fontes de tarefa suportadas
 
-Conecte via [Plugins](/pt-BR/how_to_use/code_review/plugins) para buscar contexto de tarefas automaticamente:
+Conecte um tracker em [Plugins](/pt-BR/how_to_use/code_review/plugins). A Kody só lê as tarefas pelo id delas.
 
 | Fonte | Como referenciar |
-|-------|-----------------|
-| **Jira** | Cole a URL da issue do Jira |
-| **Linear** | Cole a URL da issue do Linear |
-| **Notion** | Cole a URL da página do Notion |
-| **ClickUp** | Cole a URL da tarefa do ClickUp |
-| **Google Docs** | Cole a URL do documento |
-| **Slack** | Cole um permalink de mensagem do Slack |
-| **Inline** | Escreva os requisitos diretamente no comentário do PR |
-
-## Entendendo o resultado
-
-Cada achado tem uma severidade:
-
-- **MUST_FIX** — uma regra de negócio obrigatória está ausente ou em contradição
-- **SUGGESTION** — um caso extremo ou ponto de robustez não foi coberto
-- **INFO** — observação que não bloqueia a conformidade
-
-Cada achado inclui a **citação exata** da tarefa que estabelece o requisito, garantindo que nada seja inventado.
+|--------|-----------------|
+| **Linear** | Chave da issue (`TEAM-123`) ou URL da issue |
+| **Jira** (Atlassian Rovo) | Chave da issue (`PROJ-123`) ou URL da issue |
+| **Notion** | URL da página |
+| **Git Issues** | `#123`, `owner/repo#123` ou a URL da issue, no GitHub, GitLab, Bitbucket ou Forgejo |
+| **Outros trackers** (por exemplo ClickUp) | Por meio de um plugin personalizado. Escolha-o como **Task source** se o nome dele não indicar que é um tracker. |
+| **Inline** | Escreva os requisitos no comentário do PR |
 
 ## Dicas
 
-- Tarefas com critérios de aceitação explícitos recebem a validação mais completa
-- Após corrigir os problemas, reexecute o comando para confirmar a conformidade
-- Se o escopo do PR não corresponder à tarefa, o Kody sinaliza uma incompatibilidade de escopo em vez de especular
+- Tarefas com critérios de aceitação explícitos recebem a validação mais completa.
+- Depois de corrigir uma lacuna, comente `@kody -v business-logic` de novo. O mesmo comentário é atualizado.
+- Use **Closes PROJ-1** quando o PR entrega a tarefa inteira e **Part of PROJ-1** quando entrega uma parte.
+- Se a tarefa tem apenas um título, a Kody pede critérios de aceitação em vez de adivinhar.
 
-Para detalhes, consulte [Validação de Lógica de Negócio](/pt-BR/how_to_use/code_review/business_logic_validation).
+Para detalhes, consulte [Business Logic Validation](/pt-BR/how_to_use/code_review/business_logic_validation).

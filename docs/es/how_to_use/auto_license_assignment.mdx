@@ -1,35 +1,48 @@
 ---
-title: "Asignación Automática de Licencias"
-description: "Deja que Kodus asigne licencias automáticamente a quienes realmente contribuyen, en lugar de gestionar cada asiento a mano."
+title: "Asignación automática de licencias"
+description: "Deja que Kodus asigne licencias de desarrollador automáticamente a los colaboradores activos, en lugar de gestionar cada asiento a mano."
 ---
 
-La función de Asignación Automática de Licencias simplifica la gestión de licencias de desarrolladores dentro de tu organización. En lugar de asignar licencias manualmente a cada desarrollador, Kodus puede asignar automáticamente una licencia a los colaboradores activos.
+La función de asignación automática de licencias simplifica la gestión de licencias de desarrolladores dentro de tu organización. En lugar de asignar licencias manualmente a cada desarrollador, Kodus puede asignar automáticamente una licencia a los colaboradores activos.
 
-## Cómo Funciona
+Organizaciones con un plan de pago que usa asientos, incluidas las instalaciones autoalojadas con licencia. Los Owners administran la opción en **Subscription → PR licenses**.
 
-Cuando está habilitada, Kodus monitorea la actividad de pull requests en tus repositorios.
+## Cómo funciona
 
--   **Asignación Automática:** Si un usuario crea más de un pull request, Kodus verifica si hay espacios de licencia disponibles en tu organización.
-    -   Si hay un espacio disponible, la licencia se asigna automáticamente al usuario y sus PRs serán revisados.
-    -   Si no hay espacios disponibles, Kodus reaccionará al pull request con un emoji de pulgar hacia abajo (👎) en Github o un emoji de candado (🔒) en Gitlab para indicar que la revisión no pudo realizarse por falta de licencias (solo cuando **Show Status Feedback** está activado en **Code review → General**).
+En un plan de pago, Kodus verifica al autor de cada pull request que está por revisar. Con **Auto-assign licenses** activado:
 
-## Usuarios Ignorados
+-   **Su primer PR se revisa sin un asiento.** Kodus cuenta los PRs que tiene registrados del autor.
+-   **A partir de su segundo PR, Kodus asigna una licencia** si hay una disponible, y la revisión continúa.
+-   **Si el autor no tiene licencia y no se le puede asignar ninguna**, porque no hay asientos libres o **Auto-assign licenses** está desactivado, la revisión se omite y Kodus reacciona al pull request con un emoji de pulgar hacia abajo (👎) en GitHub y Forgejo, un emoji de candado (🔒) en GitLab, o un comentario 👎 en Azure DevOps y Bitbucket. La reacción solo aparece cuando **Show status feedback** está activado en **Code review → General**.
 
-Puedes configurar una lista de **Usuarios Ignorados**. Estos usuarios quedarán excluidos del proceso de asignación automática. La lista se define en la página **Repositories**, pestaña **PR author filters**, con **Exclude PR authors** (o, a la inversa, **Only these PR authors**).
+Las licencias solo se aplican en un plan de pago con asientos. El plan Free y la prueba no los tienen; consulta [Planes y licencias](/es/how_to_use/pricing).
 
--   **Sin Revisiones:** Los pull requests creados por usuarios ignorados no serán revisados por Kodus, salvo que ese usuario tenga una licencia, lo que anula el filtro.
--   **Sin Reacciones:** Kodus no reaccionará a sus PRs, incluso si superan el límite de PRs. Será como si Kodus ignorara el PR por completo.
+## Filtros de autor de PR
 
-Esto es útil para bots, cuentas de servicio o miembros específicos del equipo que no requieren revisiones de código.
+Dos filtros deciden qué autores revisa Kody. Se definen en la página **Repositories**, pestaña **PR author filters**:
+
+-   **Exclude PR authors:** Kody no revisará los PRs abiertos por los autores que listes.
+-   **Only these PR authors:** Kody revisará los PRs abiertos por los autores que listes, y por nadie más.
+
+Ambos filtros también dejan a la persona fuera de la asignación automática de licencias.
+
+-   **Sin revisiones:** Los pull requests de un autor filtrado no se revisan, salvo que ese autor tenga una licencia, lo que anula el filtro.
+-   **Omitido, no en silencio:** Kody registra la omisión como "User is ignored by configuration" y lista el PR en **Kody skipped**. A menos que **Show status feedback** esté desactivado, también marca el PR con 👀 (un comentario 👀 en Azure DevOps y Bitbucket). Nunca agrega la reacción de falta de licencia (👎 o 🔒) para estos autores.
+
+Esto es útil para bots, cuentas de servicio o miembros del equipo que no necesitan revisiones de código. Los bots que son autores de PRs se agregan a la lista de excluidos cuando se crea la integración de Git.
 
 ## Configuración
 
-Para habilitar y configurar la Asignación Automática de Licencias:
+Para habilitar y configurar la asignación automática de licencias:
 
 1. En la barra lateral, abre **Organization → Subscription**.
 2. Permanece en la pestaña **PR licenses**.
 3. Activa o desactiva **Auto-assign licenses**.
     - **Release seats automatically** (en la misma tarjeta) libera una licencia unos días (7 por defecto) después de que un miembro sale de tu organización de git.
-    - Para excluir usuarios, usa **Repositories → PR author filters** (consulta [Usuarios Ignorados](#usuarios-ignorados)).
+    - **Release N unused seats** lista las licencias que tienen personas que ya no están en tu organización de git, y las libera en un solo paso.
+    - **Assign by git ID** asigna un asiento a alguien que no está en la lista.
+    - Para filtrar autores, usa **Repositories → PR author filters** (consulta [Filtros de autor de PR](#filtros-de-autor-de-pr)).
 
-Estos interruptores solo aparecen con un plan de pago activo o una instancia self-hosted con licencia, y solo para los miembros que pueden gestionar asientos (Owners).
+Los dos interruptores solo aparecen con un plan de pago activo o una instancia con alojamiento autónomo con licencia, y solo para los miembros que pueden gestionar asientos (Owners).
+
+En GitLab, si alguien con un asiento no aparece en la lista de miembros, Kodus comprueba si abrió un merge request reciente en algún proyecto conectado. Los autores que aparecen en esa consulta conservan el asiento. Si el proveedor no puede completar la comprobación, Kodus conserva los asientos. Esta comprobación de GitLab se añadió después de la versión autoalojada 2.2.11.

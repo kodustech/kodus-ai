@@ -345,6 +345,24 @@ export async function exchangeCodeForTokens(
     return parsedTokens;
 }
 
+/** How long a token refresh may take before it counts as failed. */
+export const OAUTH_REFRESH_TIMEOUT_MS = 15_000;
+
+/**
+ * Whether `checkAndRefreshOAuth` would call the token endpoint: there is a
+ * refresh token, and the access token expires within five minutes or the
+ * resource server already refused it (`force`).
+ */
+export function shouldRefreshOAuth(
+    tokens: TokenData,
+    force?: boolean,
+): boolean {
+    return (
+        !!tokens.refreshToken &&
+        (!!force || tokens.expiresAt < Date.now() + 5 * 60 * 1000)
+    );
+}
+
 export async function checkAndRefreshOAuth(
     endpoint: string,
     params: {
@@ -352,14 +370,18 @@ export async function checkAndRefreshOAuth(
         clientId: string;
         clientSecret?: string;
         redirectUri: string;
+        /**
+         * Refresh whatever the stated expiry says: the resource server has
+         * already refused the access token (revoked, or rotated elsewhere).
+         */
+        force?: boolean;
     },
 ) {
-    const { tokens, clientId, clientSecret, redirectUri } = params;
+    const { tokens, clientId, clientSecret, redirectUri, force } = params;
 
-    const now = Date.now();
-    const { expiresAt, refreshToken } = tokens;
+    const { refreshToken } = tokens;
 
-    if (expiresAt < now + 5 * 60 * 1000 && refreshToken) {
+    if (shouldRefreshOAuth(tokens, force)) {
         const body = new URLSearchParams({
             grant_type: 'refresh_token',
             client_id: clientId,
@@ -368,10 +390,13 @@ export async function checkAndRefreshOAuth(
             ...(redirectUri ? { redirect_uri: redirectUri } : {}),
         });
 
+        // Bounded: a refresh runs while the grant's refresh lock is held, and
+        // a token endpoint that never answers would hold it for good.
         const tokenResp = await axios.post(endpoint, body.toString(), {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
+            timeout: OAUTH_REFRESH_TIMEOUT_MS,
             validateStatus: () => true,
         });
 

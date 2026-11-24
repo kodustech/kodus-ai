@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
     FindManyOptions,
@@ -214,6 +214,7 @@ export class ParametersRepository implements IParametersRepository {
         teamId: string,
         configValue: IParameters<K>['configValue'],
         nextVersion: number,
+        expectedConfigId?: string,
     ): Promise<ParametersEntity<K> | undefined> {
         return this.parametersRepository.manager.transaction(
             async (manager) => {
@@ -234,6 +235,21 @@ export class ParametersRepository implements IParametersRepository {
                     'SELECT pg_advisory_xact_lock(hashtext($1))',
                     [`${teamId}:${configKey}`],
                 );
+
+                if (expectedConfigId !== undefined) {
+                    const current = await manager.findOne(ParametersModel, {
+                        where: {
+                            configKey,
+                            team: { uuid: teamId },
+                            active: true,
+                        },
+                    });
+                    if (current?.uuid !== expectedConfigId) {
+                        throw new ConflictException(
+                            'Code review settings changed. Reload them and try again.',
+                        );
+                    }
+                }
 
                 // Bulk-deactivate every currently-active row for this
                 // (teamId, configKey) — not just the single row the caller

@@ -1,3 +1,4 @@
+import { APPLIED_SQL, undecidedSql } from './implementation-rate.sql';
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -47,7 +48,8 @@ import {
  * suggestions on still-open PRs are also listed.
  */
 
-const IMPLEMENTED = `IN ('implemented','partially_implemented')`;
+const IMPLEMENTED = APPLIED_SQL;
+const UNDECIDED = undecidedSql('s');
 
 /** Minimum sample for a category to qualify as a repo's "weakest". */
 const WEAKEST_CATEGORY_MIN_SENT = 5;
@@ -76,7 +78,13 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
      * suggestion and `pr` for the PR). Pushes params and returns the SQL
      * fragment with the right placeholders.
      */
-    private closedPrWhere(q: CockpitRangeQuery, params: unknown[]): string {
+    private closedPrWhere(
+        q: CockpitRangeQuery,
+        params: unknown[],
+        // Only an implementation rate leaves out what the check could not
+        // decide; votes, triggers and PR counts keep every delivered suggestion.
+        { excludeUndecided = false }: { excludeUndecided?: boolean } = {},
+    ): string {
         params.push(q.organizationId, q.startDate, q.endDate);
         const repoFilter = q.repository
             ? (params.push(q.repository),
@@ -92,29 +100,37 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
                  AND pr."status" = 'closed'
                  AND pr."parsed_closed_at" BETWEEN $2::timestamptz AND $3::timestamptz
                  AND s."suggestionDeliveryStatus" = 'sent'
+                 ${excludeUndecided ? `AND NOT ${UNDECIDED}` : ''}
                  ${repoFilter}`;
     }
 
     /** Shared FROM/WHERE built on top of {@link closedPrWhere}. */
-    private closedPrScope(q: CockpitRangeQuery, params: unknown[]): string {
+    private closedPrScope(
+        q: CockpitRangeQuery,
+        params: unknown[],
+        options: { excludeUndecided?: boolean } = {},
+    ): string {
         return `FROM "analytics"."suggestions_mv" s
                 JOIN "analytics"."pull_requests_opt" pr ON pr."_id" = s."pullRequestId"
-               WHERE ${this.closedPrWhere(q, params)}`;
+               WHERE ${this.closedPrWhere(q, params, options)}`;
     }
 
     async getImplementationRateWeekly(
         q: CockpitRangeQuery,
     ): Promise<ImplementationRateWeeklyRow[]> {
         const params: unknown[] = [];
-        const scope = this.closedPrScope(q, params);
+        const where = this.closedPrWhere(q, params);
 
         const rows = (await this.ds.query(
             `SELECT
                 to_char(date_trunc('week', pr.parsed_closed_at), 'YYYY-MM-DD') AS week_start,
                 COALESCE(lower(s."severity"), 'unknown') AS severity,
-                COUNT(*)::int AS sent,
-                COUNT(*) FILTER (WHERE s."suggestionImplementationStatus" ${IMPLEMENTED})::int AS implemented
-             ${scope}
+                COUNT(*) FILTER (WHERE NOT ${UNDECIDED})::int AS sent,
+                COUNT(*) FILTER (WHERE s."suggestionImplementationStatus" ${IMPLEMENTED})::int AS implemented,
+                COUNT(*) FILTER (WHERE ${UNDECIDED})::int AS not_measured
+             FROM "analytics"."suggestions_mv" s
+                JOIN "analytics"."pull_requests_opt" pr ON pr."_id" = s."pullRequestId"
+             WHERE ${where}
              GROUP BY date_trunc('week', pr.parsed_closed_at), severity
              ORDER BY date_trunc('week', pr.parsed_closed_at) ASC`,
             params,
@@ -123,6 +139,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
             severity: string;
             sent: number;
             implemented: number;
+            not_measured: number;
         }>;
 
         const weeks = new Map<string, ImplementationRateWeeklyRow>();
@@ -133,6 +150,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
                     weekStart: r.week_start,
                     sent: 0,
                     implemented: 0,
+                    notMeasured: 0,
                     rate: 0,
                     bySeverity: {},
                 };
@@ -140,18 +158,24 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
             }
             const sent = Number(r.sent);
             const implemented = Number(r.implemented);
+            const notMeasured = Number(r.not_measured);
             week.sent += sent;
             week.implemented += implemented;
-            week.bySeverity[r.severity] = {
-                sent,
-                implemented,
-                rate: this.rate(sent, implemented),
-            };
+            week.notMeasured += notMeasured;
+            // Nothing decided at this severity: no rate, rather than 0%.
+            if (sent > 0) {
+                week.bySeverity[r.severity] = {
+                    sent,
+                    implemented,
+                    notMeasured,
+                    rate: this.rate(sent, implemented),
+                };
+            }
         }
 
         return [...weeks.values()].map((w) => ({
             ...w,
-            rate: this.rate(w.sent, w.implemented),
+            rate: w.sent > 0 ? this.rate(w.sent, w.implemented) : null,
         }));
     }
 
@@ -159,7 +183,9 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         q: CockpitRangeQuery,
     ): Promise<ImplementationRateByCategoryRow[]> {
         const params: unknown[] = [];
-        const scope = this.closedPrScope(q, params);
+        const scope = this.closedPrScope(q, params, {
+            excludeUndecided: true,
+        });
 
         const rows = (await this.ds.query(
             `SELECT
@@ -184,7 +210,9 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         q: CockpitRangeQuery,
     ): Promise<ImplementationRateBySeverityRow[]> {
         const params: unknown[] = [];
-        const scope = this.closedPrScope(q, params);
+        const scope = this.closedPrScope(q, params, {
+            excludeUndecided: true,
+        });
 
         // A suggestion is rule-driven when it enforces a Kody Rule (or is
         // labelled as such). Its severity is user-defined on the rule, not a
@@ -236,7 +264,9 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         q: CockpitRangeQuery,
     ): Promise<IgnoredCriticalsHighlight> {
         const params: unknown[] = [];
-        const scope = this.closedPrScope(q, params);
+        const scope = this.closedPrScope(q, params, {
+            excludeUndecided: true,
+        });
 
         // The list is capped at IGNORED_CRITICALS_MAX_ITEMS, but the total badge
         // was computed with COUNT(*) OVER () — which materialises and sorts the
@@ -314,12 +344,13 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
                     COALESCE(s."label", 'Unknown') AS category,
                     s."pullRequestId" AS pull_request_id,
                     s."suggestion_id" AS suggestion_id,
-                    s."suggestionImplementationStatus" AS impl_status
+                    s."suggestionImplementationStatus" AS impl_status,
+                    ${UNDECIDED} AS undecided
                 ${scope}
             ),
             per_category AS (
                 SELECT repository, category,
-                       COUNT(*)::int AS sent,
+                       COUNT(*) FILTER (WHERE NOT undecided)::int AS sent,
                        COUNT(*) FILTER (WHERE impl_status ${IMPLEMENTED})::int AS implemented
                   FROM base
                  GROUP BY repository, category
@@ -762,6 +793,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
             `WITH scoped AS (
                 SELECT s."suggestion_id",
                        s."suggestionImplementationStatus",
+                       ${UNDECIDED} AS undecided,
                        s."suggestionCreatedAt",
                        s."brokenKodyRulesIds"
                 ${scope}
@@ -771,6 +803,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
             SELECT
                 rule_id,
                 COUNT(*)::int AS triggers,
+                COUNT(*) FILTER (WHERE NOT sc.undecided)::int AS rated,
                 COUNT(*) FILTER (WHERE sc."suggestionImplementationStatus" ${IMPLEMENTED})::int AS implemented,
                 COALESCE(SUM(f."thumbs_up"), 0)::int AS thumbs_up,
                 COALESCE(SUM(f."thumbs_down"), 0)::int AS thumbs_down,
@@ -785,6 +818,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         )) as Array<{
             rule_id: string;
             triggers: number;
+            rated: number;
             implemented: number;
             thumbs_up: number;
             thumbs_down: number;
@@ -795,7 +829,8 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
             ruleId: r.rule_id,
             triggers: Number(r.triggers),
             implemented: Number(r.implemented),
-            rate: this.rate(Number(r.triggers), Number(r.implemented)),
+            // Rated on what the check decided; triggers count every one.
+            rate: this.rate(Number(r.rated), Number(r.implemented)),
             thumbsUp: Number(r.thumbs_up),
             thumbsDown: Number(r.thumbs_down),
             lastTriggeredAt: r.last_triggered_at,
@@ -822,6 +857,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
             `SELECT
                 CASE WHEN ${IS_KODY_RULE} THEN 'kody_rules' ELSE 'general' END AS grp,
                 COUNT(*)::int AS sent,
+                COUNT(*) FILTER (WHERE NOT ${UNDECIDED})::int AS rated,
                 COUNT(*) FILTER (WHERE s."suggestionImplementationStatus" ${IMPLEMENTED})::int AS implemented,
                 COALESCE(SUM(f."thumbs_up"), 0)::int AS thumbs_up,
                 COALESCE(SUM(f."thumbs_down"), 0)::int AS thumbs_down
@@ -835,6 +871,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         )) as Array<{
             grp: 'kody_rules' | 'general';
             sent: number;
+            rated: number;
             implemented: number;
             thumbs_up: number;
             thumbs_down: number;
@@ -844,7 +881,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
             group: r.grp,
             sent: Number(r.sent),
             implemented: Number(r.implemented),
-            rate: this.rate(Number(r.sent), Number(r.implemented)),
+            rate: this.rate(Number(r.rated), Number(r.implemented)),
             thumbsUp: Number(r.thumbs_up),
             thumbsDown: Number(r.thumbs_down),
         }));
@@ -898,11 +935,15 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
         if (q.implementationStatus) {
             if (q.implementationStatus === 'not_implemented') {
                 // Suggestions never evaluated land here too — for the user
-                // both read as "the team did not act on this".
+                // both read as "the team did not act on this". The ones the
+                // last check could not decide are listed apart.
                 filters.push(
                     `AND (s."suggestionImplementationStatus" IS NULL
-                          OR s."suggestionImplementationStatus" NOT ${IMPLEMENTED})`,
+                          OR s."suggestionImplementationStatus" NOT ${IMPLEMENTED})
+                     AND NOT ${UNDECIDED}`,
                 );
+            } else if (q.implementationStatus === 'not_measured') {
+                filters.push(`AND ${UNDECIDED}`);
             } else {
                 params.push(q.implementationStatus);
                 filters.push(
@@ -944,6 +985,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
                 s."label" AS category,
                 lower(s."severity") AS severity,
                 s."suggestionImplementationStatus" AS implementation_status,
+                ${UNDECIDED} AS not_measured,
                 s."raw"->>'oneSentenceSummary' AS summary,
                 s."raw"->>'existingCode' AS existing_code,
                 s."raw"->>'improvedCode' AS improved_code,
@@ -965,6 +1007,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
                     category: string | null;
                     severity: string | null;
                     implementation_status: string | null;
+                    not_measured: boolean | null;
                     summary: string | null;
                     existing_code: string | null;
                     improved_code: string | null;
@@ -990,6 +1033,7 @@ export class CockpitReviewAnalyticsService implements ICockpitReviewAnalyticsSer
             category: r.category,
             severity: r.severity,
             implementationStatus: r.implementation_status,
+            notMeasured: r.not_measured === true,
             summary: r.summary,
             existingCode: r.existing_code,
             improvedCode: r.improved_code,

@@ -98,7 +98,7 @@ export function finderProfileFor(modelName?: string): FinderModelProfile {
  */
 export function finderRunSettings(
     input: {
-        reviewMode?: 'fast' | 'normal' | 'deep';
+        reviewMode?: 'fast' | 'balanced' | 'deep';
         maxSteps?: number;
         skipSynthesisRescue?: boolean;
     },
@@ -108,7 +108,7 @@ export function finderRunSettings(
     maxSteps?: number;
     skipSynthesisRescue?: boolean;
 } {
-    if ((input.reviewMode ?? 'normal') !== 'normal') {
+    if ((input.reviewMode ?? 'balanced') !== 'balanced') {
         return {
             profile: undefined,
             maxSteps: input.maxSteps,

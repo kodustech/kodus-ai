@@ -1,3 +1,4 @@
+import type { ApprovalTeamMembership } from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
 import { Injectable } from '@nestjs/common';
 import axios, { AxiosInstance } from 'axios';
 
@@ -10,6 +11,8 @@ import {
     AzureRepoChange,
     AzureRepoCommentType,
     AzureRepoCommit,
+    AzureRepoCommitDiff,
+    AzureRepoDiffChange,
     AzureRepoFileContent,
     AzureRepoFileItem,
     AzureRepoIteration,
@@ -25,18 +28,82 @@ import {
 import { AzureReposProject } from '@libs/platform/domain/azure/entities/azureReposProject.type';
 import { AzureReposRepository } from '@libs/platform/domain/azure/entities/azureReposRepository.type';
 
+/** `diffs/commits` returns 100 entries when `$top` is left out (#2268). */
+const DIFF_PAGE_SIZE = 1000;
+const DIFF_MAX_PAGES = 50;
+
 @Injectable()
 export class AzureReposRequestHelper {
     constructor() {}
+
+    async getApprovalTeamMembership(params: {
+        orgName: string;
+        token: string;
+        projectId: string;
+        team: string;
+        author: string;
+    }): Promise<ApprovalTeamMembership> {
+        const instance = await this.azureRequest(params);
+        let containsGroups = false;
+        // Native teams can contain groups that this endpoint cannot expand.
+        // A direct match is evidence; a missing user in an unexpanded group is unknown.
+        for (let skip = 0; skip < 10_000; skip += 100) {
+            const { data } = await instance.get(
+                `/_apis/projects/${encodeURIComponent(params.projectId)}/teams/${encodeURIComponent(params.team)}/members`,
+                {
+                    params: {
+                        'api-version': '7.1',
+                        '$top': 100,
+                        '$skip': skip,
+                    },
+                },
+            );
+            if (!Array.isArray(data?.value)) return 'unavailable';
+            for (const member of data.value) {
+                const identity = member?.identity;
+                if (!identity) return 'unavailable';
+                if (
+                    !identity.isContainer &&
+                    identity.uniqueName?.toLowerCase() ===
+                        params.author.toLowerCase()
+                )
+                    return 'member';
+                containsGroups ||= identity.isContainer === true;
+            }
+            if (data.value.length < 100)
+                return containsGroups ? 'unavailable' : 'not-member';
+        }
+        return 'unavailable';
+    }
 
     async getProjects(params: {
         orgName: string;
         token: string;
     }): Promise<AzureReposProject[]> {
         const instance = await this.azureRequest(params);
-        const { data } = await instance.get('/_apis/projects?api-version=7.1');
+        const projects: AzureReposProject[] = [];
+        let continuationToken: string | undefined;
 
-        return data?.value;
+        // The endpoint returns one page (100 projects by default) and a
+        // continuation token header while more remain.
+        do {
+            const query = continuationToken
+                ? `&continuationToken=${encodeURIComponent(continuationToken)}`
+                : '';
+            const response = await instance.get(
+                `/_apis/projects?api-version=7.1&$top=500${query}`,
+            );
+
+            projects.push(...(response?.data?.value ?? []));
+
+            const next = response?.headers?.['x-ms-continuationtoken'];
+            continuationToken =
+                typeof next === 'string' && next && next !== continuationToken
+                    ? next
+                    : undefined;
+        } while (continuationToken);
+
+        return projects;
     }
 
     /**
@@ -649,7 +716,7 @@ export class AzureReposRequestHelper {
         baseCommit: string;
         targetCommitId: string;
         filePath?: string;
-    }): Promise<any[]> {
+    }): Promise<AzureRepoCommitDiff> {
         const instance = await this.azureRequest(params);
 
         const queryParams = [
@@ -667,8 +734,22 @@ export class AzureReposRequestHelper {
         const url = `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/diffs/commits?${queryParams.join('&')}`;
 
         try {
-            const { data } = await instance.get(url);
-            return data?.changes || [];
+            const changes: AzureRepoDiffChange[] = [];
+            // Azure leaves `allChangesIncluded` out of every page but the last.
+            for (let page = 0; page < DIFF_MAX_PAGES; page++) {
+                const { data } = await instance.get(
+                    `${url}&$top=${DIFF_PAGE_SIZE}&$skip=${changes.length}`,
+                );
+                if (!Array.isArray(data?.changes)) break;
+                const pageChanges: AzureRepoDiffChange[] = data.changes;
+                changes.push(...pageChanges);
+
+                if (data?.allChangesIncluded === true) {
+                    return { changes, allChangesIncluded: true };
+                }
+                if (!pageChanges.length) break;
+            }
+            return { changes, allChangesIncluded: false };
         } catch (error) {
             if (
                 error.response?.data?.message?.includes('TF401175') ||
@@ -791,31 +872,51 @@ export class AzureReposRequestHelper {
     }): Promise<{ content: string } | null> {
         const instance = await this.azureRequest(params);
 
-        // Azure DevOps expects plain branch names for versionDescriptor.version.
+        // Azure DevOps expects plain names for versionDescriptor.version.
         // Normalize typical refs (e.g., "refs/heads/main" -> "main").
-        const normalizedBranch = params.branch?.replace(/^refs\/heads\//, '');
+        const isTag = params.branch?.startsWith('refs/tags/') ?? false;
+        const normalizedBranch = params.branch
+            ?.replace(/^refs\/heads\//, '')
+            .replace(/^refs\/tags\//, '');
 
-        const versionQuery = normalizedBranch
-            ? `versionDescriptor.version=${encodeURIComponent(normalizedBranch)}&versionDescriptor.versionType=branch`
-            : params.commitId
-              ? `versionDescriptor.version=${encodeURIComponent(params.commitId)}&versionDescriptor.versionType=commit`
-              : '';
-
-        const queryParts = [
-            `path=${encodeURIComponent(params.filePath)}`,
-            versionQuery,
-            'includeContent=true',
-            'resolveLfs=true',
-            'api-version=7.1',
-        ].filter(Boolean);
-
-        const { data } = await instance.get(
-            `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/items?${queryParts.join('&')}`,
-        );
-
-        return {
-            content: data?.content || '',
+        const read = async (versionType: 'branch' | 'tag') => {
+            const versionQuery = normalizedBranch
+                ? `versionDescriptor.version=${encodeURIComponent(normalizedBranch)}&versionDescriptor.versionType=${versionType}`
+                : params.commitId
+                  ? `versionDescriptor.version=${encodeURIComponent(params.commitId)}&versionDescriptor.versionType=commit`
+                  : '';
+            const queryParts = [
+                `path=${encodeURIComponent(params.filePath)}`,
+                versionQuery,
+                'includeContent=true',
+                'resolveLfs=true',
+                'api-version=7.1',
+            ].filter(Boolean);
+            const { data } = await instance.get(
+                `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/items?${queryParts.join('&')}`,
+            );
+            return { content: data?.content || '' };
         };
+
+        if (isTag) return read('tag');
+        try {
+            return await read('branch');
+        } catch (error) {
+            // A plain name may be a tag (a skill or doc pinned with "Use a
+            // branch or tag instead"): Azure resolves it only as a tag.
+            // Only when the name is not a branch (TF401175, the version could
+            // not be resolved); a file missing on the branch is not retried.
+            const response = (
+                error as {
+                    response?: { status?: number; data?: { message?: string } };
+                }
+            )?.response;
+            const versionNotFound =
+                (response?.status === 404 || response?.status === 400) &&
+                /TF401175/.test(response?.data?.message ?? '');
+            if (!normalizedBranch || !versionNotFound) throw error;
+            return read('tag');
+        }
     }
 
     async getCommitsForPullRequest(params: {

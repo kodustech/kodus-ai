@@ -347,6 +347,19 @@ async function everyShape(
 const MATRIX_TIMEOUT = 600000;
 
 describe('reasoning-field refusals — every production slot × protocol × executor', () => {
+    // A `kodus` slot carries no key of its own: its module reads Kodus's
+    // platform key from env at build time. A placeholder stands in for it, as
+    // `apiKey: 'k'` does for every other slot.
+    const PLATFORM_KEY = 'API_KODUS_PROVIDER_FIREWORKS_API_KEY';
+    const previousPlatformKey = process.env[PLATFORM_KEY];
+    beforeAll(() => {
+        process.env[PLATFORM_KEY] ??= 'k';
+    });
+    afterAll(() => {
+        if (previousPlatformKey === undefined) delete process.env[PLATFORM_KEY];
+        else process.env[PLATFORM_KEY] = previousPlatformKey;
+    });
+
     beforeAll(async () => {
         for (const slot of SLOTS) {
             for (const mode of MODES) {

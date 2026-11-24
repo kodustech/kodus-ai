@@ -1,39 +1,52 @@
 ---
 title: "Como hospedar uma ferramenta de revisão de código com IA por conta própria"
-description: "Implante o Kodus na sua própria infraestrutura com controle total sobre dados, modelos e configuração."
+description: "Implante a Kodus na sua própria infraestrutura com controle total sobre dados, modelos e configuração."
 ---
 
-O Kodus é open-source e pode ser hospedado na sua própria infraestrutura. Isso lhe dá controle total sobre seus dados, acesso à rede e provedor de LLM.
+A Kodus é open source e pode ser hospedado na sua própria infraestrutura. Isso dá a você controle sobre onde ficam os dados de revisão, qual provedor de LLM as revisões usam e como o seu provedor Git alcança a Kodus.
 
 ## Opções de implantação
 
 ### Docker (recomendado)
 
-Implante o Kodus usando Docker Compose em qualquer VM:
+Implante a Kodus usando Docker Compose em qualquer VM:
 
-1. Clone o repositório do Kodus
-2. Configure as variáveis de ambiente
-3. Execute `docker compose up`
-4. Acesse a interface web e conecte seu provedor Git
+1. Clone o repositório `kodus-installer`
+2. Copie `.env.example` para `.env`, gere as chaves e preencha seus valores
+3. Execute `./scripts/install.sh`
+4. Execute `./scripts/doctor.sh` para verificar a stack
+5. Abra a interface web, crie sua conta de admin, conecte um provedor de LLM (nenhuma revisão roda sem um modelo) e conecte seu provedor Git
+
+O instalador sobe o app web, a API, o serviço de webhooks, o worker, o PostgreSQL, o MongoDB e o RabbitMQ. As instruções passo a passo estão em [Implantar com Docker](/pt-BR/how_to_deploy/deploy_kodus/generic_vm).
 
 ### Desenvolvimento local
 
-Para testes ou contribuição:
+Para testes ou para contribuir, use o [quickstart local](/pt-BR/how_to_deploy/local_quickstart/orchestrator). Ele roda a stack inteira na sua máquina.
 
-1. Use o orquestrador para uma configuração local rápida
-2. Inclui todos os serviços em um único comando
+## Conectando seu provedor Git
+
+| Provedor | Conexão |
+| --- | --- |
+| GitHub | GitHub App que você cria, ou um token. [GitHub App](/pt-BR/how_to_deploy/platforms/github/github_app) |
+| GitLab | App OAuth que você cria, ou um token. [GitLab OAuth](/pt-BR/how_to_deploy/platforms/gitlab/gitlab_oauth) |
+| Bitbucket | API token no Cloud; usuário e senha no Data Center (alpha). [Webhooks do Bitbucket](/pt-BR/how_to_deploy/platforms/bitbucket/bitbucket_webhook) |
+| Azure Repos | Token. [Webhooks do Azure DevOps](/pt-BR/how_to_deploy/platforms/azure_devops/azdevops_webhook) |
+| Forgejo | Token. O suporte é mantido pela comunidade. [Webhooks do Forgejo](/pt-BR/how_to_deploy/platforms/forgejo/forgejo_webhook) |
 
 ## O que você controla
 
-- **Dados** — todo o código e dados de revisão permanecem na sua infraestrutura
-- **Provedor de LLM** — use qualquer provedor ou modelos self-hosted
-- **Rede** — roda atrás do seu firewall, sem necessidade de acesso externo
-- **Configuração** — controle total sobre todas as configurações
+- **Dados** — os dados de pull requests, sugestões e configurações ficam no seu próprio PostgreSQL e MongoDB
+- **Provedor de LLM** — use qualquer provedor, ou um modelo self-hosted por meio de um endpoint compatível com OpenAI
+- **Rede** — seu provedor Git precisa alcançar o serviço de webhooks (porta 3332), e a Kodus precisa alcançar seu provedor Git e seu provedor de LLM
+- **Configuração** — as configurações ficam no seu `.env` e no app web
+
+Cada instância envia um heartbeat anônimo por dia; veja [Telemetria Anônima](/pt-BR/how_to_deploy/deploy_kodus/telemetry) para inspecioná-lo ou desativá-lo.
 
 ## Requisitos
 
 - Docker e Docker Compose
 - Recursos de computação suficientes para os serviços de API e worker
-- Acesso à rede para o seu provedor Git (GitHub, GitLab, Bitbucket)
+- Um domínio ou IP fixo que seu provedor Git consiga alcançar, se ele for um provedor na nuvem como GitHub.com ou GitLab.com
+- Acesso de rede ao seu provedor Git (GitHub, GitLab, Bitbucket, Azure Repos ou Forgejo)
 
 Para o guia completo de implantação, consulte [Implantar com Docker](/pt-BR/how_to_deploy/deploy_kodus/generic_vm).

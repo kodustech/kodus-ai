@@ -1,5 +1,6 @@
 import { extractProviderMessage } from './review-error-diagnostics';
 import { AgentContextWindowTooSmallError } from './errors';
+import { isRoutingRefusal } from './routing-refusal';
 
 /**
  * Canonical categories for LLM/provider errors surfaced when calling a model.
@@ -27,6 +28,21 @@ export enum LlmErrorCategory {
     MODEL_ACCESS_DENIED = 'MODEL_ACCESS_DENIED',
     CONTEXT_OVERFLOW = 'CONTEXT_OVERFLOW',
     TRANSIENT = 'TRANSIENT',
+    /**
+     * A 400/422 that no other category explains: the provider refused the
+     * request as built for this model (a parameter it does not accept on that
+     * endpoint, a field it does not know). The cause can be the configuration
+     * or the request we built, so its message blames neither and quotes the
+     * provider. Like UNKNOWN, it is never cascaded to a fallback model.
+     */
+    REQUEST_REJECTED = 'REQUEST_REJECTED',
+    /**
+     * The self-hosted env model cannot be built (`API_LLM_PROVIDER` set but not
+     * runnable). Attached at the throw site only, so the reason reaches the PR
+     * comment whole instead of being cut like an unclassified message. Never
+     * cascaded to a fallback model.
+     */
+    CONFIG_INVALID = 'CONFIG_INVALID',
     UNKNOWN = 'UNKNOWN',
 }
 
@@ -99,6 +115,10 @@ export function classifyLLMError(
     err: unknown,
     provider?: string,
 ): ClassifiedErrorInfo {
+    // Classified where it was thrown (e.g. CONFIG_INVALID): that knows more
+    // than any status or wording match below.
+    const attached = getClassification(err);
+    if (attached) return attached;
     // `err.message` is typed string but at runtime can be null (malformed
     // Error-like objects) — guard so the `rawMessage.toLowerCase()` fallback
     // never throws "Cannot read properties of null (reading 'toLowerCase')".
@@ -118,6 +138,21 @@ export function classifyLLMError(
     if (category === LlmErrorCategory.UNKNOWN) {
         category = matchByMessage(lower);
     }
+    // A gateway that refuses to route a valid model (allowed providers, a
+    // region pin) answers 400 or 404 as it likes; the body is the same
+    // finding either way, and the fix is the routing, not the request.
+    if (isRoutingRefusal(lower) && category === LlmErrorCategory.UNKNOWN) {
+        category = LlmErrorCategory.MODEL_NOT_FOUND;
+    }
+    // Last, so a 400 that says "context length", "invalid api key" or "quota"
+    // keeps the category its wording names.
+    if (
+        category === LlmErrorCategory.UNKNOWN &&
+        (httpStatus === 400 || httpStatus === 422)
+    ) {
+        category = LlmErrorCategory.REQUEST_REJECTED;
+    }
+    const providerMessage = extractProviderMessage(err);
 
     return {
         category,
@@ -132,8 +167,11 @@ export function classifyLLMError(
         friendlyMessage:
             category === LlmErrorCategory.CONTEXT_OVERFLOW
                 ? buildContextOverflowMessage(err, provider)
-                : buildFriendlyMessage(category, provider, lower),
-        providerMessage: extractProviderMessage(err),
+                : category === LlmErrorCategory.REQUEST_REJECTED &&
+                    providerMessage
+                  ? `The provider${provider ? ` (${provider})` : ''} refused the request for this model: ${providerMessage}`
+                  : buildFriendlyMessage(category, provider, lower),
+        providerMessage,
         ...(category === LlmErrorCategory.MODEL_NOT_FOUND &&
         isRoutingRefusal(lower)
             ? { routingRefusal: true }
@@ -220,7 +258,8 @@ export function isTerminalCategory(category: LlmErrorCategory): boolean {
         category === LlmErrorCategory.AUTH_INVALID ||
         category === LlmErrorCategory.QUOTA_EXCEEDED ||
         category === LlmErrorCategory.MODEL_NOT_FOUND ||
-        category === LlmErrorCategory.MODEL_ACCESS_DENIED
+        category === LlmErrorCategory.MODEL_ACCESS_DENIED ||
+        category === LlmErrorCategory.CONFIG_INVALID
     );
 }
 
@@ -300,6 +339,14 @@ function matchByHttpStatus(
     lowerMessage: string,
 ): LlmErrorCategory {
     if (status === undefined) return LlmErrorCategory.UNKNOWN;
+    // OpenRouter answers a key that spent its monthly cap with a 403: the key
+    // is fine, and "check the key" sent the customer the wrong way. A 403 is
+    // an auth refusal first, so only wording that names a limit or a cap
+    // counts, not the 429 vocabulary ("billing", "credit"), which an auth
+    // refusal can carry when its body echoes the request.
+    if (status === 403 && namesASpentCap(lowerMessage)) {
+        return LlmErrorCategory.QUOTA_EXCEEDED;
+    }
     if (status === 401 || status === 403) {
         return LlmErrorCategory.AUTH_INVALID;
     }
@@ -326,6 +373,16 @@ function matchByHttpStatus(
     // 499 is the gateway status for a request its upstream dropped (nginx,
     // LiteLLM and Codex-account proxies use it): the same call can succeed.
     if ((status >= 500 && status < 600) || status === 499) {
+        // An account-pool proxy (CLIProxyAPI) answers 503 "auth_unavailable"
+        // when none of its accounts can serve. It names the last upstream
+        // refusal: a permission error stays until the proxy's auth is fixed,
+        // while an overloaded upstream does pass.
+        if (
+            lowerMessage.includes('auth_unavailable') &&
+            lowerMessage.includes('permission_error')
+        ) {
+            return LlmErrorCategory.AUTH_INVALID;
+        }
         return LlmErrorCategory.TRANSIENT;
     }
     return LlmErrorCategory.UNKNOWN;
@@ -392,9 +449,24 @@ function looksLikeQuota(lower: string): boolean {
         // wording for the same reason. Its short-window sibling ("Usage limit
         // reached for 5 hour") reopens within hours and stays a rate limit.
         lower.includes('weekly/monthly limit exhausted') ||
+        // OpenCode Go's plan cap ("usage limit reached (weekly, resets in
+        // 1d 22h)") and its free tier ("Free usage limit reached ... subscribe
+        // to OpenCode Go to keep going"): neither reopens in minutes.
+        /usage limit reached \((weekly|monthly)/.test(lower) ||
+        lower.includes('free usage limit reached') ||
+        // OpenRouter's per-key spend cap: "Key limit exceeded (monthly
+        // limit) ... $10.02 of $10.00 used; resets 2026-12-01".
+        lower.includes('key limit exceeded') ||
         lower.includes('failure to pay') ||
         lower.includes('past invoices') ||
         lower.includes('past due')
+    );
+}
+
+/** "key limit exceeded", "usage limit reached", "spending cap": a named cap. */
+function namesASpentCap(lower: string): boolean {
+    return /\b(?:key|usage|spend(?:ing)?|credit|monthly|weekly|daily|quota)[-\s](?:limit|cap)s?\b/.test(
+        lower,
     );
 }
 
@@ -430,6 +502,10 @@ function matchByMessage(lower: string): LlmErrorCategory {
     if (
         lower.includes('invalid_api_key') ||
         lower.includes('invalid api key') ||
+        // Google answers a wrong or expired key with HTTP 400, not 401.
+        lower.includes('api_key_invalid') ||
+        lower.includes('api key not valid') ||
+        lower.includes('api key expired') ||
         lower.includes('incorrect api key') ||
         lower.includes('unauthorized') ||
         lower.includes('authentication failed') ||
@@ -468,7 +544,11 @@ function matchByMessage(lower: string): LlmErrorCategory {
         // OpenAI: "Your input exceeds the context window of this model."
         lower.includes('exceeds the context window') ||
         // A gateway that caps the body: "The total text input size exceeds 8 MB".
-        lower.includes('input size exceeds')
+        lower.includes('input size exceeds') ||
+        // Anthropic: "prompt is too long: 212345 tokens > 200000 maximum", and
+        // "input length and `max_tokens` exceed context limit: …".
+        lower.includes('prompt is too long') ||
+        lower.includes('exceed context limit')
     ) {
         return LlmErrorCategory.CONTEXT_OVERFLOW;
     }
@@ -508,16 +588,6 @@ function matchByMessage(lower: string): LlmErrorCategory {
  * it. The status is identical to "no such model"; only the body distinguishes
  * them, so the body is what has to be read.
  */
-function isRoutingRefusal(providerText?: string): boolean {
-    const said = (providerText ?? '').toLowerCase();
-    if (!said) return false;
-    return (
-        said.includes('allowed-providers') ||
-        said.includes('allowed providers') ||
-        (said.includes('no allowed') && said.includes('provider'))
-    );
-}
-
 function buildFriendlyMessage(
     category: LlmErrorCategory,
     provider?: string,
@@ -536,7 +606,7 @@ function buildFriendlyMessage(
         category === LlmErrorCategory.MODEL_NOT_FOUND &&
         isRoutingRefusal(providerText)
     ) {
-        return `The model is fine, but your provider account${providerLabel} allows no upstream that serves it, so the request has nowhere to route. Allow one of the providers that serves this model, or pick a model your current ones serve.`;
+        return `The model is fine, but your provider account${providerLabel} allows no upstream that serves it, so the request has nowhere to route. Allow one of the providers that serves this model (or a region one of them serves, if the account pins regions), or pick a model your current ones serve.`;
     }
 
     switch (category) {
@@ -559,6 +629,8 @@ function buildFriendlyMessage(
             return `The PR exceeded the maximum context size accepted by the model${providerLabel}.`;
         case LlmErrorCategory.TRANSIENT:
             return `Transient error reaching the provider${providerLabel}. Try again.`;
+        case LlmErrorCategory.REQUEST_REJECTED:
+            return `The provider${providerLabel} refused the request for this model.`;
         default:
             return `Unexpected error while running the code review${providerLabel}.`;
     }
@@ -595,7 +667,7 @@ function buildContextOverflowMessage(err: unknown, provider?: string): string {
     if (err instanceof AgentContextWindowTooSmallError) {
         const window = err.contextWindow.toLocaleString('en-US');
         return [
-            `This PR is too large for the configured model. \`${err.modelName}\` has a context window of ${window} tokens, but this review needs at least ${err.overheadTokens.toLocaleString('en-US')} tokens of context.`,
+            `The configured model's context window is too small for this review. \`${err.modelName}\` has a context window of ${window} tokens, but this review's fixed prompt alone takes ${err.overheadTokens.toLocaleString('en-US')} tokens, leaving no room for the diff and the answer.`,
             '',
             '**To resolve, choose one:**',
             `- **Switch to a recommended model**: pick one of Kodus's recommended models in your BYOK settings (${RECOMMENDED_MODELS_FOR_ERROR}).`,

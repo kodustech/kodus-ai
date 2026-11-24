@@ -18,6 +18,7 @@ import {
     createTrialAnalyzeStartVerboseMessages,
 } from './review-verbose.js';
 import {
+    normalizeReviewResult,
     normalizeSeverity,
     normalizeSuggestionsResponse,
 } from './review-normalizer.js';
@@ -53,6 +54,8 @@ class ReviewService {
             commit?: string;
             branch?: string;
             focus?: string;
+            heavy?: boolean;
+            balanced?: boolean;
             quiet?: boolean;
             onProgress?: (status: string) => void;
         },
@@ -117,7 +120,10 @@ class ReviewService {
                 filesAnalyzed: result.filesAnalyzed,
             }).forEach((message) => this.logVerbose(message));
 
-            return result;
+            // `/cli/review` returns the API's own severity scale (`high`/
+            // `medium`/`low`); normalize before the result reaches the
+            // formatters, exit-code logic, and agent envelopes.
+            return normalizeReviewResult(result);
         }
 
         // Personal token: also send git context for repository-scoped rules
@@ -158,7 +164,7 @@ class ReviewService {
             filesAnalyzed: result.filesAnalyzed,
         }).forEach((message) => this.logVerbose(message));
 
-        return result;
+        return normalizeReviewResult(result);
     }
 
     async getPullRequestSuggestions(params: {
@@ -245,7 +251,7 @@ class ReviewService {
             filesAnalyzed: result.filesAnalyzed,
         }).forEach((message) => this.logVerbose(message));
 
-        return result;
+        return normalizeReviewResult(result);
     }
 
     normalizeSeverity(severity?: string): Severity {

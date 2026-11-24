@@ -8,92 +8,107 @@ icon: "headset"
 
 ### 「診断を実行する」
 
-インストーラーにはスタックと一般的な設定ミスを確認するdoctorスクリプトが同梱されています。
+インストーラーにはdoctorスクリプトが同梱されています。`kodus-installer`ディレクトリで実行します。
 
 ```bash
-cd kodus-installer
 ./scripts/doctor.sh
 ```
+
+最初の行にレビューが動作しているかどうかが表示されます（`Reviews: NOT RUNNING`、`RUNNING, DEGRADED`、`OK`のいずれか）。その後に続く各問題には、失われる機能と、対処すべき1つの操作が示されます。このスクリプトは何も変更せず、シークレットも出力しないため、出力をそのままサポートのスレッドに貼り付けられます。`--verbose`を付けると、成功したすべてのチェックも表示されます。
+
+`.env`だけを確認するには、`./scripts/validate-env.sh`を実行します。各変数をスキーマと照合し、コンテナが実行中の場合は、コンテナが`.env`と異なる値を読み込んでいる箇所を表示します。コンテナを再作成せずに行った変更を検出できます。
+
+Kubernetesでは、代わりに`./scripts/doctor-k8s.sh -n <namespace>`を使用します。[Kubernetes & OpenShift](/ja/how_to_deploy/deploy_kodus/kubernetes#検証)を参照してください。
+
+### 「レビューが開始されない」
+
+次の項目を順に確認します。
+
+1. **モデルが接続されている。** **AI providers**を開くか、`.env`でモデルを設定します。モデルがないとレビューは実行されません。
+2. **webhook URLがwebhooksサービスに到達する。** リポジトリを接続すると、プロバイダーの`*_CODE_MANAGEMENT_WEBHOOK` URL（`API_GITHUB_CODE_MANAGEMENT_WEBHOOK`など）でwebhookが登録されます。この変数が空の場合、リポジトリは接続されますが何もトリガーされません。URLは`https://`で、ポート`3332`に到達する必要があります。
+3. **workerが実行されている。** `docker compose ps worker`で起動していることを確認し、`WORKER_ROLE=code-review`が設定されている必要があります。
 
 ### 「Webインターフェースにアクセスできない」
 
 1. コンテナが実行中か確認します：
 
 ```bash
-docker-compose ps kodus-web
+docker compose ps kodus-web
 ```
 
 2. ポートが正しくマッピングされているか確認します：
 
 ```bash
-docker-compose port kodus-web 3000
+docker compose port kodus-web 3000
 ```
 
 3. Webコンテナのログを確認します：
 
 ```bash
-docker-compose logs kodus-web
+docker compose logs kodus-web
 ```
-
-### 「`kodus-web`ログにEdge Runtimeエラーが表示される」
-
-`A Node.js API is used ... not supported in the Edge Runtime`のようなエラーが表示される場合（`axios`のインポートトレースが伴うことが多い）、WebアプリのあちらがEdge Runtimeで実行されており、Node.js APIをサポートしていません。
-
-1. 最新の`kodus-web`イメージに更新します（インストーラーを再実行するか、`docker-compose pull kodus-web`と`docker-compose up -d`を実行）。
-2. ソースからビルドしている場合は、auth/サーバールートがNode.jsランタイムで実行されることを確認してください（`export const runtime = "nodejs"`を設定し、それらのルートで`runtime = "edge"`を使用しないようにしてください）。
-3. コンテナを再ビルドして再起動します。
 
 ### 「Gitのwebhookが機能しない」
 
-1. ドメインの設定を確認します：
+1. webhooksサービスが応答するか確認します：
 
 ```bash
-curl -I https://your-domain.com
+curl -i http://localhost:3332/health/live
 ```
 
-2. Webhookの試行についてWebhooksのログを確認します：
+2. Webhookの試行についてwebhooksのログを確認します：
 
 ```bash
-docker-compose logs webhooks | grep webhook
+docker compose logs webhooks | grep webhook
 ```
 
-3. リバースプロキシの設定を確認します：
+3. 専用のwebhooksドメインを使用している場合は、リバースプロキシ経由でサービスに到達できるか確認します：
 
 ```bash
+curl -i https://your-webhooks-domain.com/health/live
 sudo nginx -t
 ```
+
+webhookをAPIドメインで受け付ける場合は、プロキシが`/github/webhook`、`/gitlab/webhook`などのプロバイダーのパスをポート`3332`にルーティングする必要があります。[Reverse Proxy](/ja/how_to_deploy/deploy_kodus/reverse_proxy)を参照してください。
 
 ### 「データベース接続の問題」
 
 1. データベースコンテナの状態を確認します：
 
 ```bash
-docker-compose ps db_kodus_postgres
-docker-compose ps db_kodus_mongodb
+docker compose ps db_kodus_postgres db_kodus_mongodb
 ```
 
 2. データベースのログを確認します：
 
 ```bash
-docker-compose logs db_kodus_postgres
-docker-compose logs db_kodus_mongodb
+docker compose logs db_kodus_postgres
+docker compose logs db_kodus_mongodb
 ```
 
-3. データベース接続をテストします：
+3. コンテナ内からデータベース接続をテストします：
 
 ```bash
-docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
-docker-compose exec db_kodus_mongodb mongosh -u $API_MG_DB_USERNAME -p $API_MG_DB_PASSWORD
+docker compose exec db_kodus_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose exec db_kodus_mongodb sh -c 'mongosh -u "$MONGO_INITDB_ROOT_USERNAME" --authenticationDatabase admin'
 ```
+
+プロンプトが表示されたら、MongoDB の root パスワードを入力します。
+
+### MongoDBがSERVER-121912で終了する
+
+MongoDB 8.3 と新しい Linux カーネルの一部の組み合わせでは、起動時に `SERVER-121912` が発生します。Docker のカーネルが 6.19 以降でイメージの上書きがない場合、`install.sh` は `KODUS_MONGO_IMAGE=docker.io/mongo:8.2.11` を保存します。Compose で直接新規インストールする場合はこの値を `.env` に設定します。Helm で新規インストールする場合は `mongodb.bundled.image=mongo:8.2.11` を設定します。
+
+ボリュームに 8.3 のデータがある場合は、イメージを変更する前に [MongoDB のダウングレード手順](https://www.mongodb.com/docs/manual/release-notes/8.3-downgrade/)に従ってください。
 
 ### 「vectorタイプが見つからないためマイグレーションが失敗した」
 
-マイグレーション中に「type vector does not exist」エラーが発生した場合、PostgreSQLデータベースでpgvector拡張機能が有効になっていないためです。修正方法を以下に示します：
+マイグレーション中に「type vector does not exist」エラーが発生した場合、PostgreSQLデータベースでpgvector拡張機能が有効になっていないためです。同梱のPostgreSQLイメージでは、ボリュームを最初に作成するときに拡張機能が有効化されます。外部データベースや、拡張機能が追加される前から存在するボリュームでは、手動で有効にする必要があります。
 
 1. PostgreSQLデータベースに接続します：
 
 ```bash
-docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_DATABASE
+docker compose exec db_kodus_postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 2. pgvector拡張機能を有効にします：
@@ -102,13 +117,13 @@ docker-compose exec db_kodus_postgres psql -U $API_PG_DB_USERNAME -d $API_PG_DB_
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-3. 拡張機能を有効にした後、マイグレーションを再度実行します：
+3. apiを再起動します。apiは起動時にマイグレーションを実行します：
 
 ```bash
-docker-compose exec api npm run migration:run
+docker compose restart api
 ```
 
-問題が解決しない場合は、拡張機能が正しくインストールされているか確認できます：
+拡張機能がインストールされているか確認するには：
 
 ```sql
 SELECT * FROM pg_extension WHERE extname = 'vector';
@@ -123,16 +138,24 @@ SELECT * FROM pg_extension WHERE extname = 'vector';
 1. RabbitMQの状態を確認します：
 
 ```bash
-docker-compose logs rabbitmq
+docker compose logs rabbitmq
 ```
 
-2. `http://localhost:15672`の管理コンソールにアクセスして、キューと接続を確認します
+2. 管理コンソールを開いて、キューと接続を確認します。インストーラーはランダムなホストポートで公開します。次のコマンドで確認できます：
+
+```bash
+docker compose port rabbitmq 15672
+```
 
 3. 必要に応じてサービスを再起動します：
 
 ```bash
-docker-compose restart rabbitmq
+docker compose restart rabbitmq
 ```
+
+- apiまたはwebhooksのログに`QueueBind 404`が表示される場合は、workerが`workflow.jobs.*`キューを作成していません。workerが実行されていること、`WORKER_ROLE`が設定されていることを確認してください。
+- 接続エラーは、多くの場合`API_RABBITMQ_URI`が`RABBITMQ_DEFAULT_USER`、`RABBITMQ_DEFAULT_PASS`、または`kodus-ai`仮想ホストと一致していないことが原因です。
+- 長時間のレビューで`PRECONDITION_FAILED`が表示される場合は、ブローカーの`consumer_timeout`が2時間未満です。Kodusの RabbitMQイメージでは設定済みです。自前のブローカーでは`consumer_timeout = 7200000`を設定してください。
 
 ### リソースの問題
 
@@ -147,18 +170,19 @@ docker stats
 2. コンテナの制限を確認します：
 
 ```bash
-docker inspect $(docker-compose ps -q api) | grep -A 5 "Resources"
+docker inspect $(docker compose ps -q api) | grep -A 5 "Resources"
 ```
 
-3. 必要に応じてdocker-compose.ymlのリソース制限を調整します
+3. 必要に応じて`docker-compose.yml`のリソース制限を調整します。リポジトリの解析はworker内で実行されるため、最も多くのメモリが必要です。[Sandbox & AST Graph](/ja/how_to_deploy/deploy_kodus/sandbox#リソースのサイジング)を参照してください。
 
 ## サポートを受ける
 
 ### サポートリクエストに含める内容
 
 - 正確なエラーメッセージ
+- `./scripts/doctor.sh`の出力（Kubernetesでは`./scripts/collect-diagnostics.sh -n <namespace>`）
 - 影響を受けたサービスの関連ログ
-- デプロイ方法（CLI、VMなど）
+- デプロイ方法（Docker Compose、Kubernetes、OpenShift）とKodusのバージョン
 - 問題を再現する手順
 
 ### サポートを受けられる場所

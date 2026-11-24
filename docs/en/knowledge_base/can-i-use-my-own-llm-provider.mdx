@@ -3,13 +3,13 @@ title: "Can I use my own LLM provider for code review"
 description: "Bring your own API key and choose your preferred LLM provider for AI-powered code review with Kodus."
 ---
 
-Yes. Kodus supports Bring Your Own Key (BYOK) on every plan, letting you use your preferred LLM provider. You pay the provider directly — Kodus never marks up tokens and never sees your key in plain text.
+Yes. Kodus supports Bring Your Own Key (BYOK) on every plan, letting you use your preferred LLM provider. Your provider bills you directly for tokens, and your key is stored encrypted and never shown back in plain text.
 
 ## How it works
 
 1. In the sidebar, open **AI providers** ([app.kodus.io/byok](https://app.kodus.io/byok))
 2. On the **Providers** tab, pick your provider — or **OpenAI-compatible** / **Anthropic-compatible** under **Custom** for any other endpoint
-3. Paste your API key, choose the model, and click **Test & save** — Kodus tests the connection before saving
+3. Paste your API key, choose the model, and click **Test & save**. Kodus sends a minimal real request to the model before saving
 
 ## Supported providers
 
@@ -20,19 +20,21 @@ When Kodus can list a provider's models, the **Model** picker shows them (recomm
 ## Why use your own provider
 
 - **Data control** — requests go directly to your provider
-- **Cost management** — use your existing billing relationship, no markup
+- **Cost management** — use your existing billing relationship with the provider
 - **Model choice** — pick the model that works best for your codebase
 - **Compliance** — meet internal requirements for AI tool usage
-- **Fallback resilience** — set a **Fallback (optional)** model on the **Routing** tab to keep reviews running during provider outages
+- **Fallback resilience** — set a **Fallback model** on **Code review → Routing** to keep reviews running during provider outages
 
-## Self-hosted LLM providers
+## Other and self-hosted endpoints
 
-If you self-host Kodus, you can point BYOK at self-hosted or aggregator endpoints like:
+Through the **OpenAI-compatible** and **Anthropic-compatible** providers you can point BYOK at hosted or self-hosted endpoints like:
 
-- Novita, Groq, Together AI, Fireworks AI
+- Groq, Together AI, Fireworks AI
 - Chutes, Synthetic
 - Your own Ollama / vLLM / TGI instance (via the **OpenAI-compatible** provider)
 
-For setup guides, see the [Cookbook](/en/cookbook/novita) and the provider-specific docs in the knowledge base.
+The base URL must use `https://` and resolve to a public address. On a self-hosted Kodus, an endpoint on a private network is set with environment variables instead; see [Installation](/en/how_to_deploy/deploy_kodus/generic_vm).
+
+For setup guides, see the provider pages in the [Cookbook](/en/cookbook/fireworks).
 
 For the full BYOK flow (providers, routing, advanced tuning), see [Bring Your Own Key](/en/how_to_use/byok).

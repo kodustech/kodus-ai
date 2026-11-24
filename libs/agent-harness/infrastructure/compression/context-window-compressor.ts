@@ -18,6 +18,7 @@
  * (weaker recap, still functional); a later step can wire the live tool-call
  * history.
  */
+import { timeSync } from '@libs/core/infrastructure/activity/time-sync';
 import type { ModelMessage } from 'ai';
 
 import type {
@@ -30,14 +31,16 @@ import {
     clampMessagesToBudget,
     compressMessages,
     estimateMessagesTokens,
+    type MessageTokenCounts,
     COMPRESSION_THRESHOLD_RATIO,
+    worstCaseTokenCounts,
 } from './context-compressor';
 
 /**
  * Fraction of the window kept free by default for the model's own response plus
  * drift between our tokenizer and the provider's exact count. Overridable.
  */
-const DEFAULT_SAFETY_MARGIN_RATIO = 0.08;
+export const DEFAULT_SAFETY_MARGIN_RATIO = 0.08;
 
 export interface ContextWindowCompressorOptions {
     /**
@@ -51,17 +54,38 @@ export interface ContextWindowCompressorOptions {
      * to `DEFAULT_SAFETY_MARGIN_RATIO` of the window.
      */
     safetyMarginTokens?: number;
+    /**
+     * Leave the history whole until it no longer fits: no soft pass at the
+     * usage threshold. For a run whose latest tool result is the thing asked
+     * about (a PR diff in a chat), which the soft pass would cut to its first
+     * few thousand characters while the request still fit.
+     */
+    onlyWhenOverBudget?: boolean;
+    /**
+     * Count what the tokenizer can't reach (a run too long to encode, such as
+     * base64) at its worst, as the review's own limits do. The ordinary count
+     * reads it at ~4 characters a token and let a dense tool result through
+     * at a third of its size.
+     */
+    countAtWorstCase?: boolean;
 }
 
 export class ContextWindowCompressor implements Compressor {
     private readonly overheadTokens: number;
+    /** Token counts of this run's messages (see MessageTokenCounts). */
+    private readonly tokenCounts: MessageTokenCounts;
     private readonly safetyMarginTokens: number;
+    private readonly onlyWhenOverBudget: boolean;
 
     constructor(
         private readonly contextWindowTokens: number,
         options: ContextWindowCompressorOptions = {},
     ) {
         this.overheadTokens = Math.max(0, options.overheadTokens ?? 0);
+        this.tokenCounts = options.countAtWorstCase
+            ? worstCaseTokenCounts()
+            : new Map();
+        this.onlyWhenOverBudget = options.onlyWhenOverBudget === true;
         this.safetyMarginTokens = Math.max(
             0,
             options.safetyMarginTokens ??
@@ -69,9 +93,7 @@ export class ContextWindowCompressor implements Compressor {
         );
     }
 
-    maybeCompress(
-        messages: readonly AgentMessage[],
-    ): CompressionResult | null {
+    maybeCompress(messages: readonly AgentMessage[]): CompressionResult | null {
         if (!this.contextWindowTokens || this.contextWindowTokens <= 0) {
             return null;
         }
@@ -88,12 +110,19 @@ export class ContextWindowCompressor implements Compressor {
                 this.safetyMarginTokens,
         );
 
-        const current = estimateMessagesTokens(modelMsgs);
+        // Tokenizes the whole history every step: the 2026-11-19 stall in
+        // tiktoken was here. A slow count is logged with its job.
+        const current = timeSync(
+            'context compressor token count',
+            () => estimateMessagesTokens(modelMsgs, this.tokenCounts),
+            () => ({ messages: modelMsgs.length }),
+        );
         const usage = current + this.overheadTokens;
 
         // Soft trigger: total usage crosses the compression threshold. Hard
         // trigger: the messages alone already exceed the real budget.
         const softTrigger =
+            !this.onlyWhenOverBudget &&
             usage > this.contextWindowTokens * COMPRESSION_THRESHOLD_RATIO;
         const overBudget = current > budget;
         if (!softTrigger && !overBudget) {
@@ -102,14 +131,18 @@ export class ContextWindowCompressor implements Compressor {
 
         // 1. Soft pass: truncate older tool-result text (recap-preserving).
         let compressed = compressMessages(modelMsgs, []);
-        let after = estimateMessagesTokens(compressed);
+        let after = estimateMessagesTokens(compressed, this.tokenCounts);
 
         // 2. Hard clamp: guarantee the messages fit the real budget. This is the
         //    invariant the old "return null on no savings" path violated — an
         //    oversized window was sent verbatim and overflowed the provider.
         if (after > budget) {
-            compressed = clampMessagesToBudget(compressed, budget);
-            after = estimateMessagesTokens(compressed);
+            compressed = clampMessagesToBudget(
+                compressed,
+                budget,
+                this.tokenCounts,
+            );
+            after = estimateMessagesTokens(compressed, this.tokenCounts);
         }
 
         // Nothing to gain AND we were never over budget → leave the window as-is.

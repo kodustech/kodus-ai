@@ -14,6 +14,7 @@ import {
     OAuthGrantRejectedError,
     OAuthProtectedResourceMetadata,
     registerOauthClient,
+    shouldRefreshOAuth,
     TokenData,
 } from '../../common/utils/oauth';
 import { Repository } from 'typeorm';
@@ -26,8 +27,52 @@ import {
 import { MCPIntegrationUniqueFields } from './interfaces/mcp-integration.interface';
 import { ManagedTokenCredential } from './managed-credential.types';
 import { renderTokenAuthHeaders } from './managed-auth-header';
+import { credentialFingerprint } from '@libs/mcp-server/credential-fingerprint';
 
 const MANAGED_TOKEN_KIND = 'managed-token';
+
+/**
+ * What a refused credential led to: `stale` (an older credential, nothing
+ * done), `token_rejected` (the stored static token is refused, INACTIVE),
+ * `grant_lost` (OAuth grant INACTIVE), `refreshed` (a new access token is
+ * stored), `kept` (the refresh failed for a reason that says nothing about
+ * the grant, such as a network error, a 5xx or a refresh lock held too long;
+ * the grant stays as it is).
+ */
+export type RejectedCredentialOutcome =
+    'stale' | 'token_rejected' | 'grant_lost' | 'refreshed' | 'kept';
+
+/**
+ * A refresh under the grant's lock: `refreshed` (new tokens stored),
+ * `superseded` (another refresh or a reconnect stored other tokens first;
+ * `state` holds them), `grant_lost` (the token endpoint refused the grant),
+ * `failed` (it failed for a reason that says nothing about the grant).
+ */
+type RefreshResult = {
+    outcome: 'refreshed' | 'superseded' | 'grant_lost' | 'failed';
+    state: IntegrationOAuthState;
+};
+
+/**
+ * How long a refresh waits for another refresh of the same grant. Longer
+ * than OAUTH_REFRESH_TIMEOUT_MS, so a waiter outlasts one slow refresh.
+ */
+const REFRESH_LOCK_WAIT_MS = 20_000;
+/** Between two tries for the lock; a waiter holds no connection meanwhile. */
+const REFRESH_LOCK_POLL_MS = 200;
+
+/**
+ * Whether two token sets are the same grant state. Both tokens count: a
+ * provider may hand back the same access token while it rotates the refresh
+ * token, and then only the refresh token tells that another refresh won.
+ */
+const sameTokens = (a?: TokenData, b?: TokenData) =>
+    a?.accessToken === b?.accessToken && a?.refreshToken === b?.refreshToken;
+
+type OAuthRepository = Repository<MCPIntegrationOAuthEntity>;
+
+const bearerFingerprint = (accessToken: string) =>
+    credentialFingerprint({ Authorization: `Bearer ${accessToken}` });
 
 type IntegrationOAuthState = Partial<
     MCPIntegrationUniqueFields<MCPIntegrationAuthType.OAUTH2>
@@ -62,6 +107,22 @@ export class IntegrationOAuthService {
         }
     }
 
+    /** The static-token credential a stored `auth` holds, or `null`. */
+    private managedCredentialOf(
+        auth: string | null | undefined,
+    ): ManagedTokenCredential | null {
+        const parsed = this.decryptAndParse<
+            ({ kind?: string } & ManagedTokenCredential) | null
+        >(auth, null);
+
+        if (!parsed || parsed.kind !== MANAGED_TOKEN_KIND) {
+            return null;
+        }
+
+        const { kind: _kind, ...credential } = parsed;
+        return credential;
+    }
+
     async getOAuthStatus(
         organizationId: string,
         integrationId: string,
@@ -91,17 +152,10 @@ export class IntegrationOAuthService {
         integrationId: string,
     ): Promise<IntegrationOAuthState | null> {
         try {
-            const entity = await this.integrationOAuthRepository.findOne({
-                where: { integrationId, organizationId },
-            });
-
-            if (!entity || !entity.auth) {
-                return null;
-            }
-
-            return this.decryptAndParse<IntegrationOAuthState>(
-                entity.auth,
-                {} as IntegrationOAuthState,
+            return await this.readState(
+                this.integrationOAuthRepository,
+                organizationId,
+                integrationId,
             );
         } catch (error) {
             this.logger.error('Failed to get oauth state', {
@@ -153,12 +207,12 @@ export class IntegrationOAuthService {
         organizationId: string;
         integrationId: string;
         oauthState: IntegrationOAuthState;
+        /** Refresh even though the stated expiry has not come. */
+        force?: boolean;
     }): Promise<IntegrationOAuthState> {
-        const { organizationId, integrationId } = params;
-        let { oauthState } = params;
+        const { organizationId, integrationId, oauthState, force } = params;
 
-        const { tokens, clientId, clientSecret, redirectUri, asMetadata } =
-            oauthState;
+        const { tokens, clientId, redirectUri, asMetadata } = oauthState;
 
         if (
             !tokens ||
@@ -177,62 +231,35 @@ export class IntegrationOAuthService {
             current.expiresIn !== undefined &&
             (current.expiresAt ?? 0) < Date.now();
         if (expiredForGood) {
-            return this.markGrantLost(
-                organizationId,
-                integrationId,
-                oauthState,
-            );
-        }
-
-        try {
-            const newTokens = await checkAndRefreshOAuth(
-                asMetadata.token_endpoint,
-                {
-                    tokens: current,
-                    clientId,
-                    clientSecret,
-                    redirectUri,
-                },
-            );
-
-            if (!newTokens) {
-                return oauthState;
-            }
-
-            oauthState = {
-                ...oauthState,
-                tokens: newTokens,
-            };
-
-            await this.saveOAuthState(
-                organizationId,
-                integrationId,
-                MCPIntegrationOAuthStatus.ACTIVE,
-                oauthState,
-            );
-
-            return oauthState;
-        } catch (error) {
-            if (error instanceof OAuthGrantRejectedError) {
-                // A rotating refresh token is spent by the first refresh: a
-                // concurrent request that got here first has already saved the
-                // new grant, and this refusal is only about the old token.
-                const stored = await this.getOAuthState(
-                    organizationId,
-                    integrationId,
-                );
-                const storedRefresh = (stored?.tokens as TokenData)
-                    ?.refreshToken;
-                if (storedRefresh && storedRefresh !== current.refreshToken) {
-                    return stored;
-                }
-                return this.markGrantLost(
+            return (
+                await this.markGrantLost(
+                    this.integrationOAuthRepository,
                     organizationId,
                     integrationId,
                     oauthState,
-                    error.message,
-                );
-            }
+                )
+            ).state;
+        }
+
+        if (!shouldRefreshOAuth(current, force)) {
+            return oauthState;
+        }
+
+        try {
+            const result = await this.withRefreshLock(
+                organizationId,
+                integrationId,
+                (repository) =>
+                    this.refreshLocked(
+                        repository,
+                        organizationId,
+                        integrationId,
+                        oauthState,
+                        force,
+                    ),
+            );
+            return result.state;
+        } catch (error) {
             this.logger.error('Error checking/refreshing OAuth token:', {
                 organizationId,
                 integrationId,
@@ -243,16 +270,354 @@ export class IntegrationOAuthService {
     }
 
     /**
+     * Run `work` while holding this grant's refresh lock. A rotating refresh
+     * token is spent by the first refresh, so two refreshes of one grant must
+     * not overlap: on several pods both read the same token, the second gets
+     * `invalid_grant`, and the grant was dropped although the first had just
+     * saved a new one. A caller that waited re-reads the grant inside `work`
+     * and finds the new token.
+     *
+     * The lock is tried, not waited on: each try is its own short transaction,
+     * so a waiter holds no pooled connection between tries, and only the
+     * holder keeps one for its refresh. Transaction-scoped, so the lock is
+     * released however `work` ends. Past REFRESH_LOCK_WAIT_MS it throws.
+     */
+    private async withRefreshLock<T>(
+        organizationId: string,
+        integrationId: string,
+        work: (repository: OAuthRepository) => Promise<T>,
+    ): Promise<T> {
+        const key = `mcp-oauth-refresh:${organizationId}:${integrationId}`;
+        const deadline = Date.now() + REFRESH_LOCK_WAIT_MS;
+        for (;;) {
+            const attempt =
+                await this.integrationOAuthRepository.manager.transaction(
+                    async (manager) => {
+                        const [row] = await manager.query(
+                            'SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS locked',
+                            [key],
+                        );
+                        if (!row?.locked) return { locked: false as const };
+                        return {
+                            locked: true as const,
+                            // Every read and write under the lock goes
+                            // through this transaction's connection: a second
+                            // pooled one per holder deadlocks a pool full of
+                            // holders.
+                            value: await work(
+                                manager.getRepository(
+                                    MCPIntegrationOAuthEntity,
+                                ),
+                            ),
+                        };
+                    },
+                );
+            if (attempt.locked) return attempt.value;
+            if (Date.now() >= deadline) {
+                throw new Error(
+                    `the OAuth refresh lock was held for more than ${REFRESH_LOCK_WAIT_MS} ms`,
+                );
+            }
+            await new Promise((resolve) =>
+                setTimeout(resolve, REFRESH_LOCK_POLL_MS),
+            );
+        }
+    }
+
+    /**
+     * Refresh the grant `oauthState` holds. Call only under the grant's
+     * refresh lock: it first re-reads what is stored, and when another refresh
+     * or a reconnect already stored different tokens (a rotated refresh token
+     * counts) it returns those without calling the token endpoint.
+     */
+    private async refreshLocked(
+        repository: OAuthRepository,
+        organizationId: string,
+        integrationId: string,
+        oauthState: IntegrationOAuthState,
+        force?: boolean,
+    ): Promise<RefreshResult> {
+        const current = oauthState.tokens as TokenData;
+        const row = await repository.findOne({
+            where: { integrationId, organizationId },
+        });
+        const storedTokens = this.decryptAndParse<IntegrationOAuthState>(
+            row?.auth,
+            {} as IntegrationOAuthState,
+        ).tokens as TokenData | undefined;
+        if (!row || !sameTokens(storedTokens, current)) {
+            return {
+                outcome: 'superseded',
+                state: { ...oauthState, tokens: storedTokens },
+            };
+        }
+
+        try {
+            const newTokens = await checkAndRefreshOAuth(
+                oauthState.asMetadata!.token_endpoint,
+                {
+                    tokens: current,
+                    clientId: oauthState.clientId!,
+                    clientSecret: oauthState.clientSecret,
+                    redirectUri: oauthState.redirectUri!,
+                    force,
+                },
+            );
+            if (!newTokens) {
+                return { outcome: 'failed', state: oauthState };
+            }
+
+            const next = { ...oauthState, tokens: newTokens };
+            // Only over the row read above: a reconnect saved while the token
+            // endpoint answered (it does not take this lock) is kept.
+            const written = await repository.update(
+                { id: row.id, auth: row.auth },
+                {
+                    status: MCPIntegrationOAuthStatus.ACTIVE,
+                    auth: this.encryptionUtils.encrypt(JSON.stringify(next)),
+                },
+            );
+            if (!written.affected) {
+                const now = await this.readState(
+                    repository,
+                    organizationId,
+                    integrationId,
+                );
+                return {
+                    outcome: 'superseded',
+                    state: { ...oauthState, tokens: now?.tokens },
+                };
+            }
+            return { outcome: 'refreshed', state: next };
+        } catch (error) {
+            if (error instanceof OAuthGrantRejectedError) {
+                const lost = await this.markGrantLost(
+                    repository,
+                    organizationId,
+                    integrationId,
+                    oauthState,
+                    error.message,
+                );
+                return {
+                    outcome: lost.lost ? 'grant_lost' : 'superseded',
+                    state: lost.state,
+                };
+            }
+            this.logger.error('Error checking/refreshing OAuth token:', {
+                organizationId,
+                integrationId,
+                error,
+            });
+            return { outcome: 'failed', state: oauthState };
+        }
+    }
+
+    /**
+     * The MCP server refused the credential this manager handed out, though
+     * by its stated expiry it was still good: the user or the provider
+     * revoked it, or it was rotated elsewhere. Left alone, every review sends
+     * it again and fails the same way, and the UI never asks to reconnect.
+     *
+     * `rejectedFingerprint` names the credential the caller sent
+     * (credentialFingerprint over its auth headers). When what is stored now
+     * is a different credential — refreshed or reconnected in between — the
+     * refusal was about an older one and nothing changes.
+     *
+     * - a static token: refused for good, the user must enter a new one;
+     * - OAuth: refreshed now, under the grant's refresh lock, so reports of
+     *   the same refusal from several pods refresh it once and the others
+     *   find the new token; refused, nothing to refresh with, or refreshed to
+     *   the very token that was refused, and the grant is lost (INACTIVE,
+     *   tokens dropped) until the user connects again;
+     * - a refresh that fails for another reason (network, 5xx) keeps the grant.
+     */
+    async handleRejectedCredential(
+        organizationId: string,
+        integrationId: string,
+        rejectedFingerprint: string,
+    ): Promise<RejectedCredentialOutcome> {
+        const row = await this.integrationOAuthRepository.findOne({
+            where: { integrationId, organizationId },
+        });
+        const credential = this.managedCredentialOf(row?.auth);
+        if (row && credential) {
+            if (
+                credentialFingerprint(renderTokenAuthHeaders(credential)) !==
+                rejectedFingerprint
+            ) {
+                return 'stale';
+            }
+            // Only while the refused token is still the stored one: a token
+            // the user entered in between stays usable.
+            const refused = await this.integrationOAuthRepository.update(
+                { id: row.id, auth: row.auth },
+                { status: MCPIntegrationOAuthStatus.INACTIVE },
+            );
+            return refused.affected ? 'token_rejected' : 'stale';
+        }
+
+        const current = this.decryptAndParse<IntegrationOAuthState>(
+            row?.auth,
+            {} as IntegrationOAuthState,
+        ).tokens as TokenData | undefined;
+        if (!current?.accessToken) return 'stale';
+        if (bearerFingerprint(current.accessToken) !== rejectedFingerprint) {
+            return 'stale';
+        }
+
+        try {
+            return await this.withRefreshLock(
+                organizationId,
+                integrationId,
+                (repository) =>
+                    this.refreshRejectedGrant(
+                        repository,
+                        organizationId,
+                        integrationId,
+                        rejectedFingerprint,
+                    ),
+            );
+        } catch (error) {
+            this.logger.error('Could not refresh a refused OAuth grant', {
+                organizationId,
+                integrationId,
+                error,
+            });
+            return 'kept';
+        }
+    }
+
+    /** The OAuth half of handleRejectedCredential, under the refresh lock. */
+    private async refreshRejectedGrant(
+        repository: OAuthRepository,
+        organizationId: string,
+        integrationId: string,
+        rejectedFingerprint: string,
+    ): Promise<RejectedCredentialOutcome> {
+        // Re-read under the lock: a report of the same refusal from another
+        // pod may have refreshed the grant while this one waited.
+        const oauthState = await this.readState(
+            repository,
+            organizationId,
+            integrationId,
+        );
+        const current = oauthState?.tokens as TokenData | undefined;
+        if (
+            !oauthState ||
+            !current?.accessToken ||
+            bearerFingerprint(current.accessToken) !== rejectedFingerprint
+        ) {
+            return 'stale';
+        }
+
+        const canRefresh =
+            !!current.refreshToken &&
+            !!oauthState.asMetadata?.token_endpoint &&
+            !!oauthState.redirectUri &&
+            !!oauthState.clientId;
+        if (!canRefresh) {
+            const lost = await this.markGrantLost(
+                repository,
+                organizationId,
+                integrationId,
+                oauthState,
+                'the MCP server refused the access token and there is no refresh token',
+            );
+            return lost.lost ? 'grant_lost' : 'stale';
+        }
+
+        const result = await this.refreshLocked(
+            repository,
+            organizationId,
+            integrationId,
+            oauthState,
+            true,
+        );
+        switch (result.outcome) {
+            case 'refreshed': {
+                const next = result.state.tokens as TokenData;
+                if (next.accessToken !== current.accessToken) {
+                    return 'refreshed';
+                }
+                // The provider handed back the very token the MCP server
+                // refused: sending it again fails the same way.
+                const lost = await this.markGrantLost(
+                    repository,
+                    organizationId,
+                    integrationId,
+                    result.state,
+                    'the MCP server refused the access token and refreshing returned the same one',
+                );
+                return lost.lost ? 'grant_lost' : 'stale';
+            }
+            case 'grant_lost':
+                return 'grant_lost';
+            case 'superseded':
+                return 'stale';
+            case 'failed':
+                return 'kept';
+        }
+    }
+
+    /**
      * The grant can no longer be refreshed: mark it INACTIVE (the UI then asks
      * the user to connect again) and stop handing out its token. Connecting
      * again saves a fresh ACTIVE grant.
+     *
+     * Only while the stored tokens are still the ones in `oauthState`, in the
+     * same statement: a refresh or a reconnect that stored others in between
+     * (a rotated refresh token counts) keeps them, and that state is returned
+     * with `lost: false`.
      */
     private async markGrantLost(
+        repository: OAuthRepository,
         organizationId: string,
         integrationId: string,
         oauthState: IntegrationOAuthState,
         reason = 'access token expired and there is no refresh token',
-    ): Promise<IntegrationOAuthState> {
+    ): Promise<{ lost: boolean; state: IntegrationOAuthState }> {
+        const row = await repository.findOne({
+            where: { integrationId, organizationId },
+        });
+        const storedTokens = this.decryptAndParse<IntegrationOAuthState>(
+            row?.auth,
+            {} as IntegrationOAuthState,
+        ).tokens as TokenData | undefined;
+        if (
+            !row ||
+            !sameTokens(
+                storedTokens,
+                oauthState.tokens as TokenData | undefined,
+            )
+        ) {
+            return {
+                lost: false,
+                state: { ...oauthState, tokens: storedTokens },
+            };
+        }
+
+        // Drop the tokens too: other read paths (custom integrations'
+        // getValidAccessToken) read the stored state without its status.
+        const lost = { ...oauthState, tokens: undefined };
+        const written = await repository.update(
+            { id: row.id, auth: row.auth },
+            {
+                status: MCPIntegrationOAuthStatus.INACTIVE,
+                auth: this.encryptionUtils.encrypt(JSON.stringify(lost)),
+            },
+        );
+        if (!written.affected) {
+            const now = await this.readState(
+                repository,
+                organizationId,
+                integrationId,
+            );
+            return {
+                lost: false,
+                state: { ...oauthState, tokens: now?.tokens },
+            };
+        }
+
         this.logger.warn(
             'OAuth grant lost; the integration must be connected again',
             {
@@ -261,16 +626,26 @@ export class IntegrationOAuthService {
                 reason,
             },
         );
-        // Drop the tokens too: other read paths (custom integrations'
-        // getValidAccessToken) read the stored state without its status.
-        const lost = { ...oauthState, tokens: undefined };
-        await this.saveOAuthState(
-            organizationId,
-            integrationId,
-            MCPIntegrationOAuthStatus.INACTIVE,
-            lost,
+        return { lost: true, state: lost };
+    }
+
+    /**
+     * The stored OAuth state, read through `repository`: the shared one, or
+     * the refresh lock's transaction repository for reads under the lock.
+     */
+    private async readState(
+        repository: OAuthRepository,
+        organizationId: string,
+        integrationId: string,
+    ): Promise<IntegrationOAuthState | null> {
+        const row = await repository.findOne({
+            where: { integrationId, organizationId },
+        });
+        if (!row?.auth) return null;
+        return this.decryptAndParse<IntegrationOAuthState>(
+            row.auth,
+            {} as IntegrationOAuthState,
         );
-        return lost;
     }
 
     async refreshIntegrationOAuthIfNeeded(
@@ -515,20 +890,7 @@ export class IntegrationOAuthService {
                 where: { integrationId, organizationId },
             });
 
-            if (!entity?.auth) {
-                return null;
-            }
-
-            const parsed = this.decryptAndParse<
-                ({ kind?: string } & ManagedTokenCredential) | null
-            >(entity.auth, null);
-
-            if (!parsed || parsed.kind !== MANAGED_TOKEN_KIND) {
-                return null;
-            }
-
-            const { kind: _kind, ...credential } = parsed;
-            return credential;
+            return this.managedCredentialOf(entity?.auth);
         } catch (error) {
             this.logger.error('Failed to get managed credential', {
                 organizationId,

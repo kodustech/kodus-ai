@@ -18,7 +18,8 @@ export type ReviewWarningKind =
     | 'CALLGRAPH_DROPPED'
     /** All file diffs rendered as hunk headers only. */
     | 'HUNK_HEADERS_ONLY'
-    /** At least one file's diff was truncated to the max-chars cap. */
+    /** At least one file's diff was truncated to the max-chars cap, or cut
+     *  at the patch line limit (MAX_PATCH_LINES). */
     | 'DIFF_TRUNCATED'
     /** Low-signal files (tests/md/css) dropped even in deep mode. */
     | 'LOW_SIGNAL_FILES_DROPPED'
@@ -88,6 +89,7 @@ export type ReviewWarningReason =
     | 'path_mismatch'
     /** A Kody Rules judge shard errored. */
     | 'judge_shard_failed'
+    | 'evidence_deadline'
     /** The prompt did not fit the single-batch budget on a large PR. */
     | 'large_pr'
     /** The verifier's model call failed (provider error, 429, abort). */
@@ -99,7 +101,9 @@ export type ReviewWarningReason =
     /** A review tool the agent is configured for is missing from the sandbox. */
     | 'tool_unavailable'
     /** The repository's kodus-config.yml holds a key the review does not read. */
-    | 'config_file';
+    | 'config_file'
+    /** A file's patch was longer than the line limit the diff is built with. */
+    | 'patch_line_limit';
 
 export interface ReviewWarning {
     kind: ReviewWarningKind;
@@ -203,6 +207,21 @@ export function crossRepoUnavailableWarning(params: {
         contextWindowTokens: 0,
         modelName: params.modelName,
         detail: `${params.configured} linked repositories were not read: the review had no repository checkout`,
+    };
+}
+
+/** Files whose line-numbered diff stops at MAX_PATCH_LINES (#2206): without
+ *  this the review reads like it saw the whole file. */
+export function buildPatchLineLimitWarning(params: {
+    filenames: string[];
+    maxLines: number;
+}): ReviewWarning {
+    return {
+        kind: 'DIFF_TRUNCATED',
+        reason: 'patch_line_limit',
+        contextWindowTokens: 0,
+        modelName: '',
+        detail: `${params.filenames.length} file diff(s) cut at ${params.maxLines} lines, the rest was not reviewed: ${params.filenames.join(', ')}`,
     };
 }
 
@@ -345,7 +364,8 @@ export function buildKodyRulesPartialWarning(params: {
  * end-review comment would render the same `PROMPT_COMPACTED` notice 4
  * times (bug + security + performance + kody-rules).
  *
- * Dedup key: (kind, modelName, contextWindowTokens). Within a group,
+ * Kody Rules partial reviews also group by reason so a missed deadline
+ * and a failed shard remain distinguishable. Within a group,
  * `detail` strings are deduped and comma-joined, and `agentName` is
  * cleared because the warning is no longer agent-specific.
  *
@@ -361,7 +381,9 @@ export function dedupReviewWarnings(
     const detailsByKey = new Map<string, string[]>();
 
     for (const w of warnings) {
-        const key = `${w.kind}::${w.modelName}::${w.contextWindowTokens}`;
+        const group =
+            w.kind === 'KODY_RULES_PARTIAL' ? `${w.kind}::${w.reason}` : w.kind;
+        const key = `${group}::${w.modelName}::${w.contextWindowTokens}`;
         const existing = byKey.get(key);
         if (!existing) {
             byKey.set(key, {

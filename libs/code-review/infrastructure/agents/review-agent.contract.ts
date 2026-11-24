@@ -51,6 +51,8 @@ import type { SkillRead } from '@libs/code-review/infrastructure/agents/knowledg
 import type { InstalledCustomAgentCli } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
+import type { HeavyLensOutcome } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+
 export type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 
 /**
@@ -123,6 +125,31 @@ export interface AgentProgressEvent {
     coverage?: CoverageSummary;
     verification?: VerificationTraceSummary | null;
     anomalies?: AgentAnomalySummary;
+    /** Heavy mode's specialist agents (the lenses), on the event of the
+     *  `specialists` category: one entry per lens, and per batch when the
+     *  review is chunked. */
+    specialists?: SpecialistAgentEntry[];
+    /** The lenses were stopped because the generalist failed the review. */
+    specialistsStoppedByGeneralist?: boolean;
+}
+
+/** One specialist agent (heavy-mode lens) as the PR timeline shows it. */
+export interface SpecialistAgentEntry {
+    /** `lens-<id>`. */
+    label: string;
+    /** `stopped`: the generalist of its batch failed, which stops the
+     *  lenses before they finish. */
+    status: 'running' | 'success' | 'failed' | 'no-result' | 'stopped';
+    batchIndex?: number;
+    /** Findings it returned, before verify. */
+    found?: number;
+    /** Its findings kept after verify, before the review's dedup. */
+    kept?: number;
+    durationMs?: number;
+    steps?: number;
+    toolCalls?: number;
+    /** Readable failure reason. */
+    error?: string;
 }
 
 // ─── ReviewAgentInput, composed from cohesive slices (ISP) ───────────────────
@@ -131,6 +158,9 @@ export interface AgentProgressEvent {
 export interface PrReviewContext {
     organizationAndTeamData: OrganizationAndTeamData;
     changedFiles: FileChange[];
+    /** Diffs were requested relative to the last reviewed commit. */
+    incrementalDiff?: boolean;
+    prFilePaths?: string[];
     prNumber: number;
     repositoryId?: string;
     repositoryFullName: string;
@@ -251,8 +281,8 @@ export interface ReviewRuleConfig {
      * instructions to the reviewer.
      */
     repoInstructions?: RepoInstructionsContext;
-    /** Review mode: 'fast' skips heavy passes (verify, coverage recovery, synthesis rescue) and caps agent steps; 'normal' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
-    reviewMode?: 'fast' | 'normal' | 'deep';
+    /** Review mode: 'fast' skips the synthesis rescue and caps agent steps, and still verifies; 'balanced' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
+    reviewMode?: 'fast' | 'balanced' | 'deep';
 }
 
 /** Model selection for the run. */
@@ -282,6 +312,12 @@ export interface ModelConfig {
      * legacy `byokModel` NAME. Empty/undefined means "inherit".
      */
     byokModelId?: string;
+    /**
+     * The slot this run calls, over every routing: one model of an Ultra
+     * review. It carries no runtime fallback, so a failing model fails the
+     * run instead of moving it to the org fallback call by call.
+     */
+    forcedModel?: NormalizedModel;
     /** Optional per-agent step budget for the main investigation loop. */
     maxSteps?: number;
 }
@@ -306,6 +342,10 @@ export interface FitConfig {
      *  passes. Used by very-narrow agents (rule checks in fast mode,
      *  self-contained CLI flow). */
     skipHeavyPasses?: boolean;
+    /** Heavy mode: the M3 lenses run next to the generalist, and their
+     *  findings join its before verify (opt-in per review via CLI `--heavy`
+     *  or PR `@kody review --heavy`). */
+    heavy?: boolean;
     /** When true, run recovery + second-chance but skip ONLY the
      *  synthesis-rescue pass. The rescue pass re-words the same finding
      *  with different language, which is fine for open-ended bug review
@@ -346,6 +386,8 @@ export interface ReviewAgentInput
         ModelConfig,
         FitConfig,
         RuntimeMeta {
+    /** The PR's shared risk result; context, never a replacement for investigation. */
+    riskAssessment?: import('@libs/code-review/domain/risk/risk-assessment').RiskAssessmentResult;
     onAgentProgress?: (event: AgentProgressEvent) => void;
     /** Parent (job-level) AbortSignal. Forwarded to runAgentLoop so the
      *  outer router timeout cancels the LLM call instead of leaving it
@@ -390,6 +432,9 @@ export interface ReviewAgentOutput {
     agentReplicaTotal?: number;
     turnsUsed: number;
     durationMs: number;
+    /** Of `suggestions`, how many heavy mode's lenses produced. The agent's
+     *  own count leaves them out. */
+    specialistFindings?: number;
     /** Fidelity warnings emitted by this agent's loop (small context window
      *  forced compact prompt, dropped callGraph, etc). Empty when no
      *  adaptive strategy fired. */
@@ -450,12 +495,21 @@ export interface AgentLoopInput {
      *  files must be covered; warm/optional count toward the 70% total
      *  floor. When absent, coverage stays flat (legacy 100%-all-files). */
     fileTiers?: Map<string, CoverageTier>;
-    /** Review mode: 'fast' skips heavy passes and caps steps; 'normal' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
-    reviewMode?: 'fast' | 'normal' | 'deep';
+    /** Review mode: 'fast' skips the synthesis rescue and caps steps, and still verifies; 'balanced' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
+    reviewMode?: 'fast' | 'balanced' | 'deep';
     /** Model context window in tokens. Used to trigger context compression when the message history grows too large. */
     contextWindowTokens?: number;
     /** When true, skip recovery/rescue/second-chance passes. Used by rule-checking agents that don't benefit from open-ended exploration. */
     skipHeavyPasses?: boolean;
+    /** Heavy mode: the M3 lenses run next to the generalist, and their
+     *  findings join its before verify (opt-in per review via CLI `--heavy`
+     *  or PR `@kody review --heavy`). */
+    heavy?: boolean;
+    /** Heavy mode on a chunked review: the batch this run covers, so the
+     *  lenses are not told one batch is the whole pull request. */
+    lensBatch?: { index: number; total: number };
+    /** Called once, with the lens labels, when heavy mode's lenses start. */
+    onHeavyLensesStarted?: (labels: string[]) => void;
     /** Gated A/B knob (default off): wrap readFile so a range-less read of a
      *  large file returns a symbol outline + expand hint instead of dumping the
      *  head — fewer model tokens. Off = current behavior. */
@@ -490,6 +544,10 @@ export interface AgentLoopInput {
      *  take the quote check (target branch, via the sandbox) and the
      *  convention verifier instead of HV2. Unset for every other agent. */
     conventionGuides?: string[];
+    /** Custom agents only: the knowledge reader, which also reads the
+     *  guides of other repositories (`owner/repo:path`) for the quote check,
+     *  and the reviewed repository's guides when there is no sandbox. */
+    conventionGuideReader?: BaseBranchReader;
     /** Custom agents only: the team's instructions, the text a rule cited
      *  from `TeamInstructions` is quote-checked against. */
     teamInstructions?: string;
@@ -554,6 +612,9 @@ export interface AgentLoopSecrets {
     gitHubToken?: string;
     /** Cross-repo linked-repo access for agent tools (#1576). */
     linkedRepoAccess?: LinkedRepoAccess;
+    /** Repositories the agent's skills and docs come from (`owner/repo`):
+     *  readReference may read them besides the reviewed and linked ones. */
+    referenceRepositories?: string[];
     /**
      * External documentation search adapter (Exa-backed). When provided,
      * registers the `searchDocs` tool on the agent so it can verify
@@ -659,6 +720,8 @@ export interface AgentLoopOutput {
     coverage: CoverageSummary;
     verification?: VerificationTraceSummary | null;
     anomalies: AgentAnomalySummary;
+    /** How each heavy-mode lens ended. Absent when no lens ran. */
+    heavyLensOutcomes?: HeavyLensOutcome[];
     /** New findings each finder pass contributed (base, synthesis-rescue).
      *  Attribution the merged total hides: a pass costing a full run and
      *  adding nothing looks identical otherwise. */

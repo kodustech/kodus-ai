@@ -1,0 +1,573 @@
+import { SliceChildExitError } from '@libs/core/workflow/domain/errors/slice-child-exit.error';
+import { ClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
+import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
+import { InboxStatus } from './repositories/schemas/inbox-message.model';
+import { WorkflowJobConsumer } from './workflow-job-consumer.service';
+import { SecurityScanJobConsumer } from './security-scan-job.consumer';
+import { runSecurityScanSliceChild } from './security-scan-slice.runner';
+import {
+    SECURITY_SCAN_CLAIM_TIMEOUT_MINUTES,
+    SECURITY_SCAN_HEARTBEAT_STALE_MS,
+    SECURITY_SCAN_JOB_QUEUE,
+    SECURITY_SCAN_SLICE_EXIT_PREEMPTED,
+} from './security-scan-runtime';
+
+jest.mock('./security-scan-slice.runner', () => ({
+    ...jest.requireActual('./security-scan-slice.runner'),
+    runSecurityScanSliceChild: jest.fn(),
+}));
+
+function childExit(
+    code: number | null,
+    signal: string | null = null,
+): SliceChildExitError {
+    return new SliceChildExitError({ jobId: 'job-1', code, signal });
+}
+
+function amqpMsg(messageId: string) {
+    return {
+        properties: {
+            messageId,
+            correlationId: 'corr-1',
+            headers: {},
+        },
+    };
+}
+
+function makeConsumer(overrides?: {
+    claim?: jest.Mock;
+    find?: jest.Mock;
+    process?: jest.Mock;
+    completeIfHeldBy?: jest.Mock;
+    releaseIfHeldBy?: jest.Mock;
+    heartbeat?: jest.Mock;
+    updateJob?: jest.Mock;
+    findJob?: jest.Mock;
+    failIfProcessing?: jest.Mock;
+    Consumer?: typeof WorkflowJobConsumer | typeof SecurityScanJobConsumer;
+}) {
+    const inboxRepository = {
+        claim: overrides?.claim ?? jest.fn().mockResolvedValue({}),
+        findByConsumerAndMessageId:
+            overrides?.find ?? jest.fn().mockResolvedValue(null),
+        completeIfHeldBy:
+            overrides?.completeIfHeldBy ??
+            jest.fn().mockResolvedValue(undefined),
+        releaseIfHeldBy:
+            overrides?.releaseIfHeldBy ??
+            jest.fn().mockResolvedValue(undefined),
+        heartbeat: overrides?.heartbeat ?? jest.fn().mockResolvedValue(true),
+        releaseAllByInstance: jest.fn().mockResolvedValue(0),
+    };
+    const jobProcessor = {
+        process: overrides?.process ?? jest.fn().mockResolvedValue(undefined),
+    };
+    const jobRepository = {
+        update: overrides?.updateJob ?? jest.fn().mockResolvedValue(undefined),
+        findOne:
+            overrides?.findJob ??
+            jest.fn().mockResolvedValue({ status: JobStatus.FAILED }),
+        failIfProcessing:
+            overrides?.failIfProcessing ?? jest.fn().mockResolvedValue(true),
+    };
+    const observability = {
+        setContext: jest.fn(),
+        runInSpan: jest.fn(async (_name: string, fn: (span: any) => unknown) =>
+            fn({ setAttributes: jest.fn() }),
+        ),
+    };
+    const Ctor = overrides?.Consumer ?? WorkflowJobConsumer;
+    const consumer = new Ctor(
+        jobProcessor as any,
+        inboxRepository as any,
+        jobRepository as any,
+        observability as any,
+        {
+            protectTask: jest.fn().mockResolvedValue(undefined),
+            unprotectTask: jest.fn().mockResolvedValue(undefined),
+        } as any,
+    );
+    return { consumer, inboxRepository, jobProcessor, jobRepository };
+}
+
+function makeScanConsumer(
+    overrides?: Omit<
+        NonNullable<Parameters<typeof makeConsumer>[0]>,
+        'Consumer'
+    >,
+) {
+    return makeConsumer({ ...overrides, Consumer: SecurityScanJobConsumer });
+}
+
+const runChild = runSecurityScanSliceChild as jest.MockedFunction<
+    typeof runSecurityScanSliceChild
+>;
+
+describe('WorkflowJobConsumer claim conflict and scan slices', () => {
+    afterEach(() => {
+        runChild.mockReset();
+        jest.useRealTimers();
+        jest.clearAllTimers();
+    });
+
+    it('throws ClaimConflictError without failing the job when the inbox is held', async () => {
+        const { consumer, jobRepository } = makeScanConsumer({
+            claim: jest.fn().mockResolvedValue(null),
+            find: jest.fn().mockResolvedValue({
+                status: InboxStatus.PROCESSING,
+            }),
+        });
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toMatchObject({
+            name: 'ClaimConflictError',
+            returnToQueue: false,
+        });
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('acks a processed duplicate without throwing', async () => {
+        const { consumer, jobProcessor } = makeConsumer({
+            claim: jest.fn().mockResolvedValue(null),
+            find: jest.fn().mockResolvedValue({
+                status: InboxStatus.PROCESSED,
+            }),
+        });
+
+        await (consumer as any).processWorkflowJob(
+            'workflow-job-consumer.security_scan',
+            SECURITY_SCAN_JOB_QUEUE,
+            { jobId: 'job-1' },
+            amqpMsg('msg-1'),
+        );
+
+        expect(jobProcessor.process).not.toHaveBeenCalled();
+    });
+
+    it('retries a held code-review claim on the old path', async () => {
+        const { consumer, jobRepository } = makeConsumer({
+            claim: jest.fn().mockResolvedValue(null),
+            find: jest.fn().mockResolvedValue({
+                status: InboxStatus.PROCESSING,
+            }),
+        });
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.code_review',
+                'workflow.jobs.code_review.queue',
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toMatchObject({
+            name: 'Error',
+            message: 'Message already claimed but not finished',
+        });
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('claims a security-scan message with the short steal window', async () => {
+        runChild.mockResolvedValue(undefined);
+        const { consumer, inboxRepository } = makeScanConsumer();
+
+        await (consumer as any).processWorkflowJob(
+            'workflow-job-consumer.security_scan',
+            SECURITY_SCAN_JOB_QUEUE,
+            { jobId: 'job-1' },
+            amqpMsg('msg-1'),
+        );
+
+        expect(inboxRepository.claim).toHaveBeenCalledWith(
+            'msg-1',
+            'workflow-job-consumer.security_scan',
+            expect.any(String),
+            'job-1',
+            SECURITY_SCAN_CLAIM_TIMEOUT_MINUTES,
+        );
+        expect(runChild).toHaveBeenCalledWith(
+            'job-1',
+            expect.objectContaining({ abortSignal: expect.any(AbortSignal) }),
+        );
+        expect(inboxRepository.completeIfHeldBy).toHaveBeenCalled();
+    });
+
+    it('runs non-scan jobs in process', async () => {
+        runChild.mockResolvedValue(undefined);
+        const { consumer, jobProcessor } = makeConsumer();
+
+        await (consumer as any).processWorkflowJob(
+            'workflow-job-consumer.code_review',
+            'workflow.jobs.code_review.queue',
+            { jobId: 'job-1' },
+            amqpMsg('msg-1'),
+        );
+
+        expect(jobProcessor.process).toHaveBeenCalledWith('job-1');
+        expect(runChild).not.toHaveBeenCalled();
+    });
+
+    it('releases the inbox only while this host still holds it', async () => {
+        runChild.mockRejectedValue(new Error('child died'));
+        const { consumer, inboxRepository, jobRepository } = makeScanConsumer();
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toThrow('child died');
+
+        expect(jobRepository.update).toHaveBeenCalled();
+        expect(inboxRepository.releaseIfHeldBy).toHaveBeenCalled();
+        expect(runChild).toHaveBeenCalled();
+    });
+
+    it('delays a slice aborted under a live consumer, without failing the job', async () => {
+        jest.useFakeTimers();
+        runChild.mockImplementation(
+            (_jobId, options) =>
+                new Promise((_resolve, reject) => {
+                    options?.abortSignal?.addEventListener('abort', () => {
+                        reject(new Error('exited SIGKILL'));
+                    });
+                }),
+        );
+        const { consumer, inboxRepository, jobRepository } = makeScanConsumer({
+            heartbeat: jest.fn().mockResolvedValue(false),
+        });
+
+        const done = (consumer as any).processWorkflowJob(
+            'workflow-job-consumer.security_scan',
+            SECURITY_SCAN_JOB_QUEUE,
+            { jobId: 'job-1' },
+            amqpMsg('msg-1'),
+        );
+        const assertion = expect(done).rejects.toMatchObject({
+            name: 'ClaimConflictError',
+            returnToQueue: false,
+        });
+        await jest.advanceTimersByTimeAsync(30_000);
+        await assertion;
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(inboxRepository.releaseIfHeldBy).toHaveBeenCalled();
+        expect(inboxRepository.completeIfHeldBy).not.toHaveBeenCalled();
+    });
+
+    it('returns a slice stopped by shutdown to its queue', async () => {
+        runChild.mockImplementation(
+            (_jobId, options) =>
+                new Promise((_resolve, reject) => {
+                    options?.abortSignal?.addEventListener('abort', () => {
+                        reject(childExit(SECURITY_SCAN_SLICE_EXIT_PREEMPTED));
+                    });
+                }),
+        );
+        const { consumer, inboxRepository, jobRepository } = makeScanConsumer();
+
+        const done = (consumer as any).processWorkflowJob(
+            'workflow-job-consumer.security_scan',
+            SECURITY_SCAN_JOB_QUEUE,
+            { jobId: 'job-1' },
+            amqpMsg('msg-1'),
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        (consumer as any).abortInFlightWork();
+
+        await expect(done).rejects.toMatchObject({
+            name: 'ClaimConflictError',
+            returnToQueue: true,
+        });
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();
+        expect(inboxRepository.releaseIfHeldBy).toHaveBeenCalled();
+    });
+
+    it('does not overwrite the child job FAILED on a numeric exit', async () => {
+        runChild.mockRejectedValue(childExit(1));
+        const { consumer, jobRepository } = makeScanConsumer();
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toThrow(/exited 1 for job/);
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();
+        expect(jobRepository.findOne).toHaveBeenCalledWith('job-1');
+    });
+
+    it('acks a completed job when the child exits non-zero after success', async () => {
+        runChild.mockRejectedValue(childExit(1));
+        const { consumer, inboxRepository, jobProcessor, jobRepository } =
+            makeScanConsumer({
+                findJob: jest
+                    .fn()
+                    .mockResolvedValue({ status: JobStatus.COMPLETED }),
+            });
+
+        await (consumer as any).processWorkflowJob(
+            'workflow-job-consumer.security_scan',
+            SECURITY_SCAN_JOB_QUEUE,
+            { jobId: 'job-1' },
+            amqpMsg('msg-1'),
+        );
+
+        expect(runChild).toHaveBeenCalled();
+        expect(jobProcessor.process).not.toHaveBeenCalled();
+        expect(jobRepository.findOne).toHaveBeenCalledWith('job-1');
+        expect(inboxRepository.releaseIfHeldBy).not.toHaveBeenCalled();
+        expect(inboxRepository.completeIfHeldBy).toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();
+        expect(jobRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('marks FAILED when the slice child exits 1 without recording', async () => {
+        runChild.mockRejectedValue(childExit(1));
+        const { consumer, jobRepository } = makeScanConsumer({
+            findJob: jest
+                .fn()
+                .mockResolvedValue({ status: JobStatus.PROCESSING }),
+        });
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toThrow(/exited 1 for job/);
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).toHaveBeenCalledWith(
+            'job-1',
+            expect.objectContaining({
+                lastError: expect.stringMatching(/exited 1/),
+                errorClassification: ErrorClassification.PERMANENT,
+            }),
+        );
+    });
+
+    it('delays a child that preempted itself before shutdown, without failing the job', async () => {
+        runChild.mockRejectedValue(
+            childExit(SECURITY_SCAN_SLICE_EXIT_PREEMPTED),
+        );
+        const { consumer, jobRepository } = makeScanConsumer({
+            findJob: jest
+                .fn()
+                .mockResolvedValue({ status: JobStatus.PROCESSING }),
+        });
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toMatchObject({
+            name: 'ClaimConflictError',
+            returnToQueue: false,
+        });
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();
+    });
+
+    it('does not overwrite a terminal job when the child is SIGKILL-ed', async () => {
+        runChild.mockRejectedValue(childExit(null, 'SIGKILL'));
+        const { consumer, jobRepository } = makeScanConsumer();
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toThrow(/exited SIGKILL for job/);
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();
+    });
+
+    it('marks FAILED when SIGKILL leaves the job unrecorded', async () => {
+        runChild.mockRejectedValue(childExit(null, 'SIGKILL'));
+        const { consumer, jobRepository } = makeScanConsumer({
+            findJob: jest
+                .fn()
+                .mockResolvedValue({ status: JobStatus.PROCESSING }),
+        });
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toThrow(/exited SIGKILL for job/);
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).toHaveBeenCalledWith(
+            'job-1',
+            expect.objectContaining({
+                lastError: expect.stringMatching(/exited SIGKILL/),
+                errorClassification: ErrorClassification.PERMANENT,
+            }),
+        );
+    });
+
+    it('marks FAILED when the job lookup fails after a child exit', async () => {
+        runChild.mockRejectedValue(childExit(1));
+        const { consumer, jobRepository } = makeScanConsumer({
+            findJob: jest
+                .fn()
+                .mockRejectedValue(new Error('bounded timeout after 10000ms')),
+        });
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toThrow(/exited 1 for job/);
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).toHaveBeenCalledWith(
+            'job-1',
+            expect.objectContaining({
+                lastError: expect.stringMatching(/exited 1/),
+                errorClassification: ErrorClassification.PERMANENT,
+            }),
+        );
+    });
+
+    it('requeues a preempted child when the job lookup fails', async () => {
+        runChild.mockRejectedValue(
+            childExit(SECURITY_SCAN_SLICE_EXIT_PREEMPTED),
+        );
+        const { consumer, jobRepository } = makeScanConsumer({
+            findJob: jest
+                .fn()
+                .mockRejectedValue(new Error('bounded timeout after 10000ms')),
+        });
+
+        await expect(
+            (consumer as any).processWorkflowJob(
+                'workflow-job-consumer.security_scan',
+                SECURITY_SCAN_JOB_QUEUE,
+                { jobId: 'job-1' },
+                amqpMsg('msg-1'),
+            ),
+        ).rejects.toBeInstanceOf(ClaimConflictError);
+
+        expect(jobRepository.update).not.toHaveBeenCalled();
+        expect(jobRepository.failIfProcessing).not.toHaveBeenCalled();
+    });
+
+    it('does not abort a slice on a single heartbeat error', async () => {
+        jest.useFakeTimers();
+        let aborted = false;
+        runChild.mockImplementation(
+            (_jobId, options) =>
+                new Promise((_resolve, reject) => {
+                    options?.abortSignal?.addEventListener('abort', () => {
+                        aborted = true;
+                        reject(new Error('exited SIGKILL'));
+                    });
+                }),
+        );
+        const { consumer } = makeScanConsumer({
+            heartbeat: jest.fn().mockRejectedValue(new Error('pg blip')),
+        });
+
+        const done = (consumer as any).processWorkflowJob(
+            'workflow-job-consumer.security_scan',
+            SECURITY_SCAN_JOB_QUEUE,
+            { jobId: 'job-1' },
+            amqpMsg('msg-1'),
+        );
+        done.catch(() => undefined);
+        await jest.advanceTimersByTimeAsync(30_000);
+        expect(aborted).toBe(false);
+
+        const assertion =
+            expect(done).rejects.toBeInstanceOf(ClaimConflictError);
+        await jest.advanceTimersByTimeAsync(SECURITY_SCAN_HEARTBEAT_STALE_MS);
+        await assertion;
+        expect(aborted).toBe(true);
+    });
+
+    it('does not stack overlapping heartbeats', async () => {
+        jest.useFakeTimers();
+        const heartbeat = jest
+            .fn()
+            .mockImplementation(() => new Promise(() => undefined));
+        runChild.mockImplementation(() => new Promise(() => undefined));
+        const { consumer } = makeScanConsumer({ heartbeat });
+
+        void (consumer as any).processWorkflowJob(
+            'workflow-job-consumer.security_scan',
+            SECURITY_SCAN_JOB_QUEUE,
+            { jobId: 'job-1' },
+            amqpMsg('msg-1'),
+        );
+        await jest.advanceTimersByTimeAsync(30_000);
+        await jest.advanceTimersByTimeAsync(30_000);
+        expect(heartbeat).toHaveBeenCalledTimes(1);
+    });
+
+    it('aborts a slice when a hung heartbeat goes stale', async () => {
+        jest.useFakeTimers();
+        let aborted = false;
+        runChild.mockImplementation(
+            (_jobId, options) =>
+                new Promise((_resolve, reject) => {
+                    options?.abortSignal?.addEventListener('abort', () => {
+                        aborted = true;
+                        reject(new Error('exited SIGKILL'));
+                    });
+                }),
+        );
+        const { consumer } = makeScanConsumer({
+            heartbeat: jest
+                .fn()
+                .mockImplementation(() => new Promise(() => undefined)),
+        });
+
+        const done = (consumer as any).processWorkflowJob(
+            'workflow-job-consumer.security_scan',
+            SECURITY_SCAN_JOB_QUEUE,
+            { jobId: 'job-1' },
+            amqpMsg('msg-1'),
+        );
+        done.catch(() => undefined);
+        await jest.advanceTimersByTimeAsync(30_000);
+        expect(aborted).toBe(false);
+
+        const assertion =
+            expect(done).rejects.toBeInstanceOf(ClaimConflictError);
+        await jest.advanceTimersByTimeAsync(SECURITY_SCAN_HEARTBEAT_STALE_MS);
+        await assertion;
+        expect(aborted).toBe(true);
+    });
+});

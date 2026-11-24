@@ -40,6 +40,15 @@ describe('dedupReviewWarnings', () => {
         expect(out[0].kind).toBe('PROMPT_COMPACTED');
     });
 
+    it('preserves both reasons when evidence times out and a rule shard fails', () => {
+        const reasons = ['evidence_deadline', 'judge_shard_failed'] as const;
+        const notices = reasons.map((reason) =>
+            w('KODY_RULES_PARTIAL', { reason }),
+        );
+        const actual = dedupReviewWarnings([...notices, ...notices]);
+        expect(actual.map(({ reason }) => reason)).toEqual(reasons);
+    });
+
     it('keeps separate entries when modelName differs (multi-agent runs with different BYOK roles)', () => {
         const out = dedupReviewWarnings([
             w('PROMPT_COMPACTED', { modelName: 'llama-a' }),

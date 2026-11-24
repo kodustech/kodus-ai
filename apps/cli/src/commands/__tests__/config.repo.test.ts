@@ -26,6 +26,20 @@ vi.mock('../../services/repo-settings.service.js', () => ({
     },
 }));
 
+// These cover the team-key path; without this the credential comes from
+// whatever is stored in the machine's ~/.kodus.
+vi.mock('../../services/user-context.service.js', async (importOriginal) => ({
+    ...(await importOriginal<
+        typeof import('../../services/user-context.service.js')
+    >()),
+    userContextService: {
+        resolveCredential: async () => ({
+            kind: 'team-key',
+            accessToken: 'kodus_team_key',
+        }),
+    },
+}));
+
 import * as prompts from '@inquirer/prompts';
 import open from 'open';
 import { repoConfigService } from '../../services/repo-config.service.js';
@@ -1132,10 +1146,12 @@ describe('config repo command', () => {
         expect(help).toContain('remote [repository]');
         expect(help).not.toContain('repo [repository]');
         expect(remoteHelp).toContain(
-            'Inspect and update the current repository settings in Kodus.',
+            'Inspect and update code review settings in Kodus',
         );
-        expect(remoteHelp).toContain('Team-key auth is');
-        expect(remoteHelp).toContain('required for repository config commands');
+        const flatRemoteHelp = remoteHelp?.replace(/\s+/g, ' ');
+        expect(flatRemoteHelp).toContain('Logged in (kodus auth login)');
+        expect(flatRemoteHelp).toContain('With a team key');
+        expect(flatRemoteHelp).toContain('list works with either');
         expect(remoteHelp).toContain('shortcut for');
         expect(remoteHelp).toContain("'kodus config remote");
         expect(remoteHelp).toContain('add [options] [repository]');

@@ -10,11 +10,13 @@
 // (KodyRuleSummaryService), the orchestrator with the Kody Rules agent, and
 // every step after it up to the suggestions it keeps.
 //
-// The eval supplies data only: the team's stored rules and settings, what the
-// code host answers about the PR (materialize-cases.js), and stores in memory
-// where production writes to a database. The team runs with the generalist's
+// The eval supplies data only: the team's stored rules and settings, its
+// Context OS references (a case's `contextReferences`), what the code host
+// answers about the PR (materialize-cases.js), and stores in memory where
+// production writes to a database. The team runs with the generalist's
 // categories off (reviewOptions), a configuration production supports, so the
 // Kody Rules agent is the only agent and the measure is its own.
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { registerTs } = require('../shared/eval-kit');
@@ -45,6 +47,32 @@ class InMemoryKodyRulesRepository {
         return organizationId === this.doc.organizationId ? this.entity() : null;
     }
 
+    // The rules the review reads: every rule but the deleted ones.
+    async findLiveRulesByOrganizationId(organizationId) {
+        if (organizationId !== this.doc.organizationId) return null;
+        const doc = JSON.parse(JSON.stringify(this.doc));
+        return this.Entity.create({ ...doc, rules: doc.rules.filter((r) => r.status !== 'deleted') });
+    }
+
+    // The plan sync's per-rule writes in one call; returns the ids it missed.
+    async updateRulesFields(_organizationId, uuid, changes) {
+        const failed = [];
+        for (const { ruleId, patch } of changes) {
+            if (!(await this.updateRule(uuid, ruleId, patch))) failed.push(ruleId);
+        }
+        return failed;
+    }
+
+    async existsForOrganization(organizationId) {
+        return organizationId === this.doc.organizationId;
+    }
+
+    async updateRuleFieldsByOrganization(organizationId, ruleId, fields) {
+        if (organizationId !== this.doc.organizationId) return null;
+        const updated = await this.updateRule(this.doc.uuid, ruleId, fields);
+        return updated?.rules.find((rule) => rule.uuid === ruleId) ?? null;
+    }
+
     // The repository's per-field $set: an undefined field is left alone.
     async updateRule(uuid, ruleId, updateData) {
         if (uuid !== this.doc.uuid) return null;
@@ -54,6 +82,24 @@ class InMemoryKodyRulesRepository {
             if (value !== undefined) rule[key] = value;
         }
         return this.entity();
+    }
+
+    // The one-rule $set the save-time compile writes the detector with
+    // (KodyRulesRepository.updateRuleFieldsByOrganization): an undefined
+    // field is left alone, null is written, and only the touched rule comes
+    // back, normalized as the entity reads it.
+    async updateRuleFieldsByOrganization(organizationId, ruleId, updateData) {
+        if (organizationId !== this.doc.organizationId) return null;
+        const rule = this.doc.rules.find((r) => r.uuid === ruleId);
+        if (!rule) return null;
+        for (const [key, value] of Object.entries(updateData || {})) {
+            if (value !== undefined) rule[key] = value;
+        }
+        return this.entity().rules.find((r) => r.uuid === ruleId);
+    }
+
+    async existsForOrganization(organizationId) {
+        return organizationId === this.doc.organizationId;
     }
 }
 
@@ -71,6 +117,71 @@ function codeHostData(pr, repoDir) {
             return { data: { content: fs.readFileSync(target).toString('base64'), encoding: 'base64' } };
         },
     };
+}
+
+/**
+ * The org's Context OS references (ContextReferenceService), as production
+ * stores them: the `@file:` citations of a rule become knowledge dependencies
+ * of the reference its `contextReferenceId` names.
+ */
+function contextReferenceStore(references = []) {
+    const byId = new Map(references.map((r) => [r.uuid, JSON.parse(JSON.stringify(r))]));
+    return {
+        findById: async (uuid) => byId.get(uuid) ?? null,
+        update: async (filter, data) => {
+            const reference = byId.get(filter?.uuid);
+            if (reference) Object.assign(reference, data);
+            return reference ?? null;
+        },
+    };
+}
+
+/**
+ * A file of the PR's repository at the ref Context OS asks for, in the shape
+ * the GitHub contents API returns. Production reads references at the base
+ * branch; the eval reads them at the base commit the case recorded, so the
+ * case does not move as the branch does. The checkout is shallow and holds
+ * the branch's current tip, so that one commit is fetched on first use. A
+ * case's `referenceFiles` ({ path: text }) stand in for the repository's
+ * files, so two cases can differ only in what a reference says.
+ */
+function repositoryFileAtRef(pr, repoDir, files = {}) {
+    const shaOf = { [pr.headRef]: pr.headSha, [pr.baseRef]: pr.baseSha };
+    const ownName = pr.repositoryFullName.split('/')[1];
+    const git = (...a) => execFileSync('git', ['-C', repoDir, ...a], { maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+    const fetched = new Set();
+    const ensure = (sha) => {
+        if (fetched.has(sha)) return;
+        try {
+            git('cat-file', '-e', `${sha}^{commit}`);
+        } catch {
+            git('fetch', '--depth=1', `https://github.com/${pr.repositoryFullName}.git`, sha);
+        }
+        fetched.add(sha);
+    };
+    return {
+        getRepositoryContentFile: async ({ repository, file, pullRequest }) => {
+            if (repository?.name && repository.name !== ownName && repository.name !== pr.repositoryFullName) return null;
+            if (typeof files?.[file.filename] === 'string') {
+                return { data: { content: Buffer.from(files[file.filename]).toString('base64'), encoding: 'base64' } };
+            }
+            const sha = shaOf[pullRequest?.head?.ref ?? pullRequest?.base?.ref];
+            if (!sha) return null;
+            try {
+                ensure(sha);
+                return { data: { content: git('show', `${sha}:${file.filename}`).toString('base64'), encoding: 'base64' } };
+            } catch {
+                return null;
+            }
+        },
+    };
+}
+
+/** Production's Context OS loader over the case's references and checkout. */
+function referenceLoader(c, repoDir) {
+    const { ExternalReferenceLoaderService } = lib('kodyRules/infrastructure/adapters/services/externalReferenceLoader.service.ts');
+    const { CodeReviewContextPackService } = lib('ai-engine/infrastructure/adapters/services/context/code-review-context-pack.service.ts');
+    return new ExternalReferenceLoaderService(new CodeReviewContextPackService(contextReferenceStore(c.contextReferences), repositoryFileAtRef(c.pr, repoDir, c.referenceFiles)));
 }
 
 /** Where production writes the review's execution log. Kept, never read back. */
@@ -143,7 +254,7 @@ async function checkout(pr) {
     });
 }
 
-function agentReviewStage(permission, log) {
+function agentReviewStage(permission, log, externalReferenceLoader) {
     const { AgentReviewStage } = lib('code-review/pipeline/stages/agent-review.stage.ts');
     const { ReviewOrchestratorService } = lib('code-review/infrastructure/agents/review-orchestrator.service.ts');
     const { GeneralistAgentProvider } = lib('code-review/infrastructure/agents/providers/generalist-agent.provider.ts');
@@ -162,7 +273,7 @@ function agentReviewStage(permission, log) {
         agent(SecurityAgentProvider),
         agent(PerformanceAgentProvider),
         agent(GeneralistAgentProvider),
-        agent(KodyRulesAgentProvider),
+        new KodyRulesAgentProvider(permission, obs, undefined, undefined, externalReferenceLoader),
     );
     // The repository has no stored AST graph, so the stage builds the call
     // graph from the checkout (GraphContextService.generateContextLegacy).
@@ -245,10 +356,20 @@ async function reviewCase(c, { rules, compiled, storedConfig = null }) {
         };
         context = await fetchChangedFiles(context, pr, sandbox.repoDir);
         const log = executionLog();
-        const stage = agentReviewStage(permission, log)(rulesRepo);
+        const stage = agentReviewStage(permission, log, referenceLoader(c, sandbox.repoDir))(rulesRepo);
+        const startedAt = Date.now();
         const out = await stage.execute(context);
+        const stageMs = Date.now() - startedAt;
         return {
             suggestions: [...(out.validSuggestions || []), ...(out.validSuggestionsByPR || [])],
+            // How long the review stage ran, and each changed file as the stage
+            // read it (the quality judge shows the lines around a finding).
+            stageMs,
+            fileContents: Object.fromEntries(
+                (context.changedFiles || [])
+                    .filter((f) => typeof f.fileContent === 'string')
+                    .map((f) => [f.filename, f.fileContent]),
+            ),
             discarded: out.discardedSuggestions || [],
             files: (context.changedFiles || []).map((f) => f.filename),
             reviewWarnings: out.reviewWarnings || [],

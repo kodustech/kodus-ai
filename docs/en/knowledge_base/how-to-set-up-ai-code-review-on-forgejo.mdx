@@ -1,0 +1,18 @@
+---
+title: "How to set up AI code review on Forgejo"
+description: "Connect Forgejo to Kodus and select repositories for automated review."
+---
+
+Kodus connects to a Forgejo instance with an access token and receives pull request events through repository webhooks. Forgejo support is maintained by the community.
+
+## Steps
+
+1. **Create an account** at [kodus.io](https://kodus.io) or [self-host Kodus](/en/how_to_deploy/deploy_kodus/generic_vm)
+2. **Connect Forgejo** — in the **Connect your Git tool** step of onboarding, open the **Forgejo** tab, click **Connect via token**, and enter your **Forgejo Instance URL** and **Personal Access Token** (you can also connect later from **Repositories** in the sidebar: click **Forgejo** under **Connect a provider**)
+3. **Select repositories** — choose which Forgejo repositories Kodus should review, or turn on [Review every repository](/en/how_to_use/code_review/configs/review_all_repositories) on **Repositories**
+4. **Webhooks** — Kodus creates the pull request webhook automatically when you save the selection. That needs admin access to the repository and the `write:repository` scope on the token. If it didn't happen, **Repositories** lists the repository with the reason; add the webhook manually with the [Forgejo Webhooks](/en/how_to_deploy/platforms/forgejo/forgejo_webhook) guide
+5. Open a pull request in a selected repository. See [what Kody posts and how to check its status](/en/how_to_use/code_review/flow).
+
+## Custom configuration
+
+Use [kodus-config.yml](/en/how_to_use/code_review/configs/general#kodus-config-yml) to customize review settings per repository.

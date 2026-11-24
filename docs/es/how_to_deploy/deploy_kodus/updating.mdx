@@ -5,32 +5,50 @@ icon: "arrow-up"
 ---
 
 <Note>
-  Las versiones con telemetría anónima self-hosted vienen habilitadas por
-  defecto y envían un heartbeat diario a `telemetry.kodus.io` con sólo
-  contadores agregados — nada de código, nombres ni identificadores.
-  Inspecciona qué se enviaría con `pnpm run telemetry:preview`, o define
-  `KODUS_TELEMETRY_DISABLED=true` para optar por no participar. Schema
-  completo y política en
-  [Telemetría Anónima](/es/how_to_deploy/deploy_kodus/telemetry).
+  Las instancias self-hosted envían un heartbeat anónimo por día a `telemetry.kodus.io`, solo con contadores agregados. Define `KODUS_TELEMETRY_DISABLED=true` para optar por no participar. Consulta [Telemetría Anónima](/es/how_to_deploy/deploy_kodus/telemetry) para ver qué se envía.
 </Note>
 
-Para actualizar tu instalación de Kodus a la última versión:
+## Docker Compose
 
-```bash
-# Navega al directorio de instalación de Kodus
-cd kodus-installer
+Ejecuta estos pasos desde el directorio `kodus-installer`.
 
-# Obtén los últimos cambios del repositorio
-git pull
+Antes de actualizar, guarda copias de PostgreSQL, MongoDB y del archivo `.env`. Conserva el `API_CRYPTO_KEY` actual con las copias para poder leer las credenciales cifradas al restaurarlas.
 
-# Si estás actualizando desde la versión 1.x, actualiza tu .env con las nuevas variables de la versión 2.0
-# (RabbitMQ, MCP Manager y webhooks).
+<Steps>
+  <Step title="Actualiza el instalador">
+    ```bash
+    git pull
+    ```
 
-# Vuelve a ejecutar el instalador para descargar imágenes, iniciar servicios y ejecutar migraciones
-./scripts/install.sh
+    Esto mantiene `docker-compose.yml`, `.env.example` y la lista de variables requeridas alineados con la versión. Compara `.env.example` con tu `.env` y agrega las variables que te falten.
+  </Step>
+  <Step title="Define la versión">
+    En `.env`, define `IMAGE_TAG` con la versión que quieras, por ejemplo `IMAGE_TAG=2.2.11`. Las versiones aparecen en la [página de releases de kodus-ai](https://github.com/kodustech/kodus-ai/releases) como _Self-Hosted Release_. Sin `IMAGE_TAG`, el instalador usa `latest`, que Docker solo vuelve a descargar cuando se lo pides.
+  </Step>
+  <Step title="Descarga las imágenes y recrea los contenedores">
+    ```bash
+    ./scripts/validate-env.sh
+    docker compose pull
+    ./scripts/install.sh
+    ```
 
-# Opcional: ejecutar diagnósticos
-./scripts/doctor.sh
-```
+    El contenedor `api` ejecuta las migraciones de la base de datos cuando inicia.
+  </Step>
+  <Step title="Verifica el resultado">
+    ```bash
+    ./scripts/doctor.sh
+    ```
+  </Step>
+</Steps>
 
+<Warning>
+  No ejecutes `./scripts/generate-secrets.sh` en una instalación que ya tiene datos. Reemplaza todos los secretos de `.env`, incluidas las contraseñas de la base de datos y `API_CRYPTO_KEY`.
+</Warning>
 
+Tus datos viven en volúmenes de Docker: `pgdata` (PostgreSQL), `mongodbdata` (MongoDB), `rabbitmq-data-prod` (RabbitMQ) y `log_volume`. Docker antepone el nombre del proyecto de Compose a todos excepto a `rabbitmq-data-prod`; `docker volume ls` los muestra. `docker compose down` los conserva y `docker compose down -v` los elimina. Haz un respaldo de PostgreSQL y MongoDB antes de una actualización; las migraciones no se revierten.
+
+Si usas el analytics worker, vuelve a iniciarlo después de la actualización con `docker compose --profile analytics up -d worker-analytics`.
+
+## Kubernetes
+
+Las versiones del chart fijan la versión de Kodus. Para pasar a una versión nueva, actualiza el chart o define `imageTag`; el job de migración se ejecuta antes de que los pods se reemplacen. Consulta [Kubernetes y OpenShift](/es/how_to_deploy/deploy_kodus/kubernetes#actualización).

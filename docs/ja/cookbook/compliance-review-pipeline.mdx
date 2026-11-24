@@ -1,153 +1,154 @@
 ---
 title: "コンプライアンスのためのPRレビュー（SOC2、HIPAA）"
-description: "監査トレイル、データ処理、アクセス制御要件を適用するためのKodyルールとMemoriesの設定方法。"
+description: "監査証跡、データ処理、アクセス制御の要件を徹底するための Kody Rules と Memories の設定方法。"
 icon: "file-shield"
 ---
 
-## コンプライアンスに自動化されたレビューが必要な理由
+## コンプライアンスに自動レビューが必要な理由
 
-SOC2、HIPAA、GDPRなどのコンプライアンスフレームワークは、データ処理、アクセス制御、監査ロギングに関する特定のコーディング慣行を必要とします。手動レビューはいくつかの違反を検出しますが、一貫性がありません — 特にレビュアーがセキュリティスペシャリストでない場合は。
+SOC2、HIPAA、GDPR などのコンプライアンスフレームワークは、データ処理、アクセス制御、監査ログに関する特定のコーディング慣行を求めます。手動レビューでも一部の違反は見つかりますが、一貫性がありません。レビュアーがセキュリティの専門家でない場合は特にそうです。
 
-このクックブックは、すべてのPRでコンプライアンス要件を適用するルールを設定します。
+このクックブックでは、すべての PR でコンプライアンス要件を徹底するルールを設定します。
 
-## ステップ1 — コンプライアンスのMemoriesを定義する
+## ステップ1 — コンプライアンスの Memories を定義する
 
-まず高レベルのコンプライアンス原則をKodyに教えます：
-
-```
-@kody remember: 私たちはSOC2準拠です。すべてのデータアクセスは、
-誰が何を、いつ、どこからアクセスしたかを記録する必要があります。
-```
+まず、高レベルのコンプライアンス原則を Kody に教えます。
 
 ```
-@kody remember: PII（個人識別情報）はログ、エラーメッセージ、
-またはAPIレスポンスに絶対に表示されてはなりません。PIIには以下が含まれます：
-氏名、メールアドレス、電話番号、住所、SSN、生年月日、IPアドレス。
+@kody remember: we are SOC2 compliant. All data access must be logged
+with who accessed what, when, and from where.
 ```
 
 ```
-@kody remember: 保存されているすべてのデータは暗号化される必要があります。
-PIIを含むデータベースフィールドはアプリケーションレベルの暗号化を使用する必要があります。
+@kody remember: PII (personally identifiable information) must never
+appear in logs, error messages, or API responses. PII includes:
+name, email, phone, address, SSN, date of birth, IP address.
 ```
 
 ```
-@kody remember: アクセス制御は最小権限の原則に従います。
-新しいエンドポイントのデフォルトは「認証済み + 承認済み」であり、パブリックではありません。
+@kody remember: all data at rest must be encrypted. Database fields
+containing PII must use application-level encryption.
 ```
 
-## ステップ2 — 監査トレイルルールを作成する
+```
+@kody remember: access control follows least privilege principle.
+New endpoints default to authenticated + authorized, never public.
+```
 
-### 監査ロギングルール
+## ステップ2 — 監査証跡のルールを作成する
+
+各ルールは **Code review → Kody Rules** で作成します。**Review Rules** タブで **New rule** をクリックし、以下のとおりにフィールドを入力します。
+
+### 監査ログのルール
 
 ```
-Name: データの変更には監査ロギングが必要
+Rule name: Data mutations must have audit logging
 Execution mode: Per file
 Path: src/services/**/*.ts, src/repositories/**/*.ts
 Severity: Critical
 Instructions:
-  fileDiffにユーザーデータまたは機密レコードに対する
-  作成、更新、または削除操作が含まれている場合、
-  監査ログエントリが作成されていることを確認する。
-  auditService.log()、AuditLogger、または @Audited デコレータへの
-  呼び出しを探す。
-  承認された監査パターンについては
-  @file:src/shared/audit/audit.service.ts を参照する。
+  If fileDiff contains create, update, or delete operations
+  on user data or sensitive records, verify that an audit log
+  entry is created. Look for calls to auditService.log(),
+  AuditLogger, or @Audited decorator.
+  Reference @file:src/shared/audit/audit.service.ts for
+  the approved audit patterns.
 ```
 
-### データ保持ルール
+### データ保持のルール
 
 ```
-Name: ユーザーデータにはソフトデリートが必要
+Rule name: Soft delete required for user data
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: Critical
 Instructions:
-  ユーザーデータを含むテーブル/コレクションに対する
-  ハードデリート（DELETE FROM、.delete()、.destroy()）に
-  フラグを立てる。
-  ユーザーデータはデータ保持ポリシーに準拠するために
-  ソフトデリート（deletedAtタイムスタンプ）を使用する必要がある。
+  Flag any hard delete (DELETE FROM, .delete(), .destroy())
+  on tables/collections that contain user data.
+  User data must use soft delete (deletedAt timestamp)
+  for compliance with data retention policies.
 ```
 
-## ステップ3 — データ処理ルールを作成する
+## ステップ3 — データ処理のルールを作成する
 
-### PII露出防止
+### PII 漏えいの防止
 
 ```
-Name: ログまたはエラーレスポンスにPIIは禁止
+Rule name: No PII in logs or error responses
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: Critical
 Instructions:
-  fileDiffでPIIフィールドを含む可能性があるロギングステートメント
-  （logger.*、console.*）とエラーレスポンスビルダーを確認する：
-  email、name、phone、address、ssn、dateOfBirth、ipAddress。
-  これらはログ/レスポンス前にリダクションまたは除外される必要がある。
+  Check fileDiff for logging statements (logger.*, console.*)
+  and error response builders that might include PII fields:
+  email, name, phone, address, ssn, dateOfBirth, ipAddress.
+  These must be redacted or excluded before logging/responding.
 ```
 
-### 暗号化要件
+### 暗号化の要件
 
 ```
-Name: PIIフィールドには暗号化ヘルパーが必要
+Rule name: PII fields must use encryption helpers
 Execution mode: Per file
 Path: src/entities/**/*.ts, src/models/**/*.ts
 Severity: Critical
 Instructions:
-  fileDiffがPIIを含むエンティティ/モデルフィールドを
-  追加または変更する場合（上記リスト参照）、
-  @Encrypted デコレータまたは encryptionService ヘルパーを
-  使用していることを確認する。
-  @file:src/shared/encryption/encryption.service.ts を参照する。
+  If fileDiff adds or modifies entity/model fields that contain
+  PII (see list above), verify they use the @Encrypted decorator
+  or encryptionService helper. Reference
+  @file:src/shared/encryption/encryption.service.ts.
 ```
 
-## ステップ4 — アクセス制御ルールを作成する
+## ステップ4 — アクセス制御のルールを作成する
 
 ```
-Name: 新しいエンドポイントには認証ガードが必要
+Rule name: New endpoints must have auth guards
 Execution mode: Per PR
 Severity: Critical
 Instructions:
-  pr_files_diffで新しいルート定義またはコントローラーメソッドを確認する。
-  すべての新しいエンドポイントには以下が必要：
-  1. 認証ガード（@UseGuards(AuthGuard)）
-  2. 認可デコレータ（@Roles または @Permissions）
-  3. レート制限（@Throttle または同等）
-  エンドポイントが意図的にパブリックである場合は、
-  明示的な @Public() デコレータと理由を説明するコードコメントが必要。
+  Check pr_files_diff for new route definitions or controller
+  methods. Every new endpoint must include:
+  1. Authentication guard (@UseGuards(AuthGuard))
+  2. Authorization decorator (@Roles or @Permissions)
+  3. Rate limiting (@Throttle or equivalent)
+  If any endpoint is intentionally public, it must have
+  an explicit @Public() decorator with a code comment
+  explaining why.
 ```
 
-## ステップ5 — PRレベルのコンプライアンスチェックを追加する
+## ステップ5 — PR レベルのコンプライアンスチェックを追加する
 
 ```
-Name: コンプライアンスへの影響評価
+Rule name: Compliance impact assessment
 Execution mode: Per PR
 Severity: High
 Instructions:
-  pr_files_diffが src/entities/、src/models/、
-  またはデータベースマイグレーション内のファイルに触れる場合、
-  以下を確認する：
-  1. PIIを扱う新しいフィールドが文書化されているか
-  2. データフローの変更がpr_descriptionに記載されているか
-  3. プライバシーへの影響が考慮されているか
-  PRが新しいデータ収集を追加する場合は、
-  プライバシーレビューのためにフラグを立てる。
+  If pr_files_diff touches any file in src/entities/,
+  src/models/, or database migrations, check whether:
+  1. New fields handling PII are documented
+  2. Data flow changes are noted in pr_description
+  3. Privacy impact is considered
+  If the PR adds new data collection, flag it for
+  privacy review.
 ```
 
-## ステップ6 — 適用のために設定する
+## ステップ6 — 強制適用の設定をする
 
-1. **Code review → General** で **Enable changing status of Review to 'Request Changes'** をオンにし、コンプライアンス違反がマージをブロックするようにする
-2. すべてのコンプライアンスルールを **重大** 重要度に設定する
-3. ルール継承を使用して組織内のすべてのリポジトリにコンプライアンスルールを適用する — スコープピッカーで **Global** を選択してルールを作成する
+1. **Code review → General → Review feedback** で **Request changes on critical issues** をオンにします（接続しているプロバイダーがすべて GitLab の場合は利用できません）。Kody は Critical のインラインコメントを投稿するとレビューを Request Changes に設定し、それらの指摘が解決されるとリクエストを取り下げます
+2. すべてのコンプライアンスルールを **Critical** 重要度に設定します
+3. ルールの継承を使って、組織内のすべてのリポジトリにコンプライアンスルールを適用します。スコープピッカーで **Global** を選択してルールを作成してください
+
+Request changes はインラインコメントに連動するため、**Per file** ルールによって設定されます。**Per PR** ルールはプルリクエストコメントを 1 件投稿するだけで、これを設定しません。
 
 ## チェックリスト
 
-- [ ] コンプライアンスのMemoriesが高レベルの原則を教えている
-- [ ] 監査ロギングルールがすべてのデータ変更パスをカバーしている
-- [ ] PII露出ルールがログとエラーレスポンスをカバーしている
-- [ ] 暗号化ルールがエンティティ/モデル定義をカバーしている
-- [ ] アクセス制御ルールがすべての新しいエンドポイントをカバーしている
-- [ ] 重大な結果に対して「変更をリクエスト」が有効になっている
-- [ ] ルールが一貫性のために **Global** スコープ（組織全体）で設定されている
-- [ ] テストPRでルールが正しく発火することが確認された
+- [ ] コンプライアンスの Memories が高レベルの原則を教えている
+- [ ] 監査ログのルールがデータ変更のすべての経路をカバーしている
+- [ ] PII 漏えいのルールがログとエラーレスポンスをカバーしている
+- [ ] 暗号化のルールがエンティティ/モデルの定義をカバーしている
+- [ ] アクセス制御のルールがすべての新しいエンドポイントをカバーしている
+- [ ] **Request changes on critical issues** がオンになっている
+- [ ] 一貫性のため、ルールが **Global** スコープ（組織全体）で設定されている
+- [ ] テスト PR でルールが正しく動作することを確認した
 
-ルールの設定の詳細については、[Kodyルール](/ja/how_to_use/code_review/configs/kody_rules) を参照してください。
+ルールの設定の詳細は [Kody Rules](/ja/how_to_use/code_review/configs/kody_rules) を参照してください。

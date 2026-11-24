@@ -1,5 +1,5 @@
+import { GatedCron } from '@libs/core/infrastructure/services/cron-run-gate';
 import { Inject, Injectable } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import pLimit from 'p-limit';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -24,6 +24,7 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import {
+    CodeAreaHistoryUnavailableError,
     IRefreshCodeAreaRiskMapService,
     REFRESH_CODE_AREA_RISK_MAP_SERVICE_TOKEN,
 } from '@libs/platformData/domain/code-area-risk/code-area-risk-map.contract';
@@ -56,7 +57,7 @@ export class RefreshCodeAreaRiskMapCron {
         private readonly codeManagement: CodeManagementService,
     ) {}
 
-    @Cron('0 */2 * * *', {
+    @GatedCron('0 */2 * * *', {
         name: 'REFRESH CODE AREA RISK MAP',
         waitForCompletion: true,
     })
@@ -81,6 +82,7 @@ export class RefreshCodeAreaRiskMapCron {
                 teamId: string;
                 id: string;
                 name: string;
+                usesRiskApproval: boolean;
             }> = [];
             for (const team of teams ?? []) {
                 const organizationId = team.organization?.uuid;
@@ -111,22 +113,45 @@ export class RefreshCodeAreaRiskMapCron {
                     if (!repo.id || !repo.name || repo.isSelected === false) {
                         continue;
                     }
+                    // Saved scope inheritance is enough to prioritize without
+                    // fetching configuration files from every repository.
+                    const inherited = {
+                        ...config.configValue.configs,
+                        ...repo.configs,
+                    };
+                    const scopes = [
+                        inherited,
+                        ...(repo.directories ?? []).map((directory) => ({
+                            ...inherited,
+                            ...directory.configs,
+                        })),
+                    ];
                     repositories.push({
                         organizationId,
                         teamId: team.uuid,
                         id: repo.id,
                         name: repo.name,
+                        usesRiskApproval: scopes.some(
+                            (scope) =>
+                                scope.riskAssessmentActive === true ||
+                                (scope.riskAssessmentActive === undefined &&
+                                    scope.pullRequestApprovalActive === true &&
+                                    scope.approvalRiskActive === true),
+                        ),
                     });
                 }
             }
             if (!repositories.length) return;
 
-            // Unfinished scans first, then never scanned, then complete ones
+            // Risk approval users first. Within each group: unfinished scans,
+            // then never scanned, then complete ones
             // stalest first: a fixed rotation left first scans incomplete for
             // weeks while finished repositories were refreshed, and a scan the
             // last run's budget cut short must not wait behind every repository
             // never scanned. A status that could not be read goes last instead
-            // of passing as never scanned.
+            // of passing as never scanned. Risk approval users may exhaust all
+            // 40 batches; other repositories use only remaining capacity, even
+            // when they have never been scanned.
             const limit = pLimit(STATUS_READ_CONCURRENCY);
             const statuses = await Promise.all(
                 repositories.map((repo) =>
@@ -165,10 +190,20 @@ export class RefreshCodeAreaRiskMapCron {
             // A complete scan's window ends where its last refresh began.
             const age = ({ status }: (typeof statuses)[number]) =>
                 (status?.complete ? status.windowEnd : status?.cursorEnd) ?? '';
+            const now = Date.now();
             const ordered = repositories
                 .map((repo, index) => ({ repo, read: statuses[index] }))
+                // The provider could not list this repository's PRs on a
+                // recent run; it waits out its backoff.
+                .filter(
+                    ({ read }) =>
+                        !read.status?.retryAfter ||
+                        Date.parse(read.status.retryAfter) <= now,
+                )
                 .sort(
                     (a, b) =>
+                        Number(b.repo.usesRiskApproval) -
+                            Number(a.repo.usesRiskApproval) ||
                         rank(a.read) - rank(b.read) ||
                         age(a.read).localeCompare(age(b.read)) ||
                         `${a.repo.organizationId}:${a.repo.id}`.localeCompare(
@@ -203,6 +238,14 @@ export class RefreshCodeAreaRiskMapCron {
                         Date.now() < deadline
                     );
                 } catch (error) {
+                    // A repository the provider cannot list fails the same
+                    // way on every retry; report when it starts, not each run.
+                    if (
+                        error instanceof CodeAreaHistoryUnavailableError &&
+                        error.attempt > 1
+                    ) {
+                        continue;
+                    }
                     this.logger.warn({
                         message: 'Could not refresh code-area history batch',
                         context: RefreshCodeAreaRiskMapCron.name,

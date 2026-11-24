@@ -236,7 +236,12 @@ export class KodyRulesService implements IKodyRulesService {
         const toObject = (e: any) =>
             typeof e?.toObject === 'function' ? e.toObject() : e;
 
-        const staleOrgIds = new Set<string>();
+        // Organizations holding a rule the plan limit paused. When the find
+        // read whole documents (no rule filter), the sync reuses the entity
+        // instead of reading the document again; a rule-filtered entity holds
+        // only some rules and would make the sync miscount the active ones.
+        const wholeDocuments = !filter?.rules?.length;
+        const staleEntities = new Map<string, KodyRulesEntity>();
         entities.forEach((e) => {
             const obj = toObject(e);
             if (
@@ -246,28 +251,41 @@ export class KodyRulesService implements IKodyRulesService {
                 ) &&
                 obj?.organizationId
             ) {
-                staleOrgIds.add(obj.organizationId);
+                staleEntities.set(obj.organizationId, e);
             }
         });
 
-        const orgIdArray = [...staleOrgIds];
+        const orgIdArray = [...staleEntities.keys()];
         const syncResults = await Promise.allSettled(
             orgIdArray.map((orgId) =>
-                this.syncRulesWithPlanLimit({ organizationId: orgId }),
+                this.syncRulesWithPlanLimit(
+                    { organizationId: orgId },
+                    wholeDocuments ? { entity: staleEntities.get(orgId) } : {},
+                ),
             ),
         );
 
         syncResults.forEach((result, index) => {
             if (result.status === 'rejected') {
-                const orgId = orgIdArray[index];
                 this.logger.error({
                     message: 'Failed self-healing stale rules in find()',
                     context: KodyRulesService.name,
                     error: result.reason,
-                    metadata: { organizationId: orgId },
+                    metadata: { organizationId: orgIdArray[index] },
                 });
             }
         });
+        // Given the entity, the sync hands the same one back when it changed
+        // nothing: in a limited plan the locked rules stay locked on every
+        // call, and re-running the whole find for that was a third read. A
+        // failed sync may have written first, so it reads again too.
+        const changed =
+            !wholeDocuments ||
+            syncResults.some(
+                (result, index) =>
+                    result.status === 'rejected' ||
+                    result.value !== staleEntities.get(orgIdArray[index]),
+            );
         const normalized = (entitiesResult: KodyRulesEntity[]) =>
             entitiesResult?.map((entity) => {
                 const normalized = toObject(entity);
@@ -278,7 +296,7 @@ export class KodyRulesService implements IKodyRulesService {
                 return KodyRulesEntity.create(normalized);
             });
 
-        if (staleOrgIds.size > 0) {
+        if (staleEntities.size > 0 && changed) {
             return normalized(await this.kodyRulesRepository.find(filter));
         }
 
@@ -289,6 +307,26 @@ export class KodyRulesService implements IKodyRulesService {
         organizationId: string,
     ): Promise<KodyRulesEntity | null> {
         return this.kodyRulesRepository.findByOrganizationId(organizationId);
+    }
+
+    async findLiveRulesByOrganizationId(
+        organizationId: string,
+    ): Promise<KodyRulesEntity | null> {
+        return this.kodyRulesRepository.findLiveRulesByOrganizationId(
+            organizationId,
+        );
+    }
+
+    async updateRulesFields(
+        organizationId: string,
+        uuid: string,
+        changes: Array<{ ruleId: string; patch: Partial<IKodyRule> }>,
+    ): Promise<string[]> {
+        return this.kodyRulesRepository.updateRulesFields(
+            organizationId,
+            uuid,
+            changes,
+        );
     }
 
     async findRulesIndex(
@@ -394,26 +432,29 @@ export class KodyRulesService implements IKodyRulesService {
 
         if (!changedRules.length) return entity;
 
-        // Targeted per-rule updates in parallel: prevents whole-array overwrite race conditions (#1626)
-        const updateResults = await Promise.allSettled(
-            changedRules.map(({ ruleId, patch }) =>
-                this.kodyRulesRepository.updateRule(entity.uuid, ruleId, patch),
-            ),
-        );
-
-        updateResults.forEach((res, i) => {
-            if (res.status === 'rejected') {
-                this.logger.error({
-                    message: 'Failed per-rule update in syncRulesWithPlanLimit',
-                    context: KodyRulesService.name,
-                    error: res.reason,
-                    metadata: {
-                        organizationId,
-                        ruleId: changedRules[i].ruleId,
-                    },
-                });
-            }
-        });
+        // Per-rule field updates, so no whole-array overwrite races (#1626),
+        // in one round trip instead of one findAndModify per rule fired in
+        // parallel against the same document.
+        let failedRuleIds: string[];
+        let writeError: unknown;
+        try {
+            failedRuleIds = await this.kodyRulesRepository.updateRulesFields(
+                organizationId,
+                entity.uuid,
+                changedRules,
+            );
+        } catch (error) {
+            failedRuleIds = changedRules.map(({ ruleId }) => ruleId);
+            writeError = error;
+        }
+        if (failedRuleIds.length) {
+            this.logger.error({
+                message: 'Failed per-rule updates in syncRulesWithPlanLimit',
+                context: KodyRulesService.name,
+                error: writeError as Error | undefined,
+                metadata: { organizationId, ruleIds: failedRuleIds },
+            });
+        }
 
         this.logger.log({
             message:
@@ -550,6 +591,22 @@ export class KodyRulesService implements IKodyRulesService {
         updateData: Partial<IKodyRule>,
     ): Promise<KodyRulesEntity | null> {
         return this.kodyRulesRepository.updateRule(uuid, ruleId, updateData);
+    }
+
+    async updateRuleFieldsByOrganization(
+        organizationId: string,
+        ruleId: string,
+        updateData: Partial<IKodyRule>,
+    ): Promise<Partial<IKodyRule> | null> {
+        return this.kodyRulesRepository.updateRuleFieldsByOrganization(
+            organizationId,
+            ruleId,
+            updateData,
+        );
+    }
+
+    async existsForOrganization(organizationId: string): Promise<boolean> {
+        return this.kodyRulesRepository.existsForOrganization(organizationId);
     }
 
     async createOrUpdate(
@@ -1021,54 +1078,49 @@ export class KodyRulesService implements IKodyRulesService {
             },
         });
 
-        const existing = await this.findByOrganizationId(organizationId);
+        return this.updateSingleRuleFields(organizationId, ruleId, {
+            contextReferenceId: references.contextReferenceId,
+            // Todos os outros campos de referência foram movidos para Context OS
+            updatedAt: new Date(),
+        });
+    }
 
-        if (!existing) {
+    /**
+     * Writes only `fields` on one rule and returns that rule, without loading
+     * the organization's document (see the repository's
+     * updateRuleFieldsByOrganization for why). Undefined fields are skipped,
+     * `null` is written; a missing organization or rule throws the same
+     * NotFoundException the read-then-write did. Unlike that path, the
+     * rule's other fields are not written back as read, so a concurrent edit
+     * of them is no longer overwritten.
+     */
+    private async updateSingleRuleFields(
+        organizationId: string,
+        ruleId: string,
+        fields: Partial<IKodyRule>,
+    ): Promise<IKodyRule> {
+        const updated =
+            await this.kodyRulesRepository.updateRuleFieldsByOrganization(
+                organizationId,
+                ruleId,
+                fields,
+            );
+
+        if (updated) {
+            return updated as IKodyRule;
+        }
+
+        // Nothing matched: report why, in the order the read-then-write did.
+        const organizationHasRules =
+            await this.kodyRulesRepository.existsForOrganization(
+                organizationId,
+            );
+        if (!organizationHasRules) {
             throw new NotFoundException(
                 'Kody rules not found for organization',
             );
         }
-
-        const existingRule = existing.rules?.find(
-            (rule) => rule.uuid === ruleId,
-        );
-
-        if (!existingRule) {
-            throw new NotFoundException('Rule not found');
-        }
-
-        const updatedRule = {
-            ...existingRule,
-            contextReferenceId: references.contextReferenceId,
-            // Todos os outros campos de referência foram movidos para Context OS
-            updatedAt: new Date(),
-        } as IKodyRule;
-
-        const updatedKodyRules = await this.updateRule(
-            existing.uuid,
-            ruleId,
-            updatedRule,
-        );
-
-        if (!updatedKodyRules) {
-            this.logger.error({
-                message: 'Could not update rule references',
-                error: new Error('Could not update rule references'),
-                context: KodyRulesService.name,
-                metadata: {
-                    organizationId,
-                    ruleId,
-                    references,
-                },
-            });
-            throw new Error('Could not update rule references');
-        }
-
-        const updatedRuleResult = updatedKodyRules.rules.find(
-            (rule) => rule.uuid === ruleId,
-        );
-
-        return updatedRuleResult ? (updatedRuleResult as IKodyRule) : null;
+        throw new NotFoundException('Rule not found');
     }
 
     async updateRuleDetector(
@@ -1076,46 +1128,14 @@ export class KodyRulesService implements IKodyRulesService {
         ruleId: string,
         detector: IKodyRuleDetector | null,
     ): Promise<IKodyRule | null> {
-        const existing = await this.findByOrganizationId(organizationId);
-        if (!existing) {
-            throw new NotFoundException(
-                'Kody rules not found for organization',
-            );
-        }
-
-        const existingRule = existing.rules?.find((r) => r.uuid === ruleId);
-        if (!existingRule) {
-            throw new NotFoundException('Rule not found');
-        }
-
-        const updatedRule = {
-            ...existingRule,
-            // Pass `null` through as-is: updateRule skips only `undefined`, so
-            // `detector: null` writes `$set rules.$.detector = null` and clears
-            // a stale detector. `?? undefined` here would silently no-op the
-            // clear and leave the old regex firing forever.
+        return this.updateSingleRuleFields(organizationId, ruleId, {
+            // Pass `null` through as-is: the repository skips only `undefined`,
+            // so `detector: null` writes `$set rules.$.detector = null` and
+            // clears a stale detector. `?? undefined` here would silently no-op
+            // the clear and leave the old regex firing forever.
             detector: detector,
             updatedAt: new Date(),
-        } as IKodyRule;
-
-        const updatedKodyRules = await this.updateRule(
-            existing.uuid,
-            ruleId,
-            updatedRule,
-        );
-
-        if (!updatedKodyRules) {
-            this.logger.error({
-                message: 'Could not update rule detector',
-                error: new Error('Could not update rule detector'),
-                context: KodyRulesService.name,
-                metadata: { organizationId, ruleId },
-            });
-            throw new Error('Could not update rule detector');
-        }
-
-        const updated = updatedKodyRules.rules.find((r) => r.uuid === ruleId);
-        return updated ? (updated as IKodyRule) : null;
+        });
     }
 
     /**
@@ -1294,44 +1314,10 @@ export class KodyRulesService implements IKodyRulesService {
         ruleId: string,
         compileAttempt: IKodyRuleCompileAttempt | null,
     ): Promise<IKodyRule | null> {
-        const existing = await this.findByOrganizationId(organizationId);
-        if (!existing) {
-            throw new NotFoundException(
-                'Kody rules not found for organization',
-            );
-        }
-
-        const existingRule = existing.rules?.find((r) => r.uuid === ruleId);
-        if (!existingRule) {
-            throw new NotFoundException('Rule not found');
-        }
-
-        const updatedRule = {
-            ...existingRule,
+        return this.updateSingleRuleFields(organizationId, ruleId, {
             compileAttempt: compileAttempt,
             updatedAt: new Date(),
-        } as IKodyRule;
-
-        const updatedKodyRules = await this.updateRule(
-            existing.uuid,
-            ruleId,
-            updatedRule,
-        );
-
-        if (!updatedKodyRules) {
-            this.logger.error({
-                message: 'Could not update rule compile attempt',
-                error: new Error('Could not update rule compile attempt'),
-                context: KodyRulesService.name,
-                metadata: { organizationId, ruleId },
-            });
-            throw new Error('Could not update rule compile attempt');
-        }
-
-        const updatedAttemptRule = updatedKodyRules.rules.find(
-            (r) => r.uuid === ruleId,
-        );
-        return updatedAttemptRule ? (updatedAttemptRule as IKodyRule) : null;
+        });
     }
 
     async updateRuleWithLogging(
@@ -1474,10 +1460,13 @@ export class KodyRulesService implements IKodyRulesService {
     }
 
     async deleteRuleLogically(
-        uuid: string,
+        organizationId: string,
         ruleId: string,
-    ): Promise<KodyRulesEntity | null> {
-        return this.kodyRulesRepository.deleteRuleLogically(uuid, ruleId);
+    ): Promise<boolean> {
+        return this.kodyRulesRepository.deleteRuleLogically(
+            organizationId,
+            ruleId,
+        );
     }
 
     async deleteRuleWithLogging(
@@ -1486,22 +1475,21 @@ export class KodyRulesService implements IKodyRulesService {
         userInfo: UserInfo,
     ): Promise<boolean> {
         try {
-            const existing = await this.findByOrganizationId(
+            // The audit entry needs the rule, not the organization's whole
+            // rules document: reading that once per deleted rule made a sync
+            // that removed 154 rules read the document 154 times.
+            const deletedRule = await this.findById(
+                ruleId,
                 organizationAndTeamData.organizationId,
-            );
-
-            if (!existing?.rules?.length) {
-                return false;
-            }
-
-            const deletedRule = existing.rules.find(
-                (rule) => rule.uuid === ruleId,
             );
             if (!deletedRule) {
                 return false;
             }
 
-            const rule = await this.deleteRuleLogically(existing.uuid, ruleId);
+            const deleted = await this.deleteRuleLogically(
+                organizationAndTeamData.organizationId,
+                ruleId,
+            );
 
             this.eventEmitter.emit(AuditLogEvents.KODY_RULES, {
                 organizationAndTeamData,
@@ -1513,7 +1501,7 @@ export class KodyRulesService implements IKodyRulesService {
                 ruleTitle: deletedRule.title,
             });
 
-            return !!rule;
+            return deleted;
         } catch (error) {
             this.logger.error({
                 message: 'Error deleting rule with logging',

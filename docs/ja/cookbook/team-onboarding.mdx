@@ -1,26 +1,28 @@
 ---
 title: "新しいチームのオンボーディング"
-description: "新しいチームにKodusをセットアップするためのステップバイステップガイド — リポジトリの接続から最初の規約の教育まで。"
+description: "新しいチームに Kodus をセットアップするためのステップバイステップガイド。リポジトリの接続から、最初の規約の教え込みまで。"
 icon: "users-gear"
 ---
 
 ## 概要
 
-新しいチームをKodusで稼働させるのに約30分かかります。このガイドでは完全なセットアップを順を追って説明し、チームが最初のPRから価値を得られるようにします。
+新しいチームが Kodus を使い始めるまでには、約 30 分かかります。このガイドでは、最初の PR からチームが価値を得られるよう、セットアップの全体を順に説明します。
 
 ## ステップ1 — ワークスペースを作成して設定する
 
-1. [kodus.io](https://kodus.io) でサインアップするか、セルフホスティングインスタンスにアクセスする
-2. チームの新しいワークスペースを作成する
-3. Gitプロバイダーを接続する（GitHub、GitLab、Bitbucket、Azure Repos、またはForgejo）
-4. 監視するリポジトリを選択する
+1. [kodus.io](https://kodus.io) でサインアップするか、セルフホストのインスタンスにアクセスします
+2. チーム用の新しいワークスペースを作成します
+3. Git プロバイダー（GitHub、GitLab、Bitbucket、Azure Repos、Forgejo）を接続します
+4. 監視するリポジトリを選択します
+
+セットアップガイドは、投稿する最小の重要度、コーディングエージェント instructions のスイッチ（ステップ3）、Kody の最初のレビュー用のプルリクエストへと続きます。
 
 ## ステップ2 — レビューのベースラインを設定する
 
-カスタマイズする前に適切なデフォルトから始めます：
+Kodus は妥当なデフォルト設定で始まるため、異なる部分だけをカスタマイズします。ベースラインは、Web アプリの **Code review → What to review**（カテゴリと **Minimum severity to post**）で設定するか、各リポジトリのルートにあるデフォルトブランチの `kodus-config.yml` で管理できます。Kody がこのファイルを読み込むのは、リポジトリの **Code review → General** で **Prefer kodus-config.yml settings** をオンにした後だけです。
 
 ```yaml
-# kodus-config.yml — 各リポジトリのルートに配置する
+# kodus-config.yml — these are the defaults
 reviewOptions:
   bug: true
   security: true
@@ -34,99 +36,99 @@ suggestionControl:
 automatedReviewActive: true
 ```
 
-これにより、適切な重要度しきい値を持つ自動レビューが得られます。1週間後、フィードバックに基づいて調整してください。
+これで、妥当な重要度のしきい値を持つ自動レビューが有効になります。1 週間後にフィードバックに基づいて調整してください。
 
-## ステップ3 — コーディングエージェント向けにすでに書いた指示を使う
+## ステップ3 — コーディングエージェント向けにすでに書いた instructions を使う
 
-チームがすでにCursor、Copilot、Claude、または `AGENTS.md` の指示を管理している場合：
+チームがすでに Cursor、Copilot、Claude、または `AGENTS.md` の instructions を管理している場合：
 
-1. サイドバーで **Code review** グループ上部のスコープピッカーから **Global** またはリポジトリを選び、**What to review** を開いて **Coding-agent instructions** をオンにする
-2. Kodyは各プルリクエストの変更ファイルをカバーする指示ファイルを読み、それに反する変更を指摘する
-3. すべてのレビューで強制したい規約は、`.kody/rules` にルールファイルとして記述する
+1. サイドバーの **Code review** グループ上部にあるスコープピッカーで **Global** またはリポジトリを選び、**What to review** を開いて **Coding-agent instructions** をオンにします
+2. Kody は、各プルリクエストの変更ファイルに該当する instruction ファイルを読み、それらに違反する変更を指摘します
+3. すべてのレビューで徹底したい規約は、`.kody/rules` 内のルールファイルとして書きます
 
-指示ファイルがKodyルールに変換されることはないため、レビューポリシーが知らないうちに変わることはありません。
+instruction ファイルが Kody Rules に変換されることはないため、レビューポリシーが気づかないうちに変わることはありません。
 
-## ステップ4 — トップ5の規約を教える
+## ステップ4 — 上位 5 つの規約を教える
 
-1日目にすべてをエンコードしようとしないでください。チームが最もよく議論する5つの規約から始めます：
-
-```
-@kody remember: 変数にはcamelCaseを、型にはPascalCaseを使用する。
-```
+初日からすべてをエンコードしようとしないでください。チームが最もよく議論する 5 つの規約から始めます。
 
 ```
-@kody remember: すべてのAPIレスポンスは標準エンベロープ形式
-{ data, error, meta } を使用する。
+@kody remember: we use camelCase for variables and PascalCase for types.
 ```
 
 ```
-@kody remember: 継承よりもコンポジションを優先する。
-インターフェースと依存性注入を使用する。
+@kody remember: all API responses use the standard envelope format
+{ data, error, meta }.
 ```
 
 ```
-@kody remember: すべてのパブリック関数は
-@paramと@returnsの説明を含むJSDocが必要。
+@kody remember: we prefer composition over inheritance.
+Use interfaces and dependency injection.
 ```
 
 ```
-@kody remember: データベースクエリはリポジトリ層のみを通じて行う。
-サービスやコントローラーからの直接DBアクセスは禁止。
+@kody remember: every public function must have JSDoc with
+@param and @returns descriptions.
 ```
 
-これらはすべてのレビューに即座に適用されるMemoriesになります。
+```
+@kody remember: database queries go through the repository layer only.
+No direct DB access from services or controllers.
+```
 
-## ステップ5 — 2〜3の重要なルールを作成する
+これらは、Kody が以降のレビューで使う Memories になります。**Kody knowledge approval** がオンの場合、それぞれが誰かに承認されるまで **Pending review** で待機します。
 
-決して起きてはならないことのためのルールを追加します：
+## ステップ5 — 2〜3 個の重要なルールを作成する
+
+決して起きてはならないことのルールを追加します。**Code review → Kody Rules** の **Review Rules** タブで **New rule** をクリックします。
 
 ```
-Name: 本番コードにconsole.logは禁止
+Rule name: No console.log in production code
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: High
-Instructions: fileDiffでconsole.log、console.warn、またはconsole.errorに
-フラグを立てる。代わりにプロジェクトロガーを使用する。
-テストファイル（*.spec.ts、*.test.ts）は除外する。
+Instructions: Flag any console.log, console.warn, or console.error
+in fileDiff. Use the project logger instead.
+Exclude test files (*.spec.ts, *.test.ts).
 ```
 
 ```
-Name: ハードコードされたAPIURLは禁止
+Rule name: No hardcoded API URLs
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: Critical
-Instructions: fileDiffでAPIエンドポイントのように見える
-ハードコードされたURL（http://またはhttps://）にフラグを立てる。
-URLは環境変数または設定ファイルから取得する必要がある。
+Instructions: Flag any hardcoded URL (http:// or https://)
+in fileDiff that looks like an API endpoint.
+URLs must come from environment variables or config files.
 ```
 
-## ステップ6 — タスク管理を接続する（オプションだが推奨）
+## ステップ6 — タスク管理を接続する（任意ですが推奨）
 
-**Plugins**（サイドバー内）でJira、Linear、Notion、またはClickUpを接続して、ビジネスロジック検証を有効にします。これにより、KodusがPRがタスクの説明どおりに実装されているかどうかを確認できます。
+**Plugins**（サイドバー内）で Atlassian Rovo（Jira）、Linear、Notion、または Git Issues を接続し、[ビジネスロジック検証](/ja/how_to_use/code_review/business_logic_validation)を有効にします。これにより、Kodus は PR がタスクの記述どおりに実装しているかを確認できます。
 
-## ステップ7 — パイロットPRを実行する
+## ステップ7 — パイロット PR を実行する
 
-テストPRを開いて確認します：
+テスト PR を開いて、次を確認します。
 
-- [ ] KodusのコメントがPRに表示される
-- [ ] 提案が適切で正しい重要度になっている
-- [ ] カスタムルールが発火すべき時に発火する
-- [ ] Memoriesがレビューコンテキストに反映されている
+- [ ] PR に Kodus のコメントが表示される
+- [ ] 提案が的確で、重要度が適切である
+- [ ] カスタムルールが、発火すべきときに発火する
+- [ ] Memories がレビューのコンテキストに反映されている
 
-## ステップ8 — 1週間後にフィードバックを収集する
+## ステップ8 — 1 週間後にフィードバックを集める
 
-1週間のレビュー後、チームに確認します：
+1 週間レビューを行ったら、チームに確認します。
 
-- 提案が多すぎますか？ → **Code review → What to review** で **Minimum severity to post** を上げる（`kodus-config.yml` では `severityLevelFilter`）
-- ルールがうるさすぎますか？ → ファイルパスを絞り込むか除外を追加する
-- 重要なパターンが見つかっていませんか？ → 新しいルールまたはMemoriesを追加する
-- 自動生成ルールが欲しいですか？ → スコープピッカーでリポジトリを選び、**Code review → Kody Rules** を開いて **Configuration** をクリックし、**Generate from past reviews** をオンにして、レビュー履歴から提案を取得する
+- 提案が多すぎますか？ → **Code review → What to review** で **Minimum severity to post** を上げます（`kodus-config.yml` では `severityLevelFilter`）
+- ルールがノイズになりすぎていますか？ → ファイルパスを絞り込むか、除外を追加します
+- 重要なパターンが抜けていますか？ → 新しいルールまたは Memories を追加します
+- 自動生成されるルールが欲しいですか？ → スコープピッカーでリポジトリを選び、**Code review → Kody Rules** を開いて **Configuration** をクリックし、**Generate from past reviews** をオンにすると、Kody がレビュアーのコメントからルールの下書きを作成します。クラウドのトライアル外では、これには [BYOK](/ja/how_to_use/byok) が必要です
 
 ## ヒント
 
-- 初日からルールで過負荷にしない — 小さく始めて成長させる
-- 正式なルールとして定める前に、チームが会話を通じてKodyを自然に教えられるようにする
-- 最初の数回のPRには `@kody start-review` を使用して、チームがKodusの動作を確認できるようにする
-- Kodyが学ぶことをレビューしたい場合は、**Kody knowledge approval**（**Code review → Kody Rules → Configuration**）をオンにする
+- 初日からルールを詰め込みすぎないでください。小さく始めて、育てていきます
+- ルールとして形式化する前に、会話を通じてチームに自然に Kody を教えてもらいます
+- 最初の数件の PR では `@kody start-review` を使い、チームが Kodus の動作を確認できるようにします
+- Kody が学習した内容を確認したい場合は、**Kody knowledge approval**（**Code review → Kody Rules → Configuration**）をオンにします
 
-完全なセットアップガイドについては、[クイックスタート](/ja/how_to_use/quickstart) を参照してください。
+セットアップの完全なガイドは [クイックスタート](/ja/how_to_use/quickstart) を参照してください。

@@ -1,41 +1,37 @@
 ---
 title: "How to share coding standards across repositories"
-description: "Use rule inheritance and organization-level rules to maintain consistent coding standards across all your repositories."
+description: "Use global rules, rule inheritance and global rule sources to keep the same coding standards in every repository."
 ---
 
-When you have multiple repositories, keeping coding standards consistent is a challenge. Kodus supports rule inheritance so you can define rules once and apply them everywhere.
+When you have multiple repositories, keeping coding standards consistent is a challenge. Kodus lets you define rules once and apply them everywhere.
 
-## Organization-level rules
+## Global rules
 
-Create rules at the organization level and they automatically apply to all repositories:
+Create rules at **Global** scope and they apply to every repository:
 
 1. Pick **Global** in the scope picker at the top of the **Code review** group in the sidebar, then open **Kody Rules**
-2. Create your rules with **New rule** — they apply to every repository in the organization
-3. Individual repositories can inherit, override, or exclude specific rules
+2. Create your rules with **New rule**, or add them from the [Rules Library](/en/how_to_use/code_review/configs/rules_library)
+3. Repositories and directories inherit them
 
 ## Rule inheritance
 
-Rules flow down from organization → repository → directory:
+Rules flow down from Global → repository → directory:
 
-- **Organization rules** apply everywhere by default
-- **Repository rules** can override or extend organization rules
-- **Directory rules** can further specialize for specific paths
+- **Global rules** apply to every repository
+- **Repository rules** add to the Global ones for that repository
+- **Directory rules** add to them for pull requests reviewed with that directory's settings
 
-A repository can **exclude** an inherited rule if it doesn't apply to that codebase.
+A repository can mark an inherited rule as disabled in its list, and a rule can be marked non-inheritable. Both change how the rule is listed; a review still applies every Global and repository rule. See [Rule Inheritance](/en/how_to_use/code_review/configs/rules_inheritance).
 
-## Cross-repository references
+## Keep standards in one repository
 
-Use `@repo:org/project` in rule instructions to reference files from other repositories:
+If your standards live in a dedicated repository, [Global Rule Sources](/en/how_to_use/code_review/configs/global_rule_sources) imports its rule files as global rules and updates them when a pull request is merged there. It is not available on the Free plan. Rules in each project's own `.kody/rules` folder (see [Repository Rules](/en/how_to_use/code_review/configs/repository_rules)) apply only to that project.
 
-```
-Ensure API endpoints follow the pattern defined in @repo:team/api-standards.
-```
-
-This lets you maintain a central standards repository that all rules reference.
+To manage review settings and rules for the whole organization from one repository, use [Centralized Config](/en/how_to_use/code_review/configs/centralized_config).
 
 ## Memories across the organization
 
-Memories scoped to **organization level** apply across all repositories. For example:
+Memories scoped to the **organization** apply across all repositories. Create one with **New memory** at **Global** scope, or ask Kody in a PR comment:
 
 ```
 @kody remember: across all repos, we use ESLint flat config format.

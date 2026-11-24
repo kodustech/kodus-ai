@@ -274,7 +274,12 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
 
         const result = await run(stage, makeContext());
 
-        expect(analyzedSuggestions(result)).toHaveLength(2);
+        const posted = analyzedSuggestions(result);
+        expect(posted).toHaveLength(2);
+        expect(posted.map((p: any) => p.fixStatus).sort()).toEqual([
+            'needs-wider-change',
+            'rejected-fix',
+        ]);
         const badFixWarning = (result.reviewWarnings ?? []).find(
             (w: any) => w.kind === 'BAD_FIX_DOWNGRADED',
         );

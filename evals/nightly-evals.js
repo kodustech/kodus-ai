@@ -28,6 +28,13 @@ const NIGHTLY_EVALS = [
         files: ['evals/reply-addressing/targets.json'],
     },
     {
+        id: 'implementation-check',
+        stage: 'implementation-check',
+        run: ['evals/implementation-check/run.js', '--repeats=1'],
+        sets: { controlled: ['--set=controlled'], full: null },
+        files: ['evals/implementation-check/targets.json', 'evals/implementation-check/cases.json'],
+    },
+    {
         id: 'review-rounds',
         stage: 'review-rounds',
         // The BYOK route with reasoning off, where the reposts were measured
@@ -141,6 +148,15 @@ const WEEKLY_EVALS = [
         stage: 'finder',
         run: ['evals/investigation/run-recall.js', '--concurrency=6'],
         sets: { controlled: ['--set=controlled'], full: ['--set=full'] },
+        verdict: 'finder',
+    },
+    // Heavy mode (evals/heavy-recall): weekly only, never nightly, a heavy
+    // review per PR. Its floors live in evals/heavy-recall/targets.json.
+    {
+        id: 'heavy-recall',
+        stage: 'heavy',
+        run: ['evals/heavy-recall/run.js', '--concurrency=6'],
+        sets: { controlled: ['--set=controlled'], full: ['--set=light'] },
         verdict: 'finder',
     },
     {

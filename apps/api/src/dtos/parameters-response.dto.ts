@@ -132,6 +132,9 @@ export class CodeReviewConfigDataDto {
     @ApiProperty()
     showStatusFeedback: boolean;
 
+    @ApiPropertyOptional({ enum: ['balanced', 'heavy', 'ultra'] })
+    reviewMode?: 'balanced' | 'heavy' | 'ultra';
+
     @ApiProperty()
     kodusConfigFileOverridesWebPreferences: boolean;
 

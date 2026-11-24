@@ -8,12 +8,11 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class AcceptUserInvitationDto {
     @ApiProperty({
-        format: 'uuid',
-        description: 'Invitation UUID.',
-        example: '41d6b2bd-5db3-4b50-a5c6-2b1e5b0c6a9a',
+        description: 'Invitation token from the invitation link.',
     })
+    @IsString()
     @IsNotEmpty()
-    public uuid: string;
+    public token: string;
 
     @ApiProperty({ example: 'Jane Doe' })
     @IsString()

@@ -1,6 +1,11 @@
 import type { ListModelOverridesResult } from "@services/organizationParameters/fetch";
 
-export type FolderOverride = { id: string; name: string; model: string };
+export type FolderOverride = {
+    id: string;
+    name: string;
+    model: string;
+    href?: string;
+};
 
 /** A custom agent that pins its own model (#2172). */
 export type AgentOverride = {
@@ -19,6 +24,7 @@ export type RepoGroup = {
     id: string;
     name: string;
     model?: string;
+    href?: string;
     folders: FolderOverride[];
     agents: AgentOverride[];
 };
@@ -56,11 +62,15 @@ export const groupOverrides = (
         }
         return repo;
     };
-    const repoOf = (o: { repositoryId?: string; repositoryName?: string }) =>
-        repoFor(
+    const repoOf = (o: { repositoryId?: string; repositoryName?: string }) => {
+        const repo = repoFor(
             o.repositoryId ?? o.repositoryName ?? "unknown",
             o.repositoryName ?? o.repositoryId ?? "repository",
         );
+        if (o.repositoryId)
+            repo.href = `/settings/code-review/${encodeURIComponent(o.repositoryId)}/routing`;
+        return repo;
+    };
 
     for (const o of result?.overrides ?? []) {
         if (o.scope === "global") continue;
@@ -77,6 +87,11 @@ export const groupOverrides = (
                     `${repo.id}-dir-${repo.folders.length}`,
                 name: o.directoryName ?? o.directoryId ?? "folder",
                 model: o.model,
+                ...(o.repositoryId && o.directoryId
+                    ? {
+                          href: `/settings/code-review/${encodeURIComponent(o.repositoryId)}/routing?directoryId=${encodeURIComponent(o.directoryId)}`,
+                      }
+                    : {}),
             });
         }
     }

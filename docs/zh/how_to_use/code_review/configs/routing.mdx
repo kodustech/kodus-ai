@@ -1,0 +1,49 @@
+---
+title: "Routing"
+description: "选择审查深度,并查看适用的模型。"
+---
+
+在全局、代码库或目录范围打开 **Code review → Routing**。**General** 会显示解析后的模式和模型,无需打开 Routing 即可核对。
+
+所有套餐均支持 Balanced。支持 Heavy 的套餐和许可证见 [Heavy mode](/zh/how_to_use/code_review/review_directive#heavy-mode)。只有 Owner 可以更改全局模型路由。
+
+## 审查模式
+
+- **Balanced:** 标准审查。
+- **Heavy (beta):** 带有专家审查者的更深入审查。适用于 Teams 和 Enterprise,包括试用。在其他套餐中，设置中的 Heavy 选项不可用。显式指定 `--heavy` 会以 Balanced 模式运行，并提示 Heavy 需要 Teams 或 Enterprise 套餐。
+
+开启[风险评估](/zh/how_to_use/code_review/configs/risk)后，**No risk found** 默认使用 Balanced；套餐支持 Heavy 时，**Risk found** 默认使用 Heavy。**Risk assessment unavailable** 使用默认审查模式，即 YAML 中的 `reviewMode`。初始值为 Balanced，套餐支持 Heavy 时可将其设为回退模式。
+
+关闭风险评估后,一种模式适用于 **All PRs**。始终存在一个默认值。
+
+显式的 `--heavy` 和 `--balanced` 审查命令会覆盖 routing。套餐限制仍然适用。审查命令不会绕过自动批准的风险检查。
+
+## 模型
+
+在全局范围,**Models** 卡片设置组织的默认值:
+
+- **Default model** 和 **Fallback model**(模型失败时使用)。
+- **Risk assessment model**、**Balanced model** 和 **Heavy model**。Heavy 适用于 Teams 和 Enterprise。
+- **Other task models** 为 **Kody Rules**、**PR Summary**、**Conversation**、**Business Rules** 和 **Custom Agents** 设置模型。
+
+未设置的模型会使用默认模型。编辑模型需要组织权限。在代码库和目录范围,该卡片为只读,并带有指向组织 routing 的链接。请在 **AI providers** 下连接提供方。
+
+在全局范围,**Repository overrides** 会列出已为代码库、文件夹和自定义智能体设置的模型。它是只读的。
+
+**Code review model override**(代码库和目录范围)为该范围内的 Balanced 和 Heavy 审查设置同一个模型。它不会改变风险评估模型。选择 **Use routing models** 或继承的模型即可清除。
+
+## YAML
+
+在使用代码库配置文件之前,请先在 **Code review → General**(代码库范围)中开启 **Prefer kodus-config.yml settings**。
+
+```yaml
+riskAssessmentActive: true
+reviewMode: balanced
+riskReviewRouting:
+  noRisk: balanced
+  riskFound: heavy
+```
+
+当风险评估关闭或不可用时,会使用 `reviewMode`。限定范围的 routing 可以覆盖其中一种结果,同时继承另一种。
+
+CLI 保留其独立的审查流水线;这种 PR 风险 routing 适用于提供方的 PR 审查,包括自定义智能体的运行。

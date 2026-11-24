@@ -9,6 +9,9 @@
  */
 import { propagateAttributes, startActiveObservation } from '@langfuse/tracing';
 import { pullRequestSessionId, shouldTrace } from '@libs/core/log/langfuse';
+import { createLogger } from '@libs/core/log/logger';
+
+const logger = createLogger('ReviewObservability');
 
 export interface AgentTraceMeta {
     traceName: string;
@@ -58,10 +61,32 @@ export async function runAgentWithTrace<T>(
         },
         () =>
             startActiveObservation(meta.traceName, async (span: any) => {
-                span.update({ input: spanInput });
+                safeSpanUpdate(span, { input: spanInput }, meta);
                 const result = await fn();
-                span.update({ output: result });
+                safeSpanUpdate(span, { output: result }, meta);
                 return result;
             }),
     );
+}
+
+/** A span update that cannot throw: the trace loses a field, the review runs. */
+function safeSpanUpdate(
+    span: { update: (arg: unknown) => unknown },
+    arg: Record<string, unknown>,
+    meta: AgentTraceMeta,
+): void {
+    try {
+        span.update(arg);
+    } catch (error) {
+        logger.warn({
+            message: `Langfuse span update failed for ${meta.traceName}; review continues without it`,
+            error,
+            context: 'ReviewObservability',
+            metadata: {
+                field: Object.keys(arg)[0],
+                organizationId: meta.organizationId,
+                prNumber: meta.prNumber,
+            },
+        });
+    }
 }

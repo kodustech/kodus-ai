@@ -1,7 +1,7 @@
 import { ExternalReferenceLoaderService } from './externalReferenceLoader.service';
 
 /** Build a buildContextPack result with one knowledge layer of {filePath,content}. */
-const pack = (entries: Array<{ filePath: string; content: string }>) => ({
+const pack = (entries: Array<Record<string, unknown>>) => ({
     pack: {
         layers: [{ metadata: { sourceType: 'knowledge' }, content: entries }],
     },
@@ -31,6 +31,52 @@ describe('ExternalReferenceLoaderService', () => {
             expect(references.map((r) => r.filePath)).toEqual(['c.md']);
         });
 
+        // Two repositories can each hold a docs/conventions.md; the judge
+        // must not take one for the other (#2508).
+        it('keeps the repository and line range each reference was read from', async () => {
+            const buildContextPack = jest.fn().mockResolvedValue(
+                pack([
+                    {
+                        filePath: 'docs/conventions.md',
+                        content: 'ours',
+                        repositoryId: 'repo-1',
+                        repositoryName: 'repo',
+                    },
+                    {
+                        filePath: 'docs/conventions.md',
+                        content: 'theirs',
+                        repositoryId: 'repo-2',
+                        repositoryName: 'design-system',
+                        lineRange: { start: 3, end: 9 },
+                        hash: 'h',
+                        tokens: 10,
+                    },
+                ]),
+            );
+            const svc = makeSvc(buildContextPack);
+
+            const { references } = await svc.loadReferences(
+                { uuid: 'r1', contextReferenceId: 'ctx' } as any,
+                {} as any,
+            );
+
+            expect(references).toEqual([
+                {
+                    filePath: 'docs/conventions.md',
+                    content: 'ours',
+                    repositoryId: 'repo-1',
+                    repositoryName: 'repo',
+                },
+                {
+                    filePath: 'docs/conventions.md',
+                    content: 'theirs',
+                    repositoryId: 'repo-2',
+                    repositoryName: 'design-system',
+                    lineRange: { start: 3, end: 9 },
+                },
+            ]);
+        });
+
         it('returns empty when the rule has no contextReferenceId (no network)', async () => {
             const buildContextPack = jest.fn();
             const svc = makeSvc(buildContextPack);
@@ -45,13 +91,88 @@ describe('ExternalReferenceLoaderService', () => {
         });
     });
 
+    describe('loadReferencesForRules — rules that reference no file', () => {
+        it('tells a reference with no file to load apart from a failed load', async () => {
+            const buildContextPack = jest
+                .fn()
+                .mockImplementation(({ contextReferenceId }) =>
+                    Promise.resolve(
+                        contextReferenceId === 'no-files'
+                            ? { sanitizedOverrides: undefined }
+                            : contextReferenceId === 'failed'
+                              ? {
+                                    pack: {
+                                        layers: [],
+                                        dependencies: [{ type: 'knowledge' }],
+                                    },
+                                }
+                              : {
+                                    ...pack([
+                                        { filePath: 'a.md', content: 'x' },
+                                    ]),
+                                    pack: {
+                                        ...pack([
+                                            { filePath: 'a.md', content: 'x' },
+                                        ]).pack,
+                                        dependencies: [{ type: 'knowledge' }],
+                                    },
+                                },
+                    ),
+                );
+            const svc = makeSvc(buildContextPack);
+
+            const result = await svc.loadReferencesForRules(
+                [
+                    { uuid: 'r-none', contextReferenceId: 'no-files' },
+                    { uuid: 'r-failed', contextReferenceId: 'failed' },
+                    { uuid: 'r-ok', contextReferenceId: 'ok' },
+                ] as any,
+                {} as any,
+            );
+
+            expect([...(result.rulesWithoutFileReferences ?? [])]).toEqual([
+                'r-none',
+            ]);
+            expect([...result.referencesMap.keys()]).toEqual(['r-ok']);
+        });
+
+        it('keeps a rule whose reference no longer exists reportable', async () => {
+            const svc = makeSvc(
+                jest.fn().mockResolvedValue({ referenceMissing: true }),
+            );
+
+            const result = await svc.loadReferencesForRules(
+                [{ uuid: 'r-stale', contextReferenceId: 'deleted' }] as any,
+                {} as any,
+            );
+
+            expect(result.rulesWithoutFileReferences?.size).toBe(0);
+        });
+
+        it('counts a load that threw as expecting files', async () => {
+            const svc = makeSvc(jest.fn().mockRejectedValue(new Error('down')));
+
+            const result = await svc.loadReferencesForRules(
+                [{ uuid: 'r1', contextReferenceId: 'ctx' }] as any,
+                {} as any,
+            );
+
+            expect(result.rulesWithoutFileReferences?.size).toBe(0);
+        });
+    });
+
     describe('loadReferencesForRules', () => {
         it('maps resolved references by rule uuid and skips rules without a uuid', async () => {
             const buildContextPack = jest
                 .fn()
                 .mockImplementation(({ contextReferenceId }) =>
                     Promise.resolve(
-                        pack([{ filePath: `${contextReferenceId}.md`, content: 'x' }]),
+                        pack([
+                            {
+                                filePath: `${contextReferenceId}.md`,
+                                content: 'x',
+                            },
+                        ]),
                     ),
                 );
             const svc = makeSvc(buildContextPack);

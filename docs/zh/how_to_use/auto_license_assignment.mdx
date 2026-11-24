@@ -1,26 +1,35 @@
 ---
 title: "自动许可证分配"
-description: "让 Kodus 自动把许可证分配给真正在贡献的开发者,而不必逐个手动管理席位。"
+description: "让 Kodus 自动把开发者许可证分配给活跃的贡献者,而不必逐个手动管理席位。"
 ---
 
 自动许可证分配功能简化了组织内开发人员许可证的管理。Kodus 可以自动为活跃贡献者分配许可证,而不是手动为每个开发人员分配许可证。
 
+适用于使用席位的付费组织，包括有许可证的自托管环境。Owner 可在 **Subscription → PR licenses** 中管理此设置。
+
 ## 工作原理
 
-启用后,Kodus 会监控代码库中的拉取请求活动。
+在付费套餐上,Kodus 会检查它即将审查的每个拉取请求的作者。开启 **Auto-assign licenses** 后:
 
--   **自动分配:**如果用户创建了多个拉取请求,Kodus 会检查组织中是否有可用的许可证槽位。
-    -   如果有可用槽位,用户将自动分配许可证,并审查他们的 PR。
-    -   如果没有可用槽位,Kodus 将对拉取请求做出反应,对于 Github 使用点踩表情符号(👎),对于 Gitlab 使用挂锁表情符号(🔒),以表明由于缺少许可证而无法执行审查(仅当 **Code review → General** 中开启了 **Show Status Feedback** 时)。
+-   **作者的第一个 PR 无需席位即可被审查。** Kodus 会统计它为该作者记录的 PR 数量。
+-   **从第二个 PR 开始,Kodus 会分配许可证**(如果有可用的),然后继续审查。
+-   **如果作者没有许可证且无法分配**,原因是没有空闲席位或 **Auto-assign licenses** 已关闭,则会跳过审查,并且 Kodus 会对该拉取请求做出反应:在 GitHub 和 Forgejo 上使用点踩表情符号(👎),在 GitLab 上使用挂锁表情符号(🔒),在 Azure DevOps 和 Bitbucket 上发表一条 👎 评论。仅当 **Code review → General** 中开启了 **Show status feedback** 时才会出现该反应。
 
-## 忽略的用户
+许可证仅适用于带席位的付费套餐。免费版和试用期没有许可证;参见[套餐与许可证](/zh/how_to_use/pricing)。
 
-您可以配置**忽略的用户**列表。这些用户将被排除在自动分配流程之外。该列表在 **Repositories** 页面的 **PR author filters** 选项卡中通过 **Exclude PR authors** 设置(或者反过来,使用 **Only these PR authors**)。
+## PR 作者过滤器
 
--   **不审查:**Kodus 不会审查忽略用户创建的拉取请求——除非该用户持有许可证,许可证会覆盖此过滤器。
--   **不反应:**即使超过 PR 限制,Kodus 也不会对他们的 PR 做出反应。就像 Kodus 完全忽略了 PR 一样。
+有两个过滤器决定 Kody 究竟审查哪些作者。它们在 **Repositories** 页面的 **PR author filters** 选项卡中设置:
 
-这对于机器人、服务账户或不需要代码审查的特定团队成员很有用。
+-   **Exclude PR authors:** Kody 不会审查您列出的作者创建的 PR。
+-   **Only these PR authors:** Kody 只审查您列出的作者创建的 PR,不审查其他任何人的。
+
+这两个过滤器也会让相关人员不参与自动许可证分配。
+
+-   **不审查:** 被过滤掉的作者创建的拉取请求不会被审查,除非该作者持有许可证,许可证会覆盖此过滤器。
+-   **跳过,而非静默:** Kody 会将该跳过记录为 "User is ignored by configuration",并将该 PR 列在 **Kody skipped** 下。除非关闭了 **Show status feedback**,否则它还会用 👀 标记该 PR(在 Azure DevOps 和 Bitbucket 上为一条 👀 评论)。对这些作者,它绝不会添加无许可证反应(👎 或 🔒)。
+
+这对于机器人、服务账户或不需要代码审查的团队成员很有用。创建 Git 集成时,创建 PR 的机器人会被添加到排除列表中。
 
 ## 配置
 
@@ -30,6 +39,10 @@ description: "让 Kodus 自动把许可证分配给真正在贡献的开发者,�
 2. 停留在 **PR licenses** 选项卡。
 3. 开启或关闭 **Auto-assign licenses**。
     - **Release seats automatically**(同一卡片中)会在成员离开您的 git 组织几天后(默认 7 天)释放其许可证。
-    - 要排除用户,请使用 **Repositories → PR author filters**(参见[忽略的用户](#忽略的用户))。
+    - **Release N unused seats** 会列出已不在您的 git 组织中的人员所持有的许可证,并一步释放它们。
+    - **Assign by git ID** 会为不在列表中的人分配席位。
+    - 要过滤作者,请使用 **Repositories → PR author filters**(参见 [PR 作者过滤器](#pr-作者过滤器))。
 
-这些开关仅在有效的付费计划或已获得许可的自托管实例中显示,并且仅对可以管理席位的成员(Owners)可见。
+这两个开关仅在有效的付费套餐或已获得许可的自托管实例中显示,并且仅对可以管理席位的成员(Owners)可见。
+
+在 GitLab 中，如果成员列表缺少某位席位持有人，Kodus 会检查此人最近是否在已连接的项目中创建过合并请求。通过查询找到的作者会保留席位。如果提供商无法完成核验，Kodus 会保留席位。 这项 GitLab 核验在自托管版 2.2.11 之后加入。

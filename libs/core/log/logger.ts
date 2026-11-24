@@ -4,6 +4,8 @@ import { Socket } from 'net';
 import { trace } from '@opentelemetry/api';
 import pino from 'pino';
 
+import { runtimeIdentity } from './runtime-identity';
+
 /**
  * Structured application logger — ported out of the legacy flow engine's observability
  * module so app code (`libs/*`, `apps/*`) depends on `libs/core` instead of the
@@ -194,6 +196,10 @@ function getPinoLogger(): pino.Logger {
                 pid: process.pid,
                 hostname: undefined,
             },
+            // Release and ECS task on every line: which build wrote it, and
+            // which task (the id is known only after startup, hence a
+            // mixin rather than a fixed base field).
+            mixin: () => runtimeIdentity(),
         };
 
         try {
@@ -299,6 +305,10 @@ const SENSITIVE_KEYS = new Set([
     'awsaccesskeyid',
     'awssessiontoken',
     'jwt',
+    // GitHub's user authorization of the App: the code becomes a user
+    // token, and the state seals who asked for the link.
+    'githubcode',
+    'githubstate',
     'credential',
     'connectionstring',
     'ssn',
@@ -311,8 +321,55 @@ const SENSITIVE_KEYS = new Set([
 const KEY_SENSITIVITY_CACHE = new Map<string, boolean>();
 const KEY_SENSITIVITY_CACHE_MAX = 512;
 
+/**
+ * Credential names are open-ended (`authToken`, `basicPassword`,
+ * `webhookSecret`, `API_GITHUB_PRIVATE_KEY`, ...), so an exact list always
+ * lags behind the code. A name is also sensitive when it ENDS with one of
+ * these stems. Plurals (`inputTokens`, `maxTokens`) do not end with a stem and
+ * stay visible.
+ */
+const SENSITIVE_SUFFIXES = [
+    'token',
+    'secret',
+    'password',
+    'passwd',
+    'privatekey',
+    'apikey',
+];
+
+/** Names that end with a stem but carry no credential. */
+const NON_SECRET_SUFFIX_NAMES = new Set([
+    'cancellationtoken',
+    'keywordtoken',
+    'colontoken',
+    'equalsgreaterthantoken',
+    'redactiontoken',
+    'tstoken',
+]);
+
+/**
+ * A flag about a credential, not the credential: `hasAuthToken`,
+ * `has_access_token`, `isSecret`, `requiresApiKey`, `usesToken`. The prefix
+ * must end at a word boundary (a capital or `_` / `-`), so `issuerToken` or
+ * `userToken` still count as credentials.
+ */
+const FLAG_PREFIX = /^(?:has|is|missing|requires|uses)(?:[A-Z]|[_-])/;
+const FLAG_PREFIX_SEPARATED = /^(?:has|is|missing|requires|uses)[_-]/i;
+
+/** Prices such as `inputCostPerToken` end with a stem but are numbers. */
+const PER_TOKEN_SUFFIX = 'pertoken';
+
 function isSensitiveName(name: string): boolean {
-    return SENSITIVE_KEYS.has(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (SENSITIVE_KEYS.has(normalized)) return true;
+    if (NON_SECRET_SUFFIX_NAMES.has(normalized)) return false;
+    if (!SENSITIVE_SUFFIXES.some((suffix) => normalized.endsWith(suffix))) {
+        return false;
+    }
+    if (FLAG_PREFIX.test(name) || FLAG_PREFIX_SEPARATED.test(name)) {
+        return false;
+    }
+    return !normalized.endsWith(PER_TOKEN_SUFFIX);
 }
 
 /**
@@ -435,7 +492,100 @@ function isAuthorityTerminator(char: string | undefined): boolean {
  * Returns the original reference when nothing was redacted.
  */
 function sanitizeString(value: string): string {
-    return redactEmbeddedSecrets(redactUrlUserinfo(value));
+    return redactPostgresInputValues(
+        redactDuplicateKeyValues(
+            redactKnownTokenFormats(
+                redactEmbeddedSecrets(redactUrlUserinfo(value)),
+            ),
+        ),
+    );
+}
+
+/**
+ * Postgres conversion errors repeat the rejected input in the message
+ * itself, not only in `detail`:
+ *   invalid input syntax for type uuid: "<value>"
+ *   invalid input value for enum status: "<value>"
+ *   malformed array literal: "<value>"
+ *   value "<value>" is out of range for type integer
+ * The message reaches stdout and the Mongo log sink through this function,
+ * so the value goes here; the type, enum and code stay. One quantifier per
+ * pattern, no nesting.
+ */
+const PG_INPUT_HINT = /invalid input|literal: "|out of range/;
+// The value closes the message and may hold a newline, so everything after
+// the prefix goes, up to the stack frames (same rule as the dup-key block).
+const PG_INPUT_AFTER_COLON =
+    /(?:invalid input (?:syntax|value) for (?:type|enum) [^:\n"]{1,100}|malformed (?:array|record|range) literal|date\/time field value out of range|invalid input syntax): "/g;
+const PG_INPUT_OUT_OF_RANGE = /\bvalue "[^"]*"( is out of range for type)/g;
+function redactPostgresInputValues(value: string): string {
+    if (!PG_INPUT_HINT.test(value)) {
+        return value;
+    }
+    let result = '';
+    let cursor = 0;
+    for (const match of value.matchAll(PG_INPUT_AFTER_COLON)) {
+        const start = match.index ?? 0;
+        if (start < cursor) {
+            continue;
+        }
+        const frames = value.indexOf(STACK_FRAME, start);
+        result += value.slice(cursor, start) + match[0] + '[REDACTED]"';
+        cursor = frames === -1 ? value.length : frames;
+    }
+    result += value.slice(cursor);
+    return result.replace(PG_INPUT_OUT_OF_RANGE, 'value "[REDACTED]"$1');
+}
+
+/**
+ * MongoDB E11000 messages carry the colliding value ("dup key: { email:
+ * "..." }"), in the message and again in the stack. The block is the last
+ * thing in the message, so everything from the marker to the stack frames
+ * (or the end) goes. Looking for the closing brace leaked: a value may hold
+ * a brace or a newline, and a truncated message has no closing brace. The
+ * fields stay visible on `keyPattern`. Same policy as SQL bound values.
+ *
+ * Plain index scans rather than a regex: a pattern like /dup key: \{.*\}/ is
+ * quadratic on a string that repeats the marker with no closing brace
+ * (bounded today only by DEEP_SANITIZE_MAX_STRING).
+ */
+const DUP_KEY_MARKER = 'dup key: {';
+const STACK_FRAME = '\n    at ';
+function redactDuplicateKeyValues(value: string): string {
+    let start = value.indexOf(DUP_KEY_MARKER);
+    if (start === -1) {
+        return value;
+    }
+
+    let result = '';
+    let cursor = 0;
+    while (start !== -1) {
+        const frames = value.indexOf(STACK_FRAME, start);
+        result += value.slice(cursor, start) + 'dup key: { [REDACTED] }';
+        cursor = frames === -1 ? value.length : frames;
+        start = value.indexOf(DUP_KEY_MARKER, cursor);
+    }
+    return result + value.slice(cursor);
+}
+
+// Tokens with a recognizable format are secrets wherever they appear, even in
+// free text where no key name points at them (an error message, a stack, a
+// git or HTTP library message). Linear patterns, no nested quantifiers.
+const KNOWN_TOKEN_HINT = /gh[pousr]_|github_pat_|glpat-|bearer\s/i;
+const KNOWN_TOKEN_PATTERN =
+    /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,})/g;
+const BEARER_VALUE_PATTERN = /\b(Bearer)[ \t]+[A-Za-z0-9._~+/-]{8,}=*/gi;
+
+function redactKnownTokenFormats(value: string): string {
+    if (!KNOWN_TOKEN_HINT.test(value)) {
+        return value;
+    }
+
+    const result = value
+        .replace(KNOWN_TOKEN_PATTERN, '[REDACTED]')
+        .replace(BEARER_VALUE_PATTERN, '$1 [REDACTED]');
+
+    return result === value ? value : result;
 }
 
 function stringifyUnknownError(value: unknown): string {
@@ -451,7 +601,7 @@ function stringifyUnknownError(value: unknown): string {
 // fail-open, so every name in SENSITIVE_KEYS must match one of these stems —
 // a spec walks the set and fails when a new key has no stem here.
 const EMBEDDED_SECRET_HINT =
-    /auth|cookie|token|secret|passw|key|credential|jwt|connection|ssn|cpf|cvv|card/i;
+    /auth|cookie|token|secret|passw|key|credential|jwt|connection|ssn|cpf|cvv|card|github[_-]?(?:code|state)/i;
 
 // Linear patterns (no nested or overlapping quantifiers).
 // The optional leading `+`/`-` covers unified-diff lines, which get logged.
@@ -1249,6 +1399,93 @@ const ERROR_SERIALIZER_PASSTHROUGH_KEYS = new Set([
 ]);
 
 /**
+ * Values bound to a SQL statement are data, never diagnostics: a failed
+ * INSERT into `auth` logged a live refresh token through `parameters` and the
+ * Postgres `detail`. Keep how many values there were, the query text, code,
+ * constraint and column names; drop the values (overrides the #1835 choice to
+ * keep `parameters`).
+ */
+export function describeBoundValues(values: unknown[]): string;
+export function describeBoundValues(values?: unknown[]): string | undefined;
+export function describeBoundValues(values?: unknown[]): string | undefined {
+    return values ? `[${values.length} values]` : undefined;
+}
+
+/**
+ * Postgres puts the offending values in `detail`:
+ *   Key ("refreshToken")=(<value>) already exists.
+ *   Key (job_id)=(<value>) is not present in table "workflow_jobs".
+ *   Failing row contains (<every column>).
+ * Keeps the columns and the explanation, drops the values.
+ */
+export function redactSqlDetail(detail: string): string {
+    const key = /^Key \((.*?)\)=\(/s.exec(detail);
+    if (key) {
+        const tail =
+            /\)\s+(already exists|is not present in table|is still referenced from table|conflicts with existing key)(.*)$/s.exec(
+                detail,
+            );
+        if (!tail) {
+            return `Key (${key[1]})=([REDACTED])`;
+        }
+        // An exclusion violation names the existing row's key and value too.
+        const rest =
+            tail[1] === 'conflicts with existing key' ? ' ([REDACTED]).' : tail[2];
+        return `Key (${key[1]})=([REDACTED]) ${tail[1]}${rest}`;
+    }
+    if (detail.startsWith('Failing row contains')) {
+        return 'Failing row contains ([REDACTED]).';
+    }
+    return detail;
+}
+
+/**
+ * Fields of a database error that carry values, each with its redactor: SQL
+ * bound parameters, the Postgres `detail`, and a Mongo duplicate key.
+ */
+const VALUE_FIELD_REDACTORS = new Map<string, (value: unknown) => unknown>([
+    [
+        'parameters',
+        (value) =>
+            Array.isArray(value) ? describeBoundValues(value) : value,
+    ],
+    [
+        'detail',
+        (value) => (typeof value === 'string' ? redactSqlDetail(value) : value),
+    ],
+    [
+        'keyValue',
+        (value) =>
+            value && typeof value === 'object' && !Array.isArray(value)
+                ? Object.fromEntries(
+                      Object.keys(value).map((field) => [field, '[REDACTED]']),
+                  )
+                : value,
+    ],
+]);
+
+/**
+ * Error holders one level down that repeat those fields: pg `driverError`,
+ * Mongo `errInfo` and `errorResponse` (the whole server reply, driver 7).
+ */
+const NESTED_VALUE_HOLDERS = new Set(['driverError', 'errInfo', 'errorResponse']);
+
+function withoutValueFields(value: unknown): unknown {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return value;
+    }
+    const copy: Record<string, unknown> = {
+        ...(value as Record<string, unknown>),
+    };
+    for (const [field, redact] of VALUE_FIELD_REDACTORS) {
+        if (field in copy) {
+            copy[field] = redact(copy[field]);
+        }
+    }
+    return copy;
+}
+
+/**
  * Own props the `err.*` serializer never emits, whatever their shape.
  *
  * Logging policy, not diagnostics: `responseBody` is the raw provider body,
@@ -1267,8 +1504,9 @@ const ERROR_SERIALIZER_PASSTHROUGH_KEYS = new Set([
  * Every OTHER non-scalar is capped and kept: `driverError` on a TypeORM
  * `QueryFailedError`, `errInfo`/`keyValue` on `MongoServerError`, `errors` on
  * `AggregateError` and `issues` on `ZodError` are what make those failures
- * diagnosable, and the allowlist that dropped them was only ever needed for
- * the payload props above.
+ * diagnosable. Database values inside them are redacted first
+ * (VALUE_FIELD_REDACTORS): which constraint or field failed stays, the value
+ * that failed it does not.
  */
 const ERROR_SERIALIZER_NEVER_EMIT = new Set([
     'responseBody',
@@ -1641,7 +1879,13 @@ export function boundErrorForLog(
     }
     const flat = pino.stdSerializers.err(err as Error) as Record<string, unknown>;
     const bounded: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(flat)) {
+    for (const [key, rawValue] of Object.entries(flat)) {
+        const redact = VALUE_FIELD_REDACTORS.get(key);
+        const value = redact
+            ? redact(rawValue)
+            : NESTED_VALUE_HOLDERS.has(key)
+              ? withoutValueFields(rawValue)
+              : rawValue;
         if (ERROR_SERIALIZER_PASSTHROUGH_KEYS.has(key)) {
             bounded[key] = value;
             continue;

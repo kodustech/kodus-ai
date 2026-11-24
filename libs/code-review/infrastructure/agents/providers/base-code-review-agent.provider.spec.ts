@@ -539,6 +539,54 @@ describe('request assembly + byokConfig threading', () => {
         expect(loopParams.contextWindowTokens).toBe(200_000);
     });
 
+    it('sizes the context window by the bare model id, not the provider-prefixed label', async () => {
+        // `openai:gpt-6.1-sol` misses the mirror's exact and normalized keys
+        // and resolves by substring to `bedrock_mantle/openai.gpt-6.1-sol`
+        // (1,000,000); the model itself holds 922,000.
+        resolveModelMock.mockResolvedValue(
+            makeModel({
+                main: {
+                    modelName: 'openai:gpt-6.1-sol',
+                    modelId: 'gpt-6.1-sol',
+                    maxInputTokens: undefined,
+                },
+            }),
+        );
+        await newAgent().execute(makeInput());
+        const [loopParams] = runLoopMock.mock.calls[0];
+        expect(loopParams.contextWindowTokens).toBe(922_000);
+    });
+
+    it.each([
+        ['byok', 'gpt-6.1-sol', 500_000, 500_000],
+        ['litellm', 'gpt-6.1-sol', undefined, 922_000],
+        ['default', 'totally-unknown-xyz-model', undefined, 128_000],
+    ])(
+        'logs the context window with source %s',
+        async (source, modelId, maxInputTokens, tokens) => {
+            resolveModelMock.mockResolvedValue(
+                makeModel({
+                    main: {
+                        modelName: `openai:${modelId}`,
+                        modelId,
+                        maxInputTokens,
+                    },
+                }),
+            );
+            const agent = newAgent();
+            const log = jest.spyOn((agent as any).agentLogger, 'log');
+            await agent.execute(makeInput());
+            const entry = log.mock.calls
+                .map(([e]: any[]) => e)
+                .find((e: any) => /context window:/.test(e.message));
+            expect(entry.metadata).toMatchObject({
+                modelId,
+                contextWindowTokens: tokens,
+                contextWindowSource: source,
+            });
+        },
+    );
+
     it('wires byokErrorReporter → ByokErrorCounter.record when the counter is injected', async () => {
         const counter = { record: jest.fn() };
         await newAgent(counter).execute(makeInput());
@@ -564,6 +612,50 @@ describe('request assembly + byokConfig threading', () => {
         expect(loopParams.skipHeavyPasses).toBe(true);
         expect(loopParams.skipSynthesisRescue).toBe(true);
         expect(loopParams.maxSteps).toBe(33);
+    });
+
+    it('forwards heavy only to an agent that runs the lenses', async () => {
+        class LensAgent extends TestReviewAgent {
+            protected runsHeavyLenses(): boolean {
+                return true;
+            }
+        }
+        await new LensAgent({} as any, {} as any).execute(
+            makeInput({ heavy: true }),
+        );
+        await newAgent().execute(makeInput({ heavy: true }));
+        expect(runLoopMock.mock.calls[0][0].heavy).toBe(true);
+        // Kody Rules, custom agents and the rest never run them.
+        expect(runLoopMock.mock.calls[1][0].heavy).toBe(false);
+    });
+
+    class LensAgent extends TestReviewAgent {
+        protected runsHeavyLenses(): boolean {
+            return true;
+        }
+    }
+    const lensAgent = () => new LensAgent({} as any, {} as any);
+
+    it('forwards the batch of a chunked review, and none for a single run', async () => {
+        await lensAgent().execute(
+            makeInput({ heavy: true, batchIndex: 2, batchTotal: 3 }),
+        );
+        await lensAgent().execute(
+            makeInput({ heavy: true, batchIndex: 1, batchTotal: 1 }),
+        );
+        expect(runLoopMock.mock.calls[0][0].lensBatch).toEqual({
+            index: 2,
+            total: 3,
+        });
+        expect(runLoopMock.mock.calls[1][0].lensBatch).toBeUndefined();
+    });
+
+    it('forwards no batch for a chunked review that is not heavy', async () => {
+        await lensAgent().execute(
+            makeInput({ heavy: false, batchIndex: 2, batchTotal: 3 }),
+        );
+        expect(runLoopMock.mock.calls[0][0].heavy).toBe(false);
+        expect(runLoopMock.mock.calls[0][0].lensBatch).toBeUndefined();
     });
 
     it('forwards previousDecisions onto loopParams explicitly (issue #1313)', async () => {
@@ -750,6 +842,26 @@ describe('losses the run records (#2066)', () => {
         expect(dropped?.detail).toContain('1 files dropped');
     });
 
+    it('splits a tiered PR whose full diffs exceed the budget (#2205)', async () => {
+        resolveModelMock.mockResolvedValue(
+            makeModel({ main: { maxInputTokens: 200_000 } }),
+        );
+        const changedFiles = Array.from({ length: 10 }, (_, i) => {
+            const diff = '@@ -1,1 +1,1 @@\n' + 'x'.repeat(60_000);
+            return {
+                filename: `src/f${i}.ts`,
+                patch: diff,
+                patchWithLinesStr: diff,
+            } as any;
+        });
+
+        await newAgent().execute(makeInput({ changedFiles }));
+
+        expect(runChunkedMock).toHaveBeenCalled();
+        const [chunkedInput] = runChunkedMock.mock.calls[0];
+        expect([...chunkedInput.fileTiers.values()]).toContain('optional');
+    });
+
     it('records nothing for a PR that fits', async () => {
         const out = await newAgent().execute(makeInput());
 
@@ -819,6 +931,125 @@ describe('#2171 incomplete and unverified', () => {
         );
         expect(out.warnings?.map((w) => w.kind)).toContain(
             'VERIFY_UNAVAILABLE',
+        );
+    });
+});
+
+describe('heavy mode lenses on the timeline (#2578)', () => {
+    class LensAgent extends TestReviewAgent {
+        protected runsHeavyLenses(): boolean {
+            return true;
+        }
+    }
+    const generalistFinding = makeHarnessResult().findings.suggestions[0];
+    const lensFinding = {
+        ...generalistFinding,
+        suggestionContent: 'Token logged in plain text',
+        producedBy: 'lens-data-exposure',
+    };
+
+    it('reports the lenses as one specialists entry and counts each agent its own findings', async () => {
+        runLoopMock.mockImplementation(async (params: any) => {
+            params.onHeavyLensesStarted([
+                'lens-data-exposure',
+                'lens-text-that-ships',
+            ]);
+            return makeHarnessResult({
+                findings: {
+                    reasoning: 'r',
+                    suggestions: [generalistFinding, lensFinding],
+                },
+                heavyLensOutcomes: [
+                    {
+                        label: 'lens-data-exposure',
+                        status: 'success',
+                        found: 2,
+                        ms: 900,
+                        steps: 3,
+                        toolCalls: 4,
+                    },
+                    {
+                        label: 'lens-text-that-ships',
+                        status: 'failed',
+                        found: 0,
+                        ms: 300,
+                        steps: 1,
+                        toolCalls: 0,
+                        error: { message: 'Too Many Requests', status: 429 },
+                    },
+                ],
+            });
+        });
+        const events: AgentProgressEvent[] = [];
+
+        await new LensAgent({} as any, {} as any).execute(
+            makeInput({ heavy: true, onAgentProgress: (e) => events.push(e) }),
+        );
+
+        const specialists = events.filter(
+            (e) => e.agentCategory === 'specialists',
+        );
+        expect(specialists.map((e) => e.status)).toEqual([
+            'started',
+            'completed',
+        ]);
+        expect(specialists[0].specialists?.map((s) => s.status)).toEqual([
+            'running',
+            'running',
+        ]);
+        expect(specialists[1].specialists).toEqual([
+            expect.objectContaining({
+                label: 'lens-data-exposure',
+                status: 'success',
+                found: 2,
+                kept: 1,
+            }),
+            expect.objectContaining({
+                label: 'lens-text-that-ships',
+                status: 'failed',
+                kept: 0,
+                error: expect.any(String),
+            }),
+        ]);
+        const generalist = events.find(
+            (e) =>
+                e.agentCategory !== 'specialists' && e.status === 'completed',
+        );
+        expect(generalist?.findings).toBe(1);
+        expect(generalist?.suggestionsPreview).toHaveLength(1);
+    });
+
+    it('reports the lenses as stopped when the generalist fails', async () => {
+        runLoopMock.mockImplementation(async (params: any) => {
+            params.onHeavyLensesStarted(['lens-data-exposure']);
+            throw new Error('generalist down');
+        });
+        const events: AgentProgressEvent[] = [];
+
+        await expect(
+            new LensAgent({} as any, {} as any).execute(
+                makeInput({
+                    heavy: true,
+                    onAgentProgress: (e) => events.push(e),
+                }),
+            ),
+        ).rejects.toThrow('generalist down');
+
+        expect(
+            events.filter((e) => e.agentCategory === 'specialists').pop(),
+        ).toMatchObject({
+            status: 'error',
+            specialistsStoppedByGeneralist: true,
+        });
+    });
+
+    it('sends no specialists entry for a review without lenses', async () => {
+        const events: AgentProgressEvent[] = [];
+        await newAgent().execute(
+            makeInput({ onAgentProgress: (e) => events.push(e) }),
+        );
+        expect(events.some((e) => e.agentCategory === 'specialists')).toBe(
+            false,
         );
     });
 });

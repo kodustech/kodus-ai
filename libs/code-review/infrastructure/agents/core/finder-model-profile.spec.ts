@@ -62,7 +62,7 @@ describe('finderRunSettings', () => {
 
     it("keeps the orchestrator's budget for an adaptive family", () => {
         expect(
-            finderRunSettings({ reviewMode: 'normal', maxSteps: 34 }, 'deepseek-v4-flash'),
+            finderRunSettings({ reviewMode: 'balanced', maxSteps: 34 }, 'deepseek-v4-flash'),
         ).toMatchObject({ maxSteps: 34, skipSynthesisRescue: false });
     });
 

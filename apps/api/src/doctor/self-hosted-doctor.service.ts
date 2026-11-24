@@ -13,11 +13,13 @@ import { CockpitHealthService } from '@libs/cockpit/infrastructure/services/cock
 import {
     ILicenseService,
     LICENSE_SERVICE_TOKEN,
+    SubscriptionStatus,
 } from '@libs/ee/license/interfaces/license.interface';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { buildGitAuthHeader } from '@libs/sandbox/infrastructure/providers/git-auth-header';
+import { generateWebhookToken } from '@libs/common/utils/webhooks/webhookTokenCrypto';
 
 import {
     IVersionCheckService,
@@ -30,7 +32,9 @@ import {
 } from './checks/broker.checks';
 import { bootEnvCheck, configEnvCheck } from './checks/env.checks';
 import {
+    DeliveredEvents,
     gitAccessCheck,
+    WebhookAnswer,
     WEBHOOK_EVENTS_CAP,
     webhookUrlCheck,
 } from './checks/git.checks';
@@ -45,8 +49,11 @@ import {
 import {
     analyticsCheck,
     astGraphCheck,
+    CloneOutcome,
     CodeReviewSettings,
     editionCheck,
+    MAX_CLONE_TESTS,
+    mongoCheck,
     sandboxCheck,
     seatsCheck,
     setupCheck,
@@ -61,6 +68,7 @@ import {
     DoctorResult,
     DoctorTeam,
     licenseCandidates,
+    LicenseState,
     RECENT_DAYS,
 } from './doctor.types';
 
@@ -155,6 +163,7 @@ export class SelfHostedDoctorService {
     checks(): DoctorCheck[] {
         return [
             bootEnvCheck,
+            mongoCheck(() => this.pingMongo()),
             brokerCheck(amqpBrokerProbe),
             staleJobsCheck(this.dataSource),
             setupCheck,
@@ -166,8 +175,8 @@ export class SelfHostedDoctorService {
                 complete: liveLlmComplete,
             }),
             webhookUrlCheck({
-                reach: reachUrl,
                 recentEvents: (platform) => this.recentGitEvents(platform),
+                probe: probeWebhookUrl,
             }),
             gitAccessCheck({
                 diagnose: (team, repository) =>
@@ -178,10 +187,12 @@ export class SelfHostedDoctorService {
                         },
                         repository,
                     }),
-                reach: reachUrl,
+                deliveredEvents: (team) => this.deliveredEvents(team),
+                postedComments: (team, repositoryId) =>
+                    this.postedComments(team, repositoryId),
             }),
             seatsCheck((team) => this.countUnlicensedSkips(team)),
-            sandboxCheck((ctx) => this.testClone(ctx)),
+            sandboxCheck((ctx) => this.testClones(ctx)),
             astGraphCheck((ctx) => this.loadAstStatuses(ctx)),
             configEnvCheck,
             versionCheck(() => this.versionCheckService.getStatus()),
@@ -235,6 +246,7 @@ export class SelfHostedDoctorService {
                     status: 'unknown',
                     title: `The "${check.id}" check could not complete.`,
                     fix: `Error: ${String((error as Error)?.message ?? error).slice(0, 200)}`,
+                    blocking: check.blocking === true,
                 },
             ];
         } finally {
@@ -307,27 +319,41 @@ export class SelfHostedDoctorService {
             `SELECT COUNT(*)::int AS count FROM automation WHERE "automationType" = 'AutomationCodeReview'`,
         );
 
-        let licensed = false;
+        let license: LicenseState = { status: 'none' };
         for (const team of licenseCandidates(teams)) {
             try {
-                licensed = (
+                const validation =
                     await this.licenseService.validateOrganizationLicense({
                         organizationId: team.organizationId,
                         teamId: team.teamId,
-                    })
-                ).valid;
+                    });
+                if (validation.valid) {
+                    license = {
+                        status: 'valid',
+                        expiresAt: validation.expiresAt,
+                    };
+                    break;
+                }
+                if (
+                    validation.subscriptionStatus === SubscriptionStatus.EXPIRED
+                ) {
+                    license = { status: 'expired' };
+                } else if (
+                    license.status === 'none' &&
+                    env.KODUS_LICENSE_KEY?.trim()
+                ) {
+                    license = { status: 'invalid' };
+                }
             } catch {
-                licensed = false;
-            }
-            if (licensed) {
-                break;
+                // Unreadable counts as unlicensed, as in the review path.
             }
         }
 
         return {
             teams,
             codeReviewAutomationSeeded: seed?.count > 0,
-            licensed,
+            licensed: license.status === 'valid',
+            license,
             env,
         };
     }
@@ -376,8 +402,9 @@ export class SelfHostedDoctorService {
     }
 
     /**
-     * Every received Git event is enqueued as a WEBHOOK_PROCESSING job. Jobs are
-     * never deleted, so the `updatedAt` bound lets idx_workflow_jobs_type_updated
+     * Every received Git event is enqueued as a WEBHOOK_PROCESSING job. Finished
+     * jobs are deleted after WORKFLOW_JOB_RETENTION_DAYS (30), well past the
+     * RECENT_DAYS read here. The `updatedAt` bound lets idx_workflow_jobs_updated_at
      * cut the scan to the window (a job is never updated before it is created),
      * and the LIMIT caps the heap reads on an install with heavy traffic.
      */
@@ -400,6 +427,61 @@ export class SelfHostedDoctorService {
             count: row?.count ?? 0,
             last: row?.last ? new Date(row.last) : null,
         };
+    }
+
+    /**
+     * Repositories the Git events of the window named, read from the provider
+     * payload the webhooks service queued (GitHub/Forgejo `repository.id`,
+     * GitLab `project.id`, Azure `resource.repository.id`, Bitbucket
+     * `repository.uuid`). Same window and cap as recentGitEvents.
+     */
+    private async deliveredEvents(team: DoctorTeam): Promise<DeliveredEvents> {
+        const [row] = await this.dataSource.query(
+            `SELECT COUNT(*)::int AS count,
+                    ARRAY_REMOVE(ARRAY_AGG(DISTINCT repo), NULL) AS repos
+               FROM (SELECT COALESCE(payload->'repository'->>'id',
+                                     payload->'project'->>'id',
+                                     payload->'resource'->'repository'->>'id',
+                                     payload->'repository'->>'uuid') AS repo
+                       FROM kodus_workflow.workflow_jobs
+                      WHERE "workflowType" = 'WEBHOOK_PROCESSING'
+                        AND "updatedAt" > now() - make_interval(days => $2)
+                        AND "createdAt" > now() - make_interval(days => $2)
+                        AND metadata->>'platformType' = $1
+                      ORDER BY "updatedAt" DESC
+                      LIMIT $3) recent`,
+            [team.platform, RECENT_DAYS, WEBHOOK_EVENTS_CAP],
+        );
+        return {
+            platformEvents: row?.count ?? 0,
+            repositoryIds: new Set<string>(
+                (row?.repos ?? []).map((id: unknown) => String(id)),
+            ),
+        };
+    }
+
+    /** Pull requests of the repository where Kody posted a comment in the window. */
+    private async postedComments(
+        team: DoctorTeam,
+        repositoryId: string,
+    ): Promise<number> {
+        const since = new Date(Date.now() - RECENT_DAYS * 86_400_000);
+        const ids: Array<string | number> = [repositoryId];
+        if (/^\d+$/.test(repositoryId)) {
+            ids.push(Number(repositoryId));
+        }
+        return this.mongo.collection('pullRequests').countDocuments(
+            {
+                'organizationId': team.organizationId,
+                'repository.id': { $in: ids },
+                'updatedAt': { $gte: since },
+                '$or': [
+                    { 'files.suggestions.deliveryStatus': 'sent' },
+                    { 'prLevelSuggestions.deliveryStatus': 'sent' },
+                ],
+            },
+            { limit: 1, maxTimeMS: MONGO_QUERY_TIMEOUT_MS },
+        );
     }
 
     /**
@@ -564,6 +646,29 @@ export class SelfHostedDoctorService {
         };
     }
 
+    /** The connection the review path uses; mongoose buffers while it is down. */
+    private async pingMongo(): Promise<void> {
+        if (this.mongo.readyState !== 1 || !this.mongo.db) {
+            throw new Error(
+                `not connected (mongoose state ${this.mongo.readyState})`,
+            );
+        }
+        let timer: NodeJS.Timeout | undefined;
+        try {
+            await Promise.race([
+                this.mongo.db.admin().ping(),
+                new Promise<never>((_, reject) => {
+                    timer = setTimeout(
+                        () => reject(new Error('no answer within 5s')),
+                        5000,
+                    );
+                }),
+            ]);
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
     /** Without the default list every pattern reads as the team's own choice. */
     private defaultIgnorePaths(): string[] {
         try {
@@ -625,16 +730,21 @@ export class SelfHostedDoctorService {
         return out;
     }
 
-    /** `git ls-remote` of one selected repository: read-only, no checkout. */
-    private async testClone(
-        ctx: DoctorContext,
-    ): Promise<{ repository: string; error?: string } | null> {
-        const team = ctx.teams.find(
-            (t) => t.platform && t.integrationActive && t.repositories.length,
-        );
-        if (!team) {
-            return null;
-        }
+    /**
+     * `git ls-remote` of one selected repository per connected team (each
+     * team has its own token): read-only, no checkout.
+     */
+    private async testClones(ctx: DoctorContext): Promise<CloneOutcome[]> {
+        const teams = ctx.teams
+            .filter(
+                (t) =>
+                    t.platform && t.integrationActive && t.repositories.length,
+            )
+            .slice(0, MAX_CLONE_TESTS);
+        return Promise.all(teams.map((team) => this.testClone(team)));
+    }
+
+    private async testClone(team: DoctorTeam): Promise<CloneOutcome> {
         const repository = team.repositories[0];
         const params = await this.codeManagementService.getCloneParams({
             organizationAndTeamData: {
@@ -650,6 +760,7 @@ export class SelfHostedDoctorService {
         });
         if (!params?.url) {
             return {
+                team,
                 repository: repository.name,
                 error: 'could not build the clone URL from the stored integration',
             };
@@ -662,7 +773,7 @@ export class SelfHostedDoctorService {
                 timeout: 30_000,
                 env: gitEnv,
             });
-            return { repository: repository.name };
+            return { team, repository: repository.name };
         } catch (error: any) {
             const detail = String(error?.stderr || error?.message || error)
                 .split('\n')
@@ -672,6 +783,7 @@ export class SelfHostedDoctorService {
                 .slice(0, 200);
             // Belt and braces: never let the token reach the report.
             return {
+                team,
                 repository: repository.name,
                 error: params.auth?.token
                     ? detail.split(params.auth.token).join('<redacted>')
@@ -693,14 +805,43 @@ export class SelfHostedDoctorService {
     }
 }
 
-/** Any HTTP answer means reachable; only network/TLS errors reject. */
-export async function reachUrl(url: string): Promise<number> {
-    const res = await fetch(url, {
-        method: 'GET',
+/**
+ * POSTs an empty payload with no event header: the webhooks service drops it
+ * without queueing anything ("Webhook ignored"). Azure Repos checks the URL
+ * token before the payload, so its probe carries one minted from this api's
+ * secrets: a 403 then means the webhooks service holds other secrets.
+ */
+export async function probeWebhookUrl(
+    url: string,
+    platform: string,
+): Promise<WebhookAnswer> {
+    let target = url;
+    let token: string | undefined;
+    if (platform === PlatformType.AZURE_REPOS) {
+        token = generateWebhookToken();
+        const withToken = new URL(url);
+        withToken.searchParams.set('token', token);
+        target = withToken.toString();
+    }
+    const res = await fetch(target, {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            'user-agent': 'kodus-selfhosted-doctor',
+        },
+        body: '{}',
         redirect: 'manual',
         signal: AbortSignal.timeout(8000),
     });
-    return res.status;
+    let body = await res.text().catch(() => '');
+    // A proxy or login page may echo the request URL: the minted token is a
+    // live webhook credential and must not reach a report shared with support.
+    if (token) {
+        for (const form of [token, encodeURIComponent(token)]) {
+            body = body.split(form).join('<redacted>');
+        }
+    }
+    return { status: res.status, body: body.slice(0, 300) };
 }
 
 /**

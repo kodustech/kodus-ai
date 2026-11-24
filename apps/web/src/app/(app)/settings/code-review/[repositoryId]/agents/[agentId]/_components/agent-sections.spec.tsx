@@ -4,13 +4,22 @@ import "@testing-library/jest-dom";
 import type { CustomAgent } from "@services/custom-agents/types";
 import { getBYOK } from "@services/organizationParameters/fetch";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import {
     CommentsAndModel,
     FilesAndKnowledge,
     InstructionsCard,
 } from "./agent-sections";
+
+// The knowledge card lists other repositories through the resolve endpoint.
+jest.mock("@services/custom-agents/hooks", () => ({
+    useResolveCustomAgent: () => ({
+        isLoading: false,
+        isFetching: false,
+        data: undefined,
+    }),
+}));
 
 jest.mock("@services/organizationParameters/fetch", () => ({
     getBYOK: jest.fn(),
@@ -40,6 +49,35 @@ const agent: CustomAgent = {
 };
 
 describe("InstructionsCard", () => {
+    it("defaults existing agents to every matching PR and saves only the new run condition", () => {
+        const change = jest.fn();
+        render(<InstructionsCard agent={agent} canEdit onChange={change} />);
+        fireEvent.click(
+            screen.getByRole("button", { name: "When risk is found" }),
+        );
+        expect(change.mock.calls[0][0](agent)).toEqual({
+            ...agent,
+            runWhen: "risk-found",
+        });
+    });
+
+    it("shows the risk requirement and keeps inherited settings read-only", () => {
+        render(
+            <InstructionsCard
+                agent={{ ...agent, runWhen: "risk-found" }}
+                canEdit={false}
+                onChange={jest.fn()}
+            />,
+        );
+        expect(
+            screen.getByText(
+                "Requires confirmed PR risk. Manual commands still run.",
+            ),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "When risk is found" }),
+        ).toBeDisabled();
+    });
     it("shows a name error inline and marks the field invalid", () => {
         render(
             <InstructionsCard
@@ -111,8 +149,62 @@ describe("CommentsAndModel", () => {
         await waitFor(() =>
             expect(
                 screen.getByRole("combobox", { name: "Model" }),
-            ).toHaveTextContent("Routing default (GLM 5.3 Flash)"),
+            ).toHaveTextContent("Routing default · GLM 5.3 Flash"),
         );
         expect(screen.queryByText(/accounts\/fireworks/)).toBeNull();
+    });
+
+    it("tells apart a pin and its alias on two connections, and leaves the Kodus default out", async () => {
+        (getBYOK as jest.Mock).mockResolvedValue({
+            credentials: [
+                { id: "c-openai", provider: "openai" },
+                { id: "c-openrouter", provider: "openrouter" },
+                { id: "c-env", provider: "openai", managed: true },
+            ],
+            models: [
+                { id: "m-openai", credentialId: "c-openai", model: "gpt-5.4" },
+                {
+                    id: "m-openrouter",
+                    credentialId: "c-openrouter",
+                    model: "openai/gpt-5.4",
+                },
+                // The Kodus default runs the pin's id. Routing does not offer
+                // it, nor compares against it.
+                {
+                    id: "m-env",
+                    credentialId: "c-env",
+                    model: "gpt-5.4-2026-03-05",
+                },
+                {
+                    id: "m-pin",
+                    credentialId: "c-openai",
+                    model: "gpt-5.4-2026-03-05",
+                },
+            ],
+            routing: { defaultModelId: "m-pin" },
+        });
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <CommentsAndModel agent={agent} canEdit onChange={jest.fn()} />
+            </QueryClientProvider>,
+        );
+        const trigger = screen.getByRole("combobox", { name: "Model" });
+        await waitFor(() =>
+            expect(trigger).toHaveTextContent(
+                "Routing default · GPT 5.4 (gpt-5.4-2026-03-05)",
+            ),
+        );
+        // Radix Select scrolls the picked option into view; jsdom has no layout.
+        Element.prototype.scrollIntoView = jest.fn();
+        fireEvent.click(trigger);
+        const options = (await screen.findAllByRole("option")).map(
+            (o) => o.textContent,
+        );
+        expect(options).toEqual([
+            "Routing default · GPT 5.4 (gpt-5.4-2026-03-05)",
+            "GPT 5.4 (gpt-5.4)",
+            "GPT 5.4 (openai/gpt-5.4)",
+            "GPT 5.4 (gpt-5.4-2026-03-05)",
+        ]);
     });
 });

@@ -1,0 +1,62 @@
+---
+title: "Rules Library"
+description: "Browse ready-made Kody Rules and rule packs, and add them to Global, a repository or a directory."
+---
+
+The Rules Library is a catalog of ready-made [Kody Rules](/en/how_to_use/code_review/configs/kody_rules), grouped into packs by topic. Adding a rule copies it into your rules, where you can edit, pause or delete it like any other.
+
+## Open the library
+
+- On **Code review → Kody Rules**, **Review Rules** tab, click **Discovery**.
+- On an empty rules list, click **Browse the library**. The list also shows three library rules to start from.
+- Search for **Rules library** in the ⌘K command palette.
+
+The breadcrumb **Kody Rules → Rules Library** takes you back to the rules page you came from.
+
+## Find a rule
+
+The library has two views, **Featured** and **Browse**, in the left navigation.
+
+- **Featured:** **Recommended for you**, which suggests library rules related to what Kody recently flagged in your connected repositories (**Refresh** reloads it), then the **Plug and play** collection and a few packs.
+- **Browse:** every rule, 48 at a time (**Load more** for the rest).
+
+Typing in **Search rules...** switches to **Browse**. In **Browse** you can filter by:
+
+| Filter | Options |
+|--------|---------|
+| **Severity** | Low, Medium, High, Critical |
+| **Language** | JS/TS, Python, Java, C#, Dart, Ruby, PHP, Go, Kotlin, Rust |
+| **Packs** | A pack from the list, with its rule count |
+| **Collections** | **All rules** or **Plug and play** |
+
+**Browse** opens filtered to your team's language when Kodus knows it; choose **All** in **Language** to clear it. **Reset** clears the filters you set.
+
+### Packs
+
+A pack is a set of rules around one topic, such as security hardening, testing, observability, accessibility, compliance (GDPR, HIPAA, SOC 2, PCI DSS, LGPD) or a stack (React, Next.js, Vue, Node.js, Python, PHP, Flutter). **Browse all packs** opens the **Rules Packs** page, where you can search packs and see sample rules; **Explore pack** opens the pack's rules in **Browse**.
+
+## Read a rule
+
+Each card shows the title, severity, language and a **Plug-and-Play** badge on rules that are ready to use as they are. Click a card to open it:
+
+- **Why is it important?**
+- **Instructions**: the text Kody checks.
+- A **Bad example** and a **Good example**, when the rule has them.
+
+Use the thumbs up and thumbs down to rate a rule. Your vote is shown on the card.
+
+## Add rules
+
+1. Open a rule and click the arrow next to **Add to my rules**.
+2. Pick where it goes: **Global**, one or more repositories, or directories. Only the places where you can create rules are listed. Choosing **Global** adds the rule to Global only, since repositories inherit it.
+3. Click **Add to my rules**. A confirmation lists where the rule was added.
+
+When you open a rule from the three shown on an empty **Kody Rules** page, **Add to my rules** adds it to that scope directly and takes you back to the **Kody Rules** page.
+
+An added rule:
+
+- is active, always runs **Per file** (even if the library rule describes a whole-PR check), keeps the library's severity and examples, and shows the **Library** origin;
+- has no path, so it applies to all files, with two exceptions: a rule with a language is limited to files of that language, and a rule added from inside a directory scope gets that directory's first folder as its path, `<folder>/**`;
+- counts toward the Free plan limit of 10 active rules. Beyond it, the rule is added but **Locked**. See [rule limits](/en/how_to_use/code_review/configs/kody_rules#rule-limits).
+
+If your workspace uses [centralized config](/en/how_to_use/code_review/configs/centralized_config), adding a rule opens a pull request on the config repository instead.

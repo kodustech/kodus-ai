@@ -1,0 +1,776 @@
+"use client";
+
+import { Suspense, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@components/ui/button";
+import { Card, CardContent, CardHeader } from "@components/ui/card";
+import { Heading } from "@components/ui/heading";
+import { Link } from "@components/ui/link";
+import { Page } from "@components/ui/page";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@components/ui/select";
+import { Spinner } from "@components/ui/spinner";
+import { toast } from "@components/ui/toaster/use-toast";
+import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
+import { usePermission } from "@services/permissions/hooks";
+import { Action, ResourceType } from "@services/permissions/types";
+import { useQueryClient } from "@tanstack/react-query";
+import { ArrowUpRight, LockKeyholeIcon } from "lucide-react";
+import {
+    Controller,
+    useFormContext,
+    useFormState,
+    useWatch,
+} from "react-hook-form";
+import {
+    useCodeReviewModelData,
+    useInitialTeamId,
+} from "src/app/(app)/settings/_components/context";
+import { useCodeReviewRouteParams } from "src/app/(app)/settings/_hooks";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
+import { unformatConfig } from "src/core/utils/helpers";
+import { PerRepositoryPanel } from "src/features/ee/byok/_components/per-repository-panel";
+import {
+    hasRoutingProvider,
+    routingHref,
+    RoutingSettingsError,
+    routingStatusQueryKey,
+} from "src/features/ee/byok/_components/routing/routing-state";
+
+import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
+import { OverrideIndicatorForm } from "../../_components/override";
+import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
+import type { CodeReviewFormType } from "../../_types";
+import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
+import { reviewSettingsSaveErrorMessage } from "../../_utils/settings-save-conflict";
+import { BYOKModelSelectorSection } from "../general/_components/byok-model-selector";
+import { confirmOffCatalogModelSave } from "../general/_components/confirm-scope-model";
+import {
+    OrganizationModels,
+    OtherTaskModels,
+} from "./_components/organization-models";
+import { useOrganizationRouting } from "./_components/use-organization-routing";
+import {
+    modeLabel,
+    useReviewRouting,
+    useUltraModeInUse,
+    type Mode,
+} from "./_components/use-review-routing";
+
+type ModeField =
+    | "reviewMode.value"
+    | "riskReviewRouting.noRisk.value"
+    | "riskReviewRouting.riskFound.value";
+function ModeRow({
+    label,
+    name,
+    fallback,
+    disabled,
+    description,
+    modelFor,
+    routing,
+}: {
+    label: string;
+    name: ModeField;
+    fallback: Mode;
+    disabled: boolean;
+    description?: string;
+    modelFor?: (mode: Mode) => string;
+    /** The page's routing, with the trio being edited on it. */
+    routing: ReturnType<typeof useReviewRouting>;
+}) {
+    const form = useFormContext<CodeReviewFormType>();
+    return (
+        <Controller
+            name={name}
+            control={form.control}
+            defaultValue={fallback}
+            render={({ field }) => {
+                const effective = routing.effectiveMode(
+                    field.value ?? fallback,
+                );
+                return (
+                    <div role="group" aria-label={label}>
+                        <div className="grid max-w-3xl grid-cols-1 items-start gap-4 py-5 sm:grid-cols-[12rem_minmax(0,1fr)]">
+                            <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-text-primary text-sm font-medium">
+                                        {label}
+                                    </span>
+                                    <OverrideIndicatorForm
+                                        fieldName={name.replace(/\.value$/, "")}
+                                        disabled={disabled || field.disabled}
+                                    />
+                                </div>
+                                {description && (
+                                    <p className="text-text-secondary mt-1 text-sm leading-6">
+                                        {description}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="min-w-0 space-y-2">
+                                <Select
+                                    value={field.value ?? fallback}
+                                    onValueChange={field.onChange}
+                                    disabled={disabled || field.disabled}>
+                                    <SelectTrigger
+                                        aria-label={label}
+                                        className="max-w-48">
+                                        <SelectValue>
+                                            {modeLabel(effective)}
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="balanced">
+                                            Balanced
+                                        </SelectItem>
+                                        <SelectItem
+                                            value="heavy"
+                                            disabled={!routing.heavyAllowed}>
+                                            Heavy
+                                            {!routing.heavyAllowed
+                                                ? " · Teams/Enterprise"
+                                                : ""}
+                                        </SelectItem>
+                                        <SelectItem
+                                            value="ultra"
+                                            disabled={
+                                                !routing.ultraAllowed ||
+                                                !routing.ultraSet
+                                            }>
+                                            Ultra
+                                            {!routing.ultraAllowed
+                                                ? " · Teams/Enterprise"
+                                                : !routing.ultraSet
+                                                  ? " · set up 3 models"
+                                                  : ""}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-text-secondary text-sm break-words">
+                                    {(modelFor ?? routing.modelFor)(effective)}
+                                </p>
+                                {(field.value ?? fallback) === "heavy" &&
+                                    !routing.heavyAllowed && (
+                                        <p className="text-text-secondary text-xs">
+                                            Heavy requires Teams or Enterprise.
+                                            Reviews use Balanced.
+                                        </p>
+                                    )}
+                                {(field.value ?? fallback) === "ultra" &&
+                                    (!routing.ultraAllowed ||
+                                        !routing.ultraSet) && (
+                                        <p className="text-warning text-xs">
+                                            {!routing.ultraAllowed
+                                                ? "Ultra requires Teams or Enterprise, or a trial with three of your own models."
+                                                : "Ultra needs three different models under Models."}{" "}
+                                            Reviews in this mode do not run
+                                            until then.
+                                        </p>
+                                    )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }}
+        />
+    );
+}
+
+function RoutingSettings() {
+    const { repositoryId, directoryId } = useCodeReviewRouteParams();
+    const { teamId: selectedTeamId } = useSelectedTeamId();
+    const initialTeamId = useInitialTeamId();
+    const teamId = selectedTeamId ?? initialTeamId;
+    const router = useRouter();
+    const queryClient = useQueryClient();
+    const [saving, setSaving] = useState(false);
+    const form = useFormContext<CodeReviewFormType>();
+    const [scopePin, legacyPin] = useWatch({
+        control: form.control,
+        name: ["byokModelId.value", "byokModel.value"],
+    });
+    const { dirtyFields, isSubmitting, isValid } = useFormState({
+        control: form.control,
+    });
+    const canEdit = usePermission(
+        Action.Update,
+        ResourceType.CodeReviewSettings,
+        repositoryId,
+    );
+    const {
+        llmConfigStatus,
+        hasConnectedProvider,
+        isCheckingProvider,
+        providerStatusError,
+    } = useCodeReviewModelData();
+    const canCreateModels = usePermission(
+        Action.Create,
+        ResourceType.OrganizationSettings,
+    );
+    const canReadModels = usePermission(
+        Action.Read,
+        ResourceType.OrganizationSettings,
+    );
+    const canEditModels = canCreateModels && canReadModels;
+    const globalScope = repositoryId === "global" && !directoryId;
+    const ultraInUse = useUltraModeInUse();
+    const organization = useOrganizationRouting({
+        ultraInUse,
+        teamId,
+        enabled: globalScope && canReadModels && hasConnectedProvider,
+        canEdit:
+            canEditModels &&
+            hasConnectedProvider &&
+            !isCheckingProvider &&
+            !providerStatusError,
+        status: llmConfigStatus,
+    });
+    const routing = useReviewRouting(
+        organization.dirty ? organization.routing : undefined,
+    );
+    useEffect(() => {
+        const scrollToAnchor = () => {
+            let anchor: string;
+            try {
+                anchor = decodeURIComponent(window.location.hash.slice(1));
+            } catch {
+                return;
+            }
+            if (!/^(default|fallback|ultra|task:[a-zA-Z]+)$/.test(anchor))
+                return;
+            const element = [
+                ...document.querySelectorAll<HTMLElement>(
+                    "[data-routing-anchor]",
+                ),
+            ].find((node) => node.dataset.routingAnchor === anchor);
+            const details = element?.closest("details");
+            if (details) details.open = true;
+            element?.scrollIntoView({ block: "center" });
+        };
+        scrollToAnchor();
+        window.addEventListener("hashchange", scrollToAnchor);
+        return () => window.removeEventListener("hashchange", scrollToAnchor);
+    }, [organization.ready]);
+    const reviewDirty = !!(
+        dirtyFields.reviewMode ||
+        dirtyFields.riskReviewRouting ||
+        dirtyFields.byokModelId ||
+        dirtyFields.byokModel
+    );
+    const anyDirty = reviewDirty || organization.dirty;
+    const reset = () => {
+        form.resetField("reviewMode");
+        form.resetField("riskReviewRouting");
+        form.resetField("byokModelId");
+        form.resetField("byokModel");
+        organization.reset();
+    };
+    const refreshStatus = () =>
+        queryClient.fetchQuery({
+            queryKey: routingStatusQueryKey(teamId),
+            queryFn: getLLMConfigStatus,
+            staleTime: 0,
+        });
+    const { saveSettings } = useCodeReviewSettingsMutation({
+        teamId,
+        repositoryId,
+        directoryId,
+        form,
+    });
+    const riskHref = `/settings/code-review/${encodeURIComponent(repositoryId)}/risk${directoryId ? `?directoryId=${encodeURIComponent(directoryId)}` : ""}`;
+    const save = async (data: CodeReviewFormType) => {
+        let modelsSaved = false;
+        let checkingSavedModels = false;
+        let providerDisconnected = false;
+        let reviewSavedFirst = false;
+        setSaving(true);
+        try {
+            const freshStatus = await refreshStatus();
+            if (!hasRoutingProvider(freshStatus)) {
+                toast({
+                    variant: "warning",
+                    description:
+                        "Connect an AI provider before changing routing.",
+                });
+                return;
+            }
+            if (reviewDirty && !canEdit)
+                throw new RoutingSettingsError(
+                    "You cannot edit review settings.",
+                );
+            const model = data.byokModelId?.value;
+            const models = freshStatus.models;
+            if (
+                dirtyFields.byokModelId &&
+                model &&
+                models.length &&
+                !models.some(
+                    (entry) => entry.modelId === model || entry.model === model,
+                )
+            ) {
+                if (!(await confirmOffCatalogModelSave(model))) return;
+            }
+            // A trio cleared together with a mode change away from Ultra:
+            // the mode goes first, or the stored config would be Ultra with
+            // no models if the second save failed (the API refuses it too).
+            // Only a mode edit goes first: one of the model override alone
+            // would leave the stored mode Ultra and be reported as saved.
+            const modeFirst =
+                !!(dirtyFields.reviewMode || dirtyFields.riskReviewRouting) &&
+                organization.breaksUltraTrio;
+            const saveReview = () =>
+                reviewDirty
+                    ? saveSettings(data, {
+                          prepare: (current) => {
+                              const config = unformatConfig(current);
+                              return {
+                                  savedFormData: current,
+                                  codeReviewConfig: {
+                                      reviewMode:
+                                          config.reviewMode ?? "balanced",
+                                      riskReviewRouting:
+                                          config.riskReviewRouting,
+                                      ...(dirtyFields.byokModelId
+                                          ? { byokModelId: config.byokModelId }
+                                          : {}),
+                                  },
+                              };
+                          },
+                      })
+                    : Promise.resolve(undefined);
+            let result = modeFirst ? await saveReview() : undefined;
+            if (modeFirst) reviewSavedFirst = true;
+            if (modeFirst && result?.centralizedPr) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        result.centralizedPr,
+                        "Routing change proposed. Clear the Ultra models once it is merged.",
+                    ),
+                );
+                return;
+            }
+            modelsSaved = await organization.save(freshStatus);
+            if (modelsSaved) {
+                checkingSavedModels = true;
+                const savedStatus = await refreshStatus();
+                checkingSavedModels = false;
+                if (!hasRoutingProvider(savedStatus)) {
+                    providerDisconnected = true;
+                    throw new RoutingSettingsError(
+                        "Connect an AI provider before changing routing.",
+                    );
+                }
+            }
+            if (!modeFirst) result = await saveReview();
+            if (reviewDirty && !result?.centralizedPr) {
+                await queryClient.invalidateQueries({
+                    queryKey: ["routing-model-overrides", teamId],
+                });
+            }
+            toast(
+                result?.centralizedPr
+                    ? getCentralizedPrToastPayload(
+                          result.centralizedPr,
+                          "Routing change proposed.",
+                      )
+                    : {
+                          description: "Settings saved",
+                          variant: "success",
+                      },
+            );
+        } catch (error) {
+            const reviewError = reviewSettingsSaveErrorMessage(error);
+            // The mode went first and is saved; only the models failed.
+            if (reviewSavedFirst && !modelsSaved) {
+                await queryClient.invalidateQueries({
+                    queryKey: ["routing-model-overrides", teamId],
+                });
+                toast({
+                    description: `Review mode saved. Models were not saved: ${
+                        error instanceof RoutingSettingsError
+                            ? error.message
+                            : "try again."
+                    }`,
+                    variant: "danger",
+                });
+                return;
+            }
+            // Saved first, the review settings are not left unsaved here.
+            const reviewUnsaved = reviewDirty && !reviewSavedFirst;
+            toast({
+                description: modelsSaved
+                    ? providerDisconnected
+                        ? reviewUnsaved
+                            ? "Models saved. Connect an AI provider to save review settings."
+                            : "Models saved. Connect an AI provider to continue."
+                        : checkingSavedModels
+                          ? reviewUnsaved
+                              ? "Models saved. Could not verify provider status. Review settings are still unsaved."
+                              : "Models saved. Refresh provider status to continue."
+                          : `Models saved. ${reviewError ?? "Review settings could not be saved. Try again."}`
+                    : error instanceof RoutingSettingsError
+                      ? error.message
+                      : (reviewError ?? "Could not save routing. Try again."),
+                variant: "danger",
+            });
+        } finally {
+            if (modelsSaved) router.refresh();
+            setSaving(false);
+        }
+    };
+    const submit = () =>
+        reviewDirty ? form.handleSubmit(save)() : save(form.getValues());
+    if (
+        (!llmConfigStatus && isCheckingProvider) ||
+        (!llmConfigStatus && !providerStatusError)
+    ) {
+        return (
+            <Page.Root>
+                <Page.Header>
+                    <Page.Title>Routing</Page.Title>
+                </Page.Header>
+                <Page.Content>
+                    <Spinner />
+                </Page.Content>
+            </Page.Root>
+        );
+    }
+    if (!routing.canConfigure || providerStatusError) {
+        return (
+            <Page.Root>
+                <Page.Header>
+                    <Page.TitleContainer>
+                        <Page.Title>Routing</Page.Title>
+                        <Page.Description>
+                            Choose how Kody reviews each PR.
+                        </Page.Description>
+                    </Page.TitleContainer>
+                </Page.Header>
+                <Page.Content>
+                    <Card color="lv1">
+                        <CardHeader className="flex-row items-start gap-3">
+                            <LockKeyholeIcon
+                                aria-hidden
+                                className="text-text-secondary mt-0.5 size-5 shrink-0"
+                            />
+                            <div className="flex flex-col gap-1">
+                                <Heading variant="h3">
+                                    {providerStatusError
+                                        ? "Could not verify AI providers"
+                                        : "Connect an AI provider to use routing"}
+                                </Heading>
+                                <p className="text-text-secondary text-sm">
+                                    {providerStatusError
+                                        ? "Retry before changing routing settings."
+                                        : "A connected provider is required to configure review modes and models."}
+                                </p>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            {anyDirty &&
+                                (providerStatusError || !canEditModels) && (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="helper"
+                                        className="mb-3"
+                                        onClick={reset}>
+                                        Discard changes
+                                    </Button>
+                                )}
+                            {providerStatusError ? (
+                                <Button
+                                    type="button"
+                                    size="md"
+                                    variant="primary"
+                                    onClick={() =>
+                                        refreshStatus().catch(() => undefined)
+                                    }>
+                                    Retry
+                                </Button>
+                            ) : canEditModels && anyDirty ? (
+                                <Button
+                                    type="button"
+                                    size="md"
+                                    variant="primary"
+                                    onClick={() => {
+                                        reset();
+                                        router.push("/byok");
+                                    }}>
+                                    Discard changes and connect
+                                </Button>
+                            ) : canEditModels ? (
+                                <Link href="/byok" noHoverUnderline>
+                                    <Button variant="primary" size="md">
+                                        Connect AI provider
+                                    </Button>
+                                </Link>
+                            ) : (
+                                <p className="text-text-secondary text-sm">
+                                    Ask an organization admin to connect a
+                                    provider.
+                                </p>
+                            )}
+                        </CardContent>
+                    </Card>
+                </Page.Content>
+            </Page.Root>
+        );
+    }
+    return (
+        <Page.Root>
+            <Page.Header sticky>
+                <Page.TitleContainer>
+                    <Page.Title>Routing</Page.Title>
+                    <Page.Description>
+                        Choose how Kody reviews each PR.
+                    </Page.Description>
+                </Page.TitleContainer>
+                <Page.SaveActions
+                    isDirty={anyDirty}
+                    isSaving={saving || isSubmitting}
+                    canSave={
+                        !isCheckingProvider &&
+                        !saving &&
+                        (!reviewDirty || (canEdit && isValid)) &&
+                        (!organization.dirty ||
+                            (organization.canEdit &&
+                                !organization.validationError))
+                    }
+                    onSave={submit}
+                    onReset={reset}
+                />
+            </Page.Header>
+            <Page.Content className="gap-6">
+                <CentralizedConfigReadOnlyAlert />
+                {globalScope && canReadModels ? (
+                    <OrganizationModels
+                        controller={organization}
+                        heavyAllowed={routing.heavyAllowed}
+                        ultraAllowed={routing.ultraAllowed}
+                        canEdit={canEditModels}
+                    />
+                ) : (
+                    <Card
+                        color="lv1"
+                        role="region"
+                        aria-label="Organization models">
+                        <CardHeader className="flex-row flex-wrap items-center justify-between gap-4">
+                            <Heading variant="h3">Organization models</Heading>
+                            {!globalScope && (
+                                <Link
+                                    href={routingHref()}
+                                    className="text-text-secondary inline-flex items-center gap-1 text-sm">
+                                    View organization routing{" "}
+                                    <ArrowUpRight className="size-3.5" />
+                                </Link>
+                            )}
+                        </CardHeader>
+                        <CardContent>
+                            <dl className="divide-card-lv3 divide-y text-sm">
+                                {[
+                                    {
+                                        label: "Default model",
+                                        value: routing.defaultModel,
+                                    },
+                                    {
+                                        label: "Fallback model",
+                                        value: routing.fallbackModel,
+                                    },
+                                    ...(routing.active
+                                        ? [
+                                              {
+                                                  label: "Risk assessment",
+                                                  value: routing.riskModelInherited
+                                                      ? "Uses default model"
+                                                      : routing.riskModel,
+                                              },
+                                          ]
+                                        : []),
+                                ].map((model) => (
+                                    <div
+                                        key={model.label}
+                                        className="grid grid-cols-1 gap-2 py-3 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-center">
+                                        <dt className="text-text-secondary">
+                                            {model.label}
+                                        </dt>
+                                        <dd className="text-text-primary min-w-0 font-medium break-words">
+                                            {model.value}
+                                        </dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        </CardContent>
+                    </Card>
+                )}
+                <Card
+                    color="lv1"
+                    role="region"
+                    aria-label="Review mode"
+                    className="scroll-mt-64 md:scroll-mt-32">
+                    <CardHeader>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <Heading variant="h3">Review mode</Heading>
+                            </div>
+                            <Link
+                                href={riskHref}
+                                className="text-text-secondary inline-flex items-center gap-1 text-sm">
+                                Risk assessment: {routing.active ? "On" : "Off"}{" "}
+                                <ArrowUpRight className="size-3.5" />
+                            </Link>
+                        </div>
+                        <p className="text-text-secondary mt-2 text-sm leading-6">
+                            {routing.active
+                                ? "Review mode follows the risk result."
+                                : "One mode applies to all PRs."}
+                        </p>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="divide-card-lv3 mt-2 divide-y">
+                            {routing.active ? (
+                                <>
+                                    <ModeRow
+                                        routing={routing}
+                                        label="No risk found"
+                                        name="riskReviewRouting.noRisk.value"
+                                        fallback="balanced"
+                                        disabled={
+                                            !canEdit ||
+                                            !!isCheckingProvider ||
+                                            saving
+                                        }
+                                        modelFor={routing.modelFor}
+                                    />
+                                    <ModeRow
+                                        routing={routing}
+                                        label="Risk found"
+                                        name="riskReviewRouting.riskFound.value"
+                                        fallback="heavy"
+                                        disabled={
+                                            !canEdit ||
+                                            !!isCheckingProvider ||
+                                            saving
+                                        }
+                                        modelFor={routing.modelFor}
+                                    />
+                                </>
+                            ) : (
+                                <ModeRow
+                                    routing={routing}
+                                    label="All PRs"
+                                    name="reviewMode.value"
+                                    fallback="balanced"
+                                    disabled={
+                                        !canEdit ||
+                                        !!isCheckingProvider ||
+                                        saving
+                                    }
+                                    modelFor={routing.modelFor}
+                                />
+                            )}
+                        </div>
+                        {/* A route stored on Ultra with risk assessment off
+                            still counts (the API refuses clearing the trio
+                            over it), so it shows here and can be changed. */}
+                        {!routing.active && routing.ultraRouteSaved && (
+                            <div className="border-card-lv3 divide-card-lv3 divide-y border-t">
+                                <ModeRow
+                                    routing={routing}
+                                    label="No risk found"
+                                    description="Runs when risk assessment is on."
+                                    name="riskReviewRouting.noRisk.value"
+                                    fallback="balanced"
+                                    disabled={
+                                        !canEdit ||
+                                        !!isCheckingProvider ||
+                                        saving
+                                    }
+                                    modelFor={routing.modelFor}
+                                />
+                                <ModeRow
+                                    routing={routing}
+                                    label="Risk found"
+                                    description="Runs when risk assessment is on."
+                                    name="riskReviewRouting.riskFound.value"
+                                    fallback="heavy"
+                                    disabled={
+                                        !canEdit ||
+                                        !!isCheckingProvider ||
+                                        saving
+                                    }
+                                    modelFor={routing.modelFor}
+                                />
+                            </div>
+                        )}
+                        {routing.active && (
+                            <div className="border-card-lv3 border-t">
+                                <ModeRow
+                                    routing={routing}
+                                    label="Risk assessment unavailable"
+                                    description="Uses the default review mode. Automatic approval stays blocked."
+                                    name="reviewMode.value"
+                                    fallback="balanced"
+                                    disabled={
+                                        !canEdit ||
+                                        !!isCheckingProvider ||
+                                        saving
+                                    }
+                                    modelFor={routing.modelFor}
+                                />
+                            </div>
+                        )}
+                        <details className="border-card-lv3 border-t pt-4 text-sm">
+                            <summary className="text-text-secondary cursor-pointer">
+                                Manual commands
+                            </summary>
+                            <p className="text-text-secondary mt-3 leading-6">
+                                An explicit <code>--heavy</code>,{" "}
+                                <code>--balanced</code> or <code>--ultra</code>{" "}
+                                command takes priority.
+                            </p>
+                        </details>
+                    </CardContent>
+                </Card>
+                {(!globalScope || scopePin || legacyPin) && (
+                    <BYOKModelSelectorSection
+                        disabled={!!isCheckingProvider || saving}
+                    />
+                )}
+                {globalScope && canReadModels && (
+                    <OtherTaskModels
+                        controller={organization}
+                        heavyAllowed={routing.heavyAllowed}
+                        canEdit={canEditModels}
+                    />
+                )}
+                {globalScope && canReadModels && organization.ready && (
+                    <PerRepositoryPanel
+                        teamId={teamId}
+                        models={organization.pool.map(
+                            ({ id, label, provider }) => ({
+                                id,
+                                label,
+                                provider,
+                            }),
+                        )}
+                    />
+                )}
+            </Page.Content>
+        </Page.Root>
+    );
+}
+
+export default function RoutingPage() {
+    return (
+        <Suspense fallback={<Spinner />}>
+            <RoutingSettings />
+        </Suspense>
+    );
+}

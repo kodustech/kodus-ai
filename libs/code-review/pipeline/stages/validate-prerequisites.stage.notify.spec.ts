@@ -19,6 +19,9 @@ import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-au
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import { USER_SERVICE_TOKEN } from '@libs/identity/domain/user/contracts/user.service.contract';
 
+import { CODE_BASE_CONFIG_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
+import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { ValidatePrerequisitesStage } from './validate-prerequisites.stage';
 
@@ -117,6 +120,28 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
             providers: [
                 ValidatePrerequisitesStage,
                 {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: {
+                        getConfig: jest
+                            .fn()
+                            .mockResolvedValue({ automatedReviewActive: true }),
+                    },
+                },
+                {
+                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+                    useValue: {
+                        hasPullRequestExecutionWithDataKey: jest
+                            .fn()
+                            .mockResolvedValue(false),
+                    },
+                },
+                {
+                    provide: PULL_REQUEST_MANAGER_SERVICE_TOKEN,
+                    useValue: {
+                        getChangedFilesMetadata: jest.fn().mockResolvedValue([]),
+                    },
+                },
+                {
                     provide: PermissionValidationService,
                     useValue: permissionValidationService,
                 },
@@ -134,7 +159,10 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
                 },
                 {
                     provide: PULL_REQUESTS_SERVICE_TOKEN,
-                    useValue: { find: jest.fn().mockResolvedValue([]) },
+                    useValue: {
+                        find: jest.fn().mockResolvedValue([]),
+                        countByAuthor: jest.fn().mockResolvedValue(0),
+                    },
                 },
                 {
                     provide: CodeManagementService,

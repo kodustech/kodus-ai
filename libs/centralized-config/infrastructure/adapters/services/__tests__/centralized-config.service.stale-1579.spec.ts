@@ -23,6 +23,7 @@
  * G/H prove the genuine-removal path still works and the set is persisted;
  * E is the #1540 regression lock (Git Settings must never be touched by Sync).
  */
+import { ContextReferenceDetectionService } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 import { createLogger } from '@libs/core/log/logger';
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -252,11 +253,13 @@ async function buildHarness(opts: {
 
     const kodyRulesService = {
         find: jest.fn().mockResolvedValue([]),
-        findByOrganizationId: jest.fn().mockResolvedValue(
-            opts.existingRules
-                ? { toJson: () => ({ rules: opts.existingRules }) }
-                : undefined,
-        ),
+        findByOrganizationId: jest
+            .fn()
+            .mockResolvedValue(
+                opts.existingRules
+                    ? { toJson: () => ({ rules: opts.existingRules }) }
+                    : undefined,
+            ),
         updateRulesStatusByFilter: jest.fn(),
     };
 
@@ -308,6 +311,12 @@ async function buildHarness(opts: {
     const module: TestingModule = await Test.createTestingModule({
         providers: [
             CentralizedConfigService,
+            {
+                provide: ContextReferenceDetectionService,
+                useValue: {
+                    lastDetectionFailed: jest.fn().mockResolvedValue(false),
+                },
+            },
             { provide: PARAMETERS_SERVICE_TOKEN, useValue: parametersService },
             {
                 provide: INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -941,7 +950,10 @@ describe('#1518 guards must not make the last element undeletable', () => {
  * message was stale on every sync.
  */
 describe('#1579 custom PR messages need the same ownership rule', () => {
-    const globalMessage = { uuid: 'msg-global', configLevel: ConfigLevel.GLOBAL };
+    const globalMessage = {
+        uuid: 'msg-global',
+        configLevel: ConfigLevel.GLOBAL,
+    };
 
     const repoMessage = (uuid: string, repositoryId: string) => ({
         uuid,

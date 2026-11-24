@@ -3,9 +3,22 @@ title: "单点登录"
 description: "启用单点登录(SSO)以安全高效地访问 Kodus。"
 ---
 
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="enterprise" detail="适用于 Kodus Cloud Enterprise 或有效的试用版。">
+    <Badge icon="shield-check" stroke>Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="需要 Enterprise 许可证。">
+    <Badge icon="server" stroke>自托管</Badge>
+  </FeatureBadge>
+</div>
+
 ## 概述
 
-单点登录(SSO)允许您通过单一身份提供商管理对 Kodus 的访问,简化身份验证并增强安全性。
+单点登录(SSO)允许您的团队通过 SAML 2.0 使用您的身份提供商登录 Kodus。
+
+Owner 在 **Organization → SSO** 中配置 SAML SSO。
 
 ## 入门
 
@@ -17,7 +30,7 @@ description: "启用单点登录(SSO)以安全高效地访问 Kodus。"
     </Step>
 
     <Step title="填写您的 IdP 配置">
-        在 **SAML SSO Configuration** 下,填写您的 IdP 设置:**IDP Issuer**、**SSO URL** 和 **X.509 Certificate**。这些可以手动填写,也可以通过提供 IdP 的 **Metadata URL (optional)**(然后点击 **Fetch**)或元数据 XML 文件(**Upload Metadata XML File**)来填写。
+        在 **SAML SSO Configuration** 下,打开 **Enable SAML SSO** 以显示设置,然后填写您的 IdP 设置:**IDP Issuer**、**SSO URL** 和 **X.509 Certificate**。这些可以手动填写,也可以通过提供 IdP 的 **Metadata URL (optional)**(然后点击 **Fetch**)或元数据 XML 文件(**Upload Metadata XML File**)来填写。
 
         <Info>
             这些值通常可以在 IdP 的文档或管理控制台中找到。
@@ -35,11 +48,11 @@ description: "启用单点登录(SSO)以安全高效地访问 Kodus。"
     </Step>
 
     <Step title="验证您的域名">
-        在 **Allowed Domains** 下添加您的电子邮件域名,并对每个域名点击 **Verify**。在 **Verify Enterprise Domain** 中,输入该域名下的一个电子邮件地址以接收验证链接(自托管实例会立即完成验证)。每个域名都必须显示 **Verified** 后才能启用 SSO。
+        在 **Allowed Domains** 下添加您的电子邮件域名(不允许使用 gmail.com 等公共域名),并对每个域名点击 **Verify**。在 **Verify Enterprise Domain** 中,输入该域名下的一个电子邮件地址以接收验证链接(自托管实例会立即完成验证)。每个域名都必须显示 **Verified** 后才能启用 SSO。
     </Step>
 
     <Step title="测试并启用 SSO">
-        点击 **Test connection** 并在您的 IdP 完成一次登录。测试成功后,打开 **Enable SAML SSO** 并点击 **Save settings**。当尝试使用与 IdP 关联的电子邮件域登录时,您将看到 **Continue with SSO**。
+        点击 **Test connection** 并在您的 IdP 完成一次登录。只有测试成功后才能将 SSO 保存为已启用,因此在更改 IdP 设置或域名后请再次运行测试。测试成功后,在 **Enable SAML SSO** 开启的状态下点击 **Save settings**。
     </Step>
 
 </Steps>
@@ -52,3 +65,9 @@ description: "启用单点登录(SSO)以安全高效地访问 Kodus。"
 
 -   名字,映射到 `firstName`
 -   姓氏,映射到 `lastName`
+
+## 登录
+
+在登录页面输入您的邮箱。如果其域名已启用 SSO,Kodus 会显示 **Continue with SSO**,而不是要求输入密码,并将您转到您的 IdP。
+
+有人首次通过 SSO 登录时,Kodus 会在您的组织中为其创建账户,角色为 **Contributor**,无需邮箱确认步骤。所有者之后可以在 **Organization → Subscription → Workspace members** 下更改该角色;请参阅[工作区角色](/zh/how_to_use/workspace_roles)。

@@ -421,15 +421,16 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
                 currentEntity = KodyRulesEntity.create({ ...currentEntity.toObject(), ...updateData });
                 return Promise.resolve(currentEntity);
             }),
-            updateRule: jest.fn().mockImplementation((_uuid, ruleId, patch) => {
-                const rules = currentEntity.toObject().rules.map((r) =>
-                    r.uuid === ruleId ? { ...r, ...patch } : r,
-                );
+            updateRulesFields: jest.fn().mockImplementation((_organizationId, _uuid, changes) => {
+                const rules = currentEntity.toObject().rules.map((r) => {
+                    const change = changes.find((c) => c.ruleId === r.uuid);
+                    return change ? { ...r, ...change.patch } : r;
+                });
                 currentEntity = KodyRulesEntity.create({
                     ...currentEntity.toObject(),
                     rules,
                 });
-                return Promise.resolve(currentEntity);
+                return Promise.resolve([]);
             }),
         };
 
@@ -457,8 +458,8 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
         // Wait briefly for the background syncRulesWithPlanLimit to complete
         await new Promise((r) => setTimeout(r, 100));
 
-        // Check that repository.updateRule was called to persist updated active rules to MongoDB
-        expect(repositoryMock.updateRule).toHaveBeenCalled();
+        // The reactivated rules are persisted to MongoDB in one bulk write.
+        expect(repositoryMock.updateRulesFields).toHaveBeenCalledTimes(1);
         const updatedRules = currentEntity.toObject().rules;
 
         // r1 and r2 flipped to ACTIVE & lockedByPlan: false
@@ -489,17 +490,16 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
             findByOrganizationId: jest
                 .fn()
                 .mockImplementation(() => Promise.resolve(currentEntity)),
-            updateRule: jest.fn().mockImplementation((_uuid, ruleId, patch) => {
-                const rules = currentEntity
-                    .toObject()
-                    .rules.map((r) =>
-                        r.uuid === ruleId ? { ...r, ...patch } : r,
-                    );
+            updateRulesFields: jest.fn().mockImplementation((_organizationId, _uuid, changes) => {
+                const rules = currentEntity.toObject().rules.map((r) => {
+                    const change = changes.find((c) => c.ruleId === r.uuid);
+                    return change ? { ...r, ...change.patch } : r;
+                });
                 currentEntity = KodyRulesEntity.create({
                     ...currentEntity.toObject(),
                     rules,
                 });
-                return Promise.resolve(currentEntity);
+                return Promise.resolve([]);
             }),
         };
         const permissionValidationServiceMock = {
@@ -532,7 +532,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
         // once, for the fresh re-fetch after the write.
         expect(repositoryMock.findByOrganizationId).toHaveBeenCalledTimes(1);
         // Still reconciles: the plan-locked rule is reactivated.
-        expect(repositoryMock.updateRule).toHaveBeenCalled();
+        expect(repositoryMock.updateRulesFields).toHaveBeenCalledTimes(1);
         expect(currentEntity.toObject().rules[0].status).toBe(
             KodyRulesStatus.ACTIVE,
         );
@@ -1497,12 +1497,19 @@ describe('KodyRulesService update/sync field preservation', () => {
                 Promise.resolve({ rules: [{ ...updateData, uuid: ruleId }] }),
             );
 
+        // Single-rule $set; that it leaves the other fields intact is proven
+        // against Mongo in kody-rules-update-rule-fields.integration.spec.
+        const updateRuleFieldsByOrganization = jest
+            .fn()
+            .mockResolvedValue(existingRule);
+
         const repositoryMock = {
             findByOrganizationId: jest.fn().mockResolvedValue({
                 uuid: 'kr-doc-1',
                 rules: [existingRule],
             }),
             updateRule,
+            updateRuleFieldsByOrganization,
             // validateRulesLimit lives on the validation service, but addRule
             // must exist in case a branch falls through.
             addRule: jest.fn().mockResolvedValue({ rules: [] }),
@@ -1524,7 +1531,7 @@ describe('KodyRulesService update/sync field preservation', () => {
             // kodyRuleSummaryService (optional) omitted → summary path skipped
         );
 
-        return { service, updateRule };
+        return { service, updateRule, updateRuleFieldsByOrganization };
     };
 
     const userInfo = { userId: 'u1', userEmail: 'u1@kodus.io' } as any;
@@ -1632,18 +1639,22 @@ describe('KodyRulesService update/sync field preservation', () => {
         expect(update.contextReferenceId).toBe('ctx-ref-1');
     });
 
-    it('updateRuleReferences sets the contextReferenceId and preserves the rule', async () => {
-        const { service, updateRule } = buildService();
+    it('updateRuleReferences sets the contextReferenceId without rewriting the rest of the rule', async () => {
+        const { service, updateRule, updateRuleFieldsByOrganization } =
+            buildService();
 
         await service.updateRuleReferences('org-1', 'rule-1', {
             contextReferenceId: 'ctx-ref-2',
         });
 
-        const update = capturedUpdate(updateRule);
-        expect(update.contextReferenceId).toBe('ctx-ref-2');
-        expect(update.title).toBe('Original title');
-        expect(update.rule).toBe('original body text');
-        expect(update.severity).toBe('high');
-        expect(update.inheritance).toEqual(existingRule.inheritance);
+        // Only the pointer (and the timestamp) is written: no other field of
+        // the rule is sent, so none can be clobbered by a stale copy.
+        expect(updateRule).not.toHaveBeenCalled();
+        const fields = updateRuleFieldsByOrganization.mock.calls[0][2];
+        expect(Object.keys(fields).sort()).toEqual([
+            'contextReferenceId',
+            'updatedAt',
+        ]);
+        expect(fields.contextReferenceId).toBe('ctx-ref-2');
     });
 });

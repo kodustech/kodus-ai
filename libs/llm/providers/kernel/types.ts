@@ -90,11 +90,20 @@ export interface ProviderBuildOptions {
  * budget/level/adaptive stays INTERNAL to each `module.reasoning()` (01-04);
  * 'none' always means reasoning disabled regardless of the native type.
  */
-export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high';
+export const REASONING_EFFORTS = ['none', 'low', 'medium', 'high'] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
 /** Per-provider reasoning → AI-SDK providerOptions. Shape is provider-specific,
  *  so it stays loose here; 01-04 owns each mapping. */
 export type ProviderReasoningOptions = Record<string, unknown>;
+
+/** A provider's marker for a shared one-shot prefix (`prefixCacheHint`). */
+export interface PrefixCacheHint {
+    /** providerOptions for the last content block of the shared prefix. */
+    part: Record<string, unknown>;
+    /** providerOptions merged into the request, per vendor namespace. */
+    request?: Record<string, Record<string, unknown>>;
+}
 
 /** Normalized usage — Phase 3 fills the real extraction; declared now for shape
  *  stability so callers can type against it before Phase 3 lands. */
@@ -195,6 +204,10 @@ export interface FieldDescriptor {
     /** Whether the field lives at the top level of the config or under the
      *  provider-specific `settings` object. */
     scope?: 'top' | 'settings';
+    /** An optional field the connect form shows. Only set on an optional
+     *  `baseURL` whose provider honors it end to end: the model build, the
+     *  model listing and the connection probe all use the custom endpoint. */
+    offeredInForm?: boolean;
 }
 
 /**
@@ -252,6 +265,13 @@ export interface ProviderModule {
     systemCacheControl?(
         cfg: ProviderBuildConfig,
     ): Record<string, unknown> | undefined;
+    /** Optional marker for a prefix that several ONE-SHOT calls share (the
+     *  rules head of every Kody Rules shard of a review). `part` goes on the
+     *  last content block of the shared prefix; `request` merges into the
+     *  call's providerOptions (OpenAI needs explicit mode, or its automatic
+     *  breakpoint also writes each call's unique tail). Absent → the
+     *  module's `systemCacheControl` hint is used as `part`. */
+    prefixCacheHint?(cfg: ProviderBuildConfig): PrefixCacheHint | undefined;
     /** How this model treats `temperature` — the ONE per-model answer, sibling to
      *  `reasoning()`. Only the module knows, per its own id + model id, whether a
      *  request carrying temperature 400s (real Anthropic 4.7+), must be pinned to a
@@ -357,4 +377,26 @@ export interface ProviderModule {
      *  serve several ids, e.g. openai + openai_compatible, whose listing differs).
      *  Returns null when the id is unknown to this module. */
     modelListing?(providerId: string): ModelListing | null;
+    /** The self-hosted env vars for this provider when `API_LLM_PROVIDER` names
+     *  it, per requested id. Returns null when the id cannot be declared there. */
+    selfHostedEnv?(providerId: string): SelfHostedEnvVars | null;
+}
+
+/** Where a provider's settings come from on the self-hosted env path. The generic
+ *  `API_LLM_API_KEY` / `API_LLM_BASE_URL` win; these are read when they are empty. */
+export interface SelfHostedEnvVars {
+    /** Provider-named key vars, read in order. */
+    apiKeyVars: readonly string[];
+    /** Whether `API_LLM_BASE_URL` moves the endpoint. Absent: it cannot. */
+    baseURL?: {
+        /** Provider-named var read when `API_LLM_BASE_URL` is empty. */
+        legacyVar?: string;
+        /** The endpoint when nothing sets one, for a transport that needs it spelled out. */
+        default?: string;
+        /** No endpoint of its own: the config cannot run without one. */
+        required?: boolean;
+        /** The provider's own host. A legacy var pointing elsewhere is warned
+         *  about: the native API is called on it. */
+        nativeHost?: string;
+    };
 }

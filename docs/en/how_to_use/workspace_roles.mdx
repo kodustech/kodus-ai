@@ -6,21 +6,21 @@ description: "Learn about role-based access control (RBAC) in Kodus workspaces, 
 <Note>
 **Workspace Members vs. PR Licenses**: These are completely separate and don't affect each other.
 
-- **Workspace Members**: Admins who configure Kodus settings (unlimited)
+- **Workspace Members**: People with Kodus accounts in the workspace. Each has a role that grants access, and every plan allows unlimited members.
 - **PR Licenses**: Developers from your Git organization who get Kody reviews (based on your plan)
 </Note>
 
 ## Understanding PR Licenses
 
-PR licenses are automatically detected from your Git repositories based on developers who opened PRs in recent months. 
+The **PR licenses** tab lists the people who can open pull requests in the repositories Kody reviews: the members of your Git organization, plus recent PR authors, with bots marked. Licenses are assigned to them there, and your plan decides how many seats exist. See [Auto License Assignment](/en/how_to_use/auto_license_assignment).
 
-**Why isn't a developer showing up?** If a developer isn't appearing in your PR license count, it means Kody isn't installed in a repository where that developer has opened PRs.
+**Why isn't a developer showing up?** The list comes from your code platform. Click **Refresh members** to reload it. If the person still isn't listed, use **Assign by git ID** to seat them directly. If your code platform doesn't answer, the tab says so and automatic seat cleanup pauses.
 
-**Example:** You can have 1 workspace admin managing settings, while 20 developers get automated reviews. All plans include unlimited PRs—your plan only determines which developers get review access.
+**Example:** You can have 1 workspace admin managing settings, while 20 developers get automated reviews. All plans include unlimited PRs; on a paid plan, a license decides which developers get reviewed.
 
 ## Overview
 
-Kodus workspaces supports **Role-Based Access Control (RBAC)**, allowing you to manage user permissions and access levels within your organization. Each workspace member can be assigned one of four distinct roles, each with specific permissions and capabilities.
+Kodus workspaces support **Role-Based Access Control (RBAC)**, allowing you to manage user permissions and access levels within your organization. Each workspace member has one of four roles, each with specific permissions.
 
 ## Available Roles
 
@@ -34,19 +34,19 @@ Each role provides different levels of access and capabilities within the worksp
 
 ### Billing Manager
 
-**Financial and billing management** access with access to billing/subscription management and view access to most configurations, but no edit access to code review settings.
+**Financial and billing management** access. Manages the plan and billing, and can view developer licenses, code review settings, Kody Rules, repositories, plugins, token usage, and activity logs, but cannot edit them. No access to pull requests, Cockpit, or CLI reviews.
 
 ### Repository Admin
 
-**Repository management** access. Sees all configurations, pull requests, issues, cockpit, and plugins across the whole organization (read-only), and can edit code review configurations and Kody Rules for the repositories assigned to them.
+**Repository management** access. Sees all configurations, pull requests, issues, Cockpit, plugins, and token usage across the whole organization (read-only), and can edit code review configurations, Kody Rules, and issues for the repositories assigned to them. Shown as **Repo Admin** in the app.
 
 ### Contributor
 
-**Read-only access** to the whole organization. Contributors can view configurations, Kody Rules, pull requests, and issues across all repositories — no repository assignment needed — but cannot edit anything. Cockpit, token usage, billing, and user management stay admin-only.
+**Read-only access** to the whole organization. Contributors can view configurations, Kody Rules, pull requests, and issues across all repositories (no repository assignment needed) but cannot edit anything. Cockpit, token usage, billing, and user management stay admin-only.
 
 ## Role Permissions Matrix
 
-Here's a detailed breakdown of what each role can do, based on the actual permissions matrix:
+What each role can do:
 
 <Snippet file="rbac-matrix-generated.mdx" />
 
@@ -74,7 +74,7 @@ Enable auto-join to allow users with matching email domains to join your workspa
 
 **How it works:**
 - Users who sign up with your email domain can choose to join your organization
-- They must confirm their email after choosing to join
+- On Kodus Cloud, they must confirm their email after choosing to join
 - All auto-join users enter as **Contributor** role (read-only access to the whole organization)
 - As Owner, adjust their role if they need edit rights
 
@@ -85,6 +85,8 @@ Enable auto-join to allow users with matching email domains to join your workspa
 3. Open the select in their **Role** column
 4. Select the new role (**Owner**, **Billing Manager**, **Repo Admin**, or **Contributor**)
 5. The change takes effect immediately
+
+You can't change your own role. Role changes and member removals notify the organization's Owners.
 
 For a **Repository Admin**, assign the repositories they can edit with the **+** button next to their role, which opens **Assign repositories**.
 
@@ -108,37 +110,25 @@ The same menu has **Approve** for members marked **Needs approval** and **Copy i
 
 <AccordionGroup>
   <Accordion title="I can't invite new members to the workspace">
-    **Solutions:**
-    - Verify you have the Owner role — only Owners can invite members
-    - Check if your workspace has reached any system limits
-    - Ensure you have the correct permissions in your account
+    Only Owners can invite members. If you are an Owner and **Invite member** is disabled, check your role under **Organization → Subscription → Workspace members**.
   </Accordion>
 
   <Accordion title="A member can't edit code review configurations">
-    **Solutions:**
-    - Confirm the member has Repository Admin or Owner role for the specific repository
-    - For a Repository Admin, check that the repository is assigned to them (**Assign repositories** in the **Role** column of **Workspace members**)
-    - Verify the member's role assignment is correct
+    - Confirm the member is a Repo Admin or an Owner. Billing Managers and Contributors can view settings but not edit them.
+    - For a Repo Admin, check that the repository is assigned to them (**Assign repositories** in the **Role** column of **Workspace members**).
   </Accordion>
 
   <Accordion title="Billing information is not visible to a team member">
-    **Solutions:**
-    - Ensure the member has Owner or Billing Manager role
-    - Check if billing features are enabled for your workspace
-    - Verify the member's access hasn't been restricted
+    **Organization → Subscription** is visible only to Owners and Billing Managers. Repo Admins and Contributors don't see it.
   </Accordion>
 
-  <Accordion title="A member can't access cockpit features">
-    **Solutions:**
-    - Confirm the member has Repository Admin or Owner role (cockpit is not visible to Contributors or Billing Managers)
-    - Verify the member's role assignment is correct
+  <Accordion title="A member can't access Cockpit">
+    Cockpit is visible to Repo Admins and Owners, not to Contributors or Billing Managers. Cockpit also needs a Teams or Enterprise plan; see [Plans and Licenses](/en/how_to_use/pricing).
   </Accordion>
 
   <Accordion title="A developer isn't showing up in PR licenses">
-    **Solutions:**
-    - Verify Kody is installed in the repositories where this developer opens PRs
-    - Check if the developer has opened PRs in recent months
-    - Remember: PR licenses come from Git activity, not workspace members
-    - Ensure the repository webhook is properly configured
+    - Click **Refresh members** on the **PR licenses** tab, and check that the developer belongs to your Git organization or has recently opened PRs in a repository Kody reviews.
+    - Use **Assign by git ID** to seat someone who isn't listed.
+    - Remember: PR licenses come from your Git provider, not from workspace members.
   </Accordion>
 </AccordionGroup>

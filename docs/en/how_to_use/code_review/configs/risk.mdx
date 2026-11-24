@@ -1,0 +1,71 @@
+---
+title: "Risk assessment"
+description: "Assess PR risk independently of automatic approval."
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="cloud" detail="Available on Kodus Cloud, including the trial.">
+    <Badge icon="cloud" stroke>Teams &amp; Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Requires an Enterprise license and BETA_FEATURES=true.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="beta" detail="Kodus Cloud workspaces need access to this beta.">
+    <Badge icon="flask" color="orange" stroke>Beta</Badge>
+  </FeatureBadge>
+</div>
+
+Kody assesses the entire PR. [Routing](/en/how_to_use/code_review/configs/routing) and risk-conditioned custom agents use the result to decide how to review. When [automatic approval](/en/how_to_use/code_review/configs/auto_approve) is on, the result can also hold approval.
+
+## Enable risk assessment
+
+1. Open **Code review → Risk assessment**.
+2. Turn on **Risk assessment** and click **Save settings**.
+
+Risk assessment starts off. Kody can assess risk while automatic approval is off.
+
+## Results
+
+- **Risk found:** risk-conditioned agents may run, Routing uses its risk-found mode, and automatic approval is blocked.
+- **No risk found:** Routing uses its no-risk mode. Approval still needs a clean review and a matching policy.
+- **Unavailable:** Routing uses the configured default review mode. Automatic approval is blocked, and agents that require confirmed risk do not run automatically.
+
+With assessment off, Routing uses one configured mode for all PRs. Conditional agents do not run without confirmed risk; explicit manual agent commands bypass that condition.
+
+An assessment covers one PR head, title and description. A new commit, or a change to the title or description, holds automatic approval until a new review.
+
+## Preview on a PR
+
+**Preview on a PR** opens a side panel. Choose a connected repository and PR number to try the current criteria, including unsaved edits. It uses the configured risk-assessment model and does not publish a comment or approve the PR.
+
+## Optional team criteria
+
+Kody assesses risk without team criteria. Criteria add team context, such as the consequences of changing account permissions or deleting customer data.
+
+A criterion has a name, instructions, a switch and optional included/excluded file patterns. You can add up to 50. A name is up to 120 characters and instructions up to 4,000; in a file, each `id` must be unique. Its file filters scope the guidance; matching a file does not automatically declare the PR risky. Kody still assesses the rest of the change.
+
+The assessment uses the diff and available code/history context. Missing history is unknown information, not evidence of safety.
+
+## YAML
+
+Turn on **Prefer kodus-config.yml settings** in **Code review → General** (repository scope) before using repository configuration files.
+
+```yaml
+riskAssessmentActive: true
+riskCriteria:
+  - id: access-control
+    name: Access control
+    enabled: true
+    instructions: 'Check whether permission changes expose data across accounts. Distinguish them from equivalent refactors.'
+    includedFiles:
+      - 'src/access/**'
+    excludedFiles:
+      - '**/*.test.ts'
+```
+
+`riskCriteria: []` keeps Kody's standard assessment. To stop assessment, set `riskAssessmentActive: false`.
+
+A configuration that never set **Risk assessment** keeps its existing approval risk behavior until you change this setting. Turning automatic approval on or off does not change the **Risk assessment** switch.

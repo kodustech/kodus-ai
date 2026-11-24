@@ -6,10 +6,16 @@ import { kodyRulesIDEGeneratorSchema } from '@libs/common/utils/prompts/kodyRule
 import { kodyMemoryResolutionSchema } from '@libs/common/utils/prompts/kodyMemoryResolution';
 import { kodyRulesRecommendationSchema } from '@libs/common/utils/prompts/kodyRulesRecommendation';
 import { compilerOutputSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
+import { kodyRuleEvidenceVerdictSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rule-evidence';
 import { decomposeOutputSchema } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
-import { shardViolationsWireSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
+import {
+    buildShardViolationsWireSchema,
+    shardViolationsWireSchema,
+} from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 import { REPEAT_CHECK_SCHEMA } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
 import { approvalRiskOutputSchema } from '@libs/code-review/domain/approval/assess-approval-risk';
+import { prRiskOutputSchema } from '@libs/code-review/domain/risk/assess-pr-risk';
+import { policyEligibilityOutputSchema } from '@libs/code-review/domain/approval/assess-policy-eligibility';
 
 // Phase 3 consumer-migration call sites — schemas defined INLINE in the
 // consumer files (now exported so this governance suite can prove them
@@ -18,9 +24,8 @@ import { LLMDecisionExtractionSchema as llmDecisionExtractionSchemaSession } fro
 import { repeatedClusteringSchema } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
 import {
     severityAnalysisSchema,
-    validateImplementedSchema,
+    implementationCheckSchema,
 } from '@libs/code-review/infrastructure/adapters/services/llmAnalysis.service';
-import { documentationSearchExaFormatSchema } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import {
     safeguardFeatureExtractionSchema,
     safeguardVerificationSchema,
@@ -94,12 +99,15 @@ describe('zodToStrictWireSchema', () => {
     // BEFORE it 400s a BYOK-OpenAI customer's shards.
     const realSchemas: Array<[string, z.ZodType]> = [
         ['approvalRiskOutputSchema', approvalRiskOutputSchema],
+        ['prRiskOutputSchema', prRiskOutputSchema],
+        ['policyEligibilityOutputSchema', policyEligibilityOutputSchema],
         [
             'kodyRulesIDEGeneratorSchema (guidance-file extraction)',
             kodyRulesIDEGeneratorSchema,
         ],
         ['kodyMemoryResolutionSchema', kodyMemoryResolutionSchema],
         ['compilerOutputSchema (detector compiler)', compilerOutputSchema],
+        ['kodyRuleEvidenceVerdictSchema', kodyRuleEvidenceVerdictSchema],
         [
             'kodyRulesRecommendationSchema (rule recommendation)',
             kodyRulesRecommendationSchema,
@@ -115,11 +123,7 @@ describe('zodToStrictWireSchema', () => {
             repeatedClusteringSchema,
         ],
         ['severityAnalysisSchema (llmAnalysis)', severityAnalysisSchema],
-        ['validateImplementedSchema (llmAnalysis)', validateImplementedSchema],
-        [
-            'documentationSearchExaFormatSchema (exa formatter)',
-            documentationSearchExaFormatSchema,
-        ],
+        ['implementationCheckSchema (llmAnalysis)', implementationCheckSchema],
         [
             'safeguardFeatureExtractionSchema (safeguard features)',
             safeguardFeatureExtractionSchema,
@@ -289,6 +293,10 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
             shardViolationsWireSchema,
         ],
         [
+            'shardViolationsWireSchema (detector-only shard)',
+            buildShardViolationsWireSchema(undefined, false),
+        ],
+        [
             'REPEAT_CHECK_SCHEMA (repeat check, via jsonSchema())',
             { jsonSchema: REPEAT_CHECK_SCHEMA },
         ],
@@ -305,10 +313,12 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
     // covered above. Keep this in lockstep with the schema lists — the scan
     // below fails if a call site appears in a file that isn't listed here.
     const REGISTERED_CALL_SITE_FILES = new Set<string>([
-        'libs/code-review/domain/approval/assess-approval-risk.ts', // approvalRiskOutputSchema
+        'libs/code-review/domain/risk/assess-change-risk.ts', // approvalRiskOutputSchema (shared evaluator)
+        'libs/code-review/domain/approval/assess-policy-eligibility.ts', // policyEligibilityOutputSchema
         'libs/ee/kodyRules/service/kody-rule-detector-compiler.service.ts', // compilerOutputSchema
         'libs/ee/kodyRules/service/kodyRules.service.ts', // kodyRulesRecommendationSchema, kodyMemoryResolutionSchema
         'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts', // shardViolationsWireSchema
+        'libs/code-review/infrastructure/agents/collaborators/kody-rule-evidence.ts', // kodyRuleEvidenceVerdictSchema
         'libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service.ts', // kodyRulesIDEGeneratorSchema
         'libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service.ts', // decomposeOutputSchema (+ compilerOutputSchema, already covered)
         // Phase 3 consumer migrations.
@@ -316,8 +326,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/code-review/infrastructure/adapters/services/commentManager.service.ts', // repeatedClusteringSchema
         'libs/code-review/infrastructure/adapters/services/commentAnalysis.service.ts', // commentCategorizerSchema, commentIrrelevanceFilterSchema, kodyRulesGenerator{,DuplicateFilter,QualityFilter}Schema
         'libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service.ts', // DocumentationPlannerSchema
-        'libs/code-review/infrastructure/adapters/services/documentation-search-exa.service.ts', // documentationSearchExaFormatSchema
-        'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.ts', // severityAnalysisSchema, validateImplementedSchema
+        'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.ts', // severityAnalysisSchema, implementationCheckSchema
         'libs/code-review/infrastructure/adapters/services/safeguardPipeline.service.ts', // safeguardFeatureExtractionSchema, safeguardVerificationSchema, agentTurnSchema
         'libs/code-review/infrastructure/adapters/services/suggestionLLMValidator.service.ts', // validateCodeSemanticsSchema, checkSuggestionSimplicitySchema
         'libs/ee/analytics-warehouse/classification/pull-request-classifier.service.ts', // classificationBatchSchema
@@ -325,7 +334,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/platform/application/use-cases/codeManagement/implicit-reply.ts', // replyAddressedToKodySchema
         // Phase 3b: withStructuredOutputFallback → LLM.run migrations.
         'libs/code-review/infrastructure/agents/core/finder.agent.ts', // RECOVERY_SCHEMA (zod)
-        'libs/code-review/pipeline/stages/agent-review.stage.ts', // DEDUP_SCHEMA, DEDUP_TIEBREAK_SCHEMA via jsonSchema() — AI-SDK Schema, passes through untouched (exempt from strict-wire conversion)
+        'libs/code-review/infrastructure/agents/engine/finding-dedup.ts', // DEDUP_SCHEMA, DEDUP_TIEBREAK_SCHEMA via jsonSchema() — AI-SDK Schema, passes through untouched (exempt from strict-wire conversion)
         'libs/code-review/infrastructure/agents/engine/repeat-check.ts', // REPEAT_CHECK_SCHEMA via jsonSchema(), pass-through, born strict (#2097)
         // Second-doors → LLM.run migration.
         'libs/cli-review/infrastructure/services/public-pr-grouping.service.ts', // GroupingSchema — all-required zod (no `.optional()`), so strict-wire conversion is a no-op; public-demo path on a fixed Gemini default, never OpenAI-strict.

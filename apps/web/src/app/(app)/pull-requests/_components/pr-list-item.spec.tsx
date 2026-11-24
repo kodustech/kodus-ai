@@ -1,8 +1,9 @@
 /** @jest-environment jsdom */
 // @ts-nocheck
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen } from "@testing-library/react";
+
 import { TooltipProvider } from "@components/ui/tooltip";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 import { PrListItem, ReviewNotices } from "./pr-list-item";
 
@@ -189,5 +190,70 @@ describe("ReviewNotices — each loss under its own cause", () => {
                 "Kody Rules not evaluated (repository context unavailable)",
             ),
         ).toBeInTheDocument();
+    });
+});
+
+const multiRow = (executions) =>
+    render(
+        <TooltipProvider>
+            <PrListItem
+                group={{
+                    prId: executions[0].prId,
+                    latest: executions[0],
+                    executions,
+                    reviewCount: executions.length,
+                }}
+            />
+        </TooltipProvider>,
+    );
+
+/** #2578: the review mode is a tag on the PR, never a second status. */
+describe("PrListItem — review mode", () => {
+    it("shows a skipped run's status alone and the mode of the last run that reviewed", () => {
+        multiRow([
+            execution({ automationExecution: { status: "skipped" } }),
+            execution({
+                automationExecution: { status: "success" },
+                reviewMode: "heavy",
+            }),
+        ]);
+
+        const skipped = screen.getByText("Skipped");
+        expect(skipped.parentElement).not.toHaveTextContent("Heavy");
+        expect(screen.getByText("Heavy")).toBeInTheDocument();
+    });
+
+    it("shows the newest reviewing run's mode over an older one", () => {
+        multiRow([
+            execution({
+                automationExecution: { status: "success" },
+                reviewMode: "balanced",
+            }),
+            execution({
+                automationExecution: { status: "success" },
+                reviewMode: "heavy",
+            }),
+        ]);
+
+        expect(screen.getByText("Balanced")).toBeInTheDocument();
+        expect(screen.queryByText("Heavy")).not.toBeInTheDocument();
+    });
+
+    it("tags a balanced review as Balanced", () => {
+        renderRow(
+            execution({
+                automationExecution: { status: "success" },
+                reviewMode: "balanced",
+            }),
+        );
+
+        expect(screen.getByText("Balanced")).toBeInTheDocument();
+    });
+
+    it("shows no mode when no run reviewed", () => {
+        renderRow(execution({ automationExecution: { status: "skipped" } }));
+
+        expect(screen.queryByText("Balanced")).not.toBeInTheDocument();
+        expect(screen.queryByText("Heavy")).not.toBeInTheDocument();
     });
 });

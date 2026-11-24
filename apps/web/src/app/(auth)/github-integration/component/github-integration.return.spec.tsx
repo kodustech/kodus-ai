@@ -11,7 +11,7 @@ jest.mock("next/navigation", () => ({
 }));
 
 const mockQuery = {
-    value: { data: undefined, isLoading: true, error: null } as {
+    value: { data: {}, isLoading: false, error: null } as {
         data: unknown;
         isLoading: boolean;
         error: unknown;
@@ -19,6 +19,11 @@ const mockQuery = {
 };
 jest.mock("@services/setup/hooks", () => ({
     useGetGithubIntegrationByInstallId: () => mockQuery.value,
+}));
+const mockStart = jest.fn(() => Promise.resolve());
+jest.mock("@services/setup/github-installation-authorization", () => ({
+    startGithubInstallationAuthorization: (...args: unknown[]) =>
+        mockStart(...(args as [])),
 }));
 jest.mock("@services/codeManagement/fetch", () => ({
     createCodeManagementIntegration: jest.fn(),
@@ -33,75 +38,56 @@ jest.mock("cookies-next/client", () => ({
     deleteCookie: jest.fn(),
 }));
 
-const STORAGE_KEY = "kodus.github-installation-authorization";
-
-describe("GithubIntegrationClient — return from GitHub's authorization", () => {
+describe("GithubIntegrationClient", () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        sessionStorage.clear();
-    });
-
-    it("sends the user back to the page that started it, even when it re-renders before navigating", () => {
-        // The setup page started the authorization and asked to come back.
-        sessionStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify({
-                state: "sealed.state",
-                returnTo: "/setup/github?installation_id=42",
-            }),
-        );
-        mockSearch.value = new URLSearchParams({
-            code: "gh-code",
-            state: "sealed.state",
-        });
-        mockQuery.value = { data: undefined, isLoading: true, error: null };
-
-        const { rerender } = render(<GithubIntegrationClient />);
-
-        // The installation lookup settles before router.replace has changed
-        // the URL, so the effect runs again with the same code and state.
-        mockQuery.value = {
-            data: { status: "x" },
-            isLoading: false,
-            error: null,
-        };
-        rerender(<GithubIntegrationClient />);
-
-        expect(mockReplace).toHaveBeenCalled();
-        for (const [path] of mockReplace.mock.calls) {
-            expect(path).toMatch(/^\/setup\/github\?installation_id=42&/);
-            expect(path).toContain("github_code=gh-code");
-        }
-    });
-});
-
-describe("GithubIntegrationClient — install started from the onboarding", () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-        sessionStorage.clear();
-        mockSearch.value = new URLSearchParams({ installation_id: "42" });
         mockQuery.value = { data: {}, isLoading: false, error: null };
-    });
-
-    it("continues on the setup page instead of asking to log in", () => {
-        mockGetCookie.mockImplementation((name: string) =>
-            name === "started-setup-from-new-setup-page" ? "true" : undefined,
-        );
-
-        const { queryByText } = render(<GithubIntegrationClient />);
-
-        expect(mockReplace).toHaveBeenCalledWith(
-            "/setup/github?installation_id=42",
-        );
-        expect(queryByText("Copy link")).toBeNull();
-    });
-
-    it("still asks to log in when neither a team nor the onboarding started it", () => {
         mockGetCookie.mockReturnValue(undefined);
+    });
+
+    it("starts GitHub's authorization for the team picked in settings", () => {
+        mockSearch.value = new URLSearchParams({ installation_id: "42" });
+        mockGetCookie.mockImplementation((name: string) =>
+            name === "selectedTeam"
+                ? JSON.stringify({ uuid: "team-1", name: "Team" })
+                : undefined,
+        );
+
+        render(<GithubIntegrationClient />);
+
+        expect(mockStart).toHaveBeenCalledWith(
+            "42",
+            "/github-integration?installation_id=42",
+        );
+    });
+
+    it("shows why when GitHub's authorization was cancelled", () => {
+        mockSearch.value = new URLSearchParams({
+            installation_id: "42",
+            github_error: "access_denied",
+        });
+
+        const { getByText } = render(<GithubIntegrationClient />);
+
+        expect(getByText(/authorization was cancelled/)).toBeTruthy();
+        expect(mockStart).not.toHaveBeenCalled();
+    });
+
+    it("says the authorization expired when the return path was lost", () => {
+        mockSearch.value = new URLSearchParams({ github_error: "expired" });
+
+        const { getByText } = render(<GithubIntegrationClient />);
+
+        expect(getByText(/took too long/)).toBeTruthy();
+    });
+
+    it("asks to log in when no team started the install", () => {
+        mockSearch.value = new URLSearchParams({ installation_id: "42" });
 
         const { getByText } = render(<GithubIntegrationClient />);
 
         expect(mockReplace).not.toHaveBeenCalled();
+        expect(mockStart).not.toHaveBeenCalled();
         expect(getByText("Copy link")).toBeTruthy();
     });
 });

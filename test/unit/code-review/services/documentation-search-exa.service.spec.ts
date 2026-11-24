@@ -17,7 +17,7 @@ jest.mock('exa-js', () => {
 // buildObservabilityMock below stubs. Mock `LLM.run` directly so these tests stay
 // deterministic and never make a real per-query network call (otherwise a valid
 // LLM key in the env turns each query task into a live call and the suite times
-// out). The service unwraps `response.markdown`.
+// out). The formatter answers plain markdown text (no JSON envelope).
 jest.mock('@libs/llm/llm', () => ({
     LLM: { run: jest.fn() },
 }));
@@ -50,7 +50,7 @@ describe('DocumentationSearchExaService', () => {
         jest.clearAllMocks();
         // Default doc-formatter output for every test; a test that asserts on the
         // snippet content overrides this per-case.
-        mockLLMRun.mockResolvedValue({ markdown: DEFAULT_FORMATTED });
+        mockLLMRun.mockResolvedValue(DEFAULT_FORMATTED);
     });
 
     it('should skip search when API key is missing', async () => {
@@ -103,9 +103,9 @@ describe('DocumentationSearchExaService', () => {
         // snippet flowed through" from "fell back to the raw Exa content" (the
         // earlier `Controller` assertion passed either way, since the Exa title is
         // "NestJS Controllers").
-        mockLLMRun.mockResolvedValue({
-            markdown: '## Summary\n- LLM_FORMATTED_SENTINEL: use @Controller decorators.',
-        });
+        mockLLMRun.mockResolvedValue(
+            '## Summary\n- LLM_FORMATTED_SENTINEL: use @Controller decorators.',
+        );
 
         const cacheService = buildCacheServiceMock();
         const service = new DocumentationSearchExaService(

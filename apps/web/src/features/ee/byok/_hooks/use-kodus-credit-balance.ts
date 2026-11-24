@@ -18,7 +18,7 @@ const FALLBACK = {
     packsUsd: [20, 50, 100, 500],
     markupPct: 7,
     lowThresholdUsd: 5,
-    minPurchaseUsd: 10,
+    minPurchaseUsd: 15,
     maxPurchaseUsd: 5000,
 };
 

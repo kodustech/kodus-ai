@@ -12,10 +12,12 @@ const mockState: {
     propagate: any[];
     observationNames: string[];
     spanUpdateArgs: any[];
+    updateThrows: boolean;
 } = {
     propagate: [],
     observationNames: [],
     spanUpdateArgs: [],
+    updateThrows: false,
 };
 
 jest.mock('@langfuse/tracing', () => ({
@@ -28,6 +30,9 @@ jest.mock('@langfuse/tracing', () => ({
         const span = {
             update: (arg: any) => {
                 mockState.spanUpdateArgs.push(arg);
+                if (mockState.updateThrows) {
+                    throw new Error('langfuse export failed');
+                }
             },
         };
         return cb(span);
@@ -55,6 +60,7 @@ beforeEach(() => {
     mockState.propagate = [];
     mockState.observationNames = [];
     mockState.spanUpdateArgs = [];
+    mockState.updateThrows = false;
 });
 
 afterEach(() => {
@@ -107,6 +113,36 @@ describe('runAgentWithTrace — transparency and failure', () => {
             }),
         ).rejects.toBe(err);
         expect(mockState.spanUpdateArgs[0]).toEqual({ input: {} });
+    });
+});
+
+describe('runAgentWithTrace — a failing span update never breaks the review', () => {
+    it('runs the agent once and returns its value when span.update throws', async () => {
+        enableTracing();
+        mockState.updateThrows = true;
+        const value = { result: { findings: ['f'] } };
+        const fn = jest.fn().mockResolvedValue(value);
+
+        const result = await runAgentWithTrace(
+            { traceName: 'code-review-finder' },
+            { in: 1 },
+            fn,
+        );
+
+        expect(result).toBe(value);
+        expect(fn).toHaveBeenCalledTimes(1);
+        expect(mockState.spanUpdateArgs).toHaveLength(2);
+    });
+
+    it('still propagates the agent failure itself', async () => {
+        enableTracing();
+        mockState.updateThrows = true;
+        const err = new Error('model 500');
+        await expect(
+            runAgentWithTrace({ traceName: 't' }, {}, async () => {
+                throw err;
+            }),
+        ).rejects.toBe(err);
     });
 });
 

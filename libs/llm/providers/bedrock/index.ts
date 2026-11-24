@@ -11,10 +11,7 @@ import { bedrockModelFromCredentials } from '@libs/llm/model-builders';
 import { repairBedrockModelId } from '@libs/llm/bedrock-model-id';
 import { registerProvider } from '../kernel/registry';
 import { reasoningConfigForModel } from '../kernel/model-reasoning';
-import {
-    anthropicEphemeralCacheHint,
-    isAnthropicModel,
-} from '../kernel/anthropic-cache';
+import { isAnthropicModel } from '../kernel/anthropic-cache';
 import { anthropicModule } from '../anthropic';
 import { resolveAnthropicModelTraits } from '../anthropic/traits';
 import { EFFORT_TO_BUDGET } from '../kernel/effort-budget';
@@ -220,15 +217,15 @@ export const bedrockModule: ProviderModule = {
             : '{\n  "reasoningConfig": { "type": "adaptive", "maxReasoningEffort": "high" }\n}';
     },
 
-    // Claude-on-Bedrock honors the SAME `anthropic.cacheControl` marker as native
-    // Anthropic (per the AI SDK Bedrock docs). Non-Anthropic Bedrock models cache
-    // implicitly / not at all, so they get no inline hint. 5-minute ephemeral only
-    // (the 1h TTL is gated to specific Claude 4.5 deployments — not assumed here).
+    // The Bedrock adapter turns only `bedrock.cachePoint` into a Converse
+    // cachePoint block; `anthropic.cacheControl` is dropped without a warning,
+    // so Claude-on-Bedrock ran with no cache at all. Non-Anthropic Bedrock
+    // models get no marker. Default (5-minute) TTL only.
     systemCacheControl(
         cfg: ProviderBuildConfig,
     ): Record<string, unknown> | undefined {
         return isAnthropicModel(cfg.model)
-            ? anthropicEphemeralCacheHint()
+            ? { bedrock: { cachePoint: { type: 'default' } } }
             : undefined;
     },
 

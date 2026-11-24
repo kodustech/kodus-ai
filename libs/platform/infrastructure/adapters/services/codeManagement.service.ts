@@ -20,6 +20,7 @@ import {
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import {
     CodeManagementConnectionStatus,
+    type HostAccount,
     ICodeManagementService,
     PullRequestFileChange,
 } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
@@ -49,6 +50,11 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PlatformIntegrationFactory } from './platformIntegration.factory';
+import type {
+    ApprovalTeamMembership,
+    ApprovalTeamMembershipParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
+import { WebhookSetupResult } from '@libs/platform/domain/platformIntegrations/types/codeManagement/webhook-setup.type';
 
 @Injectable()
 export class CodeManagementService implements ICodeManagementService {
@@ -60,22 +66,27 @@ export class CodeManagementService implements ICodeManagementService {
         private platformIntegrationFactory: PlatformIntegrationFactory,
     ) {}
 
+    /**
+     * The platform of the team's active code integration, or null when it has
+     * none. A failed lookup throws, so a caller can tell it from an absence.
+     */
+    async findTypeIntegration(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<PlatformType | null> {
+        const integration = await this.integrationService.findOne({
+            organization: { uuid: organizationAndTeamData.organizationId },
+            team: { uuid: organizationAndTeamData.teamId },
+            integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+            status: true,
+        });
+        return integration?.platform ?? null;
+    }
+
     async getTypeIntegration(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PlatformType> {
         try {
-            const integration = await this.integrationService.findOne({
-                organization: { uuid: organizationAndTeamData.organizationId },
-                team: { uuid: organizationAndTeamData.teamId },
-                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
-                status: true,
-            });
-
-            if (!integration) {
-                return null;
-            }
-
-            return integration.platform;
+            return await this.findTypeIntegration(organizationAndTeamData);
         } catch (error) {
             this.logger.error({
                 message: 'Failed to resolve integration type',
@@ -114,6 +125,25 @@ export class CodeManagementService implements ICodeManagementService {
         }
 
         return codeManagementService.listIssues(params);
+    }
+
+    async getApprovalTeamMembership(
+        params: ApprovalTeamMembershipParams,
+    ): Promise<ApprovalTeamMembership> {
+        try {
+            const type = await this.getTypeIntegration(
+                params.organizationAndTeamData,
+            );
+            if (!type) return 'unavailable';
+            const provider =
+                this.platformIntegrationFactory.getCodeManagementService(type);
+            return (
+                (await provider.getApprovalTeamMembership?.(params)) ??
+                'unavailable'
+            );
+        } catch {
+            return 'unavailable';
+        }
     }
 
     async getIssue(
@@ -326,7 +356,7 @@ export class CodeManagementService implements ICodeManagementService {
     async createPullRequestWithFiles(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { id: string; name: string };
+            repository: { id: string; name: string; fullName?: string };
             sourceBranch?: string;
             targetBranch?: string;
             baseBranch?: string;
@@ -357,7 +387,7 @@ export class CodeManagementService implements ICodeManagementService {
     async uploadFiles(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { id: string; name: string };
+            repository: { id: string; name: string; fullName?: string };
             branchName?: string;
             baseBranch?: string;
             files: PullRequestFileChange[];
@@ -425,6 +455,9 @@ export class CodeManagementService implements ICodeManagementService {
                     lastNDays?: number;
                     limit?: number;
                 };
+                // A screen is waiting: providers that back off on rate limits
+                // give up sooner. Only Bitbucket Cloud reads it today.
+                interactive?: boolean;
             };
         },
         type?: PlatformType,
@@ -601,6 +634,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
             determineBots?: boolean;
+            requireLoaded?: boolean;
         },
         type?: PlatformType,
     ): Promise<PullRequestAuthor[]> {
@@ -618,6 +652,50 @@ export class CodeManagementService implements ICodeManagementService {
             this.platformIntegrationFactory.getCodeManagementService(type);
 
         return codeManagementService.getPullRequestAuthors(params);
+    }
+
+    async canFindRecentPullRequestAuthors(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean> {
+        const type = await this.getTypeIntegration(organizationAndTeamData);
+
+        if (!type) {
+            return false;
+        }
+
+        return (
+            typeof this.platformIntegrationFactory.getCodeManagementService(
+                type,
+            ).findRecentPullRequestAuthors === 'function'
+        );
+    }
+
+    /** `null` when the connected provider cannot answer this. */
+    async findRecentPullRequestAuthors(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            authorIds: string[];
+        },
+        type?: PlatformType,
+    ): Promise<PullRequestAuthor[] | null> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                extractOrganizationAndTeamData(params),
+            );
+        }
+
+        if (!type) {
+            return null;
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (!codeManagementService.findRecentPullRequestAuthors) {
+            return null;
+        }
+
+        return codeManagementService.findRecentPullRequestAuthors(params);
     }
 
     async getOrganizations(
@@ -641,13 +719,12 @@ export class CodeManagementService implements ICodeManagementService {
     async getFilesByPullRequestId(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
-            // Optional — when present, providers that implement caching
-            // (currently GitHub) key their cache entry by it. Other
-            // providers ignore it. Should be the head sha of the PR ref
-            // so the cache invalidates when new commits are pushed.
+            // Cache identity requires both PR refs. A retarget can change the
+            // full file list without changing the head.
             headSha?: string;
+            baseSha?: string;
         },
         type?: PlatformType,
     ) {
@@ -697,7 +774,7 @@ export class CodeManagementService implements ICodeManagementService {
     async createCommentInPullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             overallComment: any;
             lineComments?: any;
@@ -719,7 +796,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getRepositoryContentFile(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             file: any;
             pullRequest: any;
             suppressNotFoundLogs?: boolean;
@@ -741,7 +818,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getRepositoryContentBatch(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: any };
+            repository: { name: string; id: any; fullName?: string };
             files: Array<{ filename: string; sha?: string }>;
             pullRequest?: any;
         },
@@ -781,7 +858,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getPullRequestByNumber(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
         },
         type?: PlatformType,
@@ -801,7 +878,12 @@ export class CodeManagementService implements ICodeManagementService {
     async createReviewComment(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string; language: string };
+            repository: {
+                name: string;
+                id: string;
+                language: string;
+                fullName?: string;
+            };
             prNumber: number;
             lineComment: any;
             commit: any;
@@ -825,7 +907,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getCommitsForPullRequestForCodeReview(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             // Same pattern as getFilesByPullRequestId — optional cache key.
             headSha?: string;
@@ -849,7 +931,7 @@ export class CodeManagementService implements ICodeManagementService {
     async createIssueComment(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             body: string;
             suggestion?: ISuggestionByPR;
@@ -871,7 +953,7 @@ export class CodeManagementService implements ICodeManagementService {
     async createSingleIssueComment(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             body: string;
         },
@@ -895,7 +977,7 @@ export class CodeManagementService implements ICodeManagementService {
     async updateIssueComment(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             body: string;
             commentId: number;
@@ -1027,7 +1109,7 @@ export class CodeManagementService implements ICodeManagementService {
     async updateDescriptionInPullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             summary: string;
         },
@@ -1150,7 +1232,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getLanguageRepository(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
         },
         type?: PlatformType,
     ) {
@@ -1169,7 +1251,7 @@ export class CodeManagementService implements ICodeManagementService {
     async mergePullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
         },
         type?: PlatformType,
@@ -1220,8 +1302,9 @@ export class CodeManagementService implements ICodeManagementService {
     async approvePullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
+            headSha?: string;
         },
         type?: PlatformType,
     ) {
@@ -1240,7 +1323,7 @@ export class CodeManagementService implements ICodeManagementService {
     async requestChangesPullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             criticalComments: CommentResult[];
         },
@@ -1261,7 +1344,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getAllCommentsInPullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { name: string; id: string };
+            repository: { name: string; id: string; fullName?: string };
             prNumber: number;
             failOnError?: boolean;
         },
@@ -1420,7 +1503,7 @@ export class CodeManagementService implements ICodeManagementService {
     async getPullRequestsByRepository(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
-            repository: { id: string; name: string };
+            repository: { id: string; name: string; fullName?: string };
             filters?: {
                 startDate: string;
                 endDate: string;
@@ -1509,7 +1592,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
             prNumber: number;
-            repository: { id: string; name: string };
+            repository: { id: string; name: string; fullName?: string };
         },
         type?: PlatformType,
     ): Promise<any | null> {
@@ -1540,6 +1623,31 @@ export class CodeManagementService implements ICodeManagementService {
             this.platformIntegrationFactory.getCodeManagementService(type);
 
         return codeManagementService.deleteWebhook(params);
+    }
+
+    async ensureRepositoryWebhooks(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repositories: Repositories[];
+        },
+        type?: PlatformType,
+    ): Promise<WebhookSetupResult> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                params.organizationAndTeamData,
+            );
+        }
+
+        if (!type) {
+            throw new Error(
+                'No code management integration is connected for this team',
+            );
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        return codeManagementService.ensureRepositoryWebhooks(params);
     }
 
     async isWebhookActive(params: {
@@ -1684,7 +1792,7 @@ export class CodeManagementService implements ICodeManagementService {
         parentId: string;
         commentId: string;
         body: string;
-        repository: { id: string; name: string };
+        repository: { id: string; name: string; fullName?: string };
         prNumber: number;
     }): Promise<any | null> {
         const type = await this.getTypeIntegration(
@@ -1720,14 +1828,15 @@ export class CodeManagementService implements ICodeManagementService {
         return codeManagementService.isDraftPullRequest(params);
     }
 
-    async getReviewStatusByPullRequest(params: {
-        organizationAndTeamData: OrganizationAndTeamData;
-        repository: Partial<Repository>;
-        prNumber: number;
-    }): Promise<PullRequestReviewState | null> {
-        const type = await this.getTypeIntegration(
-            params.organizationAndTeamData,
-        );
+    async getReviewStatusByPullRequest(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: Partial<Repository>;
+            prNumber: number;
+        },
+        type?: PlatformType,
+    ): Promise<PullRequestReviewState | null> {
+        type ??= await this.getTypeIntegration(params.organizationAndTeamData);
 
         if (!type) {
             return null;
@@ -1756,6 +1865,42 @@ export class CodeManagementService implements ICodeManagementService {
             throw new Error(`Approval dismissal is unavailable on ${type}`);
         }
         return provider.dismissOwnPullRequestApprovals(params);
+    }
+
+    async isOwnAccount(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            account: HostAccount;
+        },
+        type?: PlatformType,
+    ): Promise<boolean> {
+        type ??= await this.getTypeIntegration(params.organizationAndTeamData);
+        const provider =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+        // A host that cannot tell is never taken for Kody.
+        return (await provider?.isOwnAccount?.(params)) ?? false;
+    }
+
+    async dismissOwnPullRequestChangeRequests(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: Partial<Repository>;
+            prNumber: number;
+            reason: string;
+        },
+        type?: PlatformType,
+    ): Promise<number> {
+        type ??= await this.getTypeIntegration(params.organizationAndTeamData);
+        const provider =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+        // A host that can show Kody's change request must be able to take it
+        // back; failing here keeps a silent no-op from looking like success.
+        if (!provider?.dismissOwnPullRequestChangeRequests) {
+            throw new Error(
+                `Change request withdrawal is unavailable on ${type}`,
+            );
+        }
+        return provider.dismissOwnPullRequestChangeRequests(params);
     }
 
     async addReactionToPR(params: {

@@ -12,7 +12,7 @@ Kodus filters which findings actually get posted:
 - **Minimum severity to post** — only post suggestions at or above a threshold (default: Medium). Kody still finds lower-severity issues; it just does not comment on them.
 - **Apply the threshold to Kody Rules** — off by default, so your team's own rules always surface
 
-Configure these in the sidebar under **Code review → What to review** (formerly **Review filters**), or in `kodus-config.yml`:
+Configure these in the sidebar under **Code review → What to review**, or in `kodus-config.yml`:
 
 ```yaml
 suggestionControl:
@@ -20,7 +20,7 @@ suggestionControl:
   applyFiltersToKodyRules: false
 ```
 
-The `kodus-config.yml` snippets on this page only take effect for a repository when **kodus Config File Overrides Web Preferences** is on in **Code review → General** (repository or directory scope).
+The `kodus-config.yml` snippets on this page only take effect when **Prefer kodus-config.yml settings** is on for the repository (**Code review → General**, at repository scope). Kody reads the file at the repository root on the default branch. See [Config Priority](/en/how_to_use/code_review/configs/general#config-priority).
 
 ## Ignore files and paths
 
@@ -33,6 +33,8 @@ ignorePaths:
   - "**/*.generated.ts"
   - dist/**
 ```
+
+A list in the file replaces the list set in the app, default patterns included. Copy the defaults you want to keep into it.
 
 ## Skip PRs by title
 
@@ -59,6 +61,14 @@ reviewOptions:
 
 ## Review cadence
 
-Use **Auto-pause** (**Code review → General** → **Enable Automated Code Review** → **Review Cadence**) to prevent spam during active development — Kodus pauses reviews when it detects rapid consecutive pushes (default: 3 pushes in 15 minutes).
+Use **Auto-pause** (**Code review → General** → **Automated code review** → **Review Cadence**) to prevent spam during active development. Kodus pauses a PR after a burst of reviews (default: 3 reviews in 15 minutes) until someone comments `@kody start-review`.
+
+## Start and end messages
+
+Kody posts a message when a review starts and another when it ends. In **Code review → What Kody writes → Comments during the review**, use **Post this message** to post each one only when the PR opens, or never. See [Custom messages](/en/how_to_use/code_review/configs/custom_messages).
+
+## Business Logic comments
+
+When a PR meets its task, Kody posts a one-line comment. Turn off **Comment when every requirement is met** in the **Business Logic** settings to hear only about gaps. See [Business Logic Validation](/en/how_to_use/code_review/business_logic_validation).
 
 For details, see [General Configuration](/en/how_to_use/code_review/configs/general) and [Severity threshold](/en/how_to_use/code_review/configs/suggestion_control).

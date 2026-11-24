@@ -28,6 +28,7 @@ describe('GithubService.authenticateWithCodeOauth — encrypts the installation 
         };
 
         svc.assertGithubOAuthEnv = jest.fn();
+        svc.logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
         // Covered by github.service.installation-link.spec.ts.
         svc.assertCanLinkInstallation = jest.fn().mockResolvedValue(undefined);
         svc.createOctokitInstance = jest.fn().mockReturnValue(appOctokit);

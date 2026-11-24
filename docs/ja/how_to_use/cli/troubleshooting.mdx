@@ -1,19 +1,21 @@
 ---
 title: "トラブルシューティング"
-description: "Kodus CLI の一般的なエラー、終了コード、デバッグ方法。"
+description: "Kodus CLI のよくあるエラー、終了コード、デバッグ方法。"
 ---
 
-調査はまずここから始めましょう:
+調査はまず次のコマンドから始めましょう。
 
 ```bash
 kodus status
 kodus auth status
-kodus review --verbose    # または --verbose 付きの任意のコマンド
+kodus review --verbose    # or any command with --verbose
 ```
 
-`kodus status` は統合された状態（認証モード、組織、リポジトリ、フック、バージョン）を表示します。`--verbose` は解決された API URL とリクエストごとの詳細を出力します。
+`kodus status` は、CLI のバージョン、認証モード、リポジトリ、フック、スキルを表示します。`--verbose` は、各 API リクエストの URL とステータスを出力します。
 
-## 一般的なエラー
+`kodus auth status` は、CLI が保存した認証情報を読み取ります。唯一の認証情報が環境変数の `KODUS_TEAM_KEY` または `KODUS_TOKEN` である場合は "No credentials found" と表示します。それらは `kodus status` が報告します。
+
+## よくあるエラー
 
 <AccordionGroup>
   <Accordion title="コマンドが見つかりません: kodus">
@@ -24,72 +26,110 @@ kodus review --verbose    # または --verbose 付きの任意のコマンド
     - `pnpm add -g @kodus/cli`
     - `bun add -g @kodus/cli`
 
-    スキルインストーラー経由でインストールした場合は、`curl -fsSL https://review-skill.com/install | bash` を再実行して PATH エントリを修正してください。
+    CLI には Node.js 22.19.0 以降が必要です。インストーラーでインストールした場合は、`curl -fsSL https://review-skill.com/install | bash` を再実行して PATH のエントリを修正してください。
   </Accordion>
 
-  <Accordion title="AUTH_REQUIRED または 401 Unauthorized">
-    - `kodus auth status` で現在のモードを確認。
-    - チームキーを使用している場合は、**Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）でその **Status** がまだ **Active** であることを確認。
-    - 個人ログインを使用している場合は、`kodus auth login` を再試行 — リフレッシュトークンが期限切れになっている可能性があります。
-    - CI の場合、`KODUS_TOKEN`（または `KODUS_TEAM_KEY`）がパイプラインが実行される環境に設定されていることを確認。
-    - セルフホストの場合、`KODUS_API_URL` が正しいインスタンスを向いていることを確認。
+  <Accordion title="Not authenticated、AUTH_REQUIRED、または 401 Unauthorized">
+    - `kodus status` を実行して、現在のモードを確認します。
+    - チームキーを使用している場合は、**Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）で、その **Status** がまだ **Active** であることを確認します。
+    - 個人ログインを使用している場合は、もう一度 `kodus auth login` を実行してください。更新に失敗した可能性があります。
+    - CI の場合は、パイプラインが実行される環境に `KODUS_TEAM_KEY` が設定されていることを確認します。
+    - セルフホストの場合は、`KODUS_API_URL` が正しいインスタンスを指していることを確認します。
+
+    取り消された、または期限切れの認証情報のためにレビューが拒否された場合、`kodus review` はトライアルのレビューとして実行され、その旨を表示します。トライアルのレビューは制限が低くなります。
+  </Accordion>
+
+  <Accordion title="ログイン済みのユーザーが必要">
+    `pr reviews`、`agents`、`cockpit`、`usage`、`rules pause`、`rules resume`、`rules delete`、および `config remote` のサブコマンド `unset`、`model`、`messages`、`language`、`skills` は、チームキーを受け付けません。`kodus auth login` を実行してください。環境変数の `KODUS_TEAM_KEY` は、これらのコマンドの妨げにはなりません。
+  </Accordion>
+
+  <Accordion title="チームキーでリポジトリや Kody Rules を設定するとアクセスが拒否される">
+    API が "This CLI key is not allowed to configure repositories" または "Team API key does not have permission to manage Kody Rules" と応答します。チームキーは、許可するまでリポジトリの設定や Kody Rules の管理を行えません。**Organization → CLI keys** を開き、キーの **Configure** をクリックして、**Allow repository configuration via CLI** または **Allow Kody Rules management via CLI** をオンにしてください。どちらもデフォルトではオフです。`kodus auth login` でログインした場合は、代わりに Web アプリでのロールの権限が使用されます。
   </Accordion>
 
   <Accordion title="NOT_IN_GIT_REPO">
-    `kodus review` は git の作業ディレクトリが必要です。リポジトリに `cd` するか、`git init` で初期化してください。`kodus config repo` コマンドの場合は、`.` の代わりに `owner/repo` を明示的に渡すことができます。
+    `kodus review` には git の作業ディレクトリが必要です。リポジトリに `cd` するか、`git init` で初期化してください。`kodus config remote` コマンドでは、`.` の代わりに `owner/repo` を明示的に渡すこともできます。
+  </Accordion>
+
+  <Accordion title="レビューする変更がない">
+    作業ツリーのレビューは、ステージ済みと未ステージの追跡対象の変更を対象とします。新しいファイルは、`git add` するまで対象になりません。次を試してください。
+
+    - ステージ済みの変更のみ: `kodus review --staged`
+    - ブランチ上のコミット: `kodus review --branch <base>`（コミットされていない変更がない CI のチェックアウトではこれを使用します）
+    - 1つのコミット: `kodus review --commit <sha>`
+    - 特定のファイル: `kodus review src/file.ts`
+
+    これはエラーではありません。コマンドは終了コード 0 で終了します。
   </Accordion>
 
   <Accordion title="レビューに非常に時間がかかる、または止まっているように見える">
-    大きなブランチ（数百のファイル、数千の行）は数分かかる場合があります。デフォルトのリクエストタイムアウトは60分です — 詳細モードで進行状況が確認できるはずです。
+    CLI はレビューを送信し、完了するまで最大30分間待機して状態を確認します。スピナーには、レビューがキュー待ちか分析中かが表示されます。大きなブランチでは数分かかる場合があります。
 
-    - `--verbose` でリクエストが進行中であることを確認。
-    - 非常に大きな差分の場合は、作業ツリーモードの代わりに `--branch <base>` または `--commit <sha>` を使用してください: これらによりバックエンドはインライン化されたファイル内容を受信する代わりに同じコミットをクローンできます。
-    - 必要に応じて `KODUS_REQUEST_TIMEOUT_MIN=90 kodus review` でタイムアウトを上書き。
-    - 実用的な場合は、より小さなブランチに分割してください。
+    - `--verbose` を使用して、リクエストが送信されていることを確認します。
+    - 非常に大きな差分の場合は、作業ツリーモードよりも `--branch <base>` または `--commit <sha>` を使用してください。これらはファイルの内容なしで差分を送信します。
+    - 可能であれば、作業をより小さなブランチに分割してください。
+  </Accordion>
+
+  <Accordion title="レビューが大きすぎる、または API が 403 または 413 を返す">
+    リクエストが API の受け付けるサイズを超えています。CLI は、24 MB を超えるリクエストや2,000万文字を超える差分を、送信前に拒否します。API の前段にあるゲートウェイが、大きなリクエストに対して 403 や 413 を返す場合もあります。対象を絞り込んでください。特定のファイルを指定するか、ファイルの内容なしで差分を送信する `--branch`、`--commit`、`--fast` を使用します。
   </Accordion>
 
   <Accordion title="ファイルがレビューからスキップされている">
-    レビューは `kodus config repo` で設定された `ignore-files` パターンを尊重します。現在の設定を一覧表示:
-
-    ```bash
-    kodus config repo show
-    ```
-
-    パターンを追加または削除できます:
-
-    ```bash
-    kodus config repo add-ignore-file . "**/*.generated.ts"
-    kodus config repo remove-ignore-file . "**/*.generated.ts"
-    ```
-
-    バイナリファイル、画像、ロックファイルはデフォルトでスキップされます。
+    - まだ追跡されていない新しいファイルは、どの差分にも含まれません。`git add` を実行してください。
+    - 差分が500,000文字を超えるファイル、または内容が2,000,000文字を超えるファイルは、ファイルの内容を送信するレビューではスキップされます（`--branch`、`--commit`、`--fast` では該当しません）。CLI は、どのファイルがなぜスキップされたかを表示します。
+    - 1回のレビューで送信されるのは最大500ファイルです。CLI は、リストを切り詰めた場合に警告します。
   </Accordion>
 
   <Accordion title="レート制限に達した / トライアルが終了した">
-    トライアルモードでは1日5回のレビューが許可されています。`kodus auth login` でサインインするか、`kodus auth team-key --key kodus_xxxxx` でチームキーを設定して制限を引き上げてください。`kodus auth status` で現在の使用状況を確認できます。
+    トライアルモードでは、ユーザー、デバイス、リポジトリフォルダごとに1時間あたり2回のレビューが許可され、スライディングウィンドウの1時間で集計されます。制限を引き上げるには、`kodus auth login` でサインインするか、`KODUS_TEAM_KEY` でチームキーを設定してください。トライアルモードでは、`kodus auth status` が使用状況とリセットされるタイミングを表示します。ただし、制限を "daily" と表示し、"Files limit: 10 per review" も表示します。サーバーはどちらも適用しません。制限は1時間単位で、トライアルのレビューにはファイル数の制限はありません。トライアルの上限に達すると、`kodus review` は "Daily limit reached" という通知を表示し、`--fail-on` の指定にかかわらず終了コード 0 で終了します。
+
+    サインイン済みのチームは、1時間あたり1,000リクエストに制限されます。レビュー、ビジネス検証のチェック、Kodus Trace のセッションイベントがカウントされます。上限に達すると、CLI は "Rate limit exceeded. Please try again later." と表示します。
+  </Accordion>
+
+  <Accordion title="ログインページが開かない、またはログインがタイムアウトする">
+    - ブラウザが開かない場合、CLI は URL を出力します。それをブラウザに貼り付けてください。
+    - 他の人と共有していない SSH セッションやブラウザーのないマシンでは、[デバイスコードでのサインイン手順](/ja/how_to_use/cli/getting_started)に従ってください。CI では `KODUS_TEAM_KEY` をシークレットとして設定します。
+    - そのブラウザで Kodus にサインインしていない場合、ページはサインインページに移動し、サインイン後は **Authorize CLI** ではなくダッシュボードに移動します。もう一度 URL を開いてください。CLI は待機し続けます。
+    - ログインは最大10分間待機します。"Authorization timed out"、"expired"、"denied" と表示された場合は、もう一度 `kodus auth login` を実行する必要があります。
+    - コードによるフローを強制するには、`kodus auth login --device-code` を実行します。
+  </Accordion>
+
+  <Accordion title="Hunk ビューアーが開かない">
+    `kodus review` が Hunk ビューアーを開くのは、macOS と Linux のインタラクティブなターミナルで、デフォルトのターミナル出力の場合のみです。`--no-hunk`、`--interactive`、`--agent`、`--output`、ターミナル以外の `--format`、ターミナルではない出力、または Windows では、代わりにインタラクティブなリストが表示されます。ビューアーが開くはずの状況でスキップされた場合（Windows、`--commit` と `--branch` の併用、ファイルと行を持つ指摘がない場合）、CLI は理由を示す1行のメモを出力します。`kodus diff` は Windows では利用できません。
+  </Accordion>
+
+  <Accordion title="エージェントにスキルがインストールされない">
+    [AIエージェント](/ja/how_to_use/cli/ai_agents#対応エージェント) に記載されているエージェントの設定フォルダが1つも見つからない場合、`kodus skills install` は "No compatible local agent directories were detected" と報告します。エージェントを一度実行してフォルダを作成させてから、もう一度コマンドを実行してください。
   </Accordion>
 
   <Accordion title="API が無効なレスポンスを返した（JSON が期待されたが HTML が返された）">
-    `KODUS_API_URL` が API の代わりにリバースプロキシまたは Cloudflare Access ページに到達しています。確認事項:
+    `KODUS_API_URL` が、API ではなくリバースプロキシまたは Cloudflare Access のページに到達しています。次を確認してください。
 
-    - URL パス（余計な `/api`、`/v1` など）。
-    - 該当する場合、Cloudflare Access の資格情報（`CF_ACCESS_CLIENT_ID`、`CF_ACCESS_CLIENT_SECRET`）。
-    - プロキシが `Authorization` と `CF-Access-*` ヘッダーをそのまま転送していること。
+    - URL のパス（余計な `/api`、`/v1` などがないこと）。
+    - 該当する場合は、Cloudflare Access の認証情報（`CF_ACCESS_CLIENT_ID`、`CF_ACCESS_CLIENT_SECRET`）。
+    - プロキシが `Authorization`、`X-Team-Key`、`CF-Access-*` ヘッダーをそのまま転送していること。
   </Accordion>
 
   <Accordion title="API URL に HTTPS が必要です">
-    CLI は `localhost` と `127.0.0.1` 以外のすべてに対して非 HTTPS API URL を拒否します。セルフホスト型インスタンスに有効な TLS 証明書を用意するか、ローカル開発には `http://localhost:<port>` を使用してください。
+    CLI は、`localhost` と `127.0.0.1` 以外のすべてについて、HTTPS ではない API URL を拒否し、"Security Error: API URL must use HTTPS protocol" と出力して、`https://api.kodus.io` にフォールバックします。セルフホスト型インスタンスに有効な TLS 証明書を用意するか、ローカル開発には `http://localhost:<port>` を使用してください。
   </Accordion>
 
   <Accordion title="Pre-push フックが実行されていません">
-    - インストールを確認: `kodus hook status`。
-    - `.git/hooks/pre-push` が実行可能であることを確認。
-    - 他のフックマネージャー（Husky、Lefthook、pre-commit）が `.git/hooks/pre-push` を上書きする可能性があります。それらをチェーンするか、`kodus hook install --force` で再インストールしてください。
-    - 単一のプッシュでフックをスキップ: `KODUS_SKIP_HOOK=1 git push`。
+    - インストールを確認します: `kodus hook status`。
+    - `.git/hooks/pre-push` が実行可能であることを確認します。
+    - 他のフックマネージャー（Husky、Lefthook、pre-commit）が `.git/hooks/pre-push` を上書きする場合があります。それらを連携させるか、`kodus hook install --force` で再インストールしてください。
+    - フックがレビューするのは、チェックアウトしているブランチのみで、新しいブランチとブランチの削除はスキップされます。また、Git はブランチ名ではなく `HEAD` をフックに渡すため、`git push origin HEAD` もスキップされます。ブランチは名前を指定してプッシュしてください: `git push origin my-branch`。
+    - 1回のプッシュでフックをスキップするには: `KODUS_SKIP_HOOK=1 git push`。
+  </Accordion>
+
+  <Accordion title="pre-push フックによってプッシュがブロックされる">
+    フックは、指摘が `--fail-on` の重大度（デフォルトは `critical`）に達した場合に加えて、API に到達できないなどレビュー自体が失敗した場合にもプッシュをブロックします。Git の "failed to push some refs" の行の上にあるメッセージを読んでください。重大度は `kodus hook status` で確認でき、変更するには `kodus hook install --fail-on error` で再インストールします。
+
+    IDE や Git GUI からのプッシュなど、インタラクティブなターミナルで実行されないプッシュでは、Hunk ビューアーを開けません。その場合、フックはターミナルが必要なインタラクティブなリストを表示し、"User force closed the prompt" で終了します。そのプッシュは、`--fail-on` の重大度にかかわらず、どの指摘でもブロックされます。ターミナルからプッシュするか、`KODUS_SKIP_HOOK=1` でそのプッシュのフックをスキップしてください。
   </Accordion>
 
   <Accordion title="デバイス制限に達しました">
-    セルフホスト型インスタンスは組織ごとにデバイス制限を強制できます。Web アプリには整理できるデバイス一覧がないため、制限を増やすよう管理者に依頼してください（API の `CLI_DEVICE_LIMIT` 設定。デフォルトの `0` は無制限を意味します）。
+    セルフホスト型インスタンスでは、組織ごとにデバイス数の上限を適用できます。Web アプリには整理できるデバイス一覧がないため、上限を引き上げるよう管理者に依頼してください（API の `CLI_DEVICE_LIMIT` 設定。デフォルトの `0` は無制限を意味します）。
   </Accordion>
 </AccordionGroup>
 
@@ -97,28 +137,37 @@ kodus review --verbose    # または --verbose 付きの任意のコマンド
 
 スクリプトと CI パイプラインで使用します。
 
-| コード | 意味                                                                   |
-| ------ | ---------------------------------------------------------------------- |
-| `0`    | 成功。問題が見つからないか、`--fail-on` 以下の問題が見つかった。       |
-| `1`    | `--fail-on` 重要度以上の問題が見つかった。                             |
-| `2`    | CLI 使用エラー（無効なフラグ、引数の欠落）。                           |
-| `3`    | 認証または認可の失敗。                                                 |
-| `4`    | ネットワークまたは API エラー（タイムアウト、5xx、無効なレスポンス）。 |
-| `5`    | git リポジトリにいない、またはレビューする変更がない。                 |
+| コード | 意味                                                                                         |
+| ------ | -------------------------------------------------------------------------------------------- |
+| `0`    | 成功。問題が見つからなかった、`--fail-on` 未満の問題のみが見つかった、レビューする変更がなかった、またはトライアルの上限に達した（レビューは実行されていません）。 |
+| `1`    | `--fail-on` の重大度以上の問題、またはエラー: 不正なフラグや引数、認証、ネットワークや API の失敗、git リポジトリ外での実行。 |
 
 <Tip>
-  CI では、`--fail-on error` と `--format json` と `--output review.json` を組み合わせて、終了コードのロジックに影響を与えずにパイプラインアーティファクトとして構造化された結果を公開します。
+  CI では、`--fail-on error` を `--format json` および `--output review.json` と組み合わせると、構造化された結果をパイプラインのアーティファクトとして保持できます。
 </Tip>
+
+### エージェントモードのエラーコード
+
+`--agent` を指定すると、失敗時に `ok: false` と `error.code` を持つエンベロープが出力されます。
+
+| コード               | 意味                                                              |
+| -------------------- | ----------------------------------------------------------------- |
+| `INVALID_INPUT`      | フラグまたは引数が不正、または不足している                        |
+| `AUTH_REQUIRED`      | このコマンドに使用できる認証情報がない                            |
+| `NOT_IN_GIT_REPO`    | コマンドには git リポジトリが必要                                 |
+| `NO_CHANGES`         | 選択した範囲にレビューする対象がない。終了コードは 0              |
+| `API_REQUEST_FAILED` | API がリクエストを拒否した、または API に到達できなかった         |
+| `REVIEW_TOO_LARGE`   | 差分またはリクエストがサイズ制限を超えている                      |
+| `INTERNAL_ERROR`     | その他すべて                                                      |
 
 ## デバッグのヒント
 
-- **任意のコマンドで `--verbose`** を使用すると、解決された API URL、リクエスト ID、タイミングが表示されます。
-- **`kodus schema`** は機械可読なコマンドスキーマを出力します — エージェントがフラグが見つからないと報告するときに便利です。
-- **`--agent`** は決定論的な機械可読出力を強制します; スクリプト作成時に `--format json` と組み合わせます。
-- **`KODUS_VERBOSE=true`** はセッション内の複数のコマンドにわたって詳細モードを永続化します。
+- **任意のコマンドでの `--verbose`** は、各 API リクエストのメソッドと URL、およびエラーの詳細を出力します。出力は stderr に送られます。
+- **`kodus schema`** は機械可読なコマンドスキーマを出力します。エージェントがフラグが見つからないと報告するときに役立ちます。
+- **`--agent`** は、対応するコマンドで決定論的な JSON を出力します。`--fields` と組み合わせると、出力を小さくできます。
 
 ## ヘルプを得る
 
-- バグの報告: [github.com/kodustech/cli/issues](https://github.com/kodustech/cli/issues)
-- 機能リクエスト、設定の質問: Kodus アカウントマネージャー、または `support@kodus.io`。
-- セルフホストデプロイメントの場合は、イシューを申請するときに `kodus status --verbose` の出力を含めてください。
+- バグの報告: [github.com/kodustech/kodus-ai/issues](https://github.com/kodustech/kodus-ai/issues)
+- 機能リクエスト、設定に関する質問: Kodus のアカウントマネージャー、または `support@kodus.io`。
+- セルフホスト環境では、Issue を報告する際に `kodus status` の出力と CLI のバージョン（`kodus --version`）を含めてください。

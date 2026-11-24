@@ -60,9 +60,35 @@ import {
     USER_SERVICE_TOKEN,
 } from '@libs/identity/domain/user/contracts/user.service.contract';
 
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import {
+    IPullRequestManagerService,
+    PULL_REQUEST_MANAGER_SERVICE_TOKEN,
+} from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
+import {
+    AUTOMATION_EXECUTION_SERVICE_TOKEN,
+    IAutomationExecutionService,
+} from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
 const SKIPPED_NO_LICENSE_RATE_LIMIT_TTL_SECONDS = 24 * 60 * 60; // 24h
+
+const LICENSE_NOTICE_DATA_KEY = 'licenseNoticePostedAt';
+
+export const USER_NO_LICENSE_NOTICE =
+    '## Kodus license not found\n\n' +
+    'Kody skipped this review because the PR author has no Kodus license assigned. ' +
+    'Ask your Kodus admin to assign you a license.\n\n' +
+    '<!-- kody-codereview -->';
+
+type ValidationFailureOutcome = {
+    outcome: 'auto_assigned' | 'failed';
+    licenseNoticePostedAt?: string;
+};
 
 type NoActiveSubscriptionType =
     | 'user'
@@ -78,6 +104,7 @@ const ERROR_TO_MESSAGE_TYPE: Record<
     NoActiveSubscriptionType
 > = {
     [ValidationErrorType.INVALID_LICENSE]: 'general',
+    [ValidationErrorType.LICENSE_UNAVAILABLE]: 'license_unavailable',
     [ValidationErrorType.USER_NOT_LICENSED]: 'user',
     [ValidationErrorType.BYOK_REQUIRED]: 'byok_required',
     [ValidationErrorType.PLAN_LIMIT_EXCEEDED]: 'general',
@@ -115,6 +142,12 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         private readonly usersService: IUsersService,
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
+        @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
+        private readonly pullRequestManagerService: IPullRequestManagerService,
+        @Inject(AUTOMATION_EXECUTION_SERVICE_TOKEN)
+        private readonly automationExecutionService: IAutomationExecutionService,
     ) {
         super();
     }
@@ -323,6 +356,39 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             });
         }
 
+        // An automatic trigger on a repository whose effective setting turns
+        // automated review off must not assign a seat: ValidateConfigStage
+        // would skip the review anyway. Explicit commands keep auto-assign.
+        if (
+            validationResult.errorType ===
+                ValidationErrorType.USER_NOT_LICENSED &&
+            !this.isCommandOrigin(context) &&
+            !(await this.isEffectiveAutomatedReviewActive(context))
+        ) {
+            this.logger.log({
+                message:
+                    'Automated review is off for this repository, skipping without license auto-assign',
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: context.repository?.id,
+                    prNumber: pullRequest?.number,
+                    userGitId,
+                    origin: context.origin,
+                },
+            });
+
+            return this.updateContext(context, (draft) => {
+                applyShowStatusFeedbackMetadata(draft);
+                draft.statusInfo = {
+                    status: AutomationStatus.SKIPPED,
+                    message: StageMessageHelper.skippedWithReason(
+                        PipelineReasons.CONFIG.DISABLED,
+                    ),
+                };
+            });
+        }
+
         // If validation failed due to USER_NOT_LICENSED, try auto-assign FIRST
         // (before checking autoReviewEnabled, because auto-assign should work regardless)
         if (
@@ -334,7 +400,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 showStatusFeedback,
             );
 
-            if (failureHandled === 'auto_assigned') {
+            if (failureHandled.outcome === 'auto_assigned') {
                 // Auto-assign succeeded, continue with review
                 return this.updateContext(context, (draft) => {
                     applyShowStatusFeedbackMetadata(draft);
@@ -355,6 +421,10 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                         ),
                     ),
                 };
+                if (failureHandled.licenseNoticePostedAt) {
+                    draft.licenseNoticePostedAt =
+                        failureHandled.licenseNoticePostedAt;
+                }
                 // Notification already posted by handleValidationFailure above
                 if (!draft.pipelineMetadata) {
                     draft.pipelineMetadata = {};
@@ -438,6 +508,9 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 return PipelineReasons.PREREQUISITES.PLAN_LIMIT;
             case ValidationErrorType.CREDITS_EXHAUSTED:
                 return PipelineReasons.PREREQUISITES.CREDITS_EXHAUSTED;
+            case ValidationErrorType.LICENSE_UNAVAILABLE:
+                // The license read failed; the org's entitlement is unknown.
+                return PipelineReasons.PREREQUISITES.LICENSE_UNAVAILABLE;
             case ValidationErrorType.USER_NOT_LICENSED:
                 return PipelineReasons.PREREQUISITES.USER_NO_LICENSE;
             case ValidationErrorType.INVALID_LICENSE:
@@ -450,7 +523,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         context: CodeReviewPipelineContext,
         validationResult: any,
         showStatusFeedback: boolean,
-    ): Promise<'auto_assigned' | 'failed'> {
+    ): Promise<ValidationFailureOutcome> {
         const {
             organizationAndTeamData,
             userGitId,
@@ -463,19 +536,21 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         if (
             validationResult.errorType === ValidationErrorType.USER_NOT_LICENSED
         ) {
-            const userPrs = await this.pullRequestsService.find({
-                'organizationId': organizationAndTeamData.organizationId,
-                'user.id': isNaN(Number(userGitId))
-                    ? userGitId
-                    : Number(userGitId),
-            } as any);
+            // Auto-assign only tells a first PR (a freebie) from a second, so
+            // counting past 2 buys nothing. `user.id` is a string in the
+            // schema, which is how a numeric provider id was matched before too.
+            const prCount = await this.pullRequestsService.countByAuthor(
+                organizationAndTeamData.organizationId,
+                String(userGitId),
+                2,
+            );
 
             const autoAssignResult =
                 await this.autoAssignLicenseUseCase.execute({
                     organizationAndTeamData,
                     userGitId: userGitId,
                     prNumber: pullRequest?.number,
-                    prCount: userPrs?.length ?? 0,
+                    prCount,
                     repositoryName: repository?.name,
                     provider: platformType,
                 });
@@ -490,7 +565,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                         reason: autoAssignResult.reason,
                     },
                 });
-                return 'auto_assigned';
+                return { outcome: 'auto_assigned' };
             }
 
             this.logger.warn({
@@ -517,6 +592,12 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                     platformType,
                     triggerCommentId,
                 });
+
+                return {
+                    outcome: 'failed',
+                    licenseNoticePostedAt:
+                        await this.postLicenseNoticeOnce(context),
+                };
             }
         } else {
             let noActiveSubscriptionType: NoActiveSubscriptionType =
@@ -561,7 +642,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             });
         }
 
-        return 'failed';
+        return { outcome: 'failed' };
     }
 
     /**
@@ -884,38 +965,6 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         triggerCommentId?: string | number;
     }) {
         try {
-            if (
-                params.platformType === PlatformType.AZURE_REPOS ||
-                params.platformType === PlatformType.BITBUCKET
-            ) {
-                const message =
-                    '[👎](https://docs.kodus.io/how_to_use/en/code_review/flow#what-each-emoji-means)';
-                if (
-                    params.triggerCommentId &&
-                    params.platformType === PlatformType.BITBUCKET
-                ) {
-                    await this.codeManagementService.createResponseToComment({
-                        organizationAndTeamData: params.organizationAndTeamData,
-                        repository: params.repository,
-                        prNumber: params.prNumber,
-                        inReplyToId:
-                            typeof params.triggerCommentId === 'string'
-                                ? parseInt(params.triggerCommentId, 10) ||
-                                  params.triggerCommentId
-                                : params.triggerCommentId,
-                        body: message,
-                    });
-                } else {
-                    await this.codeManagementService.createIssueComment({
-                        organizationAndTeamData: params.organizationAndTeamData,
-                        repository: params.repository,
-                        prNumber: params.prNumber,
-                        body: message,
-                    });
-                }
-                return;
-            }
-
             const reaction = NO_LICENSE_REACTION_MAP[params.platformType];
             if (!reaction) {
                 return;
@@ -952,6 +1001,96 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         }
     }
 
+    /**
+     * Posts the no-license notice once per PR: a later push or command on
+     * the same PR finds the marker an earlier run persisted and stays quiet.
+     * Returns when it was posted, for the run to persist; undefined when it
+     * was not.
+     */
+    private async postLicenseNoticeOnce(
+        context: CodeReviewPipelineContext,
+    ): Promise<string | undefined> {
+        const {
+            organizationAndTeamData,
+            repository,
+            pullRequest,
+            platformType,
+            triggerCommentId,
+            teamAutomationId,
+        } = context;
+
+        try {
+            if (teamAutomationId && repository?.id && pullRequest?.number) {
+                const alreadyPosted =
+                    await this.automationExecutionService.hasPullRequestExecutionWithDataKey(
+                        {
+                            teamAutomationId,
+                            repositoryId: repository.id,
+                            pullRequestNumber: pullRequest.number,
+                            key: LICENSE_NOTICE_DATA_KEY,
+                        },
+                    );
+                if (alreadyPosted) {
+                    return undefined;
+                }
+            }
+        } catch (error) {
+            // A duplicate notice is better than none at all.
+            this.logger.warn({
+                message:
+                    'Could not check for an earlier no-license notice, posting it',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                    prNumber: pullRequest?.number,
+                },
+            });
+        }
+
+        try {
+            const target = {
+                organizationAndTeamData,
+                repository,
+                prNumber: pullRequest.number,
+            };
+
+            // Bitbucket answers a command in its thread; it has no reaction
+            // to put on the command comment.
+            const posted =
+                triggerCommentId && platformType === PlatformType.BITBUCKET
+                    ? await this.codeManagementService.createResponseToComment({
+                          ...target,
+                          inReplyToId:
+                              typeof triggerCommentId === 'string'
+                                  ? parseInt(triggerCommentId, 10) ||
+                                    triggerCommentId
+                                  : triggerCommentId,
+                          body: USER_NO_LICENSE_NOTICE,
+                      })
+                    : await this.codeManagementService.createIssueComment({
+                          ...target,
+                          body: USER_NO_LICENSE_NOTICE,
+                      });
+
+            return posted ? new Date().toISOString() : undefined;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error posting the no-license notice',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                    prNumber: pullRequest?.number,
+                    platformType,
+                },
+            });
+            return undefined;
+        }
+    }
+
     private async createNoActiveSubscriptionComment(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string };
@@ -964,9 +1103,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
 
         let message = await this.noActiveSubscriptionGeneralMessage();
 
-        if (params.noActiveSubscriptionType === 'user') {
-            message = await this.noActiveSubscriptionForUser();
-        } else if (params.noActiveSubscriptionType === 'byok_required') {
+        if (params.noActiveSubscriptionType === 'byok_required') {
             message = await this.noBYOKConfiguredMessage();
         } else if (
             params.noActiveSubscriptionType === 'trial_credits_exhausted'
@@ -1019,16 +1156,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
     }
 
     private async creditsExhaustedMessage(): Promise<string> {
-        return (
-            '## Your Kodus credits are used up 💳\n\n' +
-            'This repository reviews with a model routed by Kodus, and your ' +
-            "organization's prepaid credit balance is at zero.\n\n" +
-            '**[Top up credits](https://app.kodus.io/byok#kodus)** ' +
-            'and re-run the review (or push a new commit) — or ' +
-            '[connect your own AI key](https://app.kodus.io/byok) to review ' +
-            'on your provider account instead.\n\n' +
-            '<!-- kody-codereview -->'
-        );
+        return KODUS_CREDITS_EXHAUSTED_COMMENT;
     }
 
     private async licenseUnavailableMessage(): Promise<string> {
@@ -1042,14 +1170,6 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         );
     }
 
-    private async noActiveSubscriptionForUser(): Promise<string> {
-        return (
-            '## User License not found! 😢\n\n' +
-            'To perform the review, ask the admin to add a subscription for your user in [subscription management](https://app.kodus.io/settings/subscription).\n\n' +
-            '<!-- kody-codereview -->'
-        );
-    }
-
     private async noBYOKConfiguredMessage(): Promise<string> {
         return (
             '## BYOK Configuration Required! 🔑\n\n' +
@@ -1057,6 +1177,53 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             'Please configure your API keys in [AI Providers](https://app.kodus.io/byok).\n\n' +
             '<!-- kody-codereview -->'
         );
+    }
+
+    private isCommandOrigin(context: CodeReviewPipelineContext): boolean {
+        return Boolean(context.origin?.startsWith('command'));
+    }
+
+    /**
+     * The value ValidateConfigStage will act on: global, repository and
+     * directory settings merged with the repository's kodus-config.yml, the
+     * directory picked from the PR's files. Falls back to the repository and
+     * global settings when the PR or the config cannot be read.
+     */
+    private async isEffectiveAutomatedReviewActive(
+        context: CodeReviewPipelineContext,
+    ): Promise<boolean> {
+        try {
+            const files =
+                await this.pullRequestManagerService.getChangedFilesMetadata(
+                    context.organizationAndTeamData,
+                    context.repository,
+                    context.pullRequest,
+                );
+
+            const config = await this.codeBaseConfigService.getConfig(
+                context.organizationAndTeamData,
+                context.repository,
+                files ?? [],
+            );
+
+            if (typeof config?.automatedReviewActive === 'boolean') {
+                return config.automatedReviewActive;
+            }
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve the effective automatedReviewActive, using repository and global settings',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repositoryId: context.repository?.id,
+                    prNumber: context.pullRequest?.number,
+                },
+            });
+        }
+
+        return this.isAutomatedReviewActive(context);
     }
 
     private async isAutomatedReviewActive(

@@ -37,10 +37,12 @@ New endpoints default to authenticated + authorized, never public.
 
 ## Step 2 — Create audit trail rules
 
+Create each rule in **Code review → Kody Rules**: on the **Review Rules** tab, click **New rule** and fill the fields as shown below.
+
 ### Audit logging rule
 
 ```
-Name: Data mutations must have audit logging
+Rule name: Data mutations must have audit logging
 Execution mode: Per file
 Path: src/services/**/*.ts, src/repositories/**/*.ts
 Severity: Critical
@@ -56,7 +58,7 @@ Instructions:
 ### Data retention rule
 
 ```
-Name: Soft delete required for user data
+Rule name: Soft delete required for user data
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: Critical
@@ -72,7 +74,7 @@ Instructions:
 ### PII exposure prevention
 
 ```
-Name: No PII in logs or error responses
+Rule name: No PII in logs or error responses
 Execution mode: Per file
 Path: src/**/*.ts
 Severity: Critical
@@ -86,7 +88,7 @@ Instructions:
 ### Encryption requirement
 
 ```
-Name: PII fields must use encryption helpers
+Rule name: PII fields must use encryption helpers
 Execution mode: Per file
 Path: src/entities/**/*.ts, src/models/**/*.ts
 Severity: Critical
@@ -100,7 +102,7 @@ Instructions:
 ## Step 4 — Create access control rules
 
 ```
-Name: New endpoints must have auth guards
+Rule name: New endpoints must have auth guards
 Execution mode: Per PR
 Severity: Critical
 Instructions:
@@ -117,7 +119,7 @@ Instructions:
 ## Step 5 — Add a PR-level compliance check
 
 ```
-Name: Compliance impact assessment
+Rule name: Compliance impact assessment
 Execution mode: Per PR
 Severity: High
 Instructions:
@@ -132,9 +134,11 @@ Instructions:
 
 ## Step 6 — Configure for enforcement
 
-1. In **Code review → General**, turn on **Enable changing status of Review to 'Request Changes'** so compliance violations block merge
+1. In **Code review → General → Review feedback**, turn on **Request changes on critical issues** (not available when every connected provider is GitLab). Kody sets the review to Request Changes when it posts a Critical inline comment, and takes the request back once those findings are resolved
 2. Set all compliance rules to **Critical** severity
 3. Use rule inheritance to apply compliance rules across all repos in the organization — create them with **Global** selected in the scope picker
+
+Request changes follows inline comments, so it is set by **Per file** rules. A **Per PR** rule posts one pull request comment and does not set it.
 
 ## Checklist
 
@@ -143,7 +147,7 @@ Instructions:
 - [ ] PII exposure rule covers logs and error responses
 - [ ] Encryption rule covers entity/model definitions
 - [ ] Access control rule covers all new endpoints
-- [ ] Request Changes enabled for critical findings
+- [ ] **Request changes on critical issues** is on
 - [ ] Rules are set at the **Global** scope (organization-wide) for consistency
 - [ ] A test PR verified the rules fire correctly
 

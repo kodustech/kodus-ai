@@ -1,22 +1,33 @@
 ---
 title: "Global Rule Sources"
-description: "Turn a connected repository into a source of organization-wide Kody Rules, so a single set of architecture and coding standards applies across every repository during code review."
+description: "Turn a connected repository into a source of organization-wide Kody Rules, so one set of standards applies to every repository during code review."
 ---
 
-Global Rule Sources let you point Kodus at one or more connected repositories and import their Kody Rule files as **global** Kody Rules. Unlike [Repository Rules](/en/how_to_use/code_review/configs/repository_rules) — which apply only to the repo they live in — rules imported from a global source apply to **every** repository during code review.
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
 
-Use this when a team keeps its architecture and coding standards in a dedicated "standards" repository and wants those standards enforced everywhere, without copying rule files into each project.
+<div className="kodus-feature-badges">
+  <FeatureBadge id="cloud" detail="Paid plans can import global rules without a limit. The trial can import up to five rules across all sources.">
+    <Badge icon="cloud" stroke>Teams &amp; Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="A valid license is required to import global rules.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+</div>
+
+Global Rule Sources let you point Kodus at one or more connected repositories and import their rule files as **global** Kody Rules. Unlike [Repository Rules](/en/how_to_use/code_review/configs/repository_rules), which apply only to the repository they live in, rules imported from a global source apply to **every** repository during code review.
+
+Use this when a team keeps its architecture and coding standards in a dedicated "standards" repository and wants them enforced everywhere, without copying rule files into each project.
 
 ## How it works
 
 - You select connected repositories to act as **sources**.
-- Kodus scans each source repo for Kody Rule files, the same locations and template as [Repository Rules](/en/how_to_use/code_review/configs/repository_rules) (`.kody/rules/**`, `rules/**/*.md`, …).
-- Each discovered rule file is imported into the **global scope** and tagged with the source repository it came from.
-- Instructions written for coding agents (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/**`) are not imported. Global rules imported from them before this change are kept but no longer update; see [Coding-Agent Instructions](/en/how_to_use/code_review/configs/rules_file_detection).
-- During code review of any repository, these global rules are applied alongside that repo's own rules (subject to [inheritance](/en/how_to_use/code_review/configs/rules_inheritance)).
+- Kodus scans each source repository's default branch for rule files, in the same locations and with the same template as [Repository Rules](/en/how_to_use/code_review/configs/repository_rules) (`.kody/rules/`, `rules/**/*.md`, and so on).
+- Each rule file becomes a global rule, shown on the global **Kody Rules** page with the file it came from.
+- During code review of any repository, these global rules apply alongside that repository's own rules, subject to [inheritance](/en/how_to_use/code_review/configs/rules_inheritance).
+- Instructions written for coding agents (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/**`) are not imported. Global rules imported from them in the past are kept but frozen; see [Coding-Agent Instructions](/en/how_to_use/code_review/configs/rules_file_detection).
 
 <Info>
-Only repositories already connected on the **Repositories** page can be used as global sources. This keeps a single source of truth for connected repos and ensures imported rules stay up to date through the Pull Request trigger described below.
+Only repositories already connected on the **Repositories** page can be sources, so imported rules stay up to date through the pull request trigger described below.
 </Info>
 
 ## Setup
@@ -26,47 +37,32 @@ Only repositories already connected on the **Repositories** page can be used as 
 3. Click the repository picker and select one or more connected repositories.
 4. Click **Import selected**.
 
-Importing runs in the background. When it finishes, the imported rules appear in your global Kody Rules list, each labeled with its source repository.
-
-<Tip>
-You can select as many source repositories as you like. Kodus imports the rule files it finds in each of them.
-</Tip>
+Importing runs in the background. When it finishes, the imported rules appear in your global Kody Rules list. A repository you picked but have not imported yet shows **Not imported yet**.
 
 ## Keeping rules up to date
 
-Imported rules are refreshed automatically and on demand:
-
-- **On merge** — when a Pull Request is merged in a source repository, its rule files are re-scanned and the global rules are updated. Unchanged files are skipped, so this is cheap.
-- **Resync now** — use the **Resync now** button to re-scan every configured source on demand. This also covers changes pushed directly to a source repo's default branch.
-
-<Note>
-Changes pushed **directly** to a source repository's default branch (without a Pull Request) are not detected automatically. Use **Resync now** after a direct push to pick them up.
-</Note>
+- **On merge:** when a pull request is merged in a source repository, its rule files are re-scanned and the global rules are updated. Unchanged files are skipped.
+- **Resync now:** re-scans every source on demand. Use it after a push straight to a source repository's default branch, which is not detected automatically.
 
 ## Removing a source
 
-Removing a repository from the sources list **deletes the global rules that were imported from it** — they will no longer apply during code review. You'll be asked to confirm before the removal takes effect. Rules imported from your other sources, and any rules you authored by hand, are never affected.
+Removing a repository from the list **deletes the global rules imported from it**, so they stop applying during code review. You are asked to confirm first. Rules from your other sources, and rules you wrote by hand, are not affected.
 
 ## Source repositories are not reviewed
 
-A repository used purely as a source of global rules is treated as a configuration repository, not a codebase. Kodus **skips code review** on Pull Requests opened in a global rule source, the same way it does for a [centralized configuration](/en/how_to_use/code_review/configs/centralized_config) repository.
+A repository used as a source of global rules is treated as a configuration repository, not a codebase. Kodus **skips code review** on pull requests opened in it, the same way it does for a [centralized configuration](/en/how_to_use/code_review/configs/centralized_config) repository.
 
 ## Plan availability
 
-Access to Global Rule Sources depends on your plan:
-
 | Plan | Access |
 |------|--------|
-| **Free** | Not available. |
-| **Trial** | Import up to **5 global rules total**, combined across all source repositories. Only the first 5 rules found are imported; once the limit is reached, no further rules are imported until you remove some or upgrade. |
+| **Free**, self-hosted without a valid license key, or a canceled or expired plan | Not available. |
+| **Trial** | Up to **5 global rules in total**, across all source repositories. Only the first 5 rules found are imported; once the limit is reached, nothing more is imported until you remove some or upgrade. |
 | **Paid** (cloud) and **licensed self-hosted** | Unlimited. |
 
-<Info>
-On the Trial plan, when you import, Kodus imports the **first 5 rules it finds** across the repositories you selected (in repository file order). A counter on the screen shows how many of your 5 rules are already used, and a confirmation dialog spells out how many more will be added before you import.
-</Info>
+On the Trial plan, a counter shows how many of the 5 rules are used, and a confirmation dialog says how many more will be added before you import.
 
 ## Related
 
-- [Repository Rules](/en/how_to_use/code_review/configs/repository_rules) — version-controlled rules scoped to a single repository.
-- [Repository Rules](/en/how_to_use/code_review/configs/repository_rules) — the rule file locations and template Kodus imports.
-- [Rules Inheritance](/en/how_to_use/code_review/configs/rules_inheritance) — how global, repository, and directory rules combine during review.
+- [Repository Rules](/en/how_to_use/code_review/configs/repository_rules): the rule file locations and template Kodus imports.
+- [Rule Inheritance](/en/how_to_use/code_review/configs/rules_inheritance): how global, repository and directory rules combine during review.

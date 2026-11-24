@@ -28,6 +28,30 @@ import { RABBITMQ_TOPOLOGY_CONFIG } from './config/rabbitmq-topology.config';
 
 export interface RabbitMQWrapperOptions {
     enableConsumers: boolean;
+    /** Only the deep-scan handler may register in this process. */
+    securityScanOnly?: boolean;
+}
+
+/**
+ * Which @RabbitSubscribe handlers golevelup registers. `enableConsumers`
+ * only gates handlers declared on controllers: handlers on providers
+ * register whenever `registerHandlers` is on (golevelup's default), which
+ * is how the API and webhooks consume feedback and notifications. A
+ * deep-scan slice child (`securityScanOnly` without consumers) must
+ * register none: with the scan consumer it took other slices from the
+ * queue and ran them nested inside its own.
+ */
+export function rabbitMQHandlerDiscovery(options: RabbitMQWrapperOptions) {
+    return {
+        enableControllerDiscovery: options.enableConsumers,
+        ...(options.securityScanOnly
+            ? {
+                  registerHandlers: options.enableConsumers,
+                  defaultHandler: 'disabled',
+                  handlers: { 'security-scan': {} },
+              }
+            : {}),
+    };
 }
 
 @Global()
@@ -116,7 +140,7 @@ export class RabbitMQWrapperModule {
                         heartbeatIntervalInSeconds: 30,
                         reconnectTimeInSeconds: 10,
                     },
-                    enableControllerDiscovery: options.enableConsumers,
+                    ...rabbitMQHandlerDiscovery(options),
                     prefetchCount:
                         configService.get<number>(
                             'workflowQueue.WORKFLOW_QUEUE_PUBLISHER_PREFETCH',
@@ -167,6 +191,13 @@ export class RabbitMQWrapperModule {
                         },
                         'channel-ast-graph-incremental': {
                             prefetchCount: 5,
+                            default: false,
+                        },
+                        'channel-security-scan': {
+                            prefetchCount:
+                                configService.get<number>(
+                                    'workflowQueue.WORKFLOW_QUEUE_SECURITY_SCAN_PREFETCH',
+                                ) ?? 1,
                             default: false,
                         },
                     },

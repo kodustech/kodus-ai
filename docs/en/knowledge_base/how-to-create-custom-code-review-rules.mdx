@@ -1,54 +1,64 @@
 ---
 title: "How to create custom code review rules"
-description: "Define rules tailored to your team's architecture, patterns, and coding preferences that are enforced automatically on every PR."
+description: "Define rules tailored to your team's architecture, patterns, and coding preferences that are checked on every PR."
 ---
 
-Every team has conventions that generic linters don't cover — architecture boundaries, naming patterns, testing requirements, or business-specific constraints. Custom code review rules let you encode these into automated checks.
+Every team has conventions that generic linters don't cover: architecture boundaries, naming patterns, testing requirements, or business-specific constraints. Custom code review rules let you encode them as checks Kody runs on every pull request.
 
 ## Creating a rule in Kodus
 
 1. Pick **Global** (or a repository / directory) in the scope picker at the top of the **Code review** group in the sidebar, then open **Kody Rules**
-2. Click **New rule**
+2. On the **Review Rules** tab, click **New rule**
 3. Configure:
-   - **Rule name** — what the rule checks (e.g., "Service files must have tests")
-   - **Execution mode** — **Per file** (analyzes each changed file) or **Per PR** (analyzes the entire PR)
-   - **Path** — glob pattern to target specific files (e.g., `src/services/**/*.ts`); not used by Per PR rules
-   - **Severity** — Critical, High, Medium, or Low
-   - **Instructions** — detailed description of what to check
+   - **Rule name**: what the rule checks (e.g., "Service files must have tests")
+   - **Execution mode**: **Per file** (checks each changed file, comments inline) or **Per PR** (checks the whole PR, posts one PR comment)
+   - **Path**: glob patterns that limit a Per file rule to specific files (e.g., `src/services/**/*.ts`); not used by Per PR rules
+   - **Instructions**: what to check and how to decide
+   - **Severity**: Critical, High (the default), Medium, or Low
 
-## What makes rules powerful
+Under **Advanced settings** you can add a **Bad example** and a **Good example**, which help Kody tell a violation from compliant code.
 
-Rules can access rich context:
+## What helps a rule work
 
-- **Variables** like `fileDiff`, `pr_title`, `pr_description`, `pr_files_diff`
-- **File references** with `@file:path/to/file.ts` to compare against patterns
-- **MCP functions** to fetch data from connected tools (Jira, repository structure, etc.)
+- **Be specific.** Name the pattern, the path and what counts as a violation.
+- **Point to your standards.** Mention a file by path, such as `@file:docs/architecture.md`, and Kody reads it when it judges the rule. The file is read from the pull request's target branch.
+- **Pick the right mode.** Use Per file for what you can see in one file, and Per PR for requirements about the pull request as a whole: its description, its size, or whether related files change together.
+
+### Example: Enforcing a naming convention
+
+You can create a file-level rule like:
+
+- **Rule name**: "React components must use PascalCase file names"
+- **Path**: `src/components/**/*.tsx`
+- **Severity**: High
+- **Instructions**: "Flag any component file that doesn't follow PascalCase naming."
 
 ### Example: Architecture boundary rule
 
 ```
 Name: Domain layer must not depend on infrastructure
 Execution mode: Per PR
-Instructions: Check pr_files_diff for any import in src/domain/
-that references src/infrastructure/. Reference
-@file:docs/architecture.md for allowed dependencies.
+Instructions: Flag any import added in src/domain/ that
+points to src/infrastructure/. The allowed dependencies are
+described in @file:docs/architecture.md.
 ```
 
 ### Example: Test coverage rule
 
 ```
-Name: Every service must have a test file
+Name: Every service change needs a test change
 Execution mode: Per PR
-Instructions: For each file modified in src/services/,
-verify a corresponding test file exists in test/services/.
-Use MCP to check the repository file tree.
+Instructions: For each file modified in src/services/, check that the
+PR also changes a matching test file under test/services/.
 ```
 
 ## More ways to add rules
 
-- **Import from Rules Library** — click **Discovery** on the Kody Rules page to browse proven rules by language and category
-- **Sync from IDE tools** — auto-import rules from Cursor, Copilot, Claude
-- **Repository rules** — define rules in markdown files in your repo
-- **Auto-generation** — Kody suggests rules based on your review history
+- **Rules Library**: click **Discovery** on the Kody Rules page to add ready-made rules and packs
+- **Repository rules**: keep one rule per markdown file in your repository, in `.kody/rules`
+- **Auto-generation**: Kody drafts rules from your reviewers' past comments
+- **In a review thread**: ask Kody to create or change a rule, for example `@kody update this rule to ignore test files`
+
+To have Kody check pull requests against `CLAUDE.md`, `AGENTS.md` or Cursor and Copilot instructions, see [Coding-Agent Instructions](/en/how_to_use/code_review/configs/rules_file_detection).
 
 For the full reference, see [Kody Rules](/en/how_to_use/code_review/configs/kody_rules).

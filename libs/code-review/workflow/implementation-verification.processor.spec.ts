@@ -24,7 +24,7 @@ describe('ImplementationVerificationProcessor', () => {
     };
     let automationExecutionService: { findLatestExecutionByFilters: jest.Mock };
     let suggestionService: {
-        validateImplementedSuggestions: jest.Mock;
+        checkImplementedSuggestions: jest.Mock;
         resolveImplementedSuggestionsOnPlatform: jest.Mock;
     };
     let eventEmitter: { emit: jest.Mock };
@@ -52,6 +52,7 @@ describe('ImplementationVerificationProcessor', () => {
         };
         pullRequestsService = {
             findOne: jest.fn().mockResolvedValue({
+                uuid: 'pr-doc-1',
                 files: [{ suggestions: [sentSuggestion('s-1')] }],
             }),
         };
@@ -67,11 +68,19 @@ describe('ImplementationVerificationProcessor', () => {
         };
         automationExecutionService = {
             findLatestExecutionByFilters: jest.fn().mockResolvedValue({
-                dataExecution: { lastAnalyzedCommit: { sha: 'reviewed-sha' } },
+                dataExecution: {
+                    lastAnalyzedCommit: { sha: 'reviewed-sha' },
+                    reviewedBaseBranch: 'develop',
+                },
             }),
         };
         suggestionService = {
-            validateImplementedSuggestions: jest.fn().mockResolvedValue([]),
+            checkImplementedSuggestions: jest.fn().mockResolvedValue({
+                checked: 1,
+                decided: 0,
+                persisted: [],
+                unmeasured: [],
+            }),
             resolveImplementedSuggestionsOnPlatform: jest
                 .fn()
                 .mockResolvedValue(undefined),
@@ -131,24 +140,109 @@ describe('ImplementationVerificationProcessor', () => {
             expect.anything(),
             [],
             { sha: 'reviewed-sha' },
+            'develop',
+            {
+                onDiffSource: expect.any(Function),
+                onRemovedFiles: expect.any(Function),
+            },
         );
     });
 
-    it('validates against the new patch, resolves on the platform, completes and broadcasts', async () => {
-        suggestionService.validateImplementedSuggestions.mockResolvedValue([
-            { id: 's-1', implementationStatus: ImplementationStatus.IMPLEMENTED },
-        ]);
+    it("reads the job organization's PR, and only its suggestions", async () => {
+        await processor.process('job-1');
+
+        const [filter, projection] = pullRequestsService.findOne.mock.calls[0];
+        expect(filter).toMatchObject({
+            'number': 42,
+            'repository.id': 'repo-1',
+            'organizationId': 'org-1',
+        });
+        expect(projection).toEqual({ 'files.suggestions': 1 });
+    });
+
+    it('tells the check which PR document holds the suggestions', async () => {
+        await processor.process('job-1');
+
+        expect(
+            suggestionService.checkImplementedSuggestions.mock.calls[0][0]
+                .pullRequestId,
+        ).toBe('pr-doc-1');
+    });
+
+    it('tells the check which files the push deleted', async () => {
+        pullRequestManagerService.getChangedFiles.mockImplementation(
+            async (...args: any[]) => {
+                args[6].onRemovedFiles(['app/b.rb']);
+                return [{ filename: 'app/a.rb', patch: '@@ -1 +1 @@' }];
+            },
+        );
 
         await processor.process('job-1');
 
         expect(
-            suggestionService.validateImplementedSuggestions,
-        ).toHaveBeenCalledWith(
-            job.payload.organizationAndTeamData,
-            'File: app/a.rb\n@@ -1 +1 @@',
-            [expect.objectContaining({ id: 's-1' })],
-            42,
+            suggestionService.checkImplementedSuggestions.mock.calls[0][0]
+                .removedFiles,
+        ).toEqual(['app/b.rb']);
+    });
+
+    it('tells the check which diff it got, and records what it decided in the job', async () => {
+        pullRequestManagerService.getChangedFiles.mockImplementation(
+            async (...args: any[]) => {
+                args[6].onDiffSource('full');
+                return [{ filename: 'app/a.rb', patch: '@@ -1 +1 @@' }];
+            },
         );
+        suggestionService.checkImplementedSuggestions.mockResolvedValue({
+            checked: 3,
+            decided: 1,
+            persisted: [],
+            unmeasured: [
+                { id: 's-2', reason: 'diff_unavailable' },
+                { id: 's-3', reason: 'diff_unavailable' },
+            ],
+        });
+
+        await processor.process('job-1');
+
+        expect(
+            suggestionService.checkImplementedSuggestions.mock.calls[0][0]
+                .diffSource,
+        ).toBe('full');
+        completedWith({
+            checkedCount: 3,
+            decided: 1,
+            raised: 0,
+            unmeasured: { diff_unavailable: 2 },
+            diffSource: 'full',
+        });
+    });
+
+    it('validates against the new patch, resolves on the platform, completes and broadcasts', async () => {
+        suggestionService.checkImplementedSuggestions.mockResolvedValue({
+            checked: 1,
+            decided: 1,
+            persisted: [
+                {
+                    id: 's-1',
+                    implementationStatus: ImplementationStatus.IMPLEMENTED,
+                },
+            ],
+            unmeasured: [],
+        });
+
+        await processor.process('job-1');
+
+        expect(
+            suggestionService.checkImplementedSuggestions,
+        ).toHaveBeenCalledWith({
+            organizationAndTeamData: job.payload.organizationAndTeamData,
+            prNumber: 42,
+            changedFiles: [{ filename: 'app/a.rb', patch: '@@ -1 +1 @@' }],
+            savedSuggestions: [expect.objectContaining({ id: 's-1' })],
+            diffSource: undefined,
+            removedFiles: [],
+            pullRequestId: 'pr-doc-1',
+        });
         expect(
             suggestionService.resolveImplementedSuggestionsOnPlatform,
         ).toHaveBeenCalledWith({
@@ -164,7 +258,13 @@ describe('ImplementationVerificationProcessor', () => {
             { name: 'repo-name', id: 'repo-1' },
             42,
         );
-        completedWith({ checkedCount: 1 });
+        completedWith({
+            checkedCount: 1,
+            decided: 1,
+            raised: 1,
+            unmeasured: {},
+            diffSource: undefined,
+        });
         // Tells the dashboard's "Needs attention" card to refetch.
         expect(eventEmitter.emit).toHaveBeenCalledWith(
             'pr-execution.updated',
@@ -184,42 +284,18 @@ describe('ImplementationVerificationProcessor', () => {
         await processor.process('job-1');
 
         expect(
-            suggestionService.validateImplementedSuggestions.mock.calls[0][2],
+            suggestionService.checkImplementedSuggestions.mock.calls[0][0]
+                .savedSuggestions,
         ).toEqual([expect.objectContaining({ id: 'partial' })]);
         expect(eventEmitter.emit).not.toHaveBeenCalled();
         // The count of checked suggestions, not of implemented ones.
-        completedWith({ checkedCount: 1 });
-    });
-
-    it('hands the validator only the fields it needs, not the stored comment data', async () => {
-        savedSuggestions({
-            ...sentSuggestion('s-1'),
-            language: 'ruby',
-            existingCode: 'a = 1',
-            improvedCode: 'a = 2',
-            label: 'bug',
-            severity: 'high',
-            suggestionContent: 'Add type annotation',
-            comment: { id: 123, pullRequestReviewId: 456 },
-            rankScore: 100,
-            priorityStatus: 'PRIORITIZED',
+        completedWith({
+            checkedCount: 1,
+            decided: 0,
+            raised: 0,
+            unmeasured: {},
+            diffSource: undefined,
         });
-
-        await processor.process('job-1');
-
-        expect(
-            suggestionService.validateImplementedSuggestions.mock.calls[0][2],
-        ).toEqual([
-            {
-                id: 's-1',
-                relevantFile: 'app/a.rb',
-                language: 'ruby',
-                existingCode: 'a = 1',
-                improvedCode: 'a = 2',
-                label: 'bug',
-                severity: 'high',
-            },
-        ]);
     });
 
     it('still checks when the team has no code review automation', async () => {
@@ -227,31 +303,13 @@ describe('ImplementationVerificationProcessor', () => {
 
         await processor.process('job-1');
 
-        completedWith({ checkedCount: 1 });
-    });
-
-    it('validates only suggestions on changed files, against all their patches', async () => {
-        savedSuggestions(
-            sentSuggestion('s-index', 'src/index.ts'),
-            sentSuggestion('s-utils', 'src/utils.ts'),
-            sentSuggestion('s-other', 'src/other.ts'),
-        );
-        pullRequestManagerService.getChangedFiles.mockResolvedValue([
-            { filename: 'src/index.ts', patch: 'patch1' },
-            { filename: 'src/utils.ts', patch: 'patch2' },
-        ]);
-
-        await processor.process('job-1');
-
-        const [, codePatch, passed] =
-            suggestionService.validateImplementedSuggestions.mock.calls[0];
-        expect(passed.map((x: { id: string }) => x.id)).toEqual([
-            's-index',
-            's-utils',
-        ]);
-        expect(codePatch).toBe(
-            'File: src/index.ts\npatch1\n\nFile: src/utils.ts\npatch2',
-        );
+        completedWith({
+            checkedCount: 1,
+            decided: 0,
+            raised: 0,
+            unmeasured: {},
+            diffSource: undefined,
+        });
     });
 
     it.each([
@@ -324,7 +382,7 @@ describe('ImplementationVerificationProcessor', () => {
 
         completedWith({ reason: 'PR_NOT_FOUND' });
         expect(
-            suggestionService.validateImplementedSuggestions,
+            suggestionService.checkImplementedSuggestions,
         ).not.toHaveBeenCalled();
     });
 
@@ -346,14 +404,17 @@ describe('ImplementationVerificationProcessor', () => {
 
             completedWith({ reason: 'NO_SUGGESTIONS' });
             expect(
-                suggestionService.validateImplementedSuggestions,
+                suggestionService.checkImplementedSuggestions,
             ).not.toHaveBeenCalled();
         },
     );
 
     it.each([
         { scenario: 'no files', pr: { files: null } },
-        { scenario: 'a file with no suggestions', pr: { files: [{ suggestions: null }] } },
+        {
+            scenario: 'a file with no suggestions',
+            pr: { files: [{ suggestions: null }] },
+        },
     ])(
         'completes with NO_SUGGESTIONS for a saved PR with $scenario',
         async ({ pr }) => {
@@ -367,16 +428,20 @@ describe('ImplementationVerificationProcessor', () => {
 
     // No commit touched a suggested file since the review: the check ends
     // before any LLM call.
-    it('completes with NO_RELEVANT_CHANGES when no suggested file changed', async () => {
-        pullRequestManagerService.getChangedFiles.mockResolvedValue([
-            { filename: 'src/unrelated.ts', patch: '@@ -1 +1 @@' },
-        ]);
+    it('completes with the reason the check skipped, without resolving threads', async () => {
+        suggestionService.checkImplementedSuggestions.mockResolvedValue({
+            skipped: 'NO_RELEVANT_CHANGES',
+            checked: 1,
+            decided: 0,
+            persisted: [],
+            unmeasured: [],
+        });
 
         await processor.process('job-1');
 
         completedWith({ reason: 'NO_RELEVANT_CHANGES' });
         expect(
-            suggestionService.validateImplementedSuggestions,
+            suggestionService.resolveImplementedSuggestionsOnPlatform,
         ).not.toHaveBeenCalled();
     });
 
@@ -392,7 +457,9 @@ describe('ImplementationVerificationProcessor', () => {
         await processor.process('job-1');
 
         completedWith({ reason: 'PLATFORM_PR_NOT_FOUND' });
-        expect(pullRequestManagerService.getChangedFiles).not.toHaveBeenCalled();
+        expect(
+            pullRequestManagerService.getChangedFiles,
+        ).not.toHaveBeenCalled();
         // The skipped check stays traceable per org/PR.
         expect(warn).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -404,18 +471,8 @@ describe('ImplementationVerificationProcessor', () => {
         );
     });
 
-    it('completes with NO_PATCH when the changed files carry no patch', async () => {
-        pullRequestManagerService.getChangedFiles.mockResolvedValue([
-            { filename: 'app/a.rb', patch: null },
-        ]);
-
-        await processor.process('job-1');
-
-        completedWith({ reason: 'NO_PATCH' });
-    });
-
     it('marks the job failed and rethrows when validation throws', async () => {
-        suggestionService.validateImplementedSuggestions.mockRejectedValue(
+        suggestionService.checkImplementedSuggestions.mockRejectedValue(
             new Error('Test error during validation'),
         );
 

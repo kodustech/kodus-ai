@@ -1,149 +1,88 @@
 ---
-title: "定价深度解析"
-description: "Kodus 的定价如何运作 —— Community、Teams 和 Enterprise,免费试用包含什么,以及为什么所有套餐的审查都不限量。"
+title: "套餐与许可证"
+description: "Free、Teams 和 Enterprise 套餐,免费试用包含什么,每个套餐解锁什么,以及开发者许可证如何运作。"
 ---
 
-这里有关于我们定价的所有信息,帮助您为组织做出最佳决策。最新的套餐详情和实时定价请见 [kodus.io/pricing](https://kodus.io/pricing)。
+套餐的区别在于功能,而不在于 Kody 可以审查多少个拉取请求。价格和商务条款请见 [kodus.io/pricing](https://kodus.io/pricing)。
 
-## 套餐速览
+<Note>
+  **所有套餐的 PR 审查和工作区成员都不限量。** 在付费套餐上,由开发者许可证决定审查谁的拉取请求。在 Free 和 Teams 上,审查使用您自己的 AI 密钥(BYOK)运行。如果一次审查的**可审查文件超过 2,000 个**，Kody 会跳过该次审查。仅由自定义智能体审查的文件也计入上限。
+</Note>
 
-- **社区版** — 免费。BYOK。自托管或云端。
-- **团队版** — $10/开发/月 + token 费用(BYOK)。仅云端。**14 天免费试用,无需信用卡。**年付 8 折。
-- **企业版** — 定制定价。自托管或云端。可选 **BYOK** 或 **Kodus AI Tokens API key**。
+## 套餐
 
-所有套餐都包含无限用户、无限 PR,且没有最低座席数。
+<CardGroup cols={3}>
+  <Card title="Free" icon="github">
+    云端。审查使用您自己的 AI 密钥运行,在您添加之前不会连接任何密钥。
+  </Card>
+  <Card title="Teams" icon="users">
+    云端。按开发者计的许可证,并解锁 Team 功能。审查使用您自己的 AI 密钥运行。
+  </Card>
+  <Card title="Enterprise" icon="building">
+    云端,或使用许可证密钥的自托管。增加 SSO 和活动日志。
+  </Card>
+</CardGroup>
 
-## 社区版 vs. 团队版 vs. 企业版
+没有许可证密钥的自托管实例运行 **Community Edition**,其限制与 Free 相同。Teams 是云端套餐。要在自托管实例上解锁 Enterprise,请将您从 Kodus 收到的密钥粘贴到 **Subscription → Activate a license key** 下。密钥过期后,Enterprise 功能会关闭,直到您粘贴续期后的密钥。
 
-Kodus 提供三个版本:
+在 **Subscription** 下,**Choose a plan**(Free 套餐上为 **Upgrade**)会打开套餐选择器。在付费套餐上,**Manage billing** 会打开 Stripe,您可以在那里更改开发者许可证和付款详情。
 
-- **社区版:** 免费使用和修改。适用于自托管和云部署。
+## 免费试用
 
-  - 自带 API 密钥(BYOK)
-  - 无限代码审查、无限用户
-  - Quality Radar 上的无限工单
-  - Kody 记忆
-  - Kodus MCP
-  - 最多 10 条 Kody 规则
-  - 最多 3 个插件 / MCP(包括默认 Kodus MCP)
-  - ❌ 无 Cockpit(仅团队版和企业版)
-  - 通过 Discord 的社区支持
+新的 Kodus Cloud 工作区可享受 **14 天试用**。功能试用期限和 Kodus 承担费用的审查次数分别计算。
 
-- **团队版:** 仅云端的付费版本。$10/开发/月 + token 费用(BYOK)。
+<CardGroup cols={2}>
+  <Card title="14 天试用权限" icon="calendar">
+    试用包括 Teams 功能，以及 Enterprise 的 SSO 和活动日志。试用期间，全局规则来源合计最多可导入五条规则。
+  </Card>
+  <Card title="前 5 次 PR 审查由我们承担" icon="gift">
+    Kodus 承担 AI token 费用,因此您无需 API 密钥即可试用 Kody。试用审查使用 Kodus 提供的高效模型运行。连接您自己的密钥即可使用更大的模型。
+  </Card>
+</CardGroup>
 
-  - 社区版的所有功能,外加:
-  - 无限 Kody 规则(取消 10 条限制)
-  - 无限插件 / MCP(取消 3 个限制)
-  - **Kody 代理优先队列**
-  - **Kodus Cockpit**(工程指标)
-  - 邮件 + Discord 支持
-  - 自动更新与维护
-  - **14 天免费试用** — 无需信用卡
-  - 年付享 **8 折**
+**Subscription** 会显示如何获得更多试用审查:使用公司邮箱注册、邀请队友,或连接拥有 10 名或更多开发者的 Git 组织。**Request review** 会请求 Kodus 查看您的试用并为其延期。
 
-- **企业版:** 为企业使用定制的版本。可自托管或云端。
+要在试用审查用完后继续审查,请在 [**AI providers**](/zh/how_to_use/byok) 下连接您的 AI 密钥。之后审查会使用您的密钥运行,在任何套餐上都没有审查数量限制,即使 14 天结束后也是如此。如果试用审查在您连接密钥之前用完,Kody 会暂停审查,并在开启 **Show status feedback** 时,在拉取请求上发表评论,附上添加密钥的链接。试用结束后,请在 **Subscription** 下选择一个套餐以保留 Team 功能。
 
-  - 团队版的所有功能,外加:
-  - SSO / SAML
-  - **RBAC、审计日志和分析**
-  - **SOC 2 合规进行中**
-  - Token 方式可选:**BYOK** 或 **Kodus AI Tokens API key**(由 Kodus 托管 token 并统一计费)
-  - 专用实例
-  - 自定义 SLA
-  - 每月最多 **5 小时**专属支持
-  - 私有 Discord 频道
-  - 高级安全功能
-  - 培训和入职协助
-  - 定制选项
+在没有密钥的自托管实例上,**Subscription** 上的 **Request a trial** 会向 Kodus 申请一个许可证密钥用于试用。
 
-## 定价如何工作
+## 每个套餐解锁什么
 
-我们的定价按在您团队中主动创建拉取请求的开发人员计费。这让计费随团队演进保持与价值对齐:
+| 功能 | Free / Community | Teams | Enterprise |
+| --- | --- | --- | --- |
+| **PR 审查和工作区成员** | 不限量 | 不限量 | 不限量 |
+| **[Kody Rules](/zh/how_to_use/code_review/configs/kody_rules)** | 最多 10 条启用 | 无上限 | 无上限 |
+| **[全局规则来源](/zh/how_to_use/code_review/configs/global_rule_sources)** | 否 | 无上限 | 无上限 |
+| **[插件](/zh/how_to_use/code_review/plugins)** | 同时最多运行 3 个 | 无上限 | 无上限 |
+| **[Heavy 审查模式(beta)](/zh/how_to_use/code_review/review_directive#heavy-mode)** | 否 | 是 | 是 |
+| **[无条件自动批准](/zh/how_to_use/code_review/configs/auto_approve)** | 是 | 是 | 是 |
+| **[有条件批准（Beta）](/zh/how_to_use/code_review/configs/auto_approve)** | 否 | 是 | 是 |
+| **[风险评估（Beta）](/zh/how_to_use/code_review/configs/risk)** | 否 | 是 | 是 |
+| **[自定义智能体](/zh/how_to_use/code_review/custom_agents)** | 否 | 是 | 是 |
+| **[关联的代码库](/zh/how_to_use/code_review/configs/linked_repositories)** | 否 | 是 | 是 |
+| **[Cockpit](/zh/how_to_use/cockpit/overview)** | 否 | 是 | 是 |
+| **[代码热点（Beta）](/zh/how_to_use/cockpit/code_hotspots)** | 否 | 是 | 是 |
+| **[Kody 工单](/zh/how_to_use/issues/overview)** | 是 | 是 | 是 |
+| **[SSO(SAML)](/zh/how_to_use/security/sso)** | 否 | 否 | 是 |
+| **[活动日志](/zh/how_to_use/organization/activity_logs)** | 否 | 否 | 是 |
 
-- **按活跃开发人员付费:** 仅为贡献 PR 的开发人员计座席。
-- **随时可调整:** 团队变化时,随时在 **Organization → Subscription**(**Manage billing**)中更改活跃开发人员数量。无最低数、无年度座席锁定。
+超过上限的规则显示为 **Locked**，审查时会跳过。切换到规则数量无上限的套餐后会恢复启用。超出上限的插件也会被跳过。Cloud 订阅取消、到期或付款失败时，适用 Free 的资源上限。自托管要求见表格中链接的指南。要在自托管环境开启 Beta 功能，请参阅 [Docker Compose](/zh/how_to_deploy/deploy_kodus/generic_vm#beta) 或 [Helm](/zh/how_to_deploy/deploy_kodus/kubernetes#beta)。
 
-## BYOK 是所有套餐的默认方式
+## 开发者许可证
 
-Kodus **默认不出售** LLM token。社区版、团队版和企业版都运行在 **自带密钥**(BYOK)模式上:您连接自己的提供商账号 — OpenAI、Anthropic、Gemini,或任意 OpenAI 兼容的提供商 — token 由该提供商直接在其仪表板上计费。Kodus 从不对 token 加价。
+在带有席位的付费套餐上,开发者持有许可证时,其拉取请求才会被审查。许可证统计的是您 Git 组织中的开发者。工作区成员(即配置 Kodus 的人)是单独的,且不限量。
 
-套餐之间的价格差别在于 **Kodus 在您 token 支出之上收取什么**,而不是 token 模式本身:
+- 所有者在 **Subscription** 的 **PR licenses** 标签页中分配或释放许可证。
+- 开启 **Auto-assign licenses** 后,开发者的第一个 PR 会在没有席位的情况下被审查,当他们打开另一个 PR 时,如果有空闲席位,就会分配一个席位。请参阅[自动许可证分配](/zh/how_to_use/auto_license_assignment)。
+- Free 套餐和试用没有按开发者计的许可证。
 
-| 套餐 | 您支付给 Kodus | Token 如何计费 |
-| ---- | -------------- | ---------------- |
-| **社区版** | $0 | 您直接支付给 LLM 提供商(BYOK) |
-| **团队版** | $10/活跃开发/月 | 您直接支付给 LLM 提供商(BYOK) |
-| **企业版** | 定制(合同) | BYOK,**或**由 Kodus 通过 **Kodus AI Tokens API key** 托管 token 并统一开票 |
+## 所有套餐上的 BYOK
 
-支持的提供商和设置流程请见 [BYOK 概述](/zh/how_to_use/byok)。下方所有内容都是关于 **Kodus 侧费用**。
+您连接自己的提供方,由提供方向您收取 token 费用。在 Enterprise 上,Kodus 也可以按照您的协议运行这些模型。提供方和设置请参阅 [BYOK](/zh/how_to_use/byok),支出提醒请参阅[月度支出上限](/zh/how_to_use/spend-limit)。
 
-## 团队定价
+## 付款
 
-### 每活跃开发 $10/月
-
-团队版订阅为 **每活跃开发 $10/月**,此外您还需支付 LLM 提供商的 token 费用。Kodus 不对 token 加价。
-
-$10/开发/月 包含:
-
-- **云端托管** — 完全由 Kodus 管理,自动更新和维护。
-- **Kody 代理优先队列** — 团队版流量先于免费版流量审查。
-- **Kodus Cockpit** — 工程指标和报表。
-- **无限 Kody 规则和插件 / MCP**(取消 10 条规则 / 3 个插件的上限)。
-- **邮件 + Discord 支持**。
-
-Token 费用包含:
-
-- 审查期间 Kodus 向您选择的 LLM 提供商发起的每次 API 调用。
-- 由提供商直接计费;您可以随时切换提供商。
-- 您选择模型 — 成本优先(如 Gemini Flash、GPT-5-mini)或前沿(Claude 4.5 Sonnet、GPT-5)。
-
-### 计费周期
-
-- **月付:** $10/开发/月,按月结算。
-- **年付:** 一次性年度结算享 8 折。
-- **免费试用:** 团队版 14 天,无需信用卡。
-- **随时取消:** 更改在当前计费周期结束时生效。
-
-## 企业定价
-
-企业版为定制定价,通过合同签订。可以选择适合您运维方式的 token 模式:
-
-- **BYOK** — 与社区版、团队版相同,您自带 LLM 密钥。Kodus 仅按座席收费。
-- **Kodus AI Tokens API key** — Kodus 提供托管 API 密钥并将 token 与座席费一并计费。适合希望单一供应商、单一发票、无需直接与 LLM 提供商建立关系的团队。
-
-企业版独享功能包括 SSO / SAML、带审计日志和分析的 RBAC、专用实例选项、自定义 SLA、每月最多 **5 小时**专属支持、以及私有 Discord 频道。SOC 2 合规进行中。
-
-请[联系销售](https://kodus.io/pricing)获取符合您组织情况的报价。
-
-## 无限拉取请求
-
-您的团队可以提交任意多的 PR — 所有套餐都没有 PR 限制。唯一的硬性限制针对**超大 PR**:我们不审查超过 **2,000 个文件变更**的 PR。Git 提供商侧的速率限制也可能适用。
-
-## Kody Pilot 计划
-
-对于推动行业进步或本无力承担的团队,我们提供 Kodus 补贴。**Kody Pilot 计划** 为以下对象提供 **30–100% 的折扣**:
-
-- **早期创业公司**
-- 活跃开发中的**开源项目**
-- 位于**经济欠发达地区**的团队
-- **非营利组织**
-
-### 如何申请
-
-1. 加入我们的 Discord 社区:[discord.gg/TFZBRk9fT6](https://discord.gg/TFZBRk9fT6)。
-2. 分享您的组织名称、网站以及工作的简要描述。
-3. 提供资格证明:
-   - 创业公司:阶段和融资轮次(如有)。
-   - 开源:公共代码库的链接。
-   - 欠发达地区:国家和背景。
-   - 非营利组织:非营利状态证明。
-4. 我们将在 3 个工作日内审查您的申请。
-
-## 付款和计费
-
-- **由 Stripe 提供支持:** 付款通过 Stripe 安全处理,这是一个全球信赖的平台。
-- **随时取消:** 您可以随时取消套餐;更改在当前计费周期(月度或年度)结束时生效。
-- **发票和巴西税务发票:** 对于巴西客户 🇧🇷,我们为每笔交易提供发票并开具税务发票(Nota Fiscal)。
+付费套餐通过 Stripe 计费。**Subscription** 上的 **Manage billing** 会打开用于付款方式和发票的 Stripe 页面,所有者和计费管理员可以使用。如果付款失败,审查会暂停,直到更新账单。已取消或已过期的订阅也会暂停审查,直到您再次订阅。
 
 ---
 

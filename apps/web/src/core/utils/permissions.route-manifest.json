@@ -56,6 +56,14 @@
     }
   },
   {
+    "route": "/deep-scan",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "route": "/dev/plan-status",
     "expected": {
       "billing_manager": "deny",
@@ -289,6 +297,22 @@
   },
   {
     "route": "/settings/code-review/x/review-scope",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/settings/code-review/x/risk",
+    "expected": {
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "route": "/settings/code-review/x/routing",
     "expected": {
       "billing_manager": "allow",
       "repo_admin": "allow",

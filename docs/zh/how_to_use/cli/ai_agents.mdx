@@ -1,34 +1,58 @@
 ---
 title: "AI 代理"
-description: "将 Kodus CLI 与 AI 编码代理集成，实现自主审查-修复循环。"
+description: "将 Kodus CLI 与 AI 编码代理集成,实现自主审查-修复循环。"
 ---
 
-CLI 内置了一种精简、结构化的输出模式（`--prompt-only`），专为 AI 编码代理解析和执行而设计。搭配团队密钥后，可以实现自主的审查-修复循环 — 代理审查、应用修复、再次审查并提交，关键路径完全无需人工介入。
+CLI 内置了一种精简、结构化的输出模式(`--prompt-only`),专为 AI 编码代理解析和执行而设计。搭配团队密钥后,代理可以审查自己的改动、修复审查发现的问题,然后再次审查,全程无需人工介入。CLI 还会把 Kodus 技能安装到您机器上的代理中,让代理知道该运行哪个命令。
 
 ## 支持的代理
 
-- **Claude Code** — 通过技能安装器原生支持。
-- **Cursor** — 原生技能。
-- **Codex** — 原生技能。
-- **Windsurf** — 通过 `--prompt-only` 输出。
+`kodus skills install` 会根据配置文件夹在当前目录和您的主目录中查找代理,并把 Kodus 技能写入其中。它能检测到:
 
-任何能够执行 shell 命令并解析结构化文本的代理，都能直接使用 `kodus review --prompt-only`。
+| 代理         | 配置文件夹                                         |
+| ------------- | -------------------------------------------------- |
+| Claude Code   | `.claude`, `~/.claude`, `~/.config/claude`         |
+| Cursor        | `.cursor`, `~/.cursor`                             |
+| Codex         | `.codex`, `~/.codex`                               |
+| Windsurf      | `.windsurf`, `~/.codeium/windsurf`                 |
+| Gemini        | `.gemini`                                          |
+| Antigravity   | `.agent`, `~/.gemini/antigravity`                  |
+| OpenCode      | `.opencode`, `~/.config/opencode`                  |
+| Kiro          | `.kiro`, `~/.kiro`                                 |
+| Goose         | `.goose`, `~/.config/goose`                        |
+| Roo Code      | `.roo`, `~/.roo`                                   |
+| Kilo Code     | `.kilocode`, `~/.kilocode`                         |
+| Droid         | `.factory`, `~/.factory`                           |
+| AiderDesk     | `.aider-desk`, `~/.aider-desk`                     |
+| 其他代理  | `.agents`, `~/.agents`, `~/.config/agents`         |
+
+对于任何其他能够执行 shell 命令并读取文本的代理,无需技能也能使用 `kodus review --prompt-only`。
 
 ## 最快捷的配置
 
-一键安装 CLI 与所有代理技能：
+一键安装 CLI 与技能:
 
 ```bash
-curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+curl -fsSL https://review-skill.com/install | bash
 ```
 
-此命令会：
+安装器会安装 CLI，并为检测到的每个代理安装随附的技能。在代理运行的环境中设置 `KODUS_TEAM_KEY`。连接自托管实例时，也要设置 `KODUS_API_URL`。之后若要添加或更新技能，请运行 `kodus skills install` 或 `kodus skills resync`。
 
-1. 全局安装 `@kodus/cli` 可执行文件。
-2. 将团队密钥配置到 `~/.kodus/config.json`。
-3. 将 Kodus 技能部署到每个检测到的代理（Claude Code、Cursor、Codex、Windsurf）。
+## 技能
 
-无需个人登录，无交互提示，即时可用于代理循环。
+| 技能                             | 代理可以用它做什么                                                      |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| `kodus-review`                    | 用 `kodus review --prompt-only` 审查本地改动并修复发现的问题       |
+| `kodus-pr-suggestions-resolver`   | 获取拉取请求的建议,应用其中合理的建议,并读取其审查历史 |
+| `kodus-business-rules-validation` | 对照任务的验收标准检查本地改动                           |
+| `kodus-kody-rules`                | 查看、创建、更新、暂停、恢复和删除 Kody Rules                         |
+| `kodus-review-settings`           | 显示并更改代码审查设置和审查模型                          |
+| `kodus-custom-agents`             | 列出、创建、编辑、开启或关闭、删除和试用自定义代理                  |
+| `kodus-cockpit-usage`             | 读取 Cockpit 指标和 token 用量                                               |
+| `kodus-centralized-config`        | 检查、启用、同步和下载集中式配置                           |
+| `kodus-trace`                     | 读取为它即将修改的代码所记录的决策                     |
+
+更改规则、设置或代理的技能需要登录,或需要允许这样做的团队密钥。参见[身份验证模式](/zh/how_to_use/cli/concepts#认证模式)。
 
 ## 审查-修复循环
 
@@ -38,68 +62,81 @@ curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
     kodus review --prompt-only
     ```
 
-    CLI 返回结构化问题，包含文件路径、行号、严重级别和建议修复 — 以紧凑文本格式呈现，便于 LLM 消费。
+    CLI 返回结构化问题,包含文件路径、行号、严重级别和建议修复,以便 LLM 使用的紧凑文本格式呈现。输出以 `REVIEW_ANALYSIS_COMPLETE` 开头,以 `END_REVIEW` 结尾。
   </Step>
   <Step title="代理应用修复">
-    代理读取输出，决定应用哪些修复（或通过 `--fix` 全部接受），并相应编辑文件。
+    代理读取输出,决定应用哪些修复,并编辑文件。跳过误报是可以的;代理应说明原因。
   </Step>
   <Step title="代理重新运行审查">
     ```bash
     kodus review --prompt-only --fail-on error
     ```
 
-    带 `--fail-on error` 时，只要还有 error 或更高级别的问题，循环就会非零退出。代理继续循环；审查通过后进程 0 退出，代理继续下一步。
+    使用 `--fail-on error` 时,只要仍存在 error 或更严重的问题,命令就会以退出码 1 退出。审查干净时,它会打印 `NO_ISSUES_FOUND`,以 0 退出,代理继续下一步。
   </Step>
   <Step title="代理提交并推送">
-    审查通过后，代理提交并推送。作为额外保障，可以安装 pre-push 钩子（`kodus hook install`），为手动推送提供双保险。
+    审查干净后,代理提交并推送。可选地,安装 pre-push 钩子(`kodus hook install`),作为手动推送时的安全网。
   </Step>
 </Steps>
 
-## 代理的团队密钥认证
+<Note>
+  `--fix` 会在终端中请求确认,因此无人值守的代理应自行应用修复。
+</Note>
 
-强烈推荐代理使用团队密钥 — 无需注册、无交互登录、便于轮换、按设备追踪。
+## 面向代理的团队密钥身份验证
+
+强烈建议为代理使用团队密钥 — 无需个人注册,无需交互式登录,易于轮换,可按设备跟踪。
 
 ```bash
 export KODUS_TEAM_KEY=kodus_xxxxx
 kodus review --prompt-only
 ```
 
-在 **Organization → CLI keys**（<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>）下生成密钥，并将随新密钥显示的安装命令分发给团队。
+在 **Organization → CLI keys**(<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>)下生成密钥,并将随新密钥显示的安装命令分发给您的团队。
 
-<Warning>请在显示密钥时保存 — 之后将无法再次查看。</Warning>
+<Warning>密钥显示时请保存 — 之后不会再次显示。</Warning>
 
-## 关键的输出标志
+## 重要的输出标志
 
-| 标志 | 用途 |
-|------|------|
-| `--prompt-only` | 供解析的精简结构化输出。审查循环中使用。 |
-| `--agent` | 强制任意命令输出为确定性、机器可读格式。 |
-| `--format json` | 完整 JSON payload。严格解析场景搭配 `--agent`。 |
-| `--fail-on` | 退出码门槛。只要此项非零，循环就继续。 |
-| `--fields <csv>` | 缩减 JSON/代理 payload（例如 `summary,issues.file,issues.severity`），有助于保持代理上下文窗口精简。 |
+| 标志             | 用途                                                                 |
+| ---------------- | ------------------------------------------------------------------- |
+| `--prompt-only`  | 用于解析的紧凑结构化输出。在审查循环中使用。仅限 `kodus review` |
+| `--agent`        | 一个 JSON 信封(`ok`、`command`、`data`、`error`、`meta`)。并非所有命令都支持:参见[全局标志](/zh/how_to_use/cli/commands#全局标志) |
+| `--format json`  | `review` 和 `pr` 的完整 JSON 负载                             |
+| `--fail-on`      | 退出码门禁:当问题达到该严重级别时返回 1                  |
+| `--fields <csv>` | 缩小 JSON 负载(例如 `summary,issues.file,issues.severity`),以保持代理的上下文精简。需要 `--format json` 或 `--agent` |
 
-## 示例：Claude Code 循环 + 业务验证
+其他命令使用 `--json`。`kodus schema` 以 JSON 打印每个命令和标志,供需要检查存在哪些命令的代理使用。
+
+## 示例:带业务验证的 Claude Code 循环
 
 ```bash
-# 在 Claude Code 会话中，代理可以运行：
-kodus review --prompt-only --fail-on error    # 通用审查
-kodus pr business-validation --task-id KC-1441 --dry-run   # 对照任务检查
-kodus review --prompt-only --fix               # 自动应用可修复问题
+# In a Claude Code session, the agent can run:
+kodus review --prompt-only --fail-on error                      # general review
+kodus pr business-validation --task-id KC-1441 --format json    # check against the task
+kodus review --prompt-only --fail-on error                      # re-run after fixes
 git commit -am "fix: KC-1441 address review findings"
 ```
 
-使用技能安装器后，Claude Code 的 Kodus 技能知道何时调用这些命令 — 您无需做 prompt 工程。
+安装了技能后,代理知道何时运行其中的每一条命令。
 
-## 相关
+## 记录代理的决策
+
+`kodus trace enable` 会为 Claude Code、Cursor 和 Codex 添加钩子来记录每个会话,这样代理改动背后的原因会被保留,并可按路径读回。参见 [Kodus Trace](/zh/how_to_use/cli/trace)。
+
+## 相关链接
 
 <CardGroup cols={2}>
-  <Card title="核心概念" icon="book-open" href="concepts">
+  <Card title="Concepts" icon="book-open" href="/zh/how_to_use/cli/concepts">
     审查模式、diff 模式和代理输出标志。
   </Card>
-  <Card title="命令参考" icon="book" href="commands">
-    完整的标志清单。
+  <Card title="Command Reference" icon="book" href="/zh/how_to_use/cli/commands">
+    完整的标志列表。
   </Card>
-  <Card title="故障排查" icon="life-ring" href="troubleshooting">
-    代理循环问题、钩子异常、超时。
+  <Card title="Kodus Trace" icon="timeline" href="/zh/how_to_use/cli/trace">
+    记录并读回代理所写改动背后的决策。
+  </Card>
+  <Card title="Troubleshooting" icon="life-ring" href="/zh/how_to_use/cli/troubleshooting">
+    代理循环问题、钩子问题、超时。
   </Card>
 </CardGroup>

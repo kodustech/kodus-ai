@@ -18,8 +18,14 @@ import { NotificationService } from '@libs/notifications/application/notificatio
 import { NotificationRateLimiter } from '@libs/notifications/application/notification-rate-limiter.service';
 import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-author-recipient.resolver';
 import { USER_SERVICE_TOKEN } from '@libs/identity/domain/user/contracts/user.service.contract';
+import { CODE_BASE_CONFIG_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
+import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
-import { ValidatePrerequisitesStage } from './validate-prerequisites.stage';
+import {
+    USER_NO_LICENSE_NOTICE,
+    ValidatePrerequisitesStage,
+} from './validate-prerequisites.stage';
 
 // The trial is provisioned cloud-only (the stage early-returns unless
 // environment.API_CLOUD_MODE). Force cloud mode on so the trial path runs.
@@ -54,6 +60,12 @@ describe('ValidatePrerequisitesStage', () => {
     };
     let mockPullRequestsService: {
         find: jest.Mock;
+        countByAuthor: jest.Mock;
+    };
+    let mockCodeBaseConfigService: { getConfig: jest.Mock };
+    let mockPullRequestManagerService: { getChangedFilesMetadata: jest.Mock };
+    let mockAutomationExecutionService: {
+        hasPullRequestExecutionWithDataKey: jest.Mock;
     };
     let mockCodeManagementService: {
         addReactionToPR: jest.Mock;
@@ -130,6 +142,7 @@ describe('ValidatePrerequisitesStage', () => {
 
         mockPullRequestsService = {
             find: jest.fn().mockResolvedValue([]),
+            countByAuthor: jest.fn().mockResolvedValue(0),
         };
 
         mockCodeManagementService = {
@@ -139,9 +152,39 @@ describe('ValidatePrerequisitesStage', () => {
             createResponseToComment: jest.fn().mockResolvedValue(undefined),
         };
 
+        mockCodeBaseConfigService = {
+            getConfig: jest
+                .fn()
+                .mockResolvedValue({ automatedReviewActive: true }),
+        };
+
+        mockPullRequestManagerService = {
+            getChangedFilesMetadata: jest
+                .fn()
+                .mockResolvedValue([{ filename: 'src/a.ts' }]),
+        };
+
+        mockAutomationExecutionService = {
+            hasPullRequestExecutionWithDataKey: jest
+                .fn()
+                .mockResolvedValue(false),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ValidatePrerequisitesStage,
+                {
+                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+                    useValue: mockAutomationExecutionService,
+                },
+                {
+                    provide: CODE_BASE_CONFIG_SERVICE_TOKEN,
+                    useValue: mockCodeBaseConfigService,
+                },
+                {
+                    provide: PULL_REQUEST_MANAGER_SERVICE_TOKEN,
+                    useValue: mockPullRequestManagerService,
+                },
                 {
                     provide: PermissionValidationService,
                     useValue: mockPermissionValidationService,
@@ -766,6 +809,43 @@ describe('ValidatePrerequisitesStage', () => {
             );
         });
 
+        it('posts "subscription check unavailable" when the license read itself failed, and never tries to provision a trial', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.LICENSE_UNAVAILABLE,
+                    metadata: {
+                        validation: { valid: false, unavailable: true },
+                    },
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            const body =
+                mockCodeManagementService.createIssueComment.mock.calls[0][0]
+                    .body;
+            expect(body).toContain('Subscription check unavailable');
+            expect(body).not.toContain('trial has ended');
+            expect(result.statusInfo?.message).toContain(
+                'Subscription Check Unavailable',
+            );
+            // A failed read must not reach the "missing trial" heal: that path
+            // would POST /trial while billing is already failing.
+            expect(mockLicenseService.startTrial).not.toHaveBeenCalled();
+            expect(
+                mockPermissionValidationService.validateExecutionPermissions,
+            ).toHaveBeenCalledTimes(1);
+        });
+
         it('keeps the generic "Plan Limit Exceeded" SKIPPED status for a non-trial plan limit', async () => {
             const context = makeContext();
 
@@ -787,6 +867,380 @@ describe('ValidatePrerequisitesStage', () => {
 
             expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
             expect(result.statusInfo?.message).toContain('Plan Limit Exceeded');
+        });
+    });
+
+    describe('license auto-assign when automated review is off', () => {
+        const unlicensed = () =>
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.USER_NOT_LICENSED,
+                },
+            );
+
+        // A repository picked by hand has its own entry in the code review
+        // config; one added by "review all repositories" may not have one
+        // yet and inherits the global settings.
+        describe.each([
+            {
+                selection: 'repository with its own config entry',
+                repositories: [{ id: 'repo-1', configs: {} }],
+            },
+            {
+                selection: 'discovered repository without a config entry',
+                repositories: [],
+            },
+        ])('$selection', ({ repositories }) => {
+            beforeEach(() => {
+                mockParametersService.findByKey.mockResolvedValue({
+                    configValue: { configs: {}, repositories },
+                });
+            });
+
+            it('skips without assigning a seat when the effective setting is off', async () => {
+                unlicensed();
+                mockCodeBaseConfigService.getConfig.mockResolvedValue({
+                    automatedReviewActive: false,
+                });
+
+                const result = await stage.execute(makeContext());
+
+                expect(
+                    mockAutoAssignLicenseUseCase.execute,
+                ).not.toHaveBeenCalled();
+                expect(result.statusInfo.status).toBe(
+                    AutomationStatus.SKIPPED,
+                );
+                expect(
+                    mockCodeManagementService.addReactionToPR,
+                ).not.toHaveBeenCalled();
+                expect(
+                    mockCodeManagementService.createIssueComment,
+                ).not.toHaveBeenCalled();
+            });
+
+            it("hands auto-assign the author's PR count, counted no further than 2", async () => {
+                unlicensed();
+                mockPullRequestsService.countByAuthor.mockResolvedValue(2);
+                mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
+                    shouldProceed: true,
+                    reason: 'ASSIGNED',
+                });
+                const context = makeContext();
+
+                await stage.execute(context);
+
+                expect(
+                    mockPullRequestsService.countByAuthor,
+                ).toHaveBeenCalledWith(
+                    context.organizationAndTeamData.organizationId,
+                    String(context.userGitId),
+                    2,
+                );
+                expect(mockPullRequestsService.find).not.toHaveBeenCalled();
+                expect(mockAutoAssignLicenseUseCase.execute).toHaveBeenCalledWith(
+                    expect.objectContaining({ prCount: 2 }),
+                );
+            });
+
+            it('assigns the seat as before when the effective setting is on', async () => {
+                unlicensed();
+                mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
+                    shouldProceed: true,
+                    reason: 'ASSIGNED',
+                });
+
+                const result = await stage.execute(makeContext());
+
+                expect(
+                    mockAutoAssignLicenseUseCase.execute,
+                ).toHaveBeenCalledTimes(1);
+                expect(result.statusInfo.status).not.toBe(
+                    AutomationStatus.SKIPPED,
+                );
+            });
+        });
+
+        it('resolves the effective setting from the PR files, so directory and kodus-config.yml overrides apply', async () => {
+            unlicensed();
+            mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
+                shouldProceed: true,
+                reason: 'ASSIGNED',
+            });
+            const context = makeContext();
+
+            await stage.execute(context);
+
+            expect(
+                mockPullRequestManagerService.getChangedFilesMetadata,
+            ).toHaveBeenCalledWith(
+                context.organizationAndTeamData,
+                context.repository,
+                context.pullRequest,
+            );
+            expect(mockCodeBaseConfigService.getConfig).toHaveBeenCalledWith(
+                context.organizationAndTeamData,
+                context.repository,
+                [{ filename: 'src/a.ts' }],
+            );
+        });
+
+        it.each(['command', 'command-force'])(
+            'keeps auto-assign for an explicit %s even when automated review is off',
+            async (origin) => {
+                unlicensed();
+                mockCodeBaseConfigService.getConfig.mockResolvedValue({
+                    automatedReviewActive: false,
+                });
+                mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
+                    shouldProceed: true,
+                    reason: 'ASSIGNED',
+                });
+
+                await stage.execute(makeContext({ origin }));
+
+                expect(
+                    mockAutoAssignLicenseUseCase.execute,
+                ).toHaveBeenCalledTimes(1);
+                expect(
+                    mockCodeBaseConfigService.getConfig,
+                ).not.toHaveBeenCalled();
+            },
+        );
+
+        it('falls back to the repository and global settings when the effective config cannot be resolved', async () => {
+            unlicensed();
+            mockPullRequestManagerService.getChangedFilesMetadata.mockRejectedValue(
+                new Error('provider down'),
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { automatedReviewActive: true },
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            configs: { automatedReviewActive: false },
+                        },
+                    ],
+                },
+            });
+
+            const result = await stage.execute(makeContext());
+
+            expect(
+                mockAutoAssignLicenseUseCase.execute,
+            ).not.toHaveBeenCalled();
+            expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
+        });
+
+        it('does not resolve the config when the author already holds a seat', async () => {
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true },
+            );
+
+            await stage.execute(makeContext());
+
+            expect(mockCodeBaseConfigService.getConfig).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('no-license notice', () => {
+        const failNoSeat = (reason = 'NO_AVAILABLE_LICENSES') => {
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.USER_NOT_LICENSED,
+                },
+            );
+            mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
+                shouldProceed: false,
+                reason,
+            });
+            mockParametersService.findByKey.mockResolvedValue(undefined);
+        };
+
+        it('reacts and posts the notice on the first skip, recording when', async () => {
+            failNoSeat();
+            mockCodeManagementService.createIssueComment.mockResolvedValue({
+                id: 1,
+            });
+
+            const result = await stage.execute(makeContext());
+
+            expect(
+                mockCodeManagementService.addReactionToPR,
+            ).toHaveBeenCalled();
+            expect(
+                mockAutomationExecutionService.hasPullRequestExecutionWithDataKey,
+            ).toHaveBeenCalledWith({
+                teamAutomationId: 'automation-1',
+                repositoryId: 'repo-1',
+                pullRequestNumber: 42,
+                key: 'licenseNoticePostedAt',
+            });
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    prNumber: 42,
+                    body: USER_NO_LICENSE_NOTICE,
+                }),
+            );
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.licenseNoticePostedAt).toEqual(expect.any(String));
+        });
+
+        it('posts the notice on the first skip only, keeping the reaction on later runs', async () => {
+            failNoSeat();
+            mockCodeManagementService.createIssueComment.mockResolvedValue({
+                id: 1,
+            });
+
+            const first = await stage.execute(makeContext());
+            expect(first.licenseNoticePostedAt).toEqual(expect.any(String));
+
+            // The next run finds the notice the first one persisted.
+            mockAutomationExecutionService.hasPullRequestExecutionWithDataKey.mockResolvedValue(
+                true,
+            );
+            const second = await stage.execute(makeContext());
+
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockCodeManagementService.addReactionToPR,
+            ).toHaveBeenCalledTimes(2);
+            expect(second.licenseNoticePostedAt).toBeUndefined();
+        });
+
+        it.each([PlatformType.AZURE_REPOS, PlatformType.BITBUCKET])(
+            'posts only the notice on %s, without the old reaction comment',
+            async (platformType) => {
+                failNoSeat();
+                mockCodeManagementService.createIssueComment.mockResolvedValue({
+                    id: 1,
+                });
+
+                await stage.execute(makeContext({ platformType }));
+
+                expect(
+                    mockCodeManagementService.createIssueComment,
+                ).toHaveBeenCalledTimes(1);
+                expect(
+                    mockCodeManagementService.createIssueComment,
+                ).toHaveBeenCalledWith(
+                    expect.objectContaining({ body: USER_NO_LICENSE_NOTICE }),
+                );
+                expect(
+                    mockCodeManagementService.addReactionToPR,
+                ).not.toHaveBeenCalled();
+            },
+        );
+
+        it('answers a Bitbucket command in its thread', async () => {
+            failNoSeat();
+            mockCodeManagementService.createResponseToComment.mockResolvedValue(
+                { id: 2 },
+            );
+
+            const result = await stage.execute(
+                makeContext({
+                    platformType: PlatformType.BITBUCKET,
+                    triggerCommentId: '77',
+                    origin: 'command',
+                }),
+            );
+
+            expect(
+                mockCodeManagementService.createResponseToComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    inReplyToId: 77,
+                    body: USER_NO_LICENSE_NOTICE,
+                }),
+            );
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).not.toHaveBeenCalled();
+            expect(result.licenseNoticePostedAt).toEqual(expect.any(String));
+        });
+
+        it('does not record the notice when the provider did not post it', async () => {
+            failNoSeat();
+            mockCodeManagementService.createIssueComment.mockResolvedValue(
+                null,
+            );
+
+            const result = await stage.execute(makeContext());
+
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).toHaveBeenCalled();
+            expect(result.licenseNoticePostedAt).toBeUndefined();
+        });
+
+        it('still posts the notice when the earlier-notice lookup fails', async () => {
+            failNoSeat();
+            mockAutomationExecutionService.hasPullRequestExecutionWithDataKey.mockRejectedValue(
+                new Error('db down'),
+            );
+            mockCodeManagementService.createIssueComment.mockResolvedValue({
+                id: 1,
+            });
+
+            const result = await stage.execute(makeContext());
+
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ body: USER_NO_LICENSE_NOTICE }),
+            );
+            expect(result.licenseNoticePostedAt).toEqual(expect.any(String));
+        });
+
+        it.each(['IGNORED_USER', 'NOT_ALLOWED_USER'])(
+            'stays silent for a %s author',
+            async (reason) => {
+                failNoSeat(reason);
+
+                const result = await stage.execute(makeContext());
+
+                expect(
+                    mockCodeManagementService.addReactionToPR,
+                ).not.toHaveBeenCalled();
+                expect(
+                    mockCodeManagementService.createIssueComment,
+                ).not.toHaveBeenCalled();
+                expect(result.licenseNoticePostedAt).toBeUndefined();
+            },
+        );
+
+        it('posts nothing when auto-assign gives the author a seat', async () => {
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.USER_NOT_LICENSED,
+                },
+            );
+            mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
+                shouldProceed: true,
+                reason: 'ASSIGNED',
+            });
+
+            const result = await stage.execute(makeContext());
+
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).not.toHaveBeenCalled();
+            expect(
+                mockCodeManagementService.addReactionToPR,
+            ).not.toHaveBeenCalled();
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+            expect(result.licenseNoticePostedAt).toBeUndefined();
         });
     });
 });

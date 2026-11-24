@@ -7,9 +7,7 @@ import type { BYOKConfig } from './byok-config';
 const v2 = (over: Partial<BYOKConfig> = {}): BYOKConfig => ({
     version: 2,
     credentials: [{ id: 'cred-openai', provider: 'openai', apiKey: 'enc(k)' }],
-    models: [
-        { id: 'model-a', credentialId: 'cred-openai', model: 'gpt-5' },
-    ],
+    models: [{ id: 'model-a', credentialId: 'cred-openai', model: 'gpt-5' }],
     ...over,
 });
 
@@ -21,8 +19,16 @@ describe('validateByokConfigRefs', () => {
                     { id: 'cred-openai', provider: 'openai', apiKey: 'enc(k)' },
                 ],
                 models: [
-                    { id: 'model-a', credentialId: 'cred-openai', model: 'gpt-5' },
-                    { id: 'model-b', credentialId: 'cred-openai', model: 'gpt-5-mini' },
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-openai',
+                        model: 'gpt-5',
+                    },
+                    {
+                        id: 'model-b',
+                        credentialId: 'cred-openai',
+                        model: 'gpt-5-mini',
+                    },
                 ],
                 routing: {
                     mode: 'manual',
@@ -54,8 +60,16 @@ describe('validateByokConfigRefs', () => {
                     { id: 'cred-openai', provider: 'openai', apiKey: 'enc(k)' },
                 ],
                 models: [
-                    { id: 'model-a', credentialId: 'cred-openai', model: 'gpt-5' },
-                    { id: 'model-x', credentialId: 'cred-ghost', model: 'gpt-5' },
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-openai',
+                        model: 'gpt-5',
+                    },
+                    {
+                        id: 'model-x',
+                        credentialId: 'cred-ghost',
+                        model: 'gpt-5',
+                    },
                 ],
             });
 
@@ -97,14 +111,20 @@ describe('validateByokConfigRefs', () => {
             });
             const result = validateByokConfigRefs(config);
             expect(result.valid).toBe(false);
-            expect(result.errors[0]).toContain('routing.taskOverrides.conversation');
+            expect(result.errors[0]).toContain(
+                'routing.taskOverrides.conversation',
+            );
             expect(result.errors[0]).toContain('ghost-model');
         });
 
         it('collects multiple errors across models and routing', () => {
             const config = v2({
                 models: [
-                    { id: 'model-a', credentialId: 'cred-ghost', model: 'gpt-5' },
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-ghost',
+                        model: 'gpt-5',
+                    },
                 ],
                 routing: {
                     defaultModelId: 'missing-1',
@@ -121,7 +141,11 @@ describe('validateByokConfigRefs', () => {
         it('passes a legacy {main,fallback} config', () => {
             const legacy = {
                 main: { provider: 'openai', apiKey: 'enc(k)', model: 'gpt-5' },
-                fallback: { provider: 'anthropic', apiKey: 'enc(k2)', model: 'claude' },
+                fallback: {
+                    provider: 'anthropic',
+                    apiKey: 'enc(k2)',
+                    model: 'claude',
+                },
             };
             expect(validateByokConfigRefs(legacy)).toEqual({
                 valid: true,
@@ -142,7 +166,11 @@ describe('findModelReferences', () => {
         const config = v2({
             models: [
                 { id: 'model-a', credentialId: 'cred-openai', model: 'gpt-5' },
-                { id: 'model-b', credentialId: 'cred-openai', model: 'gpt-5-mini' },
+                {
+                    id: 'model-b',
+                    credentialId: 'cred-openai',
+                    model: 'gpt-5-mini',
+                },
             ],
             routing: {
                 defaultModelId: 'model-a',
@@ -171,5 +199,43 @@ describe('findModelReferences', () => {
     it('returns [] for a legacy config or an empty model id', () => {
         expect(findModelReferences({ main: {} }, 'model-a')).toEqual([]);
         expect(findModelReferences(v2(), '')).toEqual([]);
+    });
+});
+
+describe('the Ultra models in routing', () => {
+    const three = v2({
+        models: [
+            { id: 'a', credentialId: 'cred-openai', model: 'gpt-5' },
+            { id: 'b', credentialId: 'cred-openai', model: 'gpt-5-mini' },
+            { id: 'c', credentialId: 'cred-openai', model: 'gpt-4o' },
+        ],
+    });
+
+    it('passes three different models that exist', () => {
+        expect(
+            validateByokConfigRefs({
+                ...three,
+                routing: { ultraModelIds: ['a', 'b', 'c'] },
+            }).valid,
+        ).toBe(true);
+    });
+
+    it('fails a missing model, a repeated one, or more than three', () => {
+        const check = (ultraModelIds: string[]) =>
+            validateByokConfigRefs({ ...three, routing: { ultraModelIds } })
+                .errors;
+        expect(check(['a', 'b', 'gone'])[0]).toContain('"gone"');
+        expect(check(['a', 'a', 'b'])[0]).toContain('three different models');
+        expect(check(['a', 'b', 'c', 'a'])[0]).toContain('up to three');
+    });
+
+    it('names the Ultra slot a model holds, so deleting it is refused', () => {
+        const config = {
+            ...three,
+            routing: { ultraModelIds: ['a', 'b', 'c'] },
+        };
+        expect(findModelReferences(config, 'b')).toEqual([
+            'Ultra review model 2',
+        ]);
     });
 });

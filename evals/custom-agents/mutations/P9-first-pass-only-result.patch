@@ -1,0 +1,13 @@
+diff --git a/libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts b/libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts
+index f3a4cfc47..79444857e 100644
+--- a/libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts
++++ b/libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.ts
+@@ -588,7 +588,7 @@ export async function runAgentLoopViaCore(
+     // rescue that submitted a whole one did deliver a result (#2384). Whether
+     // it stopped early is still the first pass's call (incompleteReason).
+     const submittedByTool = submittedWholeByTool(r.finderState);
+-    const submitted = [r.finderState, ...(r.recallStates ?? [])].some(
++    const submitted = [r.finderState].some(
+         submittedWholeResult,
+     );
+     const incompleteReason: AgentLoopOutput['incompleteReason'] =

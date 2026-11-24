@@ -5,6 +5,11 @@
  * to have OpenAI retain them, so every call on OpenAI's own API goes out with
  * `store: false` (#2135 review).
  *
+ * The same holds behind an org's own OpenAI-protocol proxy on the native id
+ * (#2150): a forwarding proxy would otherwise have OpenAI keep the code, and a
+ * pool that spreads calls across accounts cannot resolve an `item_reference`
+ * stored on another account.
+ *
  * Without the stored item, a multi-step tool loop has nothing to point its
  * reasoning at (the SDK resends it as an `item_reference`), so every call also
  * asks for `reasoning.encrypted_content` and carries it between steps. Always,

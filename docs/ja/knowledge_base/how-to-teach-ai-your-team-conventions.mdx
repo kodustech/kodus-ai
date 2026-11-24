@@ -1,68 +1,68 @@
 ---
-title: "AIにチームのコーディング規約を学習させる方法"
-description: "メモリを使用して、自然な会話を通じてKodyにコーディング設定、アーキテクチャ上の決定、チームの規約を学習させます。"
+title: "AI にチームのコーディング規約を教える方法"
+description: "メモリを使って、自然な会話を通じて Kody にコーディングの好み、アーキテクチャ上の決定、チームの規約を学習させます。"
 ---
 
-どのチームにも明文化されていない文脈があります — 技術上の好み、命名規則、アーキテクチャ上の判断、移行中の前提などです。最初からすべてを文書化する代わりに、自然な会話を通じて Kody に教えることで、将来のレビューをより的確にし、価値の低い繰り返し提案を減らせます。
+どのチームにも、明文化されていない文脈があります。技術の好み、命名規則、アーキテクチャ上の決定、移行の詳細などです。それらを最初にすべて文書化する代わりに、自然な会話を通じて Kody に教えることで、今後のレビューがより的確になり、繰り返される的外れな提案もなくなります。
 
-## 動作方法
+## 仕組み
 
-PR のコメントで Kody と話すと、コードベースの文脈やチームの好みを述べているときを検出し、自動的に**メモリ**として保存します。メモリはその後、将来のすべてのコードレビューと会話で高優先度コンテキストとして適用されます。
+PR コメントで Kody に何かを覚えるよう頼むと、Kody はそれを**メモリ**として保存します。コードベースの文脈やチームの好みを述べただけの場合、Kody は保存を提案し、あなたが了承すると保存します。メモリは、その後のコードレビューや会話で高優先度のコンテキストとして使われます。
 
-### 明示的な教授
+### 明示的に教える
 
-Kodyに何かを覚えるよう直接伝えます：
-
-```
-@kody remember: このリポジトリはサードパーティ API を反映しているため、一部の payload フィールドは意図的に snake_case のままです。
-```
+Kody に直接、何かを覚えるよう伝えます。
 
 ```
-@kody please remember: このサービスはヘキサゴナルアーキテクチャを採用し、adapter は境界に置きます。
-```
-
-### 暗黙的な学習
-
-自然に好みを述べると、Kodyがそれを拾います：
-
-```
-@kody このリポジトリはサードパーティ API を反映しているため、一部の payload フィールドは意図的に snake_case のままです。
+@kody remember: this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
 ```
 
 ```
-@kody このサービスでは、テストは中央の test フォルダではなく実装ファイルの近くに置くことが多いです。
+@kody please remember: this service follows hexagonal architecture and keeps adapters at the edge.
+```
+
+### 規約を述べる
+
+規約を述べるか、提案が当てはまらない理由を説明すると、Kody はそれをメモリとして保存することを提案します。`@kody yes` と返信すると保存されます。例：
+
+```
+@kody this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
 ```
 
 ```
-@kody 課金モジュールは移行の途中なので、大きなリファクタではなく段階的な変更を優先してください。
+@kody in this service, tests usually live next to the implementation files rather than in a central test folder.
 ```
 
-## Kodyが保存しないもの
+```
+@kody the billing module is mid-migration, so prefer incremental fixes over broad refactors.
+```
 
-Kodyはメモリになるものを選別します：
+## Kody が保存しないもの
 
-- 一時的な指示（「今すぐ修正してください」、「今日はスキップしてください」）
-- 質問（「締め切りはいつですか？」）
-- デバッグの会話（「エラーが見えます」）
-- 実行可能な情報のない曖昧な文
-- 単一のPRやタスクにスコープされたリクエスト
+Kody は、何をメモリにするかを選別します。
+
+- 一時的な指示（「今すぐ直して」「今日はこれをスキップして」）
+- 質問（「期限はいつ？」）
+- デバッグ中のやり取り（「エラーが出ています」）
+- 実行可能な情報を含まない曖昧な発言
+- 1 つの PR やタスクに限定されたリクエスト
 
 ## メモリのスコープ
 
-各メモリは特定のレベルで適用されます：
+各メモリは特定のレベルで適用されます。
 
 | スコープ | 例 |
 |-------|---------|
-| **ディレクトリ** | 「`src/components/ui`では、常にデザインシステムのトークンを使用します」 |
-| **リポジトリ** | 「このリポジトリは六角形アーキテクチャを使用します」 |
-| **組織** | 「すべてのリポジトリはESLint flat configを使用します」 |
+| **Directory** | 「`src/components/ui` では、必ずデザインシステムのトークンを使用する」 |
+| **Repository** | 「このリポジトリはヘキサゴナルアーキテクチャを採用している」 |
+| **Organization** | 「すべてのリポジトリで ESLint の flat config を使用する」 |
 
 ## 承認ワークフロー
 
-AIが生成したメモリが有効になる前にレビューしたい場合は、**Code review → Kody Rules** を開いて **Configuration** をクリックし、**Kody knowledge approval** をオンにします。メモリ（およびKodyが生成したルール）は保留状態になり、**Approve** または **Discard** するまで **Pending review** セクションで待機します。
+Kody が作成したメモリを有効になる前にレビューしたい場合は、**Code review → Kody Rules** を開き、**Configuration** をクリックして、**Kody knowledge approval** をオンにします。新しいメモリ（と Kody が生成したルール）は、**Approve** または **Discard** するまで **Pending review** セクションで待機します。**New memory** で自分で書いたメモリはすぐに有効になります。
 
 ## メモリの管理
 
-**Code review → Kody Rules** → **Memories** タブに移動して、メモリを表示、編集、または削除します。**New memory** で手動でメモリを作成することもできます。
+**Code review → Kody Rules** → **Memories** タブで、メモリの表示、編集、削除ができます。**New memory** で手動でメモリを作成することもできます。
 
-詳細については、[Kodyルール — メモリ](/ja/how_to_use/code_review/configs/kody_rules#メモリ)を参照してください。
+詳細については、[Kody Rules — メモリ](/ja/how_to_use/code_review/configs/kody_rules#memories)を参照してください。

@@ -334,6 +334,12 @@ export class ParametersController {
                     ...body.organizationAndTeamData,
                     organizationId,
                 },
+                actor: {
+                    source: 'web',
+                    organizationId,
+                    userId: this.request?.user?.uuid,
+                    userEmail: this.request?.user?.email,
+                },
             }),
         );
     }

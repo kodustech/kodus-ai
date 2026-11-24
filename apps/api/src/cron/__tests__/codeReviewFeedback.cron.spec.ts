@@ -13,7 +13,10 @@ jest.mock('@libs/core/log/logger', () => ({
 
 describe('CodeReviewFeedbackCronProvider', () => {
     const makeCron = (
-        executions: Array<{ dataExecution: { pullRequestNumber: number } }>,
+        executions: Array<{
+            repositoryId?: string;
+            dataExecution?: { pullRequestNumber?: number | null };
+        }>,
     ) => {
         const automationExecutionService = {
             findByPeriodAndTeamAutomationId: jest
@@ -47,11 +50,9 @@ describe('CodeReviewFeedbackCronProvider', () => {
         } as any;
 
         const distributedLockService = {
-            acquire: jest
-                .fn()
-                .mockResolvedValue({
-                    release: jest.fn().mockResolvedValue(undefined),
-                }),
+            acquire: jest.fn().mockResolvedValue({
+                release: jest.fn().mockResolvedValue(undefined),
+            }),
         } as any;
 
         const cron = new CodeReviewFeedbackCronProvider(
@@ -125,5 +126,83 @@ describe('CodeReviewFeedbackCronProvider', () => {
                 }),
             }),
         );
+    });
+
+    const published = (messageBroker: any) =>
+        messageBroker.transformMessageToMessageBroker.mock.calls[0][0].message;
+
+    it('publishes each PR once, however many pushes it was reviewed on', async () => {
+        const { cron, messageBroker } = makeCron([
+            {
+                repositoryId: 'repo-a',
+                dataExecution: { pullRequestNumber: 42 },
+            },
+            {
+                repositoryId: 'repo-a',
+                dataExecution: { pullRequestNumber: 42 },
+            },
+            {
+                repositoryId: 'repo-a',
+                dataExecution: { pullRequestNumber: 43 },
+            },
+            // An execution with no PR number names no PR.
+            {
+                repositoryId: 'repo-a',
+                dataExecution: { pullRequestNumber: null },
+            },
+            { repositoryId: 'repo-a', dataExecution: {} },
+            { repositoryId: 'repo-a' },
+            null as any,
+        ]);
+
+        await cron.handleCron();
+
+        expect(published(messageBroker).automationExecutionsPRs).toStrictEqual([
+            42, 43,
+        ]);
+    });
+
+    it('narrows the lookup to the (repository, PR) pairs when every execution names both', async () => {
+        const { cron, messageBroker } = makeCron([
+            { repositoryId: 'repo-a', dataExecution: { pullRequestNumber: 1 } },
+            { repositoryId: 'repo-b', dataExecution: { pullRequestNumber: 2 } },
+            { repositoryId: 'repo-a', dataExecution: { pullRequestNumber: 3 } },
+        ]);
+
+        await cron.handleCron();
+
+        expect(published(messageBroker).pullRequestRefs).toEqual([
+            { repositoryId: 'repo-a', number: 1 },
+            { repositoryId: 'repo-b', number: 2 },
+            { repositoryId: 'repo-a', number: 3 },
+        ]);
+    });
+
+    it('sends no pairs when one execution lacks its repository, so its PR is not left out', async () => {
+        const { cron, messageBroker } = makeCron([
+            { repositoryId: 'repo-a', dataExecution: { pullRequestNumber: 1 } },
+            { dataExecution: { pullRequestNumber: 2 } },
+        ]);
+
+        await cron.handleCron();
+
+        expect(published(messageBroker)).not.toHaveProperty('pullRequestRefs');
+        expect(published(messageBroker).automationExecutionsPRs).toEqual([
+            1, 2,
+        ]);
+    });
+
+    it('publishes nothing for a team whose executions name no PR', async () => {
+        const { cron, messageBroker } = makeCron([
+            { repositoryId: 'repo-a', dataExecution: {} },
+            {
+                repositoryId: 'repo-a',
+                dataExecution: { pullRequestNumber: null },
+            },
+        ]);
+
+        await cron.handleCron();
+
+        expect(messageBroker.publishMessage).not.toHaveBeenCalled();
     });
 });

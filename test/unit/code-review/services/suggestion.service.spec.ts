@@ -24,7 +24,7 @@ describe('SuggestionService', () => {
     let service: SuggestionService;
 
     const mockAIAnalysisService = {
-        validateImplementedSuggestions: jest.fn(),
+        checkSuggestionImplementation: jest.fn(),
         severityAnalysisAssignment: jest.fn(),
         filterSuggestionsSafeGuard: jest.fn(),
     };
@@ -454,18 +454,10 @@ __new hunk__
         });
     });
 
-    describe('validateImplementedSuggestions', () => {
-        const savedSuggestions: Partial<CodeSuggestion>[] = [
-            {
-                id: 'sug-1',
-                relevantFile: 'test.ts',
-                language: 'typescript',
-                improvedCode: 'const x = 1;',
-                existingCode: 'var x = 1;',
-            },
-        ];
-
-        it("resolves the org's BYOK slot for LLM_TASK.codeReview and forwards it to the analysis call", async () => {
+    describe('checkImplementedSuggestions', () => {
+        // A BYOK org's code goes only to the model it configured: the check runs
+        // on the org's code review slot, never on a model of its own.
+        it("resolves the org's BYOK slot for LLM_TASK.codeReview and forwards it to the model call", async () => {
             const byokConfig = {
                 provider: 'openai',
                 model: 'gpt-4o',
@@ -473,16 +465,23 @@ __new hunk__
             mockPermissionValidationService.resolveTaskSlot.mockResolvedValueOnce(
                 byokConfig,
             );
-            mockAIAnalysisService.validateImplementedSuggestions.mockResolvedValueOnce(
-                [],
-            );
+            mockAIAnalysisService.checkSuggestionImplementation = jest
+                .fn()
+                .mockResolvedValue({ verdicts: [], unmeasured: [] });
 
-            await service.validateImplementedSuggestions(
-                mockOrganizationAndTeamData as any,
-                'patch',
-                savedSuggestions,
-                42,
-            );
+            await service.checkImplementedSuggestions({
+                organizationAndTeamData: mockOrganizationAndTeamData as any,
+                prNumber: 42,
+                changedFiles: [{ filename: 'test.ts', patch: '@@ -1 +1 @@' }],
+                savedSuggestions: [
+                    {
+                        id: 'sug-1',
+                        relevantFile: 'test.ts',
+                        deliveryStatus: 'sent',
+                        implementationStatus: 'not_implemented',
+                    } as any,
+                ],
+            });
 
             expect(
                 mockPermissionValidationService.resolveTaskSlot,
@@ -491,66 +490,10 @@ __new hunk__
                 LLM_TASK.codeReview,
             );
             expect(
-                mockAIAnalysisService.validateImplementedSuggestions,
+                mockAIAnalysisService.checkSuggestionImplementation,
             ).toHaveBeenCalledWith(
-                mockOrganizationAndTeamData,
-                42,
-                byokConfig,
-                'patch',
-                [
-                    {
-                        id: 'sug-1',
-                        relevantFile: 'test.ts',
-                        language: 'typescript',
-                        improvedCode: 'const x = 1;',
-                        existingCode: 'var x = 1;',
-                    },
-                ],
+                expect.objectContaining({ byokConfig, prNumber: 42 }),
             );
-        });
-
-        it('persists only the suggestions the analysis reports as implemented', async () => {
-            mockPermissionValidationService.resolveTaskSlot.mockResolvedValueOnce(
-                undefined,
-            );
-            mockAIAnalysisService.validateImplementedSuggestions.mockResolvedValueOnce(
-                [{ id: 'sug-1', implementationStatus: 'implemented' }],
-            );
-
-            const result = await service.validateImplementedSuggestions(
-                mockOrganizationAndTeamData as any,
-                'patch',
-                savedSuggestions,
-                42,
-            );
-
-            expect(mockPullRequestService.updateSuggestion).toHaveBeenCalledWith(
-                'sug-1',
-                expect.objectContaining({ implementationStatus: 'implemented' }),
-                mockOrganizationAndTeamData,
-            );
-            expect(result).toEqual([
-                { id: 'sug-1', implementationStatus: 'implemented' },
-            ]);
-        });
-
-        it('returns an empty array when the analysis reports nothing implemented', async () => {
-            mockPermissionValidationService.resolveTaskSlot.mockResolvedValueOnce(
-                undefined,
-            );
-            mockAIAnalysisService.validateImplementedSuggestions.mockResolvedValueOnce(
-                [],
-            );
-
-            const result = await service.validateImplementedSuggestions(
-                mockOrganizationAndTeamData as any,
-                'patch',
-                savedSuggestions,
-                42,
-            );
-
-            expect(mockPullRequestService.updateSuggestion).not.toHaveBeenCalled();
-            expect(result).toEqual([]);
         });
     });
 

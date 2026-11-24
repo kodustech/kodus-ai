@@ -11,9 +11,11 @@ import {
 } from "@components/ui/select";
 import TagInput from "@components/ui/tag-input";
 import { Textarea } from "@components/ui/textarea";
+import { TruncateStart } from "@components/ui/truncate-start";
 import {
     CUSTOM_AGENT_LIMITS,
     nameCollisionHint,
+    setAgentKnowledge,
     TAG_COLORS,
 } from "@services/custom-agents/drafts";
 import type {
@@ -21,16 +23,41 @@ import type {
     CustomAgentPresentation,
     CustomAgentResolveReport,
     CustomAgentSeverity,
+    CustomAgentUnfollowedCitation,
     KnowledgeItem,
 } from "@services/custom-agents/types";
 import { getBYOK } from "@services/organizationParameters/fetch";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "src/core/utils/components";
-import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
+import {
+    routingModelLabels,
+    routingModelsFromConfig,
+} from "src/features/ee/byok/_components/routing/routing-state";
 import type { BYOKConfig } from "src/features/ee/byok/_types";
 
 import { Choice, Field, Section } from "./field";
 import { AgentKnowledgeField } from "./knowledge-card";
+import { AGENT_MODEL_FIELD_ID } from "./status-strip";
+import { UnfollowedCitations } from "./unfollowed-citations";
+
+/** Repositories skills and docs come from: linked first, then any in use. */
+const knowledgeRepositories = (
+    report: CustomAgentResolveReport | undefined,
+    knowledge: KnowledgeItem[],
+) => [
+    ...new Map(
+        [
+            ...(report?.knowledge.status === "ok"
+                ? (report.knowledge.linkedRepositories ?? [])
+                : []),
+            ...knowledge.flatMap((item) =>
+                typeof item.repository === "string" && item.repository
+                    ? [item.repository]
+                    : [],
+            ),
+        ].map((name) => [name.toLowerCase(), name]),
+    ).values(),
+];
 
 type Patch = (patch: (agent: CustomAgent) => CustomAgent) => void;
 
@@ -88,6 +115,26 @@ export const InstructionsCard = ({
                 }
             />
         </Field>
+        <Field
+            label="Run automatically"
+            hint={
+                agent.runWhen === "risk-found"
+                    ? "Requires confirmed PR risk. Manual commands still run."
+                    : undefined
+            }>
+            <Choice
+                label="Automatic execution"
+                value={agent.runWhen ?? "always"}
+                disabled={!canEdit}
+                options={[
+                    { value: "always", label: "Every matching PR" },
+                    { value: "risk-found", label: "When risk is found" },
+                ]}
+                onChange={(runWhen) =>
+                    onChange((current) => ({ ...current, runWhen }))
+                }
+            />
+        </Field>
     </Section>
 );
 
@@ -101,21 +148,35 @@ export const FilesAndKnowledge = ({
     agent,
     knowledge,
     report,
+    reportFailed,
+    readKnowledge,
     canEdit,
     canEditFiles = canEdit,
     onChange,
     onKnowledgeChange,
     skillsHref,
+    teamId,
+    repositoryId,
+    unfollowedCitations,
 }: {
     agent: CustomAgent;
     knowledge: KnowledgeItem[];
     report?: CustomAgentResolveReport;
+    /** The page's check failed. */
+    reportFailed?: boolean;
+    /** What a review here reads, inherited levels merged in. */
+    readKnowledge?: KnowledgeItem[];
     canEdit: boolean;
     /** False for an inherited agent, whose links are still this level's. */
     canEditFiles?: boolean;
     onChange: Patch;
     onKnowledgeChange: (next: KnowledgeItem[]) => void;
     skillsHref: string;
+    /** To list skills and docs of another repository. */
+    teamId?: string;
+    repositoryId?: string;
+    /** Files the agent's dropped findings cited without following them. */
+    unfollowedCitations?: CustomAgentUnfollowedCitation[];
 }) => {
     const bracketed = globsWithBrackets(agent);
     return (
@@ -170,8 +231,10 @@ export const FilesAndKnowledge = ({
                     Skills &amp; docs
                 </span>
                 <span className="text-text-tertiary text-xs">
-                    Read from the target branch: a skill opens when the change
-                    needs it, a doc loads whole.{" "}
+                    A skill opens when the change needs it, a doc loads whole.
+                    From this repository they are read on the pull
+                    request&apos;s target branch; from another repository, on
+                    its default branch or the branch or tag you set.{" "}
                     <Link
                         href={skillsHref}
                         className="text-primary-light hover:underline">
@@ -182,9 +245,35 @@ export const FilesAndKnowledge = ({
                     agentId={agent.id}
                     knowledge={knowledge}
                     report={report}
+                    reportFailed={reportFailed}
+                    readKnowledge={readKnowledge}
                     canEdit={canEdit}
                     onChange={onKnowledgeChange}
+                    teamId={teamId}
+                    repositoryId={repositoryId}
+                    instructions={agent.instructions}
                 />
+                {unfollowedCitations && unfollowedCitations.length > 0 && (
+                    <UnfollowedCitations
+                        agentId={agent.id}
+                        citations={unfollowedCitations}
+                        knowledge={knowledge}
+                        repositories={knowledgeRepositories(report, knowledge)}
+                        canEdit={canEdit}
+                        teamId={teamId}
+                        repositoryId={repositoryId}
+                        onFollow={(item) =>
+                            onKnowledgeChange(
+                                setAgentKnowledge(
+                                    knowledge,
+                                    item,
+                                    agent.id,
+                                    true,
+                                ),
+                            )
+                        }
+                    />
+                )}
             </div>
         </Section>
     );
@@ -384,16 +473,21 @@ export const useByokModels = () => {
         staleTime: 5 * 60 * 1000,
         retry: false,
     });
-    const models = byok.data?.models ?? [];
+    // Named as Routing names them: a pin and its alias by id, one id on two
+    // connections by connection.
+    const routable = routingModelsFromConfig(byok.data);
+    const labels = routingModelLabels(routable);
+    const managed = new Set(
+        routable.filter((m) => m.managed).map((m) => m.modelId),
+    );
     return {
-        models,
+        models: byok.data?.models ?? [],
         routing: byok.data?.routing,
         isLoading: byok.isLoading,
+        /** The Kodus default: Routing does not offer it as a pick. */
+        isManaged: (id: string) => managed.has(id),
         /** A model's readable name, never its raw id. */
-        nameOf: (id?: string) => {
-            const model = models.find((entry) => entry.id === id)?.model;
-            return model ? formatModelLabel(model) : undefined;
-        },
+        nameOf: (id?: string) => (id ? labels.get(id) : undefined),
     };
 };
 
@@ -408,7 +502,11 @@ export const ModelsFields = ({
     onChange: Patch;
 }) => {
     const byok = useByokModels();
-    const { models, routing, nameOf: labelOf } = byok;
+    const { routing, nameOf: labelOf } = byok;
+    // An agent already on the Kodus default keeps it selectable.
+    const models = byok.models.filter(
+        (model) => !byok.isManaged(model.id) || model.id === agent.models?.run,
+    );
     const routed = labelOf(
         routing?.taskOverrides?.customAgent ?? routing?.defaultModelId,
     );
@@ -419,22 +517,44 @@ export const ModelsFields = ({
             models: value === ROUTING_DEFAULT ? undefined : { run: value },
         }));
 
+    // Radix's SelectValue and ItemText drop className: their span and the
+    // icon are reached from the button, so a long label truncates.
+    const shrinkLabel = "[&>div>span]:min-w-0 [&>div>svg]:shrink-0";
     const selector = (
         <Select
             value={agent.models?.run ?? ROUTING_DEFAULT}
             disabled={!canEdit || !models.length}
             onValueChange={pick}>
-            <SelectTrigger size="md" aria-label="Model">
+            <SelectTrigger
+                size="md"
+                aria-label="Model"
+                id={AGENT_MODEL_FIELD_ID}
+                className={shrinkLabel}>
                 <SelectValue />
             </SelectTrigger>
-            <SelectContent>
-                <SelectItem value={ROUTING_DEFAULT}>
-                    Routing default
-                    {routed ? ` (${routed})` : ""}
+            <SelectContent className="max-w-(--radix-select-content-available-width)">
+                <SelectItem value={ROUTING_DEFAULT} className={shrinkLabel}>
+                    <span className="flex min-w-0">
+                        <span className="shrink-0 whitespace-pre">
+                            {routed ? "Routing default · " : "Routing default"}
+                        </span>
+                        {routed && (
+                            <TruncateStart title={routed}>
+                                {routed}
+                            </TruncateStart>
+                        )}
+                    </span>
                 </SelectItem>
                 {models.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                        {formatModelLabel(model.model)}
+                    <SelectItem
+                        key={model.id}
+                        value={model.id}
+                        className={shrinkLabel}>
+                        <span className="flex min-w-0">
+                            <TruncateStart title={labelOf(model.id)}>
+                                {labelOf(model.id)}
+                            </TruncateStart>
+                        </span>
                     </SelectItem>
                 ))}
             </SelectContent>

@@ -196,6 +196,20 @@ describe('buildUserPrompt', () => {
         },
     );
 
+    it.each([
+        ['full', {}, {}, true],
+        ['compact', { adaptiveProfile: { compactPrompt: true } }, {}, true],
+        ['no sandbox', { remoteCommands: undefined }, {}, false],
+        ['custom focus', {}, { conventionGuides: [] }, false],
+        ['no history', { previousDecisions: [] }, {}, false],
+    ] as const)('investigates consequences only in the tool-enabled generalist (%s)', (_name, input, agent, expected) => {
+        const prompt = buildUserPrompt(baseInput({
+            previousDecisions: [{ suggestionId: 'prior', label: 'bug', outcome: 'implemented' }],
+            ...input,
+        }), { ...meta, categoryLabel: 'generalist', ...agent } as PromptAgentMeta);
+        expect(prompt.includes('<ReviewAppliedChanges>')).toBe(expected);
+    });
+
     it('leaves the prompt free of a PreviousReviewDecisions block when none exist', () => {
         expect(buildUserPrompt(baseInput(), meta)).not.toContain(
             '<PreviousReviewDecisions>',
@@ -613,5 +627,21 @@ describe('custom agent output format', () => {
         const prompt = buildUserPrompt(baseInput(), meta);
         expect(prompt).not.toContain('"existingCode"');
         expect(prompt).not.toContain('Assign a confidence score');
+    });
+});
+
+describe('PRContext truncation', () => {
+    const prContext = (prBody: string) =>
+        /<PRContext>([\s\S]*)<\/PRContext>/.exec(
+            buildUserPrompt(baseInput({ prTitle: 't', prBody }), meta),
+        )![1];
+    const LONE_SURROGATE =
+        /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+
+    it('does not split an emoji that straddles the 500-character limit', () => {
+        // The emoji's high surrogate is unit 499, its low surrogate unit 500.
+        const context = prContext('x'.repeat(499) + '\u{1F527} more text');
+        expect(LONE_SURROGATE.test(context)).toBe(false);
+        expect(context).toBe('Title: t\n' + 'x'.repeat(499));
     });
 });

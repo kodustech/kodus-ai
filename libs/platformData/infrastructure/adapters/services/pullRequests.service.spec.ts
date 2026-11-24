@@ -331,7 +331,12 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
 
         expect(
             pullRequestsRepository.findByNumberAndRepositoryId,
-        ).toHaveBeenCalledWith(2, stubRepository.id, stubOrg);
+        ).toHaveBeenCalledWith(
+            2,
+            stubRepository.id,
+            stubOrg,
+            expect.anything(),
+        );
         // A name match is what merged two repositories into one record.
         expect(
             pullRequestsRepository.findByNumberAndRepositoryName,
@@ -354,7 +359,12 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
 
         expect(
             pullRequestsRepository.findByNumberAndRepositoryName,
-        ).toHaveBeenCalledWith(2, stubRepository.name, stubOrg);
+        ).toHaveBeenCalledWith(
+            2,
+            stubRepository.name,
+            stubOrg,
+            expect.anything(),
+        );
         expect((service as any).update).toHaveBeenCalledWith(
             byName,
             expect.anything(),
@@ -366,7 +376,12 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
 
         expect(
             pullRequestsRepository.findByNumberAndRepositoryName,
-        ).toHaveBeenCalledWith(2, 'kody-format-probe-1822', stubOrg);
+        ).toHaveBeenCalledWith(
+            2,
+            'kody-format-probe-1822',
+            stubOrg,
+            expect.anything(),
+        );
         expect(
             pullRequestsRepository.findByNumberAndRepositoryId,
         ).not.toHaveBeenCalled();
@@ -393,7 +408,7 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
 
         expect(
             pullRequestsRepository.findByNumberAndRepositoryId,
-        ).toHaveBeenCalledWith(2, '12345', stubOrg);
+        ).toHaveBeenCalledWith(2, '12345', stubOrg, expect.anything());
     });
 
     it('stays silent when both lookups miss, instead of warning about a foreign repository', async () => {
@@ -542,5 +557,172 @@ describe('PullRequestsService.aggregateAndSaveDataStructure — existing-PR iden
             }),
         );
         expect((service as any).handleExistingPullRequest).toHaveBeenCalled();
+    });
+});
+
+describe('PullRequestsService.aggregateAndSaveDataStructure — an event that changes no file', () => {
+    const stubRepository = { id: 'repo-1', name: 'repo' };
+    const stubOrg = { organizationId: 'org-1', teamId: 'team-1' };
+    const storedPR = {
+        uuid: 'pr-uuid-1',
+        organizationId: 'org-1',
+        repository: { id: 'repo-1', name: 'repo' },
+    };
+    let service: PullRequestsService;
+    let pullRequestsRepository: any;
+
+    beforeEach(() => {
+        pullRequestsRepository = {
+            findByNumberAndRepositoryId: jest.fn().mockResolvedValue(storedPR),
+            findByNumberAndRepositoryName: jest.fn().mockResolvedValue(null),
+            update: jest.fn().mockResolvedValue(storedPR),
+            appendPrLevelSuggestions: jest.fn(),
+        };
+        service = new PullRequestsService(
+            pullRequestsRepository as any,
+            {} as any,
+        );
+        jest.spyOn(
+            service as any,
+            'prefetchUsersForExtraction',
+        ).mockResolvedValue(undefined);
+        jest.spyOn(service as any, 'extractUser').mockResolvedValue(null);
+        jest.spyOn(service as any, 'extractUsers').mockResolvedValue([]);
+    });
+
+    const save = (options?: { filesUnchanged?: boolean }) =>
+        service.aggregateAndSaveDataStructure(
+            { number: 2, state: 'closed', user: { username: 'someone' } },
+            stubRepository,
+            [],
+            [],
+            [],
+            PlatformType.GITHUB,
+            stubOrg,
+            [],
+            undefined,
+            options,
+        );
+
+    it('writes the lifecycle once and leaves files and commits alone', async () => {
+        const handleExisting = jest.spyOn(
+            service as any,
+            'handleExistingPullRequest',
+        );
+
+        await save({ filesUnchanged: true });
+
+        expect(handleExisting).not.toHaveBeenCalled();
+        expect(pullRequestsRepository.update).toHaveBeenCalledTimes(1);
+        const [, written] = pullRequestsRepository.update.mock.calls[0];
+        expect(written).not.toHaveProperty('commits');
+        expect(written).toHaveProperty('status');
+    });
+
+    it('reads the stored PR without its files', async () => {
+        await save({ filesUnchanged: true });
+
+        const projection =
+            pullRequestsRepository.findByNumberAndRepositoryId.mock.calls[0][3];
+        expect(projection).toMatchObject({ files: 0 });
+    });
+
+    it('still writes the commits of an event that fetched them', async () => {
+        jest.spyOn(
+            service as any,
+            'handleExistingPullRequest',
+        ).mockResolvedValue(storedPR);
+
+        await save();
+
+        const [, written] = pullRequestsRepository.update.mock.calls[0];
+        expect(written).toHaveProperty('commits', []);
+    });
+});
+
+// A file whose rewrite would change nothing is not rewritten. The check has to
+// tell a real change from the shapes Mongo hands back (absent vs empty, keys
+// in another order).
+describe('PullRequestsService — when a stored file counts as unchanged', () => {
+    const unchanged = (
+        stored: Record<string, unknown>,
+        fields: Record<string, unknown>,
+        budgeted: { patch: string; truncated?: boolean },
+    ): boolean =>
+        (PullRequestsService as any).fileIsUnchanged(stored, fields, budgeted);
+
+    const stored = {
+        patch: '@@ -1 +1 @@',
+        patchTruncated: false,
+        status: 'modified',
+        added: 3,
+        deleted: 1,
+        changes: 4,
+        reviewMode: 'heavy',
+        codeReviewModelUsed: { generateSuggestions: 'gen', safeguard: 'safe' },
+    };
+    const fields = {
+        status: 'modified',
+        added: 3,
+        deleted: 1,
+        changes: 4,
+        reviewMode: 'heavy',
+        // Same object, keys in another order.
+        codeReviewModelUsed: { safeguard: 'safe', generateSuggestions: 'gen' },
+    };
+    const budgeted = { patch: '@@ -1 +1 @@', truncated: false };
+
+    it('is unchanged when every compared field matches, whatever the key order', () => {
+        expect(unchanged(stored, fields, budgeted)).toBe(true);
+    });
+
+    it('leaves updatedAt out: a save always carries a fresh one', () => {
+        expect(
+            unchanged(
+                { ...stored, updatedAt: '2026-11-01T00:00:00.000Z' },
+                { ...fields, updatedAt: new Date().toISOString() },
+                budgeted,
+            ),
+        ).toBe(true);
+    });
+
+    it('reads absent, null and empty the same', () => {
+        expect(
+            unchanged(
+                { ...stored, reviewMode: undefined, patchTruncated: undefined },
+                { ...fields, reviewMode: '' },
+                { patch: '@@ -1 +1 @@' },
+            ),
+        ).toBe(true);
+        expect(
+            unchanged(
+                { ...stored, added: null },
+                { ...fields, added: 0 },
+                budgeted,
+            ),
+        ).toBe(true);
+    });
+
+    it.each([
+        ['the patch', {}, { patch: '@@ -1 +2 @@' }],
+        ['the truncation flag', {}, { patch: '@@ -1 +1 @@', truncated: true }],
+        ['the status', { status: 'renamed' }, undefined],
+        ['the lines added', { added: 4 }, undefined],
+        ['the lines deleted', { deleted: 2 }, undefined],
+        ['the changes', { changes: 5 }, undefined],
+        ['the review mode', { reviewMode: 'light' }, undefined],
+        [
+            'the model used',
+            { codeReviewModelUsed: { generateSuggestions: 'other', safeguard: 'safe' } },
+            undefined,
+        ],
+    ])('is changed when %s differs', (_label, fieldChange, patchChange) => {
+        expect(
+            unchanged(
+                stored,
+                { ...fields, ...fieldChange },
+                patchChange ?? budgeted,
+            ),
+        ).toBe(false);
     });
 });

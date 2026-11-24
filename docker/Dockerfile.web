@@ -45,6 +45,8 @@ RUN --mount=type=cache,target=/pnpm-store,sharing=private \
 #     backend resolver. It's the ONLY llm file the web reaches (it imports
 #     nothing), so we copy just the file — never the rest of libs/llm, which
 #     pulls the AI SDK / providers / kernel and would break the isolated build.
+#   - libs/llm/routing-refusal.ts — the BYOK failure banner reads the same
+#     routing-refusal wording as the backend classifier. Zero-dependency leaf.
 #   - libs/common/utils/safe-regex.ts — the Business Logic settings preview
 #     runs the same ReDoS guard (isRegexSafe) the server applies to a team's
 #     task id pattern. A zero-dependency leaf, so only the file is copied.
@@ -54,7 +56,9 @@ COPY apps/web ./apps/web
 COPY libs/feature-gate ./libs/feature-gate
 COPY libs/identity/domain/permissions ./libs/identity/domain/permissions
 COPY libs/llm/llm-tasks.ts ./libs/llm/llm-tasks.ts
+COPY libs/llm/routing-refusal.ts ./libs/llm/routing-refusal.ts
 COPY libs/common/utils/safe-regex.ts ./libs/common/utils/safe-regex.ts
+COPY libs/common/utils/glob-pattern-validation.ts ./libs/common/utils/glob-pattern-validation.ts
 
 WORKDIR /usr/src/app/apps/web
 # Turbopack persists its compiler artifacts to .next/cache, and since Next 16.3

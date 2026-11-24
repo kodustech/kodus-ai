@@ -1,39 +1,52 @@
 ---
-title: "AIコードレビューツールをセルフホストする方法"
-description: "データ、モデル、設定を完全に管理して、独自のインフラストラクチャにKodusをデプロイします。"
+title: "AI コードレビューツールをセルフホストする方法"
+description: "データ、モデル、設定を完全に管理できる形で、自社のインフラに Kodus をデプロイします。"
 ---
 
-Kodusはオープンソースで、独自のインフラストラクチャにセルフホストできます。これにより、データ、ネットワークアクセス、LLMプロバイダーを完全に制御できます。
+Kodus はオープンソースで、自社のインフラにセルフホストできます。これにより、レビューデータの保存場所、レビューに使う LLM プロバイダー、Git プロバイダーが Kodus に到達する経路を管理できます。
 
 ## デプロイオプション
 
 ### Docker（推奨）
 
-任意のVMにDocker Composeを使用してKodusをデプロイします：
+任意の VM で Docker Compose を使って Kodus をデプロイします。
 
-1. Kodusリポジトリをクローンします
-2. 環境変数を設定します
-3. `docker compose up` を実行します
-4. ウェブUIにアクセスしてGitプロバイダーを接続します
+1. `kodus-installer` リポジトリをクローンします
+2. `.env.example` を `.env` にコピーし、キーを生成して、値を入力します
+3. `./scripts/install.sh` を実行します
+4. `./scripts/doctor.sh` を実行して、スタックを確認します
+5. Web UI を開き、管理者アカウントを作成し、LLM プロバイダーを接続し（モデルがないとレビューは実行されません）、Git プロバイダーを接続します
+
+インストーラーは、Web アプリ、API、Webhook サービス、ワーカー、PostgreSQL、MongoDB、RabbitMQ を起動します。手順は [Docker でデプロイ](/ja/how_to_deploy/deploy_kodus/generic_vm)にあります。
 
 ### ローカル開発
 
-テストまたは貢献のために：
+テストやコントリビューションには、[ローカルクイックスタート](/ja/how_to_deploy/local_quickstart/orchestrator)を使用します。スタック全体を自分のマシンで実行します。
 
-1. クイックなローカルセットアップのためにオーケストレーターを使用します
-2. 単一コマンドですべてのサービスを含みます
+## Git プロバイダーの接続
+
+| プロバイダー | 接続方法 |
+| --- | --- |
+| GitHub | 自分で作成する GitHub App、またはトークン。[GitHub App](/ja/how_to_deploy/platforms/github/github_app) |
+| GitLab | 自分で作成する OAuth アプリ、またはトークン。[GitLab OAuth](/ja/how_to_deploy/platforms/gitlab/gitlab_oauth) |
+| Bitbucket | Cloud では API トークン、Data Center（alpha）ではユーザー名とパスワード。[Bitbucket の Webhook](/ja/how_to_deploy/platforms/bitbucket/bitbucket_webhook) |
+| Azure Repos | トークン。[Azure DevOps の Webhook](/ja/how_to_deploy/platforms/azure_devops/azdevops_webhook) |
+| Forgejo | トークン。サポートはコミュニティによって維持されています。[Forgejo の Webhook](/ja/how_to_deploy/platforms/forgejo/forgejo_webhook) |
 
 ## 管理できるもの
 
-- **データ** — すべてのコードとレビューデータがインフラストラクチャ上に留まります
-- **LLMプロバイダー** — 任意のプロバイダーまたはセルフホスト型モデルを使用
-- **ネットワーク** — ファイアウォールの背後で実行し、外部アクセス不要
-- **設定** — すべての設定を完全に制御
+- **データ** — Pull Request、提案、設定のデータは、自分の PostgreSQL と MongoDB に保存されます
+- **LLM プロバイダー** — 任意のプロバイダー、または OpenAI 互換のエンドポイント経由のセルフホストモデルを使用できます
+- **ネットワーク** — Git プロバイダーが Webhook サービス（ポート 3332）に到達でき、Kodus が Git プロバイダーと LLM プロバイダーに到達できる必要があります
+- **設定** — 設定は `.env` と Web アプリにあります
+
+各インスタンスは 1 日 1 回、匿名のハートビートを 1 つ送信します。確認またはオフにする方法は、[匿名テレメトリ](/ja/how_to_deploy/deploy_kodus/telemetry)を参照してください。
 
 ## 要件
 
-- DockerとDocker Compose
-- APIとワーカーサービスのための十分なコンピュートリソース
-- Gitプロバイダー（GitHub、GitLab、Bitbucket）へのネットワークアクセス
+- Docker と Docker Compose
+- API とワーカーサービスに十分なコンピュートリソース
+- GitHub.com や GitLab.com などのクラウドプロバイダーの場合は、Git プロバイダーが到達できるドメインまたは固定 IP
+- Git プロバイダー（GitHub、GitLab、Bitbucket、Azure Repos、Forgejo）へのネットワークアクセス
 
-完全なデプロイガイドについては、[Dockerでデプロイ](/ja/how_to_deploy/deploy_kodus/generic_vm)を参照してください。
+完全なデプロイガイドについては、[Docker でデプロイ](/ja/how_to_deploy/deploy_kodus/generic_vm)を参照してください。

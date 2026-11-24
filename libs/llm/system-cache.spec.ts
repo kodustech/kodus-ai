@@ -57,16 +57,16 @@ describe('systemCacheControl — registry-driven, protocol-aware', () => {
         ).toBeUndefined();
     });
 
-    // Claude hosted on Bedrock / Vertex accepts the SAME anthropic inline marker
-    // (per the AI SDK docs), but ONLY for the Anthropic-family deployments — the
-    // Gemini/Nova/Llama models on those same providers cache implicitly.
-    it('emits the hint for Claude-on-Bedrock, not for a non-Claude Bedrock model', () => {
+    // Only the Anthropic-family deployments get a marker — the Gemini/Nova/Llama
+    // models on those same providers cache implicitly. Bedrock's adapter reads
+    // `bedrock.cachePoint`, not the anthropic marker.
+    it('emits a Bedrock cachePoint for Claude-on-Bedrock, not for a non-Claude Bedrock model', () => {
         expect(
             systemCacheControl({
                 provider: 'amazon_bedrock',
                 model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
             }),
-        ).toEqual(EPHEMERAL);
+        ).toEqual({ bedrock: { cachePoint: { type: 'default' } } });
         expect(
             systemCacheControl({
                 provider: 'amazon_bedrock',

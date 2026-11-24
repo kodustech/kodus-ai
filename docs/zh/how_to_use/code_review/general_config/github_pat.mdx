@@ -15,8 +15,8 @@ description: "生成 Kody 进行代码审查所需的 GitHub Fine-Grained PAT,�
 
 1. 您必须是组织所有者。
 1. 转到 GitHub 中的组织设置:
-   - 您可以使用此 URL 替换为您的组织名称: <small>https://github.com/organizations/YOUR_ORG_NAME/settings/personal-access-tokens)</small>。
-1. 在**细粒度个人访问令牌**下,选择**"允许通过细粒度个人访问令牌访问"**以启用 Kody 的安全访问。
+   - 您可以使用此 URL 替换为您的组织名称: <small>https://github.com/organizations/YOUR_ORG_NAME/settings/personal-access-tokens</small>。
+1. 在左侧边栏的 **Personal access tokens** 下,点击 **Settings**。在 **Fine-grained tokens** 标签页上,选择 **Allow access via personal access tokens** 并点击 **Save**。
 
 ## 生成 FGPAT(细粒度个人访问令牌)
 
@@ -26,40 +26,40 @@ description: "生成 Kody 进行代码审查所需的 GitHub Fine-Grained PAT,�
 
    - [点击此处访问个人资料设置页面](https://github.com/settings/profile)。
 
-2. **导航到 `开发者设置`**:
+2. **导航到 `Developer Settings`**:
 
-   - 在左侧边栏中,向下滚动找到 `开发者设置` 并点击它。
+   - 在左侧边栏中,向下滚动找到 `Developer Settings` 并点击它。
 
-3. **转到 `个人访问令牌`**:
+3. **转到 `Personal Access Tokens`**:
 
-   - 仍在左侧边栏中,在 `开发者设置` 下,选择 `个人访问令牌`。
-   - 然后,点击[细粒度令牌](https://github.com/settings/tokens?type=beta)。
+   - 仍在左侧边栏中,在 `Developer Settings` 下,选择 `Personal Access Tokens`。
+   - 然后,点击 [Fine-grained Tokens](https://github.com/settings/tokens?type=beta)。
 
 4. **生成新令牌**:
 
-   - 点击 `生成新令牌` 按钮。
+   - 点击 `Generate new token` 按钮。
 
 5. **使用以下规格设置新令牌**:
 
-   - **令牌名称**:选择一个容易识别的名称,例如 `kody_code_review`。
-   - **到期日期**:如果可能,选择较长的到期日期,最好至少 180 天。
-   - **资源所有者**:确保组织设置为令牌所有者,因为团队的代码库位于组织下。
-   - **代码库访问**:选择**所有代码库**以允许令牌访问所有代码库。
-   - **权限**:配置以下只读权限:
-   - **代码库**:
-     - **Actions**:读权限。
-     - **提交状态**:读权限。
-     - **内容**:读和写权限。
-     - **部署**:读权限。
-     - **工单**:读权限。
-     - **元数据**:读权限。
-     - **拉取请求**:读和写权限。
+   - **Token Name**:选择一个容易识别的名称,例如 `kody_code_review`。
+   - **Expiration Date**:如果可能,选择较长的到期日期,最好至少 180 天。
+   - **Resource Owner**:确保组织设置为令牌所有者,因为团队的代码库位于组织下。
+   - **Repository Access**:选择 **All repositories** 以允许令牌访问所有代码库。
+   - **Permissions**:配置以下权限:
+   - **Repository**:
+     - **Commit statuses**:读权限。
+     - **Contents**:读和写权限。
+     - **Issues**:读权限。
+     - **Metadata**:读权限。
+     - **Pull requests**:读和写权限。
      - **Webhooks**:读和写权限。
-   - **组织**:
-     - **成员**:读权限。
+   - **Organization**:
+     - **Members**:读权限。
+
+   Kody 不使用 **Actions** 或 **Deployments**;请将它们保持为 **No access**。
 
 6. **完成并保存令牌**:
-   - 设置权限后,点击 `生成令牌`。
+   - 设置权限后,点击 `Generate token`。
    - 确保复制生成的令牌并安全存储,因为您需要它来配置 Kody。
 
 ## 将令牌添加到 Kody
@@ -68,5 +68,16 @@ description: "生成 Kody 进行代码审查所需的 GitHub Fine-Grained PAT,�
 
 - **在入门引导期间**:在 **Connect your Git tool** 上选择 **Github** 标签页,然后点击 **Connect via token**。
 - **之后**:在侧边栏中打开 **Repositories**,点击 **Connect a provider** 下的 **Github**,切换到 **Token** 标签页,粘贴令牌并点击 **Validate and save**。
+- **替换令牌**:在 **Repositories** 中,点击 **Github** 卡片上的 **Reset**,选择 **Just reset the integration**,然后按上述步骤使用新令牌重新连接。
 
 使用令牌时,审查会以您的 GitHub 个人资料而不是 Kody 的身份发布,并且 GitHub Checks / PR 状态不可用。
+
+## GitHub Enterprise Server (Beta)
+
+要使用令牌连接 GitHub Enterprise Server，Cloud 工作区需开通此 Beta 功能。自托管 Kodus 需设置 `BETA_FEATURES=true`。
+
+1. 在您的 GitHub Enterprise Server 实例上创建令牌。
+2. 在 **Github** 令牌对话框中,打开 **Self-hosted** 并输入您的 **GitHub Enterprise URL**,例如 `https://github.your-company.com`。它必须以 `http://` 或 `https://` 开头。
+3. 粘贴令牌并点击 **Validate and save**。
+
+Kodus 会调用该实例位于 `<GitHub Enterprise URL>/api/v3` 的 API。如果令牌或 URL 有误,对话框会显示 **Invalid Token or GitHub Enterprise URL**。

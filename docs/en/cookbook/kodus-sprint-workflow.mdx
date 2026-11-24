@@ -1,6 +1,6 @@
 ---
 title: "Kodus + sprint workflow"
-description: "Integrate business logic validation into your sprint cycle so every PR is validated against task requirements before merge."
+description: "Check every pull request against the task it references, from the first review to merge."
 icon: "arrows-spin"
 ---
 
@@ -8,39 +8,39 @@ icon: "arrows-spin"
 
 Teams track requirements in Jira, Linear, or Notion. Developers implement them in PRs. But nobody systematically checks whether the PR actually covers all the acceptance criteria — until QA finds gaps in staging.
 
-This cookbook closes that loop by validating PRs against task requirements automatically.
+This cookbook closes that loop with [Business Logic Validation](/en/how_to_use/code_review/business_logic_validation): Kody checks each PR against the task it references.
 
 ## The workflow
 
 ```
-Task created (Jira/Linear/Notion)
+Task created (Jira, Linear, Notion)
     ↓
-Developer implements → Opens PR
+Developer implements → Opens PR that references the task
     ↓
-Kodus automatically:
-  1. Fetches task context from the linked tool
-  2. Compares PR diff against acceptance criteria
-  3. Reports missing/partial implementations
+Kodus, on the PR's first review:
+  1. Finds the task in the PR title, branch or description
+  2. Reads it from the connected tracker
+  3. Lists every requirement and where it stands in the code
     ↓
-Developer addresses findings → Re-validates
+Developer addresses the gaps → Re-checks with @kody -v business-logic
     ↓
 Merge with confidence
 ```
 
-## Step 1 — Connect your task management tool
+## Step 1 — Connect your task tracker
 
 In the sidebar, open **Plugins** and connect your tool:
 
-- **Jira** — for teams using Atlassian
-- **Linear** — for teams using Linear
-- **Notion** — for teams using Notion as a task tracker
-- **ClickUp** — for teams using ClickUp
+- **Atlassian Rovo** — for Jira
+- **Linear**
+- **Notion**
+- **Git Issues** — for issues in your repository's own tracker
 
-Once connected, Kodus can automatically fetch task context during reviews.
+Any other tracker works through a [custom plugin](/en/cookbook/custom-plugin-install). Kody only reads tasks by their id and never writes to your tracker.
 
-## Step 2 — Enable business logic validation
+## Step 2 — Check that Business Logic is on
 
-It's enabled by default, but verify:
+It's on by default. Turn it on or off in **Code review → What to review**, on the **Business Logic** row, or in `kodus-config.yml` (read only when **Prefer kodus-config.yml settings** is on for the repository):
 
 ```yaml
 reviewOptions:
@@ -49,13 +49,13 @@ reviewOptions:
 
 ## Step 3 — Write good acceptance criteria
 
-The quality of validation depends entirely on the quality of your task descriptions. Kodus classifies task context as:
+How much Kody can check depends on the task:
 
-| Quality | What it means | What to do |
-|---------|--------------|------------|
-| **Complete** | Title + description + acceptance criteria | Best results — criterion-by-criterion validation |
-| **Partial** | Title + description, no criteria | Decent results — behavior-based analysis |
-| **Minimal** | Just a title | Poor results — only obvious gaps flagged |
+| Task | What Kody does |
+|------|----------------|
+| Acceptance criteria: a criteria field, a checklist, or a list in the description | Checks each requirement and cites the file and line |
+| A description, no list | Checks the behavior the description states |
+| Only a title | Doesn't check. It comments asking for acceptance criteria |
 
 **Template for Jira/Linear tasks:**
 
@@ -71,55 +71,50 @@ Brief context about what needs to change and why.
 5. API returns 403 for unauthorized delete attempts
 ```
 
-## Step 4 — Use on-demand validation during development
+If your criteria sit under a heading or in a custom field, set **Where acceptance criteria live** in the Business Logic settings.
 
-Before marking a PR as ready, developers can self-check:
+## Step 4 — Make the PR name its task
 
-```
-@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292
-```
+Kody looks for the task in the PR title, branch name and description, in that order: a key like `KC-1292`, `#123`, `AB#123`, or a link to the task. "Closes KC-1292" checks the PR against the whole task. "Part of KC-1292" checks a slice and lists what is missing without calling it a blocker.
 
-This catches gaps early, before the reviewer even looks at the PR.
+To require it, open **Code review → What to review → Business Logic** and turn on **Ask for a task when the PR references none**. Kody then comments asking which task the PR is for. Bot PRs such as Dependabot are left alone.
 
-## Step 5 — Teach sprint conventions as Memories
+## Step 5 — Re-check as the PR changes
 
-```
-@kody remember: every PR must be linked to a Jira ticket.
-PRs without a linked ticket should be flagged.
-```
+Kody checks on the PR's first review. After that, comment:
 
 ```
-@kody remember: acceptance criteria marked as "out of scope"
-in the ticket should not be flagged as missing.
+@kody -v business-logic
 ```
 
-## Step 6 — Create a PR requirement rule
+Kody edits its one comment instead of posting a new one. To check against a specific task, add its link or id: `@kody -v business-logic https://kodustech.atlassian.net/browse/KC-1292`.
+
+To re-check without asking, set **Re-check after a push** to **While something is missing**: each push re-checks until every requirement is met.
+
+## Step 6 — Teach the team's conventions
+
+In the Business Logic settings, **Team guidance** holds notes Kody follows when it judges:
 
 ```
-Name: PR must reference a task
-Execution mode: Per PR
-Severity: Medium
-Instructions:
-  Check pr_description and pr_title for a task reference
-  (e.g., KC-1234, TEAM-456, or a URL to Jira/Linear/Notion).
-  If no task reference is found, flag it and ask the developer
-  to link the relevant task for business logic validation.
+Requirements the ticket marks as out of scope are not missing.
+Feature flags count as implemented when the flag exists and defaults to off.
 ```
+
+A reviewer, not the PR's author, can also accept a gap by replying to Kody's comment and mentioning Kody, for example "@kody Out of scope, moved to SAA-102". Kody confirms the task exists and marks the requirement accepted. See [Replying to the comment](/en/how_to_use/code_review/business_logic_validation#replying-to-the-comment) for who can accept.
 
 ## The result
 
 After setup, every PR in your sprint gets:
 
 1. **Code quality review** — security, performance, style (standard Kodus)
-2. **Business logic validation** — are all acceptance criteria implemented?
-3. **Scope mismatch detection** — is this PR even working on the right task?
+2. **Business logic validation** — each requirement shown as met, partial, missing or to check by hand, plus changes the task doesn't ask for
 
 QA finds fewer gaps, sprint demos go smoother, and "I thought that was done" becomes rare.
 
 ## Tips
 
 - Encourage the team to write numbered acceptance criteria — they get the best validation
-- Use on-demand validation during development, not just at review time
-- If a PR intentionally doesn't cover all criteria (phased delivery), note it in the PR description so Kody can account for it
+- Run `@kody -v business-logic` during development, not just at review time
+- For phased delivery, say "Part of KC-1292" in the PR description so Kody doesn't treat the rest as blockers
 
 For details, see [Business Logic Validation](/en/how_to_use/code_review/business_logic_validation).

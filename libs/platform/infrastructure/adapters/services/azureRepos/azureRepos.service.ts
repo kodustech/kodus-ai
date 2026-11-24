@@ -1,10 +1,14 @@
+import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
+import type {
+    ApprovalTeamMembership,
+    ApprovalTeamMembershipParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/approvalTeamMembership.type';
 import {
     is429Error,
     isTransientFetchError,
 } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createTwoFilesPatch } from 'diff';
 import pLimit from 'p-limit';
 import { v4 } from 'uuid';
 
@@ -119,7 +123,16 @@ import {
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { AzureReposRequestHelper } from './azure-repos-request-helper';
+import {
+    AZURE_FILE_DIFF_TIMEOUT_MS,
+    createFilePatchYielding,
+} from './azure-file-patch';
 import { listingFailed } from '../repository-listing';
+import {
+    failWebhookSetupForAll,
+    runWebhookSetup,
+    WebhookSetupResult,
+} from '../webhook-setup/webhook-setup';
 
 // Sequence for the webhook-pass id in the instrumentation logs, so
 // successive passes over the same selection can be told apart.
@@ -807,10 +820,16 @@ export class AzureReposService implements Omit<
         params: any,
     ): Promise<IntegrationConfigEntity | null> {
         try {
+            // Scoped to this platform's active integrations, as GitHub's
+            // is: the id alone also matches repositories of other platforms.
             const integrationConfig =
                 await this.integrationConfigService.findOne({
                     configKey: IntegrationConfigKey.REPOSITORIES,
                     configValue: [{ id: params?.repository?.id?.toString() }],
+                    integration: {
+                        status: true,
+                        platform: PlatformType.AZURE_REPOS,
+                    },
                 });
 
             return integrationConfig &&
@@ -1025,6 +1044,31 @@ export class AzureReposService implements Omit<
         prNumber: number;
         reason: string;
     }): Promise<number> {
+        return this.resetOwnVoteWhen(params, PullRequestReviewState.APPROVED);
+    }
+
+    /** A reject vote (-10) is what `requestChangesPullRequest` leaves. */
+    async dismissOwnPullRequestChangeRequests(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        return this.resetOwnVoteWhen(
+            params,
+            PullRequestReviewState.CHANGES_REQUESTED,
+        );
+    }
+
+    /** Answers how many votes it reset: Kody has one vote on a PR. */
+    private async resetOwnVoteWhen(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: Partial<Repository>;
+            prNumber: number;
+        },
+        expected: PullRequestReviewState,
+    ): Promise<number> {
         const { organizationAndTeamData, repository, prNumber } = params;
         const state = await this.getReviewStatusByPullRequest({
             organizationAndTeamData,
@@ -1032,11 +1076,18 @@ export class AzureReposService implements Omit<
             prNumber,
         });
         if (state === null) {
-            throw new Error(
-                `Could not read Kody's approval on PR #${prNumber}`,
-            );
+            throw new Error(`Could not read Kody's vote on PR #${prNumber}`);
         }
-        if (state !== PullRequestReviewState.APPROVED) return 0;
+        if (state !== expected) return 0;
+        await this.resetOwnVote(organizationAndTeamData, repository, prNumber);
+        return 1;
+    }
+
+    private async resetOwnVote(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: Partial<Repository>,
+        prNumber: number,
+    ): Promise<void> {
         const { orgName, token } = await this.getAuthDetails(
             organizationAndTeamData,
         );
@@ -1050,7 +1101,8 @@ export class AzureReposService implements Omit<
                 token,
             }),
         ]);
-        if (!reviewerId) throw new Error('Unable to identify reviewer from PAT.');
+        if (!reviewerId)
+            throw new Error('Unable to identify reviewer from PAT.');
         await this.azureReposRequestHelper.votePullRequest({
             orgName,
             token,
@@ -1060,7 +1112,6 @@ export class AzureReposService implements Omit<
             reviewerId,
             vote: AzurePullRequestVote.NoVote,
         });
-        return 1;
     }
 
     async approvePullRequest(params: {
@@ -1168,9 +1219,11 @@ export class AzureReposService implements Omit<
             const listOfCriticalIssues =
                 this.getListOfCriticalIssues(criticalComments);
 
-            const bodyFormatted = `${title}\n\n${listOfCriticalIssues}\n\n\n`;
+            const bodyFormatted = withChangeRequestExitNote(
+                `${title}\n\n${listOfCriticalIssues}`,
+            );
 
-            await this.createSingleIssueComment({
+            const summary = await this.createSingleIssueComment({
                 body: bodyFormatted,
                 organizationAndTeamData,
                 prNumber,
@@ -1184,7 +1237,11 @@ export class AzureReposService implements Omit<
                 metadata: { params },
             });
 
-            return true;
+            // The summary is an active thread: a "comments must be resolved"
+            // policy holds the PR on it after the vote is withdrawn.
+            return summary?.id
+                ? { summaryCommentId: String(summary.id) }
+                : true;
         } catch (error) {
             this.logger.error({
                 message: `Error requesting changes on pull request #${params.prNumber}`,
@@ -1290,7 +1347,8 @@ export class AzureReposService implements Omit<
         targetUrl?: string;
         updatedDate?: string;
     }): CheckEvidence {
-        const unfinished = status.state === 'pending' || status.state === 'notSet';
+        const unfinished =
+            status.state === 'pending' || status.state === 'notSet';
         const name = status.context?.genre
             ? `${status.context.genre}/${status.context?.name ?? ''}`
             : (status.context?.name ?? '');
@@ -1609,7 +1667,13 @@ export class AzureReposService implements Omit<
                             baseCommitId,
                             targetCommitId: headSha,
                             changeType: change.changeType,
-                            rethrowRateLimit: true,
+                            rethrowRetryable: true,
+                            logContext: {
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                                teamId: organizationAndTeamData?.teamId,
+                                prNumber,
+                            },
                         }),
                     ),
                 ),
@@ -1642,7 +1706,7 @@ export class AzureReposService implements Omit<
 
     async getChangedFilesSinceLastCommit(params: {
         organizationAndTeamData: OrganizationAndTeamData;
-        repository: { id: string; name: string; project: { id: string } };
+        repository: { id: string; name: string; project?: { id: string } };
         prNumber: number;
         lastCommit: any;
     }): Promise<FileChange[] | null> {
@@ -1656,7 +1720,34 @@ export class AzureReposService implements Omit<
             const { orgName, token } = await this.getAuthDetails(
                 organizationAndTeamData,
             );
-            const projectId = repository.project.id;
+
+            // The caller builds this reference from the PR's repository, which
+            // may carry no project at all: reading `project.id` straight out of
+            // it sent the Azure calls to `/undefined/_apis/...`, a 404 that the
+            // check below reads as "this PR changed nothing" (#2318). Every
+            // other method of this adapter reads the project from the
+            // integration config, so this one does too. A project that is
+            // already on the reference is used as is, without the extra read.
+            const projectId =
+                repository.project?.id ??
+                (await this.getProjectIdFromRepository(
+                    organizationAndTeamData,
+                    repository.id,
+                ));
+
+            if (!projectId) {
+                this.logger.error({
+                    message: `No project to read PR#${prNumber} from`,
+                    context: this.getChangedFilesSinceLastCommit.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        repositoryId: repository?.id,
+                        prNumber,
+                        reason: 'missing_project',
+                    },
+                });
+                return null;
+            }
 
             // Obter detalhes do PR
             const pr = await this.azureReposRequestHelper.getPullRequestDetails(
@@ -1690,12 +1781,31 @@ export class AzureReposService implements Omit<
                 targetCommitId,
             });
 
-            const fileChanges = diffResponse?.filter(
+            // A partial list can leave out every PR file, which reads as
+            // "nothing new" (#2268); the caller has to know it is unreadable.
+            if (!diffResponse.allChangesIncluded) {
+                this.logger.warn({
+                    message: `Diff of PR#${prNumber} since ${lastCommit.sha} was not read in full`,
+                    context: AzureReposService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        repositoryId: repository?.id,
+                        prNumber,
+                        baseCommit: lastCommit.sha,
+                        targetCommitId,
+                        entriesRead: diffResponse.changes.length,
+                        reason: 'diff_incomplete',
+                    },
+                });
+                return null;
+            }
+
+            const fileChanges = diffResponse.changes.filter(
                 (change) => change?.item?.gitObjectType === 'blob',
             );
 
-            if (!fileChanges?.length) {
-                return null;
+            if (!fileChanges.length) {
+                return [];
             }
 
             // Get the PR file list to filter out files that came from merge commits
@@ -1711,6 +1821,21 @@ export class AzureReposService implements Omit<
             );
 
             const lastIteration = iterations?.[iterations.length - 1];
+            // Without the PR's own files every merged-in blob would be diffed,
+            // one request each.
+            if (!lastIteration) {
+                this.logger.warn({
+                    message: `No iteration to filter the diff of PR#${prNumber} since ${lastCommit.sha}`,
+                    context: AzureReposService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        repositoryId: repository?.id,
+                        prNumber,
+                        reason: 'pr_files_unavailable',
+                    },
+                });
+                return null;
+            }
             let prFileNames: Set<string> | null = null;
 
             if (lastIteration) {
@@ -1750,6 +1875,13 @@ export class AzureReposService implements Omit<
                     baseCommitId: lastCommit.sha,
                     targetCommitId,
                     changeType: change.changeType,
+                    // A rate-limited or unreachable file is not an unchanged one
+                    rethrowRetryable: true,
+                    logContext: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                        prNumber,
+                    },
                 });
 
                 if (fileDiff) {
@@ -1771,6 +1903,8 @@ export class AzureReposService implements Omit<
 
             return changedFiles;
         } catch (error) {
+            // A transport failure is not an empty listing either: let the job retry
+            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message: `Failed to get changed files since last commit for PR #${params.prNumber}`,
                 context: AzureReposService.name,
@@ -2300,7 +2434,9 @@ export class AzureReposService implements Omit<
                 error,
                 metadata: { params },
             });
-            return null;
+            // The summary step reports a failed write only when it throws, as
+            // on GitHub and GitLab; returning null read as a success (#2380).
+            throw error;
         }
     }
 
@@ -2436,6 +2572,32 @@ export class AzureReposService implements Omit<
                 metadata: { params },
             });
             return null;
+        }
+    }
+
+    async getApprovalTeamMembership(
+        params: ApprovalTeamMembershipParams,
+    ): Promise<ApprovalTeamMembership> {
+        try {
+            const auth = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+            const projectId = await this.getProjectIdFromRepository(
+                params.organizationAndTeamData,
+                params.repository.id,
+            );
+            if (!auth?.orgName || !auth.token || !projectId)
+                return 'unavailable';
+            return await this.azureReposRequestHelper.getApprovalTeamMembership(
+                {
+                    ...auth,
+                    projectId,
+                    team: params.team,
+                    author: params.author,
+                },
+            );
+        } catch {
+            return 'unavailable';
         }
     }
 
@@ -2580,6 +2742,169 @@ export class AzureReposService implements Omit<
         return undefined;
     }
 
+    /**
+     * Subscribes the given repositories without pruning anything: only the
+     * full pass in `createWebhook` knows the whole selection. Shares that
+     * pass's in-process slot so the two never build subscriptions from the
+     * same stale snapshot.
+     */
+    async ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult> {
+        const { organizationAndTeamData, repositories = [] } = params;
+        const labels = {
+            provider: 'Azure DevOps',
+            permissionHint:
+                'Creating service hook subscriptions needs the "Edit subscriptions" permission on the project (Project Administrators have it).',
+        };
+
+        if (!repositories.length) {
+            return { configured: [], failed: {}, notAttempted: [] };
+        }
+
+        const passKey = `${organizationAndTeamData?.organizationId}:${organizationAndTeamData?.teamId}`;
+
+        if (!(await this.waitForWebhookPassSlot(passKey))) {
+            // Running beside the full pass would build from the same stale
+            // snapshot, and freeing the slot afterwards would drop its claim.
+            this.logger.warn({
+                message:
+                    'Azure DevOps webhook setup deferred: a full pass still holds the slot',
+                context: AzureReposService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryCount: repositories.length,
+                },
+            });
+            return {
+                configured: [],
+                failed: {},
+                notAttempted: repositories.map((repo) => String(repo.id)),
+                deferred: {
+                    reason: 'Waiting: another webhook setup was running for this team. It will be retried on the next sync.',
+                },
+            };
+        }
+        azureWebhookPassInFlight.add(passKey);
+
+        try {
+            const passId = `ensure-${Date.now().toString(36)}-${(azureWebhookPassSeq += 1)}`;
+            let azureAuthDetail: AzureReposAuthDetail;
+            let existingSubscriptions: AzureRepoSubscription[];
+
+            try {
+                if (!process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK) {
+                    throw new Error(
+                        'The Azure DevOps webhook URL is not configured (GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK)',
+                    );
+                }
+
+                azureAuthDetail = await this.getAuthDetails(
+                    organizationAndTeamData,
+                );
+
+                existingSubscriptions =
+                    await this.azureReposRequestHelper.listSubscriptions({
+                        orgName: azureAuthDetail.orgName,
+                        token: azureAuthDetail.token,
+                    });
+            } catch (error) {
+                this.logger.error({
+                    message: 'Could not start Azure DevOps webhook setup',
+                    context: AzureReposService.name,
+                    error,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryCount: repositories.length,
+                    },
+                });
+                return failWebhookSetupForAll(repositories, error, labels);
+            }
+
+            const subscriptionIndex = new Map<
+                string,
+                AzureRepoSubscription[]
+            >();
+            for (const subscription of existingSubscriptions ?? []) {
+                const key = AzureReposService.subscriptionKey(
+                    subscription.publisherInputs?.projectId,
+                    subscription.publisherInputs?.repository,
+                    subscription.eventType,
+                );
+                subscriptionIndex.set(key, [
+                    ...(subscriptionIndex.get(key) ?? []),
+                    subscription,
+                ]);
+            }
+
+            const result = await runWebhookSetup(
+                repositories,
+                async (repo) => {
+                    if (!repo?.project?.id) {
+                        throw new Error(
+                            'The repository has no Azure DevOps project id',
+                        );
+                    }
+
+                    await this.createNotificationChannel(
+                        repo.project.id,
+                        azureAuthDetail.token,
+                        azureAuthDetail.orgName,
+                        String(repo.id),
+                        passId,
+                        subscriptionIndex,
+                        organizationAndTeamData?.teamId,
+                        { rethrow: true },
+                    );
+                },
+                labels,
+            );
+
+            this.logger.log({
+                message: 'Azure DevOps webhook setup finished',
+                context: AzureReposService.name,
+                metadata: {
+                    passId,
+                    organizationAndTeamData,
+                    configured: result.configured.length,
+                    failed: Object.keys(result.failed).length,
+                    notAttempted: result.notAttempted.length,
+                },
+            });
+
+            return result;
+        } finally {
+            azureWebhookPassInFlight.delete(passKey);
+
+            // A save that arrived meanwhile coalesced into this slot; its
+            // full pass has to run now, or its selection never converges.
+            if (azureWebhookPassRerunRequested.delete(passKey)) {
+                void this.createWebhook(organizationAndTeamData);
+            }
+        }
+    }
+
+    /** How long a targeted webhook setup waits for a running full pass. */
+    static WEBHOOK_PASS_WAIT_MS = 120_000;
+
+    /** True once the slot is free; false when the wait ran out. */
+    private async waitForWebhookPassSlot(passKey: string): Promise<boolean> {
+        const deadline = Date.now() + AzureReposService.WEBHOOK_PASS_WAIT_MS;
+        while (azureWebhookPassInFlight.has(passKey)) {
+            if (Date.now() >= deadline) {
+                return false;
+            }
+            await new Promise((resolve) =>
+                setTimeout(
+                    resolve,
+                    Math.min(500, AzureReposService.WEBHOOK_PASS_WAIT_MS),
+                ),
+            );
+        }
+        return true;
+    }
+
     async createWebhook(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<void> {
@@ -2716,7 +3041,10 @@ export class AzureReposService implements Omit<
             // which grows with the organization rather than with the
             // selection. Keyed exactly like the prune step so the two cannot
             // disagree about what counts as the same subscription.
-            const subscriptionIndex = new Map<string, AzureRepoSubscription[]>();
+            const subscriptionIndex = new Map<
+                string,
+                AzureRepoSubscription[]
+            >();
 
             for (const subscription of surviving) {
                 const key = AzureReposService.subscriptionKey(
@@ -2802,8 +3130,11 @@ export class AzureReposService implements Omit<
                 message: 'Error to create auth integration',
                 context: this.createAuthIntegration.name,
                 error: err,
+                // Named fields only: params carries the PAT.
                 metadata: {
-                    params,
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    authMode: params?.authMode,
+                    host: params?.host ?? params?.orgUrl,
                 },
             });
             throw new BadRequestException(err);
@@ -2859,8 +3190,10 @@ export class AzureReposService implements Omit<
                 message: 'Error to authenticate with token',
                 context: this.authenticateWithToken.name,
                 error: err,
+                // Named fields only: params carries the PAT.
                 metadata: {
-                    params,
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    orgUrl: params?.orgUrl,
                 },
             });
             throw new BadRequestException(
@@ -3106,9 +3439,9 @@ export class AzureReposService implements Omit<
             // in it. The last chunk arrives with the complete selection and
             // runs this once.
             if (!params.deferWebhooks) {
-                void this.createWebhook(
-                    params.organizationAndTeamData,
-                ).catch(() => undefined);
+                void this.createWebhook(params.organizationAndTeamData).catch(
+                    () => undefined,
+                );
             }
         } catch (err) {
             this.logger.error({
@@ -3716,6 +4049,9 @@ export class AzureReposService implements Omit<
                 name: project?.name ?? '',
             },
             lastActivityAt: repo?.lastUpdateTime ?? project?.lastUpdateTime,
+            archived: Boolean(repo?.isDisabled),
+            fork: Boolean(repo?.isFork),
+            mirror: false,
         };
     }
 
@@ -3988,10 +4324,28 @@ export class AzureReposService implements Omit<
                             baseCommitId,
                             targetCommitId,
                             changeType: change.changeType,
+                            rethrowRetryable: true,
+                            logContext: {
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                                teamId: organizationAndTeamData?.teamId,
+                                prNumber,
+                            },
                         }),
                     ),
                 ),
             );
+
+            // A rate-limited or unreachable file is not a missing one: the
+            // whole listing fails so the job retries instead of reviewing
+            // part of the PR.
+            const retryable = settled.find(
+                (result): result is PromiseRejectedResult =>
+                    result.status === 'rejected' &&
+                    (is429Error(result.reason) ||
+                        isTransientFetchError(result.reason)),
+            );
+            if (retryable) throw retryable.reason;
 
             const successfulFiles: Array<
                 NonNullable<
@@ -4073,6 +4427,8 @@ export class AzureReposService implements Omit<
 
             return fileChanges;
         } catch (error: any) {
+            // A transport failure is not an empty listing either: let the job retry
+            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message: `Failed to get files for Azure Repos PR #${params.prNumber} in repo ${params.repository.name}`,
                 context: this.getFilesByPullRequestId.name,
@@ -4095,7 +4451,13 @@ export class AzureReposService implements Omit<
         targetCommitId: string;
         changeType: string; // Azure's change type (e.g., 'add', 'edit', 'delete')
         /** Let a rate limit through instead of answering null. */
-        rethrowRateLimit?: boolean;
+        rethrowRetryable?: boolean;
+        /** Ties this file's warnings to the org, team and PR. */
+        logContext?: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        };
     }): Promise<{
         filename: string;
         sha: string; // Added missing sha property
@@ -4103,7 +4465,8 @@ export class AzureReposService implements Omit<
         additions: number;
         deletions: number;
         changes: number;
-        patch: string;
+        /** Undefined when the diff could not be computed (timed out). */
+        patch: string | undefined;
         content: string; // Added content
     } | null> {
         const {
@@ -4119,7 +4482,7 @@ export class AzureReposService implements Omit<
 
         let originalFileContent = '';
         let modifiedFileContent = '';
-        let patch = '';
+        let patch: string | undefined = '';
         let additions = 0;
         let deletions = 0;
         const status: FileChange['status'] = // Use correct type from FileChange
@@ -4200,7 +4563,10 @@ export class AzureReposService implements Omit<
 
             // Generate unified diff only if we have something to compare
             if (originalFileContent || modifiedFileContent) {
-                patch = createTwoFilesPatch(
+                // Yields to the event loop while diffing and gives up on a
+                // pathological file (see createFilePatchYielding).
+                const startedAt = Date.now();
+                const computed = await createFilePatchYielding(
                     status === 'renamed' // Compare with string literal
                         ? params.filePath /* Use original path here if available and needed */
                         : filePath, // Adjust if original path is needed for renamed files
@@ -4209,17 +4575,40 @@ export class AzureReposService implements Omit<
                     modifiedFileContent,
                     baseCommitId ?? '',
                     targetCommitId,
-                    { context: 3 }, // Context lines around changes
                 );
+                if (computed === undefined) {
+                    this.logger.warn({
+                        message: `Diff for "${filePath}" exceeded ${AZURE_FILE_DIFF_TIMEOUT_MS}ms; the file has no patch (unavailable, not empty)`,
+                        context: this._generateFileDiffForAzure.name,
+                        metadata: {
+                            ...params.logContext,
+                            filePath,
+                            baseCommitId,
+                            targetCommitId,
+                            elapsedMs: Date.now() - startedAt,
+                            originalChars: originalFileContent.length,
+                            modifiedChars: modifiedFileContent.length,
+                        },
+                    });
+                }
+                // A timed-out diff stays unavailable (undefined), the shape
+                // providers use for an omitted oversized patch, never an
+                // empty patch that reads as "no changes". Risk and approval
+                // checks treat a missing patch as missing evidence.
+                patch = computed;
 
-                // Calculate additions and deletions from the patch
-                const diffLines = patch.split('\n');
-                additions = diffLines.filter(
-                    (line) => line.startsWith('+') && !line.startsWith('+++'),
-                ).length;
-                deletions = diffLines.filter(
-                    (line) => line.startsWith('-') && !line.startsWith('---'),
-                ).length;
+                if (patch !== undefined) {
+                    // Calculate additions and deletions from the patch
+                    const diffLines = patch.split('\n');
+                    additions = diffLines.filter(
+                        (line) =>
+                            line.startsWith('+') && !line.startsWith('+++'),
+                    ).length;
+                    deletions = diffLines.filter(
+                        (line) =>
+                            line.startsWith('-') && !line.startsWith('---'),
+                    ).length;
+                }
             } else if (status === 'removed') {
                 // Compare with 'removed'
                 // Handle deleted files explicitly if needed (e.g., create a dummy patch or specific log)
@@ -4243,7 +4632,12 @@ export class AzureReposService implements Omit<
                 content: modifiedFileContent, // Added content
             };
         } catch (error: any) {
-            if (params.rethrowRateLimit && is429Error(error)) throw error;
+            if (
+                params.rethrowRetryable &&
+                (is429Error(error) || isTransientFetchError(error))
+            ) {
+                throw error;
+            }
             this.logger.error({
                 message: `Error generating diff for file "${filePath}" between commits "${baseCommitId}" and "${targetCommitId}"`,
                 context: this._generateFileDiffForAzure.name,
@@ -4640,7 +5034,9 @@ export class AzureReposService implements Omit<
             return { removed: 0, surviving: existingSubscriptions };
         }
 
-        const staleIds = new Set(stale.map(({ subscription }) => subscription.id));
+        const staleIds = new Set(
+            stale.map(({ subscription }) => subscription.id),
+        );
         let removed = 0;
 
         for (const { subscription, reason } of stale) {
@@ -4702,6 +5098,7 @@ export class AzureReposService implements Omit<
         passId?: string,
         subscriptionIndex: Map<string, AzureRepoSubscription[]> = new Map(),
         teamId?: string,
+        options: { rethrow?: boolean } = {},
     ): Promise<void> {
         const webhookUrl =
             process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK!;
@@ -4722,35 +5119,46 @@ export class AzureReposService implements Omit<
 
         const tasks = AzureReposService.WEBHOOK_EVENTS.map(
             ({ type, resourceVersion }) =>
-            this.createOrReplaceHook({
-                orgName: organizationName,
-                token: userToken,
-                projectId,
-                repoId,
-                eventType: type,
-                resourceVersion,
-                webhookUrl,
-                encryptedToken,
-                passId,
-                subscriptionIndex,
-                teamId,
-            }).catch((error) => {
-                this.logger.error({
-                    message: `Erro no hook ${type}: ${error.message ?? error}`,
-                    context: this.createNotificationChannel.name,
-                    error,
-                    metadata: {
-                        eventType: type,
-                        organizationName,
-                        projectId,
-                        repoId,
-                    },
-                });
-            }),
+                this.createOrReplaceHook({
+                    orgName: organizationName,
+                    token: userToken,
+                    projectId,
+                    repoId,
+                    eventType: type,
+                    resourceVersion,
+                    webhookUrl,
+                    encryptedToken,
+                    passId,
+                    subscriptionIndex,
+                    teamId,
+                    rethrow: options.rethrow,
+                }).catch((error) => {
+                    this.logger.error({
+                        message: `Erro no hook ${type}: ${error.message ?? error}`,
+                        context: this.createNotificationChannel.name,
+                        error,
+                        metadata: {
+                            eventType: type,
+                            organizationName,
+                            projectId,
+                            repoId,
+                        },
+                    });
+                    if (options.rethrow) {
+                        throw error;
+                    }
+                }),
         );
 
-        // Aguardar todas, mas já lidamos com erros acima
-        await Promise.all(tasks);
+        const settled = await Promise.allSettled(tasks);
+        const rejections = settled
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r) => r.reason);
+
+        if (rejections.length) {
+            // A rate limit decides what the caller does next, so it wins.
+            throw rejections.find((e) => is429Error(e)) ?? rejections[0];
+        }
     }
 
     /**
@@ -4888,6 +5296,7 @@ export class AzureReposService implements Omit<
         passId?: string;
         subscriptionIndex: Map<string, AzureRepoSubscription[]>;
         teamId?: string;
+        rethrow?: boolean;
     }): Promise<void> {
         const {
             orgName,
@@ -5033,6 +5442,9 @@ export class AzureReposService implements Omit<
                 error,
                 metadata: { eventType, orgName, projectId, repoId },
             });
+            if (opts.rethrow) {
+                throw error;
+            }
         }
     }
 
@@ -5091,7 +5503,9 @@ export class AzureReposService implements Omit<
             startLine: lineComment?.start_line,
             endLine: lineComment?.line,
             prompt: resolveAgentPrompt(lineComment?.suggestion),
-            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
+            improvedCode: this.dedentCode(
+                lineComment?.body?.improvedCode || '',
+            ),
             language: lineComment?.suggestion?.language || repository?.language,
         });
 
@@ -5274,16 +5688,25 @@ export class AzureReposService implements Omit<
                                 projectId,
                             },
                         );
-                    result.hook = subscriptions.some(
+                    const ours = subscriptions.filter(
                         (subscription) =>
                             subscription.publisherInputs?.repository ===
                                 params.repository.id &&
                             subscription.consumerInputs?.url?.includes(
                                 webhookUrl,
                             ),
-                    )
-                        ? 'present'
-                        : 'missing';
+                    );
+                    // A token minted before CODE_MANAGEMENT_SECRET or the
+                    // webhook token changed gets every delivery a 403.
+                    result.hook = !ours.length
+                        ? 'missing'
+                        : ours.some((subscription) =>
+                                this.hasUsableWebhookToken(
+                                    subscription.consumerInputs?.url,
+                                ),
+                            )
+                          ? 'present'
+                          : 'stale';
                 } catch (error) {
                     result.error ??= summarizeProviderError(error);
                 }

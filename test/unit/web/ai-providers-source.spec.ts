@@ -4,10 +4,7 @@ import path from 'node:path';
 const read = (relative: string) =>
     fs.readFileSync(path.join(process.cwd(), relative), 'utf8');
 
-const PAGE =
-    'apps/web/src/features/ee/byok/_components/page.client.tsx';
-const ROUTING_TAB =
-    'apps/web/src/features/ee/byok/_components/tabs/routing-tab.tsx';
+const PAGE = 'apps/web/src/features/ee/byok/_components/page.client.tsx';
 const FIRST_RUN =
     'apps/web/src/features/ee/byok/_components/first-run-card.tsx';
 const BUDGET =
@@ -25,12 +22,8 @@ describe('AI providers page source', () => {
         expect(source).not.toContain('onValueChange={setTab}');
     });
 
-    it('registers the routing draft with that guard', () => {
-        const source = read(ROUTING_TAB);
-
-        expect(source).toContain('useUnsavedChangesGuard');
-        expect(source).toContain('"byok-routing"');
-    });
+    // Routing moved out of this page. Its navigation guard is exercised through
+    // the real controls in routing-provider-matrix.mjs, not the removed tab's source.
 
     it('promises the Kodus no-key path only when its tile is in the grid', () => {
         const source = read(FIRST_RUN);
@@ -53,9 +46,7 @@ describe('AI providers page source', () => {
 
 describe('greeting source', () => {
     it('is computed in the browser, not on the server', () => {
-        const source = read(
-            'apps/web/src/core/components/system/greeting.tsx',
-        );
+        const source = read('apps/web/src/core/components/system/greeting.tsx');
 
         expect(source).toContain('"use client"');
         // Seeding state with the greeting leaves the server's wording on
@@ -101,7 +92,8 @@ describe('Kodus provider card button hierarchy', () => {
         // packs into a radio group (where the ONLY primary is the confirm
         // button, and the amounts carry no variant at all) failed a test whose
         // invariant the redesign actually strengthened. Count instead.
-        const primaries = source.match(/variant=(?:"primary"|\{[^}]*primary[^}]*\})/g) ?? [];
+        const primaries =
+            source.match(/variant=(?:"primary"|\{[^}]*primary[^}]*\})/g) ?? [];
         expect(primaries).toHaveLength(1);
 
         // And the amounts are a choice, not competing actions: one radio group

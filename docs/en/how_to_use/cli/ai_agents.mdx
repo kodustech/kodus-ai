@@ -3,32 +3,56 @@ title: "AI Agents"
 description: "Integrate the Kodus CLI with AI coding agents for autonomous review-fix loops."
 ---
 
-The CLI ships with a minimal, structured output mode (`--prompt-only`) designed for AI coding agents to parse and act on. Combined with a team key, it enables autonomous review-fix loops — the agent reviews, applies fixes, re-reviews, and commits, all without human input in the critical path.
+The CLI ships with a minimal, structured output mode (`--prompt-only`) for AI coding agents to parse and act on. Combined with a team key, it lets an agent review its own changes, fix what the review finds, and review again, with no human in the loop. The CLI also installs Kodus skills into the agents on your machine, so an agent knows which command to run.
 
 ## Supported agents
 
-- **Claude Code** — native skill via the skill installer.
-- **Cursor** — native skill.
-- **Codex** — native skill.
-- **Windsurf** — via `--prompt-only` output.
+`kodus skills install` finds an agent by its config folder, in the current directory and in your home folder, and writes the Kodus skills there. It detects:
 
-For any other agent that can run shell commands and parse structured text, `kodus review --prompt-only` works out of the box.
+| Agent         | Config folder                                      |
+| ------------- | -------------------------------------------------- |
+| Claude Code   | `.claude`, `~/.claude`, `~/.config/claude`         |
+| Cursor        | `.cursor`, `~/.cursor`                             |
+| Codex         | `.codex`, `~/.codex`                               |
+| Windsurf      | `.windsurf`, `~/.codeium/windsurf`                 |
+| Gemini        | `.gemini`                                          |
+| Antigravity   | `.agent`, `~/.gemini/antigravity`                  |
+| OpenCode      | `.opencode`, `~/.config/opencode`                  |
+| Kiro          | `.kiro`, `~/.kiro`                                 |
+| Goose         | `.goose`, `~/.config/goose`                        |
+| Roo Code      | `.roo`, `~/.roo`                                   |
+| Kilo Code     | `.kilocode`, `~/.kilocode`                         |
+| Droid         | `.factory`, `~/.factory`                           |
+| AiderDesk     | `.aider-desk`, `~/.aider-desk`                     |
+| Other agents  | `.agents`, `~/.agents`, `~/.config/agents`         |
+
+For any other agent that can run shell commands and read text, `kodus review --prompt-only` works without a skill.
 
 ## Quickest setup
 
-Install the CLI plus all agent skills in one shot:
+Install the CLI plus the skills in one shot:
 
 ```bash
-curl -fsSL https://review-skill.com/install | bash -s -- --team-key kodus_xxxxx
+curl -fsSL https://review-skill.com/install | bash
 ```
 
-This:
+The installer adds the CLI and installs the bundled skills for each agent it detects. Set `KODUS_TEAM_KEY` in the environment where your agent runs. For a self-hosted instance, also set `KODUS_API_URL`. To add or refresh skills later, run `kodus skills install` or `kodus skills resync`.
 
-1. Installs the `@kodus/cli` binary globally.
-2. Configures the team key in `~/.kodus/config.json`.
-3. Deploys Kodus skills to every detected agent (Claude Code, Cursor, Codex, Windsurf).
+## The skills
 
-No individual logins. No interactive prompts. Ready for agent loops immediately.
+| Skill                             | What the agent can do with it                                                      |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| `kodus-review`                    | Review local changes with `kodus review --prompt-only` and fix what it finds       |
+| `kodus-pr-suggestions-resolver`   | Fetch a pull request's suggestions, apply the ones that make sense, and read its review history |
+| `kodus-business-rules-validation` | Check local changes against a task's acceptance criteria                           |
+| `kodus-kody-rules`                | View, create, update, pause, resume, and delete Kody Rules                         |
+| `kodus-review-settings`           | Show and change code review settings and the review model                          |
+| `kodus-custom-agents`             | List, create, edit, turn on or off, delete, and try custom agents                  |
+| `kodus-cockpit-usage`             | Read Cockpit metrics and token usage                                               |
+| `kodus-centralized-config`        | Check, enable, sync, and download centralized config                               |
+| `kodus-trace`                     | Read the decisions recorded for the code it is about to change                     |
+
+Skills that change rules, settings, or agents need a login, or a team key that allows it. See [Authentication Modes](/en/how_to_use/cli/concepts#authentication-modes).
 
 ## The Review-Fix Loop
 
@@ -38,22 +62,26 @@ No individual logins. No interactive prompts. Ready for agent loops immediately.
     kodus review --prompt-only
     ```
 
-    The CLI returns structured issues with file paths, line numbers, severities, and suggested fixes — in a compact text format designed for an LLM to consume.
+    The CLI returns structured issues with file paths, line numbers, severities, and suggested fixes, in a compact text format for an LLM. The output starts with `REVIEW_ANALYSIS_COMPLETE` and ends with `END_REVIEW`.
   </Step>
   <Step title="Agent applies fixes">
-    The agent reads the output, decides which fixes to apply (or accepts all via `--fix`), and edits files accordingly.
+    The agent reads the output, decides which fixes to apply, and edits the files. A skipped false positive is fine; the agent should say why.
   </Step>
   <Step title="Agent re-runs review">
     ```bash
     kodus review --prompt-only --fail-on error
     ```
 
-    With `--fail-on error`, the loop exits non-zero while there are still error-or-worse issues. The agent keeps looping; when the review comes back clean, the process exits 0 and the agent moves on.
+    With `--fail-on error`, the command exits with code 1 while an error-or-worse issue remains. When the review is clean, it prints `NO_ISSUES_FOUND`, exits 0, and the agent moves on.
   </Step>
   <Step title="Agent commits and pushes">
-    Once the review is clean, the agent commits and pushes. Optionally, install the pre-push hook (`kodus hook install`) for an additional safety net on manual pushes.
+    Once the review is clean, the agent commits and pushes. Optionally, install the pre-push hook (`kodus hook install`) as a safety net on manual pushes.
   </Step>
 </Steps>
+
+<Note>
+  `--fix` asks for a confirmation in the terminal, so an unattended agent should apply fixes itself instead.
+</Note>
 
 ## Team key authentication for agents
 
@@ -72,34 +100,43 @@ Generate a key under **Organization → CLI keys** (<a href="https://app.kodus.i
 
 | Flag             | Use                                                                 |
 | ---------------- | ------------------------------------------------------------------- |
-| `--prompt-only`  | Compact structured output for parsing. Use in the review loop.     |
-| `--agent`        | Enforces deterministic machine-readable output on any command.     |
-| `--format json`  | Full JSON payload. Pair with `--agent` for strict parsers.          |
-| `--fail-on`      | Exit code gate. The loop keeps going while this is non-zero.        |
-| `--fields <csv>` | Narrow the JSON/agent payload (e.g. `summary,issues.file,issues.severity`). Useful to keep agent context windows small. |
+| `--prompt-only`  | Compact structured output for parsing. Use it in the review loop. `kodus review` only |
+| `--agent`        | One JSON envelope (`ok`, `command`, `data`, `error`, `meta`). Not every command supports it: see [Global Flags](/en/how_to_use/cli/commands#global-flags) |
+| `--format json`  | Full JSON payload for `review` and `pr`                             |
+| `--fail-on`      | Exit code gate: 1 when an issue meets the severity                  |
+| `--fields <csv>` | Narrow the JSON payload (e.g. `summary,issues.file,issues.severity`) to keep an agent's context small. Needs `--format json` or `--agent` |
+
+Other commands take `--json`. `kodus schema` prints every command and flag as JSON, for an agent that needs to check what exists.
 
 ## Example: Claude Code loop with business validation
 
 ```bash
 # In a Claude Code session, the agent can run:
-kodus review --prompt-only --fail-on error    # general review
-kodus pr business-validation --task-id KC-1441 --dry-run   # check against task
-kodus review --prompt-only --fix               # auto-apply fixable issues
+kodus review --prompt-only --fail-on error                      # general review
+kodus pr business-validation --task-id KC-1441 --format json    # check against the task
+kodus review --prompt-only --fail-on error                      # re-run after fixes
 git commit -am "fix: KC-1441 address review findings"
 ```
 
-With the skill installer, Claude Code's Kodus skill knows when to invoke each of these — no prompt engineering required on your side.
+With the skills installed, the agent knows when to run each of these.
+
+## Capturing what the agent decides
+
+`kodus trace enable` adds hooks for Claude Code, Cursor, and Codex that record each session, so the reasons behind an agent's changes are kept and can be read back by path. See [Kodus Trace](/en/how_to_use/cli/trace).
 
 ## Related
 
 <CardGroup cols={2}>
-  <Card title="Concepts" icon="book-open" href="concepts">
+  <Card title="Concepts" icon="book-open" href="/en/how_to_use/cli/concepts">
     Review modes, diff modes, and agent output flags.
   </Card>
-  <Card title="Command Reference" icon="book" href="commands">
+  <Card title="Command Reference" icon="book" href="/en/how_to_use/cli/commands">
     Full flag listing.
   </Card>
-  <Card title="Troubleshooting" icon="life-ring" href="troubleshooting">
+  <Card title="Kodus Trace" icon="timeline" href="/en/how_to_use/cli/trace">
+    Record and read back the decisions behind agent-written changes.
+  </Card>
+  <Card title="Troubleshooting" icon="life-ring" href="/en/how_to_use/cli/troubleshooting">
     Agent loop issues, hook problems, timeouts.
   </Card>
 </CardGroup>

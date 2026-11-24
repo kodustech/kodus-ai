@@ -19,7 +19,8 @@ import {
     filesInAgentScope,
     ignoredFilesInAgentScope,
     scopeCallGraph,
-    selectCustomAgents,
+    customAgentCandidates,
+    customAgentRiskSkipReason,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentRun } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import type { ResolvedKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
@@ -52,6 +53,12 @@ export interface OrchestratorInput extends ReviewAgentInput {
     /** Skills and docs per target: `main-review` for the built-in category
      *  agents, a custom agent's id for that agent. Kody Rules takes none. */
     knowledgeByTarget?: ReadonlyMap<string, ResolvedKnowledge>;
+    /**
+     * Which agents run. `all` (the default): every one. An Ultra review runs
+     * `native` (the category agents and the lenses) once per model, and
+     * `auxiliary` (Kody Rules and the custom agents) once.
+     */
+    agentScope?: 'all' | 'native' | 'auxiliary';
 }
 
 /** Which custom agent a failure, cut-short run or unverified set belongs to. */
@@ -159,6 +166,7 @@ export class ReviewOrchestratorService {
             onlyCustomAgent,
             knowledgeByTarget,
             ignoredChangedFiles,
+            agentScope = 'all',
             ...agentInput
         } = input;
         const mainKnowledge = knowledgeByTarget?.get(
@@ -192,6 +200,7 @@ export class ReviewOrchestratorService {
         const onlyIgnoredFiles =
             !agentInput.changedFiles?.length && !!ignoredChangedFiles?.length;
         const builtInAgents = !onlyCustomAgent && !onlyIgnoredFiles;
+        const categoryAgents = builtInAgents && agentScope !== 'auxiliary';
 
         const enabledCategories = [
             reviewOptions.bug !== false && 'bug',
@@ -199,8 +208,9 @@ export class ReviewOrchestratorService {
             reviewOptions.performance !== false && 'performance',
         ].filter(Boolean) as Array<'bug' | 'security' | 'performance'>;
 
-        if (!builtInAgents) {
-            // Only the requested custom agent runs (below).
+        if (!categoryAgents) {
+            // Only the requested custom agent runs (below), or the auxiliary
+            // agents of an Ultra review.
         } else if (agentInput.reviewMode === 'deep') {
             if (enabledCategories.includes('bug')) {
                 agentTasks.push({
@@ -240,6 +250,7 @@ export class ReviewOrchestratorService {
         // Add Kody Rules agent if there are active standard rules
         if (
             builtInAgents &&
+            agentScope !== 'native' &&
             this.kodyRulesAgent &&
             kodyRules &&
             kodyRules.length > 0
@@ -258,7 +269,7 @@ export class ReviewOrchestratorService {
 
         // Custom agents run next to the built-in ones, each on the files its
         // globs match. One whose globs match nothing is recorded, not run.
-        if (this.customAgentFactory) {
+        if (this.customAgentFactory && agentScope !== 'native') {
             // A save refuses two agents sharing a slug; one saved before that
             // check still loads, and only the first of the two runs.
             const slugClash = customAgentSlugClashMessage(customAgents ?? []);
@@ -275,7 +286,7 @@ export class ReviewOrchestratorService {
                     },
                 });
             }
-            for (const agent of selectCustomAgents(
+            for (const agent of customAgentCandidates(
                 customAgents,
                 onlyCustomAgent,
             )) {
@@ -295,6 +306,16 @@ export class ReviewOrchestratorService {
                     droppedByVerify: 0,
                 };
                 customAgentRuns.push(run);
+                const riskSkip = customAgentRiskSkipReason(
+                    agent,
+                    agentInput.riskAssessment,
+                    onlyCustomAgent,
+                );
+                if (riskSkip) {
+                    run.status = 'risk-condition-not-met';
+                    run.reason = riskSkip;
+                    continue;
+                }
                 if (files.length === 0) {
                     run.status = 'no-matching-files';
                     this.logger.log({
@@ -600,7 +621,7 @@ export class ReviewOrchestratorService {
 
     private getMaxStepsForAgent(
         agentName: string,
-        reviewMode?: 'fast' | 'normal' | 'deep',
+        reviewMode?: 'fast' | 'balanced' | 'deep',
         changedFilesCount = 0,
     ): number {
         if (reviewMode === 'deep') {

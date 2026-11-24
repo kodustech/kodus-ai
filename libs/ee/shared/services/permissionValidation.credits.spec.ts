@@ -158,4 +158,104 @@ describe('PermissionValidationService — Kodus credits gate', () => {
             expect(res.byokConfig?.provider).toBe('kodus');
         });
     });
+
+    describe('a slot routed after the prerequisites (the Heavy model)', () => {
+        const kodusSlot = {
+            provider: 'kodus',
+            model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
+        } as any;
+
+        it('blocks on a non-positive balance', async () => {
+            const svc = makeService({ creditBalanceUsd: 0 });
+            const res = await svc.gateKodusCreditsForSlot(kodusSlot, orgTeam);
+            expect(res?.errorType).toBe(ValidationErrorType.CREDITS_EXHAUSTED);
+        });
+
+        it('passes on a positive or unknown balance', async () => {
+            expect(
+                await makeService({ creditBalanceUsd: 4 }).gateKodusCreditsForSlot(
+                    kodusSlot,
+                    orgTeam,
+                ),
+            ).toBeNull();
+            expect(
+                await makeService({}).gateKodusCreditsForSlot(kodusSlot, orgTeam),
+            ).toBeNull();
+        });
+
+        it('does not read billing for an org key', async () => {
+            const svc = makeService({ creditBalanceUsd: 0 });
+            const res = await svc.gateKodusCreditsForSlot(
+                { provider: 'openai', model: 'gpt-4o' } as any,
+                orgTeam,
+            );
+            expect(res).toBeNull();
+            expect(
+                (svc as any).licenseService.validateOrganizationLicense,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('lets the review run when billing cannot be read', async () => {
+            const svc = makeService({});
+            (svc as any).licenseService.validateOrganizationLicense.mockRejectedValue(
+                new Error('billing down'),
+            );
+            expect(
+                await svc.gateKodusCreditsForSlot(kodusSlot, orgTeam),
+            ).toBeNull();
+        });
+    });
+});
+
+/**
+ * A license read that never produced an answer (billing 5xx, rate limit,
+ * timeout) says nothing about the organization, so it must not be reported as
+ * "no subscription" — the pipeline turns INVALID_LICENSE into the trial-ended
+ * comment. The distinct type routes it to the "subscription check
+ * unavailable" message instead.
+ */
+describe('PermissionValidationService — license service unreachable', () => {
+    const orgTeam = {
+        organizationId: '7f5bc971-76c2-4586-a624-84a7a98c696c',
+        teamId: 'team-1',
+    } as any;
+
+    const makeService = (validation: Record<string, unknown>) => {
+        const licenseService = {
+            validateOrganizationLicense: jest
+                .fn()
+                .mockResolvedValue(validation),
+            getAllUsersWithLicense: jest.fn().mockResolvedValue([]),
+        };
+        const orgParams = {
+            findByKey: jest.fn().mockResolvedValue(null),
+        };
+        return new PermissionValidationService(
+            licenseService as any,
+            orgParams as any,
+        );
+    };
+
+    it('keeps the two failure shapes distinct', async () => {
+        const failed = makeService({ valid: false, unavailable: true });
+        const answered = makeService({ valid: false });
+
+        const failedRes = await failed.validateExecutionPermissions(
+            orgTeam,
+            'dev-1',
+            'ValidatePrerequisitesStage',
+        );
+        const answeredRes = await answered.validateExecutionPermissions(
+            orgTeam,
+            'dev-1',
+            'ValidatePrerequisitesStage',
+        );
+
+        expect(failedRes.allowed).toBe(false);
+        expect(failedRes.errorType).toBe(
+            ValidationErrorType.LICENSE_UNAVAILABLE,
+        );
+        expect(answeredRes.allowed).toBe(false);
+        expect(answeredRes.errorType).toBe(ValidationErrorType.INVALID_LICENSE);
+    });
 });

@@ -21,7 +21,7 @@ When viewing existing Kody Rules, it's important to understand the details of ea
 Use the following command to fetch Kody Rules:
 
 ```
-kodus rules view [--repo-id <repository-id>] [--uuid <uuid>]
+kodus rules view [--repo-id <repository-id>] [--uuid <uuid>] [--team <team>]
 ```
 
 3. **Display Kody Rules**: Present the retrieved Kody Rule(s) in a clear and organized manner. For each rule, display the following information:
@@ -54,3 +54,7 @@ When relevant, surface centralized path and status, and clarify that pending cen
 3. **Provide Context**: When appropriate, provide additional context about how specific Kody Rules are applied in code generation and how they affect the output.
 
 4. **Be Responsive**: Be prepared to answer any follow-up questions the user may have about the Kody Rules, and provide helpful information to guide them in understanding and utilizing the rules effectively.
+
+## Team
+
+Logged in with more than one team, add `--team <name|id>`. With a team key, the key's team is used and `--team` is ignored.

@@ -15,7 +15,29 @@ import {
     IKodyRuleIndexEntry,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { KodyRulesModel } from '@libs/kodyRules/infrastructure/adapters/repositories/schemas/kodyRules.model';
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 import { KodyRulesValidationService } from '../service/kody-rules-validation.service';
+
+/**
+ * Field-level $set (`rules.$.field`) instead of replacing the whole matched
+ * element (`rules.$`). Replacing the element means a caller that passes a
+ * Partial silently wipes every field it omitted. Per-field $set also narrows
+ * the concurrency window: two edits touching DIFFERENT fields of the same
+ * rule no longer clobber each other (only same-field edits race,
+ * last-write-wins, which is expected). Undefined fields are skipped, `null`
+ * is written. Null when nothing is left to set (Mongo rejects an empty $set).
+ */
+function ruleFieldSet(
+    updateData: Partial<IKodyRule>,
+): Record<string, unknown> | null {
+    const setFields: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(updateData)) {
+        if (value !== undefined) {
+            setFields[`rules.$.${key}`] = value;
+        }
+    }
+    return Object.keys(setFields).length > 0 ? setFields : null;
+}
 
 @Injectable()
 export class KodyRulesRepository implements IKodyRulesRepository {
@@ -59,7 +81,10 @@ export class KodyRulesRepository implements IKodyRulesRepository {
             { $replaceRoot: { newRoot: '$rules' } },
         ];
 
-        const result = await this.kodyRulesModel.aggregate(pipeline).exec();
+        const result = await this.kodyRulesModel
+            .aggregate(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .exec();
         return result.length > 0 ? result[0] : null;
     }
 
@@ -147,7 +172,10 @@ export class KodyRulesRepository implements IKodyRulesRepository {
             });
         }
 
-        const docs = await this.kodyRulesModel.aggregate(pipeline).exec();
+        const docs = await this.kodyRulesModel
+            .aggregate(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .exec();
 
         return mapSimpleModelsToEntities(docs, KodyRulesEntity);
     }
@@ -155,10 +183,119 @@ export class KodyRulesRepository implements IKodyRulesRepository {
     async findByOrganizationId(
         organizationId: string,
     ): Promise<KodyRulesEntity | null> {
+        // lean: the mapper reads plain data, and hydrating a document of
+        // hundreds of KB (every rule, examples, compiled detectors) into a
+        // Mongoose document on every review cost CPU for nothing.
         const doc = await this.kodyRulesModel
             .findOne({ organizationId })
+            .lean()
             .exec();
         return doc ? mapSimpleModelToEntity(doc, KodyRulesEntity) : null;
+    }
+
+    async findLiveRulesByOrganizationId(
+        organizationId: string,
+    ): Promise<KodyRulesEntity | null> {
+        const [doc] = await this.kodyRulesModel
+            .aggregate([
+                { $match: { organizationId } },
+                // findOne's document, should an organization have two.
+                { $limit: 1 },
+                {
+                    $project: {
+                        organizationId: 1,
+                        createdAt: 1,
+                        updatedAt: 1,
+                        rules: {
+                            $filter: {
+                                input: '$rules',
+                                as: 'rule',
+                                cond: {
+                                    $ne: [
+                                        '$$rule.status',
+                                        KodyRulesStatus.DELETED,
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                },
+            ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .exec();
+        return doc ? mapSimpleModelToEntity(doc, KodyRulesEntity) : null;
+    }
+
+    async updateRulesFields(
+        organizationId: string,
+        uuid: string,
+        changes: Array<{ ruleId: string; patch: Partial<IKodyRule> }>,
+    ): Promise<string[]> {
+        const ops = changes
+            .map(({ ruleId, patch }) => ({
+                ruleId,
+                setFields: ruleFieldSet(patch),
+            }))
+            .filter(({ setFields }) => setFields);
+        if (!ops.length) return [];
+
+        // One bulkWrite instead of a findAndModify per rule fired in
+        // parallel: the writes all land on the same document, where parallel
+        // ones only conflicted and retried, and each one sent the whole
+        // document back.
+        try {
+            const result = await this.kodyRulesModel.bulkWrite(
+                ops.map(({ ruleId, setFields }) => ({
+                    updateOne: {
+                        // `$eq`: an id that arrives as an object must not
+                        // become an operator, as in the other rule writes.
+                        // Scoped to the organization in the query itself.
+                        filter: {
+                            '_id': { $eq: uuid },
+                            'organizationId': { $eq: organizationId },
+                            'rules.uuid': { $eq: ruleId },
+                        },
+                        update: { $set: setFields },
+                    },
+                })),
+                { ordered: false },
+            );
+            // Only a readable count proves every rule was written; without one
+            // the rules are checked below.
+            if (
+                typeof result?.matchedCount === 'number' &&
+                result.matchedCount >= ops.length
+            ) {
+                return [];
+            }
+            // A rule removed between the read and this write matched
+            // nothing: report it as not written instead of counting it.
+            const stored = (await this.kodyRulesModel
+                .findOne(
+                    {
+                        _id: { $eq: uuid },
+                        organizationId: { $eq: organizationId },
+                    },
+                    { 'rules.uuid': 1 },
+                )
+                .lean()
+                .exec()) as { rules?: Array<{ uuid?: string }> } | null;
+            const present = new Set(
+                (stored?.rules ?? []).map((rule) => rule.uuid),
+            );
+            return ops
+                .filter((op) => !present.has(op.ruleId))
+                .map((op) => op.ruleId);
+        } catch (error) {
+            const failed = new Set<number>(
+                (
+                    (error as { writeErrors?: Array<{ index: number }> })
+                        ?.writeErrors ?? []
+                ).map((e) => e.index),
+            );
+            if (!failed.size) throw error;
+            return ops.filter((_, i) => failed.has(i)).map((op) => op.ruleId);
+        }
     }
 
     async findRulesIndex(
@@ -186,6 +323,7 @@ export class KodyRulesRepository implements IKodyRulesRepository {
 
         return this.kodyRulesModel
             .aggregate<IKodyRuleIndexEntry>(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
     }
 
@@ -220,6 +358,7 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         }
         const [result] = await this.kodyRulesModel
             .aggregate<{ total: number }>(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
         return result?.total ?? 0;
     }
@@ -268,6 +407,7 @@ export class KodyRulesRepository implements IKodyRulesRepository {
                 directoryId: string | null;
                 count: number;
             }>(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
     }
     //#endregion
@@ -309,25 +449,27 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         ruleId: string,
         updateData: Partial<IKodyRule>,
     ): Promise<KodyRulesEntity | null> {
-        // Field-level $set (`rules.$.field`) instead of replacing the whole
-        // matched element (`rules.$`). Replacing the element means a caller
-        // that passes a Partial — which the signature explicitly allows —
-        // silently wipes every field it omitted. Per-field $set also narrows
-        // the concurrency window: two edits touching DIFFERENT fields of the
-        // same rule no longer clobber each other (only same-field edits race,
-        // last-write-wins, which is expected). `uuid` is undefined-safe.
-        const setFields: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(updateData)) {
-            if (value !== undefined) {
-                setFields[`rules.$.${key}`] = value;
-            }
-        }
+        const setFields = ruleFieldSet(updateData);
+        // Every caller reads back only the rule it wrote
+        // (`entity.rules.find(r => r.uuid === ruleId)`), so the document
+        // returned carries that rule alone instead of every rule of the
+        // organization.
+        const projection = {
+            organizationId: 1,
+            // `$eq`: a ruleId that arrives as an object (`{ $ne: null }`)
+            // must not turn into an operator that matches any rule.
+            rules: { $elemMatch: { uuid: { $eq: ruleId } } },
+        };
 
         // Nothing concrete to set (all-undefined patch) — avoid an empty $set,
         // which Mongo rejects. Return the current doc unchanged.
-        if (Object.keys(setFields).length === 0) {
+        if (!setFields) {
             const current = await this.kodyRulesModel
-                .findOne({ '_id': uuid, 'rules.uuid': ruleId })
+                .findOne(
+                    { '_id': uuid, 'rules.uuid': { $eq: ruleId } },
+                    projection,
+                )
+                .lean()
                 .exec();
             return current
                 ? mapSimpleModelToEntity(current, KodyRulesEntity)
@@ -336,14 +478,74 @@ export class KodyRulesRepository implements IKodyRulesRepository {
 
         const updated = await this.kodyRulesModel
             .findOneAndUpdate(
-                { '_id': uuid, 'rules.uuid': ruleId },
+                { '_id': uuid, 'rules.uuid': { $eq: ruleId } },
                 { $set: setFields },
-                { new: true },
+                { new: true, projection },
             )
+            .lean()
             .exec();
         return updated
             ? mapSimpleModelToEntity(updated, KodyRulesEntity)
             : null;
+    }
+
+    /**
+     * Same field-level `$set` as `updateRule`, addressed by organization and
+     * rule id, and returning only the touched rule.
+     *
+     * Why not findByOrganizationId + updateRule: that pair loads the
+     * organization's whole document (every rule) to find one rule, then
+     * `{ new: true }` deserializes the whole document a second time. For an
+     * organization with hundreds of rules, a sync that touches each rule paid
+     * that per rule, synchronously, on the worker event loop. The
+     * `rules.uuid` index serves this filter; the `$elemMatch` projection
+     * brings back the one rule.
+     */
+    async updateRuleFieldsByOrganization(
+        organizationId: string,
+        ruleId: string,
+        updateData: Partial<IKodyRule>,
+    ): Promise<Partial<IKodyRule> | null> {
+        const setFields = ruleFieldSet(updateData);
+        const filter = {
+            'organizationId': { $eq: organizationId },
+            'rules.uuid': { $eq: ruleId },
+        };
+        const projection = { rules: { $elemMatch: { uuid: { $eq: ruleId } } } };
+
+        // All-undefined patch: Mongo rejects an empty $set, so read instead.
+        const doc = !setFields
+            ? await this.kodyRulesModel
+                  .findOne(filter, projection)
+                  .lean()
+                  .exec()
+            : await this.kodyRulesModel
+                  .findOneAndUpdate(
+                      filter,
+                      { $set: setFields },
+                      { new: true, projection },
+                  )
+                  .lean()
+                  .exec();
+
+        const rule = (doc as { rules?: Partial<IKodyRule>[] } | null)
+            ?.rules?.[0];
+        if (!rule) {
+            return null;
+        }
+        // Same normalization the entity applies when a caller reads
+        // `entity.rules` (scope defaults to FILE).
+        return KodyRulesEntity.create({
+            organizationId,
+            rules: [rule],
+        } as IKodyRules).rules[0];
+    }
+
+    async existsForOrganization(organizationId: string): Promise<boolean> {
+        const found = await this.kodyRulesModel
+            .exists({ organizationId })
+            .exec();
+        return !!found;
     }
     //#endregion
 
@@ -355,26 +557,32 @@ export class KodyRulesRepository implements IKodyRulesRepository {
 
     async deleteRule(uuid: string, ruleId: string): Promise<boolean> {
         const deleted = await this.kodyRulesModel
-            .updateOne({ _id: uuid }, { $pull: { rules: { uuid: ruleId } } })
+            .updateOne(
+                { _id: { $eq: uuid } },
+                // `$eq`: an object ruleId would otherwise pull every rule.
+                { $pull: { rules: { uuid: { $eq: ruleId } } } },
+            )
             .exec();
 
         return deleted.acknowledged;
     }
 
+    // updateOne: the caller only needs to know the rule was found. A
+    // findAndModify with `new: true` sent the whole rules document back.
     async deleteRuleLogically(
-        uuid: string,
+        organizationId: string,
         ruleId: string,
-    ): Promise<KodyRulesEntity | null> {
-        const updated = await this.kodyRulesModel
-            .findOneAndUpdate(
-                { '_id': uuid, 'rules.uuid': ruleId },
+    ): Promise<boolean> {
+        const result = await this.kodyRulesModel
+            .updateOne(
+                {
+                    'organizationId': { $eq: organizationId },
+                    'rules.uuid': { $eq: ruleId },
+                },
                 { $set: { 'rules.$.status': KodyRulesStatus.DELETED } },
-                { new: true },
             )
             .exec();
-        return updated
-            ? mapSimpleModelToEntity(updated, KodyRulesEntity)
-            : null;
+        return result.matchedCount > 0;
     }
 
     async markAutoPausesDigested(

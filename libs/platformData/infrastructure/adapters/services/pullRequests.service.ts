@@ -1,3 +1,7 @@
+import type {
+    UpdateSuggestionOptions,
+    KodyChangeRequestRecord,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
     BulkApplyResult,
     FileBulkOp,
@@ -8,12 +12,14 @@ import { IPullRequestsService } from '@libs/platformData/domain/pullRequests/con
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import {
     IApprovalReasonDeliveryFailure,
+    ApprovalReasonDeliveryGuard,
     ICommit,
     IFile,
     IPullRequests,
     IPullRequestUser,
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
+    IPullRequestWithKodyChangeRequest,
     ISuggestion,
     ISuggestionByPR,
     SuggestionCountsBySeverity,
@@ -33,6 +39,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { createLogger } from '@libs/core/log/logger';
 
+import type { CustomAgentFindingsScope } from '@libs/platformData/domain/pullRequests/interfaces/custom-agent-findings.interface';
 @Injectable()
 export class PullRequestsService implements IPullRequestsService {
     private readonly logger = createLogger(PullRequestsService.name);
@@ -58,6 +65,26 @@ export class PullRequestsService implements IPullRequestsService {
      * lets the failure return.
      */
     private static readonly MAX_FILES_PER_SAVE = 5000;
+
+    /**
+     * What the save reads of the stored PR: everything but the suggestions,
+     * the PR-level suggestions and the commits. It adds suggestions with
+     * `$push` and writes commits wholesale, so it never reads them back, and
+     * they are most of what a document weighs besides the patches (which the
+     * diff budget does need).
+     */
+    private static readonly SAVE_LOOKUP_PROJECTION = {
+        'files.suggestions': 0,
+        'prLevelSuggestions': 0,
+        'commits': 0,
+    } as const;
+
+    /** An event that changes no file reads none of them either. */
+    private static readonly LIFECYCLE_LOOKUP_PROJECTION = {
+        files: 0,
+        prLevelSuggestions: 0,
+        commits: 0,
+    } as const;
 
     private static readonly BINARY_PATCH_EXT =
         /\.(png|jpe?g|gif|svg|webp|ico|bmp|tiff?|pdf|zip|tar|gz|tgz|bz2|7z|rar|woff2?|ttf|otf|eot|mp4|mov|webm|mp3|wav|flac|ogg|psd|ai|sketch|fig|class|jar|exe|dll|so|dylib|wasm)$/i;
@@ -102,8 +129,14 @@ export class PullRequestsService implements IPullRequestsService {
         });
     }
 
-    getNativeCollection() {
-        throw new Error('Method not implemented.');
+    findCustomAgentSuggestionRows(scope: CustomAgentFindingsScope) {
+        return this.pullRequestsRepository.findCustomAgentSuggestionRows(scope);
+    }
+
+    findUnfollowedCustomAgentCitations(scope: CustomAgentFindingsScope) {
+        return this.pullRequestsRepository.findUnfollowedCustomAgentCitations(
+            scope,
+        );
     }
 
     setApprovalReasonDeliveryFailure(
@@ -111,12 +144,64 @@ export class PullRequestsService implements IPullRequestsService {
         repositoryId: string,
         prNumber: number,
         failure: IApprovalReasonDeliveryFailure | null,
+        guard?: ApprovalReasonDeliveryGuard,
     ): Promise<boolean> {
         return this.pullRequestsRepository.setApprovalReasonDeliveryFailure(
             organizationId,
             repositoryId,
             prNumber,
             failure,
+            guard,
+        );
+    }
+
+    recordKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        request: KodyChangeRequestRecord,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.recordKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            request,
+        );
+    }
+
+    clearKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.clearKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            requestedAt,
+        );
+    }
+
+    hasOpenKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.hasOpenKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            requestedAt,
+        );
+    }
+
+    findOpenPullRequestsWithKodyChangeRequest(
+        organizationId: string,
+    ): Promise<IPullRequestWithKodyChangeRequest[]> {
+        return this.pullRequestsRepository.findOpenPullRequestsWithKodyChangeRequest(
+            organizationId,
         );
     }
 
@@ -135,8 +220,9 @@ export class PullRequestsService implements IPullRequestsService {
 
     async findOne(
         filter?: Partial<IPullRequests>,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null> {
-        return this.pullRequestsRepository.findOne(filter);
+        return this.pullRequestsRepository.findOne(filter, projection);
     }
 
     async find(filter?: Partial<IPullRequests>): Promise<PullRequestsEntity[]> {
@@ -255,6 +341,53 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    findPullRequestAuthorsOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>> {
+        return this.pullRequestsRepository.findPullRequestAuthorsOpenedSince(
+            since,
+            organizationId,
+            repositoryIds,
+        );
+    }
+
+    findPullRequestAuthorLabelsByIds(
+        organizationId: string,
+        userIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>> {
+        return this.pullRequestsRepository.findPullRequestAuthorLabelsByIds(
+            organizationId,
+            userIds,
+        );
+    }
+
+    hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.hasStoredPullRequests(
+            organizationId,
+            repositoryIds,
+        );
+    }
+
+    findOpenPullRequestKeys(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: { unresolvedOnly?: boolean; limit: number },
+    ): Promise<{
+        keys: Array<{ number: number; repositoryId: string }>;
+        truncated: boolean;
+    }> {
+        return this.pullRequestsRepository.findOpenPullRequestKeys(
+            organizationId,
+            repositoryIds,
+            opts,
+        );
+    }
+
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,
         repositoryIds: string[] | undefined,
@@ -290,6 +423,18 @@ export class PullRequestsService implements IPullRequestsService {
             organizationId,
             repositoryIds,
             opts,
+        );
+    }
+
+    countByAuthor(
+        organizationId: string,
+        authorId: string,
+        limit: number,
+    ): Promise<number> {
+        return this.pullRequestsRepository.countByAuthor(
+            organizationId,
+            authorId,
+            limit,
         );
     }
 
@@ -380,12 +525,14 @@ export class PullRequestsService implements IPullRequestsService {
     async findPullRequestsWithDeliveredSuggestions(
         organizationId: string,
         prNumbers: number[],
-        status: string,
+        status: string | string[],
+        pullRequestRefs?: Array<{ repositoryId: string; number: number }>,
     ): Promise<IPullRequestWithDeliveredSuggestions[]> {
         return this.pullRequestsRepository.findPullRequestsWithDeliveredSuggestions(
             organizationId,
             prNumbers,
             status,
+            pullRequestRefs,
         );
     }
 
@@ -490,6 +637,13 @@ export class PullRequestsService implements IPullRequestsService {
 
     computeFileTotals(prUuid: string, organizationId: string) {
         return this.pullRequestsRepository.computeFileTotals(
+            prUuid,
+            organizationId,
+        );
+    }
+
+    refreshFileTotalsIfStale(prUuid: string, organizationId: string) {
+        return this.pullRequestsRepository.refreshFileTotalsIfStale(
             prUuid,
             organizationId,
         );
@@ -613,11 +767,13 @@ export class PullRequestsService implements IPullRequestsService {
         suggestionId: string,
         updateData: Partial<ISuggestion>,
         organizationAndTeamData: OrganizationAndTeamData,
+        options?: UpdateSuggestionOptions,
     ): Promise<PullRequestsEntity | null> {
         return this.pullRequestsRepository.updateSuggestion(
             suggestionId,
             updateData,
             organizationAndTeamData,
+            options,
         );
     }
 
@@ -661,7 +817,7 @@ export class PullRequestsService implements IPullRequestsService {
         organizationAndTeamData: OrganizationAndTeamData,
         commits: ICommit[],
         prLevelSuggestions?: ISuggestionByPR[],
-        options?: { keepStoredState?: boolean },
+        options?: { keepStoredState?: boolean; filesUnchanged?: boolean },
     ): Promise<IPullRequests | null> {
         // Gate from issue #1107 / fix A. Very large PRs hit the BSON
         // 16MB document cap and waste the worker on every webhook
@@ -727,7 +883,7 @@ export class PullRequestsService implements IPullRequestsService {
         organizationAndTeamData: OrganizationAndTeamData,
         commits: ICommit[],
         prLevelSuggestions?: ISuggestionByPR[],
-        options?: { keepStoredState?: boolean },
+        options?: { keepStoredState?: boolean; filesUnchanged?: boolean },
     ): Promise<IPullRequests | null> {
         const organizationId = organizationAndTeamData?.organizationId;
 
@@ -800,6 +956,9 @@ export class PullRequestsService implements IPullRequestsService {
             pullRequest?.number,
             repository,
             organizationAndTeamData,
+            options?.filesUnchanged
+                ? PullRequestsService.LIFECYCLE_LOOKUP_PROJECTION
+                : PullRequestsService.SAVE_LOOKUP_PROJECTION,
         );
 
         if (!existingPR) {
@@ -824,8 +983,13 @@ export class PullRequestsService implements IPullRequestsService {
                   merged: this.extractMergedStatus(pullRequest),
                   closedAt: this.extractClosedAt(pullRequest),
               };
-        await this.update(existingPR, {
+        const updatedPr = await this.update(existingPR, {
             ...lifecycle,
+            // Reflect how the last review ran; only overwrite when the caller
+            // passed it (review path) so a plain webhook update doesn't clear it.
+            ...(pullRequest.heavy !== undefined
+                ? { heavy: pullRequest.heavy }
+                : {}),
             updatedAt: new Date().toISOString(),
             user: await this.extractUser(
                 pullRequest.user,
@@ -847,7 +1011,11 @@ export class PullRequestsService implements IPullRequestsService {
                 platformType,
                 pullRequest?.number,
             ),
-            commits: enrichedPullRequest.commits,
+            // An event that fetched nothing carries no commits: the stored
+            // ones stay.
+            ...(options?.filesUnchanged
+                ? {}
+                : { commits: enrichedPullRequest.commits }),
             isDraft: enrichedPullRequest.isDraft ?? false,
             repository: {
                 id:
@@ -907,6 +1075,14 @@ export class PullRequestsService implements IPullRequestsService {
             }
         }
 
+        // A close, an assignment, a label: the files did not change, so there
+        // is nothing to rewrite. Re-saving them from the stored copy rewrote
+        // every file (and blanked what the review recorded on each).
+        if (options?.filesUnchanged) {
+            await this.repairStaleTotals(existingPR, organizationAndTeamData);
+            return updatedPr;
+        }
+
         return this.handleExistingPullRequest(
             existingPR,
             enrichedPullRequest,
@@ -929,6 +1105,7 @@ export class PullRequestsService implements IPullRequestsService {
                 title: pullRequest.title || '',
                 status: await this.identifyPullRequestStatus(pullRequest),
                 merged: this.extractMergedStatus(pullRequest),
+                heavy: pullRequest.heavy ?? false,
                 number: pullRequest.number,
                 url: pullRequest.url || '',
                 baseBranchRef: this.extractBaseBranchRef(pullRequest),
@@ -1148,6 +1325,7 @@ export class PullRequestsService implements IPullRequestsService {
         pullRequestNumber: number,
         repository: any,
         organizationAndTeamData: OrganizationAndTeamData,
+        projection?: Record<string, 0 | 1>,
     ): Promise<any> {
         // The write paths store `repository.id?.toString()` on a Mixed path
         // Mongoose does not cast, so a numeric provider id (GitHub webhook
@@ -1162,6 +1340,7 @@ export class PullRequestsService implements IPullRequestsService {
                     pullRequestNumber,
                     repositoryId,
                     organizationAndTeamData,
+                    projection,
                 );
             if (byId) {
                 return byId;
@@ -1174,6 +1353,7 @@ export class PullRequestsService implements IPullRequestsService {
                     pullRequestNumber,
                     repository.name,
                     organizationAndTeamData,
+                    projection,
                 );
 
             // No name hit: this pull request has not been stored yet, which is
@@ -1374,6 +1554,44 @@ export class PullRequestsService implements IPullRequestsService {
      *    (`computeFileTotals`) so they are ground truth and never
      *    drift from the actual sub-documents.
      */
+    /**
+     * Whether writing `fields` and the budgeted patch over `stored` changes
+     * the file. `updatedAt` is left out: it only records the write itself.
+     */
+    private static fileIsUnchanged(
+        stored: IFile,
+        fields: Partial<IFile> | Record<string, unknown>,
+        budgeted: { patch: string; truncated?: boolean },
+    ): boolean {
+        const f = fields as Partial<IFile>;
+        const value = (v: unknown, empty: unknown) =>
+            JSON.stringify(
+                v === undefined || v === null || v === '' ? empty : v,
+                (_key, nested) =>
+                    nested &&
+                    typeof nested === 'object' &&
+                    !Array.isArray(nested)
+                        ? Object.fromEntries(
+                              Object.entries(nested).sort(([a], [b]) =>
+                                  a.localeCompare(b),
+                              ),
+                          )
+                        : nested,
+            );
+        const same = (a: unknown, b: unknown, empty: unknown) =>
+            value(a, empty) === value(b, empty);
+        return (
+            same(stored.patch, budgeted.patch, '') &&
+            !!stored.patchTruncated === !!budgeted.truncated &&
+            same(stored.status, f.status, '') &&
+            same(stored.added, f.added, 0) &&
+            same(stored.deleted, f.deleted, 0) &&
+            same(stored.changes, f.changes, 0) &&
+            same(stored.reviewMode, f.reviewMode, '') &&
+            same(stored.codeReviewModelUsed, f.codeReviewModelUsed, '')
+        );
+    }
+
     private async handleExistingPullRequest(
         existingPR: PullRequestsEntity,
         pullRequest: any,
@@ -1564,20 +1782,50 @@ export class PullRequestsService implements IPullRequestsService {
                         added: file.additions ?? 0,
                         deleted: file.deletions ?? 0,
                         changes: file.changes ?? 0,
-                        reviewMode: file.reviewMode ?? '',
-                        codeReviewModelUsed: file.codeReviewModelUsed ?? '',
+                        // How the file was last reviewed. Only the review
+                        // knows it; a webhook save (files from the Git API)
+                        // keeps the stored value instead of blanking it.
+                        reviewMode:
+                            file.reviewMode ?? existing.reviewMode ?? '',
+                        codeReviewModelUsed:
+                            file.codeReviewModelUsed ??
+                            existing.codeReviewModelUsed ??
+                            '',
                         updatedAt: new Date().toISOString(),
                     };
-                    patchUpdates.push({
-                        fileId: existing.id,
-                        rawPatch,
-                        fields,
-                    });
                     const budgeted = budgetPatchForPersist(
                         rawPatch,
                         remainingTotalPatchBudget,
                     );
                     remainingTotalPatchBudget -= budgeted.consumed;
+
+                    // The file as stored already: writing it again only cost
+                    // a rewrite of the whole document (one per file, every
+                    // event). Its patch keeps its place in the budget, and it
+                    // is not ours to tighten in the enforcement pass below.
+                    if (
+                        PullRequestsService.fileIsUnchanged(
+                            existing,
+                            fields,
+                            budgeted,
+                        )
+                    ) {
+                        if (newSuggestionsForFile.length > 0) {
+                            ops.push({
+                                kind: 'addSuggestions',
+                                fileId: existing.id,
+                                suggestions: newSuggestionsForFile,
+                            });
+                            totalNewSuggestions += newSuggestionsForFile.length;
+                        }
+                        continue;
+                    }
+
+                    patchUpdates.push({
+                        fileId: existing.id,
+                        rawPatch,
+                        fields,
+                    });
                     ourPatchBytes += budgeted.consumed;
 
                     // Record the op slot that carries this patch payload so
@@ -1826,6 +2074,18 @@ export class PullRequestsService implements IPullRequestsService {
             // never trust an in-memory projection here, because
             // partial chunk failures or concurrent writes from
             // another webhook could leave the projection wrong.
+            // The totals sum the files' counts; with no file written they are
+            // what is stored.
+            const fileWritten = ops.some(
+                (op) => op.kind === 'updateFile' || op.kind === 'addFile',
+            );
+            if (!fileWritten) {
+                await this.repairStaleTotals(existingPR, {
+                    organizationId,
+                });
+                return existingPR;
+            }
+
             const { totalAdded, totalDeleted, totalChanges } =
                 await this.pullRequestsRepository.computeFileTotals(
                     existingPR.uuid,
@@ -1852,6 +2112,38 @@ export class PullRequestsService implements IPullRequestsService {
                 },
             });
             return null;
+        }
+    }
+
+    /**
+     * A save that writes no file skips the totals step, so totals an earlier
+     * save left stale (its totals step failed) are repaired here, writing
+     * only when they differ. Never fails the save.
+     */
+    private async repairStaleTotals(
+        existingPR: { uuid?: string; number?: number },
+        organizationAndTeamData: Pick<
+            OrganizationAndTeamData,
+            'organizationId'
+        >,
+    ): Promise<void> {
+        if (!existingPR?.uuid || !organizationAndTeamData?.organizationId) {
+            return;
+        }
+        try {
+            await this.pullRequestsRepository.refreshFileTotalsIfStale(
+                existingPR.uuid,
+                organizationAndTeamData.organizationId,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not refresh the totals of PR#${existingPR.number}`,
+                context: PullRequestsService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                },
+            });
         }
     }
 

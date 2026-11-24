@@ -94,7 +94,7 @@ describe('buildOrchestratorInput — context→agent wiring', () => {
 
     it('defaults reviewMode to normal and leaves the optional fields unset for a plain review', () => {
         const input = buildOrchestratorInput(makeContext(), computed);
-        expect(input.reviewMode).toBe('normal');
+        expect(input.reviewMode).toBe('balanced');
         expect(input.reviewDirective).toBeUndefined();
         expect(input.repoInstructions).toBeUndefined();
     });

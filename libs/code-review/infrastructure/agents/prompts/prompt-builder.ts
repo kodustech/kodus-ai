@@ -674,6 +674,17 @@ const clipDecisionText = (text: string) =>
 const NO_REPEAT_INSTRUCTION = `Every entry is already on this pull request, so never report the problem an entry raised again — whatever its Outcome (which may be stale), however it is worded, whatever fix it proposes, wherever the code moved, and also when the developer changed the code and the problem still looks unsolved. Judge "the same problem" by the failure, not by the cause you name: a finding whose consequence is the failure an entry already described (the same crash, hang, wrong result or data loss in the same operation) is that entry again, even if it blames a new cause in the developer's attempted fix. `;
 const REPEATS_CHECKED_LATER_INSTRUCTION = `Report what you find even when an entry already raised it: a later step compares every finding with these entries and drops what is already on the pull request. `;
 
+// Only the tool-enabled finder can follow a newly reachable path before
+// deciding that implementing an earlier suggestion has resolved the issue.
+function finderDecisionContext(input: ReviewAgentInput, meta: PromptAgentMeta): string {
+    const history = formatPreviousDecisions(input.previousDecisions);
+    if (!history || meta.categoryLabel !== 'generalist' || hasOwnLane(meta)) return history;
+    return history + `
+  <ReviewAppliedChanges>
+    Where a changed line implements earlier advice, trace the changed behavior to the consumer that now handles it. Check what the value or error means at its source, what the consumer actually does, and the contract of any resulting side effect. Compare that outcome with the failure the earlier comment described. If the applied change introduces a distinct failure, report it on the changed line and link the earlier Id. If the behavior is safe or the only failure is the one already reported, move on.
+  </ReviewAppliedChanges>`;
+}
+
 export function formatPreviousDecisions(
     decisions: readonly PrDecisionRecord[] | undefined,
     ruleTitleByUuid?: ReadonlyMap<string, string>,
@@ -713,7 +724,7 @@ export function formatPreviousDecisions(
 
     return `
   <PreviousReviewDecisions>
-    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the current diff shows concrete new evidence the applied change is wrong. ${repeatInstruction}Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked. A PreviousDecision resolves ONLY the specific issue it describes — it is not evidence that the surrounding code, function, or file is otherwise correct. Keep scrutinizing every other line of the current diff at full rigor, including different problems in the same location that the decision does not mention. When a Type names a specific Kody Rule, it resolves ONLY that rule — it never excuses a fresh violation of a different rule (even one you are evaluating right now, at the exact same lines). A Type of "General review (not a Kody Rule) — <category>" means this decision did not judge any rule at all — it may still be useful context (e.g. confirming the same underlying code issue was already addressed), but it never confirms or excuses a violation of a rule you are evaluating now. When a finding you report is a DIFFERENT problem that exists because one of these suggestions was applied, or that reverses or narrows one of them, set its revisesSuggestionId to that entry's Id and say in the finding why the earlier suggestion is being revised — the reader will be shown which earlier suggestion it is. Raising again the problem an entry raised is not a revision. Never refer to an entry by its index number in the text.
+    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the reviewed code shows a distinct failure caused by the applied change, including in a consumer outside the patch. ${repeatInstruction}Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked. A PreviousDecision resolves ONLY the specific issue it describes — it is not evidence that the surrounding code, function, or file is otherwise correct. Keep scrutinizing every other line of the current diff at full rigor, including different problems in the same location that the decision does not mention. When a Type names a specific Kody Rule, it resolves ONLY that rule — it never excuses a fresh violation of a different rule (even one you are evaluating right now, at the exact same lines). A Type of "General review (not a Kody Rule) — <category>" means this decision did not judge any rule at all — it may still be useful context (e.g. confirming the same underlying code issue was already addressed), but it never confirms or excuses a violation of a rule you are evaluating now. When a finding you report is a DIFFERENT problem that exists because one of these suggestions was applied, or that reverses or narrows one of them, set its revisesSuggestionId to that entry's Id and say in the finding why the earlier suggestion is being revised — the reader will be shown which earlier suggestion it is. Raising again the problem an entry raised is not a revision. Never refer to an entry by its index number in the text.
 ${rendered.join('\n')}
   </PreviousReviewDecisions>`;
 }
@@ -1030,9 +1041,7 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
         const traceDecisionsSection = formatTraceDecisions(
             input.traceDecisions,
         );
-        const previousDecisionsSection = formatPreviousDecisions(
-            input.previousDecisions,
-        );
+        const previousDecisionsSection = finderDecisionContext(input, meta);
         const commitsSection = formatCommits(input.commits);
         const diffsSection = formatDiffs(input.changedFiles);
         // The callGraph string from kodus-graph already starts with <CallGraph>
@@ -1196,9 +1205,7 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
         const traceDecisionsSection = formatTraceDecisions(
             input.traceDecisions,
         );
-        const previousDecisionsSection = formatPreviousDecisions(
-            input.previousDecisions,
-        );
+        const previousDecisionsSection = finderDecisionContext(input, meta);
         const commitsSection = formatCommits(input.commits);
         const diffsSection = formatDiffs(input.changedFiles);
         const callGraphSection = input.callGraph
@@ -1450,12 +1457,27 @@ function formatInlineFileContents(files: FileChange[]): string {
         return `\n\n  <FileContents>\n${blocks}\n  </FileContents>`;
     }
 
+const MAX_PR_BODY_CHARS = 500;
+
+/**
+ * First `max` UTF-16 units of `text`, one fewer when the cut would split a
+ * surrogate pair: a lone high surrogate (half an emoji) makes providers that
+ * validate UTF-16 reject the whole request (#2429).
+ */
+function truncateKeepingSurrogatePairs(text: string, max: number): string {
+    if (text.length <= max) return text;
+    const last = text.charCodeAt(max - 1);
+    const end = last >= 0xd800 && last <= 0xdbff ? max - 1 : max;
+    return text.slice(0, end);
+}
+
 function formatPRContext(prTitle?: string, prBody?: string): string {
         if (!prTitle && !prBody) return '';
 
         const parts: string[] = [];
         if (prTitle) parts.push(`Title: ${prTitle}`);
-        if (prBody) parts.push(prBody.substring(0, 500));
+        if (prBody)
+            parts.push(truncateKeepingSurrogatePairs(prBody, MAX_PR_BODY_CHARS));
 
         return `\n  <PRContext>${parts.join('\n')}</PRContext>`;
     }

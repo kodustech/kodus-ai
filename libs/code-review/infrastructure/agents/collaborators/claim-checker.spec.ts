@@ -29,6 +29,9 @@ interface FakeLookupOptions {
     unavailableReason?: string;
     grep?: (pattern: string) => Promise<string> | string;
     exists?: (path: string) => Promise<boolean> | boolean;
+    /** Each file's text. Without it, a file is the lines the grep fixture
+     *  gives for it (`path:line:text`), every other line blank. */
+    files?: Record<string, string>;
 }
 
 const fakeLookup = (
@@ -50,8 +53,19 @@ const fakeLookup = (
             if (!opts.grep) return 'No matches found.';
             return opts.grep(pattern);
         },
-        async read() {
-            throw new Error('not used');
+        async read(path: string, start: number, end: number) {
+            const lines = opts.files?.[path]?.split('\n') ?? [];
+            if (!opts.files?.[path] && opts.grep) {
+                for (const raw of String(await opts.grep('')).split('\n')) {
+                    const m = /^(.+?):(\d+):(.*)$/.exec(raw);
+                    if (m && m[1] === path) lines[Number(m[2]) - 1] = m[3];
+                }
+            }
+            const last = Math.min(end, Math.max(lines.length, start));
+            return Array.from(
+                { length: Math.max(0, last - start + 1) },
+                (_, k) => lines[start - 1 + k] ?? '',
+            ).join('\n');
         },
         async exists(path: string) {
             if (!opts.exists) return false;
@@ -72,9 +86,8 @@ describe('readClaim — what a violation actually claims', () => {
 
     it('treats a missing claim with no path as none (KRC-21)', () => {
         expect(
-            readClaim(
-                violation({ claimKind: 'missing', claimSymbol: 'thing' }),
-            ).kind,
+            readClaim(violation({ claimKind: 'missing', claimSymbol: 'thing' }))
+                .kind,
         ).toBe('none');
     });
 
@@ -195,6 +208,2030 @@ describe('checkClaims — unused (KRC-03, KRC-04)', () => {
     });
 });
 
+describe('checkClaims — an unused import is about the file that imports it (#1724 QA)', () => {
+    // QA on GitLab: report.js adds `import { debounce } from "./timing.js"`
+    // and never uses it. The only other occurrence is the definition in
+    // timing.js, which every local import has, so the true finding was dropped.
+    const importLine = (over: Partial<ShardViolation> = {}) =>
+        violation({
+            relevantFile: 'helpers/report.js',
+            relevantLinesStart: 2,
+            relevantLinesEnd: 2,
+            claimKind: 'unused',
+            claimSymbol: 'debounce',
+            ...over,
+        });
+
+    it('keeps it when the symbol occurs only where it is defined', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce } from "./timing.js";\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.dropped).toEqual([]);
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('keeps it when other files import and use the same symbol', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce } from "./timing.js";\nsrc/search.js:1:import { debounce } from "../helpers/timing.js";\nsrc/search.js:9:  debounce(run, 200);',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('drops it when the importing file uses the symbol outside the finding', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce } from "./timing.js";\nhelpers/report.js:24:  const save = debounce(write, 300);',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('helpers/report.js:24');
+    });
+
+    it('does not count a longer identifier in the same file as a use', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce } from "./timing.js";\nhelpers/report.js:30:  const debounced = true;',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('reads a multi-line import from the code the finding cites', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:3:  debounce,\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+            files: {
+                'helpers/report.js':
+                    'import {\n  formatDate,\n  debounce,\n} from "./timing.js";\n\nexport const x = formatDate(1);',
+            },
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    existingCode:
+                        'import {\n  formatDate,\n  debounce,\n} from "./timing.js";',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('counts the same text as a use when it sits outside the import the finding cites', async () => {
+        // The import is on lines 10-12; `  debounce,` on line 8 is a shorthand
+        // property of an object above it, a few lines away and with the same
+        // text as the import's member line.
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:8:  debounce,\nhelpers/report.js:11:  debounce,',
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantLinesStart: 10,
+                    relevantLinesEnd: 10,
+                    existingCode:
+                        'import {\n  debounce,\n} from "./timing.js";',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('helpers/report.js:8');
+    });
+
+    it('does not count the import own member line below the finding as a use', async () => {
+        const lookup = fakeLookup({
+            grep: () => 'helpers/report.js:11:  debounce,',
+            files: {
+                'helpers/report.js':
+                    '\n'.repeat(9) +
+                    'import {\n  debounce,\n} from "./timing.js";',
+            },
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantLinesStart: 10,
+                    relevantLinesEnd: 10,
+                    existingCode:
+                        'import {\n  debounce,\n} from "./timing.js";',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('does not publish an unused stylesheet import, whose members are used rather than its name', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'src/app/theme.scss:3:@import "variables";\nsrc/app/other.scss:1:@import "variables";',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/app/theme.scss',
+                    claimKind: 'unused',
+                    claimSymbol: 'variables',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('unverifiable');
+    });
+
+    it('does not publish an unused import from a finding that names no file', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantFile: undefined,
+                    existingCode: 'import { debounce } from "./timing.js";',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('unverifiable');
+    });
+
+    it('judges a re-export by the files that import it, as before', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                "src/index.ts:1:export { debounce } from './timing';\nsrc/app.ts:9:  debounce(run, 200);",
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/index.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('src/app.ts:9');
+    });
+
+    it("judges a package __init__.py's import by the files that import the package", async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'pkg/__init__.py:1:from .core import helper\napp/main.py:4:    helper()',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'pkg/__init__.py',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'helper',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('app/main.py:4');
+    });
+
+    it('does not judge a claim as an import when the cited import names another symbol', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'src/a.ts:10:export function formatTotal(n) {\nsrc/b.ts:4:  formatTotal(sum)',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 10,
+                    relevantLinesEnd: 12,
+                    claimKind: 'unused',
+                    claimSymbol: 'formatTotal',
+                    existingCode:
+                        "import { x } from './x';\n\nexport function formatTotal(n) {",
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('src/b.ts:4');
+    });
+
+    it('reads only the import statement, not the rest of the cited code, when it spans lines', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'src/a.ts:12:export function formatTotal(n) {\nsrc/b.ts:4:  formatTotal(sum)',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 12,
+                    relevantLinesEnd: 14,
+                    claimKind: 'unused',
+                    claimSymbol: 'formatTotal',
+                    existingCode:
+                        "import {\n  x,\n} from './x';\nexport function formatTotal(n) {",
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('src/b.ts:4');
+    });
+
+    it('keeps an unused import bound under another name when the file never uses that name', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce as wait } from "./timing.js";\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+        expect(lookup.grepCalls).toHaveLength(2);
+    });
+
+    it('drops an import bound under another name when the file uses that name', async () => {
+        const lookup = fakeLookup({
+            grep: (pattern) =>
+                pattern === 'wait'
+                    ? 'helpers/report.js:2:import { debounce as wait } from "./timing.js";\nhelpers/report.js:14:  wait(save, 300);'
+                    : 'helpers/report.js:2:import { debounce as wait } from "./timing.js";\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('helpers/report.js:14');
+        expect(res.dropped[0].reason).toContain('bound as wait');
+    });
+
+    it('reads a multi-line import to its real end when a comment holds a brace', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:3:  debounce,\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+            files: {
+                'helpers/report.js':
+                    'import { // see } below\n  formatDate,\n  debounce,\n} from "./timing.js" with { type: "js" };',
+            },
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    existingCode:
+                        'import { // see } below\n  formatDate,\n  debounce,\n} from "./timing.js" with { type: "js" };',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('does not read "as" in a comment on the import as an alias', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce } from "./timing.js"; // was debounce as wait\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+        });
+        const res = await checkClaims({
+            violations: [importLine()],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('judges an import that names the symbol only in its path as main does', async () => {
+        // Go binds `f`, not `fmt`: the same-file search for `fmt` cannot see it.
+        const lookup = fakeLookup({
+            grep: () =>
+                'cmd/main.go:3:import f "fmt"\ninternal/log.go:5:\tfmt.Println(msg)',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'cmd/main.go',
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    claimKind: 'unused',
+                    claimSymbol: 'fmt',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('internal/log.go:5');
+    });
+
+    it('does not publish an unused React import in a JSX file, which the classic runtime uses without its name', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                "src/Card.tsx:1:import React from 'react';\nsrc/List.tsx:1:import React from 'react';",
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/Card.tsx',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'React',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('unverifiable');
+    });
+
+    it('does not publish an unused React import in a .js file, which may hold JSX', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                "src/Card.js:1:import React from 'react';\nsrc/List.js:1:import React from 'react';",
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/Card.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'React',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('unverifiable');
+    });
+
+    it('reads a multi-line import past a block comment that spans lines and holds a brace', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:4:  debounce,\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+            files: {
+                'helpers/report.js':
+                    'import { /* formerly:\n  } */\n  formatDate,\n  debounce,\n} from "./timing.js";',
+            },
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantLinesStart: 4,
+                    relevantLinesEnd: 4,
+                    existingCode:
+                        'import { /* formerly:\n  } */\n  formatDate,\n  debounce,\n} from "./timing.js";',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('reads a string continued across lines as a string, not as the binding', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:2:import { debounce } from "./a{\\\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+            files: {
+                'helpers/report.js':
+                    '\nimport { debounce } from "./a{\\\ndebounce as w.js";',
+            },
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    existingCode:
+                        'import { debounce } from "./a{\\\ndebounce as w.js";',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('reads a multi-line import the cited code cuts before it closes', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'helpers/report.js:3:  debounce,\nhelpers/timing.js:1:export function debounce(fn, ms) {',
+            files: {
+                'helpers/report.js':
+                    'import {\n  formatDate,\n  debounce,\n} from "./timing.js";',
+            },
+        });
+        const res = await checkClaims({
+            violations: [
+                importLine({
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 3,
+                    existingCode: 'import {\n  formatDate,\n  debounce,',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('still drops a non-import unused claim when another file uses the symbol', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'src/orders/order-mapper.ts:3:export function formatDate(d) {\nsrc/invoices/print.ts:8:  formatDate(d)',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({ claimKind: 'unused', claimSymbol: 'formatDate' }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+    });
+});
+
+describe('checkClaims — an unused import, in every language the rules review', () => {
+    // Each case: the import line the finding is on, the symbol it claims is
+    // unused, and what the repository answers. `uses` is the file's own text
+    // of every name the search asks for; `elsewhere` is a definition or use in
+    // another file, which never makes this import used.
+    type Case = {
+        lang: string;
+        file: string;
+        line: string;
+        symbol: string;
+        uses?: string[];
+        elsewhere?: string;
+        verdict: 'publish' | 'drop' | 'unverifiable';
+        reason?: string;
+    };
+    const CASES: Case[] = [
+        {
+            lang: 'TypeScript',
+            file: 'src/a.ts',
+            line: 'import { formatDate } from "./dates";',
+            symbol: 'formatDate',
+            elsewhere: 'src/dates.ts:3:export function formatDate(d) {',
+            verdict: 'publish',
+        },
+        {
+            lang: 'TypeScript, used',
+            file: 'src/a.ts',
+            line: 'import { formatDate } from "./dates";',
+            symbol: 'formatDate',
+            uses: ['src/a.ts:9:  formatDate(now)'],
+            verdict: 'drop',
+            reason: 'src/a.ts:9',
+        },
+        {
+            lang: 'TypeScript type-only',
+            file: 'src/a.ts',
+            line: 'import type { Money } from "./money";',
+            symbol: 'Money',
+            uses: ['src/a.ts:7:let total: Money;'],
+            verdict: 'drop',
+            reason: 'src/a.ts:7',
+        },
+        {
+            lang: 'CommonJS',
+            file: 'src/a.js',
+            line: "const { slugify } = require('./text');",
+            symbol: 'slugify',
+            elsewhere: 'src/text.js:1:function slugify(s) {',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Python',
+            file: 'app/a.py',
+            line: 'from app.dates import format_date',
+            symbol: 'format_date',
+            elsewhere: 'app/dates.py:4:def format_date(d):',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Python, module path is not a use',
+            file: 'app/a.py',
+            line: 'from app.dates import format_date',
+            symbol: 'format_date',
+            uses: ['app/a.py:12:    app.run()'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'Python alias, used',
+            file: 'app/a.py',
+            line: 'import numpy as np',
+            symbol: 'numpy',
+            uses: ['app/a.py:8:x = np.zeros(3)'],
+            verdict: 'drop',
+            reason: 'app/a.py:8',
+        },
+        {
+            lang: 'Python alias, unused',
+            file: 'app/a.py',
+            line: 'import numpy as np',
+            symbol: 'numpy',
+            elsewhere: 'app/b.py:1:import numpy',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Python wildcard',
+            file: 'app/a.py',
+            line: 'from os.path import *',
+            symbol: 'os',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Java',
+            file: 'src/A.java',
+            line: 'import com.acme.Money;',
+            symbol: 'Money',
+            elsewhere: 'src/Money.java:3:public class Money {',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Java, the package line is not a use',
+            file: 'src/A.java',
+            line: 'import com.acme.Money;',
+            symbol: 'Money',
+            uses: ['src/A.java:0:package com.acme.app;'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'Java static, another path through the same package',
+            file: 'src/A.java',
+            line: 'import static com.acme.Util.round;',
+            symbol: 'round',
+            uses: ['src/A.java:9:    com.acme.Util.log(x);'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'Java, used',
+            file: 'src/A.java',
+            line: 'import com.acme.Money;',
+            symbol: 'Money',
+            uses: ['src/A.java:11:    Money total;'],
+            verdict: 'drop',
+            reason: 'src/A.java:11',
+        },
+        {
+            lang: 'Java wildcard',
+            file: 'src/A.java',
+            line: 'import java.util.*;',
+            symbol: 'util',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Kotlin alias, used',
+            file: 'src/A.kt',
+            line: 'import com.acme.Money as Cash',
+            symbol: 'Money',
+            uses: ['src/A.kt:6:val c: Cash = Cash()'],
+            verdict: 'drop',
+            reason: 'src/A.kt:6',
+        },
+        {
+            lang: 'Scala rename, used',
+            file: 'src/A.scala',
+            line: 'import com.acme.{Money => Cash}',
+            symbol: 'Money',
+            uses: ['src/A.scala:5:  val c = Cash(1)'],
+            verdict: 'drop',
+            reason: 'src/A.scala:5',
+        },
+        {
+            lang: 'Scala rename, unused (any-file rule)',
+            file: 'src/A.scala',
+            line: 'import com.acme.{Money => Cash}',
+            symbol: 'Money',
+            elsewhere: 'src/Money.scala:1:case class Money(v: Int)',
+            verdict: 'drop',
+            reason: 'src/Money.scala:1',
+        },
+        {
+            lang: 'Rust, one name of a group',
+            file: 'src/a.rs',
+            line: 'use crate::money::{Money, Rate};',
+            symbol: 'Rate',
+            uses: ['src/a.rs:9:    let m = Money::new();'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'Rust alias, used',
+            file: 'src/a.rs',
+            line: 'use crate::money::Money as Cash;',
+            symbol: 'Money',
+            uses: ['src/a.rs:7:    let c = Cash::new();'],
+            verdict: 'drop',
+            reason: 'src/a.rs:7',
+        },
+        {
+            lang: 'Rust, another path through the same crate',
+            file: 'src/a.rs',
+            line: 'use std::fmt::Display;',
+            symbol: 'Display',
+            uses: ['src/a.rs:9:    let s = std::mem::take(&mut x);'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'Python, a dotted import binds its first name',
+            file: 'app/a.py',
+            line: 'import os.path',
+            symbol: 'os',
+            uses: ['app/a.py:8:cwd = os.getcwd()'],
+            verdict: 'drop',
+            reason: 'app/a.py:8',
+        },
+        {
+            lang: 'Rust glob',
+            file: 'src/a.rs',
+            line: 'use std::io::*;',
+            symbol: 'io',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'PHP',
+            file: 'src/A.php',
+            line: 'use App\\Models\\User;',
+            symbol: 'User',
+            elsewhere: 'src/Models/User.php:5:class User {',
+            verdict: 'publish',
+        },
+        {
+            lang: 'PHP, used',
+            file: 'src/A.php',
+            line: 'use App\\Models\\User;',
+            symbol: 'User',
+            uses: ['src/A.php:10:User::find(1);'],
+            verdict: 'drop',
+            reason: 'src/A.php:10',
+        },
+        {
+            lang: 'Go named import, unused',
+            file: 'cmd/a.go',
+            line: 'import str "strings"',
+            symbol: 'str',
+            elsewhere: 'cmd/b.go:3:import str "strings"',
+            verdict: 'publish',
+        },
+        {
+            lang: 'Go path import keeps main rule',
+            file: 'cmd/a.go',
+            line: 'import "strings"',
+            symbol: 'strings',
+            elsewhere: 'cmd/b.go:9:\tstrings.TrimSpace(s)',
+            verdict: 'drop',
+            reason: 'cmd/b.go:9',
+        },
+        {
+            lang: 'Go dot import',
+            file: 'cmd/a.go',
+            line: 'import . "strings"',
+            symbol: 'strings',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Lua (any-file rule)',
+            file: 'lib/a.lua',
+            line: 'local json = require("json")',
+            symbol: 'json',
+            elsewhere: 'lib/b.lua:1:local json = require("json")',
+            verdict: 'drop',
+            reason: 'lib/b.lua:1',
+        },
+        {
+            lang: 'Elixir alias with as:, used',
+            file: 'lib/a.ex',
+            line: 'alias MyApp.Money, as: Cash',
+            symbol: 'Money',
+            uses: ['lib/a.ex:6:    Cash.new(1)'],
+            verdict: 'drop',
+            reason: 'lib/a.ex:6',
+        },
+        {
+            lang: 'Elixir import',
+            file: 'lib/a.ex',
+            line: 'import Ecto.Query',
+            symbol: 'Query',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Haskell explicit list (any-file rule)',
+            file: 'src/A.hs',
+            line: 'import Data.Map (fromList)',
+            symbol: 'fromList',
+            elsewhere: 'src/B.hs:2:import Data.Map (fromList)',
+            verdict: 'drop',
+            reason: 'src/B.hs:2',
+        },
+        {
+            lang: 'Haskell whole module',
+            file: 'src/A.hs',
+            line: 'import Data.List',
+            symbol: 'List',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Swift module',
+            file: 'App/A.swift',
+            line: 'import Foundation',
+            symbol: 'Foundation',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'C#',
+            file: 'src/A.cs',
+            line: 'using System.Linq;',
+            symbol: 'Linq',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'C# static',
+            file: 'src/A.cs',
+            line: 'using static System.Math;',
+            symbol: 'Math',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'C++ using-declaration, unused',
+            file: 'src/a.cpp',
+            line: 'using std::cout;',
+            symbol: 'cout',
+            uses: ['src/a.cpp:9:  std::cerr << x;'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'C++ using-declaration, used',
+            file: 'src/a.cpp',
+            line: 'using std::cout;',
+            symbol: 'cout',
+            uses: ['src/a.cpp:9:  cout << x;'],
+            verdict: 'drop',
+            reason: 'src/a.cpp:9',
+        },
+        {
+            lang: 'C++',
+            file: 'src/a.cpp',
+            line: 'using namespace std;',
+            symbol: 'std',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'OCaml',
+            file: 'src/a.ml',
+            line: 'open Printf',
+            symbol: 'Printf',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'SCSS',
+            file: 'src/a.scss',
+            line: '@use "sass:math" as m;',
+            symbol: 'math',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Python, claim about the from-path keeps main rule',
+            file: 'app/a.py',
+            line: 'from app.dates import format_date',
+            symbol: 'app',
+            uses: ['app/a.py:12:    app.run()'],
+            verdict: 'drop',
+            reason: 'app/a.py:12',
+        },
+        {
+            lang: 'Java, claim about a path segment keeps main rule',
+            file: 'src/A.java',
+            line: 'import com.acme.Money;',
+            symbol: 'acme',
+            elsewhere: 'src/B.java:1:package com.acme.billing;',
+            verdict: 'drop',
+            reason: 'src/B.java:1',
+        },
+        {
+            lang: 'Python, one name of several',
+            file: 'app/a.py',
+            line: 'from app.dates import parse_date, format_date',
+            symbol: 'format_date',
+            uses: ['app/a.py:9:    parse_date(s)'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'Java static wildcard',
+            file: 'src/A.java',
+            line: 'import static com.acme.Util.*;',
+            symbol: 'Util',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Rust trait imported as _',
+            file: 'src/a.rs',
+            line: 'use std::io::Write as _;',
+            symbol: 'Write',
+            uses: ['src/a.rs:6:    out.flush()?;'],
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'Python, claim about the from-path, file uses the bound name',
+            file: 'app/a.py',
+            line: 'from app.dates import format_date',
+            symbol: 'dates',
+            uses: ['app/a.py:9:    format_date(x)'],
+            verdict: 'drop',
+            reason: 'app/a.py:9',
+        },
+        {
+            lang: 'PHP trait used in the class (regression)',
+            file: 'app/User.php',
+            line: 'use Illuminate\\Database\\Eloquent\\Factories\\HasFactory;',
+            symbol: 'HasFactory',
+            uses: ['app/User.php:12:    use HasFactory;'],
+            verdict: 'drop',
+            reason: 'app/User.php:12',
+        },
+        {
+            lang: 'Kotlin, used in an open class (regression)',
+            file: 'src/Repo.kt',
+            line: 'import com.acme.Debouncer',
+            symbol: 'Debouncer',
+            uses: ['src/Repo.kt:10:open class Repo(private val d: Debouncer)'],
+            verdict: 'drop',
+            reason: 'src/Repo.kt:10',
+        },
+        {
+            lang: 'TypeScript, used in a using declaration (regression)',
+            file: 'src/a.ts',
+            line: 'import { pool } from "./db";',
+            symbol: 'pool',
+            uses: ['src/a.ts:7:  using res = acquire(pool);'],
+            verdict: 'drop',
+            reason: 'src/a.ts:7',
+        },
+        {
+            lang: 'Swift, used in an open class',
+            file: 'App/A.swift',
+            line: 'import struct Kit.Money',
+            symbol: 'Money',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'rename source defined locally, alias unused',
+            file: 'src/a.js',
+            line: 'import { debounce as wait } from "./timing";',
+            symbol: 'wait',
+            uses: ['src/a.js:30:function debounce() {}'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'Python import os.path, param named path',
+            file: 'app/a.py',
+            line: 'import os.path',
+            symbol: 'os',
+            uses: ['app/a.py:12:def load(path):'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'only a comment names it: counts, never publishes a used import',
+            file: 'src/a.js',
+            line: 'import { debounce } from "./timing";',
+            symbol: 'debounce',
+            uses: ['src/a.js:30:// TODO: drop debounce once the API is fast'],
+            verdict: 'drop',
+            reason: 'src/a.js:30',
+        },
+        {
+            lang: 'lodash as _, unused',
+            file: 'src/a.js',
+            line: "import * as _ from 'lodash';",
+            symbol: '_',
+            elsewhere: "src/b.js:1:import * as _ from 'lodash';",
+            verdict: 'publish',
+        },
+        {
+            lang: 'lodash as _, used',
+            file: 'src/a.js',
+            line: "import * as _ from 'lodash';",
+            symbol: '_',
+            uses: ['src/a.js:4:const xs = _.map(ys, f);'],
+            verdict: 'drop',
+            reason: 'src/a.js:4',
+        },
+        {
+            lang: 'C# using alias, used',
+            file: 'src/A.cs',
+            line: 'using Json = Newtonsoft.Json.JsonConvert;',
+            symbol: 'Json',
+            uses: ['src/A.cs:9:    var s = Json.SerializeObject(x);'],
+            verdict: 'drop',
+            reason: 'src/A.cs:9',
+        },
+        {
+            lang: 'Rust, used only as an attribute',
+            file: 'src/a.rs',
+            line: 'use async_trait::async_trait;',
+            symbol: 'async_trait',
+            uses: ['src/a.rs:5:#[async_trait]'],
+            verdict: 'drop',
+            reason: 'src/a.rs:5',
+        },
+        {
+            lang: 'PHP, used only in an attribute',
+            file: 'src/Entity/User.php',
+            line: 'use Doctrine\\ORM\\Mapping as ORM;',
+            symbol: 'ORM',
+            uses: ['src/Entity/User.php:9:    #[ORM\\Column]'],
+            verdict: 'drop',
+            reason: 'src/Entity/User.php:9',
+        },
+        {
+            lang: 'TypeScript, used only in a private field',
+            file: 'src/a.ts',
+            line: 'import { HttpClient } from "./http";',
+            symbol: 'HttpClient',
+            uses: ['src/a.ts:6:  #client = new HttpClient();'],
+            verdict: 'drop',
+            reason: 'src/a.ts:6',
+        },
+        {
+            lang: 'Python, used after a floor division',
+            file: 'app/a.py',
+            line: 'from decimal import Decimal',
+            symbol: 'Decimal',
+            uses: ['app/a.py:8:half = total // Decimal(2)'],
+            verdict: 'drop',
+            reason: 'app/a.py:8',
+        },
+        {
+            lang: 'C preprocessor line uses it',
+            file: 'src/a.cpp',
+            line: 'using logging::Logger;',
+            symbol: 'Logger',
+            uses: ['src/a.cpp:4:#define LOG(x) Logger::log(x)'],
+            verdict: 'drop',
+            reason: 'src/a.cpp:4',
+        },
+        {
+            lang: 'JS, used on an import.meta line',
+            file: 'src/a.js',
+            line: 'import { resolve } from "./paths";',
+            symbol: 'resolve',
+            uses: ['src/a.js:8:import.meta.env.DEV && resolve(dir);'],
+            verdict: 'drop',
+            reason: 'src/a.js:8',
+        },
+        {
+            lang: 'JS, used on a dynamic import line',
+            file: 'src/a.js',
+            line: 'import { loader } from "./load";',
+            symbol: 'loader',
+            uses: ["src/a.js:9:import('./page').then(loader);"],
+            verdict: 'drop',
+            reason: 'src/a.js:9',
+        },
+        {
+            lang: 'C#, used only in a using declaration',
+            file: 'src/Repo.cs',
+            line: 'using static Acme.Data.Factory;',
+            symbol: 'Factory',
+            verdict: 'unverifiable',
+        },
+        {
+            lang: 'C#, imported class used in a using var',
+            file: 'src/Repo.cs',
+            line: 'using SqlConnection = Microsoft.Data.SqlClient.SqlConnection;',
+            symbol: 'SqlConnection',
+            uses: [
+                'src/Repo.cs:12:        using var conn = new SqlConnection(cs);',
+            ],
+            verdict: 'drop',
+            reason: 'src/Repo.cs:12',
+        },
+        {
+            lang: 'Kotlin, used only in a require precondition',
+            file: 'src/A.kt',
+            line: 'import com.acme.Validator',
+            symbol: 'Validator',
+            uses: ['src/A.kt:8:    require(Validator.isValid(x))'],
+            verdict: 'drop',
+            reason: 'src/A.kt:8',
+        },
+        {
+            lang: 'Solidity, used only in a require guard',
+            file: 'contracts/Vault.sol',
+            line: 'import {Errors} from "./Errors.sol";',
+            symbol: 'Errors',
+            uses: [
+                'contracts/Vault.sol:14:        require(msg.sender == owner, Errors.NotOwner());',
+            ],
+            verdict: 'drop',
+            reason: 'contracts/Vault.sol:14',
+        },
+        {
+            lang: 'C# using alias, only the source is used',
+            file: 'src/A.cs',
+            line: 'using Json = Newtonsoft.Json.JsonConvert;',
+            symbol: 'Json',
+            uses: ['src/A.cs:9:    var s = JsonConvert.SerializeObject(x);'],
+            verdict: 'publish',
+        },
+        {
+            lang: 'TypeScript import = alias, used',
+            file: 'src/a.ts',
+            line: 'import Bar = NS.Bar;',
+            symbol: 'Bar',
+            uses: ['src/a.ts:5:const b: Bar = make();'],
+            verdict: 'drop',
+            reason: 'src/a.ts:5',
+        },
+        {
+            lang: 'React, a stylesheet of the same module is not a use',
+            file: 'src/Card.tsx',
+            line: "import Button from './Button';",
+            symbol: 'Button',
+            uses: ["src/Card.tsx:2:import './Button.css';"],
+            elsewhere: 'src/Button.tsx:1:export default function Button() {}',
+            verdict: 'publish',
+        },
+        {
+            lang: 'React, a type import from the same module is not a use',
+            file: 'src/Card.tsx',
+            line: "import Button from './Button';",
+            symbol: 'Button',
+            uses: [
+                "src/Card.tsx:2:import type { ButtonProps } from './Button';",
+            ],
+            elsewhere: 'src/Button.tsx:1:export default function Button() {}',
+            verdict: 'publish',
+        },
+    ];
+
+    it.each(CASES)('$lang: $verdict', async (c: Case) => {
+        const own = `${c.file}:1:${c.line}`;
+        const lines = [own, ...(c.uses ?? []), c.elsewhere].filter(
+            (l): l is string => Boolean(l),
+        );
+        // As rg answers: only the lines whose text matches the pattern.
+        const lookup = fakeLookup({
+            grep: (pattern) =>
+                lines
+                    .filter((l) =>
+                        new RegExp(pattern).test(
+                            l.split(':').slice(2).join(':'),
+                        ),
+                    )
+                    .join('\n'),
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: c.file,
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: c.symbol,
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        if (c.verdict === 'publish') {
+            expect(res.kept).toHaveLength(1);
+            return;
+        }
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain(
+            c.verdict === 'unverifiable' ? 'unverifiable' : c.reason!,
+        );
+    });
+});
+
+describe('checkClaims — an unused import is judged by its own finding, not the group', () => {
+    it('counts a use inside a wide finding range, which is not the import', async () => {
+        const lines = [
+            'src/a.js:3:import { debounce } from "./timing";',
+            'src/a.js:20:  const save = debounce(write, 300);',
+            'src/timing.js:1:export function debounce() {}',
+        ];
+        const lookup = fakeLookup({
+            grep: (pattern) =>
+                lines
+                    .filter((l) =>
+                        new RegExp(pattern).test(
+                            l.split(':').slice(2).join(':'),
+                        ),
+                    )
+                    .join('\n'),
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 40,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('src/a.js:20');
+    });
+
+    const lookupOf = (lines: string[]) =>
+        fakeLookup({
+            grep: (pattern) =>
+                lines
+                    .filter((l) =>
+                        new RegExp(pattern).test(
+                            l.split(':').slice(2).join(':'),
+                        ),
+                    )
+                    .join('\n'),
+        });
+
+    it('does not let a sibling hide a use between them, for a non-import claim either', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 10,
+                    relevantLinesEnd: 10,
+                    claimKind: 'unused',
+                    claimSymbol: 'helper',
+                }),
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 200,
+                    relevantLinesEnd: 200,
+                    claimKind: 'unused',
+                    claimSymbol: 'helper',
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupOf([
+                'src/a.ts:10:function helper() {',
+                'src/a.ts:100:  return helper();',
+            ]),
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('src/a.ts:100');
+    });
+
+    it('anchors the import on an undeclared sibling that sits on it', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    existingCode: "import { Foo } from './foo';",
+                }),
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 40,
+                    relevantLinesEnd: 40,
+                    claimKind: 'unused',
+                    claimSymbol: 'Foo',
+                    existingCode: '  return new Foo();',
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupOf([
+                "src/a.ts:3:import { Foo } from './foo';",
+                'src/a.ts:40:  return new Foo();',
+            ]),
+        });
+        const dropped = res.dropped.find(
+            (d) => d.violation.claimSymbol === 'Foo',
+        );
+        expect(dropped?.reason).toContain('src/a.ts:40');
+    });
+
+    it('does not take the import line for a use when the provider answers without text', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                    existingCode: 'import { debounce } from "./timing";',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () =>
+                    'src/a.js:3:\nsrc/timing.js:1:export function debounce() {}',
+                files: {
+                    'src/a.js': '\n\nimport { debounce } from "./timing";',
+                },
+            }),
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('matches a reformatted citation of a multi-line import by its lines', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 6,
+                    claimKind: 'unused',
+                    claimSymbol: 'Foo',
+                    existingCode: "import {\n  Bar,\n  Foo\n} from './x'",
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () => 'src/a.js:5:  Foo,\nsrc/x.js:1:export class Foo {}',
+                files: {
+                    'src/a.js':
+                        "\n\nimport {\n  Bar,\n  Foo,\n} from './x';\nconsole.log(Bar);",
+                },
+            }),
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('greps the alias names in the importing file only', async () => {
+        const calls: Array<{ pattern: string; path?: string; glob?: string }> =
+            [];
+        const base = fakeLookup({
+            grep: () =>
+                'src/a.js:1:import { debounce as wait } from "./timing";\nsrc/timing.js:1:export function debounce() {}',
+        });
+        const lookup = {
+            ...base,
+            grep: async (pattern: string, path?: string, glob?: string) => {
+                calls.push({ pattern, path, glob });
+                return base.grep(pattern, path, glob);
+            },
+        };
+        await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(calls[1]).toEqual({
+            pattern: 'wait',
+            path: '.',
+            glob: '/src/a.js',
+        });
+    });
+
+    it('does not take the import line for a use when the finding is one line off', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 4,
+                    relevantLinesEnd: 4,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                    existingCode: "import { debounce } from 'lodash';",
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupOf([
+                "src/a.ts:3:import { debounce } from 'lodash';",
+                "src/b.ts:1:import { debounce } from 'lodash';",
+            ]),
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('does not publish a fabricated duplicate because the new function is called inside the group', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/text.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 3,
+                    claimKind: 'duplicate',
+                    claimSymbol: 'slugify',
+                }),
+                violation({
+                    relevantFile: 'src/text.ts',
+                    relevantLinesStart: 8,
+                    relevantLinesEnd: 8,
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupOf([
+                'src/text.ts:1:export function slugify(s) {',
+                "src/text.ts:5:const a = slugify('a');",
+            ]),
+        });
+        expect(
+            res.dropped.some((d) => d.violation.claimSymbol === 'slugify'),
+        ).toBe(true);
+    });
+
+    it('counts a PHP global trait used in the class, though its text equals the import', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'app/M.php',
+                    relevantLinesStart: 2,
+                    relevantLinesEnd: 2,
+                    claimKind: 'unused',
+                    claimSymbol: 'HasFactory',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () =>
+                    'app/M.php:2:use HasFactory;\napp/M.php:5:    use HasFactory;',
+                files: {
+                    'app/M.php':
+                        '<?php\nuse HasFactory;\n\nclass M {\n    use HasFactory;\n}',
+                },
+            }),
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('app/M.php:5');
+    });
+
+    it('counts a shorthand use inside a wide finding, though its text equals a member line', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/api.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 7,
+                    claimKind: 'unused',
+                    claimSymbol: 'createUser',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () =>
+                    'src/api.js:2:  createUser,\nsrc/api.js:6:  createUser,',
+                files: {
+                    'src/api.js':
+                        "import {\n  createUser,\n} from './users';\n\nexport const api = {\n  createUser,\n};",
+                },
+            }),
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('src/api.js:6');
+    });
+
+    it('counts a use on the line of a sibling about something else', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/c.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'computeTotal',
+                }),
+                violation({
+                    relevantFile: 'src/c.ts',
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    suggestionContent: 'Name the 1.07 tax rate',
+                    existingCode: 'const t = computeTotal(2) * 1.07;',
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupOf([
+                'src/c.ts:1:function computeTotal(n) {',
+                'src/c.ts:3:const t = computeTotal(2) * 1.07;',
+            ]),
+        });
+        const dropped = res.dropped.find(
+            (d) => d.violation.claimSymbol === 'computeTotal',
+        );
+        expect(dropped?.reason).toContain('src/c.ts:3');
+    });
+
+    it('does not publish when the search did not reach the importing file', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: '.storybook/main.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'bar',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () => 'src/foo.ts:1:export const bar = 1;',
+                files: {
+                    '.storybook/main.ts':
+                        "import { bar } from '../src/foo';\nexport default bar;",
+                },
+            }),
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('unverifiable');
+    });
+
+    it('does not take a C# using declaration for the import', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/Repo.cs',
+                    relevantLinesStart: 5,
+                    relevantLinesEnd: 5,
+                    claimKind: 'unused',
+                    claimSymbol: 'Foo',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () =>
+                    'src/Repo.cs:5:        using var conn = new Foo(cs);\nsrc/Foo.cs:1:public class Foo {}',
+                files: {
+                    'src/Repo.cs':
+                        'using Acme;\n\nclass Repo {\n    void Run() {\n        using var conn = new Foo(cs);\n    }\n}',
+                },
+            }),
+        });
+        expect(res.kept).toEqual([]);
+    });
+
+    it('binds only the new name of a require destructuring rename', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'b',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: (pattern) =>
+                    pattern === 'b'
+                        ? "src/a.js:1:const { x, a: b } = require('m');"
+                        : "src/a.js:1:const { x, a: b } = require('m');\nsrc/a.js:4:obj.a = x;",
+                files: {
+                    'src/a.js':
+                        "const { x, a: b } = require('m');\n\n\nobj.a = x;",
+                },
+            }),
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('reads a finding whose end is not a real line', async () => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: Infinity,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                }),
+            ],
+            changedFiles: [],
+            lookup: fakeLookup({
+                grep: () =>
+                    'src/a.js:1:import { debounce } from "./timing";\nsrc/timing.js:1:export function debounce() {}',
+            }),
+        });
+        expect(res.kept).toHaveLength(1);
+    });
+
+    it('reads the file once for every finding of one claim', async () => {
+        const base = fakeLookup({
+            grep: () =>
+                'src/a.js:1:import { debounce } from "./timing";\nsrc/timing.js:1:export function debounce() {}',
+        });
+        let reads = 0;
+        const lookup = {
+            ...base,
+            read: async (path: string, start: number, end: number) => {
+                reads++;
+                return base.read(path, start, end);
+            },
+        };
+        await checkClaims({
+            violations: [1, 1, 1].map(() =>
+                violation({
+                    relevantFile: 'src/a.js',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    claimKind: 'unused',
+                    claimSymbol: 'debounce',
+                }),
+            ),
+            changedFiles: [],
+            lookup,
+        });
+        expect(reads).toBe(1);
+    });
+
+    it('judges the claim by the sibling that sits on the import', async () => {
+        const lines = [
+            "src/a.ts:3:import { Foo } from './foo';",
+            'src/foo.ts:1:export class Foo {}',
+        ];
+        const lookup = fakeLookup({
+            grep: (pattern) =>
+                lines
+                    .filter((l) =>
+                        new RegExp(pattern).test(
+                            l.split(':').slice(2).join(':'),
+                        ),
+                    )
+                    .join('\n'),
+        });
+        const base = {
+            relevantFile: 'src/a.ts',
+            claimKind: 'unused' as const,
+            claimSymbol: 'Foo',
+        };
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    ...base,
+                    relevantLinesStart: 120,
+                    relevantLinesEnd: 122,
+                    existingCode: 'function render() {\n  return 1;\n}',
+                }),
+                violation({
+                    ...base,
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    existingCode: "import { Foo } from './foo';",
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        expect(res.dropped).toEqual([]);
+        expect(res.kept).toHaveLength(2);
+    });
+
+    it('drops a used import although a sibling of the same rule sits further down (regression)', async () => {
+        const lines = [
+            'src/a.js:3:import { debounce } from "./timing";',
+            'src/a.js:40:  debounce(save);',
+            'src/timing.js:1:export function debounce() {}',
+        ];
+        const lookup = fakeLookup({
+            grep: (pattern) =>
+                lines
+                    .filter((l) =>
+                        new RegExp(pattern).test(
+                            l.split(':').slice(2).join(':'),
+                        ),
+                    )
+                    .join('\n'),
+        });
+        const base = {
+            relevantFile: 'src/a.js',
+            claimKind: 'unused' as const,
+        };
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    ...base,
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    claimSymbol: 'debounce',
+                }),
+                violation({
+                    ...base,
+                    relevantLinesStart: 200,
+                    relevantLinesEnd: 200,
+                    claimSymbol: 'oldHelper',
+                }),
+            ],
+            changedFiles: [],
+            lookup,
+        });
+        const dropped = res.dropped.find(
+            (d) => d.violation.claimSymbol === 'debounce',
+        );
+        expect(dropped?.reason).toContain('src/a.js:40');
+    });
+});
+
+describe('checkClaims — an import used without its name (review round 6)', () => {
+    type Case = {
+        name: string;
+        file: string;
+        line: number;
+        symbol: string;
+        files: Record<string, string>;
+        end?: number;
+        expect: 'drop' | 'keep' | 'unverifiable';
+    };
+    // Every case is a file as the repository has it, searched the way rg does.
+    const lookupFor = (files: Record<string, string>) =>
+        fakeLookup({
+            files,
+            exists: (path) => path in files,
+            grep: (pattern) =>
+                Object.entries(files)
+                    .flatMap(([path, text]) =>
+                        text
+                            .split('\n')
+                            .map((l, i) => ({ path, l, n: i + 1 }))
+                            .filter(({ l }) => new RegExp(pattern).test(l))
+                            .map(({ path, l, n }) => `${path}:${n}:${l}`),
+                    )
+                    .join('\n'),
+        });
+    const CASES: Case[] = [
+        {
+            name: 'a Rust trait used only through its methods',
+            file: 'src/main.rs',
+            line: 1,
+            symbol: 'Rng',
+            files: {
+                'src/main.rs':
+                    'use rand::Rng;\n\nfn main() {\n    let n = rand::thread_rng().gen_range(0..10);\n}',
+                'src/dice.rs': 'use rand::Rng;',
+            },
+            expect: 'drop',
+        },
+        {
+            name: "Kotlin's getValue used by a by delegate",
+            file: 'app/Screen.kt',
+            line: 1,
+            symbol: 'getValue',
+            files: {
+                'app/Screen.kt':
+                    'import androidx.compose.runtime.getValue\n\nval s by mutableStateOf(1)',
+                'app/Other.kt': 'import androidx.compose.runtime.getValue',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Scala implicit',
+            file: 'src/A.scala',
+            line: 1,
+            symbol: 'global',
+            files: {
+                'src/A.scala':
+                    'import scala.concurrent.ExecutionContext.Implicits.global\n\nval f = Future(1)',
+                'src/B.scala':
+                    'import scala.concurrent.ExecutionContext.Implicits.global',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Vue component used in its template',
+            file: 'src/App.vue',
+            line: 2,
+            symbol: 'FooBar',
+            files: {
+                'src/App.vue':
+                    "<script setup>\nimport FooBar from './FooBar.vue'\n</script>\n<template><foo-bar /></template>",
+                'src/Other.vue':
+                    "<script setup>\nimport FooBar from './FooBar.vue'\n</script>",
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Python module that re-exports a name',
+            file: 'pkg/api.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'pkg/api.py': 'from pkg._impl import connect',
+                'pkg/_impl.py': 'def connect():\n    pass',
+                'app/main.py': 'from pkg.api import connect',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Python module reached as api.connect',
+            file: 'pkg/api.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'pkg/api.py': 'from pkg._impl import connect',
+                'pkg/_impl.py': 'def connect():\n    pass',
+                'app/main.py': 'from pkg import api\napi.connect()',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Python module re-exported by a relative import',
+            file: 'app/api.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'app/api.py': 'from app._impl import connect',
+                'app/_impl.py': 'def connect():\n    pass',
+                'app/main.py': 'from .api import connect',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Python module reached through its package path',
+            file: 'src/pkg/api.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'src/pkg/api.py': 'from pkg._impl import connect',
+                'src/pkg/_impl.py': 'def connect():\n    pass',
+                'app/main.py': 'import pkg.api\npkg.api.connect()',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'a Python import of the name from another module with the same basename, unused',
+            file: 'tests/api.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'tests/api.py':
+                    'from pkg._impl import connect\n\ndef run():\n    pass',
+                'pkg/_impl.py': 'def connect():\n    pass',
+                'app/api.py': 'from pkg._impl import connect\nconnect()',
+                'app/main.py': 'from app.api import connect',
+            },
+            expect: 'keep',
+        },
+        {
+            name: 'a Python import reached by an attribute chain on another object, unused',
+            file: 'tests/api.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'tests/api.py':
+                    'from pkg._impl import connect\n\ndef run():\n    pass',
+                'pkg/_impl.py': 'def connect():\n    pass',
+                'app/main.py': 'client.api.connect(x)',
+            },
+            expect: 'keep',
+        },
+        {
+            name: 'a Python import nobody re-exports, unused',
+            file: 'pkg/job.py',
+            line: 1,
+            symbol: 'connect',
+            files: {
+                'pkg/job.py':
+                    'from pkg._impl import connect\n\ndef run():\n    pass',
+                'pkg/_impl.py': 'def connect():\n    pass',
+            },
+            expect: 'keep',
+        },
+        {
+            name: 'a function written after the import on its line',
+            file: 'src/a.ts',
+            line: 1,
+            symbol: 'foo',
+            files: {
+                'src/a.ts':
+                    "import { foo } from './foo'; export function g() {\n  return foo(1);\n}",
+                'src/foo.ts': 'export function foo(n) {}',
+            },
+            expect: 'drop',
+        },
+        {
+            name: "C#'s global using",
+            file: 'src/GlobalUsings.cs',
+            line: 1,
+            symbol: 'JsonConvert',
+            files: {
+                'src/GlobalUsings.cs':
+                    'global using JsonConvert = Newtonsoft.Json.JsonConvert;',
+            },
+            expect: 'unverifiable',
+        },
+        {
+            name: 'a C# using alias with a trailing comment, used inside a wide finding',
+            file: 'src/A.cs',
+            line: 1,
+            end: 10,
+            symbol: 'Json',
+            files: {
+                'src/A.cs':
+                    'using Json = Newtonsoft.Json.JsonConvert; // serializer\n\nclass A {\n    string S(object x) => Json.SerializeObject(x);\n}',
+            },
+            expect: 'drop',
+        },
+        {
+            name: 'an import far below a finding claiming 1..999999',
+            file: 'src/big.js',
+            line: 1,
+            end: 999999,
+            symbol: 'debounce',
+            files: {
+                'src/big.js':
+                    '\n'.repeat(2499) +
+                    "import { debounce } from './timing';\n" +
+                    '\n'.repeat(99) +
+                    'debounce(save);',
+                'src/timing.js': 'export function debounce() {}',
+            },
+            expect: 'drop',
+        },
+        {
+            name: "Python's from __future__ import",
+            file: 'app/a.py',
+            line: 1,
+            symbol: 'annotations',
+            files: {
+                'app/a.py': 'from __future__ import annotations\n\nx: int = 1',
+            },
+            expect: 'unverifiable',
+        },
+        {
+            name: 'a Preact Fragment used only as <>',
+            file: 'src/A.tsx',
+            line: 1,
+            symbol: 'Fragment',
+            files: {
+                'src/A.tsx':
+                    "import { h, Fragment } from 'preact';\n\nexport const A = () => <>x</>;",
+            },
+            expect: 'unverifiable',
+        },
+        {
+            name: 'an emoji before the end of a multi-line import',
+            file: 'src/a.js',
+            line: 3,
+            symbol: 'Foo',
+            files: {
+                'src/a.js':
+                    "import {\n  a, // 🎉🎉🎉🎉\n  Foo,\n} from './x';\nconsole.log(a);",
+                'src/x.js': 'export class Foo {}',
+            },
+            expect: 'keep',
+        },
+        {
+            name: 'the import that binds the name, beside a stylesheet path naming it',
+            file: 'src/Card.tsx',
+            line: 2,
+            symbol: 'Foo',
+            files: {
+                'src/Card.tsx':
+                    "\nimport { Foo } from './foo';\nimport styles from './Foo.module.css';\nexport const c = styles;",
+                'src/foo.ts': 'export const Foo = 1;',
+            },
+            expect: 'keep',
+        },
+    ];
+
+    it.each(CASES)('$name: $expect', async (c: Case) => {
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: c.file,
+                    relevantLinesStart: c.line,
+                    relevantLinesEnd: c.end ?? c.line,
+                    claimKind: 'unused',
+                    claimSymbol: c.symbol,
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupFor(c.files),
+        });
+        if (c.expect === 'keep') {
+            expect(res.kept).toHaveLength(1);
+            return;
+        }
+        expect(res.kept).toEqual([]);
+        if (c.expect === 'unverifiable') {
+            expect(res.dropped[0].reason).toContain('unverifiable');
+        }
+    });
+
+    it('does not let a restating sibling without lines hide a use behind the span', async () => {
+        const files = {
+            'src/a.ts':
+                '\n\n\n\nfunction helper() {}\n' +
+                '\n'.repeat(114) +
+                'helper();\n' +
+                '\n'.repeat(179) +
+                'const z = 1;',
+        };
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 5,
+                    relevantLinesEnd: 5,
+                    claimKind: 'unused',
+                    claimSymbol: 'helper',
+                }),
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: undefined,
+                    relevantLinesEnd: undefined,
+                    claimKind: 'unused',
+                    claimSymbol: 'helper',
+                }),
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 300,
+                    relevantLinesEnd: 300,
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupFor(files),
+        });
+        expect(res.kept.filter((v) => v.claimSymbol === 'helper')).toEqual([]);
+    });
+
+    it('keeps two true findings on one symbol that differ only by a claim path', async () => {
+        const files = {
+            'src/a.ts':
+                'function foo() {\n  return 1;\n}\n' +
+                '\n'.repeat(36) +
+                '// foo is dead code\nexport const x = 1;',
+        };
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 3,
+                    claimKind: 'unused',
+                    claimSymbol: 'foo',
+                }),
+                violation({
+                    relevantFile: 'src/a.ts',
+                    relevantLinesStart: 40,
+                    relevantLinesEnd: 40,
+                    claimKind: 'unused',
+                    claimSymbol: 'foo',
+                    claimPath: 'src/a.ts',
+                }),
+            ],
+            changedFiles: [],
+            lookup: lookupFor(files),
+        });
+        expect(res.kept).toHaveLength(2);
+    });
+});
+
 describe('checkClaims — missing (KRC-03, KRC-04)', () => {
     it('drops a finding claiming a path is missing when the repository has it', async () => {
         const lookup = fakeLookup({ exists: () => true });
@@ -287,8 +2324,7 @@ describe('checkClaims — duplicate (KRC-03, KRC-04)', () => {
 
     it('does not let the finding own lines stand in as the pre-existing helper', async () => {
         const lookup = fakeLookup({
-            grep: () =>
-                'src/orders/order-mapper.ts:3:function formatDate(d) {',
+            grep: () => 'src/orders/order-mapper.ts:3:function formatDate(d) {',
         });
         const res = await checkClaims({
             violations: [
@@ -473,7 +2509,11 @@ describe('checkClaims — batch behavior (KRC-07)', () => {
             },
         });
         const violations = Array.from({ length: 10 }, (_, i) =>
-            violation({ ruleUuid: `r${i}`, claimKind: 'unused', claimSymbol: 's' }),
+            violation({
+                ruleUuid: `r${i}`,
+                claimKind: 'unused',
+                claimSymbol: 's',
+            }),
         );
 
         await checkClaims({
@@ -500,7 +2540,11 @@ describe('checkClaims — batch behavior (KRC-07)', () => {
             },
         });
         const violations = Array.from({ length: 12 }, (_, i) =>
-            violation({ ruleUuid: `r${i}`, claimKind: 'unused', claimSymbol: 's' }),
+            violation({
+                ruleUuid: `r${i}`,
+                claimKind: 'unused',
+                claimSymbol: 's',
+            }),
         );
 
         // No `concurrency` passed: the default must BE the shard's limit, not a
@@ -646,7 +2690,7 @@ describe('claim check groups by (rule, file), not by finding', () => {
         expect(lookup.grepCalls).toHaveLength(0);
     });
 
-    it('does not let one file\'s refutation drop another file\'s finding', async () => {
+    it("does not let one file's refutation drop another file's finding", async () => {
         const refuted = violation({
             ruleUuid: 'rule-no-unused-imports',
             relevantFile: 'src/a.ts',
@@ -727,7 +2771,8 @@ describe('claim check groups by (rule, file), not by finding', () => {
                 violations: [dupWithPath('src/shared/slugify.ts')],
                 changedFiles: [{ filename: 'src/blog/slug.ts' } as any],
                 lookup: fakeLookup({
-                    grep: () => 'src/shared/strings.ts:9:export function slugify',
+                    grep: () =>
+                        'src/shared/strings.ts:9:export function slugify',
                     exists: () => false,
                 }),
             });
@@ -741,7 +2786,8 @@ describe('claim check groups by (rule, file), not by finding', () => {
                 violations: [dupWithPath('src/shared/strings.ts')],
                 changedFiles: [{ filename: 'src/blog/slug.ts' } as any],
                 lookup: fakeLookup({
-                    grep: () => 'src/shared/strings.ts:9:export function slugify',
+                    grep: () =>
+                        'src/shared/strings.ts:9:export function slugify',
                     exists: () => true,
                 }),
             });
@@ -757,7 +2803,8 @@ describe('claim check groups by (rule, file), not by finding', () => {
                 violations: [dupWithPath('src/shared')],
                 changedFiles: [{ filename: 'src/blog/slug.ts' } as any],
                 lookup: fakeLookup({
-                    grep: () => 'src/shared/strings.ts:9:export function slugify',
+                    grep: () =>
+                        'src/shared/strings.ts:9:export function slugify',
                     exists: () => false,
                 }),
             });
@@ -773,7 +2820,8 @@ describe('claim check groups by (rule, file), not by finding', () => {
                     { filename: 'src/shared/new-helper.ts' } as any,
                 ],
                 lookup: fakeLookup({
-                    grep: () => 'src/shared/new-helper.ts:1:export function slugify',
+                    grep: () =>
+                        'src/shared/new-helper.ts:1:export function slugify',
                     exists: () => false,
                 }),
             });
@@ -789,7 +2837,11 @@ describe('checkClaims — a file named with a leading slash', () => {
     it('checks a claim once when siblings name its path with and without the slash', async () => {
         const exists = jest.fn().mockReturnValue(true);
         const lookup = fakeLookup({ exists });
-        const sibling = (relevantFile: string, claimPath: string, line: number) =>
+        const sibling = (
+            relevantFile: string,
+            claimPath: string,
+            line: number,
+        ) =>
             violation({
                 relevantFile,
                 relevantLinesStart: line,
@@ -800,8 +2852,16 @@ describe('checkClaims — a file named with a leading slash', () => {
 
         const res = await checkClaims({
             violations: [
-                sibling('/src/orders/order-mapper.ts', '/src/orders/order-mapper.spec.ts', 3),
-                sibling('src/orders/order-mapper.ts', 'src/orders/order-mapper.spec.ts', 7),
+                sibling(
+                    '/src/orders/order-mapper.ts',
+                    '/src/orders/order-mapper.spec.ts',
+                    3,
+                ),
+                sibling(
+                    'src/orders/order-mapper.ts',
+                    'src/orders/order-mapper.spec.ts',
+                    7,
+                ),
             ],
             changedFiles: [{ filename: '/src/orders/order-mapper.ts' }],
             lookup,

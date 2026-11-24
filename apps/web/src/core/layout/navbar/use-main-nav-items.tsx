@@ -10,15 +10,36 @@ import {
     GaugeIcon,
     GitPullRequestIcon,
     LockIcon,
+    ShieldCheckIcon,
     SparklesIcon,
     type LucideIcon,
 } from "lucide-react";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { useKodusCreditBalance } from "src/features/ee/byok/_hooks/use-kodus-credit-balance";
 import { isCockpitTierAllowed } from "src/features/ee/cockpit/_helpers/tier-policy";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
+const BETA_BADGE = (
+    <span className="bg-secondary-light/15 text-secondary-light rounded-full px-1.5 py-px text-[10px] font-semibold tracking-wide uppercase">
+        Beta
+    </span>
+);
+
+/** Earlier than beta: shown on what is still experimental. */
+const ALPHA_BADGE = (
+    <span className="bg-warning/15 text-warning rounded-full px-1.5 py-px text-[10px] font-semibold tracking-wide uppercase">
+        Alpha
+    </span>
+);
+
 export type MainNavItem = {
-    id: "reviews" | "cockpit" | "repositories" | "ai-providers" | "plugins";
+    id:
+        | "reviews"
+        | "cockpit"
+        | "deep-scan"
+        | "repositories"
+        | "ai-providers"
+        | "plugins";
     label: string;
     icon: LucideIcon;
     href: string;
@@ -49,6 +70,11 @@ export const useMainNavItems = () => {
         Action.Read,
         ResourceType.PluginSettings,
     );
+    const canReadSecurityScans = usePermission(
+        Action.Read,
+        ResourceType.SecurityScan,
+    );
+    const { deepScan } = useFeatureFlags();
     const canReadRepositories = usePermission(
         Action.Read,
         ResourceType.GitSettings,
@@ -60,7 +86,7 @@ export const useMainNavItems = () => {
     const credits = useKodusCreditBalance();
     const { data: isMCPAvailable = true } = useMCPAvailability(canReadPlugins);
 
-    // Five destinations. Reviews folds Pull Requests + CLI Reviews (tabs on
+    // Six destinations. Reviews folds Pull Requests + CLI Reviews (tabs on
     // the page); Issues lives inside the Cockpit; Library is reached from
     // Kody Rules.
     const items = useMemo(() => {
@@ -89,6 +115,19 @@ export const useMainNavItems = () => {
                 ) ? undefined : (
                     <LockIcon className="size-3.5" />
                 ),
+            },
+            {
+                // A whole-repository security scan, run on demand: its own
+                // destination, so a team finds it without knowing it lives
+                // next to the Cockpit's issues.
+                id: "deep-scan",
+                label: "Deep scan",
+                icon: ShieldCheckIcon,
+                href: "/deep-scan",
+                // Private alpha: only organizations the flag lets in.
+                visible: canReadSecurityScans && deepScan === true,
+                badge: ALPHA_BADGE,
+                matcher: (path) => path.startsWith("/deep-scan"),
             },
             {
                 // Which repositories Kody reviews: where every workspace
@@ -143,11 +182,7 @@ export const useMainNavItems = () => {
                 icon: BlocksIcon,
                 href: "/settings/plugins",
                 visible: canReadPlugins && isMCPAvailable,
-                badge: (
-                    <span className="bg-secondary-light/15 text-secondary-light rounded-full px-1.5 py-px text-[10px] font-semibold tracking-wide uppercase">
-                        Beta
-                    </span>
-                ),
+                badge: BETA_BADGE,
             },
         ];
 
@@ -159,6 +194,8 @@ export const useMainNavItems = () => {
             ? subscription.license.planType
             : undefined,
         canReadPlugins,
+        canReadSecurityScans,
+        deepScan,
         canReadRepositories,
         canEditOrg,
         isMCPAvailable,

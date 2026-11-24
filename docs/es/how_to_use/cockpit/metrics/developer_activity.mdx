@@ -1,50 +1,30 @@
 ---
 title: "Actividad del Desarrollador"
-description: "Rastrea la productividad y los patrones de actividad de los desarrolladores a lo largo del tiempo"
+description: "Consulta cuántos pull requests abre cada desarrollador, semana a semana"
 ---
 
 ## Qué es la Actividad del Desarrollador
 
-La Actividad del Desarrollador mide qué tan productivos son los miembros de tu equipo a lo largo del tiempo, rastreando los Pull Requests que abre cada desarrollador de forma semanal. Esto te ayuda a comprender el rendimiento individual, la distribución de la carga de trabajo del equipo e identificar patrones en la actividad de desarrollo.
+La Actividad del Desarrollador (Developer Activity) muestra los pull requests que abre cada desarrollador a lo largo del tiempo, para que puedas ver la carga de trabajo y los patrones de actividad en todo el equipo.
 
-En el Cockpit, es el gráfico **Team Activity** de la pestaña **Productivity**.
+En el Cockpit, es el gráfico **Team Activity** de la pestaña **Productivity**: una tabla con una fila por desarrollador y una columna por semana (de domingo a sábado), de la más reciente a la más antigua. Cada fila muestra el total de PRs del desarrollador en el rango, y cada semana muestra una barra por cada PR abierto.
 
 ## Cómo la Calculamos
 
-Rastreamos automáticamente la actividad de cada desarrollador durante la semana, midiendo sus contribuciones e interacción con el código base.
-
-**Lo que Rastreamos:**
-- **PRs Creados**: Número de PRs creados por cada desarrollador
-
-**Cómo se Calcula:**
 ```
-Actividad Semanal = COUNT(PRs Creados) por desarrollador por semana
+Activity = COUNT(PRs opened) per developer per week
 ```
 
-Agregamos los datos por semana comenzando el lunes para brindarte información semanal consistente.
+- Un PR cuenta en la fecha en que se **abrió**, sin importar su estado actual (abierto, mergeado o cerrado). Para un PR abierto antes de que se conectara su repositorio, y que no esté entre los PRs importados al conectar, esa es la fecha en que Kodus lo registró por primera vez.
+- El desarrollador es el nombre de usuario del autor del PR en tu proveedor de Git. Los PRs sin autor se excluyen.
+- Cubre el rango de fechas seleccionado en la parte superior del Cockpit.
 
-## Por qué es Importante
+Compárala con [PRs por Desarrollador](/es/how_to_use/cockpit/metrics/prs_by_developer), que cuenta los PRs por la fecha en que se **cerraron**.
 
-Comprender la actividad del desarrollador te ayuda a:
+## Por qué Importa
 
-- **Identificar a los Mejores Desempeños**: Reconocer a los miembros más productivos del equipo
-- **Equilibrar la Carga de Trabajo**: Distribuir el trabajo de manera más equitativa en el equipo
-- **Rastrear Tendencias**: Ver cómo cambia la productividad a lo largo del tiempo
-- **Mejorar la Colaboración**: Comprender la dinámica y los patrones del equipo
+- **Equilibrar la carga de trabajo**: ve si el trabajo está repartido de forma pareja en el equipo
+- **Rastrear tendencias**: ve cómo cambia la actividad a lo largo del tiempo
+- **Detectar cuellos de botella**: encuentra dónde se acumula el trabajo en unas pocas personas
 
-### Impacto en el Rendimiento del Equipo
-
-- **Asignación de Recursos**: Distribuir mejor el trabajo según la capacidad
-- **Reconocimiento del Rendimiento**: Reconocer y recompensar a los de alto rendimiento
-- **Identificación de Cuellos de Botella**: Encontrar dónde se atasca el trabajo
-- **Salud del Equipo**: Monitorear el agotamiento o la falta de compromiso
-
-
-## Cómo Mejorar
-
-- Establecer metas claras y objetivos específicos para cada desarrollador
-- Proporcionar formación y oportunidades de aprendizaje
-- Distribuir el trabajo de manera más equitativa en el equipo
-- Fomentar la colaboración y el intercambio de conocimientos
-- Definir procesos claros sobre cómo fluye el trabajo
-- Reducir las tareas manuales y repetitivas mediante la automatización
+El conteo de PRs no dice nada sobre el tamaño o la dificultad de los PRs, así que léelo junto a [Tamaño del PR](/es/how_to_use/cockpit/metrics/pr_size).

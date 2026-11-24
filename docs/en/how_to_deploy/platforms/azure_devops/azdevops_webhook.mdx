@@ -4,7 +4,7 @@ description: "Manually register the Azure Repos webhook when Kody couldn't creat
 icon: webhook
 ---
 
-Kody usually creates the webhook automatically when you connect an Azure DevOps project. This page covers the **manual setup** path you take when automatic registration didn't happen — typically on self-hosted installs or in Azure projects where Kody can't create service hooks on your behalf.
+Kody usually creates the service hooks automatically, per repository, when you save the repository selection. That needs the **Edit subscriptions** permission on the project (Project Administrators have it). This page covers the **manual setup** path you take when automatic registration didn't happen. **Repositories** lists the repository with the reason.
 
 <Note>
   Webhook URLs must reach the Webhooks service (port 3332). Using the API domain only works if your reverse proxy routes `/.../webhook` paths to the Webhooks service.
@@ -103,12 +103,13 @@ console.log(iv.toString('hex') + ':' + e);
 
 6. Click **Finish**.
 
-Create one subscription per event type. Kodus currently reacts to:
+Create one subscription per event type. These three are the ones Kody creates itself and needs to review:
 
 - `git.pullrequest.created` — Pull request created
 - `git.pullrequest.updated` — Pull request updated
-- `git.pullrequest.merge.attempted` — Pull request merge attempted
 - `ms.vss-code.git-pullrequest-comment-event` — Pull request commented
+
+Kodus also accepts `git.pullrequest.merge.attempted` — Pull request merge attempted — but does not need it to review.
 
 <Note>
   Make sure the URL is reachable from Azure DevOps and accepts incoming POST requests on port 3332 (directly or through your reverse proxy).
@@ -127,5 +128,9 @@ Create one subscription per event type. Kodus currently reacts to:
 
   <Accordion title="Works for one event but not others">
     Each event type needs its own subscription in Azure DevOps. If you only created "Pull request created", updates and comments won't trigger reviews.
+  </Accordion>
+
+  <Accordion title="Kodus returns 400 Unrecognized event">
+    The token was accepted, but the request body has no `eventType`. Azure DevOps service hooks always send it, so something else is posting to the URL, for example a manual test request.
   </Accordion>
 </AccordionGroup>

@@ -8,6 +8,7 @@ import { CodeReviewFeedbackModel } from '@libs/code-review/infrastructure/adapte
 
 import { ANALYTICS_DATA_SOURCE } from '../schema.constant';
 import { parseTimestamp } from './parse-timestamps.util';
+import { ANALYTICS_QUERY_READ } from '@libs/core/infrastructure/database/mongo/read-preference';
 
 export const FEEDBACK_INGESTION_WATERMARK = 'code_review_feedback';
 export const FEEDBACK_INGESTION_SOURCE = 'code_review_feedback';
@@ -79,7 +80,7 @@ export class FeedbackIngestionService {
 
         const cursor = this.feedbackModel
             .find(filter)
-            .read('secondaryPreferred')
+            .read(ANALYTICS_QUERY_READ)
             .sort({ updatedAt: 1, _id: 1 })
             .lean()
             .cursor({ batchSize });

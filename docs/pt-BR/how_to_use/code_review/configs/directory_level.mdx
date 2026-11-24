@@ -1,60 +1,75 @@
 ---
-title: "Configurações por Diretório"
-description: "Aplique configurações de code review personalizadas a pastas específicas do seu repositório. Ideal para monorepos."
+title: "Configurações por diretório"
+description: "Dê a pastas específicas de um repositório as próprias configurações de code review. Ideal para monorepos."
 ---
 
 ## Visão Geral
 
-Aplique configurações de code review personalizadas a pastas específicas do seu repositório. Ideal para monorepos onde áreas diferentes possuem padrões ou responsabilidades distintas.
+Um escopo de diretório aplica as próprias configurações de code review a uma ou mais pastas de um repositório. Use em monorepos, onde áreas diferentes têm padrões ou responsáveis distintos.
 
-Kody seleciona uma única configuração por PR: **Diretório** → **Repositório** → **Global**
+A Kody usa uma única configuração por pull request: **Diretório** → **Repositório** → **Global**.
 
 <Note>
-  Saiba como as configurações fluem entre os níveis em <a href="/pt-BR/how_to_use/code_review/configs/inheritance_overrides">Herança e Sobrescrita de Configuração</a>.
+  Saiba como as configurações fluem entre os níveis em <a href="/pt-BR/how_to_use/code_review/configs/inheritance_overrides">Herança de configurações</a>.
 </Note>
 
 ## Como Funciona
 
-- Configure qualquer pasta em qualquer profundidade (ex.: `api/src/services`)
-- Configure quantas pastas quiser
-- **Sem sobreposição**: se você configurar `api/src/services`, não poderá também configurar `api/src/services/users`
+- Um escopo de diretório pode ter uma pasta ou várias. Todas as pastas dele compartilham as mesmas configurações.
+- As pastas podem estar em qualquer profundidade, por exemplo `api/src/services`.
+- Você pode adicionar quantos escopos de diretório precisar.
+- Uma pasta pertence a um único escopo de diretório. Pastas dentro de uma pasta que já tem escopo não podem ser selecionadas.
 
 ### Regras de Seleção
 
-- **Um diretório configurado alterado**: Usa a configuração daquele diretório
-- **Nenhum diretório configurado alterado**: Usa a configuração do repositório (ou global se não houver configuração de repositório)
-- **Dois ou mais diretórios configurados alterados**: Escala para a configuração do repositório (ou global se não houver configuração de repositório)
+A Kody verifica quais escopos de diretório o pull request toca:
+
+- **Um escopo tocado:** usa as configurações desse escopo. Arquivos fora de qualquer escopo não mudam isso.
+- **Nenhum escopo tocado:** usa as configurações do repositório, ou do Global se o repositório não tiver.
+- **Dois ou mais escopos tocados:** usa as configurações do repositório, ou do Global se o repositório não tiver.
 
 <Note>
-  Kody usa uma configuração por PR para manter as revisões previsíveis. Misturar configurações causa conflitos.
+  A Kody usa uma configuração por pull request para manter as revisões previsíveis. Misturar configurações causa conflitos.
 </Note>
 
 ## Exemplos
 
 <Tabs>
   <Tab title="Único diretório configurado">
-    Você configurou `src/microservice-alpha`. O PR altera arquivos em `src/microservice-alpha` e pastas não configuradas.
-    
-    Usa a configuração de **microservice-alpha**.
+    Você adicionou um escopo para `src/microservice-alpha`. Um pull request altera arquivos em `src/microservice-alpha` e em pastas não configuradas.
+
+    Usa as configurações de **microservice-alpha**.
   </Tab>
   <Tab title="Nenhum diretório configurado">
-    O PR toca apenas diretórios sem configurações específicas.
-    
-    Usa a configuração do **repositório** (ou **global** se não houver configuração de repositório).
+    Um pull request toca apenas pastas sem escopo.
+
+    Usa as configurações do **repositório** (ou do **Global** se o repositório não tiver).
   </Tab>
-  <Tab title="Múltiplos diretórios configurados">
-    Você configurou `src/microservice-alpha` e `src/microservice-beta`. O PR toca ambos.
-    
-    Escala para a configuração do **repositório** (ou **global** se não houver configuração de repositório).
+  <Tab title="Vários diretórios configurados">
+    Você adicionou escopos para `src/microservice-alpha` e `src/microservice-beta`. Um pull request toca os dois.
+
+    Usa as configurações do **repositório** (ou do **Global** se o repositório não tiver).
   </Tab>
 </Tabs>
 
 ## Configuração
 
-1. Na barra lateral, abra o seletor de escopo no topo do grupo **Code review** e escolha **Add repository configuration**
-2. Em **Create repository settings**, use **Select the target repository**, depois **Select the target directories** (uma ou mais pastas) e clique em **Create settings**
-3. Escolha o novo escopo de diretório — ele aparece recuado abaixo do seu repositório no seletor de escopo — e altere as configurações em qualquer página (General, What to review, Kody Rules, What Kody writes); as páginas de configurações salvam com **Save settings**
+1. Na barra lateral, escolha o repositório no seletor de escopo no topo do grupo **Code review**.
+2. Abra o seletor de novo e escolha **Add directory scope** no final.
+3. No diálogo **Add directory scope**, marque as pastas em **Select directories**. Elas aparecem em **Selected directories**. Clique em **Add directory scope**.
+4. Escolha o novo escopo. Ele aparece indentado sob o repositório dele no seletor. Altere as configurações em qualquer página e clique em **Save settings**.
 
-Para alterar as pastas depois, use o menu **⋯** ao lado do seletor de escopo → **Edit directories**; **Delete configuration** remove a configuração do diretório.
+Para alterar as pastas depois, abra o menu **⋯** ao lado do seletor de escopo e escolha **Edit directories**, depois **Save directories**. **Delete configuration** remove o escopo; as configurações do repositório voltam a valer para essas pastas.
 
-Se você também usa `kodus-config.yml`, ele sobrescreve as configurações da interface web (veja Prioridade de Configuração nas configurações Gerais).
+## kodus-config.yml e escopos de diretório
+
+- A Kody lê o `kodus-config.yml` apenas da raiz da branch padrão do repositório. Ela nunca lê um `kodus-config.yml` colocado dentro de uma pasta.
+- Ela só lê o arquivo da raiz quando **Prefer kodus-config.yml settings** está ligado no escopo de **repositório**. A chave também aparece no escopo de diretório, mas não muda uma revisão: ligá-la ali não faz a Kody ler um arquivo para esse diretório, e desligá-la não impede que o arquivo do repositório seja aplicado.
+- Uma configuração sobrescrita no escopo de diretório tem precedência sobre a mesma configuração no arquivo do repositório.
+- Para manter as configurações de um escopo de diretório em arquivos, use um repositório de [configuração centralizada](/pt-BR/how_to_use/code_review/configs/centralized_config), onde um `kodus-config.yml` na pasta do escopo é sincronizado com as configurações do escopo de diretório.
+
+Veja [Geral](/pt-BR/how_to_use/code_review/configs/general#prioridade-de-configuração) para o arquivo em si e [Herança de configurações](/pt-BR/how_to_use/code_review/configs/inheritance_overrides#kodus-config-yml) para a ordem.
+
+## Kody Rules em um escopo de diretório
+
+Um pull request é revisado com as Kody Rules do escopo de diretório sob a mesma seleção das configurações acima. Quando nenhum escopo único é selecionado, valem as regras de todos os escopos de diretório do repositório. Veja [Herança de regras](/pt-BR/how_to_use/code_review/configs/rules_inheritance).

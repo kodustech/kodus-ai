@@ -11,10 +11,20 @@
 // via resolveModelConfig — mock it to inject the scripted MockLanguageModelV3.
 jest.mock('@libs/llm/model-invocation', () => ({
     resolveModelConfig: jest.fn(),
+    // The check slot's answer, as its adapter would declare it.
+    declaredAnswerTokens: jest.fn(
+        async (_slot: unknown, answer?: number) => answer,
+    ),
 }));
 
 import { MockLanguageModelV3 } from 'ai/test';
-import { resolveModelConfig } from '@libs/llm/model-invocation';
+import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
+import { buildProviderOptions } from '@libs/llm/reasoning-options';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+import {
+    declaredAnswerTokens,
+    resolveModelConfig,
+} from '@libs/llm/model-invocation';
 
 import {
     finderRunEnvironment,
@@ -24,6 +34,11 @@ import {
 // own matrix in finder.agent.spec.ts and findings-schema.spec.ts; this file
 // keeps the verifier verdict seam and the end-to-end adapter path.
 import { extractVerdict } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
+import {
+    HEAVY_LENSES,
+    HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT,
+    HEAVY_LENS_SYSTEM_PROMPT,
+} from '@libs/ee/heavy-mode/heavy-lenses';
 
 const mockResolve = resolveModelConfig as jest.Mock;
 
@@ -155,6 +170,253 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
         expect(slotsCalled).toContain('check-model');
     });
 
+    it("keeps the check model's declared answer out of what each verify run re-sends (#2233)", async () => {
+        const { model } = makeModel();
+        const run = jest.spyOn(AiSdkAgentRunner.prototype, 'run');
+        try {
+            await runAgentLoopViaCore(makeInput(model), {
+                ...secrets,
+                byokConfig: { provider: 'openai', model: 'run-model' },
+                verifyByokConfig: {
+                    provider: 'anthropic',
+                    model: 'check-model',
+                    maxInputTokens: 32_000,
+                    maxOutputTokens: 16_000,
+                },
+            });
+            const verifyRuns = run.mock.calls.filter(
+                ([spec]) => spec.phase === 'verify',
+            );
+            expect(verifyRuns.length).toBeGreaterThan(0);
+            // Under the soft threshold (70% of 32k), so only the answer the
+            // check model declares can make the history too long.
+            const messages = [
+                { role: 'user', content: 'verify the finding' },
+                ...Array.from({ length: 8 }, (_, i) => [
+                    {
+                        role: 'assistant',
+                        content: [
+                            {
+                                type: 'tool-call',
+                                toolCallId: `r${i}`,
+                                toolName: 'readFile',
+                                input: { path: `src/f${i}.ts` },
+                            },
+                        ],
+                    },
+                    {
+                        role: 'tool',
+                        content: [
+                            {
+                                type: 'tool-result',
+                                toolCallId: `r${i}`,
+                                toolName: 'readFile',
+                                output: {
+                                    type: 'text',
+                                    value: Array.from(
+                                        { length: 160 },
+                                        (_, line) =>
+                                            `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                                    ).join('\n'),
+                                },
+                            },
+                        ],
+                    },
+                ]).flat(),
+            ];
+            const before = estimateTextTokens(JSON.stringify(messages));
+            expect(before).toBeLessThan(32_000 * 0.7);
+            expect(before + 16_000).toBeGreaterThan(32_000);
+            for (const [spec] of verifyRuns) {
+                const compression = spec.policies.find(
+                    (p) => p.name === 'compression',
+                );
+                const sent =
+                    (
+                        await compression?.prepareStep?.({
+                            messages,
+                            stepNumber: 8,
+                        } as any)
+                    )?.messages ?? messages;
+                // Cut, not emptied: the request and a read still go.
+                const text = JSON.stringify(sent);
+                expect(text).toContain('verify the finding');
+                expect(text).toContain('"type":"tool-result"');
+                expect(estimateTextTokens(text) + 16_000).toBeLessThanOrEqual(
+                    32_000,
+                );
+            }
+        } finally {
+            run.mockRestore();
+        }
+    });
+
+    it('keeps the larger answer of the check model and its fallback out of what each verify run re-sends', async () => {
+        const { model } = makeModel();
+        const run = jest.spyOn(AiSdkAgentRunner.prototype, 'run');
+        try {
+            await runAgentLoopViaCore(makeInput(model), {
+                ...secrets,
+                byokConfig: { provider: 'openai', model: 'run-model' },
+                verifyByokConfig: {
+                    provider: 'anthropic',
+                    model: 'check-model',
+                    maxInputTokens: 32_000,
+                    maxOutputTokens: 4_000,
+                    // LLM.run re-sends to it with its own, larger answer.
+                    fallback: {
+                        provider: 'anthropic',
+                        model: 'check-fallback',
+                        maxInputTokens: 32_000,
+                        maxOutputTokens: 16_000,
+                    },
+                },
+            });
+            const verifyRuns = run.mock.calls.filter(
+                ([spec]) => spec.phase === 'verify',
+            );
+            expect(verifyRuns.length).toBeGreaterThan(0);
+            // Under the soft threshold (70% of 32k), so only the answer the
+            // check model declares can make the history too long.
+            const messages = [
+                { role: 'user', content: 'verify the finding' },
+                ...Array.from({ length: 8 }, (_, i) => [
+                    {
+                        role: 'assistant',
+                        content: [
+                            {
+                                type: 'tool-call',
+                                toolCallId: `r${i}`,
+                                toolName: 'readFile',
+                                input: { path: `src/f${i}.ts` },
+                            },
+                        ],
+                    },
+                    {
+                        role: 'tool',
+                        content: [
+                            {
+                                type: 'tool-result',
+                                toolCallId: `r${i}`,
+                                toolName: 'readFile',
+                                output: {
+                                    type: 'text',
+                                    value: Array.from(
+                                        { length: 160 },
+                                        (_, line) =>
+                                            `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                                    ).join('\n'),
+                                },
+                            },
+                        ],
+                    },
+                ]).flat(),
+            ];
+            const before = estimateTextTokens(JSON.stringify(messages));
+            expect(before).toBeLessThan(32_000 * 0.7);
+            expect(before + 16_000).toBeGreaterThan(32_000);
+            for (const [spec] of verifyRuns) {
+                const compression = spec.policies.find(
+                    (p) => p.name === 'compression',
+                );
+                const sent =
+                    (
+                        await compression?.prepareStep?.({
+                            messages,
+                            stepNumber: 8,
+                        } as any)
+                    )?.messages ?? messages;
+                // Cut, not emptied: the request and a read still go.
+                const text = JSON.stringify(sent);
+                expect(text).toContain('verify the finding');
+                expect(text).toContain('"type":"tool-result"');
+                expect(estimateTextTokens(text) + 16_000).toBeLessThanOrEqual(
+                    32_000,
+                );
+            }
+        } finally {
+            run.mockRestore();
+        }
+    });
+
+    it("sizes each verify run to the tightest attempt when the check slot's answer outgrows its fallback's window", async () => {
+        const { model } = makeModel();
+        const run = jest.spyOn(AiSdkAgentRunner.prototype, 'run');
+        try {
+            await runAgentLoopViaCore(makeInput(model), {
+                ...secrets,
+                byokConfig: { provider: 'openai', model: 'run-model' },
+                verifyByokConfig: {
+                    provider: 'anthropic',
+                    model: 'claude-sonnet-4-5',
+                    maxInputTokens: 200_000,
+                    maxOutputTokens: 64_000,
+                    reasoningEffort: 'high',
+                    fallback: {
+                        provider: 'openai_compatible',
+                        model: 'small-fallback',
+                        maxInputTokens: 32_000,
+                        maxOutputTokens: 1_000,
+                    },
+                },
+            });
+            // Reserved with the options the verify run sends, the check
+            // slot's own effort with no default added, on both attempts: the
+            // run is configured once and its fallback sends them too.
+            const sentOptions = buildProviderOptions('x', undefined, {
+                reasoningEffort: 'high',
+                byokProvider: 'anthropic',
+                modelName: 'claude-sonnet-4-5',
+            });
+            expect(sentOptions).not.toEqual({});
+            for (const slotModel of ['claude-sonnet-4-5', 'small-fallback']) {
+                expect(declaredAnswerTokens).toHaveBeenCalledWith(
+                    expect.objectContaining({ model: slotModel }),
+                    expect.any(Number),
+                    { providerOptions: sentOptions },
+                );
+            }
+            const verifyRuns = run.mock.calls.filter(
+                ([spec]) => spec.phase === 'verify',
+            );
+            expect(verifyRuns.length).toBeGreaterThan(0);
+            // The finding's evidence, as the verify prompt carries it: the
+            // soft pass trims tool results, not this.
+            const evidence = Array.from(
+                { length: 2_600 },
+                (_, line) =>
+                    `${line + 1}: export const v${line} = load('${line}');`,
+            ).join('\n');
+            const messages = [
+                { role: 'user', content: `verify the finding\n${evidence}` },
+            ];
+            // Over what the 32k fallback can take beside its 1k answer.
+            expect(
+                estimateTextTokens(JSON.stringify(messages)) + 1_000,
+            ).toBeGreaterThan(32_000);
+            for (const [spec] of verifyRuns) {
+                const compression = spec.policies.find(
+                    (p) => p.name === 'compression',
+                );
+                const sent =
+                    (
+                        await compression?.prepareStep?.({
+                            messages,
+                            stepNumber: 8,
+                        } as any)
+                    )?.messages ?? messages;
+                const text = JSON.stringify(sent);
+                expect(text).toContain('verify the finding');
+                // Fits the fallback beside its answer, and the slot beside its.
+                expect(estimateTextTokens(text) + 1_000).toBeLessThanOrEqual(
+                    32_000,
+                );
+            }
+        } finally {
+            run.mockRestore();
+        }
+    });
+
     it('keeps verify on the run slot when the check slot is the same model', async () => {
         const { model } = makeModel();
         const input = makeInput(model);
@@ -223,12 +485,63 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
 
         const normal = makeModel();
         await runAgentLoopViaCore(
-            makeInput(normal.model, { reviewMode: 'normal' }),
+            makeInput(normal.model, { reviewMode: 'balanced' }),
             secrets,
         );
 
         // normal mode adds at least the synthesis-rescue pass -> more calls.
         expect(normal.calls.count).toBeGreaterThan(fast.calls.count);
+    });
+
+    it('runs the lenses of the categories on only in heavy mode, with or without a sandbox', async () => {
+        const lensRuns = (heavy: boolean, sandbox = true) => {
+            const roles: string[] = [];
+            const lensSystem = sandbox
+                ? HEAVY_LENS_SYSTEM_PROMPT
+                : HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT;
+            const doGenerate = (async (opts: any) => {
+                const text = JSON.stringify(opts?.prompt ?? '');
+                const role =
+                    /ONE assignment on this pull request: ([^.]+)\./.exec(text);
+                if (role && text.includes(lensSystem)) {
+                    roles.push(role[1]);
+                }
+                const verifier = !role && text.includes('verdict');
+                return {
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: 't',
+                            toolName: verifier
+                                ? 'submitVerdict'
+                                : 'submitResult',
+                            input: JSON.stringify(
+                                verifier
+                                    ? { keep: true, rationale: 'ok' }
+                                    : { reasoning: 'none', suggestions: [] },
+                            ),
+                        },
+                    ],
+                    finishReason: 'tool-calls',
+                    usage: { inputTokens: 5, outputTokens: 5 },
+                    warnings: [],
+                };
+            }) as any;
+            return runAgentLoopViaCore(
+                makeInput(new MockLanguageModelV3({ doGenerate }), {
+                    heavy,
+                    allowedLabels: ['security'],
+                }),
+                sandbox ? secrets : { ...secrets, remoteCommands: undefined },
+            ).then(() => roles.sort());
+        };
+        const security = HEAVY_LENSES.filter((l) => l.label === 'security')
+            .map((l) => l.assignment)
+            .sort();
+
+        expect(await lensRuns(false)).toEqual([]);
+        expect(await lensRuns(true)).toEqual(security);
+        expect(await lensRuns(true, false)).toEqual(security);
     });
 
     it('reports coverage from the ledger mutated during the run', async () => {
@@ -430,22 +743,19 @@ describe('contract matrix — B. semantic-but-wrong', () => {
     // KEPT (verifier.agent.ts:143) — the #1786 class for the verify gate.
 
     // Row 21 — boolean as string ("false").
-    it.failing(
-        'row 21 — keep:"false" (string) must drop, not silently default to keep',
-        () => {
-            const v = extractVerdict(
-                mkState({
-                    artifacts: [
-                        verdictArtifact({
-                            keep: 'false',
-                            rationale: 'refuted',
-                        }),
-                    ],
-                }),
-            );
-            expect(v.keep).toBe(false); // fails today (defaults to true)
-        },
-    );
+    it('row 21 — keep:"false" (string) must drop, not silently default to keep', () => {
+        const v = extractVerdict(
+            mkState({
+                artifacts: [
+                    verdictArtifact({
+                        keep: 'false',
+                        rationale: 'refuted',
+                    }),
+                ],
+            }),
+        );
+        expect(v.keep).toBe(false); // fails today (defaults to true)
+    });
 
     // A genuine boolean verdict is honored both ways (the happy semantic path).
     it('row 21-23 baseline — a real boolean keep:false is honored', () => {
@@ -869,9 +1179,9 @@ describe('runAgentLoopViaCore — model policy and threaded review context', () 
         );
 
         expect(out.droppedByVerify).toHaveLength(0);
-        expect(out.findings.suggestions.map((s: any) => s.relevantFile)).toEqual([
-            'a.ts',
-        ]);
+        expect(
+            out.findings.suggestions.map((s: any) => s.relevantFile),
+        ).toEqual(['a.ts']);
     });
 
     describe('readRepoInstruction', () => {
@@ -978,13 +1288,13 @@ describe('runAgentLoopViaCore — model policy and threaded review context', () 
         it('keeps a review without a sandbox off the heavy passes', async () => {
             const plain = makeModel();
             await runAgentLoopViaCore(
-                makeInput(plain.model, { reviewMode: 'normal' }),
+                makeInput(plain.model, { reviewMode: 'balanced' }),
                 { ...secrets, remoteCommands: undefined },
             );
             const listed = makeModel();
             await runAgentLoopViaCore(
                 makeInput(listed.model, {
-                    reviewMode: 'normal',
+                    reviewMode: 'balanced',
                     repoInstructions,
                     listsRepoInstructions: true,
                 }),
@@ -1222,9 +1532,7 @@ describe('finderRunEnvironment — overhead', () => {
                 fallback: { model: 'claude-sonnet-5-5' },
             }),
         ).toBe(systemPrompt);
-        expect(withSlot({ model: 'claude-sonnet-5-5' })).not.toBe(
-            systemPrompt,
-        );
+        expect(withSlot({ model: 'claude-sonnet-5-5' })).not.toBe(systemPrompt);
     });
 });
 

@@ -57,6 +57,7 @@ describe('ForgejoPullRequestHandler push events', () => {
                 id: 12345,
                 name: 'test-repo',
                 full_name: 'org/test-repo',
+                html_url: 'https://git.example.com/org/test-repo',
             },
             pusher: {
                 name: 'Pusher',
@@ -186,6 +187,20 @@ describe('ForgejoPullRequestHandler push events', () => {
         } as any);
 
         expect(outboxRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('resolves the context on the Forgejo instance that sent the push', async () => {
+        await handler.execute({
+            event: 'push',
+            platformType: PlatformType.FORGEJO,
+            payload: makeForgejoPushPayload(),
+        } as any);
+
+        expect(webhookContextService.getContext).toHaveBeenCalledWith(
+            PlatformType.FORGEJO,
+            '12345',
+            { host: 'git.example.com', repositoryFullName: 'org/test-repo' },
+        );
     });
 
     it('does not evaluate force pushes when context is missing', async () => {

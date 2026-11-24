@@ -41,31 +41,6 @@ describe('SuggestionService — pure logic', () => {
         });
     });
 
-    describe('filterSuggestionProperties', () => {
-        it('projects only the five fields the implemented-analysis needs', () => {
-            const out = svc().filterSuggestionProperties([
-                {
-                    id: 's1',
-                    relevantFile: 'a.ts',
-                    language: 'ts',
-                    improvedCode: 'b',
-                    existingCode: 'a',
-                    severity: 'high', // must be dropped
-                    suggestionContent: 'noise', // must be dropped
-                },
-            ]);
-            expect(out).toEqual([
-                {
-                    id: 's1',
-                    relevantFile: 'a.ts',
-                    language: 'ts',
-                    improvedCode: 'b',
-                    existingCode: 'a',
-                },
-            ]);
-        });
-    });
-
     describe('filterCodeSuggestionsByReviewOptions', () => {
         it('keeps only suggestions whose normalized label is enabled (=== true) in config', () => {
             const config = { security: true, code_style: false };
@@ -206,6 +181,39 @@ describe('SuggestionService — pure logic', () => {
     });
 });
 
+describe('SuggestionService — which threads get resolved', () => {
+    // Only a suggestion fully implemented closes its thread: a partial still
+    // leaves the developer something to do, and an unreadable status says
+    // nothing about what they did.
+    it('resolves the threads of delivered suggestions marked implemented, and only those', () => {
+        const suggestion = (id: number, implementationStatus: unknown) => ({
+            comment: { id },
+            deliveryStatus: DeliveryStatus.SENT,
+            implementationStatus,
+        });
+        const pr = {
+            files: [
+                {
+                    suggestions: [
+                        suggestion(1, 'implemented'),
+                        suggestion(2, 'partially_implemented'),
+                        suggestion(3, 'not_implemented'),
+                        suggestion(4, 'IMPLEMENTED'),
+                        suggestion(5, null),
+                        suggestion(6, 'The suggestion was applied.'),
+                        {
+                            ...suggestion(7, 'implemented'),
+                            deliveryStatus: DeliveryStatus.NOT_SENT,
+                        },
+                    ],
+                },
+            ],
+        };
+
+        expect(svc().getImplementedSuggestionsCommentIds(pr)).toEqual([1]);
+    });
+});
+
 describe('SuggestionService — transformCommentResultsToPrLevelSuggestions', () => {
     it('persists the full explanation alongside the short body', () => {
         const [saved] = svc().transformCommentResultsToPrLevelSuggestions([
@@ -253,5 +261,57 @@ describe('SuggestionService — transformCommentResultsToPrLevelSuggestions', ()
         ]);
 
         expect(saved.customAgent).toEqual(agent);
+    });
+});
+
+describe('SuggestionService — prioritizeSuggestions fallback', () => {
+    it('falls back to the legacy prioritization when the Kody Rules path rejects', async () => {
+        const s = svc();
+        s.logger = { log: jest.fn(), error: jest.fn(), warn: jest.fn() };
+        const legacyResult = {
+            prioritizedSuggestions: [{ id: 'a' }],
+            discardedSuggestionsBySeverityOrQuantity: [],
+        };
+        s.prioritizeSuggestionsWithKodyRulesControl = jest
+            .fn()
+            .mockRejectedValue(new Error('kody rules control failed'));
+        s.prioritizeSuggestionsLegacy = jest.fn().mockResolvedValue(legacyResult);
+
+        const result = await s.prioritizeSuggestions(
+            { organizationId: 'o', teamId: 't' },
+            {},
+            1,
+            [{ id: 'a', label: 'kody_rules' }],
+        );
+
+        expect(result).toBe(legacyResult);
+        expect(s.prioritizeSuggestionsLegacy).toHaveBeenCalledTimes(1);
+        expect(s.logger.error).toHaveBeenCalled();
+    });
+});
+
+describe('SuggestionService — sortAndPrioritizeSuggestions failure', () => {
+    it('logs an error with counts, not the suggestions, and returns them unfiltered', async () => {
+        const s = svc();
+        s.logger = { log: jest.fn(), error: jest.fn(), warn: jest.fn() };
+        s.prioritizeSuggestions = jest
+            .fn()
+            .mockRejectedValue(new Error('clustering failed'));
+        const valid = [{ id: 'a', suggestionContent: 'secret code' }];
+
+        const result = await s.sortAndPrioritizeSuggestions(
+            { organizationId: 'o', teamId: 't' },
+            { suggestionControl: {} },
+            { number: 7 },
+            valid,
+            [],
+        );
+
+        expect(result.sortedPrioritizedSuggestions).toBe(valid);
+        expect(s.logger.log).not.toHaveBeenCalled();
+        expect(s.logger.error).toHaveBeenCalledTimes(1);
+        const entry = s.logger.error.mock.calls[0][0];
+        expect(entry.metadata.suggestionsCount).toBe(1);
+        expect(JSON.stringify(entry.metadata)).not.toContain('secret code');
     });
 });

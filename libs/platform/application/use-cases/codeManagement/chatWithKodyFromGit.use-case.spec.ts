@@ -197,6 +197,124 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
     });
 
+    it('resolves a Forgejo comment on the instance that sent it', async () => {
+        const webhookContextService = {
+            getContext: jest.fn().mockResolvedValue(null),
+        };
+        const forgejo = new ChatWithKodyFromGitUseCase(
+            codeManagementService as any,
+            conversationAgentUseCase as any,
+            businessValidationService as any,
+            permissionValidationService as any,
+            leaseManager as any,
+            pullRequestsService as any,
+            undefined,
+            undefined,
+            undefined,
+            webhookContextService as any,
+        );
+
+        await forgejo.execute({
+            event: 'issue_comment',
+            platformType: PlatformType.FORGEJO,
+            payload: {
+                action: 'created',
+                repository: {
+                    id: 26,
+                    name: 'api',
+                    full_name: 'beta/api',
+                    html_url: 'https://git.beta.example/beta/api',
+                },
+                issue: { number: 21, body: 'PR description body' },
+                pull_request: { number: 21 },
+                comment: { id: 123, body: '@kody what does this do?' },
+                sender: { id: 7, login: 'bob' },
+            },
+        } as any);
+
+        expect(
+            codeManagementService.findTeamAndOrganizationIdByConfigKey,
+        ).toHaveBeenCalledWith(
+            {
+                repository: {
+                    id: '26',
+                    name: 'beta/api',
+                    fullName: 'beta/api',
+                    owner: 'beta',
+                },
+                host: 'git.beta.example',
+                repositoryFullName: 'beta/api',
+            },
+            PlatformType.FORGEJO,
+        );
+        expect(webhookContextService.getContext).toHaveBeenCalledWith(
+            PlatformType.FORGEJO,
+            '26',
+            { host: 'git.beta.example', repositoryFullName: 'beta/api' },
+        );
+    });
+
+    it('resolves a GitLab comment on the server that sent it', async () => {
+        // GitLab numbers projects per instance: project 9 of gitlab-b.example
+        // must not be answered as another server's project 9.
+        const webhookContextService = {
+            getContext: jest.fn().mockResolvedValue(null),
+        };
+        const gitlab = new ChatWithKodyFromGitUseCase(
+            codeManagementService as any,
+            conversationAgentUseCase as any,
+            businessValidationService as any,
+            permissionValidationService as any,
+            leaseManager as any,
+            pullRequestsService as any,
+            undefined,
+            undefined,
+            undefined,
+            webhookContextService as any,
+        );
+
+        await gitlab.execute({
+            event: 'Note Hook',
+            platformType: PlatformType.GITLAB,
+            payload: {
+                object_kind: 'note',
+                user: { id: 7, username: 'bob' },
+                project: {
+                    id: 9,
+                    name: 'billing-api',
+                    path_with_namespace: 'globex/billing-api',
+                    web_url: 'https://gitlab-b.example/globex/billing-api',
+                    git_http_url:
+                        'https://gitlab-b.example/globex/billing-api.git',
+                },
+                object_attributes: {
+                    id: 123,
+                    note: '@kody what does this do?',
+                    noteable_type: 'MergeRequest',
+                },
+                merge_request: { iid: 21, description: 'PR description' },
+            },
+        } as any);
+
+        expect(
+            codeManagementService.findTeamAndOrganizationIdByConfigKey,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                host: 'gitlab-b.example',
+                repositoryFullName: 'globex/billing-api',
+            }),
+            PlatformType.GITLAB,
+        );
+        expect(webhookContextService.getContext).toHaveBeenCalledWith(
+            PlatformType.GITLAB,
+            '9',
+            {
+                host: 'gitlab-b.example',
+                repositoryFullName: 'globex/billing-api',
+            },
+        );
+    });
+
     it('answers as the team whose review runs on the repository when it is connected in two organizations', async () => {
         const webhookContextService = {
             getContext: jest.fn().mockResolvedValue({
@@ -225,7 +343,12 @@ describe('ChatWithKodyFromGitUseCase', () => {
             platformType: PlatformType.GITHUB,
             payload: {
                 action: 'created',
-                repository: { id: 'repo-1', name: 'kodus-extension' },
+                repository: {
+                    id: 'repo-1',
+                    name: 'kodus-extension',
+                    full_name: 'kodus/kodus-extension',
+                    html_url: 'https://github.com/kodus/kodus-extension',
+                },
                 issue: {
                     id: 456,
                     body: 'PR description body',
@@ -238,9 +361,15 @@ describe('ChatWithKodyFromGitUseCase', () => {
             },
         } as any);
 
+        // Resolved on the server that sent the comment (per server on GitHub
+        // Enterprise Server).
         expect(webhookContextService.getContext).toHaveBeenCalledWith(
             PlatformType.GITHUB,
             'repo-1',
+            {
+                host: 'github.com',
+                repositoryFullName: 'kodus/kodus-extension',
+            },
         );
         expect(businessValidationService.validate).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -394,15 +523,17 @@ describe('ChatWithKodyFromGitUseCase', () => {
     });
 
     it("asks the other platforms for the organization's members, and knows the PR's author", async () => {
-        const getListMembers = jest.fn(async () => [{ id: 7, name: 'Nina' }]);
+        const getListMembers = jest.fn(async () => [
+            { id: 'u7', name: 'Nina' },
+        ]);
         (useCase as any).codeManagementService = { getListMembers };
         const access = (userId: number, authorId = 9) =>
             (useCase as any).senderAccess(
                 {
                     platformType: PlatformType.BITBUCKET,
                     payload: {
-                        actor: { account_id: userId, display_name: 'someone' },
-                        pullrequest: { author: { account_id: authorId } },
+                        actor: { uuid: `{u${userId}}`, display_name: 'Nina' },
+                        pullrequest: { author: { uuid: `{u${authorId}}` } },
                     },
                 },
                 { organizationId: 'org-1' },
@@ -419,9 +550,24 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
         getListMembers.mockRejectedValueOnce(new Error('403'));
         await expect(access(7)).rejects.toThrow('403');
+        // An actor with only account_id names no key members are listed by:
+        // it cannot be checked, rather than read as a non-member.
+        await expect(
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.BITBUCKET,
+                    payload: {
+                        actor: { account_id: 'u7', display_name: 'Nina' },
+                        pullrequest: { author: { uuid: '{u9}' } },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).rejects.toThrow(/named no commenter/);
     });
 
-    it("asks GitLab for the commenter's level, never the member list, and knows Forgejo's author", async () => {
+    it("asks GitLab and Forgejo for the commenter's permission, never the member list, and knows Forgejo's author", async () => {
         const getListMembers = jest.fn();
         const userCanWrite = jest.fn(async () => false);
         (useCase as any).codeManagementService = {
@@ -488,7 +634,6 @@ describe('ChatWithKodyFromGitUseCase', () => {
             ),
         ).rejects.toThrow(/could not say/);
 
-        getListMembers.mockResolvedValueOnce([]);
         await expect(
             (useCase as any).senderAccess(
                 {
@@ -500,9 +645,33 @@ describe('ChatWithKodyFromGitUseCase', () => {
                     },
                 },
                 { organizationId: 'org-1' },
+                { id: 'repo-1', name: 'acme/api' },
+            ),
+        ).resolves.toEqual({ isAuthor: true, canWrite: false });
+        expect(userCanWrite).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                login: 'ana',
+                repository: { id: 'repo-1', name: 'acme/api' },
+            }),
+            PlatformType.FORGEJO,
+        );
+        expect(getListMembers).not.toHaveBeenCalled();
+
+        // An empty member list is a read that failed, not nobody.
+        getListMembers.mockResolvedValueOnce([]);
+        await expect(
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.BITBUCKET,
+                    payload: {
+                        actor: { uuid: '{u5}' },
+                        pullrequest: { author: { uuid: '{u9}' } },
+                    },
+                },
+                { organizationId: 'org-1' },
                 { id: 'repo-1' },
             ),
-        ).resolves.toMatchObject({ isAuthor: true });
+        ).rejects.toThrow(/no members/);
     });
 
     // A bare `#12` is read from the PR's repository, which needs its owner.
@@ -585,6 +754,33 @@ describe('ChatWithKodyFromGitUseCase', () => {
             }),
         );
         expect(response).toContain('comment on this pull request is updated');
+
+        // A re-check that lands on the same verdict says so (#2423).
+        businessValidationService.validate.mockResolvedValueOnce({
+            outcome,
+            references: [],
+            attempts: [],
+            trackers: ['Linear'],
+        });
+        publisher.publish.mockResolvedValueOnce({
+            outcome,
+            comment: 'updated',
+            changed: false,
+        });
+        const again = await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: {
+                userQuestion: '@kody -v business-logic',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                pullRequest: { pullRequestNumber: 132 },
+            },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            thread: undefined,
+        });
+        expect(again).toContain('same result as before');
+        expect(again).not.toContain('updated');
     });
 
     it('does not say the comment was updated when the command posts the first one', async () => {
@@ -749,6 +945,31 @@ describe('ChatWithKodyFromGitUseCase', () => {
                     prNumber: 132,
                 }),
             );
+        });
+
+        it('says the subscription check is unavailable, not that the trial ended, when the license read fails', async () => {
+            // Billing answered 5xx / timed out (#2452): the org may be paying,
+            // so the reply must not send it to the plan page.
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: 'LICENSE_UNAVAILABLE',
+                },
+            );
+
+            await useCase.execute(conversationPayload());
+
+            expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
+            expect(
+                codeManagementService.createResponseToComment,
+            ).toHaveBeenCalledTimes(1);
+            const { body } =
+                codeManagementService.createResponseToComment.mock.calls[0][0];
+            expect(body).toContain(
+                'the license service is temporarily unreachable',
+            );
+            expect(body).not.toContain('trial has ended');
+            expect(body).not.toContain('BYOK');
         });
 
         it('runs the agent for a managed/BYOK plan that returns NOT_ERROR (no per-seat block)', async () => {

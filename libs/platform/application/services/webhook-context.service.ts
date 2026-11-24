@@ -16,15 +16,33 @@ import {
     IAutomationService,
 } from '@libs/automation/domain/automation/contracts/automation.service';
 import { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
+import {
+    dataCenterConfigsForWebhook,
+    type DataCenterRepository,
+    normalizeHost,
+    storedHostOf,
+    webhookConfigsOfInstance,
+} from '@libs/common/utils/webhooks/webhook-source-host';
 
 export type WebhookDisambiguator = {
     /**
-     * Host of the source provider (e.g. `gitlab.ikatec.cloud`). Used to pick
-     * the correct IntegrationConfig when (platform, repositoryId) collide
-     * across self-hosted instances. Compared against
-     * `integration.authIntegration.authDetails.host`.
+     * Host of the instance that sent the webhook (e.g. `gitlab-c.example`).
+     * GitLab, Forgejo and GitHub Enterprise Server number repositories per
+     * instance, so only a config on this host may take the webhook
+     * (`webhookConfigsOfInstance`).
      */
     host?: string;
+    /**
+     * `owner/repo` the webhook names. Resolves the repository when a config
+     * lists no repository URL and Kodus reaches the instance at another
+     * address than the one in the payload.
+     */
+    repositoryFullName?: string;
+    /**
+     * Bitbucket Data Center's project key and slug: its payloads carry no
+     * URL, and it numbers repositories per server.
+     */
+    dataCenterRepository?: DataCenterRepository;
 };
 
 @Injectable()
@@ -63,7 +81,49 @@ export class WebhookContextService {
             return null;
         }
 
-        const candidates = this.disambiguateConfigs(configs, disambiguator);
+        const candidates =
+            platformType === PlatformType.FORGEJO ||
+            platformType === PlatformType.GITLAB ||
+            platformType === PlatformType.GITHUB
+                ? webhookConfigsOfInstance(platformType, configs, {
+                      ...disambiguator,
+                      repositoryId,
+                  })
+                : platformType === PlatformType.BITBUCKET &&
+                    disambiguator?.dataCenterRepository
+                  ? dataCenterConfigsForWebhook(configs, {
+                        ...disambiguator.dataCenterRepository,
+                        repositoryId,
+                    })
+                  : this.disambiguateConfigs(configs, disambiguator);
+
+        if (!candidates.length) {
+            // GitLab and Forgejo repository ids are per instance: no config
+            // found is on the sending host or keeps the same `owner/repo`.
+            // Both sides are logged, so an instance stored at another address
+            // than the one in its URLs, whose repository was also renamed,
+            // shows up here.
+            this.logger.warn({
+                message:
+                    'Webhook ignored: the repository id is connected only on other instances',
+                context: WebhookContextService.name,
+                metadata: {
+                    platformType,
+                    repositoryId,
+                    host: disambiguator?.host,
+                    repositoryFullName: disambiguator?.repositoryFullName,
+                    connected: configs.map((config) => ({
+                        organizationId: config?.team?.organization?.uuid,
+                        host: storedHostOf(config),
+                        repositoryFullName: (config?.configValue ?? []).find(
+                            (repository: any) =>
+                                String(repository?.id) === repositoryId,
+                        )?.name,
+                    })),
+                },
+            });
+            return null;
+        }
 
         const automations = await this.automationService.find({
             automationType: AutomationType.AUTOMATION_CODE_REVIEW,
@@ -162,23 +222,5 @@ export class WebhookContextService {
         );
 
         return filtered.length === 1 ? filtered : configs;
-    }
-}
-
-function normalizeHost(value: string | undefined | null): string | undefined {
-    if (!value) {
-        return undefined;
-    }
-    const trimmed = String(value).trim();
-    if (!trimmed) {
-        return undefined;
-    }
-    try {
-        const url = new URL(
-            trimmed.includes('://') ? trimmed : `https://${trimmed}`,
-        );
-        return url.hostname.toLowerCase();
-    } catch {
-        return trimmed.toLowerCase().replace(/\/.*$/, '');
     }
 }

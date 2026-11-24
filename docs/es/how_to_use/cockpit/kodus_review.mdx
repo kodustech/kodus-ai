@@ -1,89 +1,87 @@
 ---
 title: "Kodus Review"
-description: "Mide qué tan efectivas son las revisiones de Kodus — y actúa en consecuencia"
+description: "Mide qué tan efectivas son las revisiones de Kodus y actúa en consecuencia"
 ---
-
-## Qué es la pestaña Kodus Review
 
 La pestaña **Kodus Review** responde una sola pregunta: *¿tu equipo está actuando sobre lo que dice Kodus?*
 
-A diferencia de la pestaña Productividad (que mide métricas generales de entrega como la frecuencia de despliegue y el tiempo de ciclo de los PR), Kodus Review trata sobre Kodus en sí — cuántas sugerencias se implementan, qué categorías y reglas se adoptan o se ignoran, y dónde el equipo expresa desacuerdo.
+A diferencia de la pestaña Productivity (métricas generales de entrega como la frecuencia de despliegue y el PR cycle time), Kodus Review trata sobre Kodus en sí: cuántas sugerencias se implementan, qué categorías y reglas se adoptan o se ignoran, y dónde el equipo expresa desacuerdo.
 
-Cada gráfico y tabla respeta los filtros globales de **repositorio** y **rango de fechas** en la parte superior de la página. Haz clic en una fila de repositorio, una barra de categoría o una regla para profundizar en las sugerencias subyacentes.
+Cada gráfico y tabla respeta los filtros de **repositorio** y **rango de fechas** de la parte superior de la página. Los números basados en sugerencias cubren los pull requests **cerrados** en el rango; los números de ejecuciones de revisión (**PRs processed** y **Review processing outcomes**) cubren las revisiones que se ejecutaron en él. Haz clic en una barra de categoría o en una regla para abrir las sugerencias subyacentes en [Sugerencias](/es/how_to_use/cockpit/suggestions); haz clic en una fila de repositorio para enfocar todo el Cockpit en ese repositorio.
 
 ## Tarjetas de resumen
 
 | Tarjeta | Qué significa |
 | --- | --- |
-| **Implementation rate** | % de sugerencias enviadas que el equipo implementó en el período |
-| **Suggestions sent** | Cuántas sugerencias entregó Kodus (como comentarios en los PR) en el período |
-| **PRs processed** | Pull requests que Kodus procesó en el período, con la variación respecto al período anterior (se muestra cuando hay datos de ejecuciones de revisión disponibles) |
+| **Implementation rate** | % de sugerencias enviadas que el equipo implementó en el período, con el conteo debajo |
+| **Suggestions sent** | Sugerencias entregadas en PRs cerrados en el período, sin las que quedaron fuera de la tasa (consulta [Not measured](#implementation-rate)) |
+| **PRs processed** | Pull requests con al menos una ejecución de revisión terminada en el período, ya sea que haya tenido éxito, fallado o se haya omitido, con la variación respecto al período anterior (se muestra cuando hay datos de ejecuciones de revisión disponibles) |
 | **Negative vote rate** | Proporción de reacciones que fueron 👎, con la tendencia respecto al período anterior. Con menos de 10 reacciones muestra los conteos brutos en lugar de una tasa |
-| **Critical suggestions not yet addressed** | Sugerencias críticas que quedaron sin implementar en PR que ya fueron fusionados — la lista de riesgos accionables. Al hacer clic, salta a **Implementation rate by category**, para ver qué temas se ignoran |
+| **Critical suggestions not yet addressed** | Sugerencias críticas entregadas que no se implementaron, en PRs cerrados en el período. Cuenta los PRs mergeados y los PRs cerrados sin merge, aunque el pie de la tarjeta diga "on merged PRs". No se cuentan las sugerencias que la verificación de implementación no pudo decidir. Al hacer clic, salta a **Implementation rate by category**, para ver qué temas se ignoran |
 
-Cuando hay datos de ejecuciones de revisión disponibles, después de las tarjetas aparece un gráfico **Review processing outcomes**: la distribución semanal de ejecuciones de revisión que tuvieron éxito, fallaron o se omitieron.
+Cuando hay datos de ejecuciones de revisión disponibles, después de las tarjetas aparece un gráfico **Review processing outcomes**. Muestra **Reviews processed** (cada ejecución de revisión, por lo que un PR revisado dos veces cuenta dos veces) frente al período anterior, y la distribución semanal de las ejecuciones que terminaron como **Success**, **Error** (incluidas las ejecuciones que terminaron con errores) o **Skipped**. La lista a su lado da el conteo de cada resultado, su proporción y la variación en puntos porcentuales respecto al período anterior.
 
 ## Implementation rate
 
-La métrica central. Una sugerencia cuenta como **implementada** cuando su estado final es `implemented` o `partially_implemented` en el momento en que el PR se cierra.
+La métrica central. Una sugerencia cuenta como **implementada** cuando su estado final es **Implemented** o **Partially implemented** en el momento en que el PR se cierra.
 
 ```
 Implementation rate = implemented suggestions ÷ sent suggestions
 ```
 
-Reglas de alcance — las mismas en todos los gráficos de implementation rate:
+Reglas de alcance, las mismas en todos los gráficos de implementation rate:
 
 - Solo cuentan las sugerencias **entregadas** (las que realmente se publicaron como comentarios en el PR). Los borradores que Kodus filtró antes de comentar nunca se cuentan.
-- Las sugerencias se atribuyen a la **semana en que se cerró el PR**, porque el estado de implementación solo es definitivo una vez que el PR se fusiona.
+- Las sugerencias se atribuyen a la **semana en que se cerró el PR**, porque el estado de implementación solo es definitivo una vez que el PR se cierra.
+- Una sugerencia que la última verificación de implementación **no pudo decidir** queda fuera de la tasa en lugar de contarse como no implementada. Eso ocurre cuando la llamada al modelo falló o su respuesta no se pudo leer o estaba incompleta, cuando el cambio del archivo era demasiado grande para el modelo, o cuando solo estaba disponible el diff de todo el PR. El gráfico semanal indica cuántas quedaron fuera, y [Sugerencias](/es/how_to_use/cockpit/suggestions) las lista con el estado **Not measured**. Los votos y los disparos de Kody Rules siguen contando todas las sugerencias entregadas.
 
 ### Semana a semana
 
 El gráfico semanal muestra la tendencia, con un selector:
 
-- **Overall** — una única línea de implementation rate.
-- **By severity** — una línea por severidad (critical / high / medium / low), para que puedas ver si las sugerencias de mayor severidad se implementan más.
+- **Overall**: una única línea de implementation rate.
+- **By severity**: una línea por severidad (critical / high / medium / low), para que puedas ver si las sugerencias de mayor severidad se implementan más. Una semana sin nada decidido muestra un hueco, no 0%.
 
 ### Por categoría y por severidad
 
-- **By category** — enviadas vs. implementadas por categoría de sugerencia. Haz clic en una barra para abrir el explorador de sugerencias filtrado por esa categoría.
-- **By severity** — implementation rate por nivel de severidad. Lo esperado es un gradiente descendente (las críticas se implementan más que las bajas). Si se ve plano o invertido, la severidad no está guiando al equipo.
+- **Implementation rate by category**: enviadas vs. implementadas por categoría de sugerencia. Haz clic en una barra para abrir Sugerencias filtradas por esa categoría.
+- **Implementation rate by severity**: implementation rate por nivel de severidad. Lo esperado es un gradiente descendente (las críticas se implementan más que las bajas). Si se ve plano o invertido, la severidad no está guiando al equipo.
 
 <Warning>
-  **El selector "All / Kodus only" del gráfico de severidad importa.** Una Kody Rule lleva la severidad que *tú* defines en la regla, no una evaluación de riesgo hecha por Kodus. Mezclar ambas distorsiona la lectura de la calibración — por ejemplo, un conjunto de Kody Rules de severidad media con alta adopción puede hacer que Kodus parezca subestimar la severidad media. Cambia a **Kodus only** para ver la calibración de severidad propia de Kodus. Las barras construidas con muy pocas sugerencias aparecen atenuadas y marcadas con `*` — un 0% o 100% a partir de un puñado de sugerencias no es una señal real.
+  **El selector "All / Kodus only" del gráfico de severidad importa.** Una Kody Rule lleva la severidad que *tú* defines en la regla, no una evaluación de riesgo hecha por Kodus. Mezclar ambas distorsiona la lectura de la calibración: por ejemplo, un conjunto de Kody Rules de severidad media con alta adopción puede hacer que Kodus parezca subestimar la severidad media. Cambia a **Kodus only** para ver la calibración de severidad propia de Kodus. Las barras construidas con menos de 5 sugerencias aparecen atenuadas y marcadas con `*`: un 0% o 100% a partir de un puñado de sugerencias no es una señal real.
 </Warning>
 
-## Retroalimentación negativa
+## Feedback negativo
 
-La retroalimentación proviene de las reacciones 👍 / 👎 en los comentarios de sugerencias de Kodus.
+El feedback proviene de las reacciones 👍 / 👎 en los comentarios de sugerencias de Kodus, contadas sobre las sugerencias de los PRs cerrados en el período.
 
-- **Negative vote rate** (tarjeta de resumen) — `👎 ÷ (👍 + 👎)`, con la tendencia respecto al período anterior. Cuanto más bajo, mejor.
-- **By category** — dónde el equipo está más en desacuerdo. Una categoría con muchos 👎 es candidata a reajustarse o desactivarse.
-- **Trend** — votos negativos semana a semana.
+- **Negative vote rate** (tarjeta de resumen): `👎 ÷ (👍 + 👎)`, con la tendencia respecto al período anterior. Cuanto más bajo, mejor.
+- **Negative feedback (👎)** tiene dos vistas: **By category** muestra dónde el equipo está más en desacuerdo (haz clic en una categoría para abrir sus sugerencias), y **Trend** muestra los 👎 semana a semana. Una categoría con muchos 👎 es candidata a reajustarse o desactivarse.
 
 ## Repositorios — salud
 
-Una tabla por repositorio: PR revisados, sugerencias enviadas, implementation rate, 👍/👎, y la **categoría más débil** (la categoría con la menor implementation rate en ese repositorio, dada una muestra mínima). Muestra dónde Kodus está acertando frente a dónde está siendo ignorado.
+Una tabla por repositorio con un cuadro de búsqueda. Columnas: **Repository**, **PRs reviewed** (PRs cerrados en el período que recibieron al menos una sugerencia entregada), **Suggestions**, **Impl. rate**, **👍 / 👎** y **Weakest category**: la categoría con la menor implementation rate en ese repositorio, contando solo las categorías con al menos 5 sugerencias. Muestra dónde Kodus está acertando frente a dónde está siendo ignorado.
 
-Hacer clic en una fila enfoca todo el cockpit en ese repositorio (igual que seleccionarlo en el filtro de repositorio).
+Hacer clic en una fila enfoca todo el Cockpit en ese repositorio (igual que seleccionarlo en el filtro de repositorio).
 
 ## Kody Rules — salud
 
-Cómo se está desempeñando cada Kody Rule en el período: disparos, implementation rate, 👍/👎, y un estado. Solo aparecen las reglas activas — las eliminadas o inactivas se excluyen, ya que no puedes actuar sobre ellas.
+Cómo se está desempeñando cada Kody Rule en el período. Columnas: **Rule**, **Scope** (Global, Repo o Folder), **Triggers**, **Impl. rate**, **👍 / 👎** y **Status**. Los botones **All / Healthy / Noisy / Ignored / Stale** filtran la tabla, y el cuadro de búsqueda encuentra una regla por nombre. La tabla muestra todas las reglas activas de la organización. El selector de repositorio filtra los conteos de disparos, así que una regla fuera del repositorio seleccionado puede aparecer como **Stale**. Las memorias activas también pueden aparecer como **Stale**, ya que no generan disparos de reglas. Comprueba el alcance de la regla y quita el filtro de repositorio antes de usar este estado para decidir si conviene conservarla.
+
+Hacer clic en una fila abre las sugerencias que produjo esa regla.
 
 El estado se calcula por regla, en este orden de prioridad:
 
 | Estado | Significado | Acción sugerida |
 | --- | --- | --- |
-| **Stale** (Obsoleta) | Sin disparos en el período | Revisa si la regla sigue siendo necesaria |
-| **Low data** (Datos insuficientes) | Se disparó, pero muy pocas veces (menos de 5) para evaluarla | Espera más datos |
-| **Noisy** (Ruidosa) | El equipo la rechaza activamente (≥ 3 👎, más 👎 que 👍 y al menos un 👎 por cada 10 disparos) | La regla está mal calibrada — reescríbela o acota su alcance (p. ej. excluir tests) |
-| **Ignored** (Ignorada) | Se dispara mucho pero casi nada se implementa (≤ 20%) | Cuestiona su relevancia — ¿le importa al equipo? |
-| **Healthy** (Saludable) | Todo lo demás | Sin acción |
+| **Stale** | Sin disparos en el período | Revisa si la regla sigue siendo necesaria |
+| **Low data** | Se disparó, pero muy pocas veces (menos de 5) para evaluarla | Espera más datos |
+| **Noisy** | El equipo la rechaza activamente (≥ 3 👎, más 👎 que 👍 y al menos un 👎 por cada 10 disparos) | La regla está mal calibrada: reescríbela o acota su alcance (p. ej. excluir tests) |
+| **Ignored** | Se dispara mucho pero casi nada se implementa (≤ 20%) | Cuestiona su relevancia: ¿le importa al equipo? |
+| **Healthy** | Todo lo demás | Sin acción |
 
-**Noisy** e **Ignored** parecen similares pero requieren acciones distintas. *Ignored* es pasivo — la regla se dispara pero nadie la implementa, y no puedes saber si es ruido o simple descuido. *Noisy* es desacuerdo activo — el equipo la rechaza explícitamente, así que sabes que es ruido. Por eso una regla que es ambas se muestra como **Noisy**: los votos negativos son la señal más fuerte y más accionable. Los umbrales son valores predeterminados razonables y pueden ajustarse con el tiempo.
+**Noisy** e **Ignored** parecen similares pero requieren acciones distintas. *Ignored* es pasivo: la regla se dispara pero nadie la implementa, y no puedes saber si es ruido o simple descuido. *Noisy* es desacuerdo activo: el equipo la rechaza explícitamente, así que sabes que es ruido. Por eso una regla que es ambas se muestra como **Noisy**: los votos negativos son la señal más fuerte y más accionable.
 
-## Explorador de sugerencias
+## Sugerencias
 
-Cada profundización — una barra de categoría (de implementación o de feedback negativo) o una fila de regla — abre el **explorador de sugerencias** (la página **Suggestions**, ruta de navegación **Cockpit › Suggestions**): una lista filtrable y paginada de las sugerencias reales detrás del número, para el rango de fechas del Cockpit.
-
-Filtros: repositorio, categoría, severidad, estado de implementación, Kody Rule y búsqueda de texto libre. Al hacer clic en una fila se abre un panel lateral con el código existente vs. el sugerido y un botón **Open in PR review** que lleva a la sugerencia en la página de revisión del pull request en Kodus.
+Cada profundización abre [Sugerencias](/es/how_to_use/cockpit/suggestions): una lista filtrable de las sugerencias reales detrás del número.

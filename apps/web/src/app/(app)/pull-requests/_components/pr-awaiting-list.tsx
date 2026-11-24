@@ -23,7 +23,16 @@ const formatDate = (iso: string) => {
     }
 };
 
-export const AwaitingList = ({ teamId }: { teamId: string }) => {
+export const AwaitingList = ({
+    teamId,
+    total,
+}: {
+    teamId: string;
+    // How many PRs are awaiting in all (the "Kody skipped" counter). The list
+    // itself is capped, so without it a reader had no way to tell that the
+    // rows on screen were not the whole backlog.
+    total?: number | null;
+}) => {
     const { data, isLoading } = usePullRequestsAwaiting(teamId);
 
     if (isLoading) {
@@ -102,6 +111,12 @@ export const AwaitingList = ({ teamId }: { teamId: string }) => {
                     </Badge>
                 </div>
             ))}
+            {typeof total === "number" && total > data.length && (
+                <p className="text-text-tertiary px-5 py-3 text-xs">
+                    Showing the {data.length} most recently opened of {total}{" "}
+                    pull requests Kody skipped.
+                </p>
+            )}
         </div>
     );
 };

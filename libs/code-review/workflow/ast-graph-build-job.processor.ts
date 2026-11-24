@@ -99,6 +99,7 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
 
         let sandbox: SandboxInstance | undefined;
         let sandboxId: string | undefined;
+        let leaseId: string | undefined;
 
         try {
             // Race the AST build against the parent's AbortSignal. The
@@ -176,9 +177,13 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                     branch,
                     platform: payload.platform as PlatformType,
                     sandboxMetadata: { stage: 'graph-build' },
+                    organizationId:
+                        payload.organizationAndTeamData?.organizationId,
+                    teamId: payload.organizationAndTeamData?.teamId,
                 },
             );
             sandbox = acquired.sandbox;
+            leaseId = acquired.leaseId;
 
             sandboxId =
                 (sandbox as any)?.sandboxId ||
@@ -274,9 +279,12 @@ export class AstGraphBuildJobProcessor implements IJobProcessorService {
                 throw error;
             }
         } finally {
-            if (sandbox) {
+            if (leaseId) {
                 try {
-                    await sandbox.cleanup();
+                    // A graph sandbox is single-use (its key carries the jobId):
+                    // nothing joins it again, so its final release stops compute
+                    // now instead of paying the 5-minute default idle window.
+                    await this.leaseManager.release(leaseId, { idleMs: 0 });
                     this.logger.log({
                         message: `[AST-GRAPH-JOB] Sandbox cleaned up for ${repoLabel}`,
                         context: AstGraphBuildJobProcessor.name,

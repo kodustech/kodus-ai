@@ -19,12 +19,7 @@ describe('SavePullRequestUseCase deterministic predicates', () => {
 
     beforeEach(() => {
         // None of the four constructor deps are used by the target methods.
-        useCase = new SavePullRequestUseCase(
-            {} as any,
-            {} as any,
-            {} as any,
-            {} as any,
-        );
+        useCase = new SavePullRequestUseCase({} as any, {} as any, {} as any);
     });
 
     const isValid = (payload: any, platformType: PlatformType) =>
@@ -317,5 +312,247 @@ describe('SavePullRequestUseCase deterministic predicates', () => {
             expect(shouldFetch({}, PlatformType.GITHUB)).toBe(false);
             expect(shouldFetch({}, PlatformType.GITLAB)).toBe(false);
         });
+    });
+});
+
+describe('SavePullRequestUseCase on Forgejo saves under the instance that sent the webhook', () => {
+    // Forgejo numbers repositories per instance: repository 26 is
+    // alpha/app on git.alpha.example and beta/api on git.beta.example.
+    const forgejoConfig = (org: string, host: string, name: string) => ({
+        team: { uuid: `team-${org}`, organization: { uuid: `org-${org}` } },
+        integration: { authIntegration: { authDetails: { host } } },
+        configValue: [{ id: '26', name }],
+    });
+    const openedPayload = {
+        action: 'opened',
+        number: 7,
+        pull_request: {
+            number: 7,
+            title: 'Add feature Y',
+            user: { id: 303, login: 'fj-user' },
+            head: { ref: 'feat/y', sha: 'def456' },
+            base: { ref: 'main' },
+            html_url: 'https://git.beta.example/beta/api/pulls/7',
+        },
+        repository: {
+            id: 26,
+            name: 'api',
+            full_name: 'beta/api',
+            html_url: 'https://git.beta.example/beta/api',
+        },
+    };
+
+    const makeUseCase = (configs: unknown[]) => {
+        const integrationConfigService = {
+            findIntegrationConfigWithTeams: jest
+                .fn()
+                .mockResolvedValue(configs),
+        };
+        const pullRequestsService = {
+            aggregateAndSaveDataStructure: jest.fn().mockResolvedValue({}),
+        };
+        const codeManagement = {
+            getFilesByPullRequestId: jest.fn().mockResolvedValue([]),
+            getCommitsForPullRequestForCodeReview: jest
+                .fn()
+                .mockResolvedValue([]),
+        };
+        const useCase = new SavePullRequestUseCase(
+            integrationConfigService as any,
+            pullRequestsService as any,
+            codeManagement as any,
+        );
+        return { useCase, codeManagement, pullRequestsService };
+    };
+
+    it('reads the pull request with the integration on the sending instance', async () => {
+        const { useCase, codeManagement } = makeUseCase([
+            forgejoConfig('alpha', 'https://git.alpha.example', 'alpha/app'),
+            forgejoConfig('beta', 'https://git.beta.example', 'beta/api'),
+        ]);
+
+        await useCase.execute({
+            payload: openedPayload,
+            platformType: PlatformType.FORGEJO,
+            event: 'pull_request',
+        });
+
+        expect(codeManagement.getFilesByPullRequestId).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationAndTeamData: {
+                    organizationId: 'org-beta',
+                    teamId: 'team-beta',
+                },
+            }),
+            PlatformType.FORGEJO,
+        );
+    });
+
+    it('saves nothing when only another instance has the repository id', async () => {
+        const { useCase, codeManagement, pullRequestsService } = makeUseCase([
+            forgejoConfig('alpha', 'https://git.alpha.example', 'alpha/app'),
+        ]);
+
+        const saved = await useCase.execute({
+            payload: openedPayload,
+            platformType: PlatformType.FORGEJO,
+            event: 'pull_request',
+        });
+
+        expect(saved).toBeNull();
+        expect(codeManagement.getFilesByPullRequestId).not.toHaveBeenCalled();
+        expect(
+            pullRequestsService.aggregateAndSaveDataStructure,
+        ).not.toHaveBeenCalled();
+    });
+});
+
+describe('SavePullRequestUseCase on GitLab saves under the instance that sent the webhook', () => {
+    // GitLab numbers projects per instance: project 9 is acme/web-shop on
+    // gitlab-a.example and globex/billing-api on gitlab-b.example.
+    const gitlabConfig = (org: string, httpUrl: string, name: string) => ({
+        team: { uuid: `team-${org}`, organization: { uuid: `org-${org}` } },
+        integration: { authIntegration: { authDetails: {} } },
+        configValue: [{ id: '9', name, http_url: httpUrl }],
+    });
+    const fromB = gitlabConfig(
+        'b',
+        'https://gitlab-b.example/globex/billing-api.git',
+        'globex/billing-api',
+    );
+    const onA = gitlabConfig(
+        'a',
+        'https://gitlab-a.example/acme/web-shop.git',
+        'acme/web-shop',
+    );
+    // An update with no new commit: saved without reading files, the path
+    // that every MR event of the other server took.
+    const updatedPayload = {
+        object_kind: 'merge_request',
+        user: { id: 11, username: 'dev-b' },
+        project: {
+            id: 9,
+            name: 'billing-api',
+            path_with_namespace: 'globex/billing-api',
+            web_url: 'https://gitlab-b.example/globex/billing-api',
+            git_http_url: 'https://gitlab-b.example/globex/billing-api.git',
+        },
+        repository: {
+            name: 'billing-api',
+            url: 'git@gitlab-b.example:globex/billing-api.git',
+            homepage: 'https://gitlab-b.example/globex/billing-api',
+        },
+        object_attributes: {
+            iid: 4242,
+            title: 'Billing export',
+            action: 'update',
+            state: 'opened',
+            source_branch: 'feat/export',
+            target_branch: 'main',
+            url: 'https://gitlab-b.example/globex/billing-api/-/merge_requests/4242',
+            last_commit: { id: 'abc' },
+            oldrev: 'abc',
+            author_id: 11,
+            target: { path_with_namespace: 'globex/billing-api' },
+            source: { path_with_namespace: 'globex/billing-api' },
+        },
+    };
+
+    const makeUseCase = (configs: unknown[]) => {
+        const integrationConfigService = {
+            findIntegrationConfigWithTeams: jest
+                .fn()
+                .mockResolvedValue(configs),
+        };
+        const pullRequestsService = {
+            aggregateAndSaveDataStructure: jest.fn().mockResolvedValue({}),
+        };
+        const codeManagement = {
+            resolveMrAuthorFromWebhookPayload: jest
+                .fn()
+                .mockResolvedValue(null),
+            getFilesByPullRequestId: jest.fn().mockResolvedValue([]),
+            getCommitsForPullRequestForCodeReview: jest
+                .fn()
+                .mockResolvedValue([]),
+        };
+        const useCase = new SavePullRequestUseCase(
+            integrationConfigService as any,
+            pullRequestsService as any,
+            codeManagement as any,
+        );
+        return {
+            useCase,
+            codeManagement,
+            pullRequestsService,
+            integrationConfigService,
+        };
+    };
+
+    it('saves under the organization whose config is on the sending server, even when another server is found first', async () => {
+        const { useCase, pullRequestsService } = makeUseCase([onA, fromB]);
+
+        await useCase.execute({
+            payload: updatedPayload,
+            platformType: PlatformType.GITLAB,
+            event: 'Merge Request Hook',
+        });
+
+        expect(
+            pullRequestsService.aggregateAndSaveDataStructure,
+        ).toHaveBeenCalledTimes(1);
+        expect(
+            pullRequestsService.aggregateAndSaveDataStructure.mock.calls[0][6],
+        ).toEqual({ organizationId: 'org-b', teamId: 'team-b' });
+    });
+
+    it("saves under the team the handler's context resolved, not the first config", async () => {
+        // The same project connected in two workspaces: the review runs for
+        // the team with an active code review automation, which is not the
+        // most recently updated config.
+        const alsoB = gitlabConfig(
+            'b2',
+            'https://gitlab-b.example/globex/billing-api.git',
+            'globex/billing-api',
+        );
+        const { useCase, pullRequestsService, integrationConfigService } =
+            makeUseCase([fromB, alsoB]);
+
+        await useCase.execute({
+            payload: updatedPayload,
+            platformType: PlatformType.GITLAB,
+            event: 'Merge Request Hook',
+            organizationAndTeamData: {
+                organizationId: 'org-b2',
+                teamId: 'team-b2',
+            },
+        });
+
+        expect(
+            pullRequestsService.aggregateAndSaveDataStructure.mock.calls[0][6],
+        ).toEqual({ organizationId: 'org-b2', teamId: 'team-b2' });
+        expect(
+            integrationConfigService.findIntegrationConfigWithTeams,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('saves nothing when only another server has the project id', async () => {
+        const { useCase, codeManagement, pullRequestsService } = makeUseCase([
+            onA,
+        ]);
+
+        const saved = await useCase.execute({
+            payload: updatedPayload,
+            platformType: PlatformType.GITLAB,
+            event: 'Merge Request Hook',
+        });
+
+        expect(saved).toBeNull();
+        expect(
+            codeManagement.resolveMrAuthorFromWebhookPayload,
+        ).not.toHaveBeenCalled();
+        expect(
+            pullRequestsService.aggregateAndSaveDataStructure,
+        ).not.toHaveBeenCalled();
     });
 });

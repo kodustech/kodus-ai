@@ -3,41 +3,32 @@ title: "Cómo verificar el código contra especificaciones de Google Docs"
 description: "Valida la implementación de tu pull request contra especificaciones escritas en Google Docs."
 ---
 
-Las especificaciones y requisitos de producto a menudo viven en Google Docs. Kodus puede obtener el contenido del documento y compararlo con el diff de tu PR para verificar que la implementación coincide con la especificación.
+Las especificaciones y requisitos de producto a menudo viven en Google Docs. Google Docs no es una fuente de tareas integrada para la Validación de Lógica de Negocio, que lee tareas de Linear, Jira, Notion, Git Issues o un plugin personalizado. Un enlace de Google Docs en el comando no se lee.
 
-## Cómo funciona
+Dos formas de verificar un PR contra una especificación de un Google Doc:
 
-1. **Conecta el plugin de Google Docs** en la página de [Plugins](/es/how_to_use/code_review/plugins) de tu espacio de trabajo
-2. Asegúrate de que el documento sea accesible para la cuenta conectada
-3. Comenta en tu PR:
+## Pega los requisitos en el comando
 
-```
-@kody -v business-logic https://docs.google.com/document/d/1abc123/edit
-```
-
-4. Kody obtiene el documento, extrae los requisitos y los compara con el diff del PR
-
-## Qué obtienes
-
-Kody produce un informe de validación estructurado:
-
-- **Hallazgos** con severidad: MUST_FIX, SUGGESTION o INFO
-- **Trazabilidad de requisitos** — cada hallazgo cita texto del documento de Google
-- **Requisitos Verificados** — lo que fue implementado correctamente
-
-## Consejos
-
-- Mantén las especificaciones estructuradas con secciones claras y requisitos numerados para mejores resultados
-- También puedes pegar el contenido de la especificación en línea:
+Copia los requisitos del documento y comenta en tu PR:
 
 ```
 @kody -v business-logic
-## Requisitos
-1. Los usuarios con rol "admin" pueden eliminar cualquier comentario
-2. Los usuarios solo pueden editar sus propios comentarios dentro de las 24 horas
-3. Los comentarios eliminados muestran el marcador "[eliminado]"
+## Requirements
+1. Users with role "admin" can delete any comment
+2. Users can only edit their own comments within 24 hours
+3. Deleted comments show "[removed]" placeholder
 ```
 
-- Divide los documentos grandes en secciones y valídalas individualmente para obtener feedback más enfocado
+Kody verifica el PR contra el texto que escribiste. No se necesita un tracker, pero el texto debe tener al menos 40 caracteres. El resultado es un comentario en el PR, **Kody · Business Logic**, con cada requisito marcado como **MET**, **PARTIAL**, **MISSING**, **CHECK MANUALLY** o **NOT IN TASK**.
+
+## Mantén los requisitos en una tarea
+
+Copia los requisitos en la descripción de una tarea de tu tracker, bajo un encabezado como `Acceptance criteria`, y nombra la tarea en el título del PR, en la rama o en la descripción. Kody entonces verifica cada PR que referencia la tarea, sin necesidad de un comando. Si los criterios están bajo un encabezado o en un campo personalizado, define **Requirements → Where acceptance criteria live** en los ajustes de Business Logic. Una página de Notion funciona como tarea: pon su URL en el PR.
+
+## Consejos
+
+- Mantén las especificaciones estructuradas, con secciones claras y requisitos numerados.
+- Divide los documentos grandes en secciones y verifícalas una a la vez para obtener feedback más enfocado.
+- Después de corregir una brecha, comenta `@kody -v business-logic` de nuevo. Se actualiza el mismo comentario.
 
 Para más detalles, consulta [Validación de Lógica de Negocio](/es/how_to_use/code_review/business_logic_validation).

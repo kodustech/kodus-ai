@@ -25,9 +25,9 @@ describe('CockpitReviewAnalyticsService', () => {
     describe('getImplementationRateWeekly', () => {
         it('composes per-week rows with overall totals and severity breakdown', async () => {
             query.mockResolvedValue([
-                { week_start: '2026-05-04', severity: 'critical', sent: 10, implemented: 7 },
-                { week_start: '2026-05-04', severity: 'low', sent: 30, implemented: 3 },
-                { week_start: '2026-05-11', severity: 'critical', sent: 4, implemented: 2 },
+                { week_start: '2026-05-04', severity: 'critical', sent: 10, implemented: 7, not_measured: 0 },
+                { week_start: '2026-05-04', severity: 'low', sent: 30, implemented: 3, not_measured: 0 },
+                { week_start: '2026-05-11', severity: 'critical', sent: 4, implemented: 2, not_measured: 0 },
             ]);
 
             const rows = await service.getImplementationRateWeekly(baseQuery);
@@ -37,10 +37,21 @@ describe('CockpitReviewAnalyticsService', () => {
                 weekStart: '2026-05-04',
                 sent: 40,
                 implemented: 10,
+                notMeasured: 0,
                 rate: 0.25,
                 bySeverity: {
-                    critical: { sent: 10, implemented: 7, rate: 0.7 },
-                    low: { sent: 30, implemented: 3, rate: 0.1 },
+                    critical: {
+                        sent: 10,
+                        implemented: 7,
+                        notMeasured: 0,
+                        rate: 0.7,
+                    },
+                    low: {
+                        sent: 30,
+                        implemented: 3,
+                        notMeasured: 0,
+                        rate: 0.1,
+                    },
                 },
             });
             expect(rows[1].rate).toBe(0.5);
@@ -48,9 +59,9 @@ describe('CockpitReviewAnalyticsService', () => {
 
         it('sums string counters numerically and keeps first-seen week order', async () => {
             query.mockResolvedValue([
-                { week_start: '2026-05-11', severity: 'critical', sent: '4', implemented: '1' },
-                { week_start: '2026-05-11', severity: 'high', sent: 2, implemented: 2 },
-                { week_start: '2026-05-04', severity: 'low', sent: 5, implemented: 0 },
+                { week_start: '2026-05-11', severity: 'critical', sent: '4', implemented: '1', not_measured: 0 },
+                { week_start: '2026-05-11', severity: 'high', sent: 2, implemented: 2, not_measured: 0 },
+                { week_start: '2026-05-04', severity: 'low', sent: 5, implemented: 0, not_measured: 0 },
             ]);
 
             const rows = await service.getImplementationRateWeekly(baseQuery);
@@ -63,6 +74,7 @@ describe('CockpitReviewAnalyticsService', () => {
             expect(rows[0].bySeverity.critical).toEqual({
                 sent: 4,
                 implemented: 1,
+                notMeasured: 0,
                 rate: 0.25,
             });
             expect(rows[1].rate).toBe(0);
@@ -244,6 +256,7 @@ describe('CockpitReviewAnalyticsService', () => {
                 {
                     rule_id: 'rule-1',
                     triggers: 87,
+                    rated: 87,
                     implemented: 16,
                     thumbs_up: 2,
                     thumbs_down: 14,

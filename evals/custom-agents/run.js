@@ -72,6 +72,13 @@ function teamConfig(c) {
     const defaults = getDefaultKodusConfigFile();
     return {
         customAgents: agentsOf(c),
+        // The skills and docs linked to its agents (P11), as the team saved them.
+        ...(c.team.knowledge && { knowledge: c.team.knowledge }),
+        // Repository instructions on (P12): the review loads CLAUDE.md and
+        // AGENTS.md from the target branch for every agent.
+        ...(c.team.repoInstructionsEnabled && {
+            repoInstructionsEnabled: true,
+        }),
         reviewOptions: {
             ...(defaults.reviewOptions || {}),
             bug: false,
@@ -103,9 +110,12 @@ function caseVars(c) {
         prTitle: c.prTitle,
         prBody: c.prBody,
         repositoryFullName: 'eval/custom-agents',
-        reviewMode: 'normal',
+        reviewMode: 'balanced',
         repoBase,
         repoFiles,
+        // Repository instructions are listed and read on the target branch
+        // through the platform (P12): it holds what the base holds.
+        ...(c.team.repoInstructionsEnabled && { targetBranchFiles: repoBase }),
     };
 }
 

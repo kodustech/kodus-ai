@@ -90,6 +90,29 @@ describe('estimateTextTokens — falsy guard', () => {
 });
 
 describe('estimateTextTokens — encoder success path', () => {
+    it('can bypass the prompt memo without reading or replacing cached estimates', () => {
+        const encode = jest
+            .fn()
+            .mockReturnValueOnce([1])
+            .mockReturnValueOnce([1, 2])
+            .mockReturnValueOnce([1, 2, 3])
+            .mockReturnValueOnce([1, 2, 3, 4]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                expect(estimateTextTokens('stored')).toBe(1);
+                expect(estimateTextTokens('stored', { cache: false })).toBe(2);
+                expect(estimateTextTokens('stored')).toBe(1);
+                expect(estimateTextTokens('transient', { cache: false })).toBe(
+                    3,
+                );
+                expect(estimateTextTokens('transient')).toBe(4);
+                expect(encode).toHaveBeenCalledTimes(4);
+            },
+        );
+    });
+
     it('returns the EXACT encode_ordinary length, not the char fallback', () => {
         const encodeSpy = jest.fn();
         withFreshModule(
@@ -205,4 +228,119 @@ describe('estimateTextTokens — fallback arithmetic (Math.ceil, divisor 3)', ()
             );
         });
     }
+});
+
+describe('estimateTextTokens — large-text memo (2026-11-23 9.2s compressor stall)', () => {
+    /** A text above the 200k-char main memo bound, with no long runs. */
+    const huge = (n: number, tag: string) =>
+        `${tag} ${'ab '.repeat(Math.ceil(n / 3))}`.slice(0, n);
+
+    it('tokenizes a repeated 2.35M-char head once', () => {
+        const encode = jest.fn().mockReturnValue([1, 2, 3]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                const head = huge(2_353_179, 'head');
+                expect(estimateTextTokens(head)).toBe(3);
+                // A fresh string with the same content (JSON.stringify of
+                // the same message on the next step) is a hit too.
+                expect(estimateTextTokens(head.slice(0))).toBe(3);
+                expect(estimateTextTokens(`${head}`)).toBe(3);
+                expect(encode).toHaveBeenCalledTimes(1);
+            },
+        );
+    });
+
+    it('still honours cache: false for huge texts', () => {
+        const encode = jest.fn().mockReturnValue([1]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                const text = huge(300_000, 'transient');
+                estimateTextTokens(text, { cache: false });
+                estimateTextTokens(text, { cache: false });
+                expect(encode).toHaveBeenCalledTimes(2);
+                // The bypassed calls did not write the memo either.
+                estimateTextTokens(text);
+                expect(encode).toHaveBeenCalledTimes(3);
+            },
+        );
+    });
+
+    it('is bounded by total characters, evicting the least recently used', () => {
+        const encode = jest.fn().mockReturnValue([1]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                const a = huge(3_000_000, 'a');
+                const b = huge(3_000_000, 'b');
+                const c = huge(3_000_000, 'c');
+                estimateTextTokens(a);
+                estimateTextTokens(b);
+                estimateTextTokens(a); // a is now the most recent
+                estimateTextTokens(c); // 9M > 8M: evicts b, not a
+                expect(encode).toHaveBeenCalledTimes(3);
+
+                estimateTextTokens(a);
+                expect(encode).toHaveBeenCalledTimes(3);
+                estimateTextTokens(b);
+                expect(encode).toHaveBeenCalledTimes(4);
+            },
+        );
+    });
+
+    it('never caches a text larger than the whole budget', () => {
+        const encode = jest.fn().mockReturnValue([1]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                const giant = huge(8_000_001, 'giant');
+                estimateTextTokens(giant);
+                estimateTextTokens(giant);
+                expect(encode).toHaveBeenCalledTimes(2);
+            },
+        );
+    });
+});
+
+describe('estimateTextTokens — memo bounds', () => {
+    it('holds at most 8 large texts, evicting the oldest', () => {
+        const encode = jest.fn().mockReturnValue([1]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                // 9 × 200,001 chars is far under the 8M-char budget, so only
+                // the entry cap can evict the first one.
+                const texts = Array.from(
+                    { length: 9 },
+                    (_, i) => `${i} ${'ab '.repeat(66_667)}`.slice(0, 200_001),
+                );
+                texts.forEach((t) => estimateTextTokens(t));
+                expect(encode).toHaveBeenCalledTimes(9);
+                estimateTextTokens(texts[8]);
+                expect(encode).toHaveBeenCalledTimes(9);
+                estimateTextTokens(texts[0]);
+                expect(encode).toHaveBeenCalledTimes(10);
+            },
+        );
+    });
+
+    it('reads a text of exactly 200,000 chars from the memo it was written to', () => {
+        const encode = jest.fn().mockReturnValue([1]);
+        withFreshModule(
+            (getEncoding) =>
+                getEncoding.mockReturnValue({ encode_ordinary: encode }),
+            ({ estimateTextTokens }) => {
+                const text = 'ab '.repeat(66_667).slice(0, 200_000);
+                estimateTextTokens(text);
+                estimateTextTokens(text);
+                expect(encode).toHaveBeenCalledTimes(1);
+            },
+        );
+    });
 });

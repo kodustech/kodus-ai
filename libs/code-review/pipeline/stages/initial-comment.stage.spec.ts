@@ -117,6 +117,7 @@ describe('InitialCommentStage GitLab status note reuse (#1721)', () => {
             manager as any,
             {} as any,
             {} as any,
+            {} as any,
         );
         const context = {
             organizationAndTeamData: {
