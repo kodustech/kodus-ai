@@ -46,7 +46,7 @@ export class RuntimeSuiteRequester {
 
     constructor(
         @Inject(RUNTIME_PRODUCT_ENVIRONMENT_STORE) private readonly environments: Pick<ProductEnvironmentStore, 'get'>,
-        @Inject(RUNTIME_GIT_PORT) private readonly git: Pick<RuntimeGitPort, 'getPullRequestHead' | 'getPullRequestDiff' | 'readFileAtCommit'>,
+        @Inject(RUNTIME_GIT_PORT) private readonly git: Pick<RuntimeGitPort, 'getPullRequestHead' | 'getPullRequestDiff' | 'readFileAtCommit' | 'compareWithMain'>,
         @Inject(RUNTIME_REPO_TOKEN_ISSUER) private readonly repoTokens: RuntimeRepoTokenIssuer,
         @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN) private readonly outbox: Pick<IOutboxMessageRepository, 'create'>,
         @Inject(RUNTIME_CLOCK) private readonly now: Clock,
@@ -86,6 +86,9 @@ export class RuntimeSuiteRequester {
         // A diff the product had to cut says nothing of the files it left out: unknown, so the whole suite runs.
         const { changedFiles, removedFiles } = this.inputs.changesOf(diff);
 
+        // The true merge base and how far main is past it (the compare API); the PR's own base and no count when the platform cannot say.
+        const standing = await this.inputs.standingOf({ ...orgTeam, ...repo }, mainSha, head.headSha);
+
         // One token per claim: the spec listing, each shard, the fresh host and the main host.
         const tokens = await this.inputs.tokensFor({ ...orgTeam, ...repo }, suite.shards, suiteRunId);
 
@@ -115,8 +118,8 @@ export class RuntimeSuiteRequester {
                     mode: 'ci',
                     prNumber: input.prNumber,
                     prSha: head.headSha,
-                    // The base the PR was opened against as the Git API gives it now; a true merge base needs a commit listing.
-                    mergeBase: head.baseSha,
+                    mergeBase: standing.mergeBase ?? head.baseSha,
+                    ...(standing.mainBehind !== undefined ? { mainBehind: standing.mainBehind } : {}),
                     mainSha,
                     requestedAt: this.now().toISOString(),
                     key: suiteRunId,

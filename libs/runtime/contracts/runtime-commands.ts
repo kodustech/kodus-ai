@@ -424,6 +424,8 @@ const SuiteSealedTokenSchema = z
 /** A suite run holds at most this many claims beyond its first: the recipe's shard ceiling plus the fresh host, the main host and the spec listing. */
 export const SUITE_MORE_TOKENS_MAX = 32;
 export const SUITE_CHANGED_FILES_MAX = 5_000;
+/** The most commits of drift a suite request carries: past the baseline's 20-commit reach nothing changes, so the product stops counting here. */
+export const SUITE_MAIN_BEHIND_MAX = 21;
 
 /**
  * Starts one run of the repository's own e2e suite. `suiteRunId` is the idempotency identity (a second delivery
@@ -444,6 +446,11 @@ export const RuntimeSuiteRequestedSchema = z
         prNumber: z.number().int().min(1).optional(),
         prSha: sha.optional(),
         mergeBase: sha.optional(),
+        /**
+         * How many commits main (`mainSha`) is ahead of `mergeBase`, counted by the platform's compare API and cut at 21 (one past
+         * the 20 commits a baseline may lag, which is all the classifier needs to know). Absent: not known, so the Runtime assumes at least one.
+         */
+        mainBehind: z.number().int().min(0).max(SUITE_MAIN_BEHIND_MAX).optional(),
         /** The default-branch head the environment template was built from: the main side of every comparison. */
         mainSha: sha,
         requestedAt: z.iso.datetime(),

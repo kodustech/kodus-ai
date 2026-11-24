@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { SUITE_MAIN_BEHIND_MAX } from '@libs/runtime/contracts/runtime-commands';
 import type { RuntimeRunRequested } from '@libs/runtime/run';
 
 import {
@@ -35,7 +36,7 @@ export type SuiteRunInputs = NonNullable<RuntimeRunRequested['suite']>;
 @Injectable()
 export class RuntimeSuiteInputs {
     constructor(
-        @Inject(RUNTIME_GIT_PORT) private readonly git: Pick<RuntimeGitPort, 'readFileAtCommit'>,
+        @Inject(RUNTIME_GIT_PORT) private readonly git: Pick<RuntimeGitPort, 'readFileAtCommit' | 'compareWithMain'>,
         @Inject(RUNTIME_REPO_TOKEN_ISSUER) private readonly repoTokens: RuntimeRepoTokenIssuer,
         @Inject(RUNTIME_API_CONFIG) private readonly config: RuntimeApiConfig,
         @Inject(RUNTIME_ENVIRONMENT_SETUP_READER) private readonly setups: Pick<RuntimeEnvironmentSetupReader, 'get'>,
@@ -53,6 +54,25 @@ export class RuntimeSuiteInputs {
         };
     }
 
+    /**
+     * Where the PR stands against main, from the platform's compare API (one call; the count, never the commits): the true merge base
+     * of `mainSha` and the PR's head, and how many main commits are past it, cut at `SUITE_MAIN_BEHIND_MAX` (the classifier only needs
+     * to know up to the baseline's reach plus one). A platform with no compare, commits it does not know or a Git API that fails give
+     * nothing: the caller keeps the base the PR was opened against and claims no drift, which is the Runtime's own at-least-one.
+     */
+    async standingOf(repo: SuiteRepo, mainSha: string, headSha: string): Promise<{ mergeBase?: string; mainBehind?: number }> {
+        if (!this.git.compareWithMain) return {};
+        try {
+            const answer = await this.git.compareWithMain({ ...repo, main: mainSha, head: headSha });
+            if (!answer || answer === 'unsupported_platform' || !/^[0-9a-f]{40}$/.test(answer.mergeBase)) return {};
+            // A merge base that is not main's own has at least one main commit past it, whatever the count says.
+            const behind = answer.mergeBase === mainSha ? 0 : Math.max(1, answer.behindBy);
+            return { mergeBase: answer.mergeBase, mainBehind: Math.min(behind, SUITE_MAIN_BEHIND_MAX) };
+        } catch {
+            return {};
+        }
+    }
+
     /** One sealed download token per claim of a suite with `shards` as its ceiling, bound to `sealTo`. */
     async tokensFor(repo: SuiteRepo, shards: number, sealTo: string): Promise<string[]> {
         const tokens: string[] = [];
@@ -64,12 +84,12 @@ export class RuntimeSuiteInputs {
      * The suite section of a Run's request: undefined when the environment was never set up (no main commit), or its recipe at that
      * commit declares no suite, so nothing is minted for a suite that cannot run.
      */
-    async forRun(input: { repo: SuiteRepo; environmentId: string; diff: PullRequestDiff; runId: string }): Promise<SuiteRunInputs | undefined> {
+    async forRun(input: { repo: SuiteRepo; environmentId: string; diff: PullRequestDiff; runId: string; headSha: string }): Promise<SuiteRunInputs | undefined> {
         const mainSha = (await this.setups.get(input.repo.organizationId, input.environmentId))?.sha;
         if (!mainSha) return undefined;
         const suite = await suiteOfRecipeAt(this.git, input.repo, mainSha);
         if (!suite) return undefined;
         const [repoToken, ...moreRepoTokens] = await this.tokensFor(input.repo, suite.shards, input.runId);
-        return { mainSha, repoToken, moreRepoTokens, ...this.changesOf(input.diff) };
+        return { mainSha, ...(await this.standingOf(input.repo, mainSha, input.headSha)), repoToken, moreRepoTokens, ...this.changesOf(input.diff) };
     }
 }

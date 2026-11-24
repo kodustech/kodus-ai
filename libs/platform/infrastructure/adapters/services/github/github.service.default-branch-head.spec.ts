@@ -138,3 +138,53 @@ describe('GithubService.getFileContentAtRef', () => {
         await expect(read(getContent, 1_024)).rejects.toThrow('more than 1024');
     });
 });
+
+describe('GithubService.compareCommits', () => {
+    const MAIN = 'd'.repeat(40);
+    const MERGE_BASE = 'e'.repeat(40);
+    const compare = (compareCommitsWithBasehead: jest.Mock) =>
+        build({ compareCommitsWithBasehead }).compareCommits({
+            organizationAndTeamData,
+            repository,
+            base: MAIN,
+            head: SHA,
+        });
+
+    it('asks for main...head with one commit listed, and answers the true merge base and how many commits main has that the head does not', async () => {
+        const compareCommitsWithBasehead = jest.fn().mockResolvedValue({
+            data: {
+                merge_base_commit: { sha: MERGE_BASE },
+                behind_by: 7,
+                ahead_by: 2,
+            },
+        });
+        await expect(compare(compareCommitsWithBasehead)).resolves.toEqual({
+            mergeBase: MERGE_BASE,
+            behindBy: 7,
+        });
+        expect(compareCommitsWithBasehead).toHaveBeenCalledWith({
+            owner: 'acme',
+            repo: 'api',
+            basehead: `${MAIN}...${SHA}`,
+            per_page: 1,
+        });
+    });
+
+    it('is null when the commits are not there (a 404) or the answer has no merge base, and rethrows anything else', async () => {
+        await expect(compare(notFound())).resolves.toBeNull();
+        await expect(
+            compare(
+                jest.fn().mockResolvedValue({ data: { behind_by: 1 } }),
+            ),
+        ).resolves.toBeNull();
+        await expect(
+            compare(
+                jest
+                    .fn()
+                    .mockRejectedValue(
+                        Object.assign(new Error('boom'), { status: 502 }),
+                    ),
+            ),
+        ).rejects.toThrow('boom');
+    });
+});

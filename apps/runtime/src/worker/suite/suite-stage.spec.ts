@@ -67,6 +67,15 @@ describe('the suite stage of a Run', () => {
         expect(w.seen[0].opts.cancellationSignal()).toBe(signal);
     });
 
+    it('takes the true merge base and the drift the product counted when the request has them, and the PR base otherwise', async () => {
+        const w = await world({ status: 'ran', suiteRunId: 's', state: 'passed', replayed: false });
+        await w.stage.run(withSuite({ mergeBase: 'e'.repeat(40), mainBehind: 5 }), passthrough);
+        expect(w.seen[0].cmd).toMatchObject({ mergeBase: 'e'.repeat(40), mainBehind: 5 });
+        await w.stage.run(withSuite(), passthrough);
+        expect(w.seen[1].cmd.mergeBase).toBe(shopRunRequest().pullRequest.baseSha);
+        expect(w.seen[1].cmd).not.toHaveProperty('mainBehind');
+    });
+
     it('answers the state of the run and the classification it stored', async () => {
         const classification = { tests: [{ spec: 'a.cy.ts', title: 't', class: 'regression', blocks: true, finding: true, baseDrift: 0 }], massFailure: false, requestTemplateBuild: false };
         const w = await world({ status: 'ran', suiteRunId: 's', state: 'failed', replayed: false }, classification);

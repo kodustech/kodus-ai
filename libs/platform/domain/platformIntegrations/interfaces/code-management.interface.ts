@@ -456,6 +456,17 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     }): Promise<{ branch: string; sha: string } | null>;
 
     /**
+     * How `head` stands against `base` (the compare API, `base...head`): the true merge base of the two and how many commits `base`
+     * has that `head` does not. Null when the commits are not there. Optional: a provider without it gives the Runtime no drift.
+     */
+    compareCommits?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; owner?: string };
+        base: string;
+        head: string;
+    }): Promise<{ mergeBase: string; behindBy: number } | null>;
+
+    /**
      * One file's text at an exact commit (no branch fallback), or null when the
      * file is not there. Larger than maxBytes is an error, never a truncation.
      */

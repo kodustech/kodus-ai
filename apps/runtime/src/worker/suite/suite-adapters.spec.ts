@@ -53,6 +53,18 @@ describe('the history of main a suite run counts drift in', () => {
     it('puts the merge base one commit behind main when they differ: the drift is at least one, never claimed zero', () => {
         expect(mainHistoryOf({ mainSha: A, mergeBase: B })).toEqual([A, B]);
     });
+    it('with the product\'s count, puts the merge base exactly that many commits behind main, so the drift and the age of a baseline are real', () => {
+        const h = mainHistoryOf({ mainSha: A, mergeBase: B, mainBehind: 4 });
+        expect(h).toHaveLength(5);
+        expect(h[0]).toBe(A);
+        expect(h.indexOf(B)).toBe(4);
+        // The commits between are placeholders the worker cannot name, never shas a baseline could be found at.
+        expect(h.slice(1, 4).every((x) => !/^[0-9a-f]{40}$/.test(x))).toBe(true);
+    });
+    it('a count of zero with a merge base that is main is no drift; a count of zero with another merge base is still at least one', () => {
+        expect(mainHistoryOf({ mainSha: A, mergeBase: A, mainBehind: 0 })).toEqual([A]);
+        expect(mainHistoryOf({ mainSha: A, mergeBase: B, mainBehind: 0 })).toEqual([A, B]);
+    });
     it('is main alone for a baseline, which has no merge base', () => {
         expect(mainHistoryOf({ mainSha: A })).toEqual([A]);
     });

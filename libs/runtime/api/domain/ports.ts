@@ -323,6 +323,14 @@ export interface RuntimeGitPort {
     listOpenPullRequests?(
         input: OrgTeam & { repositoryId: string; repositoryName: string },
     ): Promise<OpenPullRequestSummary[] | 'unsupported_platform'>;
+    /**
+     * How the PR's head stands against `main` (the commit the environment's template was built from) by the platform's compare
+     * API: the true merge base and how many commits `main` has that the head does not (the drift, counted by the platform, never
+     * listed). `unsupported_platform` when this platform has no compare here; null when the commits are not there. Throws on a Git API failure.
+     */
+    compareWithMain?(
+        input: OrgTeam & { repositoryId: string; repositoryName: string; main: string; head: string },
+    ): Promise<{ mergeBase: string; behindBy: number } | null | 'unsupported_platform'>;
     /** The default branch and its head SHA, the commit an environment setup boots (§6). */
     getDefaultBranchHead(input: OrgTeam & { repositoryId: string; repositoryName: string }): Promise<DefaultBranchHead>;
     /**

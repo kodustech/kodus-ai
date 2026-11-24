@@ -118,6 +118,18 @@ describe('CodeManagementRuntimeGitAdapter: facts from the Git API (ADR-057)', ()
         expect(await none.getPullRequestDiff({ ...input, headSha: 'a'.repeat(40) })).not.toHaveProperty('removedFiles');
     });
 
+    it('compares main with the head through the platform compare API: the true merge base and how many commits main is ahead', async () => {
+        const calls: any[] = [];
+        const adapter = new CodeManagementRuntimeGitAdapter({
+            compareCommits: async (i: any) => (calls.push(i), { mergeBase: 'e'.repeat(40), behindBy: 4 }),
+        } as any);
+        expect(await adapter.compareWithMain({ ...input, main: 'd'.repeat(40), head: 'a'.repeat(40) })).toEqual({ mergeBase: 'e'.repeat(40), behindBy: 4 });
+        expect(calls[0]).toMatchObject({ base: 'd'.repeat(40), head: 'a'.repeat(40), repository: { id: input.repositoryId } });
+        // A platform with no compare API says so; commits the API does not know are null.
+        expect(await new CodeManagementRuntimeGitAdapter({ compareCommits: async () => undefined } as any).compareWithMain({ ...input, main: 'd'.repeat(40), head: 'a'.repeat(40) })).toBe('unsupported_platform');
+        expect(await new CodeManagementRuntimeGitAdapter({ compareCommits: async () => null } as any).compareWithMain({ ...input, main: 'd'.repeat(40), head: 'a'.repeat(40) })).toBeNull();
+    });
+
     it('reads the post-change content of changed code files at the head, so routes can be extracted', async () => {
         const reads: any[] = [];
         const adapter = new CodeManagementRuntimeGitAdapter({

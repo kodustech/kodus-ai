@@ -32,7 +32,9 @@ export class SuiteRunStage implements SuiteStage {
             mode: 'run',
             prNumber: req.pullRequest.number,
             prSha: req.pullRequest.headSha,
-            mergeBase: req.pullRequest.baseSha,
+            // The true merge base when the product could say (the compare API), else the base the PR was opened against.
+            mergeBase: s.mergeBase ?? req.pullRequest.baseSha,
+            ...(s.mainBehind !== undefined ? { mainBehind: s.mainBehind } : {}),
             mainSha: s.mainSha,
             requestedAt: req.requestedAt,
             key: req.runId,

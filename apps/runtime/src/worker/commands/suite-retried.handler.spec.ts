@@ -14,7 +14,7 @@ const ORIGINAL = '0b8e3c2a-6d1f-4a57-9c3e-1f2a3b4c5d6e';
 const A = 'a'.repeat(40);
 const B = 'b'.repeat(40);
 
-async function world(over: { finished?: boolean } = {}) {
+async function world(over: { finished?: boolean; drift?: number } = {}) {
     const runs = new InMemorySuiteRuns();
     await runs.create({ suiteRunId: ORIGINAL, organizationId: 'org-a', environmentId: 'env-shop', repositoryId: 'repo-1', mode: 'ci', prNumber: 7, prSha: B, mergeBase: A, mainSha: A, requestedAt: new Date('2026-11-23T12:00:00.000Z') });
     await runs.savePlan('org-a', ORIGINAL, [{ shard: 0, specs: ['a.cy.ts', 'b.cy.ts'] }, { shard: 1, specs: ['c.cy.ts', 'd.cy.ts'] }]);
@@ -26,7 +26,7 @@ async function world(over: { finished?: boolean } = {}) {
         { spec: 'c.cy.ts', status: 'infra', durationMs: 0, tests: [] },
         { spec: 'd.cy.ts', status: 'passed', durationMs: 1, tests: [] },
     ]);
-    if (over.finished !== false) await runs.finish('org-a', ORIGINAL, 'failed', new Date('2026-11-23T12:30:00.000Z'));
+    if (over.finished !== false) await runs.finish('org-a', ORIGINAL, 'failed', new Date('2026-11-23T12:30:00.000Z'), over.drift !== undefined ? { baseDrift: over.drift } : {});
     const started: any[] = [];
     const handler = new SuiteRetriedHandler(runs, { start: async (c) => (started.push(c), 'wf') });
     return { handler, started };
@@ -56,6 +56,15 @@ describe('SuiteRetriedHandler', () => {
         ]);
         expect(w.started[0].suiteRunId).toMatch(/^[0-9a-f-]{36}$/);
         expect(w.started[0].suiteRunId).not.toBe(ORIGINAL);
+    });
+
+    it('keeps the drift the original run was judged with, so the retry is classified the same way', async () => {
+        const w = await world({ drift: 5 });
+        await w.handler.handle(body());
+        expect(w.started[0].mainBehind).toBe(5);
+        const none = await world();
+        await none.handler.handle(body());
+        expect(none.started[0]).not.toHaveProperty('mainBehind');
     });
 
     it('runs again the specs of the shard it names', async () => {

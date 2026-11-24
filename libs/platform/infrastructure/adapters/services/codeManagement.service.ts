@@ -1708,6 +1708,27 @@ export class CodeManagementService implements ICodeManagementService {
         return service.getDefaultBranchHead(params);
     }
 
+    /** The merge base and the commits `base` is ahead of `head` (compare API); `undefined` when the platform cannot say. */
+    async compareCommits(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; owner?: string };
+        base: string;
+        head: string;
+    }): Promise<{ mergeBase: string; behindBy: number } | null | undefined> {
+        const type = await this.getTypeIntegration(
+            params.organizationAndTeamData,
+        );
+        if (!type) {
+            return undefined;
+        }
+        const service =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+        if (!service.compareCommits) {
+            return undefined;
+        }
+        return service.compareCommits(params);
+    }
+
     /** A file at an exact commit; `undefined` when the platform cannot read it here. */
     async getFileContentAtRef(params: {
         organizationAndTeamData: OrganizationAndTeamData;

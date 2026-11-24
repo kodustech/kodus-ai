@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 
 import { uuidV5From, sha256 } from '@libs/runtime/contracts/derive-id';
-import { RuntimeCommandName, RuntimeSuiteRetriedSchema, type RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
+import { RuntimeCommandName, RuntimeSuiteRetriedSchema, SUITE_MAIN_BEHIND_MAX, type RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 
 import type { PgSuiteRuns } from '../suite/pg-suite-runs';
 import type { CommandHandler } from './command-handlers';
@@ -44,6 +44,8 @@ export class SuiteRetriedHandler implements CommandHandler {
             ...(original.prNumber !== undefined ? { prNumber: original.prNumber } : {}),
             ...(original.prSha ? { prSha: original.prSha } : {}),
             ...(original.mergeBase ? { mergeBase: original.mergeBase } : {}),
+            // The drift the original was judged with (cut at the contract's bound): the retry reads the same history of main.
+            ...(original.baseDrift !== undefined ? { mainBehind: Math.min(original.baseDrift, SUITE_MAIN_BEHIND_MAX) } : {}),
             mainSha: original.mainSha,
             requestedAt: r.requestedAt,
             key: r.key,

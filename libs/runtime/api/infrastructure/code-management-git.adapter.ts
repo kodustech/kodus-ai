@@ -306,6 +306,18 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
         return { status: 'ok', branch: head.branch, sha: head.sha };
     }
 
+    async compareWithMain(
+        input: OrgTeam & { repositoryId: string; repositoryName: string; main: string; head: string },
+    ): Promise<{ mergeBase: string; behindBy: number } | null | 'unsupported_platform'> {
+        const answer = await this.codeManagement.compareCommits({
+            organizationAndTeamData: { organizationId: input.organizationId, teamId: input.teamId },
+            repository: { id: input.repositoryId, ...splitFullName(input.repositoryName) } as { id: string; name: string; owner?: string },
+            base: input.main,
+            head: input.head,
+        });
+        return answer === undefined ? 'unsupported_platform' : answer;
+    }
+
     async readFileAtCommit(
         input: OrgTeam & { repositoryId: string; repositoryName: string; path: string; sha: string; maxBytes: number },
     ): Promise<string | null | 'unsupported_platform'> {

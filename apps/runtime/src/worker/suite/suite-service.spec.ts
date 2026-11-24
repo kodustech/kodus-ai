@@ -118,6 +118,17 @@ describe('running a suite as a workflow', () => {
         expect(w.published).toEqual(['started:ci', 'cancelled']);
     });
 
+    it('judges a PR against the drift the product counted: the run stores how many main commits were past the merge base', async () => {
+        const MERGE_BASE = 'c'.repeat(40);
+        const w = world();
+        await w.service.run(request({ mergeBase: MERGE_BASE, mainBehind: 6 }), passthrough);
+        expect((await w.runs.get(ORG, 'sr-1'))?.baseDrift).toBe(6);
+        // With no count the worker only knows the merge base is not main: at least one.
+        const w2 = world();
+        await w2.service.run(request({ mergeBase: MERGE_BASE }), passthrough);
+        expect((await w2.runs.get(ORG, 'sr-1'))?.baseDrift).toBe(1);
+    });
+
     it('a baseline is the whole suite on main, recorded for the baseline request, which is marked started', async () => {
         const w = world();
         const out = await w.service.run(request({ mode: 'baseline', prNumber: undefined, prSha: undefined, mergeBase: undefined }), passthrough);

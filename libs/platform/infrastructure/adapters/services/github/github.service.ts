@@ -8949,6 +8949,51 @@ This is an experimental feature that generates committable changes. Review the d
         }
     }
 
+    /**
+     * How `head` stands against `base` by the compare API (`base...head`): the true merge base of the two, and how many commits
+     * `base` has that `head` does not (`behind_by`). One call, one commit listed: the count and the merge base are the answer, the
+     * commit list is never read. Null when the commits are not there or the answer names no merge base.
+     */
+    async compareCommits(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; owner?: string };
+        base: string;
+        head: string;
+    }): Promise<{ mergeBase: string; behindBy: number } | null> {
+        const githubAuthDetail = await this.getGithubAuthDetails(
+            params.organizationAndTeamData,
+        );
+        const octokit = await this.instanceOctokit(
+            params.organizationAndTeamData,
+            githubAuthDetail,
+        );
+        const owner = await this.ownerFor(
+            params.repository,
+            githubAuthDetail,
+            octokit,
+        );
+        try {
+            const { data } = await octokit.rest.repos.compareCommitsWithBasehead(
+                {
+                    owner,
+                    repo: params.repository.name,
+                    basehead: `${params.base}...${params.head}`,
+                    per_page: 1,
+                },
+            );
+            const mergeBase = data?.merge_base_commit?.sha;
+            if (!mergeBase) return null;
+            const behind = Number(data.behind_by);
+            return {
+                mergeBase,
+                behindBy: Number.isFinite(behind) && behind > 0 ? behind : 0,
+            };
+        } catch (error) {
+            if ((error as { status?: number })?.status === 404) return null;
+            throw error;
+        }
+    }
+
     /** One file at an exact commit (no fallback to another ref). Null on 404 or a directory. */
     async getFileContentAtRef(params: {
         organizationAndTeamData: OrganizationAndTeamData;

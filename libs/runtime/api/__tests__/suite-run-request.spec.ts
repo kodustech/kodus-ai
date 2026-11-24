@@ -17,9 +17,9 @@ const recipe = `version: 1\nservices:\n  compose:\n    public: app\n${SUITE}`;
 const env = { environmentId: 'env-1', organizationId: ORG, teamId: TEAM, repositoryId: REPO, repositoryName: 'acme/shop' };
 const head: PullRequestHead = { headSha: SHA, baseSha: BASE_SHA, fork: false };
 
-function world(o: { recipe?: string | null; setupSha?: string | null; removed?: string[]; truncated?: boolean } = {}) {
+function world(o: { recipe?: string | null; setupSha?: string | null; removed?: string[]; truncated?: boolean; compare?: unknown } = {}) {
     const issued: string[] = [];
-    const git = { getPullRequestDiff: async () => ({ files: [{ path: 'src/a.ts', patch: '' }, { path: 'src/new.ts', previousPath: 'src/old.ts', patch: '' }], truncated: !!o.truncated, ...(o.removed ? { removedFiles: o.removed } : {}) }), readFileAtCommit: async () => (o.recipe === undefined ? recipe : o.recipe) } as unknown as RuntimeGitPort;
+    const git = { getPullRequestDiff: async () => ({ files: [{ path: 'src/a.ts', patch: '' }, { path: 'src/new.ts', previousPath: 'src/old.ts', patch: '' }], truncated: !!o.truncated, ...(o.removed ? { removedFiles: o.removed } : {}) }), readFileAtCommit: async () => (o.recipe === undefined ? recipe : o.recipe), ...(o.compare === undefined ? {} : { compareWithMain: async () => (o.compare === 'throws' ? Promise.reject(new Error('git api down')) : o.compare) }) } as unknown as RuntimeGitPort;
     const tokens = { issue: async () => (issued.push('t'), `ghs_${issued.length}`) };
     const setups = { get: async () => (o.setupSha === null ? null : { sha: o.setupSha ?? MAIN }) };
     const inputs = new RuntimeSuiteInputs(git, tokens, config(), setups as any);
@@ -46,6 +46,17 @@ describe('the Run request carries the suite of its environment', () => {
         const cut = await build(world({ removed: ['e2e/gone.cy.ts'], truncated: true }));
         expect(cut.suite).not.toHaveProperty('changedFiles');
         expect(cut.suite).not.toHaveProperty('removedFiles');
+    });
+
+    it('carries the true merge base and how far main moved, bounded; and the PR base with no drift when the platform cannot say', async () => {
+        const MERGE_BASE = 'e'.repeat(40);
+        expect((await build(world({ compare: { mergeBase: MERGE_BASE, behindBy: 3 } }))).suite).toMatchObject({ mergeBase: MERGE_BASE, mainBehind: 3 });
+        expect((await build(world({ compare: { mergeBase: MERGE_BASE, behindBy: 9_999 } }))).suite).toMatchObject({ mainBehind: 21 });
+        for (const compare of ['unsupported_platform', null, 'throws', undefined]) {
+            const suite = (await build(world({ compare }))).suite!;
+            expect(suite).not.toHaveProperty('mainBehind');
+            expect(suite).not.toHaveProperty('mergeBase');
+        }
     });
 
     it('leaves the section out, and mints nothing for it, when the recipe has no suite', async () => {

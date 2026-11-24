@@ -343,6 +343,9 @@ export const RuntimeRunRequestedSchema = z.strictObject({
     suite: z
         .strictObject({
             mainSha: sha,
+            /** The true merge base of the PR and `mainSha` and how many commits main is ahead of it (the platform's compare API, cut at 21); absent: the PR's base, no drift known. */
+            mergeBase: sha.optional(),
+            mainBehind: z.number().int().min(0).max(21).optional(),
             repoToken: sealedToken,
             moreRepoTokens: z.array(sealedToken).max(32).optional(),
             changedFiles: z.array(z.string().min(1).max(512)).max(5_000).optional(),

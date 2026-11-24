@@ -257,6 +257,7 @@ export class RuntimeRunRequestBuilder {
             environmentId: env.environmentId,
             diff: input.diff,
             runId: input.runId,
+            headSha: input.head.headSha,
         });
     }
 

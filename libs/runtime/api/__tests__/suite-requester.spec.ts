@@ -17,20 +17,22 @@ const SUITE = 'suite:\n  runner: cypress\n  command: npx cypress run --spec "{sp
 const recipe = `version: 1\nservices:\n  compose:\n    public: app\n${SUITE}`;
 const env = (patch: Partial<ProductEnvironment> = {}): ProductEnvironment => ({ environmentId: 'env-1', organizationId: ORG, teamId: TEAM, repositoryId: REPO, repositoryName: 'acme/shop', state: 'active', createdAt: NOW.toISOString(), updatedAt: NOW.toISOString(), ...patch });
 
-function world(o: { head?: Partial<Awaited<ReturnType<RuntimeGitPort['getPullRequestHead']>> & object> | null; recipe?: string | null; setupSha?: string | null; released?: boolean; truncated?: boolean; diff?: Array<{ path: string; previousPath?: string }>; removed?: string[] } = {}) {
+function world(o: { head?: Partial<Awaited<ReturnType<RuntimeGitPort['getPullRequestHead']>> & object> | null; recipe?: string | null; setupSha?: string | null; released?: boolean; truncated?: boolean; diff?: Array<{ path: string; previousPath?: string }>; removed?: string[]; compare?: unknown } = {}) {
     const outbox = new FakeOutbox();
     const targets = new InMemoryRunTargetStore();
     const issued: string[] = [];
+    const compared: unknown[] = [];
     const git = {
         getPullRequestHead: async () => (o.head === null ? null : { headSha: HEAD, baseSha: BASE, fork: false, state: 'open', ...o.head }),
         getPullRequestDiff: async () => ({ files: (o.diff ?? [{ path: 'src/a.ts' }, { path: 'src/new.ts', previousPath: 'src/old.ts' }]).map((f) => ({ patch: '', ...f })), truncated: !!o.truncated, ...(o.removed ? { removedFiles: o.removed } : {}) }),
         readFileAtCommit: async () => (o.recipe === undefined ? recipe : o.recipe),
+        ...(o.compare === 'absent' ? {} : { compareWithMain: async (i: unknown) => (compared.push(i), o.compare === 'throws' ? Promise.reject(new Error('git api down')) : ('compare' in o ? o.compare : { mergeBase: BASE, behindBy: 1 })) }),
     } as unknown as RuntimeGitPort;
     const tokens = { issue: async () => (issued.push('t'), `ghs_${issued.length}`) };
     const setups = { get: async () => (o.setupSha === null ? null : { sha: o.setupSha ?? MAIN }) };
     const store = { get: async () => env() };
     const step = new RuntimeSuiteRequester(store as any, git, tokens, outbox as any, clock, config(), setups as any, targets, { getTypeIntegration: async () => PlatformType.GITHUB }, o.released === undefined ? undefined : runtimeReleaseGate(o.released));
-    return { step, outbox, targets, issued };
+    return { step, outbox, targets, issued, compared };
 }
 const commands = (ob: FakeOutbox) => ob.rows.filter((r) => r.payload.event_name === 'runtime.suite.requested').map((r) => r.payload.payload);
 
@@ -60,6 +62,40 @@ describe('asking for the suite of a pull request (CI mode)', () => {
         const none = world();
         await none.step.requestCi({ environment: env(), prNumber: 42 });
         expect(commands(none.outbox)[0]).not.toHaveProperty('removedFiles');
+    });
+
+    describe('how far main moved (the platform compare API)', () => {
+        const MERGE_BASE = 'e'.repeat(40);
+        const ask = async (compare: unknown, over: Parameters<typeof world>[0] = {}) => {
+            const w = world({ compare, ...over });
+            await w.step.requestCi({ environment: env(), prNumber: 42 });
+            return { cmd: commands(w.outbox)[0], w };
+        };
+
+        it('puts the true merge base in the command, not the base the PR was opened against, and how many commits main is ahead of it', async () => {
+            const { cmd, w } = await ask({ mergeBase: MERGE_BASE, behindBy: 3 });
+            expect(cmd).toMatchObject({ mergeBase: MERGE_BASE, mainSha: MAIN, mainBehind: 3 });
+            expect(w.compared).toEqual([expect.objectContaining({ main: MAIN, head: HEAD })]);
+        });
+
+        it('counts no further than the classifier needs (21: one past the 20 commits a baseline may lag), so the answer stays bounded', async () => {
+            expect((await ask({ mergeBase: MERGE_BASE, behindBy: 4_000 })).cmd.mainBehind).toBe(21);
+        });
+
+        it('a merge base that is main itself is a drift of zero', async () => {
+            expect((await ask({ mergeBase: MAIN, behindBy: 0 })).cmd).toMatchObject({ mergeBase: MAIN, mainBehind: 0 });
+        });
+
+        it.each([
+            ['a platform with no compare API', 'unsupported_platform'],
+            ['commits the API does not know', null],
+            ['a Git API that failed', 'throws'],
+            ['a git port with no compare at all', 'absent'],
+        ])('keeps the base the PR was opened against and claims no drift for %s', async (_n, compare) => {
+            const { cmd } = await ask(compare);
+            expect(cmd.mergeBase).toBe(BASE);
+            expect(cmd).not.toHaveProperty('mainBehind');
+        });
     });
 
     it('stores the publish target under the suite run id before the command, so the check can be written', async () => {

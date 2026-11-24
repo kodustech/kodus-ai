@@ -41,9 +41,14 @@ export class PlacementSuiteDemand implements SuiteHostDemand {
 
 /**
  * Main's commits as the classifier counts drift in them (docs/runtime/e2e-suites.md 8.2), head first. The worker holds no Git
- * history, so it knows only whether the merge base is main's head: when it is not, the base is put one commit behind, which
- * counts a drift of at least one and never claims zero. A real count needs a commit listing the product does not hand over yet.
+ * history: the product counts the commits between the merge base and main with the platform's compare API and sends the count
+ * (`mainBehind`, cut at 21), and the history is made of it, main, then that many commits the worker cannot name, then the merge
+ * base, so the drift and the age of a baseline are the real ones. Without a count, a merge base that is not main's head is put one
+ * commit behind: a drift of at least one, never claimed zero.
  */
-export function mainHistoryOf(r: { mainSha: string; mergeBase?: string }): string[] {
-    return r.mergeBase && r.mergeBase !== r.mainSha ? [r.mainSha, r.mergeBase] : [r.mainSha];
+export function mainHistoryOf(r: { mainSha: string; mergeBase?: string; mainBehind?: number }): string[] {
+    if (!r.mergeBase || r.mergeBase === r.mainSha) return [r.mainSha];
+    const behind = Math.max(1, r.mainBehind ?? 1);
+    // The commits between are placeholders: no baseline is ever recorded at one, so a lookup walks past them.
+    return [r.mainSha, ...Array.from({ length: behind - 1 }, (_, i) => `~main-${i + 1}`), r.mergeBase];
 }
