@@ -131,7 +131,8 @@ describe('re-running what failed in the first pass', () => {
         const w = world({ specs: { 'a.cy.ts': { pr: [{ fail: ERR }] }, 'b.cy.ts': { pr: [{ fail: ERR }] }, 'c.cy.ts': {}, 'd.cy.ts': {} } });
         const out = await w.run();
         expect(out.classification?.massFailure).toBe(true);
-        expect(Object.values(classOf(out))).toEqual(['unclassified', 'unclassified']);
+        // The two red specs, and d, which fail fast (6.1) left unrun once the first batch was over 25% red.
+        expect(classOf(out)).toEqual({ 'a.cy.ts': 'unclassified', 'b.cy.ts': 'unclassified', 'd.cy.ts': 'unclassified' });
         expect(w.cell.starts).toHaveLength(1);
         expect(out.state).toBe('neutral');
     });

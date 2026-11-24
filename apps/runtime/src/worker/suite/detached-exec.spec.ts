@@ -78,6 +78,25 @@ describe('a suite command run detached', () => {
         expect(w.clock.now() - Date.parse('2026-11-23T12:00:00Z')).toBeLessThanOrEqual(25 * MIN + 60_000);
     });
 
+    it('a cancel stops the command and its children, names what finished, and goes no further than the poll that saw it', async () => {
+        const stop = new AbortController();
+        const w = world({ runMs: 90 * MIN, resultsAt: { 'results/a.xml': 2 * MIN } }, { signal: stop.signal, onPoll: (p) => void (p.resultFiles.length > 0 && stop.abort()) });
+        const r = await w.go();
+        expect(r).toMatchObject({ outcome: 'cancelled', resultFiles: ['results/a.xml'] });
+        expect(w.env.calls.some((c) => c.kind === 'kill')).toBe(true);
+        // The kill is the tree's, as the timeout's: the process and everything it started.
+        expect(w.env.calls.find((c) => c.kind === 'kill')?.command).toContain('killtree');
+        expect(w.clock.now() - Date.parse('2026-11-23T12:00:00Z')).toBeLessThanOrEqual(3 * MIN);
+    });
+
+    it('a cancel before the command starts runs nothing', async () => {
+        const stop = new AbortController();
+        stop.abort();
+        const w = world({ runMs: MIN }, { signal: stop.signal });
+        expect(await w.go()).toMatchObject({ outcome: 'cancelled', resultFiles: [] });
+        expect(w.env.commandRuns).toBe(0);
+    });
+
     it('a poll the transport lost is asked again; three in a row end it as infra', async () => {
         const w = world({ runMs: 3 * MIN, resultsAt: { 'results/a.xml': 1 * MIN }, lostPolls: [2, 3] });
         expect(await w.go()).toMatchObject({ outcome: 'finished' });

@@ -172,4 +172,45 @@ describe('the first pass of a suite run', () => {
         // Without the order input the specs keep their path order (no stored duration yet).
         expect(w2.cell.starts[0].specs).toEqual(['a.cy.ts', 'b.cy.ts', 'c.cy.ts']);
     });
+
+    describe('fail fast', () => {
+        const names = Array.from({ length: 10 }, (_, i) => `s${i}.cy.ts`);
+        const red = { pr: [{ fail: 'boom' }], ms: MIN };
+        const spec = (failing: string[]) => Object.fromEntries(names.map((n) => [n, failing.includes(n) ? red : { ms: MIN }]));
+
+        it('stops the first pass when more than 25% of the first batch failed: the command is stopped, the rest is not_run, nothing re-runs and the classifier sees a mass failure', async () => {
+            const w = world({ specs: spec(['s0.cy.ts', 's1.cy.ts']) }, { maxShards: 1 });
+            const started = w.clock.now();
+            const out = await w.engine.run(request(), w.inputs(names));
+            expect(statusOf(out)).toEqual({ ...Object.fromEntries(names.map((n) => [n, 'not_run'])), 's0.cy.ts': 'failed', 's1.cy.ts': 'failed' });
+            // Two minutes of work and a poll, not ten.
+            expect(w.clock.now() - started).toBeLessThan(4 * MIN);
+            // No re-run on the PR or main, and the not-run specs are not given a fresh host either.
+            expect(w.cell.starts).toHaveLength(1);
+            expect(out.classification?.massFailure).toBe(true);
+            expect(out.state).toBe('neutral');
+        });
+
+        it('across shards: one shard seeing the failures stops the others too', async () => {
+            const w = world({ specs: spec(['s0.cy.ts', 's1.cy.ts', 's2.cy.ts']) }, { maxShards: 2 });
+            const started = w.clock.now();
+            const out = await w.engine.run(request(), w.inputs(names));
+            expect(Object.values(statusOf(out)).filter((s) => s === 'not_run').length).toBeGreaterThanOrEqual(4);
+            expect(w.clock.now() - started).toBeLessThan(6 * MIN);
+            expect(out.classification?.massFailure).toBe(true);
+        });
+
+        it('goes on when failures stay within 25% of the first batch', async () => {
+            const w = world({ specs: spec(['s0.cy.ts']) }, { maxShards: 1 });
+            const out = await w.engine.run(request(), w.inputs(names));
+            expect(Object.values(statusOf(out)).filter((s) => s === 'passed')).toHaveLength(9);
+            expect(out.classification?.massFailure).toBe(false);
+        });
+
+        it('a baseline is never cut short: it is main alone and must be complete', async () => {
+            const w = world({ specs: Object.fromEntries(names.map((n) => [n, { main: [{ fail: 'boom' } as const], ms: MIN }])) }, { maxShards: 1 });
+            const out = await w.engine.run(request({ mode: 'baseline', prNumber: undefined, prSha: undefined, mergeBase: undefined }), w.inputs(names));
+            expect(Object.values(statusOf(out)).filter((s) => s === 'failed')).toHaveLength(10);
+        });
+    });
 });

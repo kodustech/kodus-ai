@@ -58,4 +58,17 @@ describe('the detached wrapper in a real shell', () => {
         const r = await go('sleep 30', { key: 'sr-1-2', timeoutMs: 1_500 });
         expect(r.outcome).toBe('timeout');
     });
+
+    it('a cancel stops the command and the child it started, leaving no process behind', async () => {
+        const stop = new AbortController();
+        const marker = join(root, 'child-alive');
+        // The child writes a heartbeat; after the cancel it must stop writing.
+        const command = `mkdir -p results; (while true; do date +%s%N > '${marker}'; sleep 0.1; done) & wait`;
+        const r = await go(command, { key: 'sr-1-3', signal: stop.signal, onPoll: async () => void stop.abort() });
+        expect(r.outcome).toBe('cancelled');
+        await sleep(400);
+        const before = readFileSync(marker, 'utf8');
+        await sleep(400);
+        expect(readFileSync(marker, 'utf8')).toBe(before);
+    });
 });

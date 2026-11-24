@@ -10,6 +10,7 @@ import {
     errorSignature,
     estimateDurations,
     estimateTotalMs,
+    failFast,
     hostsToAsk,
     needsMainRerun,
     orderBin,
@@ -198,6 +199,12 @@ interface RunCtx {
     /** The shards whose demand row is kept alive while the run lives. */
     demandShards: Set<number>;
     lastDemandAt: number;
+    /** Specs in the order they finished in the first pass, across shards: what fail fast reads (6.1). */
+    finished: Array<{ spec: string; failed: boolean }>;
+    /** Aborted when fail fast stops the first pass: every shard's command is stopped. */
+    stop: AbortController;
+    /** The specs fail fast left unrun: they are `not_run` and are not given a fresh host either. */
+    skipped: Set<string>;
     /** What the PR run was judged against: the baseline it could use (7.1) and how far main was ahead of the merge base (8.2). */
     judged?: { baselineSha?: string; baseDrift: number };
 }
@@ -238,6 +245,9 @@ export class SuiteEngine {
             claims: [],
             demandShards: new Set(),
             lastDemandAt: clock.now(),
+            finished: [],
+            stop: new AbortController(),
+            skipped: new Set(),
         };
         try {
             await this.firstPass(ctx);
@@ -327,6 +337,11 @@ export class SuiteEngine {
         const runnable = shard.planned.filter((s) => SPEC_SAFE.test(s));
         for (const s of shard.planned) if (!SPEC_SAFE.test(s)) shard.missing.set(s, 'not_run');
         if (runnable.length === 0) return;
+        // Fail fast stopped the first pass before this shard got its host: no claim, nothing runs.
+        if (ctx.stop.signal.aborted) {
+            for (const s of runnable) shard.missing.set(s, 'not_run');
+            return;
+        }
         const claim = await this.d.env.acquire({
             organizationId: req.organizationId,
             environmentId: req.environmentId,
@@ -371,7 +386,7 @@ export class SuiteEngine {
             }
             const out = await this.runCommand(ctx, col, remaining, attempt === 0 ? keyBase : `${keyBase}-r${attempt}`, timeoutMs);
             remaining = remaining.filter((s) => !col.done.has(s));
-            if (out.outcome === 'finished' || out.outcome === 'timeout') {
+            if (out.outcome === 'finished' || out.outcome === 'timeout' || out.outcome === 'cancelled') {
                 for (const s of remaining) missing.set(s, 'not_run');
                 return { done: col.done, missing };
             }
@@ -401,6 +416,8 @@ export class SuiteEngine {
             envVars: config.env,
             resultsGlob: config.resultsGlob,
             timeoutMs,
+            // Only the first pass is cut short by fail fast; the fresh host and the re-runs go on after it.
+            ...(this.failsFast(ctx, col) ? { signal: ctx.stop.signal } : {}),
             now: this.d.clock.now,
             sleep: this.d.clock.sleep,
             onPoll: async (p) => {
@@ -434,10 +451,26 @@ export class SuiteEngine {
                 const result = { ...p, spec };
                 col.done.set(spec, result);
                 fresh.push(result);
+                if (this.failsFast(ctx, col)) ctx.finished.push({ spec, failed: result.status === 'failed' });
             }
         }
         if (fresh.length === 0) return;
         await this.d.runs.recordResults(ctx.req.organizationId, ctx.req.suiteRunId, { phase: col.phase, shard: col.shard }, fresh.map((r) => ({ spec: r.spec, status: r.status, durationMs: r.durationMs, ...(r.errorSignature ? { errorSignature: r.errorSignature } : {}), tests: r.tests })));
+        this.checkFailFast(ctx, col);
+    }
+
+    /** Fail fast reads the first pass of a PR run's shards only: not the fresh host, the re-runs, or a baseline (which must be complete). */
+    private failsFast(ctx: RunCtx, col: Pick<Collector, 'phase' | 'shard'>): boolean {
+        return ctx.req.mode !== 'baseline' && col.phase === 'shard' && col.shard !== FRESH_HOST_SHARD;
+    }
+
+    /** More than 25% of the first batch red: stop every shard's command; what did not run is `not_run` and the classifier sees a mass failure (6.1). */
+    private checkFailFast(ctx: RunCtx, col: Pick<Collector, 'phase' | 'shard'>): void {
+        if (!this.failsFast(ctx, col) || ctx.stop.signal.aborted) return;
+        const decision = failFast({ allSpecs: ctx.inputs.specs.map((s) => s.path), finished: ctx.finished });
+        if (!decision.stop) return;
+        for (const spec of decision.notRun) ctx.skipped.add(spec);
+        ctx.stop.abort();
     }
 
     private async recordMissing(ctx: RunCtx, phase: SuitePhase = 'shard', shards: Iterable<{ shard: number; missing: ReadonlyMap<string, 'not_run' | 'infra'> }> = ctx.shards.values()): Promise<void> {
@@ -470,7 +503,7 @@ export class SuiteEngine {
         const { req, inputs } = ctx;
 
         // 9.2: a spec that never reported (a lost shard, a crashed runner, a timeout) runs once more on a fresh host.
-        const unreported = firstPass.filter((s) => s.status === 'infra' || s.status === 'not_run');
+        const unreported = firstPass.filter((s) => (s.status === 'infra' || s.status === 'not_run') && !ctx.skipped.has(s.spec));
         const infraWas = new Map(unreported.filter((s) => s.status === 'infra').map((s) => [s.spec, s]));
         const fresh = unreported.length > 0 ? await this.freshHostPass(ctx, unreported.map((s) => s.spec)) : undefined;
         if (fresh) {

@@ -41,6 +41,8 @@ export interface DetachedRunInput {
     stateDir?: string;
     now(): number;
     sleep(ms: number): Promise<void>;
+    /** A cancel: aborted, the command and its children are stopped (as at the timeout) and what finished is named. Seen before the start and after each poll. */
+    signal?: AbortSignal;
     /** Called after every answered poll with what exists now, so the engine can read results as they appear. */
     onPoll?(p: { resultFiles: string[]; logTail: string; elapsedMs: number }): void | Promise<void>;
 }
@@ -54,6 +56,8 @@ export type DetachedOutcome =
     | { outcome: 'crashed'; resultFiles: string[]; logTail: string; durationMs: number }
     /** The shard cap passed: the command was stopped; what finished is named. */
     | { outcome: 'timeout'; resultFiles: string[]; logTail: string; durationMs: number }
+    /** The caller cancelled (`signal`): the command was stopped; what finished is named. */
+    | { outcome: 'cancelled'; resultFiles: string[]; logTail: string; durationMs: number }
     /** Never a regression: the runner left no result file, or the cell could not be asked (the closed list of section 9.2). */
     | { outcome: 'infra'; reason: InfraReason; exitCode?: number; logTail?: string; durationMs: number };
 
@@ -75,6 +79,7 @@ export async function runDetached(i: DetachedRunInput): Promise<DetachedOutcome>
     const dir = `${i.stateDir ?? DEFAULT_STATE_DIR}/${i.key}`;
     if (!/^[A-Za-z0-9._\/-]+$/.test(dir)) return infra('bad_input');
 
+    if (i.signal?.aborted) return { outcome: 'cancelled', resultFiles: [], logTail: '', durationMs: took() };
     const started = await i.env.exec(i.claimId, { stepId: `${i.key}:start`, command: startScript(dir, cwd, i.command, i.envVars ?? {}), timeoutMs: POLL_TIMEOUT_MS });
     if (!answered(started) || started.exitCode !== 0) return infra('start_failed');
 
@@ -85,7 +90,7 @@ export async function runDetached(i: DetachedRunInput): Promise<DetachedOutcome>
     let last: Report | undefined;
     for (;;) {
         const remaining = deadline - i.now();
-        if (remaining <= 0) break;
+        if (remaining <= 0 || i.signal?.aborted) break;
         await i.sleep(Math.min(pollMs, remaining));
         n++;
         const answer = await i.env.exec(i.claimId, { stepId: `${i.key}:poll:${n}`, command: pollScript(dir, cwd, i.resultsGlob), timeoutMs: POLL_TIMEOUT_MS });
@@ -104,11 +109,12 @@ export async function runDetached(i: DetachedRunInput): Promise<DetachedOutcome>
             return report.files.length === 0 ? infra('no_result_file', { logTail: report.logTail }) : { outcome: 'crashed', resultFiles: report.files, logTail: report.logTail, durationMs: took() };
         }
     }
-    // The shard's cap: stop the command, then read what finished once more.
+    // The shard's cap, or a cancel: stop the command and its children, then read what finished once more.
+    const cancelled = !!i.signal?.aborted;
     await i.env.exec(i.claimId, { stepId: `${i.key}:kill`, command: killScript(dir), timeoutMs: POLL_TIMEOUT_MS });
     const final = await i.env.exec(i.claimId, { stepId: `${i.key}:poll:final`, command: pollScript(dir, cwd, i.resultsGlob), timeoutMs: POLL_TIMEOUT_MS });
     const report = (answered(final) && final.exitCode === 0 ? parseReport(final.stdout) : undefined) ?? last;
-    return { outcome: 'timeout', resultFiles: report?.files ?? [], logTail: report?.logTail ?? '', durationMs: took() };
+    return { outcome: cancelled ? 'cancelled' : 'timeout', resultFiles: report?.files ?? [], logTail: report?.logTail ?? '', durationMs: took() };
 }
 
 const answered = (r: StepResult | EnvError): r is StepResult => 'transport' in r && r.transport === 'ok';
