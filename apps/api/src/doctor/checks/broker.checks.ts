@@ -53,6 +53,20 @@ export const STRANDED_JOB_MINUTES = 180;
 /** The x-delay the probe asks for, and how long it waits for the message. */
 export const DELAYED_PROBE_DELAY_MS = 1000;
 export const DELAYED_PROBE_WAIT_MS = 8000;
+/**
+ * A blocked connection never answers channel.close or connection.close (it
+ * stops reading frames), so closing is bounded and the socket dropped after.
+ */
+export const BROKER_CLOSE_TIMEOUT_MS = 2000;
+
+/**
+ * `blocked`: the broker answered the publish with connection.blocked, which
+ * it sends while a memory or disk alarm stops every publisher (#1694).
+ */
+export type DelayedRoundTrip =
+    | { outcome: 'arrived' }
+    | { outcome: 'lost' }
+    | { outcome: 'blocked'; reason: string };
 
 export interface BrokerProbe {
     connect(uri: string): Promise<{
@@ -60,15 +74,28 @@ export interface BrokerProbe {
         exchangeExists(exchange: string): Promise<boolean>;
         /**
          * Publishes one message with an x-delay to a private queue bound to
-         * the exchange, and resolves whether it arrived within `waitMs`.
+         * the exchange, and says whether it arrived within `waitMs`.
          */
         delayedRoundTrip(
             exchange: string,
             delayMs: number,
             waitMs: number,
-        ): Promise<boolean>;
+        ): Promise<DelayedRoundTrip>;
         close(): Promise<void>;
     }>;
+}
+
+function bounded(work: Promise<unknown>, ms: number): Promise<void> {
+    let timer: NodeJS.Timeout | undefined;
+    return Promise.race([
+        work.then(
+            () => undefined,
+            () => undefined,
+        ),
+        new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, ms);
+        }),
+    ]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -80,6 +107,12 @@ export const amqpBrokerProbe: BrokerProbe = {
     async connect(uri: string) {
         const connection = await amqplib.connect(uri, { timeout: 5000 });
         connection.on('error', () => undefined);
+        let blocked: string | null = null;
+        const onBlocked: Array<(reason: string) => void> = [];
+        connection.on('blocked', (reason: string) => {
+            blocked = reason || 'resource alarm';
+            onBlocked.forEach((notify) => notify(blocked!));
+        });
 
         const withChannel = async <T>(
             fn: (ch: amqplib.Channel) => Promise<T>,
@@ -95,7 +128,7 @@ export const amqpBrokerProbe: BrokerProbe = {
                 }
                 throw error;
             } finally {
-                await channel.close().catch(() => undefined);
+                await bounded(channel.close(), BROKER_CLOSE_TIMEOUT_MS);
             }
         };
 
@@ -114,32 +147,52 @@ export const amqpBrokerProbe: BrokerProbe = {
             // pattern matches (workflow.jobs.*.<TYPE>): the probe message
             // reaches nobody else, and the queue goes away with the channel.
             delayedRoundTrip: (exchange, delayMs, waitMs) =>
-                withChannel(async (ch) => {
-                    const { queue } = await ch.assertQueue('', {
-                        exclusive: true,
-                        autoDelete: true,
-                        durable: false,
-                    });
-                    const routingKey = `kodus.doctor.probe.${randomUUID()}`;
-                    await ch.bindQueue(queue, exchange, routingKey);
-                    let timer: NodeJS.Timeout | undefined;
-                    const arrived = new Promise<boolean>((resolve) => {
-                        timer = setTimeout(() => resolve(false), waitMs);
-                        void ch.consume(queue, (msg) => msg && resolve(true), {
-                            noAck: true,
+                withChannel(
+                    async (ch) => {
+                        const { queue } = await ch.assertQueue('', {
+                            exclusive: true,
+                            autoDelete: true,
+                            durable: false,
                         });
-                    });
-                    ch.publish(exchange, routingKey, Buffer.from('{}'), {
-                        headers: { 'x-delay': delayMs },
-                        persistent: false,
-                    });
-                    try {
-                        return await arrived;
-                    } finally {
-                        clearTimeout(timer);
-                    }
-                }, false),
-            close: () => connection.close().catch(() => undefined),
+                        const routingKey = `kodus.doctor.probe.${randomUUID()}`;
+                        await ch.bindQueue(queue, exchange, routingKey);
+                        let timer: NodeJS.Timeout | undefined;
+                        const result = new Promise<DelayedRoundTrip>(
+                            (resolve) => {
+                                timer = setTimeout(
+                                    () => resolve({ outcome: 'lost' }),
+                                    waitMs,
+                                );
+                                onBlocked.push((reason) =>
+                                    resolve({ outcome: 'blocked', reason }),
+                                );
+                                void ch.consume(
+                                    queue,
+                                    (msg) =>
+                                        msg && resolve({ outcome: 'arrived' }),
+                                    { noAck: true },
+                                );
+                            },
+                        );
+                        ch.publish(exchange, routingKey, Buffer.from('{}'), {
+                            headers: { 'x-delay': delayMs },
+                            persistent: false,
+                        });
+                        try {
+                            return await result;
+                        } finally {
+                            clearTimeout(timer);
+                        }
+                    },
+                    { outcome: 'lost' } as DelayedRoundTrip,
+                ),
+            close: async () => {
+                await bounded(connection.close(), BROKER_CLOSE_TIMEOUT_MS);
+                if (blocked) {
+                    // close() never completes on a blocked connection.
+                    (connection as any).connection?.stream?.destroy?.();
+                }
+            },
         };
     },
 };
@@ -218,29 +271,16 @@ export function brokerCheck(probe: BrokerProbe): DoctorCheck {
                         impact: 'Retries and scheduled review steps are lost.',
                         fix: `Enable the rabbitmq_delayed_message_exchange plugin (exchange ${DELAYED_EXCHANGE} is missing), or use the kodus-rabbitmq image, then restart the worker.`,
                     });
-                } else if (
+                } else {
                     // The exchange can exist and still drop every delayed
                     // message (RabbitMQ 4.2 with the khepri_db flag, #2654):
                     // only a message that comes back proves it works.
-                    await broker.delayedRoundTrip(
+                    const trip = await broker.delayedRoundTrip(
                         DELAYED_EXCHANGE,
                         DELAYED_PROBE_DELAY_MS,
                         DELAYED_PROBE_WAIT_MS,
-                    )
-                ) {
-                    results.push({
-                        check: 'broker.delayed_delivery',
-                        status: 'ok',
-                        title: 'A delayed test message came back: retries are delivered.',
-                    });
-                } else {
-                    results.push({
-                        check: 'broker.delayed_delivery',
-                        status: 'warn',
-                        title: `A test message sent with a ${DELAYED_PROBE_DELAY_MS / 1000}s delay never came back after ${DELAYED_PROBE_WAIT_MS / 1000}s.`,
-                        impact: 'Retries are lost: a review that hits a temporary error (rate limit, provider timeout) is never retried, so that pull request gets no review.',
-                        fix: 'A known problem of RabbitMQ 4.2 with the khepri_db feature flag on (rabbitmqctl list_feature_flags), tracked in kodustech/kodus-ai#2654. Until a broker image without it ships, ask again for a review that failed with @kody start-review.',
-                    });
+                    );
+                    results.push(delayedTripResult(trip));
                 }
             } finally {
                 await broker.close();
@@ -248,6 +288,32 @@ export function brokerCheck(probe: BrokerProbe): DoctorCheck {
 
             return results;
         },
+    };
+}
+
+function delayedTripResult(trip: DelayedRoundTrip): DoctorResult {
+    if (trip.outcome === 'arrived') {
+        return {
+            check: 'broker.delayed_delivery',
+            status: 'ok',
+            title: 'A delayed test message came back: retries are delivered.',
+        };
+    }
+    if (trip.outcome === 'blocked') {
+        return {
+            check: 'broker.blocked',
+            status: 'fail',
+            title: `The message queue is blocking publishers (${trip.reason}).`,
+            impact: 'No Git event or review job can be queued, so no review runs, while every service still reads as running.',
+            fix: 'Free disk space or memory on the RabbitMQ host (rabbitmq-diagnostics check_alarms names the alarm); the bundled broker needs free disk above 1.2 times the RAM.',
+        };
+    }
+    return {
+        check: 'broker.delayed_delivery',
+        status: 'warn',
+        title: `A test message sent with a ${DELAYED_PROBE_DELAY_MS / 1000}s delay never came back after ${DELAYED_PROBE_WAIT_MS / 1000}s.`,
+        impact: 'Retries are lost: a review that hits a temporary error (rate limit, provider timeout) is never retried, so that pull request gets no review.',
+        fix: 'A known problem of RabbitMQ 4.2 with the khepri_db feature flag on (rabbitmqctl list_feature_flags), tracked in kodustech/kodus-ai#2654. Until a broker image without it ships, ask again for a review that failed with @kody start-review.',
     };
 }
 

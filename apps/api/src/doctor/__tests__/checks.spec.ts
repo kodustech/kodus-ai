@@ -3,6 +3,7 @@ jest.mock('@libs/llm/llm', () => ({ LLM: { run: jest.fn() } }));
 import {
     BrokerProbe,
     brokerCheck,
+    DelayedRoundTrip,
     REVIEW_JOB_TYPES,
     staleJobsCheck,
 } from '../checks/broker.checks';
@@ -92,7 +93,7 @@ const healthyBroker = (
     over: {
         consumers?: Record<string, number | null>;
         delayed?: boolean;
-        delayedArrives?: boolean;
+        delayedTrip?: DelayedRoundTrip;
         connectError?: Error;
     } = {},
 ): BrokerProbe => ({
@@ -104,7 +105,8 @@ const healthyBroker = (
             consumerCount: async (q: string) =>
                 over.consumers && q in over.consumers ? over.consumers[q] : 1,
             exchangeExists: async () => over.delayed ?? true,
-            delayedRoundTrip: async () => over.delayedArrives ?? true,
+            delayedRoundTrip: async () =>
+                over.delayedTrip ?? { outcome: 'arrived' },
             close: async () => undefined,
         };
     }),
@@ -281,11 +283,32 @@ describe('doctor checks — each condition in scope, one at a time', () => {
 
         it('delayed messages that never come back degrade (RabbitMQ 4.2 + khepri_db, #2654)', async () => {
             const results = await brokerCheck(
-                healthyBroker({ delayedArrives: false }),
+                healthyBroker({ delayedTrip: { outcome: 'lost' } }),
             ).run(ctx());
             expect(
                 results.find((r) => r.check === 'broker.delayed_delivery'),
             ).toMatchObject({ status: 'warn' });
+            expectActionable(results);
+        });
+
+        it('a broker that blocks publishers (resource alarm, #1694) fails, and the worker lines are kept', async () => {
+            const results = await brokerCheck(
+                healthyBroker({
+                    delayedTrip: {
+                        outcome: 'blocked',
+                        reason: 'low on disk',
+                    },
+                }),
+            ).run(ctx());
+            expect(
+                results.find((r) => r.check === 'broker.blocked'),
+            ).toMatchObject({
+                status: 'fail',
+                title: 'The message queue is blocking publishers (low on disk).',
+            });
+            expect(
+                results.find((r) => r.check === 'worker.consumers')?.status,
+            ).toBe('ok');
             expectActionable(results);
         });
 
