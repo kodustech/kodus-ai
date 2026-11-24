@@ -388,6 +388,35 @@ describe('GitHub installation linking', () => {
             );
         });
 
+        it('treats a 401 to the App as a fault in Kodus credentials, not a refusal', async () => {
+            // The user gives no token here: GitHub refusing the App's JWT
+            // means a wrong private key or a skewed clock on our side.
+            const { svc, appAuth } = setup({});
+            const rejected = Object.assign(new Error('Bad credentials'), {
+                status: 401,
+                request: { url: '/app/installations/4242/access_tokens' },
+            });
+            appAuth.mockImplementation(async (args: any) => {
+                if (args.type === 'oauth-user') return { token: 'ghu_user' };
+                throw rejected;
+            });
+
+            const thrown = await link(svc).catch((e) => e);
+
+            expect(thrown).toBe(rejected);
+            expect(svc.logger.warn).not.toHaveBeenCalled();
+            expect(svc.logger.error).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'GitHub App installation link failed',
+                    error: rejected,
+                    metadata: expect.objectContaining({
+                        step: 'mint-installation-token',
+                        githubStatus: 401,
+                    }),
+                }),
+            );
+        });
+
         it('never logs GitHub authorization code or state', async () => {
             const { svc, appOctokit } = setup({});
             appOctokit.rest.apps.getInstallation.mockRejectedValue(
@@ -451,6 +480,21 @@ describe('GitHub installation linking', () => {
             expect(thrown).toBe(fault);
             expect(svc.logger.error).not.toHaveBeenCalled();
             expect(svc.logger.warn).not.toHaveBeenCalled();
+        });
+
+        it('passes a host 401 from an App link through without mapping it again', async () => {
+            const svc = service();
+            const rejected = Object.assign(new Error('Bad credentials'), {
+                status: 401,
+                request: {},
+            });
+            svc.authenticateWithCodeOauth = jest
+                .fn()
+                .mockRejectedValue(rejected);
+
+            await expect(
+                svc.createAuthIntegration({ ...base, authMode: 'oauth' }),
+            ).rejects.toBe(rejected);
         });
 
         it('keeps an App link refusal and its words', async () => {

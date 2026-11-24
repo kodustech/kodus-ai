@@ -3,6 +3,7 @@ import {
     ForbiddenException,
     HttpException,
     InternalServerErrorException,
+    ServiceUnavailableException,
     UnauthorizedException,
 } from '@nestjs/common';
 
@@ -64,7 +65,114 @@ describe('toIntegrationLinkError', () => {
         );
     });
 
-    it.each(['ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'CERT_HAS_EXPIRED'])(
+    it.each([
+        [
+            'octokit, primary limit',
+            fail({
+                status: 403,
+                request: {},
+                response: {
+                    status: 403,
+                    headers: { 'x-ratelimit-remaining': '0' },
+                },
+            }),
+        ],
+        [
+            'octokit, secondary limit',
+            fail({
+                status: 403,
+                request: {},
+                response: { status: 403, headers: { 'retry-after': '60' } },
+            }),
+        ],
+        [
+            'fetch Response headers',
+            fail({
+                cause: {
+                    response: {
+                        status: 403,
+                        headers: new Headers({ 'x-ratelimit-remaining': '0' }),
+                    },
+                },
+            }),
+        ],
+        [
+            'the message only',
+            fail(
+                { status: 403, request: {} },
+                'API rate limit exceeded for installation ID 1.',
+            ),
+        ],
+        ['a 429', fail({ status: 429, request: {} })],
+    ])(
+        'answers a rate limit (%s) with a worded 503, not a credentials refusal',
+        (_shape, err) => {
+            const mapped = toIntegrationLinkError(
+                err,
+                'GitHub',
+            ) as HttpException;
+
+            expect(mapped).toBeInstanceOf(ServiceUnavailableException);
+            expect(mapped.message).toMatch(
+                /^GitHub is rate-limiting Kodus \((403|429)\)\. Try again in a few minutes\.$/,
+            );
+            expect(mapped.cause).toBe(err);
+        },
+    );
+
+    it('keeps a 403 with rate-limit room left as a refusal', () => {
+        const mapped = toIntegrationLinkError(
+            fail({
+                status: 403,
+                request: {},
+                response: {
+                    status: 403,
+                    headers: { 'x-ratelimit-remaining': '4999' },
+                },
+            }),
+            'GitHub',
+        );
+
+        expect(mapped).toBeInstanceOf(BadRequestException);
+    });
+
+    it.each([
+        'ETIMEDOUT',
+        'ECONNRESET',
+        'ECONNABORTED',
+        'EAI_AGAIN',
+        'ENETUNREACH',
+    ])('answers a transient network failure (%s) with a worded 503', (code) => {
+        const err = fail({ code });
+        const mapped = toIntegrationLinkError(err, 'GitLab') as HttpException;
+
+        expect(mapped).toBeInstanceOf(ServiceUnavailableException);
+        expect(mapped.message).toBe(
+            `Kodus could not reach the GitLab host (${code}). Try again in a few minutes, and check that the host accepts connections from Kodus.`,
+        );
+        expect(mapped.cause).toBe(err);
+        expect(isIntegrationLinkRefusal(mapped)).toBe(false);
+    });
+
+    it('leaves a 401 to the exception filter when Kodus holds the credentials', () => {
+        const err = fail({ status: 401, request: {} });
+
+        expect(
+            toIntegrationLinkError(err, 'GitHub', { kodusCredentials: true }),
+        ).toBe(err);
+    });
+
+    it('still words a 404 when Kodus holds the credentials', () => {
+        const mapped = toIntegrationLinkError(
+            fail({ status: 404, request: {} }),
+            'GitHub',
+            { kodusCredentials: true },
+        );
+
+        expect(mapped).toBeInstanceOf(BadRequestException);
+    });
+
+    it.each(['ENOTFOUND', 'ECONNREFUSED', 'EHOSTUNREACH', 'CERT_HAS_EXPIRED'])(
         'turns an unreachable host (%s) into a worded 400',
         (code) => {
             const err = fail({ code });

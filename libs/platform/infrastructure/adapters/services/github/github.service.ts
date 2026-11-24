@@ -607,11 +607,12 @@ export class GithubService
 
             return res;
         } catch (err) {
-            const linkError = toIntegrationLinkError(err, 'GitHub');
-            // An App link logs its own failures, with the step it reached.
+            // An App link words and logs its own failures, with the step it
+            // reached; mapping again would turn its faults into refusals.
             if (params?.authMode === AuthMode.OAUTH) {
-                throw linkError;
+                throw err;
             }
+            const linkError = toIntegrationLinkError(err, 'GitHub');
             logIntegrationLinkFailure(this.logger, {
                 provider: 'GitHub',
                 context: GithubService.name,
@@ -905,7 +906,11 @@ export class GithubService
                 ...installationLinkLogMetadata(params, progress),
                 githubStatus: err?.status,
             };
-            const linkError = toIntegrationLinkError(err, 'GitHub');
+            // The user gives no token here: a 401 is GitHub refusing the
+            // App's own credentials.
+            const linkError = toIntegrationLinkError(err, 'GitHub', {
+                kodusCredentials: true,
+            });
             if (isIntegrationLinkRefusal(linkError)) {
                 // An expected refusal (state, access, another org's link,
                 // GitHub refusing the App): the reason is what the user sees.

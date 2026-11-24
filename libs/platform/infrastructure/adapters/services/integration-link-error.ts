@@ -1,5 +1,9 @@
 import { SimpleLogger } from '@libs/core/log/logger';
-import { BadRequestException, HttpException } from '@nestjs/common';
+import {
+    BadRequestException,
+    HttpException,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 
 /**
  * Network failures a user fixes by correcting the host URL. octokit reports
@@ -8,13 +12,8 @@ import { BadRequestException, HttpException } from '@nestjs/common';
  */
 const UNREACHABLE_HOST_CODES = new Set([
     'ENOTFOUND',
-    'EAI_AGAIN',
     'ECONNREFUSED',
-    'ECONNRESET',
-    'ETIMEDOUT',
-    'ECONNABORTED',
     'EHOSTUNREACH',
-    'ENETUNREACH',
     'CERT_HAS_EXPIRED',
     'DEPTH_ZERO_SELF_SIGNED_CERT',
     'SELF_SIGNED_CERT_IN_CHAIN',
@@ -23,13 +22,29 @@ const UNREACHABLE_HOST_CODES = new Set([
     'ERR_TLS_CERT_ALTNAME_INVALID',
 ]);
 
+/**
+ * Network failures that pass: a slow or flaky host, or our own egress. Not
+ * the user's URL to fix, and an outage must show up as an error.
+ */
+const TRANSIENT_NETWORK_CODES = new Set([
+    'ETIMEDOUT',
+    'ECONNRESET',
+    'ECONNABORTED',
+    'EAI_AGAIN',
+    'ENETUNREACH',
+]);
+
 const MAX_CAUSE_DEPTH = 5;
+
+type Headers = { get?: (name: string) => unknown } & Record<string, unknown>;
 
 type ErrorLike = {
     code?: unknown;
     status?: unknown;
+    message?: unknown;
+    headers?: Headers;
     request?: unknown;
-    response?: { status?: unknown };
+    response?: { status?: unknown; headers?: Headers };
     cause?: unknown;
 };
 
@@ -49,12 +64,12 @@ export function causeChain(err: unknown): ErrorLike[] {
     return chain;
 }
 
-function unreachableHostCode(chain: ErrorLike[]): string | undefined {
+function networkCode(
+    chain: ErrorLike[],
+    codes: Set<string>,
+): string | undefined {
     for (const link of chain) {
-        if (
-            typeof link.code === 'string' &&
-            UNREACHABLE_HOST_CODES.has(link.code)
-        ) {
+        if (typeof link.code === 'string' && codes.has(link.code)) {
             return link.code;
         }
     }
@@ -62,13 +77,15 @@ function unreachableHostCode(chain: ErrorLike[]): string | undefined {
 }
 
 /**
- * The first status a host response in the chain carries: octokit and
- * bitbucket set `status` with the `request`, axios `response.status`,
- * gitbeaker a cause with `response.status`. A link with neither `request` nor
- * `response`, or a Nest exception (it keeps its own `status` and `response`),
- * is not the host's answer.
+ * The first host response in the chain: octokit and bitbucket set `status`
+ * with the `request`, axios `response.status`, gitbeaker a cause with
+ * `response.status`. A link with neither `request` nor `response`, or a Nest
+ * exception (it keeps its own `status` and `response`), is not the host's
+ * answer.
  */
-function hostStatus(chain: ErrorLike[]): number | undefined {
+function hostAnswer(
+    chain: ErrorLike[],
+): { status: number; link: ErrorLike } | undefined {
     for (const link of chain) {
         if (link instanceof HttpException) {
             continue;
@@ -78,11 +95,42 @@ function hostStatus(chain: ErrorLike[]): number | undefined {
         }
         for (const status of [link.status, link.response?.status]) {
             if (typeof status === 'number') {
-                return status;
+                return { status, link };
             }
         }
     }
     return undefined;
+}
+
+function header(headers: Headers | undefined, name: string): unknown {
+    if (!headers) {
+        return undefined;
+    }
+    return typeof headers.get === 'function'
+        ? headers.get(name)
+        : headers[name];
+}
+
+/**
+ * GitHub answers a spent rate limit with 403, not 429: `x-ratelimit-remaining:
+ * 0` for the primary limit, `retry-after` for the secondary one.
+ */
+function isRateLimited(status: number, link: ErrorLike): boolean {
+    if (status === 429) {
+        return true;
+    }
+    if (status !== 403) {
+        return false;
+    }
+    for (const headers of [link.response?.headers, link.headers]) {
+        if (
+            String(header(headers, 'x-ratelimit-remaining')) === '0' ||
+            header(headers, 'retry-after') !== undefined
+        ) {
+            return true;
+        }
+    }
+    return typeof link.message === 'string' && /rate limit/i.test(link.message);
 }
 
 function refusalMessage(provider: string, status: number): string | undefined {
@@ -101,13 +149,18 @@ function refusalMessage(provider: string, status: number): string | undefined {
 /**
  * What a failed integration link throws to the client. A refusal already
  * worded for the user passes through; a host refusing the credentials or
- * unreachable becomes a worded 400; anything else is returned as is, for the
- * exception filter to answer 500, report and log with its stack, instead of
- * a 400 carrying its raw message.
+ * unreachable becomes a worded 400; a rate limit or a transient network
+ * failure a worded 503; anything else is returned as is, for the exception
+ * filter to answer 500, report and log with its stack, instead of a 400
+ * carrying its raw message.
+ *
+ * `kodusCredentials`: the link authenticates with credentials Kodus holds
+ * (the GitHub App), so a 401 is a fault on our side, not the user's to fix.
  */
 export function toIntegrationLinkError(
     err: unknown,
     provider: string,
+    options: { kodusCredentials?: boolean } = {},
 ): unknown {
     if (err instanceof HttpException) {
         return err;
@@ -118,21 +171,37 @@ export function toIntegrationLinkError(
         return err;
     }
 
-    const code = unreachableHostCode(chain);
-    if (code) {
+    const unreachable = networkCode(chain, UNREACHABLE_HOST_CODES);
+    if (unreachable) {
         return new BadRequestException(
-            `Kodus could not reach the ${provider} host (${code}). Check the URL and that the host is reachable from Kodus.`,
+            `Kodus could not reach the ${provider} host (${unreachable}). Check the URL and that the host is reachable from Kodus.`,
             { cause: err },
         );
     }
 
-    const status = hostStatus(chain);
-    const message = status ? refusalMessage(provider, status) : undefined;
-    if (message) {
-        return new BadRequestException(message, { cause: err });
+    const transient = networkCode(chain, TRANSIENT_NETWORK_CODES);
+    if (transient) {
+        return new ServiceUnavailableException(
+            `Kodus could not reach the ${provider} host (${transient}). Try again in a few minutes, and check that the host accepts connections from Kodus.`,
+            { cause: err },
+        );
     }
 
-    return err;
+    const answer = hostAnswer(chain);
+    if (!answer) {
+        return err;
+    }
+    if (isRateLimited(answer.status, answer.link)) {
+        return new ServiceUnavailableException(
+            `${provider} is rate-limiting Kodus (${answer.status}). Try again in a few minutes.`,
+            { cause: err },
+        );
+    }
+    if (answer.status === 401 && options.kodusCredentials) {
+        return err;
+    }
+    const message = refusalMessage(provider, answer.status);
+    return message ? new BadRequestException(message, { cause: err }) : err;
 }
 
 /** A refusal worded for the user (4xx), as opposed to a fault on our side. */
