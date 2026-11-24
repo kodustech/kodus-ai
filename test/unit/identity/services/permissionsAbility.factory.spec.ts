@@ -1,9 +1,5 @@
 import { subject } from '@casl/ability';
 
-import {
-    SubscriptionStatus,
-    type ILicenseService,
-} from '@libs/ee/license/interfaces/license.interface';
 import { type IPermissionsService } from '@libs/identity/domain/permissions/contracts/permissions.service.contract';
 import {
     Action,
@@ -21,15 +17,6 @@ const OTHER_REPO_ID = 'repo-2';
 const permissionsServiceMock: Pick<IPermissionsService, 'findOne'> = {
     findOne: jest.fn(),
 };
-
-const createLicenseServiceMock = (
-    subscriptionStatus: SubscriptionStatus,
-): Pick<ILicenseService, 'validateOrganizationLicense'> => ({
-    validateOrganizationLicense: jest.fn().mockResolvedValue({
-        valid: true,
-        subscriptionStatus,
-    }),
-});
 
 const createUser = (role: Role): IUser => ({
     uuid: `user-${role}`,
@@ -254,15 +241,9 @@ describe('PermissionsAbilityFactory', () => {
         async (role) => {
             const cloudFactory = new PermissionsAbilityFactory(
                 permissionsServiceMock as IPermissionsService,
-                createLicenseServiceMock(
-                    SubscriptionStatus.ACTIVE,
-                ) as ILicenseService,
             );
             const enterpriseFactory = new PermissionsAbilityFactory(
                 permissionsServiceMock as IPermissionsService,
-                createLicenseServiceMock(
-                    SubscriptionStatus.LICENSED_SELF_HOSTED,
-                ) as ILicenseService,
             );
 
             const cloudAbility = await cloudFactory.createForUser(

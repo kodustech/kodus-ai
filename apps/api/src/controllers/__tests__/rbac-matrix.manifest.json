@@ -759,6 +759,17 @@
     }
   },
   {
+    "key": "integration.controller.ts#getConnectionAccess",
+    "httpMethod": "GET",
+    "urlPath": "/integration/connections/:connectionId/access",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "integration.controller.ts#getConnections",
     "httpMethod": "GET",
     "urlPath": "/integration/connections",
@@ -789,6 +800,17 @@
       "billing_manager": "allow",
       "repo_admin": "allow",
       "contributor": "allow"
+    }
+  },
+  {
+    "key": "integration.controller.ts#setConnectionAccess",
+    "httpMethod": "PUT",
+    "urlPath": "/integration/connections/:connectionId/access",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
     }
   },
   {

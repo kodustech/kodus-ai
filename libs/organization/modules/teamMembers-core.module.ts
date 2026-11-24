@@ -5,6 +5,7 @@ import { EmailModule } from '@libs/common/email/email.module';
 import { DeleteUserUseCase } from '@libs/identity/application/use-cases/user/delete.use-case';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 import { TeamMemberModel } from '../infrastructure/adapters/repositories/schemas/teamMember.model';
+import { UserConnectionAccessModel } from '@libs/identity/infrastructure/adapters/repositories/schemas/userConnectionAccess.model';
 import { TeamMemberService } from '../infrastructure/adapters/services/teamMembers.service';
 import { TeamMemberDatabaseRepository } from '../infrastructure/adapters/repositories/teamMember.repository';
 
@@ -21,7 +22,7 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([TeamMemberModel]),
+        TypeOrmModule.forFeature([TeamMemberModel, UserConnectionAccessModel]),
         forwardRef(() => TeamModule),
         forwardRef(() => IntegrationModule),
         forwardRef(() => IntegrationConfigModule),

@@ -33,9 +33,21 @@ const owner: PolicyRule[] = [
 // requires that repo to be assigned to the user.
 const repoAdmin: PolicyRule[] = [
     // Code review settings — read org-wide, edit assigned repos.
-    { action: Action.Read, resource: ResourceType.CodeReviewSettings, scope: 'org' },
-    { action: Action.Update, resource: ResourceType.CodeReviewSettings, scope: 'repo' },
-    { action: Action.Create, resource: ResourceType.CodeReviewSettings, scope: 'repo' },
+    {
+        action: Action.Read,
+        resource: ResourceType.CodeReviewSettings,
+        scope: 'org',
+    },
+    {
+        action: Action.Update,
+        resource: ResourceType.CodeReviewSettings,
+        scope: 'repo',
+    },
+    {
+        action: Action.Create,
+        resource: ResourceType.CodeReviewSettings,
+        scope: 'repo',
+    },
 
     // Kody rules — read org-wide (library is open to everyone), edit assigned
     // repos (editing a repo's kody rules is part of its code-review config).
@@ -53,16 +65,32 @@ const repoAdmin: PolicyRule[] = [
     { action: Action.Create, resource: ResourceType.Issues, scope: 'repo' },
 
     // Issues settings — org-wide configuration.
-    { action: Action.Read, resource: ResourceType.IssuesSettings, scope: 'org' },
-    { action: Action.Update, resource: ResourceType.IssuesSettings, scope: 'org' },
-    { action: Action.Create, resource: ResourceType.IssuesSettings, scope: 'org' },
+    {
+        action: Action.Read,
+        resource: ResourceType.IssuesSettings,
+        scope: 'org',
+    },
+    {
+        action: Action.Update,
+        resource: ResourceType.IssuesSettings,
+        scope: 'org',
+    },
+    {
+        action: Action.Create,
+        resource: ResourceType.IssuesSettings,
+        scope: 'org',
+    },
 
     { action: Action.Read, resource: ResourceType.Logs, scope: 'org' },
 
     { action: Action.Read, resource: ResourceType.PullRequests, scope: 'org' },
 
     { action: Action.Read, resource: ResourceType.GitSettings, scope: 'org' },
-    { action: Action.Read, resource: ResourceType.PluginSettings, scope: 'org' },
+    {
+        action: Action.Read,
+        resource: ResourceType.PluginSettings,
+        scope: 'org',
+    },
     { action: Action.Read, resource: ResourceType.TokenUsage, scope: 'org' },
 
     { action: Action.Read, resource: ResourceType.CliReview, scope: 'org' },
@@ -70,20 +98,36 @@ const repoAdmin: PolicyRule[] = [
     // Security scans — read across the org, start one on assigned repos (it
     // spends the organization's model budget on that repository).
     { action: Action.Read, resource: ResourceType.SecurityScan, scope: 'org' },
-    { action: Action.Create, resource: ResourceType.SecurityScan, scope: 'repo' },
+    {
+        action: Action.Create,
+        resource: ResourceType.SecurityScan,
+        scope: 'repo',
+    },
 ];
 
 const billingManager: PolicyRule[] = [
-    { action: Action.Read, resource: ResourceType.CodeReviewSettings, scope: 'org' },
+    {
+        action: Action.Read,
+        resource: ResourceType.CodeReviewSettings,
+        scope: 'org',
+    },
     { action: Action.Read, resource: ResourceType.KodyRules, scope: 'org' },
 
     { action: Action.Manage, resource: ResourceType.Billing, scope: 'org' },
 
     { action: Action.Read, resource: ResourceType.GitSettings, scope: 'org' },
-    { action: Action.Read, resource: ResourceType.PluginSettings, scope: 'org' },
+    {
+        action: Action.Read,
+        resource: ResourceType.PluginSettings,
+        scope: 'org',
+    },
     // Read users for the license / seat-management screen.
     { action: Action.Read, resource: ResourceType.UserSettings, scope: 'org' },
-    { action: Action.Read, resource: ResourceType.IssuesSettings, scope: 'org' },
+    {
+        action: Action.Read,
+        resource: ResourceType.IssuesSettings,
+        scope: 'org',
+    },
     { action: Action.Read, resource: ResourceType.Logs, scope: 'org' },
     { action: Action.Read, resource: ResourceType.TokenUsage, scope: 'org' },
 ];
@@ -92,17 +136,45 @@ const billingManager: PolicyRule[] = [
 // sees the whole org (settings, kody rules, issues, PRs, logs) by default.
 // Cockpit and Token Usage stay admin-only.
 const contributor: PolicyRule[] = [
-    { action: Action.Read, resource: ResourceType.CodeReviewSettings, scope: 'org' },
+    {
+        action: Action.Read,
+        resource: ResourceType.CodeReviewSettings,
+        scope: 'org',
+    },
     { action: Action.Read, resource: ResourceType.KodyRules, scope: 'org' },
     { action: Action.Read, resource: ResourceType.Issues, scope: 'org' },
-    { action: Action.Read, resource: ResourceType.IssuesSettings, scope: 'org' },
+    {
+        action: Action.Read,
+        resource: ResourceType.IssuesSettings,
+        scope: 'org',
+    },
     { action: Action.Read, resource: ResourceType.CliReview, scope: 'org' },
     { action: Action.Read, resource: ResourceType.SecurityScan, scope: 'org' },
     { action: Action.Read, resource: ResourceType.PullRequests, scope: 'org' },
     { action: Action.Read, resource: ResourceType.Logs, scope: 'org' },
     { action: Action.Read, resource: ResourceType.GitSettings, scope: 'org' },
-    { action: Action.Read, resource: ResourceType.PluginSettings, scope: 'org' },
+    {
+        action: Action.Read,
+        resource: ResourceType.PluginSettings,
+        scope: 'org',
+    },
 ];
+
+/**
+ * Organization-wide reads of repository data. For a member who is not
+ * granted every Git connection of the organization they are narrowed to the
+ * repositories of the connections they are granted.
+ */
+export const CONNECTION_SCOPED_READS: ReadonlySet<ResourceType> = new Set([
+    ResourceType.CodeReviewSettings,
+    ResourceType.KodyRules,
+    ResourceType.Issues,
+    ResourceType.PullRequests,
+    ResourceType.Logs,
+    ResourceType.CliReview,
+    ResourceType.SecurityScan,
+    ResourceType.Cockpit,
+]);
 
 export const ROLE_POLICIES: Record<Role, PolicyRule[]> = {
     [Role.OWNER]: owner,

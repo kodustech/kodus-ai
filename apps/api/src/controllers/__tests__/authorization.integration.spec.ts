@@ -11,6 +11,7 @@ import request = require('supertest');
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { PERMISSIONS_SERVICE_TOKEN } from '@libs/identity/domain/permissions/contracts/permissions.service.contract';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import { PermissionsAbilityFactory } from '@libs/identity/infrastructure/adapters/services/permissions/permissionsAbility.factory';
 import { PolicyGuard } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 
@@ -107,6 +108,15 @@ describe('controller authorization (integration)', () => {
                 {
                     provide: PERMISSIONS_SERVICE_TOKEN,
                     useValue: permissionsServiceMock,
+                },
+                // Every member reads every Git connection here.
+                {
+                    provide: ConnectionAccessService,
+                    useValue: {
+                        readScopeFor: jest
+                            .fn()
+                            .mockResolvedValue({ kind: 'all' }),
+                    },
                 },
                 { provide: APP_GUARD, useClass: InjectUserGuard },
             ],

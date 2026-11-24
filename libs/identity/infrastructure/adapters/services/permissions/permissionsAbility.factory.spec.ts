@@ -40,9 +40,9 @@ describe('PermissionsAbilityFactory', () => {
         expect(ability.can(Action.Read, ResourceType.Cockpit)).toBe(true);
         expect(ability.can(Action.Read, ResourceType.CliReview)).toBe(true);
         expect(ability.can(Action.Read, ResourceType.TokenUsage)).toBe(true);
-        expect(ability.can(Action.Update, ResourceType.CodeReviewSettings)).toBe(
-            true,
-        );
+        expect(
+            ability.can(Action.Update, ResourceType.CodeReviewSettings),
+        ).toBe(true);
         // Fase 0 fix: cockpit settings are owner-only.
         expect(ability.can(Action.Update, ResourceType.Cockpit)).toBe(false);
         expect(ability.can(Action.Manage, ResourceType.Billing)).toBe(false);
@@ -67,9 +67,9 @@ describe('PermissionsAbilityFactory', () => {
         expect(ability.can(Action.Read, ResourceType.PullRequests)).toBe(true);
         expect(ability.can(Action.Read, ResourceType.Cockpit)).toBe(false);
         expect(ability.can(Action.Read, ResourceType.TokenUsage)).toBe(false);
-        expect(ability.can(Action.Update, ResourceType.CodeReviewSettings)).toBe(
-            false,
-        );
+        expect(
+            ability.can(Action.Update, ResourceType.CodeReviewSettings),
+        ).toBe(false);
     });
 
     it('REPO_ADMIN reads are org-wide, but writes stay gated by repo assignment', async () => {
@@ -161,5 +161,117 @@ describe('PermissionsAbilityFactory', () => {
         const ability = await factory.createForUser(user, []);
         expect(ability.can(Action.Manage, ResourceType.All)).toBe(false);
         expect(ability.can(Action.Read, ResourceType.Issues)).toBe(false);
+    });
+});
+
+describe('PermissionsAbilityFactory — Git connection access', () => {
+    const user = (role: Role) =>
+        ({
+            uuid: 'user-1',
+            role,
+            organization: { uuid: 'org-1' },
+        }) as unknown as IUser;
+
+    const factoryWith = (scope: unknown) =>
+        new PermissionsAbilityFactory(
+            {
+                findOne: jest.fn().mockResolvedValue({
+                    permissions: {
+                        assignedRepositoryIds: ['repo-1', 'repo-9'],
+                    },
+                }),
+            } as any,
+            { readScopeFor: jest.fn().mockResolvedValue(scope) } as any,
+        );
+
+    const repo = (resource: ResourceType, repoId: string) =>
+        caslSubject(resource, { organizationId: 'org-1', repoId }) as any;
+
+    it('keeps organization-wide reads for a member granted every connection', async () => {
+        const ability = await factoryWith({ kind: 'all' }).createForUser(
+            user(Role.CONTRIBUTOR),
+        );
+
+        expect(
+            ability.can(
+                Action.Read,
+                caslSubject(ResourceType.PullRequests, {
+                    organizationId: 'org-1',
+                }) as any,
+            ),
+        ).toBe(true);
+    });
+
+    it('limits repository reads to the granted connections’ repositories', async () => {
+        const ability = await factoryWith({
+            kind: 'connections',
+            connectionIds: ['gh-a'],
+            repositoryIds: ['repo-1'],
+        }).createForUser(user(Role.CONTRIBUTOR));
+
+        expect(
+            ability.can(Action.Read, repo(ResourceType.PullRequests, 'repo-1')),
+        ).toBe(true);
+        expect(
+            ability.can(Action.Read, repo(ResourceType.PullRequests, 'repo-2')),
+        ).toBe(false);
+        expect(
+            ability.can(
+                Action.Read,
+                caslSubject(ResourceType.PullRequests, {
+                    organizationId: 'org-1',
+                }) as any,
+            ),
+        ).toBe(false);
+        // Workspace defaults stay readable.
+        expect(
+            ability.can(
+                Action.Read,
+                repo(ResourceType.CodeReviewSettings, 'global'),
+            ),
+        ).toBe(true);
+    });
+
+    it('edits only assigned repositories that are also on a granted connection', async () => {
+        const ability = await factoryWith({
+            kind: 'connections',
+            connectionIds: ['gh-a'],
+            repositoryIds: ['repo-1'],
+        }).createForUser(user(Role.REPO_ADMIN));
+
+        expect(
+            ability.can(
+                Action.Update,
+                repo(ResourceType.CodeReviewSettings, 'repo-1'),
+            ),
+        ).toBe(true);
+        expect(
+            ability.can(
+                Action.Update,
+                repo(ResourceType.CodeReviewSettings, 'repo-9'),
+            ),
+        ).toBe(false);
+    });
+
+    it('never narrows an owner', async () => {
+        const ability = await factoryWith({
+            kind: 'connections',
+            connectionIds: [],
+            repositoryIds: [],
+        }).createForUser(user(Role.OWNER));
+
+        expect(
+            ability.can(Action.Read, repo(ResourceType.PullRequests, 'repo-2')),
+        ).toBe(true);
+    });
+
+    it('leaves organization settings readable', async () => {
+        const ability = await factoryWith({
+            kind: 'connections',
+            connectionIds: [],
+            repositoryIds: [],
+        }).createForUser(user(Role.CONTRIBUTOR));
+
+        expect(ability.can(Action.Read, ResourceType.GitSettings)).toBe(true);
     });
 });

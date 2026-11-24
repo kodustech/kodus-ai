@@ -1,4 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { sealInvitation } from '@libs/identity/domain/user/invitation-token';
 import { randomBytes } from 'crypto';
 
@@ -27,6 +29,7 @@ import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { createLogger } from '@libs/core/log/logger';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
+import { UserConnectionAccessModel } from '@libs/identity/infrastructure/adapters/repositories/schemas/userConnectionAccess.model';
 
 @Injectable()
 export class TeamMemberService implements ITeamMemberService {
@@ -40,6 +43,10 @@ export class TeamMemberService implements ITeamMemberService {
         private readonly usersService: IUsersService,
 
         private readonly notificationService: NotificationService,
+
+        @Optional()
+        @InjectRepository(UserConnectionAccessModel)
+        private readonly connectionAccessRepository?: Repository<UserConnectionAccessModel>,
     ) {}
 
     findManyById(ids: string[]): Promise<TeamMemberEntity[]> {
@@ -79,7 +86,43 @@ export class TeamMemberService implements ITeamMemberService {
     }
 
     async create(teamMember: ITeamMember): Promise<any> {
-        return this.teamMembersRepository.create(teamMember);
+        const created = await this.teamMembersRepository.create(teamMember);
+        await this.grantWorkspaceConnections(
+            teamMember?.user?.uuid,
+            teamMember?.team?.uuid,
+        );
+        return created;
+    }
+
+    /**
+     * A member joining a workspace reads its Git connections; connections
+     * added later start with owners only and are granted one by one.
+     */
+    private async grantWorkspaceConnections(
+        userId?: string,
+        teamId?: string,
+    ): Promise<void> {
+        if (!userId || !teamId || !this.connectionAccessRepository) return;
+        try {
+            await this.connectionAccessRepository.manager.query(
+                `INSERT INTO "user_connection_access" ("user_id", "integration_id")
+                 SELECT $1::uuid, i."uuid"
+                   FROM "integrations" i
+                  WHERE i."team_id" = $2
+                    AND i."status" = true
+                    AND i."integrationCategory" = 'CODE_MANAGEMENT'
+                 ON CONFLICT ("user_id", "integration_id") DO NOTHING`,
+                [userId, teamId],
+            );
+        } catch (error) {
+            this.logger.error({
+                message:
+                    'Could not grant a new member the workspace connections',
+                context: TeamMemberService.name,
+                error,
+                metadata: { userId, teamId },
+            });
+        }
     }
 
     async update(
