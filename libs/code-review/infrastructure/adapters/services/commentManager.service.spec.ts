@@ -61,6 +61,7 @@ import { JSONParseError, NoObjectGeneratedError } from 'ai';
 import { getClassification } from '@libs/llm/error-classifier';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import { LLM } from '@libs/llm/llm';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { prompt_repeated_suggestion_clustering_system } from '@libs/common/utils/prompts/repeatedCodeReviewSuggestionClustering';
 
 import {
@@ -486,6 +487,213 @@ describe('CommentManagerService.generateSummaryPR', () => {
         // name suggests rejected the single summary call ("Your input exceeds
         // the context window of this model"), and the retry re-sent the same
         // oversized prompt. With no maxInputTokens configured nothing split it.
+        // #2233: the summary sent 4.7M-token requests to 1M-token models.
+        describe("within the model's window (#2233)", () => {
+            // Numbers with no space between them: about 1.2 characters a
+            // token, where the old character split assumed 3.5.
+            const dense = (chars: number, seed: number) => {
+                let out = '+';
+                while (out.length < chars) {
+                    seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+                    out += `${seed % 256},`;
+                }
+                return out.slice(0, chars);
+            };
+            const worst = (text: string) =>
+                estimateTextTokens(text, { worstCase: true });
+            const summarize = (slot: unknown, files: any[]) => {
+                permissionValidationService.resolveTaskSlot = jest.fn(
+                    async () => slot,
+                );
+                return service.generateSummaryPR(
+                    { ...stubPR, body: '' },
+                    stubRepository,
+                    files,
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                );
+            };
+            const sent = () => {
+                const system = capturedPrompts.find((p) => p.role === 'system');
+                return capturedPrompts
+                    .filter((p) => p.role === 'user')
+                    .map((p) => worst(p.prompt) + worst(system?.prompt ?? ''));
+            };
+
+            it('splits dense files by their real tokens, so no call overflows the slot', async () => {
+                const files = ['a', 'b', 'c'].map((name, i) => ({
+                    filename: `icons/${name}.svg`,
+                    patch: dense(9_000, i + 1),
+                    status: 'added',
+                }));
+                await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 16_000,
+                    },
+                    files,
+                );
+                expect(sent().length).toBeGreaterThan(0);
+                for (const tokens of sent()) {
+                    expect(tokens).toBeLessThanOrEqual(16_000);
+                }
+            });
+
+            it('cuts a file larger than one call instead of sending it whole', async () => {
+                await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 16_000,
+                    },
+                    [
+                        {
+                            filename: 'fixtures/catalog.json',
+                            patch: dense(60_000, 7),
+                            status: 'added',
+                        },
+                    ],
+                );
+                const users = capturedPrompts.filter((p) => p.role === 'user');
+                expect(users.length).toBeGreaterThan(0);
+                expect(
+                    users.some((p) =>
+                        p.prompt.includes('fixtures/catalog.json'),
+                    ),
+                ).toBe(true);
+                for (const tokens of sent()) {
+                    expect(tokens).toBeLessThanOrEqual(16_000);
+                }
+            });
+
+            it('never splits a character when it cuts a file', async () => {
+                // Where the cut lands depends on the length: every offset
+                // puts it on each side of a pair at least once.
+                for (const lead of [
+                    '+',
+                    '++',
+                    '+++',
+                    '++++',
+                    '+++++',
+                    '++++++',
+                ]) {
+                    capturedPrompts.length = 0;
+                    await summarize(
+                        {
+                            provider: 'openai_compatible',
+                            model: 'local-open-weights',
+                            maxInputTokens: 16_000,
+                        },
+                        [
+                            {
+                                filename: 'docs/emoji.md',
+                                patch: `${lead}${'😀'.repeat(40_000 + lead.length * 7)}`,
+                                status: 'added',
+                            },
+                        ],
+                    );
+                    const users = capturedPrompts.filter(
+                        (p) => p.role === 'user',
+                    );
+                    expect(users.length).toBeGreaterThan(0);
+                    for (const { prompt } of users) {
+                        // A lone high surrogate is invalid in the request
+                        // body: raw, or as the escape JSON.stringify writes.
+                        expect(prompt).not.toMatch(
+                            /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/,
+                        );
+                        expect(prompt).not.toMatch(
+                            /\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f][0-9a-f]{2})/i,
+                        );
+                    }
+                }
+            });
+
+            it('says a file was cut in its own field, not inside the patch the author wrote', async () => {
+                await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 16_000,
+                    },
+                    [
+                        {
+                            filename: 'fixtures/catalog.json',
+                            patch: dense(60_000, 11),
+                            status: 'added',
+                        },
+                    ],
+                );
+                const users = capturedPrompts.filter((p) => p.role === 'user');
+                expect(
+                    users.some((p) =>
+                        p.prompt.includes('"patchTruncated":true'),
+                    ),
+                ).toBe(true);
+                expect(users.some((p) => /\(cut:/.test(p.prompt))).toBe(false);
+            });
+
+            it("keeps room for the output limit Anthropic's adapter declares when the slot sets none", async () => {
+                await summarize(
+                    {
+                        provider: 'anthropic',
+                        model: 'claude-haiku-4-5-20251001',
+                        apiKey: 'k',
+                        maxInputTokens: 100_000,
+                    },
+                    [
+                        {
+                            filename: 'src/catalog.ts',
+                            patch: Array.from(
+                                { length: 6_000 },
+                                (_, line) =>
+                                    `+export const item${line} = load('${line}');`,
+                            ).join('\n'),
+                            status: 'added',
+                        },
+                    ],
+                );
+                expect(sent().length).toBeGreaterThan(0);
+                for (const tokens of sent()) {
+                    // The adapter sends max_tokens = 64,000 for Haiku 4.5.
+                    expect(tokens + 64_000).toBeLessThanOrEqual(100_000);
+                }
+            });
+
+            it('asks the model nothing when the prompt alone leaves no room', async () => {
+                const result = await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 300,
+                    },
+                    [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                );
+                expect(capturedPrompts).toHaveLength(0);
+                expect(result).toBeNull();
+            });
+
+            it("sizes the calls by the model's known window when the slot sets none", async () => {
+                const files = ['a', 'b', 'c'].map((name, i) => ({
+                    filename: `src/${name}.ts`,
+                    patch: Array.from(
+                        { length: 500 },
+                        (_, line) =>
+                            `+export const ${name}${line} = load('${i}-${line}');`,
+                    ).join('\n'),
+                    status: 'modified',
+                }));
+                expect(worst(JSON.stringify(files))).toBeGreaterThan(8_192);
+                await summarize({ provider: 'openai', model: 'gpt-4' }, files);
+                expect(sent().length).toBeGreaterThan(1);
+                for (const tokens of sent()) {
+                    expect(tokens).toBeLessThanOrEqual(8_192);
+                }
+            });
+        });
+
         describe('context overflow on the single call', () => {
             const overflow = new Error(
                 'Your input exceeds the context window of this model. Please adjust your input and try again.',

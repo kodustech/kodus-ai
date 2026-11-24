@@ -279,10 +279,10 @@ it('keeps legacy deep links inside canonical Routing and rejects malformed ancho
 });
 
 it('distinguishes identical model names across providers and gateways without exposing URL credentials', () => {
-    // Every field the labeler reads is spelled out: this spec type-checks
-    // from the repo root too, where the web's model-status type is opaque
-    // and every picked field counts as required.
-    const models = [
+    // The models as Routing's status reads them (`LabeledModel`). Every field
+    // is spelled out: under the libs tsconfig the web app's `@services` alias
+    // does not resolve, and the picked fields read as required.
+    const models: Parameters<typeof routingModelLabels>[0] = [
         {
             modelId: 'native',
             model: 'gpt-4o',
