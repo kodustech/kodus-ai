@@ -256,7 +256,7 @@ describe('running a suite as a workflow', () => {
             const w = world({ map: mapOf({ 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] }) });
             await w.service.run(request({ changedFiles: ['src/x.ts'] }), passthrough);
             expect(w.cell.starts.flatMap((s) => s.specs)).toEqual(['cypress/e2e/a.cy.ts']);
-            expect((await w.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'selected', selected: 1, total: 2 });
+            expect((await w.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'selected', selected: 1, total: 2, reachedBy: { 'src/x.ts': ['cypress/e2e/a.cy.ts'] } });
         });
 
         it('a change that reaches no spec ends the run green without a shard host, and says none ran', async () => {
@@ -354,7 +354,7 @@ describe('running a suite as a workflow', () => {
             await pr.service.run(request({ changedFiles: ['src/y.ts'] }), passthrough);
             expect(pr.cell.starts.flatMap((x) => x.specs)).toEqual(['cypress/e2e/b.cy.ts']);
             expect(pr.cell.starts.some((x) => 'NODE_V8_COVERAGE' in x.env)).toBe(false);
-            expect((await pr.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'selected', selected: 1, total: 2 });
+            expect((await pr.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'selected', selected: 1, total: 2, reachedBy: { 'src/y.ts': ['cypress/e2e/b.cy.ts'] } });
         });
 
         it('does not take itself for the previous run when a crashed step runs again', async () => {

@@ -138,6 +138,31 @@ describe('select: ignored files', () => {
     });
 });
 
+describe('select says which changed file reached which specs', () => {
+    it('names, per changed file, the specs it reaches, so a page can show why each spec ran', () => {
+        const s = select(input(['src/api/session.ts', 'src/search/search.ts']));
+        expect(s).toMatchObject({ mode: 'selected', reachedBy: { 'src/api/session.ts': ['e2e/login.cy.ts', 'e2e/cart.cy.ts'], 'src/search/search.ts': ['e2e/search.cy.ts'] } });
+    });
+    it('a changed spec file is reached by itself', () => {
+        expect(select(input(['e2e/profile.cy.ts']))).toMatchObject({ reachedBy: { 'e2e/profile.cy.ts': ['e2e/profile.cy.ts'] } });
+    });
+    it('a file reached through its importer names the specs of that importer', () => {
+        const importers: Record<string, string[]> = { 'src/util/money.ts': ['src/cart/cart.ts'] };
+        expect(select(input(['src/util/money.ts'], { importersOf: (f) => importers[f] ?? [] }))).toMatchObject({ reachedBy: { 'src/util/money.ts': ['e2e/cart.cy.ts'] } });
+    });
+    it('keeps a bounded list: at most 40 files and 25 specs each', () => {
+        const specs = Array.from({ length: 30 }, (_, i) => `e2e/s${i}.cy.ts`);
+        const files = Array.from({ length: 50 }, (_, i) => `src/f${i}.ts`);
+        const others = Array.from({ length: 200 }, (_, i) => `e2e/o${i}.cy.ts`);
+        const map: CoverageMapInput = { ...MAP, specs: { ...Object.fromEntries(specs.map((s) => [s, files])), ...Object.fromEntries(others.map((s, i) => [s, [`src/other${i}.ts`]])) } };
+        const s = select({ allSpecs: [...specs, ...others], changed: files, map, suiteDigest: 'd1' });
+        if (s.mode !== 'selected') throw new Error('expected a selection');
+        expect(Object.keys(s.reachedBy)).toHaveLength(40);
+        expect(Object.values(s.reachedBy).every((x) => x.length <= 25)).toBe(true);
+        expect(s.specs).toHaveLength(30);
+    });
+});
+
 describe('select feeds the shard count', () => {
     it('6 short selected specs are one host, one boot, one PR build', () => {
         const specs = Array.from({ length: 6 }, (_, i) => `e2e/s${i}.cy.ts`);

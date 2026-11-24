@@ -40,7 +40,7 @@ describe('with a coverage map', () => {
     it('selects the specs the change reaches, and says how many of how many', () => {
         const p = planSuiteRun(input({ map: m }));
         expect(p.specs).toEqual(['a.cy.ts']);
-        expect(p.selection).toEqual({ mode: 'selected', selected: 1, total: 3 });
+        expect(p.selection).toEqual({ mode: 'selected', selected: 1, total: 3, reachedBy: { 'src/x.ts': ['a.cy.ts'] } });
         expect(p.diffCoverage).toEqual({ 'a.cy.ts': 1 });
     });
 

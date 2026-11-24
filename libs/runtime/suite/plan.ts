@@ -110,5 +110,5 @@ function planSpecs(i: SuitePlanInput): SuitePlan {
     }
     const s = selectOver(i.changed);
     if (s.mode === 'full') return { specs: all, failedBefore: [], diffCoverage: {}, selection: { mode: 'full', reason: s.reason, total }, text: s.text };
-    return { specs: s.specs, failedBefore: [], diffCoverage: s.diffCoverage, selection: s.specs.length ? { mode: 'selected', selected: s.specs.length, total } : { mode: 'none', total }, text: s.text };
+    return { specs: s.specs, failedBefore: [], diffCoverage: s.diffCoverage, selection: s.specs.length ? { mode: 'selected', selected: s.specs.length, total, reachedBy: s.reachedBy } : { mode: 'none', total }, text: s.text };
 }

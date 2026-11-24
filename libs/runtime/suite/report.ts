@@ -62,6 +62,8 @@ export interface SuiteSelectionReport {
     total: number;
     /** Set while main is ahead of the merge base and no coverage map could say which specs the diff reaches: why, so the check can. */
     reachUnknown?: FullReason;
+    /** For a `selected` run: per changed file, the specs it reaches (bounded, `REACHED_BY_LIMITS`); absent on a re-push, which selects over the new commits and what was red before. */
+    reachedBy?: Record<string, string[]>;
 }
 
 export interface SuiteReport {

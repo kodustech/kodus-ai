@@ -70,6 +70,8 @@ export type Selection =
           specs: string[];
           /** Per selected spec, how many changed files reach it: the risk-first order reads it. */
           diffCoverage: Record<string, number>;
+          /** Per changed file, the specs it reaches (what the run's page shows as "why these specs"); bounded by `REACHED_BY_LIMITS`. */
+          reachedBy: Record<string, string[]>;
           text: string;
       }
     | { mode: 'full'; specs: string[]; reason: FullReason; text: string };
@@ -96,6 +98,9 @@ const matches = (globs: readonly string[] | undefined) => {
     return (f: string) => m(f);
 };
 
+/** What a stored "reached by" keeps: the page shows a reason, not the whole map. */
+export const REACHED_BY_LIMITS = { files: 40, specsPerFile: 25 } as const;
+
 const files = (n: number) => `${n} changed file${n === 1 ? '' : 's'}`;
 
 const full = (specs: readonly string[], reason: FullReason, text: string): Selection => ({ mode: 'full', specs: [...specs], reason, text: `full suite: ${text}` });
@@ -118,8 +123,8 @@ export function select(i: SelectInput): Selection {
 
     const ignored = matches(i.ignore);
     const relevant = i.changed.filter((f) => !ignored(f));
-    if (i.changed.length > 0 && relevant.length === 0) return { mode: 'selected', specs: [], diffCoverage: {}, text: 'no spec selected: every changed file is ignored (suite.ignore)' };
-    if (relevant.length === 0) return { mode: 'selected', specs: [], diffCoverage: {}, text: 'no spec selected: nothing changed' };
+    if (i.changed.length > 0 && relevant.length === 0) return { mode: 'selected', specs: [], diffCoverage: {}, reachedBy: {}, text: 'no spec selected: every changed file is ignored (suite.ignore)' };
+    if (relevant.length === 0) return { mode: 'selected', specs: [], diffCoverage: {}, reachedBy: {}, text: 'no spec selected: nothing changed' };
 
     // 5: the map.
     const map = i.map;
@@ -143,6 +148,7 @@ export function select(i: SelectInput): Selection {
 
     const selected = new Set<string>();
     const diffCoverage: Record<string, number> = {};
+    const reachedBy: Record<string, string[]> = {};
     const hit = (spec: string) => {
         selected.add(spec);
         diffCoverage[spec] = (diffCoverage[spec] ?? 0) + 1;
@@ -159,10 +165,11 @@ export function select(i: SelectInput): Selection {
         if (reached.size === 0 && Object.hasOwn(map.specs, f) && !present.has(f)) continue; // a spec that was deleted: nothing of it to run
         if (reached.size === 0) return full(all, 'uncovered_file', `no spec covers ${f}`);
         for (const s of reached) hit(s);
+        if (Object.keys(reachedBy).length < REACHED_BY_LIMITS.files) reachedBy[f] = all.filter((x) => reached.has(x)).slice(0, REACHED_BY_LIMITS.specsPerFile);
     }
 
     const specs = all.filter((s) => selected.has(s));
-    return { mode: 'selected', specs, diffCoverage, text: `selected ${specs.length} of ${all.length} specs: covers the ${files(relevant.length)}` };
+    return { mode: 'selected', specs, diffCoverage, reachedBy, text: `selected ${specs.length} of ${all.length} specs: covers the ${files(relevant.length)}` };
 }
 
 /** The specs that cover the nearest importers of `file`, walking importers breadth first, bounded. */
