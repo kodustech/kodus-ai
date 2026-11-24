@@ -2,6 +2,10 @@ import { redirect } from "next/navigation";
 import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
 import {
+    getFixedEgressIp,
+    type FixedEgressIp,
+} from "@services/codeManagement/fixedEgressIp";
+import {
     getRepositorySelection,
     type RepositorySelection,
 } from "@services/codeManagement/repositorySelection";
@@ -26,9 +30,16 @@ import { getAutoLicenseAssignmentConfig } from "src/lib/services/organizationPar
 
 import { GitProviders } from "./_components/_providers";
 import { GitConnectedProvider } from "./_components/connected-provider";
+import { FixedEgressIpCard } from "./_components/fixed-egress-ip-card";
 import { IgnoredUsersCard } from "./_components/ignored-users-card";
 import { ReviewAllRepositoriesCard } from "./_components/review-all-repositories-card";
 import { GitRepositoriesTable } from "./_components/table";
+
+const NO_FIXED_EGRESS_IP: FixedEgressIp = {
+    available: false,
+    allowedByPlan: false,
+    enabled: false,
+};
 
 const MANUAL_SELECTION: RepositorySelection = {
     mode: "manual",
@@ -54,6 +65,7 @@ export default async function GitSettings() {
     > = {};
     let webhookFailuresUnavailable = false;
     let repositorySelection: RepositorySelection = MANUAL_SELECTION;
+    let fixedEgressIp: FixedEgressIp = NO_FIXED_EGRESS_IP;
     let connectionsError = false;
 
     try {
@@ -64,6 +76,7 @@ export default async function GitSettings() {
             organizationMembersRaw,
             webhookFailures,
             repositorySelection,
+            fixedEgressIp,
         ] = await Promise.all([
             getConnections(teamId),
             getIntegrationConfig({ teamId }),
@@ -80,6 +93,8 @@ export default async function GitSettings() {
                 return {};
             }),
             getRepositorySelection(teamId).catch(() => MANUAL_SELECTION),
+            // Ancillary too: a failed read hides the card, nothing else.
+            getFixedEgressIp(teamId).catch(() => NO_FIXED_EGRESS_IP),
         ]);
     } catch (err) {
         console.error("[GitSettings] error fetching data:", err);
@@ -172,6 +187,9 @@ export default async function GitSettings() {
                                 <ReviewAllRepositoriesCard
                                     platformName={gitConnection.platformName}
                                     initialSelection={repositorySelection}
+                                />
+                                <FixedEgressIpCard
+                                    initialSetting={fixedEgressIp}
                                 />
                                 <GitRepositoriesTable
                                     platformName={gitConnection.platformName}
