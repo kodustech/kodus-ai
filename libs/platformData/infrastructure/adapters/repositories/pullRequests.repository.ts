@@ -1,6 +1,7 @@
 import pLimit from 'p-limit';
 import type {
     UpdateSuggestionOptions,
+    KodyChangeRequestFinding,
     KodyChangeRequestRecord,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { Injectable } from '@nestjs/common';
@@ -295,6 +296,9 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     'kodyChangeRequest.commentIds': {
                         $each: request.commentIds,
                     },
+                    'kodyChangeRequest.suggestionIds': {
+                        $each: request.suggestionIds,
+                    },
                     ...(request.summaryCommentId
                         ? {
                               'kodyChangeRequest.summaryCommentIds':
@@ -365,6 +369,41 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 )
                 .lean<IPullRequestWithKodyChangeRequest[]>(),
         );
+    }
+
+    async findKodyChangeRequestFindings(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        suggestionIds: string[],
+    ): Promise<KodyChangeRequestFinding[]> {
+        if (!suggestionIds.length) return [];
+        return this.pullRequestsModel
+            .aggregate<KodyChangeRequestFinding>([
+                {
+                    $match: {
+                        organizationId,
+                        'repository.id': repositoryId,
+                        'number': prNumber,
+                    },
+                },
+                { $unwind: '$files' },
+                { $unwind: '$files.suggestions' },
+                { $match: { 'files.suggestions.id': { $in: suggestionIds } } },
+                {
+                    $project: {
+                        _id: 0,
+                        suggestionId: '$files.suggestions.id',
+                        commentId: {
+                            $toString: '$files.suggestions.comment.id',
+                        },
+                        implementationStatus:
+                            '$files.suggestions.implementationStatus',
+                    },
+                },
+            ])
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .exec();
     }
 
     //#region Create

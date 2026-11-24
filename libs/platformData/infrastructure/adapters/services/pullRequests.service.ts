@@ -1,5 +1,6 @@
 import type {
     UpdateSuggestionOptions,
+    KodyChangeRequestFinding,
     KodyChangeRequestRecord,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
@@ -194,6 +195,20 @@ export class PullRequestsService implements IPullRequestsService {
             repositoryId,
             prNumber,
             requestedAt,
+        );
+    }
+
+    findKodyChangeRequestFindings(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        suggestionIds: string[],
+    ): Promise<KodyChangeRequestFinding[]> {
+        return this.pullRequestsRepository.findKodyChangeRequestFindings(
+            organizationId,
+            repositoryId,
+            prNumber,
+            suggestionIds,
         );
     }
 

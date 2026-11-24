@@ -1,5 +1,6 @@
 import type {
     UpdateSuggestionOptions,
+    KodyChangeRequestFinding,
     KodyChangeRequestRecord,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
@@ -325,6 +326,13 @@ export interface IPullRequestsRepository {
     findOpenPullRequestsWithKodyChangeRequest(
         organizationId: string,
     ): Promise<IPullRequestWithKodyChangeRequest[]>;
+    /** The stored state of the suggestions behind a change request. */
+    findKodyChangeRequestFindings(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        suggestionIds: string[],
+    ): Promise<KodyChangeRequestFinding[]>;
     findPullRequestsWithDeliveredSuggestions(
         organizationId: string,
         prNumbers: number[],

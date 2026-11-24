@@ -33,7 +33,15 @@ export interface IApprovalReasonDeliveryFailure {
 export interface KodyChangeRequestRecord {
     requestedAt: string;
     commentIds: string[];
+    suggestionIds: string[];
     summaryCommentId?: string;
+}
+
+/** A suggestion behind Kody's change request, as the PR stores it. */
+export interface KodyChangeRequestFinding {
+    suggestionId: string;
+    commentId?: string;
+    implementationStatus?: unknown;
 }
 
 /**
@@ -46,6 +54,11 @@ export interface IKodyChangeRequest {
     requestedAt: string;
     /** Review comments of the critical findings behind the request. */
     commentIds: string[];
+    /**
+     * The critical findings themselves. Absent on requests recorded before
+     * it existed, which are judged by their comments alone.
+     */
+    suggestionIds?: string[];
     /**
      * Summary comments the host keeps open next to the request (a GitLab
      * discussion, an Azure thread), resolved when it is withdrawn.

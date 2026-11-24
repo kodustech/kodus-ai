@@ -1,5 +1,9 @@
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import {
+    normalizeImplementationStatus,
+    resolvesSuggestionThread,
+} from '@libs/platformData/domain/pullRequests/implementation-status';
 
 /** A review comment or thread as the code host returns it. */
 export interface HostReviewComment {
@@ -50,4 +54,53 @@ export function hasOpenFinding(
         }
     }
     return commentIds.some((id) => resolvedByKey.get(String(id)) !== true);
+}
+
+/** A finding behind the request, as the PR stores its suggestion. */
+export interface StoredFinding {
+    suggestionId: string;
+    commentId?: string | null;
+    implementationStatus?: unknown;
+}
+
+/**
+ * Whether one of the findings behind Kody's change request is still open. A
+ * finding is closed once the implementation check found it implemented, or
+ * once its thread is resolved on the host; so one whose comment id never came
+ * back can still close. A suggestion the PR no longer stores counts as open.
+ * A request recorded before its suggestions were is judged by its comments.
+ */
+export function hasOpenChangeRequestFinding(
+    changeRequest: { commentIds?: string[]; suggestionIds?: string[] },
+    stored: StoredFinding[],
+    comments: HostReviewComment[],
+    platformType: PlatformType,
+): boolean {
+    const suggestionIds = changeRequest.suggestionIds ?? [];
+    if (!suggestionIds.length) {
+        return hasOpenFinding(
+            changeRequest.commentIds ?? [],
+            comments,
+            platformType,
+        );
+    }
+
+    const byId = new Map(
+        stored.map((finding) => [finding.suggestionId, finding]),
+    );
+    return suggestionIds.some((id) => {
+        const finding = byId.get(id);
+        if (!finding) return true;
+        if (
+            resolvesSuggestionThread(
+                normalizeImplementationStatus(finding.implementationStatus),
+            )
+        ) {
+            return false;
+        }
+        return (
+            !finding.commentId ||
+            hasOpenFinding([String(finding.commentId)], comments, platformType)
+        );
+    });
 }

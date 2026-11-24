@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import { hasOpenFinding } from '@libs/code-review/domain/approval/own-change-request';
+import { hasOpenChangeRequestFinding } from '@libs/code-review/domain/approval/own-change-request';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { createLogger } from '@libs/core/log/logger';
@@ -32,24 +32,72 @@ export class OwnChangeRequestService {
         private readonly pullRequests: IPullRequestsService,
     ) {}
 
-    /** Remembers a request just made, and the review comments behind it. */
+    /**
+     * Remembers a request about to be made, and the findings behind it.
+     * Answers when it was recorded, or null when it was not: a request with
+     * no record could never be taken back, so the caller does not make it.
+     */
     async record(input: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string };
         prNumber: number;
+        suggestionIds: string[];
         commentIds: string[];
-        /** A summary the host keeps open next to the request, if it left one. */
-        summaryCommentId?: string;
+    }): Promise<string | null> {
+        if (!input.suggestionIds.length) return null;
+        const requestedAt = new Date().toISOString();
+        try {
+            const recorded = await this.pullRequests.recordKodyChangeRequest(
+                input.organizationAndTeamData.organizationId,
+                input.repository.id,
+                input.prNumber,
+                {
+                    requestedAt,
+                    commentIds: input.commentIds,
+                    suggestionIds: input.suggestionIds,
+                },
+            );
+            if (recorded) return requestedAt;
+            this.logger.warn({
+                message: `Kody's change request on PR#${input.prNumber} was not recorded: the PR is not stored`,
+                context: OwnChangeRequestService.name,
+                metadata: {
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    repositoryId: input.repository.id,
+                    prNumber: input.prNumber,
+                },
+            });
+        } catch (error) {
+            this.logger.error({
+                message: `Kody's change request on PR#${input.prNumber} was not recorded`,
+                context: OwnChangeRequestService.name,
+                error,
+                metadata: {
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    repositoryId: input.repository.id,
+                    prNumber: input.prNumber,
+                },
+            });
+        }
+        return null;
+    }
+
+    /** Adds the summary the host keeps open next to a recorded request. */
+    async recordSummary(input: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string };
+        prNumber: number;
+        requestedAt: string;
+        summaryCommentId: string;
     }): Promise<void> {
-        // A request with no comment on record could never be shown resolved.
-        if (!input.commentIds.length) return;
         await this.pullRequests.recordKodyChangeRequest(
             input.organizationAndTeamData.organizationId,
             input.repository.id,
             input.prNumber,
             {
-                requestedAt: new Date().toISOString(),
-                commentIds: input.commentIds,
+                requestedAt: input.requestedAt,
+                commentIds: [],
+                suggestionIds: [],
                 summaryCommentId: input.summaryCommentId,
             },
         );
@@ -74,8 +122,18 @@ export class OwnChangeRequestService {
                 changeRequest.requestedAt,
             );
 
-        // Read first: while a finding is open, which is how most passes find a
-        // request, this is the only call the host gets.
+        const suggestionIds = changeRequest.suggestionIds ?? [];
+        const stored = suggestionIds.length
+            ? await this.pullRequests.findKodyChangeRequestFindings(
+                  organizationAndTeamData.organizationId,
+                  repository.id,
+                  prNumber,
+                  suggestionIds,
+              )
+            : [];
+
+        // While a finding is open, which is how most passes find a request,
+        // this is the only call the host gets.
         const comments =
             platformType === PlatformType.GITHUB
                 ? await this.codeManagement.getPullRequestReviewThreads(
@@ -88,8 +146,9 @@ export class OwnChangeRequestService {
                   );
         if (
             !Array.isArray(comments) ||
-            hasOpenFinding(
-                changeRequest.commentIds ?? [],
+            hasOpenChangeRequestFinding(
+                changeRequest,
+                stored,
                 comments,
                 platformType,
             )

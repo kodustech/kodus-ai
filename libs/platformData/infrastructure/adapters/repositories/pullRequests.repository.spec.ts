@@ -61,6 +61,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 repo.recordKodyChangeRequest('org-A', 'repo-alpha', 7, {
                     requestedAt: T1,
                     commentIds: ['101', '102'],
+                    suggestionIds: ['s-1', 's-2'],
                     summaryCommentId: 'd-1',
                 }),
             ).resolves.toBe(true);
@@ -69,6 +70,9 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 $set: { 'kodyChangeRequest.requestedAt': T1 },
                 $addToSet: {
                     'kodyChangeRequest.commentIds': { $each: ['101', '102'] },
+                    'kodyChangeRequest.suggestionIds': {
+                        $each: ['s-1', 's-2'],
+                    },
                     'kodyChangeRequest.summaryCommentIds': 'd-1',
                 },
             });
@@ -81,11 +85,13 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 repo.recordKodyChangeRequest('org-A', 'repo-alpha', 7, {
                     requestedAt: T1,
                     commentIds: ['101'],
+                    suggestionIds: ['s-1'],
                 }),
             ).resolves.toBe(false);
 
             expect(model.updateOne.mock.calls[0][1].$addToSet).toEqual({
                 'kodyChangeRequest.commentIds': { $each: ['101'] },
+                'kodyChangeRequest.suggestionIds': { $each: ['s-1'] },
             });
         });
 

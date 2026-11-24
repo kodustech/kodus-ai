@@ -41,7 +41,7 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         Pick<PrAuthorRecipientResolver, 'resolve'>
     >;
     let commentManager: { postApprovalReason: jest.Mock };
-    let ownChangeRequest: { record: jest.Mock };
+    let ownChangeRequest: { record: jest.Mock; recordSummary: jest.Mock };
 
     // Frozen by DEFAULT — production hands every stage after the first
     // produce() a deep-frozen context. See test/fixtures/frozen-pipeline-context.ts.
@@ -86,7 +86,10 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         commentManager = {
             postApprovalReason: jest.fn().mockResolvedValue(undefined),
         };
-        ownChangeRequest = { record: jest.fn().mockResolvedValue(undefined) };
+        ownChangeRequest = {
+            record: jest.fn().mockResolvedValue('2026-11-24T12:00:00.000Z'),
+            recordSummary: jest.fn().mockResolvedValue(undefined),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -97,7 +100,10 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
                     useValue: commentManager,
                 },
                 { provide: NotificationService, useValue: notificationService },
-                { provide: OwnChangeRequestService, useValue: ownChangeRequest },
+                {
+                    provide: OwnChangeRequestService,
+                    useValue: ownChangeRequest,
+                },
                 {
                     provide: PrAuthorRecipientResolver,
                     useValue: prAuthorResolver,
@@ -709,11 +715,18 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
     });
 
     // The request leaves later without an approval only if it was recorded
-    // with the comments behind it.
+    // with the findings behind it, so it is recorded before it is made.
     describe('requesting changes', () => {
-        const finding = (severity: string, commentId?: number) => ({
-            comment: { suggestion: { severity } },
-            codeReviewFeedbackData: commentId ? { commentId } : undefined,
+        const finding = (
+            severity: string,
+            commentId?: number | null,
+            suggestionId = `s-${commentId}`,
+            deliveryStatus = 'sent',
+        ) => ({
+            comment: { suggestion: { id: suggestionId, severity } },
+            deliveryStatus,
+            codeReviewFeedbackData:
+                commentId === undefined ? undefined : { commentId },
         });
         const requestChanges = (lineComments: object[]) =>
             (stage as any).executeStage(
@@ -725,8 +738,13 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
                     lineComments,
                 }),
             );
+        const organizationAndTeamData = {
+            organizationId: 'org-1',
+            teamId: 'team-1',
+        };
+        const repository = { id: 'repo-1', name: 'acme/api' };
 
-        it('records the request with the comments of its critical findings only', async () => {
+        it('records the critical findings, then requests changes over them', async () => {
             codeManagement.requestChangesPullRequest.mockResolvedValue({
                 summaryCommentId: 'discussion-9',
             });
@@ -737,66 +755,86 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
                 finding('high', 103),
             ]);
 
-            expect(
-                codeManagement.requestChangesPullRequest,
-            ).toHaveBeenCalledTimes(1);
+            expect(ownChangeRequest.record).toHaveBeenCalledWith({
+                organizationAndTeamData,
+                repository,
+                prNumber: 42,
+                suggestionIds: ['s-101', 's-102'],
+                commentIds: ['101', '102'],
+            });
             expect(
                 codeManagement.requestChangesPullRequest,
             ).toHaveBeenCalledWith({
-                organizationAndTeamData: {
-                    organizationId: 'org-1',
-                    teamId: 'team-1',
-                },
+                organizationAndTeamData,
                 prNumber: 42,
-                repository: { id: 'repo-1', name: 'acme/api' },
+                repository,
                 criticalComments: [
                     finding('critical', 101),
                     finding('Critical', 102),
                 ],
             });
-            expect(ownChangeRequest.record).toHaveBeenCalledWith({
-                organizationAndTeamData: {
-                    organizationId: 'org-1',
-                    teamId: 'team-1',
-                },
-                repository: { id: 'repo-1', name: 'acme/api' },
+            expect(
+                ownChangeRequest.record.mock.invocationCallOrder[0],
+            ).toBeLessThan(
+                codeManagement.requestChangesPullRequest.mock
+                    .invocationCallOrder[0],
+            );
+            expect(ownChangeRequest.recordSummary).toHaveBeenCalledWith({
+                organizationAndTeamData,
+                repository,
                 prNumber: 42,
-                commentIds: ['101', '102'],
+                requestedAt: '2026-11-24T12:00:00.000Z',
                 summaryCommentId: 'discussion-9',
             });
         });
 
-        it('records only the comments that were posted, on a host that hands back no summary', async () => {
-            // The default host answers nothing (GitHub, Bitbucket, Forgejo).
+        // The host handed no comment id back: the finding still closes
+        // through its suggestion, so the request is still made.
+        it('records every critical finding, with or without a comment id', async () => {
             await requestChanges([
                 finding('critical', 101),
-                finding('critical'),
-                {
-                    comment: { suggestion: { severity: 'critical' } },
-                    codeReviewFeedbackData: { commentId: null },
-                },
+                finding('critical', undefined, 's-a'),
+                finding('critical', null, 's-b'),
             ]);
 
             expect(ownChangeRequest.record).toHaveBeenCalledWith(
                 expect.objectContaining({
+                    suggestionIds: ['s-101', 's-a', 's-b'],
                     commentIds: ['101'],
-                    summaryCommentId: undefined,
                 }),
+            );
+            expect(
+                codeManagement.requestChangesPullRequest,
+            ).toHaveBeenCalledTimes(1);
+            expect(ownChangeRequest.recordSummary).not.toHaveBeenCalled();
+        });
+
+        it('leaves out a critical finding that never reached the PR', async () => {
+            await requestChanges([
+                finding('critical', 101),
+                finding('critical', undefined, 's-x', 'failed'),
+            ]);
+
+            expect(ownChangeRequest.record).toHaveBeenCalledWith(
+                expect.objectContaining({ suggestionIds: ['s-101'] }),
             );
         });
 
-        it('records nothing when the host refused the request', async () => {
-            codeManagement.requestChangesPullRequest.mockRejectedValue(
-                new Error('403'),
-            );
+        it('makes no request it could not record', async () => {
+            ownChangeRequest.record.mockResolvedValue(null);
 
             await requestChanges([finding('critical', 101)]);
 
-            expect(ownChangeRequest.record).not.toHaveBeenCalled();
+            expect(
+                codeManagement.requestChangesPullRequest,
+            ).not.toHaveBeenCalled();
         });
 
-        it('requests and records nothing without a critical finding', async () => {
-            await requestChanges([finding('high', 103)]);
+        it('requests and records nothing without a delivered critical finding', async () => {
+            await requestChanges([
+                finding('high', 103),
+                finding('critical', undefined, 's-x', 'failed'),
+            ]);
 
             expect(
                 codeManagement.requestChangesPullRequest,
@@ -805,4 +843,3 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         });
     });
 });
-
