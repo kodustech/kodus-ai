@@ -631,6 +631,23 @@ describe("createGapCheck within the model's window (#2233)", () => {
         expect(worst(textOf(sent)) + overhead + 12_000).toBeLessThanOrEqual(
             64_000,
         );
+        // Fitting is not dropping: the task stays whole, and every read
+        // still answers its call, from its first line on.
+        const kept = sent as typeof messages;
+        expect(textOf(kept[0].content)).toContain(table);
+        const results = kept
+            .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+            .filter((part: any) => part.type === 'tool-result') as any[];
+        expect(results.map((r) => r.toolCallId)).toEqual(
+            reads
+                .filter((m) => m.role === 'tool')
+                .map((m) => (m.content as any[])[0].toolCallId),
+        );
+        results.forEach((result, i) =>
+            expect(textOf(result.output)).toContain(
+                `1: export const v0 = load('${i}-0');`,
+            ),
+        );
     });
 
     it('keeps the files read, the answer and the overhead within a 16k window once they outgrow it', async () => {
