@@ -1424,6 +1424,22 @@ export class SecurityScanEngine {
                             finding,
                             rationale: verdict.rationale,
                         });
+                        logger.log({
+                            message:
+                                'Security finding refuted by the independent check',
+                            context: SecurityScanEngine.name,
+                            metadata: {
+                                organizationId: params.organizationId,
+                                teamId: params.teamId,
+                                repositoryId: params.repositoryId,
+                                unit: unit.id,
+                                vulnClass,
+                                cwe: finding.cwe,
+                                filePath: finding.filePath,
+                                startLine: finding.startLine,
+                                rationale: verdict.rationale.slice(0, 300),
+                            },
+                        });
                         continue;
                     }
                     if (verdict.severity) finding.severity = verdict.severity;
