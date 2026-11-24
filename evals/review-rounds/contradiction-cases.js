@@ -206,6 +206,54 @@ const archiveClaims = [
     },
 ];
 
+// ---------------------------------------------------------------------------
+// kodus-ai#2663, round 2 replayed from this repository's public history: the
+// incremental diff from round 1's head (8cb2485b9) to 7e2213fd1, which applied
+// round 1's host filter, and round 1's seven comments as round 2 saw them
+// (stored not_implemented; the author had answered every thread). In
+// production round 2 posted the reverse of the applied filter and two points
+// already raised. https://github.com/kodustech/kodus-ai/pull/2663
+// ---------------------------------------------------------------------------
+function loadReplay(name) {
+    const fs = require('fs');
+    const path = require('path');
+    const dir = path.join(__dirname, 'fixtures', name);
+    const walk = (d, base = '') => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(path.join(d, e.name), `${base}${e.name}/`) : [`${base}${e.name}`]);
+    const repo = Object.fromEntries(walk(path.join(dir, 'repo')).map((f) => [f, fs.readFileSync(path.join(dir, 'repo', f), 'utf8')]));
+    const changedFiles = walk(path.join(dir, 'diffs')).map((f) => {
+        const text = fs.readFileSync(path.join(dir, 'diffs', f), 'utf8').split('\n');
+        const first = text.findIndex((l) => l.startsWith('@@ '));
+        return { filename: f.replace(/\.diff$/, ''), patch: text.slice(first).join('\n').replace(/\n+$/, '') };
+    });
+    const previousDecisions = JSON.parse(fs.readFileSync(path.join(dir, 'round-a-decisions.json'), 'utf8'));
+    return { repo, changedFiles, previousDecisions };
+}
+const kodus2663 = loadReplay('kodus-2663');
+const kodus2663Claims = [
+    {
+        id: 'readmit-config-on-other-host',
+        golden: 'Asks to loosen the "never take a config listed on another server" filter added in round 1: re-admit, or fall back to, a config whose repository id and owner/repo match even when the host it lists differs from the host that sent the webhook (for example a stale stored host after an instance moved).',
+        truth: 'contested',
+        premise: 'diff',
+        expect: 'not_deliver',
+    },
+    {
+        id: 'name-match-requires-no-hosts-again',
+        golden: 'Asks again to require that a config lists no host (configHostsOf(config, repositoryId).length === 0) before a repository-name match is accepted in webhook-source-host.ts.',
+        truth: 'contested',
+        premise: 'diff',
+        expect: 'not_deliver',
+    },
+    {
+        id: 'gitlab-lookup-loses-fallback-again',
+        golden: 'The GitLab config lookup in gitlab.service.ts loses the repository-name or id-only fallback when the webhook host cannot be read, so the event or comment is dropped.',
+        truth: 'contested',
+        premise: 'read-file',
+        expect: 'not_deliver',
+    },
+];
+
 const contradictionCases = [
     // The #2663 reversal, through the finder's link and through the check.
     {
@@ -254,6 +302,8 @@ const contradictionCases = [
         previousDecisions: [hostDecision],
         claims: [hostReversalClaim('not_deliver')],
     },
+    { id: 'R23-kodus2663-round2', family: 'rounds', ...kodus2663, sandbox: 'alive', claims: kodus2663Claims },
+    { id: 'R23-kodus2663-round2-heavy', family: 'rounds', ...kodus2663, sandbox: 'alive', heavy: true, claims: kodus2663Claims },
 ];
 
 module.exports = { contradictionCases };

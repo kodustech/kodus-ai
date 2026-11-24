@@ -123,8 +123,7 @@ which vendors this repository's own public history in `fixtures/kodus-2011/`.
 | R7 | earlier suggestion applied ineffectively (timeout never aborts) | repeat → `not_deliver` (already sent; never posted again) |
 | R8 | #2039 exactly: the earlier suggestion came from a Kody Rule | `deliver_linked` |
 | R9 | the developer explicitly rejected the earlier suggestion (stored `not_implemented`) | repeat → `not_deliver` |
-| R10 | reversal replayed from this repository's PR #2044; its claim is an approval bypass (security) | `if_delivered_linked` |
-| R11 | reversal replayed from this repository's PR #1902, not security | `not_deliver` (#2676: a reversal is never posted) |
+| R10, R11 | follow-ups replayed from this repository's PRs #2044 and #1902; neither fix undoes round A's change | `if_delivered_linked` |
 | K1 | Kody Rules: a violation already posted, plus a new one in another function | repeat → `not_deliver`; new → `deliver` |
 | K2 | Kody Rules: the rule judge flags code Kody's own earlier suggestion produced | `not_deliver` (a reversal) |
 | R12 | an applied suggestion in the history, and a new unrelated bug in another file | `deliver` (guard) |
@@ -145,6 +144,7 @@ which vendors this repository's own public history in `fixtures/kodus-2011/`.
 | R22 | a reversal of an applied comment on another file, next to a real bug in the new file | reversal → `not_deliver`; bug → `deliver` |
 | R20/R21/R22-check-* | the same with every repeat-check call failing (`repeatCheckFault`: `timeout` or `parse`) | linked reversal and answered point → `not_deliver`; the unrelated bug → `deliver` |
 | R20/R21-heavy | the same through heavy mode, whose lenses never see the history | `not_deliver` |
+| R23 | kodus-ai#2663 round 2 replayed from this repository: the applied host filter and round 1's seven answered comments | reversal and both re-raises → `not_deliver`; `-heavy` the same through heavy mode |
 
 K5–K12 and R15–R17 reproduce repost shapes from a production sample (500
 later-round comments, 2026-10-05→12, #2114) with invented code; the volumes are
