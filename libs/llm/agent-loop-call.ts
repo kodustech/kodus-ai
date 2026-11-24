@@ -191,9 +191,13 @@ export async function runAgentLoopCall(
     // (e.g. 800 for task-finder, 600 for agent-tool-reader) are not silently
     // overridden by the large Anthropic-wire default injected in
     // resolveSlotCallOptions. An explicit slot value still applies when no
-    // per-agent cap is set.
+    // per-agent cap is set. Zero is treated as absent (same convention as the
+    // slot guard in resolveSlotCallOptions) so a 0 from an unset caller
+    // option does not shadow the slot default or send an invalid cap.
     const maxOutputTokens =
-        params.maxOutputTokens ?? inv.callOptions.maxOutputTokens;
+        (params.maxOutputTokens ?? 0) > 0
+            ? params.maxOutputTokens
+            : inv.callOptions.maxOutputTokens;
     // Reasoning: a caller-supplied override wins (the finder's config-derived
     // providerOptions); otherwise the slot-derived ones.
     const providerOptions = params.providerOptions ?? inv.providerOptions;
@@ -282,7 +286,7 @@ export async function runAgentLoopCall(
             messages: callMessages,
             tools: callTools as any,
             ...(temperature != null ? { temperature } : {}),
-            ...(maxOutputTokens != null ? { maxOutputTokens } : {}),
+            ...((maxOutputTokens ?? 0) > 0 ? { maxOutputTokens } : {}),
             providerOptions: providerOptions as any,
             abortSignal: signal,
             // Tool-call self-heal against THIS model (owned by LLM.run, not the
