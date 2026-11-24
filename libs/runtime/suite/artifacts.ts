@@ -10,7 +10,7 @@ export interface ArtifactFile {
     bytes: number;
 }
 
-export type ArtifactDropReason = 'passed_spec' | 'unattributed' | 'unsupported_type' | 'too_large' | 'budget';
+export type ArtifactDropReason = 'passed_spec' | 'unattributed' | 'unsupported_type' | 'too_large' | 'budget' | 'secret_in_archive' | 'archive_unreadable';
 
 export interface ArtifactPlan {
     keep: Array<ArtifactFile & { spec: string }>;

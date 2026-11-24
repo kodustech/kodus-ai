@@ -5,6 +5,7 @@ import { type ArtifactDropReason, type ArtifactFile, planArtifacts } from '@libs
 
 import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
 import { type Canary, containsCanary, redactCanaries } from '../canary/canary';
+import { scanZip } from './zip-scan';
 
 // The artifacts of a suite run's failed specs as evidence (docs/runtime/e2e-suites.md section 7, 13 and D8): the files the runner
 // left in the recipe's artifact directories (screenshots, videos, traces), kept only for specs that failed, each within its kind's
@@ -123,7 +124,20 @@ export class SuiteArtifactKeeper {
                 continue;
             }
             let bytes = body;
-            if (isText(limit.contentType)) {
+            // A zip (a Playwright trace) embeds request headers and bodies and console text: its entries are read within bounds and
+            // it is stored only when none holds a canary or a secret. Never stored unscanned. PNG and WebM are NOT scanned: pixels
+            // and frames are not read for secrets (a known gap, covered only by the byte budget and the org-scoped evidence access).
+            if (limit.contentType === 'application/zip') {
+                const scan = scanZip(body, i.canaries ?? []);
+                if (scan.verdict === 'canary') {
+                    out.leaked = true;
+                    continue;
+                }
+                if (scan.verdict !== 'clean') {
+                    out.dropped.push({ path: f.path, reason: scan.verdict === 'secret' ? 'secret_in_archive' : 'archive_unreadable' });
+                    continue;
+                }
+            } else if (isText(limit.contentType)) {
                 const text = body.toString('utf8');
                 const canaries = [...(i.canaries ?? [])];
                 if (canaries.length > 0 && containsCanary(text, canaries)) out.leaked = true;

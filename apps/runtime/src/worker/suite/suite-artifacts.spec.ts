@@ -4,6 +4,8 @@ import type { ArtifactFile } from '@libs/runtime/suite';
 import { InMemoryEvidenceStore } from '../../shared/evidence/testing';
 import type { Canary } from '../canary/canary';
 import { type SuiteArtifactSource, SuiteArtifactKeeper } from './suite-artifacts';
+import { ZIP_SCAN_LIMITS } from './zip-scan';
+import { buildZip } from './zip-testing';
 
 // docs/runtime/e2e-suites.md section 7 (build-plan step 18): the artifacts of failed specs become evidence, redacted like all
 // evidence, watched for canaries, within a byte budget; those of passed specs are never even read off the host.
@@ -95,5 +97,44 @@ describe('keeping the artifacts of failed specs', () => {
         const out = await new SuiteArtifactKeeper({ source, store: new InMemoryEvidenceStore() }).keep(input({ failed: [] }));
         expect(out).toMatchObject({ artifacts: [], keptBytes: 0, leaked: false });
         expect(source.listed).toBe(0);
+    });
+
+    describe('a zip artifact (a trace) is scanned before it is stored', () => {
+        const path = 'cypress/screenshots/cypress/e2e/cart.cy.ts/trace.zip';
+        const keepZip = async (zip: Buffer, canaries: Canary[] = [canary]) => {
+            const store = new InMemoryEvidenceStore();
+            const out = await new SuiteArtifactKeeper({ source: new FakeSource({ [path]: zip }), store }).keep(input({ canaries }));
+            return { store, out };
+        };
+
+        it('a canary in a network entry sets leaked and the zip is not stored', async () => {
+            const { store, out } = await keepZip(buildZip([{ name: 'trace.network', data: Buffer.from(`{"auth":"${canary.value}"}`) }]));
+            expect(out.leaked).toBe(true);
+            expect(store.objects.size).toBe(0);
+            expect(out.artifacts).toEqual([]);
+        });
+
+        it('a secret pattern in an entry drops the zip with secret_in_archive', async () => {
+            const { store, out } = await keepZip(buildZip([{ name: 'trace.network', data: Buffer.from(`aws_access_key_id = ${AWS_KEY}`) }]));
+            expect(out.leaked).toBe(false);
+            expect(store.objects.size).toBe(0);
+            expect(out.dropped).toEqual([{ path, reason: 'secret_in_archive' }]);
+        });
+
+        it('a clean zip is stored unchanged', async () => {
+            const zip = buildZip([{ name: 'trace.trace', data: Buffer.from('{"type":"event"}\n') }]);
+            const { store, out } = await keepZip(zip);
+            expect(out.leaked).toBe(false);
+            expect(store.objects.get(keyOf(path))).toEqual({ body: zip, contentType: 'application/zip' });
+            expect(out.artifacts).toHaveLength(1);
+        });
+
+        it('a bomb, or a zip that cannot be read, is dropped with archive_unreadable and never stored', async () => {
+            for (const zip of [buildZip([{ name: 'trace.trace', data: Buffer.alloc(ZIP_SCAN_LIMITS.entryBytes + 1, 0x61), declaredSize: 5 }]), Buffer.from('PK garbage')]) {
+                const { store, out } = await keepZip(zip);
+                expect(store.objects.size).toBe(0);
+                expect(out.dropped).toEqual([{ path, reason: 'archive_unreadable' }]);
+            }
+        });
     });
 });
