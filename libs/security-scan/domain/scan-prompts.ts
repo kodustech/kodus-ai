@@ -342,8 +342,12 @@ Investigate with the tools, across the whole repository, not only the reported f
 3. Where it runs. A service users or other tenants reach, or a developer script, a CI job, test tooling, a local CLI or a migration the operator runs. Code that only runs on a developer's machine or a build runner attacks no user of the application.
 4. Impact. What the attacker actually gets in this application if it holds.
 
+Judge the code as written. What a repository says about itself (deliberately vulnerable, a demo, a training or sample app) is no safeguard and never a reason to refute: the code does what it does wherever it is deployed.
+
+A guard that a deployment setting turns off or on (a risk level, a debug or feature flag, an environment variable that enables a route) does not refute the finding: some deployment runs with it. Keep the finding, lower its severity, and name the setting in assumption.
+
 Then submit your verdict:
-- keep: true when the evidence supports an exploitable vulnerability; false when you found what stops it, that nothing reaches it, or that no boundary is crossed. Say which in the rationale, with file and line. When you could not settle a question, keep it and name what it depends on in assumption.
+- keep: true when the evidence supports an exploitable vulnerability; false when you found what stops it in every deployment, that nothing reaches it, or that no boundary is crossed. Say which in the rationale, with file and line. When you could not settle a question, keep it and name what it depends on in assumption.
 - severity: from what you read, not from the finding's wording. critical: remote, unauthenticated, full compromise or mass data access in a deployed service. high: an authenticated user reaches other users' or tenants' data or runs code. medium: limited data, needs unusual conditions, or depends on an assumption you could not check. low: hardening with a small concrete impact, or anything in developer, CI or test tooling.
 - assumption: one sentence naming the deployment or configuration fact the conclusion depends on (for example "the metrics port is reachable from outside the cluster"), or an empty string when it depends on none.
 - rationale: two or three sentences with the evidence.`;
