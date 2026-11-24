@@ -5,9 +5,9 @@ import { BitbucketCloudService } from '../bitbucket/bitbucket-cloud.service';
 // Only the transport is replaced: the `bitbucket` client builds and throws
 // its own HTTPError, so the shape the link reads is the library's, not a
 // fixture's.
-const fetchMock = jest.fn();
+const mockFetch = jest.fn();
 jest.mock('node-fetch', () => {
-    const fn = (...args: unknown[]) => fetchMock(...args);
+    const fn = (...args: unknown[]) => mockFetch(...args);
     return Object.assign(fn, { default: fn, __esModule: true });
 });
 
@@ -25,7 +25,7 @@ const answer = (status: number, statusText: string, body: unknown) => ({
 
 describe('Bitbucket Cloud link, through the real bitbucket client', () => {
     it('refuses a token Bitbucket rejects in words, from the HTTPError the client throws', async () => {
-        fetchMock.mockResolvedValue(
+        mockFetch.mockResolvedValue(
             answer(401, 'Unauthorized', {
                 type: 'error',
                 error: { message: 'Invalid credentials' },
@@ -43,7 +43,7 @@ describe('Bitbucket Cloud link, through the real bitbucket client', () => {
             })
             .catch((e: unknown) => e);
 
-        expect(fetchMock).toHaveBeenCalled();
+        expect(mockFetch).toHaveBeenCalled();
         expect(thrown).toBeInstanceOf(BadRequestException);
         expect((thrown as HttpException).message).toBe(
             'Bitbucket Cloud did not accept the credentials (401). Check the token and try again.',
