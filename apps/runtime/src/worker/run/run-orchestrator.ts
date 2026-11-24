@@ -49,6 +49,8 @@ import {
     reproductionFor,
     RunState,
     RuntimeRunRequested,
+    type SuiteStageResult,
+    suiteVerdictParts,
     VerdictOutcome,
     VerdictState,
 } from '@libs/runtime/run';
@@ -1916,6 +1918,9 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
         probes = redactDeep(probes, canaries);
     }
     ctx.dependencyChangeUntested = t.dependency.length > 0 && !verdicts.some((v) => t.dependency.some((d) => d.id === v.entryPoint));
+    // The repository's own e2e suite, after the probes: its regressions are findings, its undecided failures hold a green Run back.
+    const suite = suiteVerdictParts(await suiteStage(run));
+    if (suite.findings.length) probes = [...probes, ...redactDeep(suite.findings, canaries)];
     const exercised = await exercisedOnPr(run, pr);
     // Every kept check of the request has an outcome, from the final verdicts (after intent): a halt leaves the rest skipped.
     const kept = req.keptChecks?.length ? keptOutcomesOf(req.keptChecks, t.kept, probes) : undefined;
@@ -1929,6 +1934,8 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
         identityMismatch: !!ready.identityMismatch,
         ...(exercised ? { exercised: exercised.summary } : {}),
         ...(kept ? { keptChecksNotRun: kept.filter(isKeptCheckNotRun).length } : {}),
+        ...(suite.unclassified ? { suiteUnclassified: suite.unclassified } : {}),
+        ...(suite.notRun ? { suiteNotRun: true } : {}),
     });
     tally.findings = verdict.findings.length;
     if (ctx.securityViolation) await securityViolationEvent(deps, req, ctx.securityViolation);
@@ -1978,6 +1985,22 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
     await recordKeptOutcomes(run, kept);
     // halted keeps the computed verdict in verdictState, and the check follows it.
     return finishRun(run, leak || ctx.securityViolation ? 'halted' : verdict.verdictState, verdict);
+}
+
+/**
+ * The e2e suite stage (docs/runtime/e2e-suites.md section 10.2): only for a request that carries the suite section, on a worker
+ * that has the stage, and never after a halt. It runs inside the Run's workflow with the Run's step runner. A stage that fails
+ * is a suite that did not run, never a Run that errored; a cancellation goes on up.
+ */
+async function suiteStage(run: RunScope): Promise<SuiteStageResult | undefined> {
+    const { deps, req, ctx } = run;
+    if (!deps.suite || !req.suite || ctx.stoppedEarly) return undefined;
+    try {
+        return await deps.suite.run(req, deps.step);
+    } catch (e) {
+        if (isCancellation(e)) throw e;
+        return { status: 'unavailable' };
+    }
 }
 
 /** Each kept check's outcome of this Run, in one step (the metric reads them); a simulation records none. */

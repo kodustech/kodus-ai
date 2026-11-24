@@ -270,6 +270,7 @@ All config is read in one place, `shared/config.ts`:
 | `RUNTIME_SUITE_PER_ORG` | 2 | Worker only; 1 to 8. E2E suite runs of one org that run at once on the suite queue (`runtime-suites`). |
 | `RUNTIME_SUITE_CONCURRENCY` | 4 | Worker only; 1 to 64, never above `RUNTIME_GLOBAL_CONCURRENCY`. Suite runs across the app. |
 | `RUNTIME_SUITE_MAX_HOSTS` | 8 | Worker only; 1 to 16. The most hosts one suite run asks for, whatever the recipe `suite.shards` says. |
+| `RUNTIME_SUITE_CI` | unset | Product API only. `true`: a pull request's own events (opened, reopened, ready for review, a new head) also ask for the repository's e2e suite in CI mode, for an environment whose recipe declares a `suite:` block. Off by default: a suite holds several hosts for tens of minutes. |
 | `RUNTIME_WORKER_CONCURRENCY` | min(10, global) | Worker only; 1 to `RUNTIME_GLOBAL_CONCURRENCY`. Runs and setups one replica runs at once (DBOS `workerConcurrency`), so one replica never takes every global slot while its Postgres pool serves a share. |
 | `RUNTIME_SANDBOX_MEMORY_MB` | 2048 | Hub only. The memory a code sandbox that asks no size is admitted at on a cell whose hello names no `sandboxSize` (a cell that names one is admitted at its own, `-sandbox-memory-mb`). Never the cell's default Run size. |
 | `RUNTIME_PREVIEW_DOMAIN` | unset | Worker and preview edge. The registrable domain previews are served under (docs/runtime/preview-urls.md), never the one Kodus runs on. Unset: previews are off and the product says so; the edge refuses to start. |

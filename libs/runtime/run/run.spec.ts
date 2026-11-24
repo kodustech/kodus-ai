@@ -511,6 +511,21 @@ describe('kept checks on the wire', () => {
         expect(RuntimeRunRequestedSchema.safeParse({ ...req, keptChecks: [{ ...check, assertions: undefined }] }).success).toBe(false);
     });
 
+    it("a Run request carries the suite section the Run's e2e stage runs from: sealed tokens bound to the Run, the main commit and the PR's files", () => {
+        const suite = { mainSha: 'c'.repeat(40), repoToken: sealSecret('ghs_s0', key, runId), moreRepoTokens: [sealSecret('ghs_s1', key, runId)], changedFiles: ['src/a.ts'], removedFiles: [], deltaFiles: ['src/a.ts'] };
+        expect(RuntimeRunRequestedSchema.safeParse({ ...req, suite }).success).toBe(true);
+        expect(RuntimeRunRequestedSchema.safeParse({ ...req, suite: { ...suite, repoToken: 'ghs_plain' } }).success).toBe(false);
+        expect(RuntimeRunRequestedSchema.safeParse({ ...req, suite: { ...suite, extra: 1 } }).success).toBe(false);
+        expect(RuntimeRunRequestedSchema.safeParse({ ...req, suite: { ...suite, mainSha: 'abc' } }).success).toBe(false);
+    });
+
+    it('an external finding Run never carries the suite: its plan is closed', () => {
+        const suite = { mainSha: 'c'.repeat(40), repoToken: sealSecret('ghs_s0', key, runId) };
+        const r = RuntimeRunRequestedSchema.safeParse({ ...req, trigger: 'external_finding' as const, suite });
+        expect(r.success).toBe(false);
+        expect(!r.success && r.error.issues.some((i) => i.path[0] === 'suite')).toBe(true);
+    });
+
     it('an external finding Run never carries kept checks: its plan is closed', () => {
         const external = { ...req, trigger: 'external_finding' as const, keptChecks: [check] };
         expect(RuntimeRunRequestedSchema.safeParse(external).success).toBe(false);

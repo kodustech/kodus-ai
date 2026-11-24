@@ -40,16 +40,10 @@ import { RUNTIME_RUN_RETRY_EXCHANGE } from '@libs/runtime/run/run-messages';
 import { RuntimeRunRetry } from './consumer/runtime-run-retry';
 import { canaryKeyFrom, hubEnvironments, loadRecordedTurns, poolCellOf, RUN_DEPS_FACTORY, RunDependenciesFactory } from './dbos/run-deps.factory';
 import { RUN_ENGINE_LOCKS, RUN_ENGINE_RETENTION, RUN_ENGINE_STUCK, RUN_ENGINE_WORKFLOW_RETENTION, RunEngineService } from './dbos/run-engine.service';
-import { PgEnvTemplates } from '../shared/persistence/env-templates';
-import { PgSuiteBaselineRequests } from '../shared/persistence/suite-baseline-requests';
-import { PgSuiteDemand } from '../shared/persistence/suite-demand';
-import { PgSuiteBaselines } from './suite/pg-suite-baselines';
 import { PgSuiteRuns } from './suite/pg-suite-runs';
-import { PgSuiteSpecStats } from './suite/pg-suite-spec-stats';
-import { PlacementSuiteDemand } from './suite/suite-adapters';
-import { SuitePublisher } from './suite/suite-publisher';
-import { AmqpSuitePublishRequester } from './publish/amqp-suite-publish-requester';
-import { SUITE_RUNS, SUITE_SERVICE, SuiteService } from './suite/suite-service';
+import { SUITE_RUNS, SUITE_SERVICE } from './suite/suite-service';
+import { SuiteRunStage } from './suite/suite-stage';
+import { buildSuiteService } from './suite/suite-wiring';
 import { PgStuckSource, StuckDetector } from './maintenance/stuck-detector';
 import { ADMISSION_COORDINATOR, AdmissionCoordinator } from './dbos/admission-coordinator';
 import { HubPhysicalAdmissionClient } from './env/physical-admission-client';
@@ -252,6 +246,11 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                             capacityWaitMaxMs: config.capacityWaitMaxMs,
                             queueTimeoutMs: config.queueTimeoutMs,
                             exercisedLinesThresholdPercent: config.exercisedLinesThresholdPercent,
+                            // Run mode: the same suite service, as a stage of the Run (docs/runtime/e2e-suites.md section 10.2).
+                            suite: (factory) => {
+                                const runs = new PgSuiteRuns(pool);
+                                return new SuiteRunStage(buildSuiteService({ pool, deps: factory, setups, runs, amqp, maxHosts: config.suiteMaxHosts }), runs);
+                            },
                         });
                     },
                 },
@@ -306,25 +305,8 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                     // The e2e suite's workflow body (docs/runtime/e2e-suites.md section 11): the recipe's suite block, the spec list, the engine.
                     provide: SUITE_SERVICE,
                     inject: [RUNTIME_PG_POOL, RUN_DEPS_FACTORY, ENVIRONMENT_SETUP_STORE, SUITE_RUNS, AmqpConnection],
-                    useFactory: (pool: Pool, deps: RunDependenciesFactory, setups: EnvironmentSetupStore, runs: PgSuiteRuns, amqp: AmqpConnection) => {
-                        const templates = new PgEnvTemplates(pool);
-                        const pools = new PgHostPoolReader(pool);
-                        const demand = new PgSuiteDemand(pool);
-                        return new SuiteService({
-                            setups,
-                            environment: (ctx) => deps.envForSuite(ctx),
-                            demand: (scope) => new PlacementSuiteDemand(demand, pools, scope),
-                            runs,
-                            stats: new PgSuiteSpecStats(pool),
-                            baselines: new PgSuiteBaselines(pool),
-                            templates: { hasReady: (organizationId, environmentId) => templates.hasReady(organizationId, environmentId) },
-                            headroom: async () => config.suiteMaxHosts,
-                            baselineRequests: new PgSuiteBaselineRequests(pool),
-                            // The suite's own check goes to the product on the Runtime's publish route.
-                            publisher: new SuitePublisher(runs, new AmqpSuitePublishRequester(amqp)),
-                            clock: { now: () => Date.now(), sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)) },
-                        });
-                    },
+                    useFactory: (pool: Pool, deps: RunDependenciesFactory, setups: EnvironmentSetupStore, runs: PgSuiteRuns, amqp: AmqpConnection) =>
+                        buildSuiteService({ pool, deps, setups, runs, amqp, maxHosts: config.suiteMaxHosts }),
                 },
                 { provide: ORGANIZATION_PURGE_STORE, inject: [RUNTIME_PG_POOL], useFactory: (pool: Pool) => new PgOrganizationPurgeStore(pool) },
                 { provide: CLAIM_RELEASER, inject: [HUB_CLIENT], useFactory: (hub: HubClient) => new HubClaimReleaser(hub) },

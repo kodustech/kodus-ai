@@ -19,6 +19,7 @@ const FULL_REASON_TEXT: Record<FullReason, string> = {
     shared_routing: 'shared routing or setup code changed',
     uncovered_file: 'a changed file is covered by no spec, so nothing is skipped on a guess',
     map_missing: 'no coverage map is stored for this environment yet',
+    changes_unknown: 'the files this pull request changes could not be read',
     map_stale: 'the stored coverage map is too old to trust',
     map_digest: 'the suite changed since the coverage map was made',
     noise_file: 'a changed file is exercised by most specs',

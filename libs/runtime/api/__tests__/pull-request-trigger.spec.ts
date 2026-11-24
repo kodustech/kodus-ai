@@ -61,6 +61,7 @@ async function setup(opts: {
     issuer?: RuntimeRepoTokenIssuer;
     /** Whether the org may use the Runtime (alpha track and flag); on by default. */
     released?: boolean;
+    suiteCi?: { onPullRequest: jest.Mock };
 } = {}) {
     const head = opts.head === undefined ? { headSha: SHA, baseSha: BASE_SHA, fork: false, state: 'open' as const } : opts.head;
     const git = {
@@ -105,6 +106,7 @@ async function setup(opts: {
             { ownAuthor: async () => ({ userIds: [KODY_ACCOUNT] }) },
         ),
         runtimeReleaseGate(opts.released ?? true),
+        opts.suiteCi as any,
     );
     const requested = () => outbox.rows.filter((r) => r.payload.event_name === 'runtime.run.requested').map((r) => RuntimeRunRequestedSchema.parse(stripType(r.payload.payload)));
     const cancels = () => outbox.rows.filter((r) => r.payload.event_name === 'runtime.run.cancel_requested').map((r) => RuntimeRunCancelRequestedSchema.parse(stripType(r.payload.payload)));
@@ -138,6 +140,31 @@ function fakePlatform() {
 }
 
 const stripType = ({ workflowType: _t, ...rest }: any) => rest;
+
+describe('the suite CI trigger on a PR event', () => {
+    it.each(['opened', 'synchronize', 'ready_for_review'])('is asked on %s, after the Run decision, with the event as the Git API read it later', async (name) => {
+        const suiteCi = { onPullRequest: jest.fn(async () => ({ status: 'skipped', reason: 'disabled' })) };
+        const s = await setup({ suiteCi });
+        await s.useCase.execute(event({ event: name }));
+        expect(suiteCi.onPullRequest).toHaveBeenCalledWith(expect.objectContaining({ prNumber: 7, event: name }));
+    });
+
+    it('is not asked for a pull request closed, a comment, or an org the Runtime is not released to', async () => {
+        const suiteCi = { onPullRequest: jest.fn() };
+        await (await setup({ suiteCi, head: { headSha: SHA, baseSha: BASE_SHA, fork: false, state: 'closed' } })).useCase.execute(event({ event: 'closed' }));
+        await (await setup({ suiteCi, canWrite: true })).useCase.execute(event({ event: 'comment', commenter: { id: '42', login: 'maria' } }));
+        await (await setup({ suiteCi, released: false })).useCase.execute(event());
+        expect(suiteCi.onPullRequest).not.toHaveBeenCalled();
+    });
+
+    it('never changes what the Run trigger decided, whatever the suite trigger does', async () => {
+        const plain = await setup();
+        const expected = await plain.useCase.execute(event());
+        const failing = await setup({ suiteCi: { onPullRequest: jest.fn(async () => Promise.reject(new Error('boom'))) } });
+        expect(await failing.useCase.execute(event())).toEqual(expected);
+        expect(failing.requested()).toHaveLength(plain.requested().length);
+    });
+});
 
 describe('Runtime PR trigger (PR 2)', () => {
     it('a PR event from an org the Runtime is not released to is skipped as not_enabled, before any read or enqueue', async () => {

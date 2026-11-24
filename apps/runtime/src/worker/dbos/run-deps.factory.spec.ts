@@ -17,6 +17,22 @@ const options = (over: Partial<ConstructorParameters<typeof RunDependenciesFacto
     ...over,
 });
 
+describe('the suite stage of a Run', () => {
+    const req = { runId: 'r1', correlationId: 'c', organizationId: 'o', repository: { id: 'repo', name: 'shop' }, pullRequest: { number: 1, headSha: 'a'.repeat(40), baseSha: 'b'.repeat(40) }, environment: { imageId: 'img', expose: [] } } as any;
+
+    it("gives a Run the stage the worker built, built with the factory itself so its claims use the factory's environments", () => {
+        const stage = { run: jest.fn() };
+        const seen: unknown[] = [];
+        const f = new RunDependenciesFactory(options({ suite: (factory) => (seen.push(factory), stage) }));
+        expect(f.forRun(req).suite).toBe(stage);
+        expect(seen).toEqual([f]);
+    });
+
+    it('leaves a Run with no stage where the worker has none', () => {
+        expect(new RunDependenciesFactory(options()).forRun(req).suite).toBeUndefined();
+    });
+});
+
 describe('the environment of a suite run', () => {
     const ctx = { organizationId: 'org-1', suiteRunId: 'sr-1', key: 'suite-key', correlationId: 'suite-sr-1', fullName: 'acme/shop', imageId: 'img-1', expose: [], tokens: ['sealed:v1:a', 'sealed:v1:b'] };
 

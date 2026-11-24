@@ -1,6 +1,10 @@
 import type { AcquireRequest, ExecRequest } from '@libs/runtime/environment';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 
+import { parseRecipe } from '@libs/runtime/protocol/recipe';
+import { suiteDigestOf } from '@libs/runtime/suite';
+
+import { suiteConfigOf } from './suite-config';
 import { FakeSuiteCell, FakeSuiteDemand, InMemorySuiteBaselines, InMemorySuiteRuns, InMemorySuiteSpecStats, SuiteClock, type FakeSuiteWorld } from './testing';
 import { SuiteService, type SuiteServiceDeps } from './suite-service';
 
@@ -28,7 +32,7 @@ const request = (over: Partial<RuntimeSuiteRequested> = {}): RuntimeSuiteRequest
     requestedAt: '2026-11-23T12:00:00.000Z', key: 'sr-1', repoToken: 'sealed:v1:t0', moreRepoTokens: ['sealed:v1:t1', 'sealed:v1:t2', 'sealed:v1:t3', 'sealed:v1:t4'], ...over,
 });
 
-function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean } = {}) {
+function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any } = {}) {
     const published: string[] = [];
     const clock = new SuiteClock();
     const main = over.main ?? ['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts'];
@@ -58,6 +62,7 @@ function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuit
         templates: { hasReady: async () => over.ready ?? true },
         baselineRequests: { markStarted: async (_o, _e, sha) => void baselineStarted.push(sha) },
         clock,
+        ...(over.map ? { maps: { newest: async () => over.map } } : {}),
         ...(over.publisher ? { publisher: { started: async (c) => void published.push(`started:${c.mode}`), finished: async (_c, r, s) => void published.push(`finished:${r.status}:${s.cwd}`) } } : {}),
     };
     return { service: new SuiteService(deps), cell, runs, baselines, demand, tokens, baselineStarted, published };
@@ -160,5 +165,57 @@ describe('running a suite as a workflow', () => {
         const off = world({ recipe: null, publisher: true });
         await off.service.run(request(), passthrough);
         expect(off.published).toEqual([]);
+    });
+
+    describe('which specs run (docs section 6.1)', () => {
+        const recipe = parseRecipe(RECIPE);
+        const digest = suiteDigestOf(suiteConfigOf((recipe as { recipe: Parameters<typeof suiteConfigOf>[0] }).recipe)!.config, ['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts']);
+        const mapOf = (specs: Record<string, string[]>) => ({ suiteDigest: digest, commitsBehindMain: 0, ageMs: 0, specs });
+
+        it('runs the whole suite and keeps on the run why: there is no coverage map yet', async () => {
+            const w = world();
+            await w.service.run(request({ changedFiles: ['apps/dashboard/src/x.ts'] }), passthrough);
+            expect(w.cell.starts.flatMap((s) => s.specs).sort()).toEqual(['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts']);
+            expect((await w.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'full', reason: 'map_missing', total: 2 });
+        });
+
+        it('a baseline is the whole suite on main, whatever the map says', async () => {
+            const w = world({ map: mapOf({ 'cypress/e2e/a.cy.ts': ['x.ts'] }) });
+            await w.service.run(request({ mode: 'baseline', prNumber: undefined, prSha: undefined, mergeBase: undefined, changedFiles: ['x.ts'] }), passthrough);
+            expect(w.cell.starts.flatMap((s) => s.specs).sort()).toEqual(['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts']);
+            expect((await w.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'full', reason: 'baseline', total: 2 });
+        });
+
+        it('with a map, runs only the specs the change reaches, and says how many of how many', async () => {
+            const w = world({ map: mapOf({ 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] }) });
+            await w.service.run(request({ changedFiles: ['src/x.ts'] }), passthrough);
+            expect(w.cell.starts.flatMap((s) => s.specs)).toEqual(['cypress/e2e/a.cy.ts']);
+            expect((await w.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'selected', selected: 1, total: 2 });
+        });
+
+        it('a change that reaches no spec ends the run green without a shard host, and says none ran', async () => {
+            const w = world({ recipe: `${RECIPE}  ignore: ["docs/**"]\n`, map: mapOf({ 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] }) });
+            const out = await w.service.run(request({ changedFiles: ['docs/a.md'] }), passthrough);
+            expect(out).toMatchObject({ status: 'ran', state: 'passed' });
+            expect(w.cell.starts).toEqual([]);
+            expect((await w.runs.get(ORG, 'sr-1'))).toMatchObject({ state: 'passed', selection: { mode: 'none', total: 2 } });
+        });
+
+        it('a re-push of the PR runs what was red before plus what the new commits reach, and runs the red spec first', async () => {
+            const w = world({ map: mapOf({ 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] }) });
+            await w.runs.create({ suiteRunId: 'sr-0', organizationId: ORG, environmentId: ENV, repositoryId: 'repo-1', mode: 'ci', prNumber: 7, prSha: 'c'.repeat(40), mergeBase: MAIN, mainSha: MAIN, requestedAt: new Date('2026-11-23T11:00:00.000Z'), selection: { mode: 'selected', selected: 1, total: 2 } });
+            await w.runs.finish(ORG, 'sr-0', 'failed', new Date('2026-11-23T11:20:00.000Z'), { classification: { tests: [{ spec: 'cypress/e2e/b.cy.ts', title: 't', class: 'regression', blocks: true, finding: true, baseDrift: 0 }], massFailure: false, requestTemplateBuild: false } });
+            await w.service.run(request({ changedFiles: ['src/x.ts', 'src/y.ts'], deltaFiles: ['src/x.ts'] }), passthrough);
+            expect(w.cell.starts[0].specs).toEqual(['cypress/e2e/b.cy.ts', 'cypress/e2e/a.cy.ts']);
+            expect((await w.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'selected', selected: 2, total: 2 });
+        });
+
+        it('does not take itself for the previous run when a crashed step runs again', async () => {
+            const w = world();
+            await w.service.run(request(), passthrough);
+            await w.runs.finish(ORG, 'sr-1', 'failed', new Date(), {});
+            // A replay of the step finds the run it created: a finished one is answered, never planned against itself.
+            expect(await w.service.run(request(), passthrough)).toMatchObject({ replayed: true });
+        });
     });
 });

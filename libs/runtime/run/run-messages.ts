@@ -334,9 +334,26 @@ export const RuntimeRunRequestedSchema = z.strictObject({
      * strict schema refuses the field.
      */
     keptChecks: KeptChecksSchema.optional(),
+    /**
+     * The repository's own e2e suite as a stage of this Run (docs/runtime/e2e-suites.md section 10.2): sealed download tokens
+     * bound to the Run (the cell revokes a token once it fetched with it, so one per claim), the default-branch commit the
+     * environment template was built from, and the PR's files. Absent: the Run has no suite stage. Never on an external
+     * finding's Run, whose plan is closed.
+     */
+    suite: z
+        .strictObject({
+            mainSha: sha,
+            repoToken: sealedToken,
+            moreRepoTokens: z.array(sealedToken).max(32).optional(),
+            changedFiles: z.array(z.string().min(1).max(512)).max(5_000).optional(),
+            removedFiles: z.array(z.string().min(1).max(512)).max(5_000).optional(),
+            deltaFiles: z.array(z.string().min(1).max(512)).max(5_000).optional(),
+        })
+        .optional(),
 })
     .refine((req) => (req.trigger === 'external_finding') === !!req.externalVerification, { message: 'external verification metadata and trigger must be supplied together' })
     .refine((req) => req.trigger !== 'external_finding' || !req.keptChecks?.length, { message: 'an external finding Run plays its closed plan only', path: ['keptChecks'] })
+    .refine((req) => req.trigger !== 'external_finding' || !req.suite, { message: 'an external finding Run plays its closed plan only', path: ['suite'] })
     .superRefine((req, ctx) => {
         const error = runWorkspaceError(req);
         if (error) ctx.addIssue({ code: 'custom', message: error, path: ['workspace'] });

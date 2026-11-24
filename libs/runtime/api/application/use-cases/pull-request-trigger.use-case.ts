@@ -35,6 +35,7 @@ import {
     type RuntimeSettingsStore,
 } from '../../domain/ports';
 import { RuntimeRunRequestBuilder } from '../run-request-builder.service';
+import { RuntimeSuiteCiTrigger } from '../suite-ci-trigger.service';
 import { RuntimeRunEnqueuer } from '../runtime-run-enqueuer.service';
 
 /** Coding agents that open PRs under their own account; bots end in [bot]. */
@@ -130,6 +131,10 @@ export class RuntimePullRequestTriggerUseCase {
         // Required by Nest; a use case made without it starts nothing (fails closed).
         @Inject(RUNTIME_RELEASE_GATE)
         private readonly release?: RuntimeReleaseGate,
+        // CI mode (docs/runtime/e2e-suites.md section 11): the PR's own events also ask for the repository's e2e suite, when the deployment turns it on.
+        @Optional()
+        @Inject(RuntimeSuiteCiTrigger)
+        private readonly suiteCi?: Pick<RuntimeSuiteCiTrigger, 'onPullRequest'>,
     ) {}
 
     /**
@@ -206,7 +211,18 @@ export class RuntimePullRequestTriggerUseCase {
             context: RuntimePullRequestTriggerUseCase.name,
             metadata: { ...metadata, ...(reply ? { reply } : {}) },
         });
+        await this.askSuite(ev);
         return outcome;
+    }
+
+    /** The suite's CI trigger, after the Run decision and independent of it: whatever it does, the Run's outcome stands. */
+    private async askSuite(ev: RuntimePullRequestObserved): Promise<void> {
+        if (!this.suiteCi || ev.event === 'comment' || ev.event === 'closed') return;
+        try {
+            await this.suiteCi.onPullRequest(ev);
+        } catch (error) {
+            this.logger.warn({ message: 'Runtime trigger: the suite CI trigger failed', context: RuntimePullRequestTriggerUseCase.name, error: error instanceof Error ? error : undefined, metadata: { organizationId: ev.organizationId, prNumber: ev.prNumber } });
+        }
     }
 
     /**

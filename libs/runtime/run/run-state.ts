@@ -256,6 +256,8 @@ export interface VerdictInput {
      * (docs/runtime/e2e-suites.md section 10.2). A regression of the suite is a finding among `probes`.
      */
     suiteUnclassified?: number;
+    /** The repository's e2e suite was asked for and did not run, or did not finish: the Run cannot say it tested the suite. */
+    suiteNotRun?: boolean;
 }
 
 export interface VerdictOutcome {
@@ -331,6 +333,10 @@ export function decideRunVerdict(input: VerdictInput): VerdictOutcome {
     if (suiteUndecided > 0 && verdictState !== 'regression') {
         verdictState = 'partly_tested';
         forcedNeutral.push(`${suiteUndecided} e2e failure${suiteUndecided > 1 ? 's' : ''} not classified`);
+    }
+    if (input.suiteNotRun && verdictState !== 'regression') {
+        verdictState = 'partly_tested';
+        forcedNeutral.push('the e2e suite could not run');
     }
     if (input.blockedOutbound) forcedNeutral.push(`${input.blockedOutbound} blocked outbound request${input.blockedOutbound > 1 ? 's' : ''}`);
     if (input.dependencyChangeUntested) forcedNeutral.push('dependency change not behavior-tested');

@@ -84,6 +84,9 @@ const run: SuiteRunRecord = {
         await store.create({ ...run, suiteRunId: '2c5c2f6e-6f1d-4c53-9a43-1d1f5f3a9c13', prNumber: 8, requestedAt: new Date('2026-11-23T14:00:00.000Z') });
         expect((await store.latestForPr('org-a', 'env-1', 7))!.prSha).toBe('c'.repeat(40));
         expect(await store.latestForPr('org-a', 'env-1', 99)).toBeNull();
+        // From before a run: the run never reads itself as its previous.
+        expect((await store.latestForPr('org-a', 'env-1', 7, new Date('2026-11-23T13:00:00.000Z')))!.prSha).toBe('a'.repeat(40));
+        expect(await store.latestForPr('org-a', 'env-1', 7, new Date('2026-11-23T12:00:00.000Z'))).toBeNull();
     });
 
     it('keeps the classification a finished run ends with, and the first conclusion stays', async () => {

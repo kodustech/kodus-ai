@@ -5,8 +5,7 @@ import {
     OUTBOX_MESSAGE_REPOSITORY_TOKEN,
     type IOutboxMessageRepository,
 } from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
-import { RUNTIME_RECIPE_MAX_BYTES, RUNTIME_RECIPE_PATHS, RuntimeCommandName, runtimeCommandOutboxMessage } from '@libs/runtime/contracts/runtime-commands';
-import { parseRecipe, SUITE_LIMITS } from '@libs/runtime/protocol/recipe';
+import { RuntimeCommandName, runtimeCommandOutboxMessage } from '@libs/runtime/contracts/runtime-commands';
 import { traceparentFor } from '@libs/runtime/telemetry/runtime-telemetry';
 
 import {
@@ -26,6 +25,7 @@ import {
     type RuntimeSuiteBaselineReader,
 } from '../domain/ports';
 import { sealForRuntime } from './secret-sealer';
+import { suiteOfRecipeAt } from './suite-recipe';
 
 /** How many pending baseline requests one pass handles. */
 const PASS_LIMIT = 50;
@@ -79,7 +79,8 @@ export class RuntimeSuiteBaselineRequests {
                 }
                 const orgTeam = { organizationId: env.organizationId, teamId: env.teamId };
                 const repo = { repositoryId: env.repositoryId, repositoryName: env.repositoryName };
-                const shards = await this.shardsOf({ ...orgTeam, ...repo }, p.mainSha);
+                const suite = await suiteOfRecipeAt(this.git, { ...orgTeam, ...repo }, p.mainSha);
+                const shards = suite?.baseline ? suite.shards : undefined;
                 if (shards === undefined) {
                     // No suite at that commit: nothing to run, and nothing minted. Not asked again by this process.
                     this.handled.add(p.suiteRunId);
@@ -116,17 +117,5 @@ export class RuntimeSuiteBaselineRequests {
             }
         }
         return { pending: pending.length, requested, skipped, failed };
-    }
-
-    /** The shard ceiling of the recipe's suite at `sha`, or undefined when it declares none or no baseline. */
-    private async shardsOf(repo: { organizationId: string; teamId: string; repositoryId: string; repositoryName: string }, sha: string): Promise<number | undefined> {
-        for (const path of RUNTIME_RECIPE_PATHS) {
-            const content = await this.git.readFileAtCommit({ ...repo, path, sha, maxBytes: RUNTIME_RECIPE_MAX_BYTES });
-            if (content === null || content === 'unsupported_platform') continue;
-            const parsed = parseRecipe(content);
-            if (parsed.ok === false || !parsed.recipe.suite || !parsed.recipe.suite.baseline) return undefined;
-            return parsed.recipe.suite.shards ?? SUITE_LIMITS.shards;
-        }
-        return undefined;
     }
 }

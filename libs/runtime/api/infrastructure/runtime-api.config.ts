@@ -78,6 +78,7 @@ export function loadRuntimeApiConfig(env: NodeJS.ProcessEnv = process.env): Runt
         })(),
         // Every preset unless the deployment's plan lowers it, as the pool's ceiling (4) is open by default.
         machineSize: { maxPreset: isMachineSizePreset(env.RUNTIME_MACHINE_SIZE_MAX) ? env.RUNTIME_MACHINE_SIZE_MAX : 'large' },
+        suiteCi: env.RUNTIME_SUITE_CI === 'true',
         oncallUserIds: (env.RUNTIME_ONCALL_USER_IDS ?? '')
             .split(',')
             .map((s) => s.trim())

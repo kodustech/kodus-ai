@@ -24,7 +24,7 @@ import { resetTimeoutMs } from '../env/ready-check';
 import { IntentAuthor } from '../intent/intent-author';
 import { IntentClassifier } from '../intent/intent-classifier';
 import { ClaimLeaseKeeper, type LeaseEvent, type LeaseKeeperOptions } from '../run/lease-keeper';
-import type { ClaimReleaser, PublishRequester, RunClaims, RunDeps, RunEventSink, RunLog } from '../run/ports';
+import type { ClaimReleaser, PublishRequester, RunClaims, RunDeps, RunEventSink, RunLog, SuiteStage } from '../run/ports';
 import { type SecretOpener, setupTokenBinding } from '../secrets/sealed-tokens';
 import type { SuiteEnvironmentContext } from '../suite/suite-service';
 import { type SuiteEnvironment, suiteEnvironment } from '../suite/suite-environment';
@@ -50,6 +50,11 @@ export interface HardExpiredClaims {
 export interface RunDependenciesOptions {
     /** Earlier Runs' accepted plans, for a Run of the same head (run/plan-reuse.ts). */
     pastPlans?: PastPlans;
+    /**
+     * The e2e suite as a stage of a Run (docs/runtime/e2e-suites.md section 10.2): built with the factory, since its claims use
+     * the factory's environments (`envForSuite`). Absent: a request's `suite` section is ignored.
+     */
+    suite?: (factory: RunDependenciesFactory) => SuiteStage;
     /** The probes' versioned stability history (runtime_stability, ADR-050); absent: every probe starts with the table's default. */
     stability?: StabilityHistory;
     /** Each Run's kept-check outcomes (runtime_kept_check_results); absent: they stay on the Run only. */
@@ -212,6 +217,7 @@ export class RunDependenciesFactory implements RunDepsFactory {
             ...(this.deps.pastPlans ? { pastPlans: this.deps.pastPlans } : {}),
             ...(this.deps.stability ? { stability: this.deps.stability } : {}),
             ...(this.deps.keptCheckResults ? { keptCheckResults: this.deps.keptCheckResults } : {}),
+            ...(this.deps.suite ? { suite: this.deps.suite(this) } : {}),
         };
     }
 

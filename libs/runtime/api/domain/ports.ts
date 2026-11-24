@@ -101,6 +101,8 @@ export interface RuntimeApiConfig {
     pool: RuntimePoolPlan;
     /** The plan's machine size ceiling per environment (RUNTIME_MACHINE_SIZE_MAX). */
     machineSize: RuntimeMachineSizePlan;
+    /** RUNTIME_SUITE_CI: the PR's own events ask for the repository's e2e suite (CI mode, docs/runtime/e2e-suites.md section 11). Off by default. */
+    suiteCi?: boolean;
     /** Kodus on-call users: global stop and managed cells (RUNTIME_ONCALL_USER_IDS). */
     oncallUserIds: string[];
     /** Extra denylist entries on top of the Kodus default (RUNTIME_EGRESS_DENYLIST). */

@@ -77,6 +77,8 @@ export interface SuiteInputs {
     suiteDigest?: string;
     /** How the specs were chosen (the whole suite with the reason, or the selection): kept on the run for its check. */
     selection?: SuiteSelectionReport;
+    /** The risk-first order inside a shard (6.1): the specs red on the previous push first, then those that cover the diff. The balance is untouched. */
+    order?: { failedBefore: readonly string[]; diffCoverage: Readonly<Record<string, number>> };
 }
 
 /** Whether the environment has a ready template to start a main host from, and a way to ask for a build (9.5). */
@@ -337,7 +339,7 @@ export class SuiteEngine {
         shard.claimId = claim.claimId;
         ctx.claims.push(claim.claimId);
         const durations = estimateDurations(inputs.specs, ctx.stats);
-        const ordered = orderBin(runnable, { failedBefore: [], diffCoverage: {}, durations: Object.fromEntries(durations ?? []) });
+        const ordered = orderBin(runnable, { failedBefore: inputs.order?.failedBefore ?? [], diffCoverage: inputs.order?.diffCoverage ?? {}, durations: Object.fromEntries(durations ?? []) });
         // A crash re-runs what the runner had not reported, once, in the same claim.
         const ran = await this.runSpecs(ctx, { claimId: claim.claimId, shard: shard.shard }, 'shard', ordered, `${req.suiteRunId}-${shard.shard}`, { timeoutMs: inputs.config.shardTimeoutMs, crashRetries: 1, clear: false });
         for (const [spec, r] of ran.done) shard.done.set(spec, r);

@@ -92,8 +92,8 @@ export class InMemorySuiteRuns implements Pick<PgSuiteRuns, 'create' | 'get' | '
         const r = this.runs.get(suiteRunId);
         return r && r.organizationId === organizationId ? r : null;
     }
-    async latestForPr(organizationId: string, environmentId: string, prNumber: number) {
-        return [...this.runs.values()].filter((r) => r.organizationId === organizationId && r.environmentId === environmentId && r.prNumber === prNumber).sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime())[0] ?? null;
+    async latestForPr(organizationId: string, environmentId: string, prNumber: number, before?: Date) {
+        return [...this.runs.values()].filter((r) => r.organizationId === organizationId && r.environmentId === environmentId && r.prNumber === prNumber && (!before || r.requestedAt.getTime() < before.getTime())).sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime())[0] ?? null;
     }
     async finish(organizationId: string, suiteRunId: string, state: SuiteRunState, at: Date, end: SuiteRunEnd = {}) {
         const r = this.runs.get(suiteRunId);

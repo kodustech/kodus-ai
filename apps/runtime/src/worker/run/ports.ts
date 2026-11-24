@@ -2,7 +2,7 @@ import type { KeptCheckOutcome } from '@libs/runtime/contracts/kept-check';
 import type { ForkApprovalTokens } from '@libs/runtime/contracts/runtime-commands';
 import type { Claim, EnvironmentRuntime } from '@libs/runtime/environment';
 import type { ExercisedRequest, ExercisedResult } from '@libs/runtime/protocol/messages';
-import type { RunProjectionStore, RunStreamEvent, RuntimePublishRequested } from '@libs/runtime/run';
+import type { RunProjectionStore, RunStreamEvent, RuntimePublishRequested, RuntimeRunRequested, SuiteStageResult } from '@libs/runtime/run';
 import type { RuntimeMetrics } from '@libs/runtime/telemetry';
 
 import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
@@ -149,6 +149,15 @@ export interface KeptCheckResults {
     record(scope: { orgId: string; environmentId: string; repositoryId: string; runId: string; prNumber: number }, rows: KeptCheckResultRow[]): Promise<void>;
 }
 
+/** The repository's e2e suite as a stage of a Run (docs/runtime/e2e-suites.md section 10.2). */
+export interface SuiteStage {
+    /**
+     * Runs the suite the Run's request carries (`req.suite`) through the same engine as CI mode, inside the Run's workflow
+     * with its step runner, and says how it ended. Throws only a cancellation; anything else the stage turns into `unavailable`.
+     */
+    run(req: RuntimeRunRequested, step: StepRunner): Promise<SuiteStageResult>;
+}
+
 export interface RunDeps {
     step: StepRunner;
     env: EnvironmentRuntime;
@@ -168,6 +177,8 @@ export interface RunDeps {
     projection: RunProjectionStore;
     events: RunEventSink;
     publisher: PublishRequester;
+    /** The repository's e2e suite as a stage of the Run; absent: a request's `suite` section is ignored. */
+    suite?: SuiteStage;
     claims: RunClaims;
     metrics: RuntimeMetrics;
     now: () => Date;

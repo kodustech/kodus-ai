@@ -1,7 +1,7 @@
 import { type Claim } from '@libs/runtime/environment';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
-import { specListOf, suiteDigestOf } from '@libs/runtime/suite';
+import { type CoverageMapInput, type PreviousSuiteRun, planSuiteRun, type SuiteSelectionReport, specListOf, suiteDigestOf } from '@libs/runtime/suite';
 
 import type { PgSuiteBaselineRequests } from '../../shared/persistence/suite-baseline-requests';
 import type { PgSuiteBaselines } from './pg-suite-baselines';
@@ -40,10 +40,12 @@ export interface SuiteServiceDeps {
     setups: Pick<EnvironmentSetupStore, 'get'>;
     environment(ctx: SuiteEnvironmentContext): SuiteEnvironment;
     demand(scope: { organizationId: string; suiteRunId: string }): SuiteHostDemand;
-    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults'>;
+    runs: Pick<PgSuiteRuns, 'create' | 'get' | 'finish' | 'savePlan' | 'recordResults' | 'latestForPr'>;
     stats: Pick<PgSuiteSpecStats, 'read' | 'record'>;
     baselines?: Pick<PgSuiteBaselines, 'record' | 'findAmong'>;
     templates?: SuiteTemplates;
+    /** The environment's newest complete coverage map (a later step of the plan): absent, every PR run is the whole suite with the reason `map_missing`. */
+    maps?: { newest(organizationId: string, environmentId: string): Promise<CoverageMapInput | undefined> };
     headroom?(): Promise<number>;
     /** The baseline request a baseline run answers: marked started once the workflow holds it, so the product does not issue it again. */
     baselineRequests?: Pick<PgSuiteBaselineRequests, 'markStarted'>;
@@ -126,7 +128,16 @@ export class SuiteService {
         const common = { glob: s.suite.specsGlob, ...(s.suite.config.cwd ? { cwd: s.suite.config.cwd } : {}), listed: listing.specs, changedFiles: cmd.changedFiles, removedFiles: cmd.removedFiles };
         // A baseline is main alone: the PR's files are not part of it.
         const whole = specListOf(cmd.mode === 'baseline' ? { glob: common.glob, listed: listing.specs, ...(common.cwd ? { cwd: common.cwd } : {}) } : common);
-        const specs = cmd.specs ? specListOf({ ...common, only: cmd.specs }) : whole;
+        const digest = suiteDigestOf(s.suite.config, whole.map((x) => x.path));
+        const plan = await this.plan(cmd, s, whole.map((x) => x.path), digest);
+        const wanted = new Set(plan.specs);
+        // A retry runs exactly the specs it names; a selection runs the ones the plan chose (in the list's order).
+        const specs = cmd.specs ? specListOf({ ...common, only: cmd.specs }) : whole.filter((x) => wanted.has(x.path));
+        if (specs.length === 0 && !cmd.specs && plan.selection.mode === 'none') {
+            // The change reaches no spec: green, and the check says none ran.
+            await demand.end().catch(() => undefined);
+            return this.endedWithoutRunning(cmd, 'passed', plan.selection);
+        }
         if (specs.length === 0) {
             await demand.end().catch(() => undefined);
             return this.unavailable(cmd, 'no_specs');
@@ -146,14 +157,57 @@ export class SuiteService {
             specs,
             mainHistory: mainHistoryOf(cmd),
             // A retry or a selection runs part of the suite; the digest that keys a baseline is the whole suite's.
-            suiteDigest: suiteDigestOf(s.suite.config, whole.map((x) => x.path)),
+            suiteDigest: digest,
+            selection: cmd.specs ? { mode: 'selected', selected: specs.length, total: whole.length } : plan.selection,
+            order: { failedBefore: plan.failedBefore, diffCoverage: plan.diffCoverage },
         });
         return { status: 'ran', suiteRunId: cmd.suiteRunId, state: out.state, replayed: out.replayed };
     }
 
-    /** The run row that says why nothing ran: neutral, never a failure of the PR. */
-    private async unavailable(cmd: RuntimeSuiteRequested, reason: Extract<SuiteServiceResult, { status: 'unavailable' }>['reason']): Promise<SuiteServiceResult> {
-        await this.d.runs.create({
+    /**
+     * Which specs this run executes (6.1): the whole suite for a baseline; for a PR the plan of `planSuiteRun` over the change set,
+     * the re-push rule when the PR has an earlier finished run, and the coverage map when there is one. A retry names its own specs.
+     */
+    private async plan(cmd: RuntimeSuiteRequested, s: Started, all: readonly string[], digest: string) {
+        if (cmd.mode === 'baseline' || cmd.specs) return { specs: [...all], failedBefore: [] as string[], diffCoverage: {} as Record<string, number>, selection: { mode: 'full', reason: 'baseline', total: all.length } as SuiteSelectionReport };
+        const map = await this.d.maps?.newest(cmd.organizationId, cmd.environmentId);
+        const previous = await this.previousOf(cmd);
+        return planSuiteRun({
+            allSpecs: all,
+            suiteDigest: digest,
+            mergeBase: cmd.mergeBase!,
+            prSha: cmd.prSha!,
+            ...(cmd.changedFiles ? { changed: cmd.changedFiles } : {}),
+            ...(cmd.deltaFiles ? { deltaFiles: cmd.deltaFiles } : {}),
+            ...(previous ? { previous } : {}),
+            ...(map ? { map } : {}),
+            ignore: s.suite.ignore,
+        });
+    }
+
+    /** The PR's earlier finished run, as the re-push rule reads it: what it ran and what was red after classification. */
+    private async previousOf(cmd: RuntimeSuiteRequested): Promise<PreviousSuiteRun | undefined> {
+        if (cmd.prNumber === undefined) return undefined;
+        const prev = await this.d.runs.latestForPr(cmd.organizationId, cmd.environmentId, cmd.prNumber, new Date(cmd.requestedAt));
+        if (!prev?.finishedAt || prev.suiteRunId === cmd.suiteRunId || !prev.prSha || !prev.mergeBase) return undefined;
+        return {
+            prSha: prev.prSha,
+            mergeBase: prev.mergeBase,
+            mode: prev.selection?.mode === 'selected' ? 'selected' : 'full',
+            green: prev.state === 'passed',
+            failures: (prev.classification?.tests ?? []).map((t) => ({ spec: t.spec, class: t.class })),
+        };
+    }
+
+    /** A run that ended without running a spec: the row says how the specs were chosen. */
+    private async endedWithoutRunning(cmd: RuntimeSuiteRequested, state: 'passed', selection: SuiteSelectionReport): Promise<SuiteServiceResult> {
+        await this.d.runs.create({ ...this.runRecord(cmd), selection });
+        await this.d.runs.finish(cmd.organizationId, cmd.suiteRunId, state, new Date(this.d.clock.now()));
+        return { status: 'ran', suiteRunId: cmd.suiteRunId, state, replayed: false };
+    }
+
+    private runRecord(cmd: RuntimeSuiteRequested) {
+        return {
             suiteRunId: cmd.suiteRunId,
             organizationId: cmd.organizationId,
             environmentId: cmd.environmentId,
@@ -164,7 +218,12 @@ export class SuiteService {
             ...(cmd.mergeBase ? { mergeBase: cmd.mergeBase } : {}),
             mainSha: cmd.mainSha,
             requestedAt: new Date(cmd.requestedAt),
-        });
+        };
+    }
+
+    /** The run row that says why nothing ran: neutral, never a failure of the PR. */
+    private async unavailable(cmd: RuntimeSuiteRequested, reason: Extract<SuiteServiceResult, { status: 'unavailable' }>['reason']): Promise<SuiteServiceResult> {
+        await this.d.runs.create(this.runRecord(cmd));
         await this.d.runs.finish(cmd.organizationId, cmd.suiteRunId, 'neutral', new Date(this.d.clock.now()));
         return { status: 'unavailable', suiteRunId: cmd.suiteRunId, state: 'neutral', reason };
     }

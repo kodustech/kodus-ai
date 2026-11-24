@@ -30,6 +30,8 @@ export const FULL_REASONS = [
     'shared_routing',
     'uncovered_file',
     'map_missing',
+    /** The change set could not be read (the diff was cut or the product did not send it): nothing is skipped on a guess. */
+    'changes_unknown',
     'map_stale',
     'map_digest',
     'noise_file',

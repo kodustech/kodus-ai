@@ -21,3 +21,5 @@ export { specListOf } from './spec-list';
 export type { SpecListInput } from './spec-list';
 export { ANNOTATION_MESSAGE_MAX, ANNOTATION_PAGE, ANNOTATION_TITLE_MAX, ANNOTATIONS_MAX, buildSuiteReport, failingLineOf, pageAnnotations, SUITE_REPORT_STATES, SUITE_UNAVAILABLE_REASONS, suiteConclusionOf } from './report';
 export type { SuiteAnnotation, SuiteCheckConclusion, SuiteReport, SuiteReportInput, SuiteReportState, SuiteSelectionReport, SuiteUnavailableReason } from './report';
+export { planSuiteRun } from './plan';
+export type { SuitePlan, SuitePlanInput } from './plan';

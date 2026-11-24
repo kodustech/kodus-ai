@@ -460,6 +460,8 @@ export const RuntimeSuiteRequestedSchema = z
         /** The files the PR changed against its merge base (renames as both paths), and those it removed: the selection and the spec list read them. Absent: unknown, the whole suite runs. */
         changedFiles: z.array(z.string().min(1).max(512)).max(SUITE_CHANGED_FILES_MAX).optional(),
         removedFiles: z.array(z.string().min(1).max(512)).max(SUITE_CHANGED_FILES_MAX).optional(),
+        /** The files the newest commits of a re-pushed PR change (the previous head against this one); absent: unknown. */
+        deltaFiles: z.array(z.string().min(1).max(512)).max(SUITE_CHANGED_FILES_MAX).optional(),
         /** Run only these spec files (a retry of a shard or of the failed specs); the suite's digest stays the whole suite's. */
         specs: z.array(z.string().min(1).max(512)).max(SUITE_CHANGED_FILES_MAX).optional(),
     })

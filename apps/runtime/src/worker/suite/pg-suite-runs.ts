@@ -110,11 +110,11 @@ export class PgSuiteRuns {
         return r.rows[0] ? runOf(r.rows[0]) : null;
     }
 
-    /** The newest earlier run of a PR in the environment: what the re-push rule reads. */
-    async latestForPr(organizationId: string, environmentId: string, prNumber: number): Promise<StoredSuiteRun | null> {
+    /** The newest run of a PR in the environment, from before `before` when given (a run never reads itself as its previous): what the re-push rule reads. */
+    async latestForPr(organizationId: string, environmentId: string, prNumber: number, before?: Date): Promise<StoredSuiteRun | null> {
         const r = await this.pool.query(
-            `SELECT * FROM runtime.runtime_suite_runs WHERE organization_id = $1 AND environment_id = $2 AND pr_number = $3 ORDER BY requested_at DESC LIMIT 1`,
-            [organizationId, environmentId, prNumber],
+            `SELECT * FROM runtime.runtime_suite_runs WHERE organization_id = $1 AND environment_id = $2 AND pr_number = $3 AND ($4::timestamptz IS NULL OR requested_at < $4) ORDER BY requested_at DESC LIMIT 1`,
+            [organizationId, environmentId, prNumber, before ?? null],
         );
         return r.rows[0] ? runOf(r.rows[0]) : null;
     }

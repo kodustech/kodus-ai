@@ -152,4 +152,14 @@ describe('the first pass of a suite run', () => {
         expect(again).toMatchObject({ replayed: true, state: 'passed' });
         expect(w.cell.starts).toHaveLength(1);
     });
+
+    it('runs the specs red on the previous push, then those that cover the diff, first in their shard, and balances the same', async () => {
+        const w = world({ specs: { 'a.cy.ts': { ms: 10_000 }, 'b.cy.ts': { ms: 20_000 }, 'c.cy.ts': { ms: 30_000 } } }, { maxShards: 1 });
+        await w.engine.run(request(), { ...w.inputs(['a.cy.ts', 'b.cy.ts', 'c.cy.ts']), order: { failedBefore: ['c.cy.ts'], diffCoverage: { 'b.cy.ts': 2 } } });
+        expect(w.cell.starts[0].specs).toEqual(['c.cy.ts', 'b.cy.ts', 'a.cy.ts']);
+        const w2 = world({ specs: { 'a.cy.ts': { ms: 10_000 }, 'b.cy.ts': { ms: 20_000 }, 'c.cy.ts': { ms: 30_000 } } }, { maxShards: 1 });
+        await w2.engine.run(request(), w2.inputs(['a.cy.ts', 'b.cy.ts', 'c.cy.ts']));
+        // Without the order input the specs keep their path order (no stored duration yet).
+        expect(w2.cell.starts[0].specs).toEqual(['a.cy.ts', 'b.cy.ts', 'c.cy.ts']);
+    });
 });

@@ -25,3 +25,21 @@ export function suiteFindingsOf(classification: Classification | undefined): Pro
 }
 
 export const suiteUnclassifiedCount = (classification: Classification | undefined): number => (classification?.tests ?? []).filter((t) => UNDECIDED.has(t.class)).length;
+
+/** What a suite stage ended as, as far as the Run's verdict reads it. */
+export interface SuiteStageResult {
+    /** `off`: the environment has no suite to run. `unavailable`: it could not start. */
+    status: 'ran' | 'unavailable' | 'off';
+    /** The suite run's state when it ran. */
+    state?: 'passed' | 'failed' | 'neutral' | 'timed_out' | 'cancelled' | 'errored';
+    classification?: Classification;
+}
+
+/** The suite's part of the verdict: findings, the failures left undecided, and whether the suite did not run or finish. */
+export function suiteVerdictParts(r: SuiteStageResult | undefined): { findings: ProbeVerdict[]; unclassified: number; notRun: boolean } {
+    if (!r || r.status === 'off') return { findings: [], unclassified: 0, notRun: false };
+    if (r.status === 'unavailable') return { findings: [], unclassified: 0, notRun: true };
+    // A run that timed out, was cancelled or errored never reached its classification: what it did not decide is not "tested".
+    const finished = r.state === 'passed' || r.state === 'failed' || r.state === 'neutral';
+    return { findings: suiteFindingsOf(r.classification), unclassified: suiteUnclassifiedCount(r.classification), notRun: !finished };
+}

@@ -88,6 +88,18 @@ describe('PublishSuiteCheckUseCase', () => {
         expect(run.output.annotations?.[0]).toMatchObject({ path: 'cypress/e2e/a.cy.ts', startLine: 12, level: 'failure' });
     });
 
+    it('Run mode and CI mode write the same check; Run mode links to the Run, CI mode to nothing the suite has no page for yet', async () => {
+        const ci = await setup();
+        await ci.useCase.execute(onTheWire(finalMsg()));
+        expect([...ci.checks.runs.values()][0].output.summary).not.toContain('Open the Run');
+        const run = await setup();
+        await run.useCase.execute(onTheWire(finalMsg({ report: report({ mode: 'run' }) })));
+        const [check] = [...run.checks.runs.values()];
+        expect(check.name).toBe('Kody Runtime e2e');
+        expect(check.output.summary).toContain(`[Open the Run](https://app.kodus.test/runtime/runs/${SUITE_ID})`);
+        expect(check.output.title).toBe([...ci.checks.runs.values()][0].output.title);
+    });
+
     it('takes the conclusion from the report state: a neutral run is neutral whatever the message says', async () => {
         const t = await setup();
         await t.useCase.execute(onTheWire(finalMsg({ report: report({ state: 'neutral', classes: { regression: 0, preExisting: 0, flaky: 0, unclassified: 2, infra: 0 }, annotations: [] }), check: { status: 'completed', conclusion: 'success' } })));
