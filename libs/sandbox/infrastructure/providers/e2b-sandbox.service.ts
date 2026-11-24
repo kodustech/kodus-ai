@@ -33,6 +33,7 @@ import {
 import { readWithinRootCommand } from './read-within-root';
 import type {
     EgressRoute,
+    EgressRouteWhy,
     FixedIpFallback,
     FixedIpReason,
     ISandboxEgressPolicy,
@@ -71,6 +72,15 @@ const EGRESS_JUMP_CHECK =
     'iptables -t nat -C OUTPUT -p tcp -j SHADOWSOCKS 2>/dev/null';
 const EGRESS_BYPASS_CHECK =
     'iptables -t nat -C OUTPUT -p tcp -j RETURN 2>/dev/null';
+/** The policy's reasons, plus what only the sandbox can know: no template
+ * (it boots without the proxy rules), the policy threw, or the sandbox
+ * could not be taken off the proxy. */
+type SandboxRouteWhy =
+    | EgressRouteWhy
+    | 'no_template'
+    | 'policy_failed'
+    | 'bypass_failed';
+
 // How long a direct sandbox waits for the Git host to accept a connection.
 const EGRESS_REACH_TIMEOUT_S = 10;
 
@@ -731,15 +741,15 @@ export class E2BSandboxService implements ISandboxProvider {
     /** `fixed_ip` unless the policy says this team may leave direct. */
     private async resolveEgressRoute(
         params: CreateSandboxParams,
-    ): Promise<EgressRoute> {
+    ): Promise<{ route: EgressRoute; why: SandboxRouteWhy }> {
         const { organizationId, teamId } = params;
         if (!this.egressPolicy || !organizationId || !teamId) {
-            return 'fixed_ip';
+            return { route: 'fixed_ip', why: 'no_scope' };
         }
         try {
-            return await this.egressPolicy.route({ organizationId, teamId });
+            return await this.egressPolicy.decide({ organizationId, teamId });
         } catch {
-            return 'fixed_ip';
+            return { route: 'fixed_ip', why: 'policy_failed' };
         }
     }
 
@@ -759,13 +769,14 @@ export class E2BSandboxService implements ISandboxProvider {
                 EGRESS_BYPASS_CHECK,
             ].join('; '),
         );
-        this.logger.log({
-            message: done
-                ? '[egress] route=direct'
-                : '[egress] could not take the sandbox off the egress proxy; route=fixed_ip',
-            context: E2BSandboxService.name,
-            metadata: { sandboxId: sandbox.sandboxId, direct: done },
-        });
+        if (!done) {
+            this.logger.warn({
+                message:
+                    '[egress] could not take the sandbox off the egress proxy; staying on the fixed IP',
+                context: E2BSandboxService.name,
+                metadata: { sandboxId: sandbox.sandboxId },
+            });
+        }
         return done;
     }
 
@@ -1036,15 +1047,33 @@ export class E2BSandboxService implements ISandboxProvider {
             // through the egress proxy (fixed IP). Teams whose Git host does
             // not need that IP leave direct instead; see
             // SandboxEgressPolicyService for who decides.
-            let egressRoute: EgressRoute = usedTemplate
+            const decision = usedTemplate
                 ? await this.resolveEgressRoute(params)
-                : 'fixed_ip';
+                : ({ route: 'fixed_ip', why: 'no_template' } as const);
+            let egressRoute: EgressRoute = decision.route;
+            let why: SandboxRouteWhy = decision.why;
             if (
                 egressRoute === 'direct' &&
                 !(await this.useDirectEgress(sandbox))
             ) {
                 egressRoute = 'fixed_ip';
+                why = 'bypass_failed';
             }
+            // One line per sandbox: which route it took and why. With the
+            // clone fallback's own lines, this is how to tell who leaves
+            // direct, who keeps the fixed IP, and who was refused.
+            this.logger.log({
+                message: `[egress] route=${egressRoute} (${why})`,
+                context: E2BSandboxService.name,
+                metadata: {
+                    organizationId: params.organizationId,
+                    teamId: params.teamId,
+                    platform: params.platform,
+                    sandboxId: sandbox.sandboxId,
+                    route: egressRoute,
+                    why,
+                },
+            });
             if (egressRoute === 'fixed_ip') {
                 // Configure Shadowsocks proxy for IP tunneling (clients with restricted git access)
                 await this.setupProxy(sandbox);

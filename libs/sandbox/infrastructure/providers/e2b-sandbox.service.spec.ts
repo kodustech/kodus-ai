@@ -1299,6 +1299,10 @@ describe('E2BSandboxService egress route', () => {
     type Fallback = 'allowed' | 'plan' | 'turned_off' | 'throws';
     const policy = (route: 'direct' | 'fixed_ip', fallback: Fallback) => ({
         route: jest.fn().mockResolvedValue(route),
+        decide: jest.fn().mockResolvedValue({
+            route,
+            why: route === 'direct' ? 'not_marked' : 'marked',
+        }),
         fixedIpAllowed: jest.fn().mockResolvedValue(fallback !== 'plan'),
         fixedIpFallback:
             fallback === 'throws'
@@ -1341,6 +1345,17 @@ describe('E2BSandboxService egress route', () => {
             opts.fallback ?? (opts.paidPlan === false ? 'plan' : 'allowed'),
         );
         const service = new E2BSandboxService(config as any, egress);
+        const logged = jest.fn();
+        const realLogger = (service as any).logger;
+        (service as any).logger = new Proxy(realLogger, {
+            get: (target, prop) =>
+                prop === 'log'
+                    ? (entry: unknown) => {
+                          logged(entry);
+                          return target.log(entry);
+                      }
+                    : target[prop],
+        });
         const result = service.createSandboxWithRepo({
             cloneUrl: 'https://github.com/acme/api.git',
             authToken: 'tok',
@@ -1350,8 +1365,14 @@ describe('E2BSandboxService egress route', () => {
             sandboxMetadata: { stage: 'review' },
             ...(opts.scoped !== false && { organizationId: ORG, teamId: TEAM }),
         });
-        return { result, egress, log, sbx };
+        return { result, egress, log, sbx, logged };
     };
+
+    /** The one `[egress] route=` line the sandbox wrote. */
+    const routeLines = (logged: jest.Mock) =>
+        logged.mock.calls
+            .map(([entry]) => entry as { message: string; metadata: any })
+            .filter((e) => e.message?.startsWith('[egress] route='));
 
     const clones = (log: { cmd: string; onProxy: boolean }[]) =>
         log.filter((l) => l.cmd.includes('git init'));
@@ -1361,7 +1382,7 @@ describe('E2BSandboxService egress route', () => {
     it('leaves the network alone for a team that needs the fixed IP', async () => {
         const { result, log, egress } = await create({ route: 'fixed_ip' });
         await result;
-        expect(egress.route).toHaveBeenCalledWith({
+        expect(egress.decide).toHaveBeenCalledWith({
             organizationId: ORG,
             teamId: TEAM,
         });
@@ -1561,7 +1582,7 @@ describe('E2BSandboxService egress route', () => {
             scoped: false,
         });
         await result;
-        expect(egress.route).not.toHaveBeenCalled();
+        expect(egress.decide).not.toHaveBeenCalled();
         expect(touchesNetwork(log)).toBe(false);
     });
 
@@ -1571,7 +1592,49 @@ describe('E2BSandboxService egress route', () => {
             template: false,
         });
         await result;
-        expect(egress.route).not.toHaveBeenCalled();
+        expect(egress.decide).not.toHaveBeenCalled();
+    });
+
+    it('logs one route line per sandbox with the organization, the team and why', async () => {
+        const { result, logged } = await create({ route: 'direct' });
+        await result;
+        expect(routeLines(logged)).toEqual([
+            expect.objectContaining({
+                message: '[egress] route=direct (not_marked)',
+                metadata: expect.objectContaining({
+                    organizationId: ORG,
+                    teamId: TEAM,
+                    route: 'direct',
+                    why: 'not_marked',
+                }),
+            }),
+        ]);
+    });
+
+    it('logs the fixed IP with the reason when the sandbox cannot be taken off the proxy', async () => {
+        const { result, logged } = await create({
+            route: 'direct',
+            sandbox: { cannotLeaveProxy: true },
+        });
+        await result;
+        expect(routeLines(logged)).toEqual([
+            expect.objectContaining({
+                message: '[egress] route=fixed_ip (bypass_failed)',
+            }),
+        ]);
+    });
+
+    it('logs why a sandbox without the template keeps the fixed IP', async () => {
+        const { result, logged } = await create({
+            route: 'direct',
+            template: false,
+        });
+        await result;
+        expect(routeLines(logged)).toEqual([
+            expect.objectContaining({
+                message: '[egress] route=fixed_ip (no_template)',
+            }),
+        ]);
     });
 
     it('never tells the sandbox provider which organization or team it serves', async () => {

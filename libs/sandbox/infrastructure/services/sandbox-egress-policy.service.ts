@@ -115,8 +115,31 @@ export interface FixedEgressIpSetting {
  */
 export type FixedIpFallback = 'allowed' | 'plan' | 'turned_off';
 
+/**
+ * Why a sandbox got its route, for the one log line each sandbox writes:
+ * `rollout_off` (direct egress not rolled out to the organization),
+ * `not_in_plan` (its plan does not include the fixed IP, so always direct),
+ * `marked` / `not_marked` (the organization's egress_fixed_ip marker),
+ * `marker_unreadable` (kept on the fixed IP), `no_scope` (no organization
+ * or team to decide for).
+ */
+export type EgressRouteWhy =
+    | 'no_scope'
+    | 'rollout_off'
+    | 'not_in_plan'
+    | 'marked'
+    | 'not_marked'
+    | 'marker_unreadable';
+
+export interface EgressDecision {
+    route: EgressRoute;
+    why: EgressRouteWhy;
+}
+
 export interface ISandboxEgressPolicy {
     route(scope: EgressScope | undefined): Promise<EgressRoute>;
+    /** The route and why it was chosen. */
+    decide(scope: EgressScope | undefined): Promise<EgressDecision>;
     /** Whether the organization's plan includes the fixed outbound IP. */
     fixedIpAllowed(scope: EgressScope): Promise<boolean>;
     /**
@@ -256,23 +279,33 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
     ) {}
 
     async route(scope: EgressScope | undefined): Promise<EgressRoute> {
-        if (!scope?.organizationId || !scope?.teamId) return 'fixed_ip';
-        if (!this.organizationParameters) return 'fixed_ip';
+        return (await this.decide(scope)).route;
+    }
+
+    async decide(scope: EgressScope | undefined): Promise<EgressDecision> {
+        if (!scope?.organizationId || !scope?.teamId) {
+            return { route: 'fixed_ip', why: 'no_scope' };
+        }
+        if (!this.organizationParameters) {
+            return { route: 'fixed_ip', why: 'no_scope' };
+        }
 
         const rollout = await this.readRollout();
         if (
             !rollout.directByDefault &&
             !rollout.directOrganizationIds.includes(scope.organizationId)
         ) {
-            return 'fixed_ip';
+            return { route: 'fixed_ip', why: 'rollout_off' };
         }
 
-        if (!(await this.fixedIpAllowed(scope))) return 'direct';
+        if (!(await this.fixedIpAllowed(scope))) {
+            return { route: 'direct', why: 'not_in_plan' };
+        }
 
         try {
             return (await this.requiresFixedIp(scope.organizationId))
-                ? 'fixed_ip'
-                : 'direct';
+                ? { route: 'fixed_ip', why: 'marked' }
+                : { route: 'direct', why: 'not_marked' };
         } catch (error) {
             this.logger.warn({
                 message:
@@ -281,7 +314,7 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
                 error,
                 metadata: { ...scope },
             });
-            return 'fixed_ip';
+            return { route: 'fixed_ip', why: 'marker_unreadable' };
         }
     }
 

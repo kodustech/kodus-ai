@@ -129,6 +129,51 @@ const build = (opts: {
     };
 };
 
+describe('SandboxEgressPolicyService.decide', () => {
+    it.each([
+        [{}, 'fixed_ip', 'rollout_off'],
+        [
+            { rollout: { directByDefault: true }, license: 'free' as const },
+            'direct',
+            'not_in_plan',
+        ],
+        [
+            {
+                rollout: { directByDefault: true },
+                license: 'teams' as const,
+                marker: { required: true, source: 'manual' },
+            },
+            'fixed_ip',
+            'marked',
+        ],
+        [
+            { rollout: { directByDefault: true }, license: 'teams' as const },
+            'direct',
+            'not_marked',
+        ],
+        [
+            {
+                rollout: { directByDefault: true },
+                license: 'teams' as const,
+                markerError: new Error('pg down'),
+            },
+            'fixed_ip',
+            'marker_unreadable',
+        ],
+    ])('says why it picked the route (%#)', async (opts, route, why) => {
+        const { service } = build(opts);
+        await expect(service.decide(scope)).resolves.toEqual({ route, why });
+    });
+
+    it('says there was nothing to decide for a sandbox without a team', async () => {
+        const { service } = build({ rollout: { directByDefault: true } });
+        await expect(service.decide(undefined)).resolves.toEqual({
+            route: 'fixed_ip',
+            why: 'no_scope',
+        });
+    });
+});
+
 describe('SandboxEgressPolicyService.route', () => {
     it('keeps every sandbox on the fixed IP while direct egress is not rolled out (today)', async () => {
         const { service } = build({});
