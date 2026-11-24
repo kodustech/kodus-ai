@@ -55,6 +55,7 @@ Imports these Runtime modules:
 - [`libs/runtime/protocol`](../../protocol/AGENTS.md)
 - [`libs/runtime/redaction`](../../redaction/AGENTS.md)
 - [`libs/runtime/run`](../../run/AGENTS.md)
+- [`libs/runtime/suite`](../../suite/AGENTS.md)
 - [`libs/runtime/telemetry`](../../telemetry/AGENTS.md)
 
 Imported by:

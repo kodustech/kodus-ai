@@ -351,6 +351,13 @@ export interface RuntimeGitPort {
         input: OrgTeam & { repositoryId: string; repositoryName: string; sha: string },
     ): Promise<string[] | 'unsupported_platform'>;
     /**
+     * As listFilesAtCommit, with each file's size in bytes (-1 when the platform's tree does not say): the e2e suite's spec
+     * files on main, weighed for the shards without a host (libs/runtime/suite mainSpecsOfTree).
+     */
+    listFileSizesAtCommit?(
+        input: OrgTeam & { repositoryId: string; repositoryName: string; sha: string },
+    ): Promise<Array<{ path: string; size: number }> | 'unsupported_platform'>;
+    /**
      * Opens a PR from a new branch off `baseBranch` with these files (a recipe
      * fix, ADR-015: the recipe only changes by a PR). Null when the platform
      * refused it.

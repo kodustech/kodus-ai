@@ -347,6 +347,19 @@ export class CodeManagementRuntimeGitAdapter implements RuntimeGitPort {
         return files.map((f) => f?.path).filter((p): p is string => typeof p === 'string' && p.length > 0);
     }
 
+    async listFileSizesAtCommit(input: OrgTeam & { repositoryId: string; repositoryName: string; sha: string }): Promise<Array<{ path: string; size: number }> | 'unsupported_platform'> {
+        const files = await this.codeManagement.getRepositoryAllFiles({
+            organizationAndTeamData: { organizationId: input.organizationId, teamId: input.teamId },
+            repository: { id: input.repositoryId, name: splitFullName(input.repositoryName).name },
+            filters: { branch: input.sha, maxFiles: 0 },
+            throwOnError: true,
+        });
+        if (!Array.isArray(files)) return 'unsupported_platform';
+        return files
+            .filter((f) => typeof f?.path === 'string' && f.path.length > 0)
+            .map((f) => ({ path: f.path as string, size: typeof f.size === 'number' && Number.isSafeInteger(f.size) ? f.size : -1 }));
+    }
+
     /** The provider's own read diagnosis of the repository (never throws); unknown when it cannot be asked. */
     async repositoryReadAccess(input: OrgTeam & { repositoryId: string; repositoryName: string }): Promise<'ok' | 'denied' | 'unknown'> {
         const { name } = splitFullName(input.repositoryName);

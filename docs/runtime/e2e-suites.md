@@ -154,7 +154,12 @@ disk). A host boots in 10 to 20 s with main's build ready (`host-providers.md` 8
 
 ## 6. Spec distribution
 
-The engine lists the spec files at the PR sha (`git ls-tree`, matched against `suite.specs`) and splits them:
+The product reads main's spec files and their sizes from the repository's tree at the main commit (one Git API call,
+`mainSpecsOfTree`: under `cwd`, matched against `suite.specs`, never `node_modules`) and sends them in the command
+(`mainSpecs`); the PR's added and removed specs go on top (`specListOf`). No host boots to list them: on an environment
+with no ready template that host would build main cold only to read file names. A platform with no tree, a Git API that
+fails, or more than 5,000 matches leave `mainSpecs` out, and a listing host lists them as before (`TemplateSpecLister`).
+The engine then splits them:
 
 1. **Durations.** `runtime_suite_spec_stats(environment, spec) -> {p50Ms, lastMs, samples, lastSeenSha}`, an
    exponential average of the last 10 passing runs, updated by every baseline and PR run. Failed or timed-out specs do

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { SUITE_MAIN_BEHIND_MAX } from '@libs/runtime/contracts/runtime-commands';
 import type { RuntimeRunRequested } from '@libs/runtime/run';
+import { mainSpecsOfTree } from '@libs/runtime/suite';
 
 import {
     RUNTIME_API_CONFIG,
@@ -36,7 +37,7 @@ export type SuiteRunInputs = NonNullable<RuntimeRunRequested['suite']>;
 @Injectable()
 export class RuntimeSuiteInputs {
     constructor(
-        @Inject(RUNTIME_GIT_PORT) private readonly git: Pick<RuntimeGitPort, 'readFileAtCommit' | 'compareWithMain'>,
+        @Inject(RUNTIME_GIT_PORT) private readonly git: Pick<RuntimeGitPort, 'readFileAtCommit' | 'compareWithMain' | 'listFileSizesAtCommit'>,
         @Inject(RUNTIME_REPO_TOKEN_ISSUER) private readonly repoTokens: RuntimeRepoTokenIssuer,
         @Inject(RUNTIME_API_CONFIG) private readonly config: RuntimeApiConfig,
         @Inject(RUNTIME_ENVIRONMENT_SETUP_READER) private readonly setups: Pick<RuntimeEnvironmentSetupReader, 'get'>,
@@ -73,6 +74,23 @@ export class RuntimeSuiteInputs {
         }
     }
 
+    /**
+     * Main's spec files with their sizes, from the repository's tree at `mainSha` (one Git API call): the engine then needs no
+     * listing host, which on an environment with no ready template would build main cold only to list files. Nothing when the
+     * platform has no tree here, the call fails or more specs match than a command carries: the listing host lists them.
+     */
+    async mainSpecsOf(repo: SuiteRepo, mainSha: string, suite: { specs: string; cwd?: string }): Promise<{ mainSpecs?: Array<{ path: string; sizeBytes: number }> }> {
+        if (!this.git.listFileSizesAtCommit) return {};
+        try {
+            const tree = await this.git.listFileSizesAtCommit({ ...repo, sha: mainSha });
+            if (tree === 'unsupported_platform') return {};
+            const specs = mainSpecsOfTree(tree, { glob: suite.specs, ...(suite.cwd !== undefined ? { cwd: suite.cwd } : {}) });
+            return specs ? { mainSpecs: specs } : {};
+        } catch {
+            return {};
+        }
+    }
+
     /** One sealed download token per claim of a suite with `shards` as its ceiling, bound to `sealTo`. */
     async tokensFor(repo: SuiteRepo, shards: number, sealTo: string): Promise<string[]> {
         const tokens: string[] = [];
@@ -90,6 +108,13 @@ export class RuntimeSuiteInputs {
         const suite = await suiteOfRecipeAt(this.git, input.repo, mainSha);
         if (!suite) return undefined;
         const [repoToken, ...moreRepoTokens] = await this.tokensFor(input.repo, suite.shards, input.runId);
-        return { mainSha, ...(await this.standingOf(input.repo, mainSha, input.headSha)), repoToken, moreRepoTokens, ...this.changesOf(input.diff) };
+        return {
+            mainSha,
+            ...(await this.standingOf(input.repo, mainSha, input.headSha)),
+            repoToken,
+            moreRepoTokens,
+            ...this.changesOf(input.diff),
+            ...(await this.mainSpecsOf(input.repo, mainSha, suite)),
+        };
     }
 }

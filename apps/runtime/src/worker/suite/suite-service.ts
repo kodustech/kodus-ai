@@ -19,7 +19,7 @@ import { mainHistoryOf } from './suite-adapters';
 import { suiteConfigOf, type ResolvedSuite } from './suite-config';
 import { execInService, type SuiteEnvironment } from './suite-environment';
 import { type SuiteHostDemand, SuiteEngine, type SuiteTemplates } from './suite-engine';
-import { TemplateSpecLister } from './spec-lister';
+import { type SpecListing, TemplateSpecLister } from './spec-lister';
 import { ExecArtifactSource, SuiteArtifactKeeper } from './suite-artifacts';
 import type { SuitePublisher } from './suite-publisher';
 
@@ -176,10 +176,14 @@ export class SuiteService {
             tokens,
         });
         const demand = this.d.demand({ organizationId: cmd.organizationId, suiteRunId: cmd.suiteRunId });
-        const listing = await new TemplateSpecLister({ env, demand, clock }).list(
-            { organizationId: cmd.organizationId, environmentId: cmd.environmentId, suiteRunId: cmd.suiteRunId, mainSha: cmd.mainSha },
-            { ...(s.suite.config.cwd ? { cwd: s.suite.config.cwd } : {}), specsGlob: s.suite.specsGlob },
-        );
+        // The product read main's specs from the repository's tree: no listing host (on an environment with no ready template it
+        // would build main cold only to list files). Without them, the listing host lists them.
+        const listing: SpecListing = cmd.mainSpecs
+            ? { status: 'listed', specs: cmd.mainSpecs }
+            : await new TemplateSpecLister({ env, demand, clock }).list(
+                  { organizationId: cmd.organizationId, environmentId: cmd.environmentId, suiteRunId: cmd.suiteRunId, mainSha: cmd.mainSha },
+                  { ...(s.suite.config.cwd ? { cwd: s.suite.config.cwd } : {}), specsGlob: s.suite.specsGlob },
+              );
         if (listing.status === 'unavailable') {
             await demand.end().catch(() => undefined);
             return this.unavailable(cmd, listing.reason, listing.blocker);

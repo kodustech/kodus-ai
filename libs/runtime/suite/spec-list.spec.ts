@@ -1,4 +1,4 @@
-import { specListOf } from './spec-list';
+import { MAIN_SPECS_MAX, mainSpecsOfTree, specListOf } from './spec-list';
 
 const listed = [
     { path: 'cypress/e2e/a.cy.ts', sizeBytes: 100 },
@@ -39,5 +39,27 @@ describe('the spec list a suite run uses', () => {
     it('limits the list to the specs a retry names: they ran in the run being retried, so a spec only the PR has is kept, with its size when main knows it', () => {
         const out = specListOf({ glob: 'cypress/e2e/**/*.cy.ts', listed, only: ['cypress/e2e/b.cy.ts', 'cypress/e2e/pr-only.cy.ts'] });
         expect(out).toEqual([{ path: 'cypress/e2e/b.cy.ts', sizeBytes: 200 }, { path: 'cypress/e2e/pr-only.cy.ts', sizeBytes: 0 }]);
+    });
+});
+
+describe("main's spec files from the repository's tree (no listing host)", () => {
+    const tree = [
+        { path: 'apps/web/cypress/e2e/b.cy.ts', size: 300 },
+        { path: 'apps/web/cypress/e2e/a.cy.ts', size: 120 },
+        { path: 'apps/web/cypress/e2e/notes.md', size: 9 },
+        { path: 'apps/web/node_modules/pkg/cypress/e2e/x.cy.ts', size: 50 },
+        { path: 'apps/api/cypress/e2e/c.cy.ts', size: 70 },
+        { path: 'apps/web/cypress/e2e/unknown.cy.ts', size: -1 },
+    ];
+    it("gives what the listing host's find gives: under cwd, matching the glob, never node_modules, sorted, with sizes", () => {
+        expect(mainSpecsOfTree(tree, { glob: 'cypress/e2e/**/*.cy.ts', cwd: 'apps/web' })).toEqual([
+            { path: 'cypress/e2e/a.cy.ts', sizeBytes: 120 },
+            { path: 'cypress/e2e/b.cy.ts', sizeBytes: 300 },
+            { path: 'cypress/e2e/unknown.cy.ts', sizeBytes: 0 },
+        ]);
+    });
+    it('gives no list past the bound, so the listing host lists them instead of a cut list', () => {
+        const many = Array.from({ length: MAIN_SPECS_MAX + 1 }, (_, i) => ({ path: `e2e/s${i}.cy.ts`, size: 1 }));
+        expect(mainSpecsOfTree(many, { glob: 'e2e/*.cy.ts' })).toBeNull();
     });
 });

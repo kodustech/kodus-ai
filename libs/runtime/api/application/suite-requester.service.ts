@@ -91,6 +91,7 @@ export class RuntimeSuiteRequester {
 
         // One token per claim: the spec listing, each shard, the fresh host and the main host.
         const tokens = await this.inputs.tokensFor({ ...orgTeam, ...repo }, suite.shards, suiteRunId);
+        const { mainSpecs } = await this.inputs.mainSpecsOf({ ...orgTeam, ...repo }, mainSha, suite);
 
         const target: RunTarget = {
             runId: suiteRunId,
@@ -128,6 +129,7 @@ export class RuntimeSuiteRequester {
                     moreRepoTokens: tokens.slice(1),
                     ...(changedFiles ? { changedFiles } : {}),
                     ...(removedFiles ? { removedFiles } : {}),
+                    ...(mainSpecs ? { mainSpecs } : {}),
                 },
                 suiteRunId,
             ),

@@ -1,3 +1,4 @@
+import { LIST_HOST_SHARD } from './spec-lister';
 import type { AcquireRequest, ExecRequest } from '@libs/runtime/environment';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 
@@ -140,6 +141,19 @@ describe('running a suite as a workflow', () => {
         const w2 = world();
         await w2.service.run(request({ mergeBase: MERGE_BASE }), passthrough);
         expect((await w2.runs.get(ORG, 'sr-1'))?.baseDrift).toBe(1);
+    });
+
+    it("with main's specs from the product (the repository's tree) it boots no listing host and runs exactly those", async () => {
+        const w = world();
+        const mainSpecs = [{ path: 'cypress/e2e/a.cy.ts', sizeBytes: 120 }, { path: 'cypress/e2e/b.cy.ts', sizeBytes: 300 }];
+        const out = await w.service.run(request({ mainSpecs }), passthrough);
+        expect(out).toMatchObject({ status: 'ran' });
+        expect(w.demand.requested.flat()).not.toContain(LIST_HOST_SHARD);
+        expect(w.cell.starts.flatMap((x) => x.specs).sort()).toEqual(['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts']);
+        // Without them, the listing host is asked for.
+        const listed = world();
+        await listed.service.run(request(), passthrough);
+        expect(listed.demand.requested.flat()).toContain(LIST_HOST_SHARD);
     });
 
     it('a baseline is the whole suite on main, recorded for the baseline request, which is marked started', async () => {

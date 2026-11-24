@@ -470,6 +470,12 @@ export const RuntimeSuiteRequestedSchema = z
         removedFiles: z.array(z.string().min(1).max(512)).max(SUITE_CHANGED_FILES_MAX).optional(),
         /** The files the newest commits of a re-pushed PR change (the previous head against this one); absent: unknown. */
         deltaFiles: z.array(z.string().min(1).max(512)).max(SUITE_CHANGED_FILES_MAX).optional(),
+        /**
+         * Main's spec files with their sizes, read by the product from the repository's tree at `mainSha` (relative to the suite's
+         * cwd): the engine shards them without a listing host. Absent: the listing host lists them. Deploy the runtime-worker before
+         * the product sends it: an older worker's strict schema refuses the field.
+         */
+        mainSpecs: z.array(z.strictObject({ path: z.string().min(1).max(512), sizeBytes: z.number().int().min(0) })).max(SUITE_CHANGED_FILES_MAX).optional(),
         /** Run only these spec files (a retry of a shard or of the failed specs); the suite's digest stays the whole suite's. */
         specs: z.array(z.string().min(1).max(512)).max(SUITE_CHANGED_FILES_MAX).optional(),
     })

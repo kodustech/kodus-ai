@@ -51,6 +51,7 @@ Imported by:
 - [`apps/runtime/src/worker/suite`](../../../apps/runtime/src/worker/suite/AGENTS.md)
 - [`libs/runtime-publish/application`](../../runtime-publish/application/AGENTS.md)
 - [`libs/runtime-publish/domain`](../../runtime-publish/domain/AGENTS.md)
+- [`libs/runtime/api/application`](../api/application/AGENTS.md)
 - [`libs/runtime/api/domain`](../api/domain/AGENTS.md)
 - [`libs/runtime/run`](../run/AGENTS.md)
 

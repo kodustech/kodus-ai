@@ -41,3 +41,23 @@ export function specListOf(i: SpecListInput): SuiteSpecFile[] {
     const out = i.only ? [...new Set(i.only)].map((path) => byPath.get(path) ?? i.listed.find((s) => s.path === path) ?? { path, sizeBytes: 0 }) : [...byPath.values()];
     return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
+
+/** The most spec files main's tree may give; past it the listing host lists them (the command's bound). */
+export const MAIN_SPECS_MAX = 5_000;
+
+/**
+ * Main's spec files read from the repository's tree (the Git API, no host): what the listing host's `find` gives, the files
+ * under `cwd` matching the glob, never one under node_modules, each with its size (0 when the platform did not say). Null when
+ * more than MAIN_SPECS_MAX match: the listing host lists them instead, never a cut list.
+ */
+export function mainSpecsOfTree(tree: ReadonlyArray<{ path: string; size: number }>, suite: { glob: string; cwd?: string }): SuiteSpecFile[] | null {
+    const matches = picomatch(suite.glob, { dot: true });
+    const out: SuiteSpecFile[] = [];
+    for (const f of tree) {
+        const rel = inside(suite.cwd, f.path);
+        if (rel === undefined || rel.split('/').includes('node_modules') || !matches(rel)) continue;
+        if (out.length === MAIN_SPECS_MAX) return null;
+        out.push({ path: rel, sizeBytes: Number.isSafeInteger(f.size) && f.size > 0 ? f.size : 0 });
+    }
+    return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}

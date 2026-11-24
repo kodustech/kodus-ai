@@ -17,9 +17,9 @@ const recipe = `version: 1\nservices:\n  compose:\n    public: app\n${SUITE}`;
 const env = { environmentId: 'env-1', organizationId: ORG, teamId: TEAM, repositoryId: REPO, repositoryName: 'acme/shop' };
 const head: PullRequestHead = { headSha: SHA, baseSha: BASE_SHA, fork: false };
 
-function world(o: { recipe?: string | null; setupSha?: string | null; removed?: string[]; truncated?: boolean; compare?: unknown } = {}) {
+function world(o: { recipe?: string | null; setupSha?: string | null; removed?: string[]; truncated?: boolean; compare?: unknown; tree?: unknown } = {}) {
     const issued: string[] = [];
-    const git = { getPullRequestDiff: async () => ({ files: [{ path: 'src/a.ts', patch: '' }, { path: 'src/new.ts', previousPath: 'src/old.ts', patch: '' }], truncated: !!o.truncated, ...(o.removed ? { removedFiles: o.removed } : {}) }), readFileAtCommit: async () => (o.recipe === undefined ? recipe : o.recipe), ...(o.compare === undefined ? {} : { compareWithMain: async () => (o.compare === 'throws' ? Promise.reject(new Error('git api down')) : o.compare) }) } as unknown as RuntimeGitPort;
+    const git = { getPullRequestDiff: async () => ({ files: [{ path: 'src/a.ts', patch: '' }, { path: 'src/new.ts', previousPath: 'src/old.ts', patch: '' }], truncated: !!o.truncated, ...(o.removed ? { removedFiles: o.removed } : {}) }), readFileAtCommit: async () => (o.recipe === undefined ? recipe : o.recipe), ...(o.compare === undefined ? {} : { compareWithMain: async () => (o.compare === 'throws' ? Promise.reject(new Error('git api down')) : o.compare) }), ...(o.tree === undefined ? {} : { listFileSizesAtCommit: async () => (o.tree === 'throws' ? Promise.reject(new Error('git api down')) : o.tree) }) } as unknown as RuntimeGitPort;
     const tokens = { issue: async () => (issued.push('t'), `ghs_${issued.length}`) };
     const setups = { get: async () => (o.setupSha === null ? null : { sha: o.setupSha ?? MAIN }) };
     const inputs = new RuntimeSuiteInputs(git, tokens, config(), setups as any);
@@ -38,6 +38,14 @@ describe('the Run request carries the suite of its environment', () => {
         expect(req.suite!.moreRepoTokens).toHaveLength(4);
         const all = [req.suite!.repoToken, ...req.suite!.moreRepoTokens!];
         expect(new Set(all.map((t) => openSealed(t, RUN))).size).toBe(5);
+    });
+
+    it("carries main's spec files and sizes from the repository's tree, so no listing host boots; nothing when the tree cannot be read", async () => {
+        const tree = [{ path: 'cypress/e2e/a.cy.ts', size: 120 }, { path: 'cypress/e2e/sub/b.cy.ts', size: 300 }, { path: 'src/app.ts', size: 10 }];
+        const req = await build(world({ tree }));
+        expect(RuntimeRunRequestedSchema.safeParse(req).success).toBe(true);
+        expect(req.suite!.mainSpecs).toEqual([{ path: 'cypress/e2e/a.cy.ts', sizeBytes: 120 }, { path: 'cypress/e2e/sub/b.cy.ts', sizeBytes: 300 }]);
+        for (const t of ['unsupported_platform', 'throws', undefined]) expect((await build(world({ tree: t }))).suite).not.toHaveProperty('mainSpecs');
     });
 
     it('sends the files the PR removes, and neither list when the diff was cut', async () => {

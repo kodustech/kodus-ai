@@ -12,9 +12,9 @@ export async function suiteOfRecipeAt(
     git: Pick<RuntimeGitPort, 'readFileAtCommit'>,
     repo: { organizationId: string; teamId: string; repositoryId: string; repositoryName: string },
     sha: string,
-): Promise<{ shards: number; baseline: boolean } | undefined> {
+): Promise<{ shards: number; baseline: boolean; specs: string; cwd?: string } | undefined> {
     const suite = await suiteDeclarationAt(git, repo, sha);
-    return suite ? { shards: suite.shards ?? SUITE_LIMITS.shards, baseline: suite.baseline } : undefined;
+    return suite ? { shards: suite.shards ?? SUITE_LIMITS.shards, baseline: suite.baseline, specs: suite.specs, ...(suite.cwd !== undefined ? { cwd: suite.cwd } : {}) } : undefined;
 }
 
 /** The whole suite block the recipe declares at `sha` (what Settings shows read-only), by the same rules: the first recipe found wins; none, or an invalid one, declares no suite. */

@@ -45,6 +45,7 @@ export class SuiteRunStage implements SuiteStage {
             ...(s.changedFiles ? { changedFiles: s.changedFiles } : {}),
             ...(s.removedFiles ? { removedFiles: s.removedFiles } : {}),
             ...(s.deltaFiles ? { deltaFiles: s.deltaFiles } : {}),
+            ...(s.mainSpecs ? { mainSpecs: s.mainSpecs } : {}),
             ...(req.traceparent ? { traceparent: req.traceparent } : {}),
         };
         const result = await this.service.run(cmd, step, opts);

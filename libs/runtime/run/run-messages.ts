@@ -351,6 +351,8 @@ export const RuntimeRunRequestedSchema = z.strictObject({
             changedFiles: z.array(z.string().min(1).max(512)).max(5_000).optional(),
             removedFiles: z.array(z.string().min(1).max(512)).max(5_000).optional(),
             deltaFiles: z.array(z.string().min(1).max(512)).max(5_000).optional(),
+            /** Main's spec files and sizes from the repository's tree (RuntimeSuiteRequested.mainSpecs); absent: a listing host lists them. */
+            mainSpecs: z.array(z.strictObject({ path: z.string().min(1).max(512), sizeBytes: z.number().int().min(0) })).max(5_000).optional(),
         })
         .optional(),
 })
