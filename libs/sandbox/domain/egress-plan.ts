@@ -49,16 +49,6 @@ export class FixedEgressIpPlanUnconfirmedError extends Error {
     }
 }
 
-/** The team has no code management integration to hold its egress setting. */
-export class FixedEgressIpNoIntegrationError extends Error {
-    constructor() {
-        super(
-            'Connect a git integration before choosing how Kodus reaches your Git host.',
-        );
-        this.name = 'FixedEgressIpNoIntegrationError';
-    }
-}
-
 /** How a failed direct clone reads, in the words a team sees. */
 const BLOCKED_REASON_WORDS = {
     ip_allow_list: 'your Git host only accepts allowlisted IPs',
@@ -71,7 +61,8 @@ export type FirewallReason = keyof typeof BLOCKED_REASON_WORDS;
 /**
  * A direct clone failed the way a host that only accepts Kodus's fixed IP
  * fails, and the team cannot fall back to that IP: its plan does not include
- * it (`plan`), or the team turned it off in Git settings (`turned_off`). The
+ * it (`plan`), or an owner turned it off in Organization settings
+ * (`turned_off`). The
  * original error is kept as `cause`. Lives in the domain so the review
  * pipeline can tell it from an infrastructure failure by name.
  */
@@ -84,7 +75,7 @@ export class FixedEgressIpUnavailableError extends Error {
         super(
             blockedBy === 'plan'
                 ? `Kodus could not clone the repository from its shared network: ${BLOCKED_REASON_WORDS[reason]}. ${FIXED_EGRESS_IP_PLAN_REQUIRED}`
-                : `Kodus could not clone the repository from its shared network: ${BLOCKED_REASON_WORDS[reason]}. The fixed outbound IP is turned off for this team; turn on Fixed outbound IP in Settings > Repositories so Kody clones from Kodus's IP.`,
+                : `Kodus could not clone the repository from its shared network: ${BLOCKED_REASON_WORDS[reason]}. The fixed outbound IP is turned off for this organization; an owner can turn on Fixed outbound IP in Organization settings > General so Kody clones from Kodus's IP.`,
             options,
         );
         this.name = 'FixedEgressIpUnavailableError';

@@ -1,6 +1,10 @@
 import { authorizedFetch, TypedFetchError } from "@services/fetch";
 import { ORGANIZATION_PARAMETERS_PATHS } from "@services/organizationParameters";
 import { getOrganizationParameterByKey } from "@services/organizationParameters/fetch";
+import {
+    getFixedEgressIp,
+    type FixedEgressIp,
+} from "@services/organizationParameters/fixedEgressIp";
 import { getOrganizationId } from "@services/organizations/fetch";
 import {
     OrganizationParametersAutoJoinConfig,
@@ -100,11 +104,28 @@ export default async function OrganizationSettingsPage() {
         }
     };
 
+    // Its own read: a failure says "could not load" on its card instead of
+    // answering "not available", and never takes the rest of the page down.
+    const NO_FIXED_EGRESS_IP: FixedEgressIp = {
+        available: false,
+        allowedByPlan: false,
+        enabled: false,
+    };
+    const loadFixedEgressIp = (): Promise<{
+        setting: FixedEgressIp;
+        failed: boolean;
+    }> =>
+        getFixedEgressIp().then(
+            (setting) => ({ setting, failed: false }),
+            () => ({ setting: NO_FIXED_EGRESS_IP, failed: true }),
+        );
+
     // The parameter loads are independent of each other.
-    const [, , reviewCommandModes] = await Promise.all([
+    const [, , reviewCommandModes, fixedEgressIp] = await Promise.all([
         loadTimezone(),
         loadAutoJoin(),
         loadReviewCommandModes(),
+        loadFixedEgressIp(),
     ]);
 
     return (
@@ -118,6 +139,8 @@ export default async function OrganizationSettingsPage() {
                     ultraBlocked: reviewCommandModes.ultraBlocked === true,
                 }
             }
+            fixedEgressIp={fixedEgressIp.setting}
+            fixedEgressIpLoadFailed={fixedEgressIp.failed}
         />
     );
 }

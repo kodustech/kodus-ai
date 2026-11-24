@@ -495,17 +495,6 @@
     }
   },
   {
-    "key": "codeManagement.controller.ts#getFixedEgressIp",
-    "httpMethod": "GET",
-    "urlPath": "/code-management/fixed-egress-ip",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "allow",
-      "repo_admin": "allow",
-      "contributor": "allow"
-    }
-  },
-  {
     "key": "codeManagement.controller.ts#getOrganizationMemberLabels",
     "httpMethod": "GET",
     "urlPath": "/code-management/organization-members/labels",
@@ -655,17 +644,6 @@
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
-      "repo_admin": "deny",
-      "contributor": "deny"
-    }
-  },
-  {
-    "key": "codeManagement.controller.ts#setFixedEgressIp",
-    "httpMethod": "PUT",
-    "urlPath": "/code-management/fixed-egress-ip",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "deny",
       "repo_admin": "deny",
       "contributor": "deny"
     }
@@ -1386,6 +1364,17 @@
     }
   },
   {
+    "key": "organizationParameters.controller.ts#getFixedEgressIp",
+    "httpMethod": "GET",
+    "urlPath": "/organization-parameters/fixed-egress-ip",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "organizationParameters.controller.ts#getLLMConfigStatus",
     "httpMethod": "GET",
     "urlPath": "/organization-parameters/llm-config/status",
@@ -1433,6 +1422,17 @@
     "key": "organizationParameters.controller.ts#modelCapabilities",
     "httpMethod": "GET",
     "urlPath": "/organization-parameters/model-capabilities",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "organizationParameters.controller.ts#setFixedEgressIp",
+    "httpMethod": "PUT",
+    "urlPath": "/organization-parameters/fixed-egress-ip",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",

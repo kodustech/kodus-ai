@@ -3,6 +3,10 @@ import "@testing-library/jest-dom";
 
 import { createOrUpdateOrganizationParameter } from "@services/organizationParameters/fetch";
 import {
+    setFixedEgressIp,
+    type FixedEgressIp,
+} from "@services/organizationParameters/fixedEgressIp";
+import {
     OrganizationParametersConfigKey,
     Timezone,
 } from "@services/parameters/types";
@@ -20,12 +24,25 @@ jest.mock("src/core/utils/revalidate-server-side", () => ({
     revalidateServerSidePath: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock("@components/ui/toaster/use-toast", () => ({ toast: jest.fn() }));
+jest.mock("@services/organizationParameters/fixedEgressIp", () => ({
+    setFixedEgressIp: jest.fn(),
+}));
+jest.mock("@services/permissions/hooks", () => ({
+    usePermission: () => true,
+}));
+jest.mock("src/core/utils/self-hosted", () => ({ isSelfHosted: false }));
 
 // Radix's Switch measures itself; jsdom has no ResizeObserver.
 global.ResizeObserver = class {
     observe() {}
     unobserve() {}
     disconnect() {}
+};
+
+const NO_FIXED_IP: FixedEgressIp = {
+    available: false,
+    allowedByPlan: false,
+    enabled: false,
 };
 
 const renderPage = (
@@ -36,6 +53,7 @@ const renderPage = (
         heavyBlocked: false,
         ultraBlocked: false,
     },
+    fixedEgressIp: FixedEgressIp = NO_FIXED_IP,
 ) =>
     render(
         <GeneralOrganizationSettingsPage
@@ -43,6 +61,7 @@ const renderPage = (
             timezone={Timezone.NEW_YORK}
             autoJoinConfig={{ enabled: false, domains: ["acme.dev"] }}
             reviewCommandModes={reviewCommandModes ?? undefined}
+            fixedEgressIp={fixedEgressIp}
         />,
     );
 
@@ -104,5 +123,48 @@ describe("General settings — review mode commands", () => {
             OrganizationParametersConfigKey.REVIEW_COMMAND_MODES_CONFIG,
             { heavyBlocked: true, ultraBlocked: true },
         );
+    });
+});
+
+describe("General settings — fixed outbound IP", () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    const paid: FixedEgressIp = {
+        available: true,
+        allowedByPlan: true,
+        enabled: false,
+        savedOn: false,
+        inRollout: true,
+        fixedIp: "203.0.113.10",
+    };
+
+    it("shows the organization's fixed outbound IP card on this page", () => {
+        renderPage(undefined, paid);
+        expect(screen.getByText("Fixed outbound IP")).toBeInTheDocument();
+        expect(screen.getByText("203.0.113.10")).toBeInTheDocument();
+    });
+
+    it("copying the IP does not submit the page's form", async () => {
+        renderPage(undefined, paid);
+        await act(async () => {
+            fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+        });
+        expect(createOrUpdateOrganizationParameter).not.toHaveBeenCalled();
+    });
+
+    it("saves the switch on its own, without the page's Save", async () => {
+        (setFixedEgressIp as jest.Mock).mockResolvedValue({
+            ...paid,
+            enabled: true,
+            savedOn: true,
+        });
+        renderPage(undefined, paid);
+        await act(async () => {
+            fireEvent.click(
+                screen.getByRole("switch", { name: "Fixed outbound IP" }),
+            );
+        });
+        expect(setFixedEgressIp).toHaveBeenCalledWith({ enabled: true });
+        expect(createOrUpdateOrganizationParameter).not.toHaveBeenCalled();
     });
 });

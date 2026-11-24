@@ -19,7 +19,7 @@ import { toast } from "@components/ui/toaster/use-toast";
 import {
     setFixedEgressIp,
     type FixedEgressIp,
-} from "@services/codeManagement/fixedEgressIp";
+} from "@services/organizationParameters/fixedEgressIp";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { ClipboardHelpers } from "src/core/utils/clipboard";
@@ -33,23 +33,25 @@ const apiMessage = (error: unknown): string | undefined => {
 };
 
 /**
- * Fixed outbound IP: review sandboxes reach the team's Git host from Kodus's
- * fixed IP, for hosts behind an IP allowlist. A Teams and Enterprise feature
- * (trial included); everyone else reaches Git from a shared network.
+ * Fixed outbound IP: the organization's review sandboxes reach its Git host
+ * from Kodus's fixed IP, for hosts behind an IP allowlist. A Teams and
+ * Enterprise feature (trial included); everyone else reaches Git from a
+ * shared network. Saved on its own, as soon as it is switched: it is not
+ * part of the page's form.
  */
 export const FixedEgressIpCard = ({
-    teamId,
     initialSetting,
     loadFailed = false,
 }: {
-    /** The team the page read the setting for; the switch writes the same. */
-    teamId: string;
     initialSetting: FixedEgressIp;
     /** The setting could not be read: say so instead of hiding the card. */
     loadFailed?: boolean;
 }) => {
     const router = useRouter();
-    const canEdit = usePermission(Action.Create, ResourceType.GitSettings);
+    const canEdit = usePermission(
+        Action.Create,
+        ResourceType.OrganizationSettings,
+    );
     const [setting, setSetting] = useState(initialSetting);
     const [seenInitial, setSeenInitial] = useState(initialSetting);
     const [saving, setSaving] = useState(false);
@@ -69,7 +71,7 @@ export const FixedEgressIpCard = ({
     if (isSelfHosted) return null;
     if (loadFailed && !savedHere) {
         return (
-            <Card className="mb-4">
+            <Card color="lv1" className="w-md">
                 <CardHeader className="space-y-2">
                     <CardTitle className="text-base">
                         Fixed outbound IP
@@ -84,15 +86,15 @@ export const FixedEgressIpCard = ({
     }
     if (!setting.available) return null;
 
-    // The team's stored choice: on also when its plan no longer uses it, so
-    // a downgraded team can see it and turn it off.
+    // The organization's stored choice: on also when its plan no longer uses
+    // it, so a downgraded organization can see it and turn it off.
     const on = setting.enabled || Boolean(setting.savedOn);
     const unusedOnPlan = on && !setting.enabled;
 
     const onToggle = async (enabled: boolean) => {
         setSaving(true);
         try {
-            setSetting(await setFixedEgressIp({ teamId, enabled }));
+            setSetting(await setFixedEgressIp({ enabled }));
             setSavedHere(true);
             toast({
                 variant: "success",
@@ -128,7 +130,7 @@ export const FixedEgressIpCard = ({
     const cta = planCtaTarget();
 
     return (
-        <Card className="mb-4">
+        <Card color="lv1" className="w-md">
             <CardHeader className="flex flex-row items-start justify-between gap-6">
                 <div className="space-y-2">
                     <CardTitle className="text-base">
@@ -137,9 +139,10 @@ export const FixedEgressIpCard = ({
                     <CardDescription>
                         Turn this on when your Git host only accepts connections
                         from allowlisted IPs, such as a self-managed GitLab
-                        behind a firewall. Kody then clones your repositories
-                        from Kodus&apos;s fixed IP. Without it, Kody reaches
-                        your Git host from a shared network.
+                        behind a firewall. Kody then clones the repositories of
+                        every team in this organization from Kodus&apos;s fixed
+                        IP. Without it, Kody reaches your Git host from a shared
+                        network. Saved as soon as you switch it.
                     </CardDescription>
 
                     {unusedOnPlan ? (
@@ -171,6 +174,7 @@ export const FixedEgressIpCard = ({
                                         {setting.fixedIp}
                                     </code>
                                     <Button
+                                        type="button"
                                         size="xs"
                                         variant="helper"
                                         onClick={copyIp}>

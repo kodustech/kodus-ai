@@ -18,6 +18,7 @@ import { toast } from "@components/ui/toaster/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { createOrUpdateOrganizationParameter } from "@services/organizationParameters/fetch";
+import type { FixedEgressIp } from "@services/organizationParameters/fixedEgressIp";
 import {
     OrganizationParametersAutoJoinConfig,
     OrganizationParametersConfigKey,
@@ -28,6 +29,8 @@ import { Controller, useForm } from "react-hook-form";
 import { publicDomainsSet } from "src/core/utils/email";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 import { z } from "zod";
+
+import { FixedEgressIpCard } from "./_components/fixed-egress-ip-card";
 
 const timezoneOptions = [
     { value: Timezone.NEW_YORK, title: "New York" },
@@ -94,6 +97,9 @@ export const GeneralOrganizationSettingsPage = (props: {
     autoJoinConfig: OrganizationParametersAutoJoinConfig;
     /** Undefined when they could not be read: shown unknown, never saved. */
     reviewCommandModes?: Required<OrganizationParametersReviewCommandModesConfig>;
+    /** Saved on its own by its card, outside this form. */
+    fixedEgressIp: FixedEgressIp;
+    fixedEgressIpLoadFailed?: boolean;
 }) => {
     const router = useRouter();
     const userDomain = props.email.split("@")[1];
@@ -186,8 +192,8 @@ export const GeneralOrganizationSettingsPage = (props: {
                         <Page.Title>General settings</Page.Title>
                         <Page.Description>
                             Your organization&apos;s timezone, who can join it
-                            automatically, and which review modes a PR comment
-                            can start.
+                            automatically, which review modes a PR comment can
+                            start, and how Kody reaches your Git host.
                         </Page.Description>
                     </Page.TitleContainer>
                     <Page.SaveActions
@@ -396,6 +402,11 @@ export const GeneralOrganizationSettingsPage = (props: {
                             </FormControl.Root>
                         </CardHeader>
                     </Card>
+
+                    <FixedEgressIpCard
+                        initialSetting={props.fixedEgressIp}
+                        loadFailed={props.fixedEgressIpLoadFailed}
+                    />
                 </Page.Content>
             </form>
         </Page.Root>

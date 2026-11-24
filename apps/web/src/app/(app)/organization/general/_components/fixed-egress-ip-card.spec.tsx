@@ -2,12 +2,12 @@
 import "@testing-library/jest-dom";
 
 import { toast } from "@components/ui/toaster/use-toast";
-import { setFixedEgressIp } from "@services/codeManagement/fixedEgressIp";
+import { setFixedEgressIp } from "@services/organizationParameters/fixedEgressIp";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { FixedEgressIpCard } from "./fixed-egress-ip-card";
 
-jest.mock("@services/codeManagement/fixedEgressIp", () => ({
+jest.mock("@services/organizationParameters/fixedEgressIp", () => ({
     setFixedEgressIp: jest.fn(),
 }));
 jest.mock("@components/ui/toaster/use-toast", () => ({ toast: jest.fn() }));
@@ -47,7 +47,6 @@ describe("FixedEgressIpCard", () => {
     it("is not shown where sandboxes never leave through Kodus's network", () => {
         const { container } = render(
             <FixedEgressIpCard
-                teamId="team-1"
                 initialSetting={{
                     available: false,
                     allowedByPlan: false,
@@ -60,13 +59,7 @@ describe("FixedEgressIpCard", () => {
 
     it("says the setting could not be loaded instead of hiding it", () => {
         const none = { available: false, allowedByPlan: false, enabled: false };
-        render(
-            <FixedEgressIpCard
-                teamId="team-1"
-                initialSetting={none}
-                loadFailed
-            />,
-        );
+        render(<FixedEgressIpCard initialSetting={none} loadFailed />);
         expect(screen.getByText("Fixed outbound IP")).toBeInTheDocument();
         expect(
             screen.getByText(/could not load this setting/i),
@@ -79,7 +72,6 @@ describe("FixedEgressIpCard", () => {
         for (const loadFailed of [false, true]) {
             const { container, unmount } = render(
                 <FixedEgressIpCard
-                    teamId="team-1"
                     initialSetting={paid}
                     loadFailed={loadFailed}
                 />,
@@ -92,7 +84,6 @@ describe("FixedEgressIpCard", () => {
     it("says the plan could not be confirmed and cannot be turned on, without the plans link", () => {
         render(
             <FixedEgressIpCard
-                teamId="team-1"
                 initialSetting={{ ...paid, planUnconfirmed: true }}
             />,
         );
@@ -106,7 +97,6 @@ describe("FixedEgressIpCard", () => {
     it("still lets a team turn it off while the plan cannot be confirmed", () => {
         render(
             <FixedEgressIpCard
-                teamId="team-1"
                 initialSetting={{
                     ...paid,
                     enabled: true,
@@ -124,7 +114,6 @@ describe("FixedEgressIpCard", () => {
     it("cannot be turned on from a plan without it, and points to the plans", () => {
         render(
             <FixedEgressIpCard
-                teamId="team-1"
                 initialSetting={{
                     available: true,
                     allowedByPlan: false,
@@ -140,14 +129,13 @@ describe("FixedEgressIpCard", () => {
 
     it("shows a paying team the IP to allowlist and turns it on", async () => {
         setMock.mockResolvedValue({ ...paid, enabled: true });
-        render(<FixedEgressIpCard teamId="team-1" initialSetting={paid} />);
+        render(<FixedEgressIpCard initialSetting={paid} />);
 
         expect(screen.getByText("203.0.113.10")).toBeInTheDocument();
         fireEvent.click(screen.getByRole("switch"));
 
         await waitFor(() =>
             expect(setMock).toHaveBeenCalledWith({
-                teamId: "team-1",
                 enabled: true,
             }),
         );
@@ -165,7 +153,7 @@ describe("FixedEgressIpCard", () => {
                 data: { message: "Available on Teams and Enterprise." },
             },
         });
-        render(<FixedEgressIpCard teamId="team-1" initialSetting={paid} />);
+        render(<FixedEgressIpCard initialSetting={paid} />);
 
         fireEvent.click(screen.getByRole("switch"));
 
@@ -186,7 +174,6 @@ describe("FixedEgressIpCard", () => {
     it("says when Kody turned it on after a refused clone", () => {
         render(
             <FixedEgressIpCard
-                teamId="team-1"
                 initialSetting={{
                     ...paid,
                     enabled: true,
@@ -199,15 +186,12 @@ describe("FixedEgressIpCard", () => {
         ).toBeInTheDocument();
     });
 
-    it("writes to the team the page read, the one it was given", async () => {
+    it("writes the organization choice", async () => {
         setMock.mockResolvedValue({ ...paid, enabled: true });
-        render(
-            <FixedEgressIpCard teamId="team-of-page" initialSetting={paid} />,
-        );
+        render(<FixedEgressIpCard initialSetting={paid} />);
         fireEvent.click(screen.getByRole("switch"));
         await waitFor(() =>
             expect(setMock).toHaveBeenCalledWith({
-                teamId: "team-of-page",
                 enabled: true,
             }),
         );
@@ -217,7 +201,6 @@ describe("FixedEgressIpCard", () => {
         setMock.mockResolvedValue({ ...paid, enabled: false });
         render(
             <FixedEgressIpCard
-                teamId="team-1"
                 initialSetting={{ ...paid, enabled: true, savedOn: true }}
             />,
         );
@@ -237,7 +220,7 @@ describe("FixedEgressIpCard", () => {
         setMock.mockReturnValue(
             new Promise((_resolve) => (resolve = _resolve)) as never,
         );
-        render(<FixedEgressIpCard teamId="team-1" initialSetting={paid} />);
+        render(<FixedEgressIpCard initialSetting={paid} />);
         fireEvent.click(screen.getByRole("switch"));
         fireEvent.click(screen.getByRole("switch"));
         expect(setMock).toHaveBeenCalledTimes(1);
@@ -247,7 +230,7 @@ describe("FixedEgressIpCard", () => {
 
     it("cannot be changed by someone who is not an owner, and says so", () => {
         mockAccess.canEdit = false;
-        render(<FixedEgressIpCard teamId="team-1" initialSetting={paid} />);
+        render(<FixedEgressIpCard initialSetting={paid} />);
         expect(screen.getByRole("switch")).toBeDisabled();
         expect(
             screen.getByText("Only an organization owner can change this."),
@@ -263,7 +246,6 @@ describe("FixedEgressIpCard", () => {
         });
         render(
             <FixedEgressIpCard
-                teamId="team-1"
                 initialSetting={{
                     ...paid,
                     allowedByPlan: false,
@@ -283,7 +265,6 @@ describe("FixedEgressIpCard", () => {
         fireEvent.click(toggle);
         await waitFor(() =>
             expect(setMock).toHaveBeenCalledWith({
-                teamId: "team-1",
                 enabled: false,
             }),
         );
@@ -292,13 +273,12 @@ describe("FixedEgressIpCard", () => {
     it("keeps the saved state when the re-read right after a change fails", async () => {
         setMock.mockResolvedValue({ ...paid, enabled: true });
         const { rerender } = render(
-            <FixedEgressIpCard teamId="team-1" initialSetting={paid} />,
+            <FixedEgressIpCard initialSetting={paid} />,
         );
         fireEvent.click(screen.getByRole("switch"));
         await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
         rerender(
             <FixedEgressIpCard
-                teamId="team-1"
                 initialSetting={{
                     available: false,
                     allowedByPlan: false,

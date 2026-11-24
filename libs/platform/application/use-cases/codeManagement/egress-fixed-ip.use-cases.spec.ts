@@ -4,7 +4,6 @@ import {
     ServiceUnavailableException,
 } from '@nestjs/common';
 
-import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import {
     FixedEgressIpPlanRequiredError,
     FixedEgressIpPlanUnconfirmedError,
@@ -23,9 +22,6 @@ jest.mock('@libs/ee/configs/environment', () => ({
 }));
 
 const ORG = 'org-1';
-const TEAM = 'team-1';
-const INTEGRATION = 'int-1';
-const organizationAndTeamData = { organizationId: ORG, teamId: TEAM };
 
 const setting = {
     allowedByPlan: true,
@@ -42,74 +38,26 @@ const policyWith = (overrides: Record<string, jest.Mock> = {}) =>
         ...overrides,
     }) as any;
 
-/** Integrations by organization and team; anything else finds none. */
-const integrationsOf = (owned: Record<string, string> = { [ORG]: TEAM }) =>
-    ({
-        findOne: jest.fn(async (filter: any) =>
-            owned[filter.organization?.uuid] === filter.team?.uuid
-                ? { uuid: INTEGRATION }
-                : null,
-        ),
-    }) as any;
-
 describe('GetFixedEgressIpUseCase', () => {
     afterEach(() => (mockEnvironment.API_CLOUD_MODE = true));
 
-    it("shows the team's setting and the IP to allowlist on Kodus Cloud", async () => {
+    it("shows the organization's setting and the IP to allowlist on Kodus Cloud", async () => {
         const policy = policyWith();
-        const integrations = integrationsOf();
         await expect(
-            new GetFixedEgressIpUseCase(policy, integrations).execute({
-                organizationAndTeamData,
+            new GetFixedEgressIpUseCase(policy).execute({
+                organizationId: ORG,
             }),
         ).resolves.toEqual({ available: true, ...setting });
-        expect(integrations.findOne).toHaveBeenCalledWith({
-            organization: { uuid: ORG },
-            team: { uuid: TEAM },
-            integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
-            status: true,
-        });
-        expect(policy.getFixedIpSetting).toHaveBeenCalledWith(
-            organizationAndTeamData,
-            INTEGRATION,
-        );
+        expect(policy.getFixedIpSetting).toHaveBeenCalledWith(ORG);
     });
 
-    it("never reads another organization's team, and shows nothing for it", async () => {
+    it('refuses a session without an organization', async () => {
         const policy = policyWith();
-        const integrations = integrationsOf({ 'org-2': 'team-of-org-2' });
         await expect(
-            new GetFixedEgressIpUseCase(policy, integrations).execute({
-                organizationAndTeamData: {
-                    organizationId: ORG,
-                    teamId: 'team-of-org-2',
-                },
-            }),
-        ).resolves.toEqual(expect.objectContaining({ available: false }));
-        expect(policy.getFixedIpSetting).not.toHaveBeenCalled();
-    });
-
-    it('refuses a request without a team before looking anything up', async () => {
-        const policy = policyWith();
-        const integrations = integrationsOf();
-        await expect(
-            new GetFixedEgressIpUseCase(policy, integrations).execute({
-                organizationAndTeamData: {
-                    organizationId: ORG,
-                    teamId: undefined as any,
-                },
+            new GetFixedEgressIpUseCase(policy).execute({
+                organizationId: undefined,
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
-        expect(integrations.findOne).not.toHaveBeenCalled();
-    });
-
-    it('shows a team without an active git integration as not available, not as a failed read', async () => {
-        const policy = policyWith();
-        await expect(
-            new GetFixedEgressIpUseCase(policy, integrationsOf({})).execute({
-                organizationAndTeamData,
-            }),
-        ).resolves.toEqual(expect.objectContaining({ available: false }));
         expect(policy.getFixedIpSetting).not.toHaveBeenCalled();
     });
 
@@ -121,8 +69,8 @@ describe('GetFixedEgressIpUseCase', () => {
             })),
         });
         await expect(
-            new GetFixedEgressIpUseCase(policy, integrationsOf()).execute({
-                organizationAndTeamData,
+            new GetFixedEgressIpUseCase(policy).execute({
+                organizationId: ORG,
             }),
         ).resolves.toEqual(expect.objectContaining({ available: false }));
     });
@@ -131,8 +79,8 @@ describe('GetFixedEgressIpUseCase', () => {
         mockEnvironment.API_CLOUD_MODE = false;
         const policy = policyWith();
         await expect(
-            new GetFixedEgressIpUseCase(policy, integrationsOf()).execute({
-                organizationAndTeamData,
+            new GetFixedEgressIpUseCase(policy).execute({
+                organizationId: ORG,
             }),
         ).resolves.toEqual(expect.objectContaining({ available: false }));
         expect(policy.getFixedIpSetting).not.toHaveBeenCalled();
@@ -142,50 +90,26 @@ describe('GetFixedEgressIpUseCase', () => {
 describe('SetFixedEgressIpUseCase', () => {
     afterEach(() => (mockEnvironment.API_CLOUD_MODE = true));
 
-    it("turns the fixed IP on for the team's integration and names who did it", async () => {
+    it('turns the fixed IP on for the organization and names who did it', async () => {
         const policy = policyWith();
-        await new SetFixedEgressIpUseCase(policy, integrationsOf()).execute({
-            organizationAndTeamData,
+        await new SetFixedEgressIpUseCase(policy).execute({
+            organizationId: ORG,
             enabled: true,
             actorUserId: 'user-1',
         });
-        expect(policy.setFixedIp).toHaveBeenCalledWith(
-            organizationAndTeamData,
-            true,
-            { integrationId: INTEGRATION, actorUserId: 'user-1' },
-        );
+        expect(policy.setFixedIp).toHaveBeenCalledWith(ORG, true, {
+            actorUserId: 'user-1',
+        });
     });
 
-    it("never changes another organization's team", async () => {
+    it('refuses a session without an organization', async () => {
         const policy = policyWith();
         await expect(
-            new SetFixedEgressIpUseCase(
-                policy,
-                integrationsOf({ 'org-2': 'team-of-org-2' }),
-            ).execute({
-                organizationAndTeamData: {
-                    organizationId: ORG,
-                    teamId: 'team-of-org-2',
-                },
+            new SetFixedEgressIpUseCase(policy).execute({
+                organizationId: undefined,
                 enabled: false,
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
-        expect(policy.setFixedIp).not.toHaveBeenCalled();
-    });
-
-    it('refuses a request without a team before looking anything up', async () => {
-        const policy = policyWith();
-        const integrations = integrationsOf();
-        await expect(
-            new SetFixedEgressIpUseCase(policy, integrations).execute({
-                organizationAndTeamData: {
-                    organizationId: ORG,
-                    teamId: undefined as any,
-                },
-                enabled: false,
-            }),
-        ).rejects.toBeInstanceOf(BadRequestException);
-        expect(integrations.findOne).not.toHaveBeenCalled();
         expect(policy.setFixedIp).not.toHaveBeenCalled();
     });
 
@@ -195,11 +119,8 @@ describe('SetFixedEgressIpUseCase', () => {
                 throw new FixedEgressIpPlanRequiredError();
             }),
         });
-        const error = await new SetFixedEgressIpUseCase(
-            policy,
-            integrationsOf(),
-        )
-            .execute({ organizationAndTeamData, enabled: true })
+        const error = await new SetFixedEgressIpUseCase(policy)
+            .execute({ organizationId: ORG, enabled: true })
             .catch((e) => e);
         expect(error).toBeInstanceOf(ForbiddenException);
         expect(error.message).toContain('Teams and Enterprise');
@@ -211,32 +132,18 @@ describe('SetFixedEgressIpUseCase', () => {
                 throw new FixedEgressIpPlanUnconfirmedError();
             }),
         });
-        const error = await new SetFixedEgressIpUseCase(
-            policy,
-            integrationsOf(),
-        )
-            .execute({ organizationAndTeamData, enabled: true })
+        const error = await new SetFixedEgressIpUseCase(policy)
+            .execute({ organizationId: ORG, enabled: true })
             .catch((e) => e);
         expect(error).toBeInstanceOf(ServiceUnavailableException);
         expect(error.message).toContain('Try again');
     });
 
-    it('answers 400 when the team has no active git integration', async () => {
-        const policy = policyWith();
-        await expect(
-            new SetFixedEgressIpUseCase(policy, integrationsOf({})).execute({
-                organizationAndTeamData,
-                enabled: true,
-            }),
-        ).rejects.toBeInstanceOf(BadRequestException);
-        expect(policy.setFixedIp).not.toHaveBeenCalled();
-    });
-
     it('refuses a value that is not true or false', async () => {
         const policy = policyWith();
         await expect(
-            new SetFixedEgressIpUseCase(policy, integrationsOf()).execute({
-                organizationAndTeamData,
+            new SetFixedEgressIpUseCase(policy).execute({
+                organizationId: ORG,
                 enabled: 'yes' as any,
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
@@ -247,8 +154,8 @@ describe('SetFixedEgressIpUseCase', () => {
         mockEnvironment.API_CLOUD_MODE = false;
         const policy = policyWith();
         await expect(
-            new SetFixedEgressIpUseCase(policy, integrationsOf()).execute({
-                organizationAndTeamData,
+            new SetFixedEgressIpUseCase(policy).execute({
+                organizationId: ORG,
                 enabled: true,
             }),
         ).rejects.toBeInstanceOf(BadRequestException);

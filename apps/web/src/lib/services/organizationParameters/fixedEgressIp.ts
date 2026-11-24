@@ -1,19 +1,19 @@
 import { authorizedFetch } from "@services/fetch";
 import { axiosAuthorized } from "src/core/utils/axios";
 
-import { CODE_MANAGEMENT_API_PATHS } from "./types";
+import { ORGANIZATION_PARAMETERS_PATHS } from "./index";
 
 /** Mirror of the API's `FixedEgressIpView`. */
 export type FixedEgressIp = {
-    /** False on a self-hosted install: the card is not shown. */
+    /** False where the setting changes nothing: the card is not shown. */
     available: boolean;
     /** The organization's plan includes the fixed outbound IP. */
     allowedByPlan: boolean;
     /** Billing could not confirm the plan: turning it on is refused for now. */
     planUnconfirmed?: boolean;
-    /** The team's review sandboxes reach its Git host from the fixed IP. */
+    /** The organization's review sandboxes reach its Git host from the fixed IP. */
     enabled: boolean;
-    /** The team's stored choice is on, even when its plan does not use it. */
+    /** The stored choice is on, even when the plan does not use it. */
     savedOn?: boolean;
     /** Direct egress is rolled out to the organization. */
     inRollout?: boolean;
@@ -27,28 +27,25 @@ export type FixedEgressIp = {
 /**
  * Server components: reads through the authorized server-side path. A read
  * that brings no setting throws rather than answer "not available", so the
- * page can tell a failed load from a team without the card.
+ * page can tell a failed load from an organization without the card.
  */
-export const getFixedEgressIp = async (
-    teamId: string,
-): Promise<FixedEgressIp> => {
+export const getFixedEgressIp = async (): Promise<FixedEgressIp> => {
     const response = await authorizedFetch<FixedEgressIp>(
-        CODE_MANAGEMENT_API_PATHS.FIXED_EGRESS_IP,
-        { params: { teamId } },
+        ORGANIZATION_PARAMETERS_PATHS.FIXED_EGRESS_IP,
     );
-    if (!response)
+    if (!response) {
         throw new Error("The fixed outbound IP setting came back empty");
+    }
     return response;
 };
 
 // `axiosAuthorized.put` resolves to the response body, which the API wraps
 // as `{ data, statusCode, type }`; callers want `data`.
 export const setFixedEgressIp = async (params: {
-    teamId: string;
     enabled: boolean;
 }): Promise<FixedEgressIp> => {
     const { data } = await axiosAuthorized.put<{ data: FixedEgressIp }>(
-        CODE_MANAGEMENT_API_PATHS.FIXED_EGRESS_IP,
+        ORGANIZATION_PARAMETERS_PATHS.FIXED_EGRESS_IP,
         params,
     );
     return data;

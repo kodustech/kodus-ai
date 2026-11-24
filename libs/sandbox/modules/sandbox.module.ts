@@ -24,7 +24,7 @@ import {
     SandboxEgressPolicyService,
 } from '@libs/sandbox/infrastructure/services/sandbox-egress-policy.service';
 import { GlobalParametersModule } from '@libs/organization/modules/global-parameters.module';
-import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
+import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 import { LicenseModule } from '@libs/ee/license/license.module';
 
 @Module({
@@ -33,7 +33,9 @@ import { LicenseModule } from '@libs/ee/license/license.module';
             { name: SandboxLeaseModel.name, schema: SandboxLeaseSchema },
         ]),
         GlobalParametersModule,
-        IntegrationConfigModule,
+        // The organization's fixed outbound IP choice is an organization
+        // parameter.
+        forwardRef(() => OrganizationParametersModule),
         // The plan decides whether a team may keep the fixed outbound IP.
         forwardRef(() => LicenseModule),
     ],

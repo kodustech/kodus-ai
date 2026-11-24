@@ -1512,7 +1512,7 @@ describe('E2BSandboxService egress route', () => {
         const error = await result.catch((e) => e);
         expect(error).toBeInstanceOf(FixedEgressIpUnavailableError);
         expect(error.blockedBy).toBe('turned_off');
-        expect(error.message).toContain('Settings > Repositories');
+        expect(error.message).toContain('Organization settings > General');
         expect(clones(log).map((c) => c.onProxy)).toEqual([false]);
         expect(egress.markFixedIpRequired).not.toHaveBeenCalled();
     });

@@ -67,8 +67,6 @@ export const CODE_MANAGEMENT_API_PATHS = {
     REPOSITORY_SELECTION_PREVIEW: pathToApiUrl(
         "/code-management/repository-selection/preview",
     ),
-
-    FIXED_EGRESS_IP: pathToApiUrl("/code-management/fixed-egress-ip"),
 } as const;
 
 export type RepositoryUploadResult = {
