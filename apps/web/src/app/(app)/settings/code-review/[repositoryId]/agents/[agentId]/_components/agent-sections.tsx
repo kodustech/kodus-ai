@@ -11,6 +11,7 @@ import {
 } from "@components/ui/select";
 import TagInput from "@components/ui/tag-input";
 import { Textarea } from "@components/ui/textarea";
+import { TruncateStart } from "@components/ui/truncate-start";
 import {
     CUSTOM_AGENT_LIMITS,
     nameCollisionHint,
@@ -525,16 +526,28 @@ export const ModelsFields = ({
                 size="md"
                 aria-label="Model"
                 id={AGENT_MODEL_FIELD_ID}>
-                <SelectValue />
+                <SelectValue className="min-w-0" />
             </SelectTrigger>
             <SelectContent>
                 <SelectItem value={ROUTING_DEFAULT}>
-                    Routing default
-                    {routed ? ` · ${routed}` : ""}
+                    <span className="flex min-w-0">
+                        <span className="shrink-0 whitespace-pre">
+                            {routed ? "Routing default · " : "Routing default"}
+                        </span>
+                        {routed && (
+                            <TruncateStart title={routed}>
+                                {routed}
+                            </TruncateStart>
+                        )}
+                    </span>
                 </SelectItem>
                 {models.map((model) => (
                     <SelectItem key={model.id} value={model.id}>
-                        {labelOf(model.id)}
+                        <span className="flex min-w-0">
+                            <TruncateStart title={labelOf(model.id)}>
+                                {labelOf(model.id)}
+                            </TruncateStart>
+                        </span>
                     </SelectItem>
                 ))}
             </SelectContent>

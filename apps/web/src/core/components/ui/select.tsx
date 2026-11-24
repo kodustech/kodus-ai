@@ -128,7 +128,9 @@ const SelectItem = React.forwardRef<
                     <CheckIcon />
                 </SelectPrimitive.ItemIndicator>
             }>
-            <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+            <SelectPrimitive.ItemText className="min-w-0">
+                {children}
+            </SelectPrimitive.ItemText>
         </Button>
     </SelectPrimitive.Item>
 ));
