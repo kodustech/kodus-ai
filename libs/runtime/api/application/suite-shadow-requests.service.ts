@@ -41,7 +41,7 @@ export class RuntimeSuiteShadowRequests {
         @Inject(RUNTIME_SUITE_SHADOW_READER) private readonly reader: RuntimeSuiteShadowReader,
         @Inject(RUNTIME_PRODUCT_ENVIRONMENT_STORE) private readonly environments: Pick<ProductEnvironmentStore, 'get'>,
         @Inject(RUNTIME_GIT_PORT) private readonly git: Pick<RuntimeGitPort, 'readFileAtCommit'>,
-        private readonly inputs: Pick<RuntimeSuiteInputs, 'tokensFor'>,
+        @Inject(RuntimeSuiteInputs) private readonly inputs: Pick<RuntimeSuiteInputs, 'tokensFor'>,
         @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN) private readonly outbox: Pick<IOutboxMessageRepository, 'create'>,
         @Inject(RUNTIME_CLOCK) private readonly now: Clock,
         @Inject(RUNTIME_API_CONFIG) private readonly config: RuntimeApiConfig,

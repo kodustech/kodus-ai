@@ -21,7 +21,7 @@ export class RuntimeSuiteCiTrigger {
     constructor(
         @Inject(RUNTIME_API_CONFIG) private readonly config: Pick<RuntimeApiConfig, 'suiteCi'>,
         @Inject(RUNTIME_PRODUCT_ENVIRONMENT_STORE) private readonly environments: Pick<ProductEnvironmentStore, 'findByRepository'>,
-        private readonly requester: Pick<RuntimeSuiteRequester, 'requestCi'>,
+        @Inject(RuntimeSuiteRequester) private readonly requester: Pick<RuntimeSuiteRequester, 'requestCi'>,
     ) {}
 
     async onPullRequest(ev: RuntimePullRequestObserved): Promise<SuiteCiOutcome | { status: 'skipped'; reason: 'disabled' | 'event' | 'no_environment' | 'failed' }> {

@@ -14,7 +14,7 @@ import { decideForkRun } from '../../domain/fork-policy';
 import { decideRun, type RepositoryTriggerSettings } from '../../domain/trigger-rules';
 import { ASKED_RUNS_REACHED_DETAIL, askedRunsReached } from '../asked-runs';
 import { membersOr, RuntimeEnvironmentMembers, type EnvironmentMembership } from '../environment-members.service';
-import type { RuntimePoolController } from '../pool-controller.service';
+import { RuntimePoolController } from '../pool-controller.service';
 import {
     RUNTIME_ENVIRONMENT_SETUP_READER,
     RUNTIME_GIT_PORT,
@@ -120,6 +120,7 @@ export class RuntimePullRequestTriggerUseCase {
         @Inject(RUNTIME_ENVIRONMENT_SETUP_READER)
         private readonly setups: RuntimeEnvironmentSetupReader,
         @Optional()
+        @Inject(RuntimePoolController)
         private readonly pool?: Pick<RuntimePoolController, 'onPullRequest'>,
         // Required by Nest; a use case made without it (the older tests) reads the environment the repository is the primary of.
         @Inject(RuntimeEnvironmentMembers)
