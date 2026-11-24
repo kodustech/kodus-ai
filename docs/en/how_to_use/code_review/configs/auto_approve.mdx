@@ -3,6 +3,15 @@ title: "Auto-approve"
 description: "Approve clean PRs with named policies and a recorded decision."
 ---
 
+<Info>
+    Auto-approval now runs through the per-PR [Decision
+    reconciler](/en/how_to_use/code_review/decision-flow). The shape of an
+    `approvalPolicies[*]` is unchanged; the engine folds each policy into one of
+    four gates (L0 conditions, L1 graph, L2 risk, L3 policies) and projects the
+    verdict on the host in a single ordered sequence.
+    `FilesRequiringHumanApproval` continues to be a hard veto.
+</Info>
+
 Turn on **Automatic PR approval** in **Code review → General**. Kody submits a review approval to your Git provider. It never merges the PR.
 
 ## Approval policies

@@ -9,6 +9,7 @@ export const KODUS_GRAPH_TIMEOUTS = {
     install: 120_000,
     parseAll: 600_000,
     parseFiles: 300_000,
+    analyzeFiles: 120_000,
     context: 60_000,
 };
 
@@ -184,6 +185,57 @@ export class KodusGraphCli {
         if (result.exitCode !== 0) {
             throw new Error(
                 `kodus-graph context failed (exit=${result.exitCode}): ${(result.stderr || '').slice(0, 500)}`,
+            );
+        }
+    }
+
+    /**
+     * Runs `kodus-graph analyze` over the PR's changed files against the base
+     * graph (passed in via {@link options.graphPath}). Writes JSON to
+     * {@link options.outPath} for the reconciler to read and map into an L1
+     * gate verdict.
+     *
+     * The CLI exits non-zero on oversized diffs, on missing graph, or on a
+     * model/library error. The reconciler maps every non-zero exit to
+     * `Unavailable`; the wrapper does not classify the cause.
+     */
+    async analyzeFiles(
+        sandbox: SandboxInstance,
+        files: string[],
+        options: {
+            outPath: string;
+            graphPath: string;
+            repoDir?: string;
+            timeoutMs?: number;
+        },
+    ): Promise<void> {
+        const {
+            outPath,
+            graphPath,
+            repoDir = '.',
+            timeoutMs = KODUS_GRAPH_TIMEOUTS.analyzeFiles,
+        } = options;
+        if (!graphPath) {
+            throw new Error(
+                'kodus-graph analyze --files requires graphPath (a baseline graph json from the AstGraph module)',
+            );
+        }
+        const outDir = dirname(outPath);
+        const filesArg = quoteFiles(files);
+
+        const result = await sandbox.run(
+            [
+                BUN_PATH_PREFIX,
+                `cd ${sandbox.repoDir ?? '.'}`,
+                `mkdir -p ${shSingleQuote(outDir)}`,
+                `kodus-graph analyze --files ${filesArg} --graph ${shSingleQuote(graphPath)} --repo-dir ${shSingleQuote(repoDir)} --out ${shSingleQuote(outPath)}`,
+            ].join(' && '),
+            { timeoutMs },
+        );
+
+        if (result.exitCode !== 0) {
+            throw new Error(
+                `kodus-graph analyze --files failed (exit=${result.exitCode}): ${(result.stderr || result.stdout || '').slice(0, 500)}`,
             );
         }
     }

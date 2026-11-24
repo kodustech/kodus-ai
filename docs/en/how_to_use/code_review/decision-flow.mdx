@@ -1,0 +1,163 @@
+---
+title: "Decision flow"
+description: "How a PR becomes a Kody decision and how that decision reaches the host."
+icon: "scale"
+---
+
+The Decision flow answers a single question:
+
+> For every PR that reaches Kody, what is Kody's settled view, and how does
+> that view reach the host?
+
+This page describes the runtime behaviour; configuration lives under
+[Risk assessment](/en/how_to_use/code_review/configs/risk) and
+[Auto-approve](/en/how_to_use/code_review/configs/auto_approve).
+
+## Four gates, one verdict
+
+Each reconcile folds four gate streams into a single desired host state.
+
+| Gate | Source | Veto semantics | Where it lives |
+|---|---|---|---|
+| **L0** conditions | Pure function of the PR shape (labels, author, paths, line limits, blocklist). | Not veto-by-default. Failures surface in the reason. | `libs/code-review/domain/risk/` |
+| **L1** graph metric | `kodus-graph analyze` over the PR's changed files against the cached baseline graph. | `HIGH` risk vetoes. `MEDIUM` non-vetoing context. `Unavailable` = no contribution. | `libs/code-review/infrastructure/adapters/services/graph/` |
+| **L2** LLM risk | Existing `assessChangeRisk` over the diff + historical area evidence. | Hard veto when `riskIdentified = true`. `Unavailable` fails closed. | `libs/code-review/domain/risk/assess-pr-risk.ts` |
+| **L3** policy matcher | Configured `approvalPolicies[*]` against the PR's author/labels/files/lines/instruction. | Hard veto on `'unmatched'`. `Unavailable` fails closed. | `libs/code-review/domain/approval/` |
+
+The reducer is a pure function over `GateVerdict<L0 | L1 | L2 | L3>` — see
+[`pr-decision-reducer.ts`](https://github.com/kodustech/kodus-ai/blob/main/libs/code-review/domain/risk/pr-decision-reducer.ts).
+The applier sequences the host calls — see [`pr-decision-applier.ts`](https://github.com/kodustech/kodus-ai/blob/main/libs/code-review/domain/risk/pr-decision-applier.ts).
+
+## Three ratified design decisions
+
+These were locked in `proposal.md` and surfaced as tests. Anyone reviewing
+diffs to this change can read the rationale, the edge-case test, and the
+spec rule next to it.
+
+- **Q1 — L1 graph unavailable escalates to L2.**
+  If `kodus-graph analyze` returns `Unavailable(reason)` (graph not built,
+  oversized diff, library error), the L1 stream contributes nothing to the
+  decision. Auto-approval fails closed only when **L2 finds risk** or when
+  globals veto. Self-hosted installs on `SANDBOX_PROVIDER=none` therefore
+  do not silently lose auto-approval.
+
+  Test: `pr-decision-reducer.spec.ts` › `Q1 — L1 Unavailable does not veto`.
+  Spec: [`L1 unavailable escalates to L2`](/en/specs?path=specs%2Fpr-decision-orchestrator%2Fspec).
+
+- **Q2 — Acceptance criteria stream is advisory.**
+  `business-rules-verifier.ts` produces per-criterion states (`met`,
+  `partial`, `missing`, `accepted`). When partial/missing criteria are
+  observed, the evidence feeds the L2 LLM prompt at increased weight;
+  the AC verdict never stands as its own veto. Mirrors today's stated
+  product posture: partial criteria raise confidence in the risk model,
+  not block approval.
+
+- **Q3 — `REVIEW_SETTINGS_INHERITABLE_FIELDS` stays narrow.**
+  The web UI per-directory override surface keeps its six fields
+  (`riskAssessmentActive`, `riskCriteria`, `approvalPolicies`,
+  `reviewMode`, `riskReviewRouting.noRisk`, `riskReviewRouting.riskFound`).
+  Other approval- and review-shaping fields stay overridable per directory
+  only via YAML, gated by `kodusConfigFileOverridesWebPreferences`.
+
+## Per-PR record: the source of truth
+
+Each `(repoId, prNumber, headSha)` has a row in
+`pr_decision_records`. The row carries: gate verdicts + snapshot keys, the
+last apply outcome (applied / partial / skipped-nochange), retry state,
+and the trigger kind on which the reconciler is mid-flight. The row is the
+materially deterministic source — the host is a projection.
+
+Read shape: `GET /api/v1/pull-requests/<repoId>/<prNumber>/decision?headSha=…`.
+
+```
+{
+  organizationId, repositoryId, prNumber, headSha, baseSha,
+  configurationKey,
+  gateVerdictsSnapshot: { snapshotKey, capturedAt, l0?, l1?, l2?, l3?, ac? },
+  lastApplyOutcome:    { kind, steps: [{step, result}], decidedAt },
+  lastReconciledAt:    ISO,
+  consecutiveFailures: integer,
+  inFlightTriggerKind: string | null,
+}
+```
+
+## In-app audit panel
+
+The Decision tab on the PR page reads the per-PR record and surfaces:
+
+- the four gate rows (Ready / Unavailable / Stale variants),
+- the applied-or-not outcome and the time of the last reconciliation,
+- a retry banner when `consecutiveFailures > 0`,
+- an error state when the read fails.
+
+The tab is gated by `NEXT_PUBLIC_FEATURE_PR_DECISION_TAB` (off by default;
+the closing PR turns it on per tenant during the rollout). See
+[Deploy Kodus — Decision reconciler](/en/how_to_deploy/deploy_kodus/decision-reconciler) for the
+rollout and the parity runner.
+
+## Host projection order
+
+Each reconcile whose desired state differs from the actual host state
+applies exactly one ordered sequence of host calls:
+
+```
+1. dismissIfNeeded           (only when priorChangeRequestActive AND desired.kind = APPROVE)
+2. approve                   (only when desired.kind = APPROVE)
+3. upsertDecisionComment     (always)
+```
+
+Any provider-side failure (timeout, 5xx) halts the sequence without
+rollback. The reconciler reschedules with exponential backoff
+(`PR_DECISION_RECONCILER_ENABLED=false` keeps the existing two-cron halves
+governing until the rollout flag flips).
+
+## Trigger taxonomy
+
+A reconcile fires on:
+
+| Trigger | Reason |
+|---|---|
+| Commit pushed | head SHA invalidates prior verdicts |
+| Comment resolved | host-side `isResolved` flipped |
+| Config edited | `riskCriteria`, `approvalPolicies`, or `FilesRequiringHumanApproval` changed |
+| In-flight review cleared | safe to dismiss any outstanding `REQUEST_CHANGES` |
+| Debounced safety-poll | catches missed signals |
+
+A new trigger arriving within 30 seconds of the previous reconcile's
+`lastReconciledAt` is merged into the next reconcile rather than spawning
+a parallel pass. The per-PR record's `inFlightTriggerKind` records the
+trigger currently being processed.
+
+## Order of risk on the host
+
+After the reconciler publishes `APPROVE`:
+
+1. (if needed) `ownChangeRequest.withdrawIfResolved(...)` is awaited before
+   the host's APPROVE event is submitted.
+2. `codeManagementService.approvePullRequest(...)` posts the host review
+   event.
+3. `postConditionalApprovalReason(...)` upserts the single conditional
+   approval comment.
+
+Steps 1 and 2 are sequenced deliberately so the host never shows both
+Kody events present at the same time. The comment step is always last,
+regardless of the decide. The `record` row in
+`pull_request_messages` records one entry per apply transition; late
+hold posts carry a declining `notAfter` so the outbox stays bounded.
+
+## Verifying a reconcile
+
+The CRON-level cron (`CheckIfPRCanBeApproved.cron.ts`) continues to run,
+guarded by `PR_DECISION_RECONCILER_ENABLED`. While the flag is off, that
+cron is authoritative. The behaviour is unchanged from before this change:
+see its test suite (`__tests__/CheckIfPRCanBeApproved.cron.spec.ts`).
+
+When the feature flag flips on:
+
+- `pnpm run eval:wiring` should still pass (the pipeline shape is identical
+  on both paths).
+- `pnpm run test:nightly` should report zero regressions in
+  `evals/approval-risk` before the rollout begins. This is the gate the
+  PR's "before merging" validation uses.
+- The reconcile runner can be exercised on a frozen sample; see
+  [Deploy Kodus — Decision reconciler](/en/how_to_deploy/deploy_kodus/decision-reconciler).

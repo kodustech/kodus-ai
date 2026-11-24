@@ -1639,6 +1639,17 @@
     }
   },
   {
+    "key": "pr-decision.controller.ts#readDecision",
+    "httpMethod": "GET",
+    "urlPath": "/pull-requests/:repoId/:prNumber/decision",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "pullRequest.controller.ts#backfillHistoricalPRs",
     "httpMethod": "POST",
     "urlPath": "/pull-requests/backfill",

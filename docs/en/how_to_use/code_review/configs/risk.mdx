@@ -3,6 +3,15 @@ title: "Risk assessment"
 description: "Assess PR risk independently of automatic approval."
 ---
 
+<Info>
+    Risk assessment now feeds into the per-PR [Decision
+    reconciler](/en/how_to_use/code_review/decision-flow) alongside the L1 graph
+    metric and the policy matcher. The four gates fold into one source-of-truth
+    row whose host projection runs as a single ordered sequence (dismiss →
+    approve → comment). The shapes below stay the same; the output is consumed
+    by the reconciler in addition to review comments.
+</Info>
+
 **Code review → Risk assessment** controls the shared risk engine. It can run with automatic approval off, and you can switch it off independently.
 
 When enabled, Kody assesses the complete PR before choosing the review mode or selecting risk-conditioned custom agents. The result is shared across those consumers.

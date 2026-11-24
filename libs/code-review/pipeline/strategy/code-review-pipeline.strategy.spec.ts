@@ -29,6 +29,7 @@ const buildStrategy = (): CodeReviewPipelineStrategy =>
         mockStage('CreateFileCommentsStage') as any,
         mockStage('AggregateResultsStage') as any,
         mockStage('DecidePrApprovalStage') as any,
+        mockStage('PrDecisionReconcilerStage') as any,
         mockStage('UpdateCommentsAndGenerateSummaryStage') as any,
         mockStage('RequestChangesOrApproveStage') as any,
         mockStage('AssessPrRiskStage') as any,
@@ -59,6 +60,9 @@ const EXPECTED_ORDER = [
     'AggregateResultsStage',
     'UpdateCommentsAndGenerateSummaryStage',
     'DecidePrApprovalStage',
+    // The reconciler owns the host projection when the flag is on, so it
+    // runs after the decision inputs exist and before the host write.
+    'PrDecisionReconcilerStage',
     'RequestChangesOrApproveStage',
 ];
 

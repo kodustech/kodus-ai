@@ -32,6 +32,7 @@ import { ValidateConfigStage } from '../stages/validate-config.stage';
 import { ValidateNewCommitsStage } from '../stages/validate-new-commits.stage';
 import { ValidatePrerequisitesStage } from '../stages/validate-prerequisites.stage';
 import { ValidateSuggestionsStage } from '../stages/validate-suggestions.stage';
+import { PrDecisionReconcilerStage } from '../stages/pr-decision-reconciler.stage';
 
 /**
  * Code review pipeline (agent engine only). The stage list is linear:
@@ -63,6 +64,7 @@ export class CodeReviewPipelineStrategy implements IPipelineStrategy<CodeReviewP
         private readonly createFileCommentsStage: CreateFileCommentsStage,
         private readonly aggregateResultsStage: AggregateResultsStage,
         private readonly decidePrApprovalStage: DecidePrApprovalStage,
+        private readonly prDecisionReconcilerStage: PrDecisionReconcilerStage,
         private readonly updateCommentsAndGenerateSummaryStage: UpdateCommentsAndGenerateSummaryStage,
         private readonly requestChangesOrApproveStage: RequestChangesOrApproveStage,
         private readonly assessPrRiskStage: AssessPrRiskStage,
@@ -113,6 +115,13 @@ export class CodeReviewPipelineStrategy implements IPipelineStrategy<CodeReviewP
             this.aggregateResultsStage,
             this.updateCommentsAndGenerateSummaryStage,
             this.decidePrApprovalStage,
+            // The per-PR reconciler, when PR_DECISION_RECONCILER_ENABLED is set.
+            // It sits AFTER DecidePrApprovalStage (the policy verdict it reads
+            // as its L3 gate exists only then) and BEFORE
+            // RequestChangesOrApproveStage (which writes to the host — with the
+            // flag on, the reconciler owns that write; with the flag off, the
+            // stage passes through and the existing stage keeps it).
+            this.prDecisionReconcilerStage,
             this.requestChangesOrApproveStage,
         ];
     }

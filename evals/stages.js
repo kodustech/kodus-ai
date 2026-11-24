@@ -807,7 +807,11 @@ const STAGES = [
         short: 'Approves or requests changes',
         group: 'On the PR',
         does: 'Checks approval scope and risk after the review, then approves or requests changes when the team turned it on.',
-        pipeline: ['DecidePrApprovalStage', 'RequestChangesOrApproveStage'],
+        pipeline: [
+            'DecidePrApprovalStage',
+            'PrDecisionReconcilerStage',
+            'RequestChangesOrApproveStage',
+        ],
         tests: [
             {
                 kind: 'unit',
@@ -823,13 +827,44 @@ const STAGES = [
                 ],
             },
             {
+                kind: 'unit',
+                name: 'The per-PR reconciler: its reducer, its applier and the stage that drives them',
+                specs: [
+                    'libs/code-review/domain/risk/pr-decision-reducer.spec.ts',
+                    'libs/code-review/domain/risk/pr-decision-applier.spec.ts',
+                    'libs/code-review/domain/risk/pr-decision-graph-verdict.spec.ts',
+                    'libs/code-review/pipeline/services/pr-decision-reconciler.service.spec.ts',
+                    'libs/code-review/pipeline/stages/pr-decision-reconciler.stage.spec.ts',
+                ],
+            },
+            {
+                kind: 'unit',
+                name: 'The reconciler gate adapters and its host projection',
+                specs: [
+                    'libs/code-review/pipeline/services/pr-decision-l0-assessor.service.spec.ts',
+                    'libs/code-review/pipeline/services/pr-decision-l1-assessor.service.spec.ts',
+                    'libs/code-review/pipeline/services/pr-decision-l2-assessor.service.spec.ts',
+                    'libs/code-review/pipeline/services/pr-decision-l3-assessor.service.spec.ts',
+                    'libs/code-review/pipeline/services/pr-decision-host-driver.service.spec.ts',
+                    'libs/code-review/pipeline/services/pr-decision-recorder.service.spec.ts',
+                ],
+            },
+            {
+                kind: 'unit',
+                name: 'The reconciler wiring: the port bindings and the pipeline shape',
+                specs: [
+                    'libs/code-review/modules/pr-decision-wiring.spec.ts',
+                    'libs/code-review/pipeline/strategy/code-review-pipeline.strategy.spec.ts',
+                ],
+            },
+            {
                 kind: 'contract',
                 name: 'Production approval decision with a scripted model',
                 wiring: ['approval-risk'],
             },
         ],
         eval: null,
-        note: 'The 200-PR risk quality eval is awaiting independent labels; the controlled pair only checks wiring.',
+        note: 'The 200-PR risk quality eval is awaiting independent labels; the controlled pair only checks wiring. The per-PR reconciler (PrDecisionReconcilerStage) is disabled unless PR_DECISION_RECONCILER_ENABLED is set; with the flag off it passes through and the cron halves still govern, so this step is unchanged.',
     },
     {
         id: 'implementation-check',
@@ -918,13 +953,15 @@ const STAGES = [
         name: 'Files a rule cites',
         short: 'Finds the files a rule cites',
         group: 'Where rules and memories come from',
-        does: 'When a Kody Rule is saved, reads its text for the files it cites (@file:, paths) so the review can load them as the rule\'s context.',
+        does: "When a Kody Rule is saved, reads its text for the files it cites (@file:, paths) so the review can load them as the rule's context.",
         pipeline: null,
         tests: [
             {
                 kind: 'unit',
                 name: 'The reply parser and its fail-safe',
-                specs: ['libs/ai-engine/infrastructure/adapters/services/reference-detector.service.spec.ts'],
+                specs: [
+                    'libs/ai-engine/infrastructure/adapters/services/reference-detector.service.spec.ts',
+                ],
             },
             {
                 kind: 'contract',
@@ -1170,7 +1207,7 @@ const STAGES = [
             },
             {
                 kind: 'contract',
-                name: "A scripted model scans a repository written for it, end to end",
+                name: 'A scripted model scans a repository written for it, end to end',
                 wiring: ['security-scan'],
             },
         ],

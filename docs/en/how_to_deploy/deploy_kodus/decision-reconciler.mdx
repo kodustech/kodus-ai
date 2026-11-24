@@ -1,0 +1,263 @@
+---
+title: "Decision reconciler"
+description: "Deploy, flag, parity, and rollback for the per-PR decision reconciler."
+icon: "scale"
+---
+
+The reconciler is a per-PR orchestrator that holds the source-of-truth
+row and projects its conclusions on the host. The runtime shape is in
+[Decision flow](/en/how_to_use/code_review/decision-flow); this page is about
+the cutover plan and the operator surface.
+
+## Feature flags
+
+| Flag | Default | Location | Effect |
+|---|---|---|---|
+| `PR_DECISION_RECONCILER_ENABLED` | `false` | API + worker env | When unset, the existing two halves of `CheckIfPRCanBeApproved.cron.ts` continue to govern. When set, the per-PR reconciler is the source of truth and the cron halves are responsible only for the change-request sweep. |
+| `FEATURE_PR_DECISION_TAB` | opt-in per tenant | Web build-time env (`NEXT_PUBLIC_FEATURE_PR_DECISION_TAB=true`) | When unset, the in-app Decision tab is hidden. Default sits behind an explicit tenant opt-in until parity is measured. |
+| `FEATURE_PR_DECISION_CHECK_RUN` | per-tenant opt-in | API + worker env | When set, the reconciler publishes a provider check run alongside the APPROVE / hold comment. Defaults to off; the check-run surface lights up per tenant after the rollout. |
+
+> **License boundary:** the reconciler ships AGPL only; nothing under
+> `libs/ee/` or any `*.ee.*` filename is modified. The closing PR's
+> [Tasks §9.4 verify clause](/en/how_to_use/code_review/decision-flow) runs
+> `git diff main -- 'libs/ee/**' '*.ee.*'` and confirms an empty diff.
+
+## Migration schema
+
+The reconciler writes one row per `(repoId, prNumber, headSha)` to a new
+`pr_decision_records` table — committed under
+`libs/core/infrastructure/database/typeorm/migrations/2026112018000000-CreatePrDecisionRecordsTable.ts`.
+
+Self-hosted installs and cloud replicas run the migration before flipping
+`PR_DECISION_RECONCILER_ENABLED`:
+
+```bash
+pnpm exec typeorm migration:run -d libs/core/infrastructure/database/typeorm/ormconfig.ts
+```
+
+The `pr_decision_records` table is additive — no existing rows are
+modified, no existing indices are dropped. Rollback is a clean DROP
+TABLE (`down()` of the migration).
+
+## Parity run
+
+The change adds a parity runner under
+`evals/approval-risk/runs/parity-pilot.js`-style scripts (path will land
+with the closing PR); the script does:
+
+1. Pull a frozen sample of N PRs from `evals/approval-risk`'s controlled
+   set.
+2. For each PR, run **both** the existing two-cron halves and the new
+   reconciler with identical inputs.
+3. Compare `desiredState`, `applyOutcome`, the published host review
+   event, and the conditional approval comment.
+4. Classify divergences (`l1-not-veto-when-low-vs-medium`, `refusal-retry
+   -not-fired`, etc.) and write the report to
+   `evals/approval-risk/runs/parity-<date>.json`.
+
+The roll-out's go/no-go signal is **zero divergences over a rolling
+quarter of nightly runs**. Until then, `PR_DECISION_RECONCILER_ENABLED`
+stays unset in cloud.
+
+## Cutover plan
+
+1. **Self-hosted first.** `PR_DECISION_RECONCILER_ENABLED=true` on a fresh
+   self-hosted install of the engine. The closing PR's
+   [Migration step 7.3](/en/how_to_use/code_review/decision-flow)
+   resolves divergence-classification before raising the flag.
+2. **Cloud opt-in by tier.** T2 (paid BYOK) first, T1 second, then
+   free/dev. Each tier raises the flag for that cohort and watches the
+   nightly run count for divergences. The existing two-cron halves
+   continue to run in cloud while opt-in proceeds; they take back over if
+   `PR_DECISION_RECONCILER_ENABLED` flips back.
+3. **Default-on when eviction criteria are met.** After a quarter at near-zero
+   par divergence, `PR_DECISION_RECONCILER_ENABLED` flips default-on in
+   the engine's bootstrap. The two-cron halves then become a safety net
+   for an undefined grace period (default 30 days), then are removed.
+
+## Rollback
+
+Flipping `PR_DECISION_RECONCILER_ENABLED=false` at any point returns the
+instance to the pre-reconciler behaviour:
+
+- `PrDecisionRecord` rows continue to be written (no write-side toggle),
+  but the cron halves read the host state directly.
+- Per-PR audit panel keeps reading `pr_decision_records` — visible history
+  is preserved.
+- Closing PR-description-section §9.4 mechanical check remains the go-to
+  for license-boundary verification during rollback-era audits.
+
+The per-PR audit panel phase surfaces are decoupled from the flag: the
+Decision tab is gated separately (`NEXT_PUBLIC_FEATURE_PR_DECISION_TAB`)
+and can be turned off per tenant without affecting the engine's
+authoritative behaviour.
+
+## Self-hosted installer notes
+
+The self-hosted installer (`./scripts/install.sh`) sets
+`PR_DECISION_RECONCILER_ENABLED` from the user's `reconciler` opt-in in
+`installer.yml` (added in step 7.1 of the migration plan). Until that
+field is set, self-hosted installs keep the existing two-cron halves.
+
+A self-hosted install that flips the flag must (a) have
+`kodus-graph` available on the engine's worker image, and (b) have
+Postgres reachable from the worker. Both already hold on install-default
+images.
+
+## The L1 graph baseline
+
+The L1 gate is the repository's code graph, measured over the PR's changed
+files. It needs a **baseline**: the graph of the repository's default
+branch, built offline and stored in the database.
+
+Without a baseline, L1 reports `Unavailable` and the decision escalates to
+L2 — it does not block, and it does not approve on the graph's behalf. The
+audit panel shows L1 as unavailable with the reason.
+
+**How the baseline is built.** The graph is built by a background job and
+persisted in the database — it is not a file in your repository. A per-PR
+review exports a filtered subgraph of that baseline into its sandbox before
+the graph tooling runs.
+
+**How to check the status of a repository:**
+
+```sql
+SELECT external_id, full_name, ast_graph_status
+  FROM repositories
+ WHERE full_name = 'your-org/your-repo';
+```
+
+`ast_graph_status` is one of `pending`, `building`, `ready` or `failed`.
+
+**How to get it built.** Connecting a repository enqueues its first build
+automatically. If the repository was connected before this feature, or the
+build failed, the scheduled repository sync retries it — it runs every ten
+minutes (`API_CRON_SYNC_ALL_REPOSITORIES`, `*/10 * * * *` by default) and
+re-enqueues any repository whose status is `pending` or `failed`. A
+repository that is `ready` or `building` is left alone.
+
+A build is not instant: it clones the repository, parses it, and stores the
+result. A large repository takes a while. Until it finishes, L1 stays
+unavailable and the reconciler decides on L2 alone.
+
+**When to care.** You do not have to build a baseline to use the
+reconciler — the decision works without one. Build one when you want L1's
+graph metric to be able to veto a wide-blast-radius change, and when you
+want the audit panel to show a real graph verdict instead of an
+unavailable one.
+
+## When the git host cannot reach Kodus
+
+The webhook is a **push** from your git host to Kodus. If the git host
+cannot open a connection to the webhooks service, no review ever starts —
+and the symptom is a 404 or a connection error in the git host's webhook
+delivery log, not an error in Kody.
+
+Check the address first: the webhook URL must be one **the git host can
+dial**, not one that only works from the machine running Kodus.
+
+A common case is a git host on the local network and Kodus inside a
+virtualized Linux environment (WSL2) whose address is behind a NAT. The
+git host can reach the **Windows host**, but not the Linux environment
+behind it. Two ways out:
+
+**Publish the port on the Windows host** (WSL2):
+
+```powershell
+# run in an Administrator PowerShell on the Windows host
+netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=3332 connectaddress=<wsl-ip> connectport=3332
+New-NetFirewallRule -DisplayName "Kodus webhooks" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3332 -Profile Private -RemoteAddress <git-host-subnet>
+```
+
+The firewall rule is required: Windows blocks inbound connections by
+default, and the port forward does not change that — the forward makes the
+Windows host listen, the rule makes it answer. Scope the rule to the
+profile the git host is on (`Get-NetConnectionProfile` shows which) and to
+the git host's subnet, so only that host can reach the port.
+
+Check that the path works before wiring the webhook up: from the git host,
+`POST http://<windows-host-lan-ip>:3332/forgejo/webhook` must answer. If
+it does not, the rule is missing or on the wrong profile — a request from
+the Windows host itself (`http://127.0.0.1:3332/`) answering while the
+network address does not is exactly that symptom.
+
+The webhook URL becomes `http://<windows-host-lan-ip>:3332/forgejo/webhook`.
+The WSL address changes when WSL restarts, so the rule has to be
+re-applied — unless you use mirrored networking, which puts the Linux
+environment directly on the network and removes the forwarding entirely:
+
+```ini
+# %UserProfile%\.wslconfig
+[experimental]
+networkingMode=mirrored
+```
+
+**Or put a reverse proxy in front of Kodus** and point the webhook URL at
+the proxy's public address. This is the shape a production install should
+have anyway; the forwarding above is for a test environment.
+
+To undo the forwarding when you are done:
+
+```powershell
+netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=3332
+Remove-NetFirewallRule -DisplayName "Kodus webhooks"
+```
+
+**Two more things a containerised install needs:**
+
+*Name resolution.* A git host on the local network can be addressed by a
+short name the host resolves through a DNS search domain
+(`git-host` -> `git-host.home`). Containers use their own resolver and do
+not apply the host's `search` list, so the short name is unreachable from
+inside them. Map it in `docker-compose.dev.yml`:
+
+```yaml
+    extra_hosts:
+        - "${GATE_HOST_NAME:-localhost}:${GATE_HOST_IP:-127.0.0.1}"
+```
+
+*A private CA.* If the git host's certificate is issued by a private CA,
+Node must be told to trust it — Node reads its own bundled roots, not the
+OS trust store:
+
+```yaml
+    environment:
+        - NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/gate-ca.crt
+```
+
+Mount the CA file into the container so it survives a recreation; a file
+copied in with `docker cp` does not.
+
+Neither the forward nor the firewall rule is a file, so nothing on disk
+reverts them — remove them by hand when the environment is torn down. A
+helper that reports and undoes the whole local setup is at
+`scripts/dev/cleanup-local-test-harness.sh` in the Kodus repository.
+
+## Day-2 operations
+
+- **Replay a reconcile.** The reconciler is idempotent on
+  `(repoId, prNumber, headSha)`; calling it twice with the same inputs
+  produces the same host projection. To replay, set `headSha = current`
+  in the existing cron loop and watch for `consecutiveFailures` to drop.
+- **Force a re-evaluation.** Bump `configurationKey` (e.g. add a
+  whitespace and re-save — the SHA-256 hash changes). Every verdict
+  becomes `Stale` and the reducer forces a HOLD until the gates emit under
+  the new key.
+- **Inspect a stuck PR.** Read the per-PR row directly:
+  ```bash
+  psql -U kodus -d kodus_db -c '
+    SELECT head_sha, configurationKey, last_apply_outcome, consecutive_failures
+      FROM pr_decision_records
+      WHERE repository_id = $1 AND pr_number = $2
+      ORDER BY last_reconciled_at DESC LIMIT 5;
+  '
+  ```
+
+## What this page does not yet describe
+
+- Cross-provider check-run vocabulary mapping (GitHub / Azure DevOps /
+  GitLab / Forgejo). Settled under `Decisions §5` in
+  [design.md](/en/specs?path=specs%2Fpr-decision-orchestrator%2Fdesign); tenant
+  validation runs during the cloud opt-in phase.
+- Trigger debounce tuning. Best guess `bufferTime(2min)`; tuned by the
+  parity runner's measurement of effective latency vs manual investigation.

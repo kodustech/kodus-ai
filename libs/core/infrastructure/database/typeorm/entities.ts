@@ -31,6 +31,7 @@ import { SessionEventModel } from '../../../../cli-review/infrastructure/reposit
 import { RepositoryModel } from '../../../../code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import { AstNodeModel } from '../../../../code-review/infrastructure/adapters/repositories/schemas/astNode.model';
 import { AstEdgeModel } from '../../../../code-review/infrastructure/adapters/repositories/schemas/astEdge.model';
+import { PrDecisionRecordModel } from '../../../../code-review/infrastructure/adapters/repositories/schemas/prDecisionRecord.model';
 import { InboxMessageModel } from '../../../workflow/infrastructure/repositories/schemas/inbox-message.model';
 import { OutboxMessageModel } from '../../../workflow/infrastructure/repositories/schemas/outbox-message.model';
 import { WorkflowJobModel } from '../../../workflow/infrastructure/repositories/schemas/workflow-job.model';
@@ -77,6 +78,11 @@ export const ENTITIES = [
     RepositoryModel,
     AstNodeModel,
     AstEdgeModel,
+    // The per-PR reconciler's source-of-truth row. It MUST be registered
+    // here: the pipeline module's TypeORM connection reads the entity
+    // registry, and a model missing from it fails at RUNTIME with
+    // "No metadata for PrDecisionRecordModel was found" — not at boot.
+    PrDecisionRecordModel,
     NotificationDeliveryModel,
     UserNotificationModel,
     RoutingRuleModel,

@@ -274,6 +274,43 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     /** Approval policy result for this reviewed head; reused by the finish stage. */
     approvalDecision?: ApprovalDecision;
+
+    /**
+     * The per-PR reconciler's outcome for this run: what it decided, what it
+     * applied, and where the source-of-truth row lives. Read by the audit
+     * panel and by anything that needs to know WHY the host state is what it
+     * is, without re-running the gates.
+     */
+    prDecisionReconcileOutcome?: {
+        record: {
+            organizationId: string;
+            repositoryId: string;
+            prNumber: number;
+            headSha: string;
+            baseSha: string;
+            configurationKey: string;
+        };
+        desired: {
+            kind: 'APPROVE' | 'HOLD' | 'ORCH_FAIL';
+            reason: string;
+            policyId?: string;
+            vetoSources: ReadonlyArray<string>;
+        };
+        apply:
+            | { status: 'applied' }
+            | {
+                  status: 'partial';
+                  attemptedSteps: ReadonlyArray<string>;
+                  reason: string;
+              }
+            | { status: 'skipped-nochange' }
+            | {
+                  status: 'aborted';
+                  reason: 'prior-reconciliation-running';
+                  priorReconciledAt: string;
+              };
+        recordedAt: string;
+    };
     approvalPolicyEligibility?: import('../services/approval-policies.service').ApprovalEligibilityCache;
     approvalReviewSummary?: {
         lineFindings: number;

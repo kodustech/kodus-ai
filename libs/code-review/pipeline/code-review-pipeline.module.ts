@@ -73,6 +73,24 @@ import { RATE_LIMIT_GATE_SERVICE_TOKEN } from '@libs/core/workflow/domain/contra
 import { ImplementationVerificationProcessor } from '../workflow/implementation-verification.processor';
 import { ValidateSuggestionsStage } from './stages/validate-suggestions.stage';
 import { CodeReviewPipelineStrategy } from './strategy/code-review-pipeline.strategy';
+// Per-PR decision reconciler (opt-in behind PR_DECISION_RECONCILER_ENABLED).
+import { PrDecisionReconcilerService } from './services/pr-decision-reconciler.service';
+import { PrDecisionReconcilerStage } from './stages/pr-decision-reconciler.stage';
+import { PrDecisionRecordModule } from '../modules/pr-decision-record.module';
+import { PrDecisionHostDriverService } from './services/pr-decision-host-driver.service';
+import { PrDecisionL0AssessorService } from './services/pr-decision-l0-assessor.service';
+import { PrDecisionL1AssessorService } from './services/pr-decision-l1-assessor.service';
+import { PrDecisionL2AssessorService } from './services/pr-decision-l2-assessor.service';
+import { PrDecisionL3AssessorService } from './services/pr-decision-l3-assessor.service';
+import { PrDecisionRecorderService } from './services/pr-decision-recorder.service';
+import {
+    DECISION_RECORDER_TOKEN,
+    HOST_DRIVER_TOKEN,
+    L0_ASSESSOR_TOKEN,
+    L1_ASSESSOR_TOKEN,
+    L2_ASSESSOR_TOKEN,
+    L3_ASSESSOR_TOKEN,
+} from '@libs/code-review/domain/contracts/pr-decision-reconciler.ports';
 
 // Sandbox (lease manager)
 import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
@@ -137,6 +155,9 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         forwardRef(() => PromptsModule),
         // UpdateCommentsAndGenerateSummaryStage posts the selected Trace pack.
         TraceContextModule,
+        // The per-PR record's repository (the reconciler's source of truth).
+        // forwardRef: it reaches back into the shared database module.
+        forwardRef(() => PrDecisionRecordModule),
     ],
     providers: [
         {
@@ -189,6 +210,46 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         RequestChangesOrApproveStage,
         ValidateSuggestionsStage,
 
+        // Per-PR decision reconciler. Disabled by default: the stage passes
+        // through unless PR_DECISION_RECONCILER_ENABLED is set, in which case
+        // the reconciler owns the host projection between DecidePrApprovalStage
+        // and RequestChangesOrApproveStage.
+        //
+        // The reconciler depends on the PORTS, never on the adapters. The
+        // bindings live here because this module already imports every
+        // adapter's dependency — CodebaseModule (the comment manager),
+        // PlatformModule (the code-management service) and PlatformDataModule
+        // (the PRs service). A separate module for them would have to
+        // import CodebaseModule, and CodebaseModule imports this one: a
+        // load-time cycle that `forwardRef` cannot break (it fixes Nest's
+        // runtime resolution, not the ES module cycle).
+        {
+            provide: L0_ASSESSOR_TOKEN,
+            useClass: PrDecisionL0AssessorService,
+        },
+        {
+            provide: L1_ASSESSOR_TOKEN,
+            useClass: PrDecisionL1AssessorService,
+        },
+        {
+            provide: L2_ASSESSOR_TOKEN,
+            useClass: PrDecisionL2AssessorService,
+        },
+        {
+            provide: L3_ASSESSOR_TOKEN,
+            useClass: PrDecisionL3AssessorService,
+        },
+        {
+            provide: HOST_DRIVER_TOKEN,
+            useClass: PrDecisionHostDriverService,
+        },
+        {
+            provide: DECISION_RECORDER_TOKEN,
+            useClass: PrDecisionRecorderService,
+        },
+        PrDecisionReconcilerService,
+        PrDecisionReconcilerStage,
+
         // V3 Agent-First stages + providers
         CreateSandboxStage,
         LoadCiEvidenceStage,
@@ -238,6 +299,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         OwnChangeRequestService,
         PrRiskAssessmentService,
         CodeReviewPipelineStrategy,
+        PrDecisionReconcilerService,
 
         CodeReviewJobProcessorService,
         CodeReviewPipelineObserver,

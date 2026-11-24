@@ -15,6 +15,7 @@ import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/dom
 import { CodeReviewDashboardModule } from '@libs/code-review/modules/code-review-dashboard.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.module';
+import { PrDecisionRecordModule } from '@libs/code-review/modules/pr-decision-record.module';
 import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequestMessages.module';
 import { GlobalCacheModule } from '@libs/core/cache/cache.module';
 import { HealthModule } from '@libs/core/health/health.module';
@@ -85,6 +86,7 @@ import {
     CockpitReviewAnalyticsController,
 } from './controllers/cockpit.controller';
 import { PullRequestController } from './controllers/pullRequest.controller';
+import { PrDecisionController } from './controllers/pull-requests/pr-decision.controller';
 import { PullRequestMessagesController } from './controllers/pullRequestMessages.controller';
 import { RuleLikeController } from './controllers/ruleLike.controller';
 import { BusinessLogicController } from './controllers/businessLogic.controller';
@@ -146,6 +148,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         AgentsModule,
         CodebaseModule,
         PullRequestsModule,
+        PrDecisionRecordModule,
         PullRequestMessagesModule,
         IntegrationModule,
         IntegrationConfigModule,
@@ -204,6 +207,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         IntegrationController,
         IntegrationConfigController,
         PullRequestController,
+        PrDecisionController,
         UsersController,
         CliAuthController,
         CliReviewController,
