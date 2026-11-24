@@ -334,8 +334,11 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         if (budgetError) {
             throw new ScanFailure(budgetError);
         }
+        // The lenses stop short of the limit by a small reserve: the end of
+        // the scan folds duplicate issues within the rest of it, so a scan
+        // stopped by its limit still folds them, and the limit still holds.
         const meter = new ScanBudgetMeter(
-            scan.budget,
+            withFoldingReserve(scan.budget),
             rates,
             carriedSpend(scan),
             model.contextWindowTokens,
@@ -846,9 +849,20 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
 
         // Issues earlier scans opened for one root cause fold into one, now
         // that this scan's sightings and resolutions are on record.
+        // The whole limit, from what the lenses committed: the reserve.
+        const foldingMeter = new ScanBudgetMeter(
+            scan.budget,
+            rates,
+            meter.committedSpend(),
+            model.contextWindowTokens,
+        );
+        foldingMeter.beforeEachRequest((committed) =>
+            this.scans.raiseCommittedSpend(scan.uuid, committed, jobId),
+        );
+        onMeter(foldingMeter);
         counts.consolidated =
             (counts.consolidated ?? 0) +
-            (await this.consolidateIssues(scan, model, meter, signal));
+            (await this.consolidateIssues(scan, model, foldingMeter, signal));
 
         await this.kodyIssuesManagement
             .clearIssuesCache(scan.organizationId)
@@ -859,7 +873,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 ? SecurityScanStatus.STOPPED_BY_BUDGET
                 : SecurityScanStatus.COMPLETED,
             progress: result.progress,
-            spend: meter.committedSpend(),
+            spend: foldingMeter.committedSpend(),
             coverage,
             outcome: counts,
             finishedAt: new Date().toISOString(),
@@ -868,7 +882,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
         return {
             status: 'finished',
             outcome: counts,
-            spend: meter.committedSpend(),
+            spend: foldingMeter.committedSpend(),
         };
     }
 
@@ -1094,6 +1108,30 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
 
 /** How long the end of a scan may spend folding duplicate issues. */
 const CONSOLIDATION_WINDOW_MS = 6 * 60 * 1000;
+
+/**
+ * The limit the lenses run within: the scan's, less what folding duplicate
+ * issues at the end may spend (5% of it, at least $0.05 and at most $0.50,
+ * or the same share of a token limit). No limit, no reserve.
+ */
+export function withFoldingReserve(
+    budget: SecurityScanRecord['budget'],
+): SecurityScanRecord['budget'] {
+    const share = (total: number, floor: number, ceiling: number) =>
+        Math.max(0, total - Math.min(ceiling, Math.max(floor, total * 0.05)));
+    return {
+        ...(budget.maxUsd !== undefined
+            ? { maxUsd: share(budget.maxUsd, 0.05, 0.5) }
+            : {}),
+        ...(budget.maxTokens !== undefined
+            ? {
+                  maxTokens: Math.floor(
+                      share(budget.maxTokens, 50_000, 1_000_000),
+                  ),
+              }
+            : {}),
+    };
+}
 
 /**
  * The issue body: what the auditor wrote and how to fix it. The attack path

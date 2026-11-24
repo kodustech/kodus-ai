@@ -18,6 +18,7 @@ import {
     SecurityScanJobProcessor,
     buildIssueDescription,
     scanErrorMessage,
+    withFoldingReserve,
 } from './security-scan-job.processor';
 import { SecurityScanStatus } from '../domain/security-scan.types';
 import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
@@ -1361,5 +1362,35 @@ describe('SecurityScanJobProcessor: incremental scans', () => {
             'securityScan',
             'model-42',
         );
+    });
+});
+
+describe('the reserve for folding duplicates at the end of a scan', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('keeps 5% of the limit, between $0.05 and $0.50, and nothing without a limit', () => {
+        expect(withFoldingReserve({ maxUsd: 2 })).toEqual({ maxUsd: 1.9 });
+        expect(withFoldingReserve({ maxUsd: 0.5 })).toEqual({ maxUsd: 0.45 });
+        expect(withFoldingReserve({ maxUsd: 50 })).toEqual({ maxUsd: 49.5 });
+        expect(withFoldingReserve({ maxTokens: 2_000_000 })).toEqual({ maxTokens: 1_900_000 });
+        expect(withFoldingReserve({})).toEqual({});
+    });
+
+    it('folds duplicates even when the lenses stopped at the limit', async () => {
+        const { processor, issuesService, scans } = setup(
+            { unitEvents: [], result: finishedResult({ findings: [], stoppedByBudget: true, finished: false }) },
+            scanRecord({ budget: { maxUsd: 2 } }) as any,
+        );
+        issuesService.findOpenScanFindings.mockResolvedValue([
+            { ...finding, fingerprint: 'fp-auth', severity: 'critical', cwe: 'CWE-862' },
+            { ...finding, fingerprint: 'fp-dos', severity: 'high', cwe: 'CWE-400', startLine: 30, endLine: 31 },
+        ] as any);
+        jest.spyOn(LLM, 'run').mockResolvedValue({ sameAs: 'c1', reason: 'same' } as any);
+
+        await processor.process('job-1');
+
+        expect(issuesService.foldScanIssueInto).toHaveBeenCalled();
+        expect(lastUpdate(scans).status).toBe(SecurityScanStatus.STOPPED_BY_BUDGET);
+        expect(lastUpdate(scans).outcome.consolidated).toBe(1);
     });
 });
