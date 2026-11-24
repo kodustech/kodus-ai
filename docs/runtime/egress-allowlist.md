@@ -799,6 +799,19 @@ Built: `internal/mirror/artifacts.go` and tests; `cmd/egress/main.go` (`/artifac
 releases named in "Verified shapes". To verify on a real cell: that the versions in a customer's lockfile build the same
 URLs (a major release can change them).
 
+### Nuxt's `nuxt prepare` postinstall (2026-11-24)
+
+No host was opened and no mirror entry was added. Measured on a synthetic Nuxt 4.7 app (`@nuxt/fonts`, `@nuxt/icon`,
+`@nuxt/image`, `@nuxtjs/i18n`, `@nuxtjs/google-fonts`) run with `sandbox-exec (deny network*)`: `nuxt prepare` exits 0
+with no network at all. `@nuxt/telemetry` posts to `telemetry.nuxt.com` with a 5 s timeout and swallows the error, and
+`@nuxtjs/google-fonts` logs its failed `fonts.googleapis.com` fetch and goes on (that host is build passthrough anyway).
+What exits 1 is a missing source: a layer in `extends`, or a locale file the i18n config names, absent from a
+manifests-only install layer (the shape the author writes for caching). So the fix is not a host: Kody's Dockerfile sets
+`ENV NUXT_TELEMETRY_DISABLED=1` in each stage that installs with npm, pnpm or yarn (`declareMirrorBuildArgs`, no refused
+connection from any Nuxt install), and the author's instructions say to install with scripts skipped and run
+`<pm> rebuild` plus `nuxt prepare` in that workspace after `COPY . .`, never to remove the postinstall. Not measured: a
+real cell build of a Nuxt monorepo (the partner's exact failure text was not available).
+
 ## Sources
 
 Vendor and research pages, read 2026-11-13.

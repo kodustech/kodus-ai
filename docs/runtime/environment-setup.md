@@ -183,6 +183,9 @@ product with the org's BYOK key, which never reaches the worker.
   service boots with `CI=true` in its environment (`loadClaimCompose`, `compose.Project.DefaultEnvironment`). A value
   the project sets itself wins: a build arg of its own, the compose file's `environment`, or the recipe's
   `services.compose.env`.
+- **Nuxt:** Kody's Dockerfiles also set `ENV NUXT_TELEMETRY_DISABLED=1` in each npm, pnpm or yarn install stage, so `nuxt prepare`
+  (a common postinstall) makes no connection to `telemetry.nuxt.com`; its other failure, a manifests-only install layer
+  without the config, layers or locale files, is handled by the author's install-then-rebuild rule (egress-allowlist.md §17).
 - **Firebase emulators:** firebase-tools has no download-URL override, so for a repository whose `firebase.json` has
   an `emulators` block, that installs firebase-tools and starts the emulators, Kody's Dockerfile fetches them from the
   cell mirror in its last stage (`authored-dockerfile-firebase.ts`, `FIREBASE_EMULATORS_MIRROR`; egress-allowlist §17).
