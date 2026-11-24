@@ -17,7 +17,6 @@ import {
     IGlobalParametersService,
 } from '@libs/organization/domain/global-parameters/contracts/global-parameters.service.contract';
 import {
-    FixedEgressIpNoIntegrationError,
     FixedEgressIpPlanRequiredError,
     FixedEgressIpPlanUnconfirmedError,
     isFixedEgressIpPlanAllowed,
@@ -84,6 +83,18 @@ export interface FixedEgressIpSetting {
     planUnconfirmed?: boolean;
     /** The team's sandboxes go through the fixed IP. */
     enabled: boolean;
+    /**
+     * The team's stored choice is on (by hand or by the clone fallback),
+     * whether or not the plan uses it now: a downgraded team sees it and can
+     * turn it off, so an upgrade later does not bring it back unasked.
+     */
+    savedOn: boolean;
+    /**
+     * Direct egress is rolled out to the organization. Outside the rollout
+     * every team leaves from the fixed IP whatever this setting says, so
+     * Git settings does not offer it.
+     */
+    inRollout: boolean;
     /** Who turned it on: the team, or the clone fallback. */
     source?: EgressFixedIpMarker['source'];
     reason?: FixedIpReason;
@@ -92,21 +103,41 @@ export interface FixedEgressIpSetting {
     fixedIp?: string;
 }
 
+/**
+ * Whether a failed direct clone may be tried again through the fixed IP:
+ * `allowed`, or blocked because the plan does not include it (`plan`) or
+ * because the team turned it off in Git settings (`turned_off`).
+ */
+export type FixedIpFallback = 'allowed' | 'plan' | 'turned_off';
+
 export interface ISandboxEgressPolicy {
     route(scope: EgressScope | undefined): Promise<EgressRoute>;
     /** Whether the organization's plan includes the fixed outbound IP. */
     fixedIpAllowed(scope: EgressScope): Promise<boolean>;
+    /**
+     * After a failed direct clone: whether to retry through the fixed IP.
+     * Reads the plan and the team's marker fresh (it runs once per failed
+     * clone), so an upgrade or a toggle a minute ago already counts.
+     */
+    fixedIpFallback(scope: EgressScope): Promise<FixedIpFallback>;
     markFixedIpRequired(
         scope: EgressScope,
         reason: FixedIpReason,
     ): Promise<void>;
-    /** The team's setting as Git settings shows it. */
-    getFixedIpSetting(scope: EgressScope): Promise<FixedEgressIpSetting>;
+    /**
+     * The team's setting as Git settings shows it. `integrationId` is the
+     * team's code management integration, already checked to belong to the
+     * caller's organization.
+     */
+    getFixedIpSetting(
+        scope: EgressScope,
+        integrationId: string,
+    ): Promise<FixedEgressIpSetting>;
     /** Turns the team's fixed outbound IP on or off by hand. */
     setFixedIp(
         scope: EgressScope,
         enabled: boolean,
-        actorUserId?: string,
+        options: { integrationId: string; actorUserId?: string },
     ): Promise<FixedEgressIpSetting>;
 }
 
@@ -148,9 +179,18 @@ export const FIXED_IP_MARKER_TTL_MS: Record<FixedIpReason, number> = {
 
 const markerCacheKey = (scope: EgressScope) =>
     `sandbox-egress:fixed-ip:${scope.organizationId}:${scope.teamId}`;
-/** A plan answer is reused this long: an upgrade or a downgrade reaches the
- * route within it. */
+/** A plan that includes the fixed IP is reused this long: a downgrade
+ * reaches the route within it. */
 const PLAN_TTL_MS = 10 * 60_000;
+/**
+ * A "not included" answer, and an answer billing could not give, are reused
+ * only this long. A 4xx from billing (a rotated key) reads like a real "no";
+ * keeping it short bounds that blip, and a slow or rate-limited billing is
+ * asked once a minute per worker instead of once per sandbox.
+ */
+const PLAN_SHORT_TTL_MS = 60_000;
+/** Billing gets this long to answer before the read counts as failed. */
+const PLAN_READ_TIMEOUT_MS = 5_000;
 const planCacheKey = (scope: EgressScope) =>
     `sandbox-egress:plan:${scope.organizationId}`;
 
@@ -173,10 +213,14 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
     private rolloutReadAt = 0;
     private rolloutRetryAt = 0;
     /**
-     * Teams this worker marked, with the order of the mark. A marker read
-     * that started before a mark must not cache its older answer over it.
+     * Teams this worker marked, with the order of the mark and the value it
+     * set. A marker read that started before a mark must not cache its
+     * older answer over it.
      */
-    private readonly markedAt = new Map<string, number>();
+    private readonly markedAt = new Map<
+        string,
+        { seq: number; required: boolean }
+    >();
     private markSeq = 0;
 
     constructor(
@@ -237,27 +281,54 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
     }
 
     async fixedIpAllowed(scope: EgressScope): Promise<boolean> {
-        const key = planCacheKey(scope);
         const cached = await this.cache
-            ?.getFromCache<{ allowed: boolean }>(key)
+            ?.getFromCache<{ allowed: boolean }>(planCacheKey(scope))
             .catch(() => null);
         if (cached && typeof cached.allowed === 'boolean') {
             return cached.allowed;
         }
-        const { allowed, definitive } = await this.readPlan(scope);
-        if (definitive) {
-            await this.cache
-                ?.addToCache(key, { allowed }, PLAN_TTL_MS)
-                .catch(() => undefined);
+        const plan = await this.readPlan(scope);
+        await this.cachePlan(scope, plan);
+        return plan.allowed;
+    }
+
+    async fixedIpFallback(scope: EgressScope): Promise<FixedIpFallback> {
+        const plan = await this.readPlan(scope);
+        await this.cachePlan(scope, plan);
+        if (!plan.allowed) return 'plan';
+        try {
+            const config = await this.integrationConfigs?.findOne({
+                team: { uuid: scope.teamId },
+                configKey: IntegrationConfigKey.EGRESS_FIXED_IP,
+            });
+            const marker = config?.configValue as
+                EgressFixedIpMarker | undefined;
+            // The team chose the shared network by hand: Kody does not
+            // override it, the failure says how to turn the IP on.
+            if (marker?.source === 'manual' && marker.required === false) {
+                return 'turned_off';
+            }
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not read the egress_fixed_ip marker for the clone fallback; retrying through the fixed IP',
+                context: SandboxEgressPolicyService.name,
+                error,
+                metadata: { ...scope },
+            });
         }
-        return allowed;
+        return 'allowed';
     }
 
     /** The team's fixed outbound IP as Git settings shows it, read fresh. */
-    async getFixedIpSetting(scope: EgressScope): Promise<FixedEgressIpSetting> {
+    async getFixedIpSetting(
+        scope: EgressScope,
+        integrationId: string,
+    ): Promise<FixedEgressIpSetting> {
         const [{ allowed, failed }, config, rollout] = await Promise.all([
             this.readPlan(scope),
             this.integrationConfigs?.findOne({
+                integration: { uuid: integrationId },
                 team: { uuid: scope.teamId },
                 configKey: IntegrationConfigKey.EGRESS_FIXED_IP,
             }),
@@ -269,6 +340,10 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
             allowedByPlan: allowed,
             ...(failed ? { planUnconfirmed: true } : {}),
             enabled: allowed && holds,
+            savedOn: holds,
+            inRollout:
+                rollout.directByDefault ||
+                rollout.directOrganizationIds.includes(scope.organizationId),
             ...(holds && marker?.source ? { source: marker.source } : {}),
             ...(holds && marker?.reason ? { reason: marker.reason } : {}),
             ...(marker?.detectedAt ? { updatedAt: marker.detectedAt } : {}),
@@ -283,22 +358,22 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
      * existing marker through a billing outage, turning it on does not).
      * Turning it off never needs the plan, so a team that left a paid plan
      * can still clear it.
-     * This process routes the team the new way at once; other workers
-     * within the marker cache window.
+     * The process that writes it (the API) routes the team the new way at
+     * once; review workers keep their cached marker up to 10 minutes
+     * (MARKER_TTL_MS), which the toggle's message says.
      */
     async setFixedIp(
         scope: EgressScope,
         enabled: boolean,
-        actorUserId?: string,
+        options: { integrationId: string; actorUserId?: string },
     ): Promise<FixedEgressIpSetting> {
+        const { integrationId, actorUserId } = options;
         if (enabled) {
             const plan = await this.readPlan(scope);
+            await this.cachePlan(scope, plan);
             if (plan.failed) throw new FixedEgressIpPlanUnconfirmedError();
             if (!plan.allowed) throw new FixedEgressIpPlanRequiredError();
         }
-        const integrationId = await this.codeManagementIntegrationId(scope);
-        if (!integrationId) throw new FixedEgressIpNoIntegrationError();
-
         const marker: EgressFixedIpMarker = {
             required: enabled,
             source: 'manual',
@@ -311,14 +386,17 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
             integrationId,
             { organizationId: scope.organizationId, teamId: scope.teamId },
         );
-        this.markedAt.set(markerCacheKey(scope), ++this.markSeq);
+        this.markedAt.set(markerCacheKey(scope), {
+            seq: ++this.markSeq,
+            required: enabled,
+        });
         await this.cacheMarker(scope, enabled);
         this.logger.log({
             message: `[egress] fixed outbound IP turned ${enabled ? 'on' : 'off'} in Git settings`,
             context: SandboxEgressPolicyService.name,
             metadata: { ...scope, enabled, actorUserId },
         });
-        return this.getFixedIpSetting(scope);
+        return this.getFixedIpSetting(scope, integrationId);
     }
 
     async markFixedIpRequired(
@@ -327,7 +405,10 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
     ): Promise<void> {
         // This worker stops trying direct for the team first, whatever
         // happens to the write below.
-        this.markedAt.set(markerCacheKey(scope), ++this.markSeq);
+        this.markedAt.set(markerCacheKey(scope), {
+            seq: ++this.markSeq,
+            required: true,
+        });
         await this.cacheMarker(scope, true);
 
         try {
@@ -400,12 +481,25 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
         if (!this.licenseService) {
             return { allowed: true, definitive: false, failed: false };
         }
+        let timer: ReturnType<typeof setTimeout> | undefined;
         try {
-            const license =
-                await this.licenseService.validateOrganizationLicense({
+            const license = await Promise.race([
+                this.licenseService.validateOrganizationLicense({
                     organizationId: scope.organizationId,
                     teamId: scope.teamId,
-                });
+                }),
+                new Promise<never>((_, reject) => {
+                    timer = setTimeout(
+                        () =>
+                            reject(
+                                new Error(
+                                    `billing did not answer within ${PLAN_READ_TIMEOUT_MS} ms`,
+                                ),
+                            ),
+                        PLAN_READ_TIMEOUT_MS,
+                    );
+                }),
+            ]);
             return {
                 allowed: isFixedEgressIpPlanAllowed(license),
                 definitive: !license?.unavailable,
@@ -420,7 +514,26 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
                 metadata: { ...scope },
             });
             return { allowed: true, definitive: false, failed: true };
+        } finally {
+            if (timer) clearTimeout(timer);
         }
+    }
+
+    /**
+     * A plan with the fixed IP is reused for PLAN_TTL_MS; a "not included"
+     * and a failed read for PLAN_SHORT_TTL_MS. No license service: nothing
+     * to reuse.
+     */
+    private async cachePlan(
+        scope: EgressScope,
+        plan: { allowed: boolean; definitive: boolean; failed: boolean },
+    ): Promise<void> {
+        if (!plan.definitive && !plan.failed) return;
+        const ttl =
+            plan.definitive && plan.allowed ? PLAN_TTL_MS : PLAN_SHORT_TTL_MS;
+        await this.cache
+            ?.addToCache(planCacheKey(scope), { allowed: plan.allowed }, ttl)
+            .catch(() => undefined);
     }
 
     private async requiresFixedIp(scope: EgressScope): Promise<boolean> {
@@ -438,8 +551,10 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
             configKey: IntegrationConfigKey.EGRESS_FIXED_IP,
         });
         // Marked by this worker while the read was in flight: the read saw
-        // the database before the mark, and the mark already cached `true`.
-        if ((this.markedAt.get(key) ?? 0) > readStartedAt) return true;
+        // the database before the mark, and the mark already cached its
+        // value (on or off).
+        const mark = this.markedAt.get(key);
+        if (mark && mark.seq > readStartedAt) return mark.required;
         const required = markerHolds(
             config?.configValue as EgressFixedIpMarker | undefined,
             Date.now(),

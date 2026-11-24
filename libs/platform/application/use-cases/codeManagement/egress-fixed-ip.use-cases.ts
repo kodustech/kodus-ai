@@ -6,8 +6,13 @@ import {
     ServiceUnavailableException,
 } from '@nestjs/common';
 
+import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { environment } from '@libs/ee/configs/environment';
+import {
+    IIntegrationService,
+    INTEGRATION_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import {
     FixedEgressIpNoIntegrationError,
     FixedEgressIpPlanRequiredError,
@@ -21,32 +26,78 @@ import {
 
 /**
  * The fixed outbound IP card in Git settings. `available` is false where
- * sandboxes never leave through Kodus's network (self-hosted installs), so
- * the card is not shown there.
+ * the setting changes nothing: a self-hosted install (it reaches Git from
+ * its own network), or an organization direct egress is not rolled out to
+ * yet (every team still leaves from the fixed IP).
  */
-export type FixedEgressIpView = FixedEgressIpSetting & { available: boolean };
+export type FixedEgressIpView = Partial<FixedEgressIpSetting> &
+    Pick<FixedEgressIpSetting, 'allowedByPlan' | 'enabled'> & {
+        available: boolean;
+    };
+
+const NOT_AVAILABLE: FixedEgressIpView = {
+    available: false,
+    allowedByPlan: false,
+    enabled: false,
+};
 
 const scopeOf = ({ organizationId, teamId }: OrganizationAndTeamData) => ({
     organizationId,
     teamId,
 });
 
+/**
+ * The team's active code management integration, looked up inside the
+ * caller's organization: a team uuid from another organization finds none,
+ * so its setting is neither read nor written. A missing team is refused
+ * before any lookup (an unfiltered query would match any tenant's row).
+ */
+async function teamIntegrationId(
+    integrationService: Pick<IIntegrationService, 'findOne'>,
+    { organizationId, teamId }: OrganizationAndTeamData,
+): Promise<string> {
+    if (!organizationId || !teamId) {
+        throw new BadRequestException('`teamId` is required.');
+    }
+    const integration = await integrationService.findOne({
+        organization: { uuid: organizationId },
+        team: { uuid: teamId },
+        integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+        status: true,
+    });
+    if (!integration?.uuid) {
+        throw new BadRequestException(
+            new FixedEgressIpNoIntegrationError().message,
+        );
+    }
+    return integration.uuid;
+}
+
 @Injectable()
 export class GetFixedEgressIpUseCase {
     constructor(
         @Inject(SANDBOX_EGRESS_POLICY_TOKEN)
         private readonly egressPolicy: ISandboxEgressPolicy,
+        @Inject(INTEGRATION_SERVICE_TOKEN)
+        private readonly integrationService: Pick<
+            IIntegrationService,
+            'findOne'
+        >,
     ) {}
 
     async execute(params: {
         organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<FixedEgressIpView> {
-        if (!environment.API_CLOUD_MODE) {
-            return { available: false, allowedByPlan: false, enabled: false };
-        }
+        if (!environment.API_CLOUD_MODE) return NOT_AVAILABLE;
+        const integrationId = await teamIntegrationId(
+            this.integrationService,
+            params.organizationAndTeamData,
+        );
         const setting = await this.egressPolicy.getFixedIpSetting(
             scopeOf(params.organizationAndTeamData),
+            integrationId,
         );
+        if (!setting.inRollout) return NOT_AVAILABLE;
         return { available: true, ...setting };
     }
 }
@@ -56,6 +107,11 @@ export class SetFixedEgressIpUseCase {
     constructor(
         @Inject(SANDBOX_EGRESS_POLICY_TOKEN)
         private readonly egressPolicy: ISandboxEgressPolicy,
+        @Inject(INTEGRATION_SERVICE_TOKEN)
+        private readonly integrationService: Pick<
+            IIntegrationService,
+            'findOne'
+        >,
     ) {}
 
     async execute(params: {
@@ -71,22 +127,23 @@ export class SetFixedEgressIpUseCase {
         if (typeof params.enabled !== 'boolean') {
             throw new BadRequestException('`enabled` must be true or false.');
         }
+        const integrationId = await teamIntegrationId(
+            this.integrationService,
+            params.organizationAndTeamData,
+        );
         try {
             const setting = await this.egressPolicy.setFixedIp(
                 scopeOf(params.organizationAndTeamData),
                 params.enabled,
-                params.actorUserId,
+                { integrationId, actorUserId: params.actorUserId },
             );
-            return { available: true, ...setting };
+            return { available: setting.inRollout, ...setting };
         } catch (error) {
             if (error instanceof FixedEgressIpPlanRequiredError) {
                 throw new ForbiddenException(error.message);
             }
             if (error instanceof FixedEgressIpPlanUnconfirmedError) {
                 throw new ServiceUnavailableException(error.message);
-            }
-            if (error instanceof FixedEgressIpNoIntegrationError) {
-                throw new BadRequestException(error.message);
             }
             throw error;
         }

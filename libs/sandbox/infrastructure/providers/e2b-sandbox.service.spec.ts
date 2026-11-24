@@ -29,10 +29,10 @@ import { CommandExitError, Sandbox } from 'e2b';
 import {
     E2BSandboxService,
     buildE2BRemoteCommands,
-    FixedEgressIpUnavailableError,
     fixedIpReasonFrom,
     syncE2BSandboxRepo,
 } from './e2b-sandbox.service';
+import { FixedEgressIpUnavailableError } from '@libs/sandbox/domain/egress-plan';
 import type { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { readWithinRootCommand } from './read-within-root';
 
@@ -1236,7 +1236,8 @@ describe('E2BSandboxService egress route', () => {
      * boots it. `onProxy` follows the iptables commands the service runs.
      */
     const fakeSandbox = (opts: {
-        directClone?: 'ok' | 'refused' | 'bad-credentials';
+        directClone?:
+            'ok' | 'refused' | 'bad-credentials' | 'no-repo-permission' | 'dns';
         proxyClone?: 'ok' | 'fails';
         reachable?: boolean;
         reachCheck?: 'sandbox-error';
@@ -1272,6 +1273,16 @@ describe('E2BSandboxService egress route', () => {
                         "fatal: Authentication failed for 'https://github.com/acme/api.git/'",
                     );
                 }
+                if (outcome === 'no-repo-permission') {
+                    throw exitError(
+                        "remote: Write access to repository not granted.\nfatal: unable to access 'https://github.com/acme/api.git/': The requested URL returned error: 403",
+                    );
+                }
+                if (outcome === 'dns') {
+                    throw exitError(
+                        "fatal: unable to access 'https://github.com/acme/api.git/': Could not resolve host: github.com",
+                    );
+                }
                 if (outcome !== 'ok') throw exitError(IP_BLOCK);
             }
             return { stdout: '', stderr: '', exitCode: 0 };
@@ -1285,9 +1296,14 @@ describe('E2BSandboxService egress route', () => {
         return { sbx, log };
     };
 
-    const policy = (route: 'direct' | 'fixed_ip', paidPlan: boolean) => ({
+    type Fallback = 'allowed' | 'plan' | 'turned_off' | 'throws';
+    const policy = (route: 'direct' | 'fixed_ip', fallback: Fallback) => ({
         route: jest.fn().mockResolvedValue(route),
-        fixedIpAllowed: jest.fn().mockResolvedValue(paidPlan),
+        fixedIpAllowed: jest.fn().mockResolvedValue(fallback !== 'plan'),
+        fixedIpFallback:
+            fallback === 'throws'
+                ? jest.fn().mockRejectedValue(new Error('billing down'))
+                : jest.fn().mockResolvedValue(fallback),
         markFixedIpRequired: jest.fn().mockResolvedValue(undefined),
         getFixedIpSetting: jest.fn(),
         setFixedIp: jest.fn(),
@@ -1301,6 +1317,8 @@ describe('E2BSandboxService egress route', () => {
         gitProxyMisconfigured?: boolean;
         /** The organization's plan includes the fixed IP (default: yes). */
         paidPlan?: boolean;
+        /** What the policy answers after a failed direct clone. */
+        fallback?: Fallback;
     }) => {
         const { sbx, log } = fakeSandbox(opts.sandbox ?? {});
         (Sandbox as any).create = jest.fn().mockResolvedValue(sbx);
@@ -1318,7 +1336,10 @@ describe('E2BSandboxService egress route', () => {
                     }),
                 })[key],
         };
-        const egress = policy(opts.route, opts.paidPlan !== false);
+        const egress = policy(
+            opts.route,
+            opts.fallback ?? (opts.paidPlan === false ? 'plan' : 'allowed'),
+        );
         const service = new E2BSandboxService(config as any, egress);
         const result = service.createSandboxWithRepo({
             cloneUrl: 'https://github.com/acme/api.git',
@@ -1444,7 +1465,12 @@ describe('E2BSandboxService egress route', () => {
         const error = await result.catch((e) => e);
         expect(error).toBeInstanceOf(FixedEgressIpUnavailableError);
         expect(error.message).toContain('Teams and Enterprise');
+        expect(error.message).toContain('only accepts allowlisted IPs');
+        expect(error.message).not.toMatch(
+            /ip_allow_list|unreachable|forbidden/,
+        );
         expect(error.reason).toBe('ip_allow_list');
+        expect(error.blockedBy).toBe('plan');
         expect(clones(log).map((c) => c.onProxy)).toEqual([false]);
         expect(
             log.some((l) => l.cmd.includes('iptables -t nat -A OUTPUT')),
@@ -1475,6 +1501,58 @@ describe('E2BSandboxService egress route', () => {
         expect(String(error?.stderr ?? error?.message)).toContain(
             'Authentication failed',
         );
+    });
+
+    it('respects a team that turned the fixed IP off by hand, and says how to turn it on', async () => {
+        const { result, log, egress } = await create({
+            route: 'direct',
+            fallback: 'turned_off',
+            sandbox: { directClone: 'refused' },
+        });
+        const error = await result.catch((e) => e);
+        expect(error).toBeInstanceOf(FixedEgressIpUnavailableError);
+        expect(error.blockedBy).toBe('turned_off');
+        expect(error.message).toContain('Settings > Repositories');
+        expect(clones(log).map((c) => c.onProxy)).toEqual([false]);
+        expect(egress.markFixedIpRequired).not.toHaveBeenCalled();
+    });
+
+    it('retries through the fixed IP and marks the team when the policy cannot answer', async () => {
+        const { result, log, egress } = await create({
+            route: 'direct',
+            fallback: 'throws',
+            sandbox: { directClone: 'refused' },
+        });
+        await result;
+        expect(clones(log).map((c) => c.onProxy)).toEqual([false, true]);
+        expect(egress.markFixedIpRequired).toHaveBeenCalledWith(
+            { organizationId: ORG, teamId: TEAM },
+            'ip_allow_list',
+        );
+    });
+
+    it("gives a team whose plan has no fixed IP git's own 403 when it is not the IP allow list", async () => {
+        const { result } = await create({
+            route: 'direct',
+            paidPlan: false,
+            sandbox: { directClone: 'no-repo-permission' },
+        });
+        const error = await result.catch((e) => e);
+        expect(error).not.toBeInstanceOf(FixedEgressIpUnavailableError);
+        expect(String(error?.stderr)).toContain(
+            'Write access to repository not granted',
+        );
+    });
+
+    it("gives a team whose plan has no fixed IP git's own error when the host name does not resolve", async () => {
+        const { result } = await create({
+            route: 'direct',
+            paidPlan: false,
+            sandbox: { directClone: 'dns' },
+        });
+        const error = await result.catch((e) => e);
+        expect(error).not.toBeInstanceOf(FixedEgressIpUnavailableError);
+        expect(String(error?.stderr)).toContain('Could not resolve host');
     });
 
     it('keeps the fixed IP, without asking, for a sandbox that does not say which team it serves', async () => {

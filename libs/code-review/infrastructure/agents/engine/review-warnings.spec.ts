@@ -206,6 +206,17 @@ describe('buildBadFixDowngradedWarning', () => {
 });
 
 describe('losses a review used to record only in its logs (#2066)', () => {
+    it("says why the sandbox was missing when the cause is the team's to act on", () => {
+        const generic = buildSandboxUnavailableWarning({ modelName: 'm' });
+        const withCause = buildSandboxUnavailableWarning({
+            modelName: 'm',
+            cause: 'The fixed outbound IP is available on the Teams and Enterprise plans.',
+        });
+        expect(withCause.reason).toBe('sandbox_unavailable');
+        expect(withCause.detail).toContain(generic.detail);
+        expect(withCause.detail).toContain('Teams and Enterprise');
+    });
+
     it('names each loss with its own cause, not a small context window', () => {
         const all = [
             buildSandboxUnavailableWarning({ modelName: 'gpt-4.1' }),

@@ -6,6 +6,7 @@ import {
     isTimeoutSandboxFailure,
     SandboxCreateCircuitBreaker,
 } from './sandbox-create-circuit-breaker';
+import { FixedEgressIpUnavailableError } from '@libs/sandbox/domain/egress-plan';
 
 const OPTIONS = {
     windowMs: 60_000,
@@ -330,6 +331,16 @@ describe('sandbox failure classification', () => {
             stderr: 'fatal: Authentication failed',
         });
         expect(isRepositorySpecificSandboxFailure(err)).toBe(true);
+    });
+
+    it('counts a Git host that refused the shared network for a team without the fixed IP as repository-specific: no retry, no breaker', () => {
+        const err = new FixedEgressIpUnavailableError('ip_allow_list', 'plan', {
+            cause: Object.assign(new Error('exit status 128'), {
+                stderr: 'fatal: unable to access: Connection timed out',
+            }),
+        });
+        expect(isRepositorySpecificSandboxFailure(err)).toBe(true);
+        expect(isTimeoutSandboxFailure(err)).toBe(false);
     });
 
     it('detects timeouts by error name or message', () => {
