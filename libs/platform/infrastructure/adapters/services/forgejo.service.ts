@@ -230,6 +230,17 @@ export class ForgejoService implements Omit<
 > {
     private readonly logger = createLogger(ForgejoService.name);
 
+    /**
+     * The hook type to ask the instance for.
+     *
+     * Gitea and Forgejo disagree on the string: Gitea accepts `gitea` and
+     * rejects `forgejo` with HTTP 422 ("Invalid hook type: forgejo"), while
+     * Forgejo accepts `forgejo`. Gitea is the stricter and more common
+     * deployment, so `gitea` is tried first and `forgejo` is the fallback
+     * for an instance that refuses it.
+     */
+    private hookType: 'gitea' | 'forgejo' = 'gitea';
+
     constructor(
         @Inject(INTEGRATION_SERVICE_TOKEN)
         private readonly integrationService: IIntegrationService,
@@ -4523,21 +4534,12 @@ export class ForgejoService implements Omit<
                 );
 
                 if (!existingHook) {
-                    throwIfForgejoFailed(
-                        await repoCreateHook({
-                            client,
-                            path,
-                            body: {
-                                type: 'forgejo',
-                                config: {
-                                    url: webhookUrl,
-                                    content_type: 'json',
-                                },
-                                events: desiredEvents,
-                                active: true,
-                            },
-                        }),
-                    );
+                    await this.createRepositoryHook({
+                        client,
+                        path,
+                        webhookUrl,
+                        events: desiredEvents,
+                    });
 
                     this.logger.log({
                         message: 'Forgejo webhook created',
@@ -4599,6 +4601,70 @@ export class ForgejoService implements Omit<
         });
 
         return result;
+    }
+
+    /**
+     * Creates the repository's webhook, asking for the hook type the
+     * instance understands.
+     *
+     * Gitea and Forgejo disagree on the string: Gitea accepts `gitea` and
+     * rejects `forgejo` with HTTP 422 ("Invalid hook type: forgejo"), while
+     * Forgejo accepts `forgejo`. Gitea is the stricter and more common
+     * deployment, so `gitea` is tried first; an instance that refuses it
+     * gets `forgejo` on the retry, and the working type is remembered.
+     */
+    private async createRepositoryHook(params: {
+        client: ReturnType<ForgejoService['createForgejoClient']>;
+        path: { owner: string; repo: string };
+        webhookUrl: string;
+        events: string[];
+    }): Promise<void> {
+        const { client, path, webhookUrl, events } = params;
+
+        const attempt = async (type: 'gitea' | 'forgejo') =>
+            await repoCreateHook({
+                client,
+                path,
+                body: {
+                    type,
+                    config: {
+                        url: webhookUrl,
+                        content_type: 'json',
+                    },
+                    events,
+                    active: true,
+                },
+            });
+
+        const first = await attempt(this.hookType);
+
+        if (!first?.error) {
+            throwIfForgejoFailed(first);
+            return;
+        }
+
+        // The instance refused the type. The other spelling is what it
+        // wants; remember it so the next repository does not repeat the
+        // failed attempt.
+        const other: 'gitea' | 'forgejo' =
+            this.hookType === 'gitea' ? 'forgejo' : 'gitea';
+        const second = await attempt(other);
+
+        if (second?.error) {
+            // Neither spelling worked: report the ORIGINAL failure, which
+            // names the cause ("Invalid hook type: gitea") rather than a
+            // retry artifact.
+            throwIfForgejoFailed(first);
+            throwIfForgejoFailed(second);
+            return;
+        }
+
+        this.hookType = other;
+        this.logger.log?.({
+            message: `Forgejo webhook type is '${other}' on this instance`,
+            context: ForgejoService.name,
+            metadata: { webhookUrl },
+        });
     }
 
     async isWebhookActive(params: {
