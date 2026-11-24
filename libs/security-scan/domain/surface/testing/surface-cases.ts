@@ -7,6 +7,8 @@ import {
 } from '../surface.types';
 import { createFakeGrep, createRipgrep, hasRipgrep } from './fake-grep';
 
+const RIPGREP_TEST_TIMEOUT_MS = 30_000;
+
 export interface SurfaceCase {
     code: string;
     role: SurfaceRole;
@@ -139,6 +141,8 @@ export function describeSurfaceCases(
                     rg.cleanup();
                 }
             },
+            // It starts the real ripgrep process; on a busy machine that alone passes jest's 5 s default.
+            RIPGREP_TEST_TIMEOUT_MS,
         );
     });
 }
