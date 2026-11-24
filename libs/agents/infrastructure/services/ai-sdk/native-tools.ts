@@ -11,14 +11,14 @@ import { buildNativeToolConfigs } from '../agents/native-tools.factory';
  *
  * `buildNativeToolConfigs` already returns AI-SDK-shaped entries
  * (`{ name, description, inputSchema: ZodSchema, execute }`); the AI SDK accepts
- * a Zod schema directly as `inputSchema`, so this is a thin adapter. A
- * NullSandbox yields `[]` upstream, so this returns `{}` (MCP-only tools).
+ * a Zod schema directly as `inputSchema`, so this is a thin adapter. The
+ * sandbox opens on the first call (`buildNativeToolConfigs`).
  */
 export function buildNativeTools(
-    sandbox: SandboxInstance,
+    openSandbox: () => Promise<SandboxInstance>,
 ): Record<string, Tool> {
     const tools: Record<string, Tool> = {};
-    for (const cfg of buildNativeToolConfigs(sandbox)) {
+    for (const cfg of buildNativeToolConfigs(openSandbox)) {
         tools[cfg.name] = tool({
             description: cfg.description,
             inputSchema: cfg.inputSchema,

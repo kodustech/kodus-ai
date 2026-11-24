@@ -14,7 +14,8 @@ what production gives it, each case as its own organization with a connected
 GitHub:
 - the sandbox: production's `LocalSandboxService.createSandboxWithRepo`,
   fetching `refs/pull/7/head` and the base branch at depth 1 from a git remote
-  that carries both (`evals/shared/pr-remote.js`);
+  that carries both (`evals/shared/pr-remote.js`), opened on the agent's first
+  repository tool call as the chat opens it (`openOnFirstUse`);
 - the org's MCP connections: production's `MCPManagerService` reads them from
   the mcp-manager (here, the row its `createKodusMCPIntegration` stores, with
   the tools its `KodusMCPClient` lists) and signs the Kodus MCP token; the

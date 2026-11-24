@@ -31,6 +31,7 @@ jest.mock('@langfuse/tracing', () => ({
 }));
 
 import { setLlmObservability } from '@libs/llm/llm-observability';
+import { openOnFirstUse } from '@libs/sandbox/domain/open-on-first-use';
 import { MockLanguageModelV3 } from 'ai/test';
 
 import { ConversationAgentProvider } from './conversationAgent';
@@ -225,6 +226,112 @@ describe('ConversationAgentProvider (harness wiring)', () => {
                 organizationAndTeamData: { organizationId: 'o' },
             } as any),
         ).rejects.toThrow();
+    });
+});
+
+/**
+ * The PR's checkout opens on the first repository tool call, not before the
+ * run (#2629): the tools and their prompt line are offered either way.
+ */
+describe('ConversationAgentProvider — sandbox opened on first read', () => {
+    const usage = {
+        inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 5, text: 5, reasoning: 0 },
+    };
+
+    /** Step 1 greps and reads in parallel; step 2 answers. */
+    function mockParallelReadsModel(): MockLanguageModelV3 {
+        let call = 0;
+        return new MockLanguageModelV3({
+            doGenerate: async () =>
+                (call++ === 0
+                    ? {
+                          content: [
+                              {
+                                  type: 'tool-call',
+                                  toolCallId: 'c1',
+                                  toolName: 'grep',
+                                  input: JSON.stringify({ pattern: 'total' }),
+                              },
+                              {
+                                  type: 'tool-call',
+                                  toolCallId: 'c2',
+                                  toolName: 'readFile',
+                                  input: JSON.stringify({
+                                      path: 'a.ts',
+                                      start: 1,
+                                      end: 2,
+                                  }),
+                              },
+                          ],
+                          finishReason: {
+                              unified: 'tool-calls',
+                              raw: 'tool_calls',
+                          },
+                          usage,
+                          warnings: [],
+                      }
+                    : {
+                          content: [{ type: 'text', text: 'it is on line 1' }],
+                          finishReason: { unified: 'stop', raw: 'stop' },
+                          usage,
+                          warnings: [],
+                      }) as any,
+        });
+    }
+
+    it('offers the repository tools without opening the sandbox for a reply that reads nothing', async () => {
+        modelRef.model = makeModel('thanks!');
+        const { provider } = build();
+        const openSandbox = jest.fn();
+
+        await provider.execute('thanks', { ...ctx, openSandbox });
+
+        const call = modelRef.model.doGenerateCalls[0];
+        expect(call.tools.map((t: any) => t.name)).toEqual(
+            expect.arrayContaining(['grep', 'readFile', 'listDir', 'exec']),
+        );
+        expect(JSON.stringify(call.prompt)).toContain('grep / readFile');
+        expect(openSandbox).not.toHaveBeenCalled();
+    });
+
+    it('opens one sandbox for the parallel first reads', async () => {
+        modelRef.model = mockParallelReadsModel();
+        const { provider } = build();
+        const remoteCommands = {
+            grep: jest.fn().mockResolvedValue('a.ts:1:total'),
+            read: jest.fn().mockResolvedValue('const total = 1;'),
+            listDir: jest.fn(),
+        };
+        const open = jest.fn().mockResolvedValue({
+            type: 'e2b',
+            remoteCommands,
+        });
+
+        const res = await provider.execute('where is total?', {
+            ...ctx,
+            openSandbox: openOnFirstUse(open).open,
+        });
+
+        expect(res).toContain('it is on line 1');
+        expect(open).toHaveBeenCalledTimes(1);
+        expect(remoteCommands.grep).toHaveBeenCalledWith(
+            'total',
+            '.',
+            undefined,
+        );
+        expect(remoteCommands.read).toHaveBeenCalledWith('a.ts', 1, 2);
+    });
+
+    it('offers no repository tools without an opener', async () => {
+        modelRef.model = makeModel('hi');
+        const { provider } = build();
+
+        await provider.execute('hi', ctx);
+
+        const call = modelRef.model.doGenerateCalls[0];
+        expect(call.tools?.map((t: any) => t.name) ?? []).not.toContain('grep');
+        expect(JSON.stringify(call.prompt)).not.toContain('grep / readFile');
     });
 });
 

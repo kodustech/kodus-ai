@@ -132,10 +132,15 @@ export class ConversationAgentProvider {
             organizationAndTeamData: OrganizationAndTeamData;
             prepareContext?: ConversationThreadContext;
             thread?: ConversationThread;
-            sandbox?: SandboxInstance;
+            /**
+             * Opens the PR's checkout on the first repository tool call, the
+             * same sandbox for every call (`openOnFirstUse`). Absent: no
+             * repository tools.
+             */
+            openSandbox?: () => Promise<SandboxInstance>;
         },
     ): Promise<string> {
-        const { organizationAndTeamData, prepareContext, thread, sandbox } =
+        const { organizationAndTeamData, prepareContext, thread, openSandbox } =
             context || ({} as any);
 
         if (!organizationAndTeamData?.organizationId) {
@@ -199,7 +204,7 @@ export class ConversationAgentProvider {
             auditWriteTools(
                 {
                     ...mcp.tools,
-                    ...(sandbox ? buildNativeTools(sandbox) : {}),
+                    ...(openSandbox ? buildNativeTools(openSandbox) : {}),
                     // Grants within the step it runs in, so a decision and a
                     // write emitted together are not refused.
                     ...buildDecisionTool((decision) =>
@@ -281,7 +286,7 @@ export class ConversationAgentProvider {
                 organizationAndTeamData,
                 availableTools: Object.keys(tools),
                 toolMetadata: mcp.metadata,
-                hasSandbox: Boolean(sandbox && sandbox.type !== 'null'),
+                hasSandbox: Boolean(openSandbox),
                 priorTurns: seedMessages,
             });
 
