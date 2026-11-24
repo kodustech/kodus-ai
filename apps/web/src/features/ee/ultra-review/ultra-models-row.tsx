@@ -3,6 +3,7 @@
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Link } from "@components/ui/link";
+import { TruncateStart } from "@components/ui/truncate-start";
 import { ChevronsUpDownIcon } from "lucide-react";
 import { ProviderAvatar } from "src/features/ee/byok/_components/provider-avatar";
 import {
@@ -113,18 +114,19 @@ export function UltraModelsRow({
                                             disabled={disabled}
                                             className="w-full justify-between"
                                             rightIcon={
-                                                <ChevronsUpDownIcon className="opacity-50" />
+                                                <ChevronsUpDownIcon className="shrink-0 opacity-50" />
                                             }>
                                             <span className="flex min-w-0 items-center gap-2">
                                                 <ProviderAvatar
                                                     provider={model?.provider}
                                                 />
-                                                <span className="truncate">
+                                                <TruncateStart
+                                                    title={model?.label}>
                                                     {model?.label ??
                                                         (id
                                                             ? "Unavailable model"
                                                             : "Select a model")}
-                                                </span>
+                                                </TruncateStart>
                                             </span>
                                         </Button>
                                     }
