@@ -66,6 +66,18 @@ describe('DeleteIntegrationAndRepositoriesUseCase', () => {
             mockCreateOrUpdateParametersUseCase,
             mockPullRequestMessagesService,
             mockKodyRulesService,
+            // The workspace's only Git connection.
+            {
+                find: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { uuid: 'integration-uuid-0001', platform: 'GITHUB' },
+                    ]),
+            },
+            {
+                findIntegrationConfigFormatted: jest.fn(),
+                findByOrganizationAndConfigKey: jest.fn(),
+            },
         );
     });
 
@@ -95,9 +107,10 @@ describe('DeleteIntegrationAndRepositoriesUseCase', () => {
 
     // ─── Shared assertions for full reset ──────────────────
     function assertDeleteIntegrationUseCaseCalled() {
-        expect(mockDeleteIntegrationUseCase.execute).toHaveBeenCalledWith(
-            executeParams,
-        );
+        expect(mockDeleteIntegrationUseCase.execute).toHaveBeenCalledWith({
+            ...executeParams,
+            connectionId: 'integration-uuid-0001',
+        });
     }
 
     function assertRepositoriesClearedFromConfig() {

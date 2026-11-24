@@ -94,6 +94,8 @@ describe('DeleteIntegrationUseCase', () => {
     function setupIntegration(platform: string, authMode: string) {
         const integration = createMockIntegrationEntity(platform, authMode);
         mockIntegrationService.findOne.mockResolvedValue(integration);
+        // The workspace's only Git connection.
+        mockIntegrationService.find.mockResolvedValue([integration]);
         mockIntegrationConfigService.find.mockResolvedValue([
             createMockIntegrationConfigEntity(),
         ]);
@@ -102,6 +104,7 @@ describe('DeleteIntegrationUseCase', () => {
 
     function setupNoIntegration() {
         mockIntegrationService.findOne.mockResolvedValue(null);
+        mockIntegrationService.find.mockResolvedValue([]);
     }
 
     // ─── Shared assertions ─────────────────────────────────
@@ -138,6 +141,7 @@ describe('DeleteIntegrationUseCase', () => {
             organizationAndTeamData: {
                 organizationId: MOCK_ORG_ID,
                 teamId: MOCK_TEAM_ID,
+                integrationId: MOCK_INTEGRATION_UUID,
             },
         });
     }

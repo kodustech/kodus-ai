@@ -168,3 +168,68 @@ describe('GitHub connections in one workspace', () => {
         expect(result.integrationId).toBe('new-pat');
     });
 });
+
+describe('GitHub Reset of one connection', () => {
+    const resetSetup = (sharedWith: string[]) => {
+        const svc: any = Object.create(GithubService.prototype);
+        const deleteInstallation = jest.fn().mockResolvedValue(undefined);
+        svc.createOctokitInstance = jest
+            .fn()
+            .mockReturnValue({ apps: { deleteInstallation } });
+        svc.integrationService = {
+            findOne: jest.fn().mockResolvedValue({
+                uuid: 'gh-a',
+                authIntegration: {
+                    uuid: 'auth-a',
+                    authDetails: { authMode: 'oauth', installationId: 4242 },
+                },
+            }),
+        };
+        svc.authIntegrationService = {
+            find: jest.fn(async (filter: any) =>
+                typeof filter.authDetails.installationId === 'number'
+                    ? [
+                          { uuid: 'auth-a' },
+                          ...sharedWith.map((uuid) => ({ uuid })),
+                      ]
+                    : [],
+            ),
+        };
+        svc.logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+        return { svc, deleteInstallation };
+    };
+
+    const reset = (svc: any) =>
+        svc.deleteWebhook({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 't1',
+                integrationId: 'gh-a',
+            },
+        });
+
+    it('uninstalls the GitHub App when no other connection uses the installation', async () => {
+        const { svc, deleteInstallation } = resetSetup([]);
+
+        await reset(svc);
+
+        expect(deleteInstallation).toHaveBeenCalledWith({
+            installation_id: 4242,
+        });
+    });
+
+    it('keeps the GitHub App installed while another connection uses it', async () => {
+        const { svc, deleteInstallation } = resetSetup(['auth-b']);
+
+        await reset(svc);
+
+        expect(deleteInstallation).not.toHaveBeenCalled();
+        expect(svc.logger.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    sharedWithAuthIntegrationIds: ['auth-b'],
+                }),
+            }),
+        );
+    });
+});

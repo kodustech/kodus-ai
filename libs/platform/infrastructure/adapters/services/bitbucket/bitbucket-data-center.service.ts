@@ -3676,12 +3676,13 @@ export class BitbucketDataCenterService implements Omit<
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
-            const repositories = <Repositories[]>(
-                    await this.integrationConfigService.findOne({
-                        team: { uuid: organizationAndTeamData.teamId },
-                        configKey: IntegrationConfigKey.REPOSITORIES,
-                    })
-                )?.configValue || [];
+            const repositories =
+                <Repositories[]>(
+                    await this.findOneByOrganizationAndTeamDataAndConfigKey(
+                        organizationAndTeamData,
+                        IntegrationConfigKey.REPOSITORIES,
+                    )
+                ) || [];
 
             const webhookUrl =
                 this.configService.get<string>(
@@ -3690,7 +3691,20 @@ export class BitbucketDataCenterService implements Omit<
 
             if (!webhookUrl) return;
 
-            for (const repo of repositories) {
+            // The hook URL is shared: a repository another connection still
+            // lists keeps it.
+            const integrationId = (authDetails as { integrationId?: string })
+                .integrationId;
+            const listedElsewhere = integrationId
+                ? await this.integrationConfigService.repositoryIdsListedByOtherConnections(
+                      organizationAndTeamData.organizationId,
+                      integrationId,
+                  )
+                : new Set<string>();
+
+            for (const repo of repositories.filter(
+                (r) => !listedElsewhere.has(String(r?.id)),
+            )) {
                 const projectKey = repo.workspaceId;
                 const repoSlug = repo.name;
 

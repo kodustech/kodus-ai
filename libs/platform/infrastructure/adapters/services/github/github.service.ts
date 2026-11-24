@@ -8922,6 +8922,30 @@ This is an experimental feature that generates committable changes. Review the d
         return result;
     }
 
+    /** Active credentials, other than `authIntegrationId`, on the same installation. */
+    private async otherLinksOfInstallation(
+        installationId: string | number,
+        authIntegrationId: string,
+    ): Promise<string[]> {
+        const linked = (
+            await Promise.all(
+                [Number(installationId), String(installationId)].map((id) =>
+                    this.authIntegrationService.find({
+                        authDetails: { installationId: id },
+                        status: true,
+                    }),
+                ),
+            )
+        ).flat();
+        return [
+            ...new Set(
+                linked
+                    .map((auth) => auth?.uuid)
+                    .filter((uuid) => uuid && uuid !== authIntegrationId),
+            ),
+        ];
+    }
+
     async deleteWebhook(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositories?: Repositories[];
@@ -8942,7 +8966,28 @@ This is an experimental feature that generates committable changes. Review the d
         const { authMode } = integration.authIntegration.authDetails;
 
         if (authMode === AuthMode.OAUTH) {
-            if (integration.authIntegration.authDetails.installationId) {
+            const installationId =
+                integration.authIntegration.authDetails.installationId;
+            const sharedWithAuthIntegrationIds = installationId
+                ? await this.otherLinksOfInstallation(
+                      installationId,
+                      integration.authIntegration.uuid,
+                  )
+                : [];
+            if (sharedWithAuthIntegrationIds.length) {
+                // Another connection reviews through the same installation:
+                // uninstalling the App would cut it off too.
+                this.logger.log({
+                    message:
+                        'GitHub App kept installed: another connection uses the installation',
+                    context: GithubService.name,
+                    metadata: {
+                        organizationAndTeamData: params.organizationAndTeamData,
+                        installationId,
+                        sharedWithAuthIntegrationIds,
+                    },
+                });
+            } else if (installationId) {
                 try {
                     const appOctokit = this.createOctokitInstance();
                     await appOctokit.apps.deleteInstallation({
@@ -8987,7 +9032,17 @@ This is an experimental feature that generates committable changes. Review the d
                         octokit,
                     );
 
-                    for (const repo of repositories) {
+                    // The hook URL is shared: a repository another
+                    // connection still lists keeps it.
+                    const listedElsewhere =
+                        await this.integrationConfigService.repositoryIdsListedByOtherConnections(
+                            params.organizationAndTeamData.organizationId,
+                            integration.uuid,
+                        );
+
+                    for (const repo of repositories.filter(
+                        (r) => !listedElsewhere.has(String(r?.id)),
+                    )) {
                         const owner =
                             GithubService.recordedOwnerOf(repo) ||
                             this.trustedOwnerOf(repo, authDetails) ||

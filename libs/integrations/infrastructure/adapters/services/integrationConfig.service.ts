@@ -72,6 +72,32 @@ export class IntegrationConfigService implements IIntegrationConfigService {
         return this.integrationConfigRepository.findById(uuid);
     }
 
+    /**
+     * Repository ids listed by any other active Git connection of the
+     * organization. Hooks and per-repository records keyed by id alone stay
+     * while one of them still reviews the repository.
+     */
+    async repositoryIdsListedByOtherConnections(
+        organizationId: string,
+        integrationId: string,
+    ): Promise<Set<string>> {
+        const configs =
+            (await this.integrationConfigRepository.findByOrganizationAndConfigKey(
+                organizationId,
+                IntegrationConfigKey.REPOSITORIES,
+            )) ?? [];
+        return new Set(
+            configs
+                .filter((config) => config?.integration?.uuid !== integrationId)
+                .flatMap((config) =>
+                    Array.isArray(config.configValue) ? config.configValue : [],
+                )
+                .map((repository: { id: string | number }) =>
+                    String(repository?.id),
+                ),
+        );
+    }
+
     findAllOfTeamByConfigKey(
         configKey: IntegrationConfigKey,
         organizationAndTeamData: OrganizationAndTeamData,

@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
 import { PULL_REQUEST_MESSAGES_SERVICE_TOKEN } from '@libs/code-review/domain/pullRequestMessages/contracts/pullRequestMessages.service.contract';
 import { IPullRequestMessagesService } from '@libs/code-review/domain/pullRequestMessages/contracts/pullRequestMessages.service.contract';
@@ -15,6 +15,16 @@ import {
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
+import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
+import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
+import {
+    IIntegrationConfigService,
+    INTEGRATION_CONFIG_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
+import {
+    IIntegrationService,
+    INTEGRATION_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 
 @Injectable()
 export class DeleteIntegrationAndRepositoriesUseCase {
@@ -30,20 +40,62 @@ export class DeleteIntegrationAndRepositoriesUseCase {
         private readonly pullRequestMessagesService: IPullRequestMessagesService,
         @Inject(KODY_RULES_SERVICE_TOKEN)
         private readonly kodyRulesService: IKodyRulesService,
+        @Inject(INTEGRATION_SERVICE_TOKEN)
+        private readonly integrationService: IIntegrationService,
+        @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
+        private readonly integrationConfigService: IIntegrationConfigService,
     ) {}
 
     async execute(params: {
         organizationId: string;
         teamId: string;
+        connectionId?: string;
     }): Promise<void> {
         const { organizationId, teamId } = params;
 
+        // Which connection goes, decided before anything is removed.
+        const connections =
+            (await this.integrationService.find({
+                organization: { uuid: organizationId },
+                team: { uuid: teamId },
+                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+                status: true,
+            })) ?? [];
+        const connection = params.connectionId
+            ? connections.find((c) => c.uuid === params.connectionId)
+            : connections.length === 1
+              ? connections[0]
+              : undefined;
+        if (params.connectionId && !connection) {
+            throw new BadRequestException(
+                'This Git connection is not in the workspace.',
+            );
+        }
+        if (!params.connectionId && connections.length > 1) {
+            throw new BadRequestException(
+                'This workspace has several Git connections: choose the one to reset.',
+            );
+        }
+        const workspaceKeepsAConnection = connections.some(
+            (c) => c.uuid !== connection?.uuid,
+        );
+
         try {
             // 1. First, get the list of repositories before deleting the configurations
-            const repositoriesIds = await this.getRepositoriesIds(
-                teamId,
-                organizationId,
-            );
+            const connectionRepositoryIds = workspaceKeepsAConnection
+                ? await this.connectionRepositoryIds(
+                      organizationId,
+                      teamId,
+                      connection.uuid,
+                  )
+                : undefined;
+            const repositoriesIds = connectionRepositoryIds
+                ? await this.notListedElsewhere(
+                      organizationId,
+                      connection.uuid,
+                      connectionRepositoryIds,
+                  )
+                : await this.getRepositoriesIds(teamId, organizationId);
 
             this.logger.log({
                 message:
@@ -58,7 +110,11 @@ export class DeleteIntegrationAndRepositoriesUseCase {
 
             // 2. Execute the existing deleteIntegrationUseCase (remove integration and config repositories)
             try {
-                await this.deleteIntegrationUseCase.execute(params);
+                await this.deleteIntegrationUseCase.execute({
+                    organizationId,
+                    teamId,
+                    ...(connection ? { connectionId: connection.uuid } : {}),
+                });
 
                 this.logger.log({
                     message: 'Integration deleted successfully',
@@ -79,6 +135,7 @@ export class DeleteIntegrationAndRepositoriesUseCase {
             await this.removeRepositoriesFromCodeReviewConfig(
                 teamId,
                 organizationId,
+                connectionRepositoryIds,
             );
 
             this.logger.log({
@@ -176,9 +233,52 @@ export class DeleteIntegrationAndRepositoriesUseCase {
         }
     }
 
+    /** The repository ids a connection lists. */
+    private async connectionRepositoryIds(
+        organizationId: string,
+        teamId: string,
+        integrationId: string,
+    ): Promise<Set<string>> {
+        const repositories =
+            (await this.integrationConfigService.findIntegrationConfigFormatted<
+                Array<{ id: string | number }>
+            >(IntegrationConfigKey.REPOSITORIES, {
+                organizationId,
+                teamId,
+                integrationId,
+            })) ?? [];
+        return new Set(repositories.map((repo) => String(repo.id)));
+    }
+
+    /**
+     * Rules and messages are keyed by repository id only, so a repository
+     * another connection in the organization still lists keeps them.
+     */
+    private async notListedElsewhere(
+        organizationId: string,
+        integrationId: string,
+        repositoryIds: Set<string>,
+    ): Promise<string[]> {
+        const configs =
+            (await this.integrationConfigService.findByOrganizationAndConfigKey(
+                organizationId,
+                IntegrationConfigKey.REPOSITORIES,
+            )) ?? [];
+        const elsewhere = new Set(
+            configs
+                .filter((config) => config?.integration?.uuid !== integrationId)
+                .flatMap((config) =>
+                    Array.isArray(config.configValue) ? config.configValue : [],
+                )
+                .map((repo: { id: string | number }) => String(repo?.id)),
+        );
+        return [...repositoryIds].filter((id) => !elsewhere.has(id));
+    }
+
     private async removeRepositoriesFromCodeReviewConfig(
         teamId: string,
         organizationId: string,
+        onlyRepositoryIds?: Set<string>,
     ): Promise<void> {
         try {
             const codeReviewConfig = await this.parametersService.findOne({
@@ -200,10 +300,16 @@ export class DeleteIntegrationAndRepositoriesUseCase {
                 return;
             }
 
-            // Remove the repositories array from the configValue
+            // Remove the connection's repositories, or all of them with the
+            // workspace's last connection.
             const updatedConfigValue = {
                 ...codeReviewConfig.configValue,
-                repositories: [],
+                repositories: onlyRepositoryIds
+                    ? (codeReviewConfig.configValue?.repositories ?? []).filter(
+                          (repo: { id: string | number }) =>
+                              !onlyRepositoryIds.has(String(repo?.id)),
+                      )
+                    : [],
             };
 
             await this.createOrUpdateParametersUseCase.execute(

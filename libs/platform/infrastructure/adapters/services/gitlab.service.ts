@@ -5920,7 +5920,16 @@ export class GitlabService implements Omit<
                 );
 
             if (repositories) {
-                for (const repo of repositories) {
+                // The hook URL is shared: a repository another connection
+                // still lists keeps it.
+                const listedElsewhere =
+                    await this.integrationConfigService.repositoryIdsListedByOtherConnections(
+                        params.organizationAndTeamData.organizationId,
+                        integration.uuid,
+                    );
+                for (const repo of repositories.filter(
+                    (r) => !listedElsewhere.has(String(r?.id)),
+                )) {
                     try {
                         const webhooks = await gitlabAPI.ProjectHooks.all(
                             repo.id,

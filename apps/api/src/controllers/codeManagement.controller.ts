@@ -227,6 +227,8 @@ export class CodeManagementController {
         body: {
             repositories: Repository[];
             teamId: string;
+            /** The Git connection the repositories belong to; required when the workspace has several. */
+            connectionId?: string;
             type?: 'replace' | 'append';
             /**
              * Set by the chunked save on every request but the last, so
@@ -517,7 +519,15 @@ export class CodeManagementController {
         description: 'Removes a code management integration for the team.',
     })
     @ApiNoContentResponse({ description: 'Integration deleted' })
-    public async deleteIntegration(@Query() query: { teamId: string }) {
+    @ApiQuery({
+        name: 'connectionId',
+        required: false,
+        description:
+            'The Git connection to reset; required when the workspace has several.',
+    })
+    public async deleteIntegration(
+        @Query() query: { teamId: string; connectionId?: string },
+    ) {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
@@ -529,6 +539,7 @@ export class CodeManagementController {
         return await this.deleteIntegrationUseCase.execute({
             organizationId,
             teamId: query.teamId,
+            connectionId: query.connectionId,
         });
     }
 
@@ -548,8 +559,14 @@ export class CodeManagementController {
     @ApiNoContentResponse({
         description: 'Integration and repositories deleted',
     })
+    @ApiQuery({
+        name: 'connectionId',
+        required: false,
+        description:
+            'The Git connection to reset; required when the workspace has several.',
+    })
     public async deleteIntegrationAndRepositories(
-        @Query() query: { teamId: string },
+        @Query() query: { teamId: string; connectionId?: string },
     ) {
         const organizationId = this.request?.user?.organization?.uuid;
 
@@ -562,6 +579,7 @@ export class CodeManagementController {
         return await this.deleteIntegrationAndRepositoriesUseCase.execute({
             organizationId,
             teamId: query.teamId,
+            connectionId: query.connectionId,
         });
     }
 

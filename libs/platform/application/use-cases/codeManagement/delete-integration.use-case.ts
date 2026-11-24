@@ -1,5 +1,10 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
+import {
+    BadRequestException,
+    Inject,
+    Injectable,
+    Optional,
+} from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
@@ -17,6 +22,11 @@ import {
     MCPManagerService,
 } from '@libs/mcp-server/services/mcp-manager.service';
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
+import {
+    IParametersService,
+    PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
@@ -42,38 +52,71 @@ export class DeleteIntegrationUseCase {
                 email: string;
             };
         },
+        @Optional()
+        @Inject(PARAMETERS_SERVICE_TOKEN)
+        private readonly parametersService?: IParametersService,
     ) {}
 
     async execute(params: {
         organizationId: string;
         teamId: string;
+        connectionId?: string;
     }): Promise<void> {
-        const integration = await this.integrationService.findOne({
+        const workspaceScope = {
             organization: { uuid: params.organizationId },
             team: { uuid: params.teamId },
             integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
             status: true,
-        });
+        };
+
+        let integration;
+        if (params.connectionId) {
+            integration = await this.integrationService.findOne({
+                ...workspaceScope,
+                uuid: params.connectionId,
+            });
+        } else {
+            const connections =
+                (await this.integrationService.find(workspaceScope)) ?? [];
+            if (connections.length > 1) {
+                throw new BadRequestException(
+                    'This workspace has several Git connections: choose the one to reset.',
+                );
+            }
+            integration = connections[0];
+        }
 
         if (!integration) {
             return;
         }
 
-        // The generic issues MCP reuses the team's code-management integration,
-        // so removing/switching the provider (e.g. GitHub -> Azure) must clear
-        // the issues connection — otherwise it points at the wrong (or an
-        // unsupported) host until re-installed.
-        await this.mcpManagerService.deleteConnectionByIntegrationId(
-            { organizationId: params.organizationId },
-            KODUS_ISSUES_INTEGRATION_ID,
-        );
+        const organizationAndTeamData = {
+            organizationId: params.organizationId,
+            teamId: params.teamId,
+            integrationId: integration.uuid,
+        };
+
+        const otherConnections = (
+            (await this.integrationService.find({
+                organization: { uuid: params.organizationId },
+                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+                status: true,
+            })) ?? []
+        ).filter((connection) => connection.uuid !== integration.uuid);
+
+        // The generic issues MCP reuses the organization's code-management
+        // connection, so it goes with the last one; while another remains it
+        // keeps serving the organization.
+        if (!otherConnections.length) {
+            await this.mcpManagerService.deleteConnectionByIntegrationId(
+                { organizationId: params.organizationId },
+                KODUS_ISSUES_INTEGRATION_ID,
+            );
+        }
 
         try {
             await this.codeManagementService.deleteWebhook({
-                organizationAndTeamData: {
-                    organizationId: params.organizationId,
-                    teamId: params.teamId,
-                },
+                organizationAndTeamData,
             });
         } catch (error) {
             this.logger.error({
@@ -97,22 +140,48 @@ export class DeleteIntegrationUseCase {
             integration: { uuid: integration.uuid },
         });
 
+        const connectionRepositoryIds = new Set(
+            (integrationConfigs ?? [])
+                .filter(
+                    (config) =>
+                        config.configKey === IntegrationConfigKey.REPOSITORIES,
+                )
+                .flatMap((config) =>
+                    Array.isArray(config.configValue) ? config.configValue : [],
+                )
+                .map((repository: { id: string | number }) =>
+                    String(repository?.id),
+                ),
+        );
+
         for (const integrationConfig of integrationConfigs ?? []) {
             await this.integrationConfigService.delete(integrationConfig.uuid);
         }
 
-        await this.createOrUpdateParametersUseCase.execute(
-            ParametersKey.CENTRALIZED_CONFIG,
-            {
-                enabled: false,
-                repository: null,
-                activePullRequest: null,
-            },
-            {
-                organizationId: params.organizationId,
-                teamId: params.teamId,
-            },
-        );
+        const workspaceKeepsAConnection = (
+            (await this.integrationService.find(workspaceScope)) ?? []
+        ).some((connection) => connection.uuid !== integration.uuid);
+
+        if (
+            !workspaceKeepsAConnection ||
+            (await this.centralizedConfigLivesOn(
+                organizationAndTeamData,
+                connectionRepositoryIds,
+            ))
+        ) {
+            await this.createOrUpdateParametersUseCase.execute(
+                ParametersKey.CENTRALIZED_CONFIG,
+                {
+                    enabled: false,
+                    repository: null,
+                    activePullRequest: null,
+                },
+                {
+                    organizationId: params.organizationId,
+                    teamId: params.teamId,
+                },
+            );
+        }
 
         this.eventEmitter.emit(AuditLogEvents.INTEGRATION, {
             organizationAndTeamData: {
@@ -131,6 +200,36 @@ export class DeleteIntegrationUseCase {
 
         await this.authIntegrationService.delete(
             integration.authIntegration.uuid,
+        );
+
+        this.logger.log({
+            message: 'connection_reset',
+            context: DeleteIntegrationUseCase.name,
+            metadata: {
+                ...organizationAndTeamData,
+                platform: integration.platform,
+                remainingConnectionsInOrganization: otherConnections.length,
+                actorUserId: this.request?.user?.uuid,
+            },
+        });
+    }
+
+    /** Whether the workspace's centralized config repository is on this connection. */
+    private async centralizedConfigLivesOn(
+        organizationAndTeamData: { organizationId: string; teamId: string },
+        connectionRepositoryIds: Set<string>,
+    ): Promise<boolean> {
+        const centralized = await this.parametersService?.findByKey(
+            ParametersKey.CENTRALIZED_CONFIG,
+            {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+            },
+        );
+        const repositoryId = centralized?.configValue?.repository?.id;
+        return (
+            repositoryId != null &&
+            connectionRepositoryIds.has(String(repositoryId))
         );
     }
 }

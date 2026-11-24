@@ -139,3 +139,36 @@ describe('IntegrationConfigService.findIntegrationConfigFormatted — connection
         expect(repository.findAllOfTeamByConfigKey).not.toHaveBeenCalled();
     });
 });
+
+describe('IntegrationConfigService.repositoryIdsListedByOtherConnections', () => {
+    it('collects the repository ids every other active connection in the organization lists', async () => {
+        const repository = {
+            findByOrganizationAndConfigKey: jest.fn().mockResolvedValue([
+                {
+                    integration: { uuid: 'mine' },
+                    configValue: [{ id: 1 }, { id: 2 }],
+                },
+                {
+                    integration: { uuid: 'other-a' },
+                    configValue: [{ id: 2 }],
+                },
+                {
+                    integration: { uuid: 'other-b' },
+                    configValue: [{ id: '3' }],
+                },
+            ]),
+        } as any;
+        const service = new IntegrationConfigService(repository);
+
+        const ids = await service.repositoryIdsListedByOtherConnections(
+            'org-1',
+            'mine',
+        );
+
+        expect([...ids].sort()).toEqual(['2', '3']);
+        expect(repository.findByOrganizationAndConfigKey).toHaveBeenCalledWith(
+            'org-1',
+            IntegrationConfigKey.REPOSITORIES,
+        );
+    });
+});
