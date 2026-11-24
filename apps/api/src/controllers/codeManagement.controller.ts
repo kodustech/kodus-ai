@@ -150,6 +150,12 @@ export class CodeManagementController {
     @ApiQuery({ name: 'isSelected', required: false, type: Boolean })
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'perPage', required: false, type: Number })
+    @ApiQuery({
+        name: 'connectionId',
+        required: false,
+        description:
+            'The Git connection to list; every connection of the workspace when absent.',
+    })
     @ApiOkResponse({ type: CodeManagementRepositoriesResponseDto })
     public async getRepositories(
         @Query()
@@ -159,6 +165,7 @@ export class CodeManagementController {
             isSelected?: boolean;
             page?: number;
             perPage?: number;
+            connectionId?: string;
         },
     ) {
         return this.getRepositoriesUseCase.execute(query);

@@ -4,6 +4,7 @@ import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { extractOrganizationAndTeamData } from '@libs/common/utils/helpers';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { CreateAuthIntegrationResult } from '@libs/core/domain/enums/create-auth-integration-status.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import {
     CommentResult,
@@ -526,7 +527,7 @@ export class CodeManagementService implements ICodeManagementService {
     async createAuthIntegration(
         params: any,
         type?: PlatformType,
-    ): Promise<void> {
+    ): Promise<CreateAuthIntegrationResult> {
         ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
