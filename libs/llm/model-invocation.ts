@@ -35,6 +35,7 @@ import {
 import { getModelName, type ByokModelOptions } from '@libs/llm/byok-to-vercel';
 import { envManagedReasoningDescriptor } from '@libs/llm/managed-slot';
 import {
+    anthropicDeclaredMaxTokens,
     budgetAddedToAnswerCap,
     optionsNamespace,
 } from '@libs/llm/answer-cap-budget';
@@ -232,29 +233,42 @@ function resolveReasoningOptions(
 }
 
 /**
- * The reasoning budget an agent-loop call on this slot (or, without one, on
- * the env-managed model) sends on top of its answer cap: Anthropic and
- * Bedrock ask for `max_tokens = answer + thinking budget`, and the window
- * must hold that too. Zero for an adapter that keeps reasoning inside the
- * answer cap.
+ * The answer an agent-loop call on this slot (or, without one, on the
+ * env-managed model) declares to the provider for `answerTokens`: Anthropic
+ * and Bedrock ask for `max_tokens = answer + thinking budget`, and Anthropic
+ * caps that sum at a known Claude model's output limit. The window must hold
+ * what is declared, no more and no less.
  */
-export function reasoningBudgetAddedToAnswer(
+export async function declaredAnswerTokens(
     slot: NormalizedModel | undefined,
-): number {
+    answerTokens: number,
+): Promise<number> {
     try {
         const { providerOptions, reasoningSlot } = resolveReasoningOptions(
             slot,
             slot ? undefined : envManagedReasoningDescriptor(),
-            { runName: 'answerCapBudget', reasoningEffortDefault: 'low' },
+            { runName: 'declaredAnswerTokens', reasoningEffortDefault: 'low' },
         );
+        const namespace = optionsNamespace(reasoningSlot);
+        if (namespace === 'anthropic' && reasoningSlot?.model) {
+            const declared = await anthropicDeclaredMaxTokens(
+                reasoningSlot.model,
+                answerTokens,
+                providerOptions,
+            );
+            if (declared !== undefined) {
+                return declared;
+            }
+        }
         return (
-            budgetAddedToAnswerCap(
+            answerTokens +
+            (budgetAddedToAnswerCap(
                 providerOptions,
                 reasoningSlot,
-                optionsNamespace(reasoningSlot),
-            ) ?? 0
+                namespace,
+            ) ?? 0)
         );
     } catch {
-        return 0;
+        return answerTokens;
     }
 }

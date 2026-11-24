@@ -11,9 +11,9 @@ const slot = (fields: Record<string, unknown>) =>
     ({ apiKey: '', ...fields }) as unknown as NormalizedModel;
 
 describe('reservedOutputTokens', () => {
-    it("reserves the only slot's own answer limit, even below what the caller asks", () => {
+    it("reserves the only slot's own answer limit, even below what the caller asks", async () => {
         expect(
-            reservedOutputTokens(
+            await reservedOutputTokens(
                 slot({
                     provider: 'openai_compatible',
                     model: 'local-open-weights',
@@ -25,9 +25,9 @@ describe('reservedOutputTokens', () => {
         ).toBe(1_000);
     });
 
-    it('reserves the thinking budget Anthropic sends on top of the answer', () => {
+    it('reserves the thinking budget Anthropic sends on top of the answer', async () => {
         expect(
-            reservedOutputTokens(
+            await reservedOutputTokens(
                 slot({
                     provider: 'anthropic',
                     model: 'claude-sonnet-4-5',
@@ -38,18 +38,32 @@ describe('reservedOutputTokens', () => {
         ).toBe(60_000);
     });
 
-    it('reserves the thinking budget an Anthropic-compatible model gets by default', () => {
+    it("reserves no more than a Claude model's output limit, where the adapter caps the answer and the budget", async () => {
         expect(
-            reservedOutputTokens(
+            await reservedOutputTokens(
+                slot({
+                    provider: 'anthropic',
+                    model: 'claude-haiku-4-5-20251001',
+                    maxOutputTokens: 64_000,
+                    reasoningEffort: 'high',
+                }),
+                20_000,
+            ),
+        ).toBe(64_000);
+    });
+
+    it('reserves the thinking budget an Anthropic-compatible model gets by default', async () => {
+        expect(
+            await reservedOutputTokens(
                 slot({ provider: 'anthropic_compatible', model: 'glm-4.6' }),
                 8_000,
             ),
         ).toBeGreaterThan(8_000);
     });
 
-    it('adds nothing for a provider that keeps reasoning inside the answer', () => {
+    it('adds nothing for a provider that keeps reasoning inside the answer', async () => {
         expect(
-            reservedOutputTokens(
+            await reservedOutputTokens(
                 slot({ provider: 'openai', model: 'gpt-5' }),
                 20_000,
             ),

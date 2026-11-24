@@ -528,7 +528,7 @@ export class BusinessValidationService {
                     ),
                 ),
             );
-        const answer = analyzerOutputTokens(slot);
+        const answer = await analyzerOutputTokens(slot);
         const fitBeside = (outputTokens: number) => {
             const tokens = diffTokenBudget({
                 contextWindowTokens,
@@ -712,7 +712,12 @@ export class BusinessValidationService {
         if (!reader || !open.length || request.signal?.aborted) {
             return verdict;
         }
-        const check = this.gapCheck((await judge()).modelSlot, request);
+        const slot = (await judge()).modelSlot;
+        const check = this.gapCheck(
+            slot,
+            request,
+            await reservedOutputTokens(slot, GAP_CHECK_ANSWER),
+        );
         const results = await Promise.all(
             open.map(({ requirement }) =>
                 check({
@@ -786,6 +791,8 @@ export class BusinessValidationService {
     protected gapCheck(
         model: NormalizedModel | undefined,
         request: BusinessValidationRequest,
+        /** The answer its calls declare: `reservedOutputTokens`. */
+        outputTokens?: number,
     ): GapCheck {
         return createGapCheck(
             aiSdkAgentRun(
@@ -799,7 +806,7 @@ export class BusinessValidationService {
             ),
             {
                 contextWindowTokens: judgeWindow(model),
-                outputTokens: reservedOutputTokens(model, GAP_CHECK_ANSWER),
+                outputTokens,
             },
         );
     }

@@ -1,7 +1,7 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { getModelId } from '@libs/llm/managed-slot';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
-import { reasoningBudgetAddedToAnswer } from '@libs/llm/model-invocation';
+import { declaredAnswerTokens } from '@libs/llm/model-invocation';
 
 /** The most the analyzer may write when the slot sets no limit of its own. */
 export const ANALYZER_MAX_OUTPUT_TOKENS = 20_000;
@@ -37,42 +37,58 @@ export function judgeWindow(model: NormalizedModel | undefined): number {
         : windowOf(model);
 }
 
+/** The answer the analyzer asks for: 20k tokens, or a quarter of a smaller window. */
+export function analyzerRequestedTokens(
+    model: NormalizedModel | undefined,
+): number {
+    return Math.min(
+        ANALYZER_MAX_OUTPUT_TOKENS,
+        Math.floor(judgeWindow(model) * ANALYZER_OUTPUT_WINDOW_SHARE),
+    );
+}
+
 /**
- * The answer the analyzer is allowed: 20k tokens, or a quarter of a smaller
- * window. A slot's own `maxOutputTokens` is what `runAgentLoopCall` sends
- * whatever the caller asks, so it is what the call keeps room for.
+ * What the analyzer asks for, and what its call really declares: a slot's
+ * own `maxOutputTokens` is what `runAgentLoopCall` sends whatever the caller
+ * asks, so it is what the call keeps room for.
  */
-export function analyzerOutputTokens(model: NormalizedModel | undefined): {
+export async function analyzerOutputTokens(
+    model: NormalizedModel | undefined,
+): Promise<{
     /** What the analyzer asks for. */
     requested: number;
     /** What the call may really spend: the room kept in the window. */
     reserved: number;
-} {
-    const requested = Math.min(
-        ANALYZER_MAX_OUTPUT_TOKENS,
-        Math.floor(judgeWindow(model) * ANALYZER_OUTPUT_WINDOW_SHARE),
-    );
-    return { requested, reserved: reservedOutputTokens(model, requested) };
+}> {
+    const requested = analyzerRequestedTokens(model);
+    return {
+        requested,
+        reserved: await reservedOutputTokens(model, requested),
+    };
 }
 
 /**
  * The answer room a call on this slot keeps in the window, for a caller that
  * asks for `requested`: the slot's own `maxOutputTokens` wins in
- * `runAgentLoopCall`, and Anthropic and Bedrock add the thinking budget on
- * top (`max_tokens = answer + budget`). With a fallback, the larger of what
- * each would send. Not capped by the window: the call declares that much
- * whatever room is left, and a provider rejects input plus answer above the
- * window, so a slot whose answer fills its window can't be judged.
+ * `runAgentLoopCall`, and the provider receives that plus the thinking budget
+ * on Anthropic and Bedrock (Anthropic capping the sum at the model's output
+ * limit). With a fallback, the larger of what each declares. Not capped by
+ * the window: the call declares that much whatever room is left, and a
+ * provider rejects input plus answer above the window, so a slot whose answer
+ * fills its window can't be judged.
  */
-export function reservedOutputTokens(
+export async function reservedOutputTokens(
     model: NormalizedModel | undefined,
     requested: number,
-): number {
+): Promise<number> {
     const sent = (slot: Slot | undefined) =>
-        (slot?.maxOutputTokens && slot.maxOutputTokens > 0
-            ? slot.maxOutputTokens
-            : requested) + reasoningBudgetAddedToAnswer(slot);
+        declaredAnswerTokens(
+            slot,
+            slot?.maxOutputTokens && slot.maxOutputTokens > 0
+                ? slot.maxOutputTokens
+                : requested,
+        );
     return model?.fallback
-        ? Math.max(sent(model), sent(model.fallback))
+        ? Math.max(await sent(model), await sent(model.fallback))
         : sent(model);
 }

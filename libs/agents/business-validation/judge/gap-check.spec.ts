@@ -636,8 +636,8 @@ describe("createGapCheck within the model's window (#2233)", () => {
         const kept = sent as typeof messages;
         expect(textOf(kept[0].content)).toContain(table);
         const results = kept
-            .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
-            .filter((part: any) => part.type === 'tool-result') as any[];
+            .flatMap((m): any[] => (Array.isArray(m.content) ? m.content : []))
+            .filter((part) => part.type === 'tool-result');
         expect(results.map((r) => r.toolCallId)).toEqual(
             reads
                 .filter((m) => m.role === 'tool')

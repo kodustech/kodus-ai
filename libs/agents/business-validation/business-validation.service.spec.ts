@@ -859,7 +859,7 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
         expect(calls).toHaveLength(1);
         expect(calls[0].diff.length).toBeGreaterThan(0);
         expect(
-            worst(calls[0].text) + analyzerOutputTokens(slot).reserved,
+            worst(calls[0].text) + (await analyzerOutputTokens(slot)).reserved,
         ).toBeLessThanOrEqual(32_000);
         expect(outcome.kind).toBe('validated');
         expect(outcome.unseenFiles.length).toBeGreaterThan(0);
@@ -872,7 +872,7 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
         );
         expect(calls[0].diff.length).toBeGreaterThan(0);
         expect(
-            worst(calls[0].text) + analyzerOutputTokens(slot).reserved,
+            worst(calls[0].text) + (await analyzerOutputTokens(slot)).reserved,
         ).toBeLessThanOrEqual(16_000);
     });
 
@@ -941,7 +941,7 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
             { body: `Closes KOD-1\n\n${image}`, diff: codeFiles(60) },
         );
         expect(
-            worst(calls[0].text) + analyzerOutputTokens(slot).reserved,
+            worst(calls[0].text) + (await analyzerOutputTokens(slot)).reserved,
         ).toBeLessThanOrEqual(64_000);
     });
 
@@ -997,6 +997,26 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
         expect(calls[0].diff.length).toBeGreaterThan(0);
         // max_tokens = the 20k answer + the 40k budget of effort high.
         expect(worst(calls[0].text) + 60_000).toBeLessThanOrEqual(200_000);
+    });
+
+    it("judges a PR that fits beside the answer a Claude model's output limit caps", async () => {
+        const catalog = formatPullRequestDiff([
+            { filename: 'src/catalog.json', patch: numberTable(90_000) },
+        ]);
+        const { outcome, calls } = await judgeCalls(
+            {
+                provider: 'anthropic',
+                model: 'claude-haiku-4-5-20251001',
+                maxInputTokens: 200_000,
+                maxOutputTokens: 64_000,
+                reasoningEffort: 'high',
+            },
+            { diff: catalog },
+        );
+        expect(outcome.kind).toBe('validated');
+        expect(calls[0].diff).toBe(catalog);
+        // The adapter declares max_tokens = min(64k + 40k budget, 64k).
+        expect(worst(calls[0].text) + 64_000).toBeLessThanOrEqual(200_000);
     });
 
     it("reads the code on a small slot whose answer limit is below the judge's own", async () => {
