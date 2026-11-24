@@ -421,8 +421,11 @@ the suite run starts, updated at each phase (first pass, re-run), closed with th
 
 ### 10.2 The Run verdict (Run mode)
 
-The suite is a **stage of the Run**, run after the PR boots (the claims exist) and in parallel with the probes' phase
-when the environment has the capacity; its output enters the Run as follows:
+The suite is a **stage of the Run**. It uses its own hosts (the shard hosts of its setup template), never the Run's claims,
+and needs only the request (the PR head, the merge base, the environment and the suite's tokens), so it starts as soon as
+the Run is admitted and runs beside the Run's boot, probes and intent phases; the verdict joins it. One workflow step
+(`suite:stage`) holds the whole stage, so its inner steps never reorder the Run's own step ids. A Run that ends or halts
+before its verdict stops the suite. Its output enters the Run as follows:
 
 - A `regression` becomes a `Finding` of a new kind `e2e_regression` (`FindingKind` in `contracts/enums.ts`), with the spec,
   the error, the artifacts and the class evidence (PR failed twice, main passed). Verdict state `regression`.
@@ -692,7 +695,7 @@ Dashboards and events: `runtime.suite.run{mode,outcome}`, `runtime.suite.shard_m
 | D6 | Baseline lag after a main push | have the baseline wait for the template; show "baseline pending" and use the nearest ancestor baseline; a push-driven setup request if the 24 h pass is too slow |
 | D7 | Customer orgs on boat | wait for legal; meanwhile run for Kodus's org and build the AWS `perRun` adapter if a customer is first |
 | D8 | Videos | off by default, failed specs only when enabled |
-| D9 | Suite in Run mode in parallel with probes, or after | in parallel when the PR claim has CPU for both; otherwise after the probes (the verdict is faster) |
+| D9 | Suite in Run mode in parallel with probes, or after | in parallel, from the start of the Run: the suite runs on its own hosts, not the PR claim (decided with the parallel start) |
 | D10 | Server coverage method per spec | `v8.takeCoverage()` flushed through a small hook the baseline injects (`NODE_OPTIONS` preload) at spec boundaries; fall back to timestamps against periodic dumps; no APM agent |
 | D11 | Baseline slowdown from coverage and one-spec-per-service | measure on the fixture; accept up to +30% on the baseline (it is off the PR path); if over, collect server coverage on a sample of baselines and keep the last complete map |
 | D12 | Map staleness `N` | 20 main commits or 3 days, whichever first; a stale map means full, not a guess |

@@ -72,7 +72,7 @@ import { buildComment } from './comment';
 import { changesOnlyTheRecipe, memberNotBootedOf, recipeChangedInPr } from './recipe-change';
 import { planReuseKey } from './plan-reuse';
 import { TEST_PLANNER_VERSION } from '@libs/runtime/planner/test-planner.agent';
-import type { ForkApprovals, RunDeps, StabilityOutcome } from './ports';
+import type { ForkApprovals, RunDeps, StabilityOutcome, StepRunner } from './ports';
 import { RunLeaseHolds } from './lease-keeper';
 import { checkClaimLease, type ClaimLeaseFailed, throwClaimLeaseFailure } from '../env/claim-liveness';
 import { isCancellation } from '../workflow-cancellation';
@@ -763,12 +763,14 @@ interface RunScope {
     /** Renewals of the Run's claims, from each side's boot until the Run ends (lease-keeper.ts). */
     leases: RunLeaseHolds;
     reportingAt?: number;
-    /** When both sides had room: the machines' 45 minutes (RUN_TIMEOUT_MS) count from here. Set once booted; the suite stage's deadline derives from it. */
+    /** When both sides had room: the machines' 45 minutes (RUN_TIMEOUT_MS) count from here. Set once booted. */
     roomAt?: string;
     /** The plan the agent makes while the PR side boots (early-plan.ts); absent once taken or dropped, or when the plan is given. */
     early?: { result: Promise<EarlyPlan>; abort: AbortController };
     /** The first base rounds played with that plan while the PR built (early-plan.ts), once the plan is taken. */
     firstBaseRounds?: FirstBaseRounds;
+    /** The e2e suite stage, started as soon as the Run is admitted and joined at the verdict (startSuiteStage); absent when there is none to run. */
+    suite?: { result: Promise<SuiteStageResult | undefined>; abort: AbortController };
     /** What the diff's parsers read, once per Run in the step `diff:analysis` (diffAnalysisOf). */
     diff?: DiffAnalysis;
 }
@@ -1928,7 +1930,7 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
     }
     ctx.dependencyChangeUntested = t.dependency.length > 0 && !verdicts.some((v) => t.dependency.some((d) => d.id === v.entryPoint));
     // The repository's own e2e suite, after the probes: its regressions are findings, its undecided failures hold a green Run back.
-    const stage = await suiteStage(run, canaries);
+    const stage = await joinSuiteStage(run);
     // A canary in an artifact the suite kept is a sighting like any other: the Run halts.
     if (stage?.leaked) leak ??= 'exec_output';
     const suite = suiteVerdictParts(stage);
@@ -2000,21 +2002,87 @@ async function reportVerdict(run: RunScope, ready: ReadySides, t: TestedRun): Pr
 }
 
 /**
- * The e2e suite stage (docs/runtime/e2e-suites.md section 10.2): only for a request that carries the suite section, on a worker
- * that has the stage, and never after a halt. It runs inside the Run's workflow with the Run's step runner. A stage that fails
- * is a suite that did not run, never a Run that errored; a cancellation goes on up.
+ * The e2e suite stage (docs/runtime/e2e-suites.md sections 10.2 and 12): only for a request that carries the suite section, on a
+ * worker that has the stage. It needs nothing the Run learns while it boots and tests (the PR head, the merge base, the environment
+ * and the suite's own tokens are all in the request), so it starts right after the Run is admitted and runs beside the boot, the
+ * probes and the intent phases; reportVerdict joins it.
+ *
+ * Durability: the whole stage is ONE step of the workflow, started at a fixed place, whatever the timing of the rest (the early
+ * plan's pattern: DBOS accepts concurrent steps "as long as they are started in a deterministic order"). The suite's own steps
+ * (suite:start, suite:run, the publish steps) would otherwise be asked for at moments that depend on the clock, and a replay would
+ * find them in another order. Inside the step they run as plain calls (suiteInnerStep): the engine is idempotent by suite run, so
+ * a step that runs again after a crash finishes what was left; a replay that finds the step done reads its result.
+ *
+ * Failure isolation: a stage that fails is a suite that did not run (`unavailable`), recorded by the step, never a Run that
+ * errored; a cancellation goes on up.
  */
-async function suiteStage(run: RunScope, canaries: Canary[]): Promise<SuiteStageResult | undefined> {
-    const { deps, req, ctx } = run;
-    if (!deps.suite || !req.suite || ctx.stoppedEarly) return undefined;
-    try {
-        // The suite shares the Run's 45 minutes (design 12.1): it ends in time for the verdict and the publish that follow it.
-        const deadlineAt = run.roomAt ? new Date(Date.parse(run.roomAt) + RUN_TIMEOUT_MS - SUITE_STAGE_MARGIN_MS).toISOString() : undefined;
-        return await deps.suite.run(req, deps.step, { ...(deadlineAt ? { deadlineAt } : {}), ...(deps.cancellationSignal ? { cancellationSignal: deps.cancellationSignal } : {}), ...(canaries.length ? { canaries } : {}) });
-    } catch (e) {
-        if (isCancellation(e)) throw e;
-        return { status: 'unavailable' };
+function startSuiteStage(run: RunScope): void {
+    const { deps, req, canaries } = run;
+    if (!deps.suite || !req.suite) return;
+    const suite = deps.suite;
+    const abort = new AbortController();
+    // The suite shares the Run's 45 minutes (design 12.1) and ends in time for the verdict and the publish that follow it. It starts
+    // before the machines have room, so the count is from the Run's start: never later than the machines' own end.
+    const deadlineAt = new Date(Date.parse(run.startedAt.at) + RUN_TIMEOUT_MS - SUITE_STAGE_MARGIN_MS).toISOString();
+    const result = deps
+        .step('suite:stage', async (): Promise<SuiteStageResult> => {
+            try {
+                return await suite.run(req, suiteInnerStep(deps), {
+                    deadlineAt,
+                    // Read inside the step: the workflow's cancellation is the running step's. Our own abort (the Run ended before its verdict) stops it too.
+                    cancellationSignal: () => {
+                        const cancel = deps.cancellationSignal?.();
+                        return cancel ? AbortSignal.any([abort.signal, cancel]) : abort.signal;
+                    },
+                    ...(canaries.length ? { canaries } : {}),
+                });
+            } catch (e) {
+                if (isCancellation(e)) throw e;
+                return { status: 'unavailable' };
+            }
+        })
+        // A cancellation reaches the workflow where the stage is joined; nothing is an unhandled rejection meanwhile.
+        .then((r): SuiteStageResult | undefined => r);
+    result.catch(() => undefined);
+    run.suite = { result, abort };
+}
+
+/** The suite's steps inside the stage's one step: plain calls, with the retries a publish step has in the engine. */
+function suiteInnerStep(deps: RunDeps): StepRunner {
+    const attempts = 8;
+    return async (name, fn) => {
+        if (!(name === 'publish' || name.startsWith('publish:'))) return fn();
+        for (let n = 1; ; n++) {
+            try {
+                return await fn();
+            } catch (e) {
+                if (isCancellation(e) || n >= attempts) throw e;
+                const wait = 5_000 * 2 ** (n - 1);
+                await (deps.sleep ? deps.sleep(wait) : new Promise<void>((r) => setTimeout(r, wait)));
+            }
+        }
+    };
+}
+
+/** The suite's result for the verdict: waited for here, and never after a halt (the suite is stopped and its result dropped). */
+async function joinSuiteStage(run: RunScope): Promise<SuiteStageResult | undefined> {
+    const started = run.suite;
+    if (!started) return undefined;
+    if (run.ctx.stoppedEarly) {
+        await stopSuiteStage(run);
+        return undefined;
     }
+    run.suite = undefined;
+    return started.result;
+}
+
+/** Stops the suite stage the Run started and waits for its step to end: no step is left running past the workflow. */
+async function stopSuiteStage(run: RunScope): Promise<void> {
+    const started = run.suite;
+    if (!started) return;
+    run.suite = undefined;
+    started.abort.abort();
+    await started.result.catch(() => undefined);
 }
 
 /** Each kept check's outcome of this Run, in one step (the metric reads them); a simulation records none. */
@@ -2053,6 +2121,8 @@ export async function runRuntimeRun(req: RuntimeRunRequested, deps: RunDeps, opt
             }
             const ended = await endBeforeBoot(run, { planGiven: !!providedPlan });
             if (ended) return ended;
+            // The suite needs only the request (the PR head, the merge base, the environment, its own inputs): it starts now and runs beside the Run.
+            startSuiteStage(run);
             // A given plan (an external finding's) has nothing to make while the PR boots.
             const booted = await bootSides(run, !providedPlan);
             const ready = await settleBoot(run, booted);
@@ -2070,6 +2140,7 @@ export async function runRuntimeRun(req: RuntimeRunRequested, deps: RunDeps, opt
             run.leases.stop();
             // Never a step left running past the workflow.
             await stopEarlyPlan(run);
+            await stopSuiteStage(run);
         }
     });
 }

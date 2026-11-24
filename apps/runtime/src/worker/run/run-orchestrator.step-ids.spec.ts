@@ -1,7 +1,10 @@
 import { FakeEnvironmentRuntime, type EnvironmentRuntime } from '@libs/runtime/environment';
 import { checkIntentProbes } from '@libs/runtime/planner/intent-author';
 
+import { sealSecret } from '@libs/runtime/run';
+
 import { shopRunRequest } from '../../e2e/fixtures';
+import { devSealKey } from '../../testing/dev-seal-key';
 import { SCENARIOS } from '../../fake-cell/scenarios';
 import { HmacCanaryVault } from '../canary/canary';
 import { inMemoryRunDeps } from './testing';
@@ -182,6 +185,21 @@ describe('a Run replayed from its recorded steps asks for the same step ids, eac
                 ];
             },
         ],
+        [
+            'a Run whose e2e suite runs beside it as one step of its own, started before the machines boot',
+            () => {
+                const req = shopRunRequest();
+                const suite = { mainSha: 'c'.repeat(40), repoToken: sealSecret('ghs_s0', devSealKey(), req.runId) };
+                return [
+                    { ...req, suite },
+                    prBootsWhileThePlanRuns(),
+                    (h) => {
+                        // Its own inner steps are many and timed by the suite; none of them is a step of the Run.
+                        h.deps.suite = { run: async (_r, step) => (await step('suite:start', async () => 1), await step('suite:run', async () => 2), { status: 'ran', state: 'passed' }) };
+                    },
+                ];
+            },
+        ],
     ];
 
     it.each(cases)('%s', async (_name, args) => {
@@ -197,6 +215,10 @@ describe('a Run replayed from its recorded steps asks for the same step ids, eac
         expect(r.replayIds).toEqual(r.firstIds);
         expect(r.replayRan).toBe(0);
         expect(r.replay.state).toBe(r.first.state);
+        if (/e2e suite/.test(_name)) {
+            expect(r.firstIds.filter((id) => id.startsWith('suite:'))).toEqual(['suite:stage']);
+            expect(r.firstIds.indexOf('suite:stage')).toBeLessThan(r.firstIds.indexOf('booting:at'));
+        }
     });
 });
 
