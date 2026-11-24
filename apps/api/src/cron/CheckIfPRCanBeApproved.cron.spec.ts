@@ -620,6 +620,77 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
     });
 
     describe('approveByNamedPolicy', () => {
+        const finalPr = {
+            number: 7,
+            title: 'A change',
+            body: '',
+            user: { login: 'ana' },
+            labels: [],
+            head: { sha: 'sha-1' },
+            base: { sha: 'base-1' },
+        };
+        const decision = {
+            kind: 'approve',
+            reviewedHeadSha: 'sha-1',
+            reviewedBaseSha: 'base-1',
+            reviewedMetadataKey: approvalPrMetadataKey(finalPr),
+        };
+        const execution = (status: AutomationStatus, blocked?: boolean) => ({
+            uuid: 'exec-1',
+            status,
+            dataExecution: {
+                ...(blocked === undefined
+                    ? {}
+                    : { reviewApprovalBlocked: blocked }),
+                lastAnalyzedCommit: 'sha-1',
+                approvalReviewSummary: {
+                    complete: true,
+                    lineFindings: 0,
+                    prFindings: 0,
+                },
+                approvalDecision: decision,
+            },
+        });
+        const run = async (deps: Deps, latest: unknown, final: unknown) => {
+            deps.automationExecutionService.findLatestExecutionByFilters
+                .mockResolvedValueOnce(latest)
+                .mockResolvedValueOnce(final);
+            deps.codeManagementService.getPullRequest.mockResolvedValue(
+                finalPr,
+            );
+            const provider = buildProvider(deps, true, {
+                evaluate: jest
+                    .fn()
+                    .mockResolvedValue({ decision, eligibility: {} }),
+            });
+            return (provider as any).approveByNamedPolicy({
+                organizationAndTeamData: ORG_DATA,
+                pr: { ...basePr(), suggestions: [] },
+                codeReviewConfig: { pullRequestApprovalActive: true },
+                teamAutomationId: 'ta-1',
+            });
+        };
+
+        it.each([
+            ['a blocked marker', true],
+            ['no marker at all', undefined],
+        ])(
+            'holds, and does not approve, when the final execution carries %s',
+            async (_label, blocked) => {
+                const deps = buildDeps();
+                const approved = await run(
+                    deps,
+                    execution(AutomationStatus.PARTIAL_ERROR, false),
+                    execution(AutomationStatus.PARTIAL_ERROR, blocked as any),
+                );
+
+                expect(approved).toBe(false);
+                expect(
+                    deps.codeManagementService.approvePullRequest,
+                ).not.toHaveBeenCalled();
+            },
+        );
+
         it('approves when the final execution is a summary-only PARTIAL_ERROR', async () => {
             const deps = buildDeps();
             const finalPr = {
