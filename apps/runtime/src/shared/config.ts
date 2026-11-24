@@ -146,6 +146,12 @@ export interface WorkerConfig extends RuntimeConfig {
      * the LLM for a recipe; it waits its turn on the setup queue, or as setup_limit under durable admission.
      */
     setupConcurrency: number;
+    /** RUNTIME_SUITE_PER_ORG (1..8, default 2): e2e suite runs of one org that run at once on the suite queue. */
+    suitePerOrg: number;
+    /** RUNTIME_SUITE_CONCURRENCY (1..64, default 4, never above RUNTIME_GLOBAL_CONCURRENCY): suite runs across the app. */
+    suiteConcurrency: number;
+    /** RUNTIME_SUITE_MAX_HOSTS (1..16, default 8): the hosts one suite run asks for at most, whatever its recipe's `suite.shards` says. */
+    suiteMaxHosts: number;
     /**
      * RUNTIME_WORKER_CONCURRENCY (1..global, default min(10, RUNTIME_GLOBAL_CONCURRENCY)): Runs and
      * setups one replica runs at once, so one replica never takes every global slot while its
@@ -496,6 +502,9 @@ export function loadWorkerConfig(env: Env = process.env): WorkerConfig {
         },
         setupPerOrg: boundedInt(env, 'RUNTIME_SETUP_PER_ORG', 2, 1, 8),
         setupConcurrency,
+        suitePerOrg: boundedInt(env, 'RUNTIME_SUITE_PER_ORG', 2, 1, 8),
+        suiteConcurrency: Math.min(boundedInt(env, 'RUNTIME_SUITE_CONCURRENCY', 4, 1, 64), base.globalConcurrency),
+        suiteMaxHosts: boundedInt(env, 'RUNTIME_SUITE_MAX_HOSTS', 8, 1, 16),
         workerConcurrency: boundedInt(env, 'RUNTIME_WORKER_CONCURRENCY', Math.min(10, base.globalConcurrency), 1, base.globalConcurrency),
         roundSnapshots: flag01(env, 'RUNTIME_ROUND_SNAPSHOTS', '1'),
         capacityWaitMaxMs: boundedInt(env, 'RUNTIME_CAPACITY_WAIT_MAX_MS', 30 * 60_000, 0, 30 * 60_000),

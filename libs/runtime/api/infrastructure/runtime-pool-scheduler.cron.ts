@@ -8,6 +8,7 @@ import { kodyRuntimeEnabledInThisProcess } from '@libs/runtime-publish/runtime-f
 import { type DistributedLock, DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 
 import { RuntimePoolController } from '../application/pool-controller.service';
+import { RuntimeSuiteBaselineRequests } from '../application/suite-baseline-requests.service';
 import { RuntimeTemplateSetupRequests } from '../application/template-setup-requests.service';
 
 // Every 5 minutes: a schedule opens or closes within that, a warm-up ends,
@@ -53,6 +54,9 @@ export class RuntimePoolSchedulerCron {
         // The fleet's environment template builds wait for their setup command; asked on the same lock and schedule.
         @Optional()
         private readonly templateSetups?: RuntimeTemplateSetupRequests,
+        // The baseline suite runs a template turning ready asked for (docs/runtime/e2e-suites.md section 2.1); same lock, same schedule.
+        @Optional()
+        private readonly suiteBaselines?: RuntimeSuiteBaselineRequests,
     ) {}
 
     @GatedCron(RUNTIME_CRON_SCHEDULES.poolScheduler, { name: 'Runtime pool scheduler' })
@@ -88,6 +92,7 @@ export class RuntimePoolSchedulerCron {
             });
         } finally {
             await this.requestTemplateSetups();
+            await this.requestSuiteBaselines();
             // DistributedLock.release logs its own failure, and the TTL frees the lock anyway.
             await lock.release().catch(() => undefined);
         }
@@ -101,6 +106,17 @@ export class RuntimePoolSchedulerCron {
             if (out.pending) this.logger.log({ message: 'Runtime template setups: pass', context: RuntimePoolSchedulerCron.name, metadata: out });
         } catch (error) {
             this.logger.error({ message: 'Runtime template setups: pass failed', context: RuntimePoolSchedulerCron.name, error: error instanceof Error ? error : undefined });
+        }
+    }
+
+    /** Never throws and never counts as a failed tick: the pool's schedule does not wait on a baseline. */
+    private async requestSuiteBaselines(): Promise<void> {
+        if (!this.suiteBaselines) return;
+        try {
+            const out = await this.suiteBaselines.run();
+            if (out.pending) this.logger.log({ message: 'Runtime suite baselines: pass', context: RuntimePoolSchedulerCron.name, metadata: out });
+        } catch (error) {
+            this.logger.error({ message: 'Runtime suite baselines: pass failed', context: RuntimePoolSchedulerCron.name, error: error instanceof Error ? error : undefined });
         }
     }
 }

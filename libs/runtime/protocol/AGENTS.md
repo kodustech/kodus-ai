@@ -63,6 +63,7 @@ Imported by:
 - [`apps/runtime/src/worker/run`](../../../apps/runtime/src/worker/run/AGENTS.md)
 - [`apps/runtime/src/worker/sandbox`](../../../apps/runtime/src/worker/sandbox/AGENTS.md)
 - [`apps/runtime/src/worker/setup`](../../../apps/runtime/src/worker/setup/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../../../apps/runtime/src/worker/suite/AGENTS.md)
 - [`libs/runtime/api/application`](../api/application/AGENTS.md)
 - [`libs/runtime/api/application/recipe-author`](../api/application/recipe-author/AGENTS.md)
 - [`libs/runtime/api/application/use-cases`](../api/application/use-cases/AGENTS.md)

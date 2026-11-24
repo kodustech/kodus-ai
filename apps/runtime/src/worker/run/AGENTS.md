@@ -82,5 +82,6 @@ Imported by:
 - [`apps/runtime/src/worker/persistence`](../persistence/AGENTS.md)
 - [`apps/runtime/src/worker/publish`](../publish/AGENTS.md)
 - [`apps/runtime/src/worker/setup`](../setup/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../suite/AGENTS.md)
 
 <!-- module-map:end -->

@@ -17,6 +17,30 @@ const options = (over: Partial<ConstructorParameters<typeof RunDependenciesFacto
     ...over,
 });
 
+describe('the environment of a suite run', () => {
+    const ctx = { organizationId: 'org-1', suiteRunId: 'sr-1', key: 'suite-key', correlationId: 'suite-sr-1', fullName: 'acme/shop', imageId: 'img-1', expose: [], tokens: ['sealed:v1:a', 'sealed:v1:b'] };
+
+    it('builds one client per claim, each with the next sealed token bound to the command key, and no Run behind it', async () => {
+        const built: any[] = [];
+        const f = new RunDependenciesFactory(options({ environment: (c) => (built.push(c), { acquire: async () => ({ claimId: 'c' }), renew: async () => ({ status: 'gone' as const }), release: async () => undefined }) as any }));
+        const env = f.envForSuite(ctx);
+        const acquire = (key: string) => env.acquire({ organizationId: 'org-1', environmentId: 'env-1', ref: { side: 'pr', sha: 'a'.repeat(40) }, consumer: 'suite', idempotencyKey: key });
+        await acquire('k0');
+        await acquire('k1');
+        expect(built.map((c) => c.sealedRepoToken)).toEqual(['sealed:v1:a', 'sealed:v1:b']);
+        expect(built[0]).toMatchObject({ tokenBinding: 'suite-key', fullName: 'acme/shop', organizationId: 'org-1', correlationId: 'suite-sr-1', imageId: 'img-1' });
+        expect(built[0].runId).toBeUndefined();
+    });
+
+    it('refuses a production environment that cannot renew claims, as for a Run', () => {
+        const f = new RunDependenciesFactory(options({ allowUnrenewedClaims: false }));
+        expect(() => f.envForSuite(ctx)).not.toThrow();
+        expect(() => (f.envForSuite(ctx) as any).acquire).not.toThrow();
+        // The check runs when a client is built, which is at the first acquire.
+        return expect(f.envForSuite(ctx).acquire({ organizationId: 'org-1', environmentId: 'e', ref: { side: 'pr', sha: 'a'.repeat(40) }, consumer: 'suite', idempotencyKey: 'k' })).rejects.toThrow('claim renewal');
+    });
+});
+
 describe('control-plane reaper', () => {
     it('releases claims past their hard expiry through the hub, with their tenant, and counts reaper.terminated', async () => {
         const released: unknown[] = [];

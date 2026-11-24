@@ -856,6 +856,28 @@ export interface RuntimeTemplateSetupReader {
 
 export const RUNTIME_TEMPLATE_SETUP_READER = Symbol.for('RuntimeApi.TemplateSetupReader');
 
+/** A baseline suite run the fleet asked for when an environment's template turned ready, and nobody has issued yet. */
+export interface PendingSuiteBaseline {
+    organizationId: string;
+    environmentId: string;
+    repositoryId: string;
+    /** The default-branch commit the template was built from. */
+    mainSha: string;
+    /** The id the suite run will have: the command's `suiteRunId` and key, so a redelivery finds one run. */
+    suiteRunId: string;
+}
+
+/**
+ * Reads runtime_suite_baseline_requests (written by runtime-fleet): the queued requests whose suite run does not exist yet.
+ * Read-only: the worker moves a request out of the queue when it starts the run. Only the product holds the credentials the
+ * command carries.
+ */
+export interface RuntimeSuiteBaselineReader {
+    pending(limit: number): Promise<PendingSuiteBaseline[]>;
+}
+
+export const RUNTIME_SUITE_BASELINE_READER = Symbol.for('RuntimeApi.SuiteBaselineReader');
+
 /**
  * Reads runtime_build_state_evictions (written by the hub from each cell's
  * heartbeat): the cells whose disk floor removed the environment's build

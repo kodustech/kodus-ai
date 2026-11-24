@@ -267,6 +267,9 @@ All config is read in one place, `shared/config.ts`:
 | `RUNTIME_PRODUCT_SECRETS_READ_URL` | unset | Hub only. The product Postgres, read-only, as the role that may read only the org secrets' id, name and hosts (`scripts/runtime/runtime-secrets-reader-grants.sql`). Unset: no claim gets the org's secrets. |
 | `RUNTIME_SETUP_PER_ORG` | 2 | Worker only; 1 to 8. Environment setups of one org that run at once on the setup queue; the next waits its turn. |
 | `RUNTIME_SETUP_CONCURRENCY` | 4 | Worker only; 1 to 64, never above `RUNTIME_GLOBAL_CONCURRENCY`. Setups that run at once across the app (the setup queue's global limit; under durable admission, a setup past it waits as `setup_limit`). |
+| `RUNTIME_SUITE_PER_ORG` | 2 | Worker only; 1 to 8. E2E suite runs of one org that run at once on the suite queue (`runtime-suites`). |
+| `RUNTIME_SUITE_CONCURRENCY` | 4 | Worker only; 1 to 64, never above `RUNTIME_GLOBAL_CONCURRENCY`. Suite runs across the app. |
+| `RUNTIME_SUITE_MAX_HOSTS` | 8 | Worker only; 1 to 16. The most hosts one suite run asks for, whatever the recipe `suite.shards` says. |
 | `RUNTIME_WORKER_CONCURRENCY` | min(10, global) | Worker only; 1 to `RUNTIME_GLOBAL_CONCURRENCY`. Runs and setups one replica runs at once (DBOS `workerConcurrency`), so one replica never takes every global slot while its Postgres pool serves a share. |
 | `RUNTIME_SANDBOX_MEMORY_MB` | 2048 | Hub only. The memory a code sandbox that asks no size is admitted at on a cell whose hello names no `sandboxSize` (a cell that names one is admitted at its own, `-sandbox-memory-mb`). Never the cell's default Run size. |
 | `RUNTIME_PREVIEW_DOMAIN` | unset | Worker and preview edge. The registrable domain previews are served under (docs/runtime/preview-urls.md), never the one Kodus runs on. Unset: previews are off and the product says so; the edge refuses to start. |

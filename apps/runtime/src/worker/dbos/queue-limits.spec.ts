@@ -43,4 +43,17 @@ describe('queueRegistrations', () => {
         expect(q['runtime-admissions']).not.toHaveProperty('minPollingIntervalMs');
         expect(q['runtime-admission-finalizers']).not.toHaveProperty('minPollingIntervalMs');
     });
+
+    // A suite lasts tens of minutes on several hosts: its own queue, so it never takes a Run's slot or a setup's.
+    it('gives the suites a queue of their own with a per-org and a global limit, in both admission modes', () => {
+        const withSuites = { ...names, suites: 'runtime-suites' };
+        const settings = { globalConcurrency: 20, partitionConcurrency: 2, suitePerOrg: 3, suiteConcurrency: 5, workerConcurrency: 10 };
+        const q = Object.fromEntries(queueRegistrations(settings, withSuites));
+        expect(q['runtime-suites']).toEqual({ globalConcurrency: 5, partitionConcurrency: 3, workerConcurrency: 5, minPollingIntervalMs: MACHINE_QUEUE_POLL_MS, onConflict: 'always_update' });
+        const admission = { globalExecuting: 20, perOrgExecuting: 2, attemptConcurrency: 8, attemptPerOrg: 1 };
+        const durable = Object.fromEntries(queueRegistrations({ ...settings, durableAdmission: true, admission }, withSuites));
+        expect(durable['runtime-suites']).toEqual(q['runtime-suites']);
+        // Without the names or the limits, no suite queue exists.
+        expect(Object.keys(Object.fromEntries(queueRegistrations(settings, names)))).not.toContain('runtime-suites');
+    });
 });

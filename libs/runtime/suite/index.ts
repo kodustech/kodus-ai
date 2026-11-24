@@ -17,3 +17,5 @@ export { hostsToAsk, spreadOnto } from './hosts';
 export type { ShardSpecs } from './hosts';
 export { suiteDigestOf } from './digest';
 export type { DigestedSuite } from './digest';
+export { specListOf } from './spec-list';
+export type { SpecListInput } from './spec-list';

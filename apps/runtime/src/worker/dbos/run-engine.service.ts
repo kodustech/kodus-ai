@@ -3,7 +3,7 @@ import { DBOS } from '@dbos-inc/dbos-sdk';
 import { jsonTupleHex } from '@libs/runtime/contracts/derive-id';
 import { Inject, Injectable, Logger, OnApplicationShutdown, OnModuleInit, Optional } from '@nestjs/common';
 
-import type { RuntimeEnvironmentSetupRequested } from '@libs/runtime/contracts/runtime-commands';
+import type { RuntimeEnvironmentSetupRequested, RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 
 import { isForkApprovalRequired, isTerminal, RunProjectionStore, RuntimeRunProjection, RuntimeRunRequested } from '@libs/runtime/run';
 import { ATTR, RuntimeMetrics, withRunSpan } from '@libs/runtime/telemetry';
@@ -15,6 +15,7 @@ import { admissionWaitMs, type AdmissionReason, type AdmissionRecord, type Admis
 import { awaitForkApproval, finalizeStoppedRun, QUEUE_TIMEOUT_MS, RUN_TIMEOUT_MS, RunOptions, runRuntimeRun } from '../run/run-orchestrator';
 import type { ForkApprovalMessage, RunDeps } from '../run/ports';
 import { ENVIRONMENT_SETUP_SERVICE, EnvironmentSetupService } from '../setup/environment-setup.service';
+import { SUITE_SERVICE, type SuiteService } from '../suite/suite-service';
 import { RUN_DEPS_FACTORY, RunDepsFactory } from './run-deps.factory';
 import { ADMISSION_COORDINATOR, AdmissionCoordinator, admissionRefOf } from './admission-coordinator';
 import type { StuckDetector } from '../maintenance/stuck-detector';
@@ -36,6 +37,11 @@ export const STOP_WORKFLOW = 'runtimeRunStop';
 /** Environment setups: their own queue, RUNTIME_SETUP_PER_ORG setups at a time per org (fair, and a setup never takes a Run's slot). */
 export const SETUP_QUEUE = 'runtime-setups';
 export const SETUP_WORKFLOW = 'runtimeEnvironmentSetup';
+/** E2E suite runs (docs/runtime/e2e-suites.md section 11): their own queue, RUNTIME_SUITE_PER_ORG per org at a time, so a suite that holds several hosts for tens of minutes never takes a Run's or a setup's slot. */
+export const SUITE_QUEUE = 'runtime-suites';
+export const SUITE_WORKFLOW = 'runtimeSuite';
+/** One workflow per suite run: a request delivered twice, or a retry with the same key, finds it. */
+export const suiteWorkflowId = (suiteRunId: string) => `suite:${suiteRunId}`;
 export const ADMISSION_QUEUE = 'runtime-admissions';
 export const EXECUTION_QUEUE = 'runtime-executions';
 export const ADMISSION_WORKFLOW = 'runtimeAdmission';
@@ -104,6 +110,7 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
     private stopWorkflow!: (run: StoppedRun, state: StopState, reason: string) => Promise<unknown>;
     private setupWorkflow?: (cmd: RuntimeEnvironmentSetupRequested, opts?: SetupWorkflowOptions) => Promise<unknown>;
     private admissionWorkflow?: (ref: AdmissionRef, generation: number) => Promise<void>;
+    private suiteWorkflow?: (cmd: RuntimeSuiteRequested) => Promise<unknown>;
     private sweeper?: NodeJS.Timeout;
     private lastRetentionAt = 0;
     launched = false;
@@ -126,6 +133,7 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
         @Optional() @Inject(RUN_ENGINE_STUCK) private readonly stuck?: Pick<StuckDetector, 'pass'>,
         @Optional() @Inject(RUN_ENGINE_WORKFLOW_HISTORY) private readonly workflows: WorkflowHistory = dbosWorkflowHistory,
         @Optional() @Inject(RUN_ENGINE_WORKFLOW_RETENTION) private readonly workflowRetention?: Partial<WorkflowRetentionOptions>,
+        @Optional() @Inject(SUITE_SERVICE) private readonly suite?: Pick<SuiteService, 'run'>,
     ) {}
 
     async onModuleInit() {
@@ -180,6 +188,11 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
         if (setup) {
             this.setupWorkflow = DBOS.registerWorkflow(async (cmd: RuntimeEnvironmentSetupRequested, opts?: SetupWorkflowOptions) => this.executeSetup(cmd, opts ?? {}), { name: SETUP_WORKFLOW });
         }
+        const suite = this.suite;
+        if (suite) {
+            // The suite's steps are the service's own (`suite:start`, `suite:run`): a replay takes what it journalled.
+            this.suiteWorkflow = DBOS.registerWorkflow(async (cmd: RuntimeSuiteRequested) => suite.run(cmd, dbosStep), { name: SUITE_WORKFLOW });
+        }
         if (this.config.durableAdmission) {
             this.admissionWorkflow = DBOS.registerWorkflow(async (ref: AdmissionRef, generation: number) => this.admission!.attempt(ref, generation, {
                 step: dbosStep,
@@ -195,7 +208,7 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
         }
         DBOS.setConfig({ name: 'kody-runtime', systemDatabaseUrl: this.config.databaseUrl, logLevel: this.config.dbosLogLevel, applicationVersion: this.config.releaseVersion, ...(this.config.executorId ? { executorID: this.config.executorId } : {}) });
         await DBOS.launch();
-        for (const [name, options] of queueRegistrations(this.config, { execution: EXECUTION_QUEUE, admission: ADMISSION_QUEUE, finalize: ADMISSION_FINALIZE_QUEUE, runs: RUN_QUEUE, setups: SETUP_QUEUE })) {
+        for (const [name, options] of queueRegistrations(this.config, { execution: EXECUTION_QUEUE, admission: ADMISSION_QUEUE, finalize: ADMISSION_FINALIZE_QUEUE, runs: RUN_QUEUE, setups: SETUP_QUEUE, ...(this.suite ? { suites: SUITE_QUEUE } : {}) })) {
             await DBOS.registerQueue(name, options);
         }
         this.launched = true;
@@ -281,6 +294,21 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
         const handle = await DBOS.startWorkflow(this.setupWorkflow, {
             workflowID: setupWorkflowId(cmd.key),
             queueName: SETUP_QUEUE,
+            enqueueOptions: { queuePartitionKey: cmd.organizationId },
+        })(cmd);
+        return handle.workflowID;
+    }
+
+    /**
+     * Enqueues an e2e suite run on the per-org suite queue and returns once DBOS holds it durably; the same suite run starts
+     * once. False when this worker has no suite service. A suite does not go through durable admission: its hosts are asked
+     * for as fleet demand, and the queue's limits bound how many run at once.
+     */
+    async startSuite(cmd: RuntimeSuiteRequested): Promise<string | false> {
+        if (!this.suiteWorkflow) return false;
+        const handle = await DBOS.startWorkflow(this.suiteWorkflow, {
+            workflowID: suiteWorkflowId(cmd.suiteRunId),
+            queueName: SUITE_QUEUE,
             enqueueOptions: { queuePartitionKey: cmd.organizationId },
         })(cmd);
         return handle.workflowID;

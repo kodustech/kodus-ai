@@ -9,6 +9,9 @@ export interface QueueLimitSettings {
     setupPerOrg?: number;
     /** RUNTIME_SETUP_CONCURRENCY: setups at once across the app (default: globalConcurrency). */
     setupConcurrency?: number;
+    /** RUNTIME_SUITE_PER_ORG and RUNTIME_SUITE_CONCURRENCY: the e2e suite runs of one org and of the app at once. Absent: no suite queue. */
+    suitePerOrg?: number;
+    suiteConcurrency?: number;
     /** RUNTIME_WORKER_CONCURRENCY: workflows one replica runs at once (default: no per-replica limit). */
     workerConcurrency?: number;
     durableAdmission?: boolean;
@@ -48,7 +51,8 @@ function limited(global: number, partition: number | undefined, worker: number |
  * pool (RUNTIME_PG_POOL_MAX) serves a share of them. Setups, which build and bake on a cell
  * at full size and may ask the LLM for a recipe, have a global limit of their own.
  */
-export function queueRegistrations(c: QueueLimitSettings, names: { execution: string; admission: string; finalize: string; runs: string; setups: string }): Registration[] {
+export function queueRegistrations(c: QueueLimitSettings, names: { execution: string; admission: string; finalize: string; runs: string; setups: string; suites?: string }): Registration[] {
+    const suites = suiteQueue(c, names.suites);
     if (c.durableAdmission && c.admission) {
         const a = c.admission;
         return [
@@ -57,11 +61,19 @@ export function queueRegistrations(c: QueueLimitSettings, names: { execution: st
             // Short attempts, no machine: no per-replica limit.
             [names.admission, limited(a.attemptConcurrency, a.attemptPerOrg, undefined)],
             [names.finalize, limited(a.attemptConcurrency, a.attemptPerOrg, undefined)],
+            ...suites,
         ];
     }
     const setups = Math.min(c.setupConcurrency ?? c.globalConcurrency, c.globalConcurrency);
     return [
         [names.runs, limited(c.globalConcurrency, c.partitionConcurrency, c.workerConcurrency, MACHINE_QUEUE_POLL_MS)],
         [names.setups, limited(setups, c.setupPerOrg, c.workerConcurrency, MACHINE_QUEUE_POLL_MS)],
+        ...suites,
     ];
+}
+
+/** The suites' own queue (docs/runtime/e2e-suites.md section 12): a suite holds several hosts for tens of minutes, so it never shares a Run's or a setup's slot. */
+function suiteQueue(c: QueueLimitSettings, name: string | undefined): Registration[] {
+    if (!name || c.suiteConcurrency === undefined) return [];
+    return [[name, limited(Math.min(c.suiteConcurrency, c.globalConcurrency), c.suitePerOrg, c.workerConcurrency, MACHINE_QUEUE_POLL_MS)]];
 }

@@ -40,6 +40,14 @@ import { RUNTIME_RUN_RETRY_EXCHANGE } from '@libs/runtime/run/run-messages';
 import { RuntimeRunRetry } from './consumer/runtime-run-retry';
 import { canaryKeyFrom, hubEnvironments, loadRecordedTurns, poolCellOf, RUN_DEPS_FACTORY, RunDependenciesFactory } from './dbos/run-deps.factory';
 import { RUN_ENGINE_LOCKS, RUN_ENGINE_RETENTION, RUN_ENGINE_STUCK, RUN_ENGINE_WORKFLOW_RETENTION, RunEngineService } from './dbos/run-engine.service';
+import { PgEnvTemplates } from '../shared/persistence/env-templates';
+import { PgSuiteBaselineRequests } from '../shared/persistence/suite-baseline-requests';
+import { PgSuiteDemand } from '../shared/persistence/suite-demand';
+import { PgSuiteBaselines } from './suite/pg-suite-baselines';
+import { PgSuiteRuns } from './suite/pg-suite-runs';
+import { PgSuiteSpecStats } from './suite/pg-suite-spec-stats';
+import { PlacementSuiteDemand } from './suite/suite-adapters';
+import { SUITE_RUNS, SUITE_SERVICE, SuiteService } from './suite/suite-service';
 import { PgStuckSource, StuckDetector } from './maintenance/stuck-detector';
 import { ADMISSION_COORDINATOR, AdmissionCoordinator } from './dbos/admission-coordinator';
 import { HubPhysicalAdmissionClient } from './env/physical-admission-client';
@@ -289,6 +297,29 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                             logger.warn({ msg: 'setup.dev_override', devSha: opts.devSha?.slice(0, 12) ?? null, devExpose: !!opts.devExpose });
                         }
                         return new EnvironmentSetupService(deps, store, opts);
+                    },
+                },
+                { provide: SUITE_RUNS, inject: [RUNTIME_PG_POOL], useFactory: (pool: Pool) => new PgSuiteRuns(pool) },
+                {
+                    // The e2e suite's workflow body (docs/runtime/e2e-suites.md section 11): the recipe's suite block, the spec list, the engine.
+                    provide: SUITE_SERVICE,
+                    inject: [RUNTIME_PG_POOL, RUN_DEPS_FACTORY, ENVIRONMENT_SETUP_STORE, SUITE_RUNS],
+                    useFactory: (pool: Pool, deps: RunDependenciesFactory, setups: EnvironmentSetupStore, runs: PgSuiteRuns) => {
+                        const templates = new PgEnvTemplates(pool);
+                        const pools = new PgHostPoolReader(pool);
+                        const demand = new PgSuiteDemand(pool);
+                        return new SuiteService({
+                            setups,
+                            environment: (ctx) => deps.envForSuite(ctx),
+                            demand: (scope) => new PlacementSuiteDemand(demand, pools, scope),
+                            runs,
+                            stats: new PgSuiteSpecStats(pool),
+                            baselines: new PgSuiteBaselines(pool),
+                            templates: { hasReady: (organizationId, environmentId) => templates.hasReady(organizationId, environmentId) },
+                            headroom: async () => config.suiteMaxHosts,
+                            baselineRequests: new PgSuiteBaselineRequests(pool),
+                            clock: { now: () => Date.now(), sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)) },
+                        });
                     },
                 },
                 { provide: ORGANIZATION_PURGE_STORE, inject: [RUNTIME_PG_POOL], useFactory: (pool: Pool) => new PgOrganizationPurgeStore(pool) },

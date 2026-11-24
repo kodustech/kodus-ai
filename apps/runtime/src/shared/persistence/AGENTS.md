@@ -8,6 +8,7 @@ The Runtime Postgres as both control-plane apps use it: the schema and its migra
 - Commands the API decided: `pg-command-store.ts` `PgCommandStore` (`CommandStore`: fork and egress approvals, egress audit and settings, stops, cell tokens, `revokeCell`), `egressScopes`.
 - Cell choice: `cell-directory.ts` `PgCellDirectory` (`reserveCell`, `replicaForClaim`, `replicaForCell`), `reserveCellFor` / `reserveCellCapped` (the capped, org-locked reservation in `runtime_cell_reservations`), `reserveCellRow` (the hub's uncapped one), and the SQL they share (`RESERVE_CELL_SQL`, `CELL_CAPACITY_SQL`, `BEST_CELL_SQL`).
 - Suite demand: `suite-demand.ts` `PgSuiteDemand` (`request`: one `runtime_pool_demand` row per shard of a suite run, keyed `suite:<org>/<suiteRun>/<shard>`; `status`: per shard `starting | ready | failed`; `end`: the run's demand expires at once). `CellWant` carries `suiteRunId` and `shard` for a claim of consumer `suite`.
+- Environment templates, read by the worker: `env-templates.ts` `PgEnvTemplates.hasReady` (a ready template of the organization's environment: the suite's main host starts from it). The fleet writes the table.
 - Suite baseline requests: `suite-baseline-requests.ts` `PgSuiteBaselineRequests` (`runtime_suite_baseline_requests`, migration 52): the baseline suite runs a template turning ready asks for. `request` is one statement: the queued requests of the environment for another commit are replaced, and a commit already recorded (queued or started) changes nothing; each request carries the `suiteRunId` its run will have. `pending` lists the queued ones oldest first; `markStarted` (own organization only) moves one out of the queue. The fleet writes it; the product reads it with the read-only role and issues the command.
 - The organization purge: `organization-purge.ts` `PgOrganizationPurgeStore` (`liveClaims`, `cordonPools`, `deleteOrganization`: every row of one organization in batches, the tables in `ORGANIZATION_PURGE_TABLES`; a host that is not terminated stays with its pool). `organization-purge.integration.spec.ts` fails when a `runtime` table with an organization column is missing from the list.
 - Previews: `preview-store.ts` `PgPreviewStore` (records and state, tunnel tickets, edge sessions, grants seen, tunnel holders), `normalizedSerial`, `sessionHashOf`.
@@ -38,7 +39,7 @@ The Runtime Postgres as both control-plane apps use it: the schema and its migra
 
 ## Module map
 
-Files (13, tests apart): `cell-directory.ts`, `host-pools.ts`, `lock-scoped-pg.ts`, `locks.ts`, `organization-purge.ts`, `pg-command-store.ts`, `preview-store.ts`, `runtime-schema.ts`, `snapshot-placements.ts`, `suite-baseline-requests.ts`, `suite-demand.ts`, `testing.ts`, `workflow-retention.ts`
+Files (14, tests apart): `cell-directory.ts`, `env-templates.ts`, `host-pools.ts`, `lock-scoped-pg.ts`, `locks.ts`, `organization-purge.ts`, `pg-command-store.ts`, `preview-store.ts`, `runtime-schema.ts`, `snapshot-placements.ts`, `suite-baseline-requests.ts`, `suite-demand.ts`, `testing.ts`, `workflow-retention.ts`
 
 Imports these Runtime modules:
 

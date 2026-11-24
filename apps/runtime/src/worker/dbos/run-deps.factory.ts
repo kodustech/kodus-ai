@@ -26,6 +26,8 @@ import { IntentClassifier } from '../intent/intent-classifier';
 import { ClaimLeaseKeeper, type LeaseEvent, type LeaseKeeperOptions } from '../run/lease-keeper';
 import type { ClaimReleaser, PublishRequester, RunClaims, RunDeps, RunEventSink, RunLog } from '../run/ports';
 import { type SecretOpener, setupTokenBinding } from '../secrets/sealed-tokens';
+import type { SuiteEnvironmentContext } from '../suite/suite-service';
+import { type SuiteEnvironment, suiteEnvironment } from '../suite/suite-environment';
 
 export const RUN_DEPS_FACTORY = Symbol('RUN_DEPS_FACTORY');
 
@@ -279,6 +281,31 @@ export class RunDependenciesFactory implements RunDepsFactory {
         });
         this.requireRenewal(env);
         return env;
+    }
+
+    /**
+     * The environment of a suite run (no Run): the claims of its shards, the fresh host and the main host, each acquired by a
+     * client with a download token of its own (the cell revokes a token once it fetched with it) bound to the command's key,
+     * and each kept leased while the engine holds it.
+     */
+    envForSuite(input: SuiteEnvironmentContext): SuiteEnvironment {
+        return suiteEnvironment(
+            (sealedRepoToken) => {
+                const env = this.deps.environment({
+                    correlationId: input.correlationId,
+                    organizationId: input.organizationId,
+                    fullName: input.fullName,
+                    sealedRepoToken,
+                    tokenBinding: input.key,
+                    imageId: input.imageId,
+                    expose: input.expose,
+                });
+                this.requireRenewal(env);
+                return env;
+            },
+            input.tokens,
+            { ...this.deps.leaseRenewal, onEvent: (e) => this.deps.onLeaseEvent?.(input.suiteRunId, e) },
+        );
     }
 
     private requireRenewal(env: EnvironmentRuntime): void {

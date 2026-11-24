@@ -79,6 +79,36 @@ describe('RuntimePoolSchedulerCron template setups', () => {
     });
 });
 
+describe('RuntimePoolSchedulerCron suite baselines', () => {
+    const saved = process.env.RUNTIME_ENABLED;
+    beforeEach(() => {
+        process.env.RUNTIME_ENABLED = 'true';
+    });
+    afterEach(() => {
+        if (saved === undefined) delete process.env.RUNTIME_ENABLED;
+        else process.env.RUNTIME_ENABLED = saved;
+    });
+
+    it('issues the pending baseline suite runs under the same lock, after the template setups and before releasing it', async () => {
+        const order: string[] = [];
+        const templates = { run: jest.fn(async () => (order.push('templates'), { pending: 0, requested: 0, skipped: 0, failed: 0 })) };
+        const baselines = { run: jest.fn(async () => (order.push('baselines'), { pending: 1, requested: 1, skipped: 0, failed: 0 })) };
+        const release = jest.fn(async () => void order.push('release'));
+        const cron = new RuntimePoolSchedulerCron({ tick: async () => ({ checked: 0 }) } as any, { acquire: async () => ({ release }) } as any, { recordTick: () => undefined }, templates as any, baselines as any);
+        await cron.handleCron();
+        expect(order).toEqual(['templates', 'baselines', 'release']);
+    });
+
+    it('does not count a baseline pass that throws as a failed tick, and still releases the lock', async () => {
+        const ticks: string[] = [];
+        const release = jest.fn(async () => undefined);
+        const cron = new RuntimePoolSchedulerCron({ tick: async () => ({ checked: 0 }) } as any, { acquire: async () => ({ release }) } as any, { recordTick: (o) => ticks.push(o) }, undefined, { run: async () => Promise.reject(new Error('x')) } as any);
+        await cron.handleCron();
+        expect(ticks).toEqual(['ok']);
+        expect(release).toHaveBeenCalled();
+    });
+});
+
 describe('OtelPoolSchedulerMetrics', () => {
     it('one counter, labelled by outcome', () => {
         const counter = { add: jest.fn() };

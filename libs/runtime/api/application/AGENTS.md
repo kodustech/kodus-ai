@@ -6,6 +6,7 @@ The application layer of the product's Runtime API: the services the use cases s
 - The one builder of `RuntimeRunRequested`: `run-request-builder.service.ts` `RuntimeRunRequestBuilder` (diff and repo token from the Git API, Run token signed here, both sealed), used by the PR trigger, Run again, Run on this PR, fork approval and simulate.
 - The one way a Run is enqueued: `runtime-run-enqueuer.service.ts` `RuntimeRunEnqueuer` (the publish target first, then the outbox row).
 - Setup commands: `runtime-setup-requester.service.ts` `RuntimeSetupRequester` (recipe read and refused with the broken rule named, pool size and machine size under the plan).
+- Baseline suite commands: `suite-baseline-requests.service.ts` `RuntimeSuiteBaselineRequests` (run on the pool scheduler's lock after the template setups): reads the queued baseline requests of the fleet (`RuntimeSuiteBaselineReader`, the read-only role; the worker marks a request started), checks the recipe at that commit still declares a suite with a baseline, mints one sealed download token per claim (the cell revokes a token once it fetched with it: the listing and each shard of the recipe's ceiling) and writes `runtime.suite.requested` under the request's `suiteRunId`.
 - Access: `run-access.service.ts` `RuntimeRunAccessService` (load the Run, then org, team and repo; another tenant's Run is 404), `egress-access.service.ts` `RuntimeEgressAccess`, `environment-members.service.ts` `RuntimeEnvironmentMembers`.
 - Worker credentials: `runtime-worker-scope.ts` `verifyRuntimeWorkerToken`, `runtimeWorkerScope` (Run token, rechecked against the live Run on every call); `setup-token.ts` `openSetupToken`; `secret-sealer.ts` `sealForRuntime` (503 without the seal key).
 - Model call budgets: `llm-run-budget.ts` `liveRunFor`, `withReservation`; `model-input-bytes.ts`.
@@ -34,7 +35,7 @@ The application layer of the product's Runtime API: the services the use cases s
 
 ## Module map
 
-Files (22, tests apart): `asked-runs.ts`, `egress-access.service.ts`, `env-tools.service.ts`, `environment-members.service.ts`, `external-findings.service.ts`, `external-verification-reconciler.ts`, `failure-context.ts`, `llm-run-budget.ts`, `model-input-bytes.ts`, `pool-controller.service.ts`, `recipe-inference.reader.ts`, `run-access.service.ts`, `run-cost.service.ts`, `run-public-view.ts`, `run-request-builder.service.ts`, `runtime-run-enqueuer.service.ts`, `runtime-setup-requester.service.ts`, `runtime-worker-scope.ts`, `secret-sealer.ts`, `setup-token.ts`, `template-setup-requests.service.ts`, `webhook-reconciler.service.ts`
+Files (23, tests apart): `asked-runs.ts`, `egress-access.service.ts`, `env-tools.service.ts`, `environment-members.service.ts`, `external-findings.service.ts`, `external-verification-reconciler.ts`, `failure-context.ts`, `llm-run-budget.ts`, `model-input-bytes.ts`, `pool-controller.service.ts`, `recipe-inference.reader.ts`, `run-access.service.ts`, `run-cost.service.ts`, `run-public-view.ts`, `run-request-builder.service.ts`, `runtime-run-enqueuer.service.ts`, `runtime-setup-requester.service.ts`, `runtime-worker-scope.ts`, `secret-sealer.ts`, `setup-token.ts`, `suite-baseline-requests.service.ts`, `template-setup-requests.service.ts`, `webhook-reconciler.service.ts`
 
 Imports these Runtime modules:
 

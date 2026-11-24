@@ -32,9 +32,7 @@ BEGIN
       'runtime_kept_check_results',
       -- The e2e suite's runs, shards, results, baselines and spec durations (v51; docs/runtime/e2e-suites.md): the suite
       -- page and the environment's suite settings. Results hold redacted errors cut to the evidence limits, never a secret.
-      'runtime_suite_runs', 'runtime_suite_shards', 'runtime_suite_results', 'runtime_suite_baselines', 'runtime_suite_spec_stats',
-      -- The baseline suite runs a template turning ready asks for (v52): the product reads the queued ones and issues the command.
-      'runtime_suite_baseline_requests'
+      'runtime_suite_runs', 'runtime_suite_shards', 'runtime_suite_results', 'runtime_suite_baselines', 'runtime_suite_spec_stats'
     ] LOOP
       IF to_regclass(format('runtime.%I', t)) IS NOT NULL THEN
         EXECUTE format('GRANT SELECT ON runtime.%I TO kodus_runtime_reader', t);
@@ -53,6 +51,11 @@ BEGIN
     -- The template builds' setup records (v50): the pending-template reader only asks whether a key exists.
     IF to_regclass('runtime.runtime_template_setups') IS NOT NULL THEN
       EXECUTE 'GRANT SELECT (setup_key, organization_id, environment_id) ON runtime.runtime_template_setups TO kodus_runtime_reader';
+    END IF;
+    -- The baseline suite runs a template turning ready asks for (v52): the product reads the queued ones, with no suite run yet,
+    -- and issues the command. Ids, the main commit and the state only, never the bake fingerprint.
+    IF to_regclass('runtime.runtime_suite_baseline_requests') IS NOT NULL THEN
+      EXECUTE 'GRANT SELECT (suite_run_id, environment_id, organization_id, repository_id, main_sha, state, requested_at) ON runtime.runtime_suite_baseline_requests TO kodus_runtime_reader';
     END IF;
     IF to_regclass('runtime.runtime_stops') IS NOT NULL THEN
       EXECUTE 'GRANT SELECT (scope, organization_id, cleared_at) ON runtime.runtime_stops TO kodus_runtime_reader';

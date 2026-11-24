@@ -3,13 +3,13 @@
 The runtime-worker's engine: it registers the DBOS workflows and queues, starts, stops and approves them, and runs the per-cluster maintenance tick. It runs in the runtime-worker and is the boundary between the broker handlers (`worker/commands`) and the workflow code (`worker/run`, `worker/setup`), which it calls with a `step` built on `DBOS.runStep`.
 
 ## Owns
-- Workflow registration and launch: `run-engine.service.ts` `RunEngineService.onModuleInit` registers `runtimeRun`, `runtimeForkGate`, `runtimeRunStop`, `runtimeEnvironmentSetup` (when a setup service is wired) and `runtimeAdmission` (durable admission), sets `applicationVersion` from `RUNTIME_RELEASE_VERSION`, and declares the queues.
+- Workflow registration and launch: `run-engine.service.ts` `RunEngineService.onModuleInit` registers `runtimeRun`, `runtimeForkGate`, `runtimeRunStop`, `runtimeEnvironmentSetup` (when a setup service is wired), `runtimeSuite` (when a suite service is wired: `startSuite`, workflow id `suite:<suiteRunId>`, queue `runtime-suites` partitioned by org, `RUNTIME_SUITE_PER_ORG` and `RUNTIME_SUITE_CONCURRENCY`; a suite does not go through durable admission, its hosts are fleet demand) and `runtimeAdmission` (durable admission), sets `applicationVersion` from `RUNTIME_RELEASE_VERSION`, and declares the queues.
 - Queues and workflow ids: `queue-limits.ts` `queueRegistrations` sizes them and polls the machine-work queues every `MACHINE_QUEUE_POLL_MS` (5 s) (limits clamped to each queue's global one, which DBOS requires; `RUNTIME_WORKER_CONCURRENCY` per replica): `RUN_QUEUE` and `SETUP_QUEUE` partitioned by org (`RUNTIME_ORG_CONCURRENCY`, `RUNTIME_SETUP_PER_ORG`, `RUNTIME_SETUP_CONCURRENCY`), or `EXECUTION_QUEUE`, `ADMISSION_QUEUE`, `ADMISSION_FINALIZE_QUEUE` with durable admission; the sweep asks DBOS about the workflows of the live Runs in batches (`SWEEP_BATCH`); `workflowID = runId` for a Run, `approvedRunWorkflowId`, `setupWorkflowId`, `admissionAttemptWorkflowId`.
 - Entry points the handlers call (`commands/run-engine.port.ts` `RunEngine`): `start`, `startSetup`, `approve` (sends on `APPROVAL_TOPIC`), `stop` (cancels, then starts the stop workflow and returns); `status` and `result` read a Run workflow by runId.
 - The step wrapper `dbosStep`: one try per step, except publish steps (`isPublishStep`), which retry with `PUBLISH_STEP_RETRY` for about ten minutes.
 - Maintenance: `RunEngineService.maintenanceTick` every 15 s under the `runtime-worker/maintenance` lock: `repairAdmission`, `sweep` (`runPastLimit`, `queuedPastLimit`), the reaper, hourly retention (the Runtime schema's, then DBOS's own history), then the stuck pass (`worker/maintenance`).
 - DBOS history retention: `shared/persistence/workflow-retention.ts` `pruneWorkflowHistory` (shared with the fleet's own history) deletes terminal workflows (`TERMINAL_WORKFLOW_STATUSES`) created more than 30 days ago, with their inputs and step outputs, in batches of 100 and at most 20 pages and 30 s per hourly pass (`WORKFLOW_RETENTION_DEFAULTS`, overridable through `RUN_ENGINE_WORKFLOW_RETENTION`), never one whose Run is live in the projection (its own id, `:run`, `:stop`).
-- The Run's dependencies: `run-deps.factory.ts` `RunDependenciesFactory` (`forRun`, `forStop`, `envForSetup`, `envForSession`, `reap`), `hubEnvironments`, `poolCellOf`, the canary-guarded LLM gateway and the lease keeper.
+- The Run's dependencies: `run-deps.factory.ts` `RunDependenciesFactory` (`forRun`, `forStop`, `envForSetup`, `envForSuite`, `envForSession`, `reap`), `hubEnvironments`, `poolCellOf`, the canary-guarded LLM gateway and the lease keeper.
 - Durable admission: `admission-coordinator.ts` `AdmissionCoordinator` (`begin`, `attempt`, `finish`, `cleanupTicket`) over the admission store and the cells' physical tickets.
 
 ## Does not own
@@ -55,6 +55,7 @@ Imports these Runtime modules:
 - [`apps/runtime/src/worker/run`](../run/AGENTS.md)
 - [`apps/runtime/src/worker/secrets`](../secrets/AGENTS.md)
 - [`apps/runtime/src/worker/setup`](../setup/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../suite/AGENTS.md)
 - [`libs/runtime/canary`](../../../../../libs/runtime/canary/AGENTS.md)
 - [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)
 - [`libs/runtime/environment`](../../../../../libs/runtime/environment/AGENTS.md)

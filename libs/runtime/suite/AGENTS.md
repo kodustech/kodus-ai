@@ -13,6 +13,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 
 - `hosts.ts` `hostsToAsk` (one host per shard, at most the pool headroom, at least one) and `spreadOnto` (every spec onto the shards that got a host, balanced by the stored durations; the missing shards carry none).
 - `digest.ts` `suiteDigestOf`: the digest of a suite (the block's command, runner, directory, results glob and env, and the sorted spec list) that keys a baseline; timeouts and the shard ceiling do not move it.
+- `spec-list.ts` `specListOf`: the spec files one run executes: main's listing under the recipe's glob, plus the specs the PR adds, minus the ones it removes (paths read relative to the suite directory), or exactly the specs a retry names.
 
 ## Does not own
 - Storing results, baselines and durations, the shard hosts, the detached command and its polling, publishing: later steps of the build plan (section 17), in the runtime-worker and `libs/runtime-publish`.
@@ -34,7 +35,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 
 ## Module map
 
-Files (12, tests apart): `balance.ts`, `classifier.ts`, `digest.ts`, `error-signature.ts`, `hosts.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `repush.ts`, `select.ts`, `types.ts`
+Files (13, tests apart): `balance.ts`, `classifier.ts`, `digest.ts`, `error-signature.ts`, `hosts.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `repush.ts`, `select.ts`, `spec-list.ts`, `types.ts`
 
 Imports these Runtime modules:
 

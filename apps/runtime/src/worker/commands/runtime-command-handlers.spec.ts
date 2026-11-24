@@ -9,6 +9,7 @@ import { RuntimeCommandConsumer } from '../consumer/run-request.consumer';
 import { RuntimeRunRetry } from '../consumer/runtime-run-retry';
 import { RUN_ENGINE_LOCKS } from '../dbos/run-engine.service';
 import { RUNTIME_LOCK_PG_POOL, RuntimeWorkerModule } from '../runtime-worker.module';
+import { RunEngineService } from '../dbos/run-engine.service';
 import { CONSUMER_LOCKS, RUNTIME_COMMAND_HANDLERS, runtimeCommandHandlersProvider } from './runtime-command-handlers';
 
 /** The worker module's own providers for these tokens, as production wires them. */
@@ -54,6 +55,17 @@ describe('Runtime command consumer wiring', () => {
             await expect(Test.createTestingModule({ providers: [...consumerGraph(), ...leavesWithout(token)] }).compile()).rejects.toThrow(/can't resolve dependencies/i);
         },
     );
+
+    it('registers the suite handlers in production: a request and a retry, both enqueued through the engine', async () => {
+        const started: unknown[] = [];
+        const engine = { startSuite: async (c: unknown) => (started.push(c), 'wf') };
+        const module = await Test.createTestingModule({ providers: [...consumerGraph(), ...leavesWithout(RunEngineService), { provide: RunEngineService, useValue: engine }] }).compile();
+        const handlers = module.get<Array<{ event: string; handle(b: Record<string, unknown>): Promise<unknown> }>>(RUNTIME_COMMAND_HANDLERS);
+        const request = handlers.find((h) => h.event === 'runtime.suite.requested')!;
+        expect(handlers.some((h) => h.event === 'runtime.suite.retried')).toBe(true);
+        expect(await request.handle({ suiteRunId: '0b8e3c2a-6d1f-4a57-9c3e-1f2a3b4c5d6e', organizationId: 'o', environmentId: 'e', repositoryId: 'r', mode: 'baseline', mainSha: 'a'.repeat(40), requestedAt: '2026-11-23T12:00:00.000Z', key: 'k' })).toBeUndefined();
+        expect(started).toHaveLength(1);
+    });
 
     it('fails to boot without the broker retry, instead of dead-lettering every failed dispatch', async () => {
         const withoutRetry = consumerGraph().filter((p) => typeof p === 'function' ? p !== RuntimeRunRetry : p.provide !== RuntimeRunRetry);

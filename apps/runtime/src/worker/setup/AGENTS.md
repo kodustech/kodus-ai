@@ -65,5 +65,6 @@ Imported by:
 - [`apps/runtime/src/worker`](../AGENTS.md)
 - [`apps/runtime/src/worker/commands`](../commands/AGENTS.md)
 - [`apps/runtime/src/worker/dbos`](../dbos/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../suite/AGENTS.md)
 
 <!-- module-map:end -->

@@ -37,7 +37,9 @@ import {
 import { OrganizationPurgeRequestedHandler } from './organization-purge.handler';
 import type { RunEngine } from './run-engine.port';
 import { type PullRequestPreviews, RunCancelRequestedHandler, RunRequestedHandler } from './run-requested.handler';
+import { SUITE_RUNS } from '../suite/suite-service';
 import { SuiteRequestedHandler, type SuiteStarter } from './suite-requested.handler';
+import { SuiteRetriedHandler, type SuiteRetryRuns } from './suite-retried.handler';
 
 /** Every handler the Runtime command consumer routes to, one per event. */
 export const RUNTIME_COMMAND_HANDLERS = Symbol('RUNTIME_COMMAND_HANDLERS');
@@ -75,6 +77,8 @@ export interface CommandHandlerDeps {
     organizationPurge?: { store: OrganizationPurgeStore; releaser: ClaimReleaser; evidence: Pick<EvidenceStore, 'deletePrefix'> | null; cells?: CellDataPurger | null };
     /** The suite engine: without it `runtime.suite.requested` is not handled (the consumer dead-letters it). */
     suites?: SuiteStarter;
+    /** The suite runs a retry reads: with it and `suites`, `runtime.suite.retried` is handled too. */
+    suiteRuns?: SuiteRetryRuns;
     warn?: (msg: string, meta: Record<string, unknown>) => void;
 }
 
@@ -97,6 +101,7 @@ export function runtimeCommandHandlers(deps: CommandHandlerDeps): CommandHandler
         new CellRevokeRequestedHandler(commands),
         new LessonUpdateRequestedHandler(deps.lessons),
         ...(deps.suites ? [new SuiteRequestedHandler(deps.suites)] : []),
+        ...(deps.suites && deps.suiteRuns ? [new SuiteRetriedHandler(deps.suiteRuns, deps.suites)] : []),
         ...(deps.organizationPurge ? [new OrganizationPurgeRequestedHandler(engine, projection, deps.organizationPurge.store, deps.organizationPurge.releaser, deps.organizationPurge.evidence, deps.organizationPurge.cells ?? null)] : []),
     ];
 }
@@ -125,6 +130,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
         CLAIM_RELEASER,
         EVIDENCE_STORE,
         CELL_DATA_PURGER,
+        SUITE_RUNS,
     ],
     useFactory: (
         engine: RunEngine,
@@ -144,6 +150,7 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
         releaser: ClaimReleaser,
         evidence: EvidenceStore | null,
         cells: CellDataPurger,
+        suiteRuns: SuiteRetryRuns,
     ) => {
         const logger = new Logger('RuntimeCommandConsumer');
         return runtimeCommandHandlers({
@@ -161,6 +168,9 @@ export const runtimeCommandHandlersProvider: FactoryProvider<CommandHandler[]> =
             previews,
             prSessions,
             organizationPurge: { store: purgeStore, releaser, evidence, cells },
+            // The suite workflow is the engine's; a retry reads the runs it left.
+            suites: { start: async (cmd) => (engine.startSuite ? engine.startSuite(cmd) : false) },
+            suiteRuns,
             warn: (msg, meta) => logger.warn({ msg, ...meta }),
         });
     },

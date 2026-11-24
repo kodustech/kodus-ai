@@ -9,7 +9,7 @@ One handler per command the product sends through the outbox: they turn a parsed
 - `RunCancelRequestedHandler`: a cancel (`pr_closed`, or `superseded` keeping one head) fences the PR's generation and stops the live Runs it may cancel; a closed PR also forgets its sessions and ends its previews. It needs the delivery's `messageId`.
 - `command-handlers.ts`: `ForkApprovedHandler` (bound to the Run's own head and org), `EgressApprovedHandler`, `EgressRevokedHandler`, `EgressSettingsChangedHandler`, `MachineMinutesChangedHandler` (the org's own daily machine minutes, newest change wins), `StopRequestedHandler`, `StopClearedHandler`, `EnvironmentSetupRequestedHandler` (seals a plain token, then only enqueues), `EnvironmentPoolRequestedHandler`, `CellTokenIssuedHandler`, `CellTokenRevokedHandler`, `CellRevokeRequestedHandler`, `LessonUpdateRequestedHandler`.
 - `organization-purge.handler.ts` `OrganizationPurgeRequestedHandler` (`runtime.organization.purge_requested`): cancels the organization's live Runs (`engine.stop`), releases its live claims through the hub, and once none is live deletes its evidence (`{orgId}/`) and every Runtime Postgres row; while a Run or claim is still live it throws, so the control lane retries it with a delay. After the claims and before the evidence it asks the connected cells to remove the organization's data at rest (`CellDataPurger`, `HubCellDataPurger` over the hub's `POST /internal/organizations/:id/cell-data-purge`) and throws `OrganizationPurgeNotReadyError` with `cellsPending` until each has acknowledged; a cell that is offline is not waited for.
-- `suite-requested.handler.ts` `SuiteRequestedHandler` (`runtime.suite.requested`): validates the request and hands it to the `SuiteStarter` port (`start`), returning without waiting. Registered only when `CommandHandlerDeps.suites` is given; the production provider gives none yet, so the consumer dead-letters the command until the suite workflow exists.
+- `suite-requested.handler.ts` `SuiteRequestedHandler` (`runtime.suite.requested`): validates the request and hands it to the `SuiteStarter` port (`start`), returning without waiting; in production the starter is `RunEngine.startSuite` (the `runtime.suite` workflow). `suite-retried.handler.ts` `SuiteRetriedHandler` (`runtime.suite.retried`): a retry of one shard or of every spec that did not pass in the first pass is a new suite run of the same commits limited to those specs (`RuntimeSuiteRequested.specs`), under an id derived from the retry's key; it needs the original run to have ended and the tokens the product sends with the retry. Both are registered when `CommandHandlerDeps.suites` is given (the retry also `suiteRuns`), which the production provider always does.
 - The engine port the handlers call: `run-engine.port.ts` `RunEngine`.
 
 ## Does not own
@@ -35,7 +35,7 @@ One handler per command the product sends through the outbox: they turn a parsed
 
 ## Module map
 
-Files (6, tests apart): `command-handlers.ts`, `organization-purge.handler.ts`, `run-engine.port.ts`, `run-requested.handler.ts`, `runtime-command-handlers.ts`, `suite-requested.handler.ts`
+Files (7, tests apart): `command-handlers.ts`, `organization-purge.handler.ts`, `run-engine.port.ts`, `run-requested.handler.ts`, `runtime-command-handlers.ts`, `suite-requested.handler.ts`, `suite-retried.handler.ts`
 
 Imports these Runtime modules:
 
@@ -51,6 +51,7 @@ Imports these Runtime modules:
 - [`apps/runtime/src/worker/sandbox`](../sandbox/AGENTS.md)
 - [`apps/runtime/src/worker/secrets`](../secrets/AGENTS.md)
 - [`apps/runtime/src/worker/setup`](../setup/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../suite/AGENTS.md)
 - [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)
 - [`libs/runtime/protocol`](../../../../../libs/runtime/protocol/AGENTS.md)
 - [`libs/runtime/run`](../../../../../libs/runtime/run/AGENTS.md)

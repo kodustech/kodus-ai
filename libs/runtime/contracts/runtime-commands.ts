@@ -415,6 +415,16 @@ export type RuntimeOrganizationPurgeRequested = z.infer<typeof RuntimeOrganizati
 export const SUITE_MODES = ['run', 'ci', 'baseline'] as const;
 export type SuiteMode = (typeof SUITE_MODES)[number];
 
+/** A download token as the product seals it for a suite run (bound to the command's key). */
+const SuiteSealedTokenSchema = z
+    .string()
+    .min(1)
+    .max(8_192)
+    .refine((v): boolean => isSealedSecret(v), { message: 'the token must be sealed (sealed:v1:…), never plain' });
+/** A suite run holds at most this many claims beyond its first: the recipe's shard ceiling plus the fresh host, the main host and the spec listing. */
+export const SUITE_MORE_TOKENS_MAX = 32;
+export const SUITE_CHANGED_FILES_MAX = 5_000;
+
 /**
  * Starts one run of the repository's own e2e suite. `suiteRunId` is the idempotency identity (a second delivery
  * finds the run and starts nothing). A baseline names the main commit alone; a PR suite also names its PR, its head
@@ -426,6 +436,8 @@ export const RuntimeSuiteRequestedSchema = z
         organizationId: id,
         environmentId: id,
         repositoryId: id,
+        /** `owner/name`, which the claim's download needs; the setup command carries it the same way. */
+        repositoryFullName: RepositoryFullNameSchema.optional(),
         mode: z.enum(SUITE_MODES),
         prNumber: z.number().int().min(1).optional(),
         prSha: sha.optional(),
@@ -437,12 +449,17 @@ export const RuntimeSuiteRequestedSchema = z
         key: z.string().min(1).max(256),
         traceparent: TraceparentSchema.optional(),
         /** Download token for the repository, sealed for this suite run (bound to `key`), like a setup's. */
-        repoToken: z
-            .string()
-            .min(1)
-            .max(8_192)
-            .refine((v): boolean => isSealedSecret(v), { message: 'the token must be sealed (sealed:v1:…), never plain' })
-            .optional(),
+        repoToken: SuiteSealedTokenSchema.optional(),
+        /**
+         * One more sealed token per claim beyond the first: the cell revokes a download token once it fetched with it,
+         * so each shard, the fresh host and the main host need their own (the product mints them with the command).
+         */
+        moreRepoTokens: z.array(SuiteSealedTokenSchema).max(SUITE_MORE_TOKENS_MAX).optional(),
+        /** The files the PR changed against its merge base (renames as both paths), and those it removed: the selection and the spec list read them. Absent: unknown, the whole suite runs. */
+        changedFiles: z.array(z.string().min(1).max(512)).max(SUITE_CHANGED_FILES_MAX).optional(),
+        removedFiles: z.array(z.string().min(1).max(512)).max(SUITE_CHANGED_FILES_MAX).optional(),
+        /** Run only these spec files (a retry of a shard or of the failed specs); the suite's digest stays the whole suite's. */
+        specs: z.array(z.string().min(1).max(512)).max(SUITE_CHANGED_FILES_MAX).optional(),
     })
     .superRefine((m, ctx) => {
         const pr = [m.prNumber, m.prSha, m.mergeBase];
@@ -466,6 +483,10 @@ export const RuntimeSuiteRetriedSchema = z
         requestedBy: actor,
         requestedAt: z.iso.datetime(),
         key: z.string().min(1).max(256),
+        repositoryFullName: RepositoryFullNameSchema.optional(),
+        /** Sealed download tokens for the new run's claims, minted by the product with the command (bound to `key`). */
+        repoToken: SuiteSealedTokenSchema.optional(),
+        moreRepoTokens: z.array(SuiteSealedTokenSchema).max(SUITE_MORE_TOKENS_MAX).optional(),
     })
     .refine((m) => (m.scope === 'shard') === (m.shard !== undefined), { message: 'a shard retry names its shard; a failed-specs retry names none', path: ['shard'] });
 export type RuntimeSuiteRetried = z.infer<typeof RuntimeSuiteRetriedSchema>;

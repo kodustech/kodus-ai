@@ -42,4 +42,24 @@ describe('the suite commands', () => {
         expect(RuntimeSuiteRetriedSchema.safeParse({ ...base, scope: 'failed', shard: 2 }).success).toBe(false);
         expect(runtimeCommandRoute(RuntimeCommandName.SuiteRetried).routingKey).toBe(runtimeCommandOutboxMessage(RuntimeCommandName.SuiteRetried, { ...base, scope: 'failed' }, 'm-2').routingKey);
     });
+
+    it('carries one sealed download token per claim, because the cell revokes a token after it fetches', () => {
+        const sealed = 'sealed:v1:abc';
+        const ok = RuntimeSuiteRequestedSchema.safeParse({ ...pr, repoToken: sealed, moreRepoTokens: [sealed, sealed] });
+        expect(ok.success).toBe(true);
+        expect(RuntimeSuiteRequestedSchema.safeParse({ ...pr, moreRepoTokens: ['ghs_plain'] }).success).toBe(false);
+        expect(RuntimeSuiteRequestedSchema.safeParse({ ...pr, moreRepoTokens: Array.from({ length: 33 }, () => sealed) }).success).toBe(false);
+    });
+
+    it('names the files the PR changed and removed, and the specs a retry is limited to', () => {
+        const parsed = RuntimeSuiteRequestedSchema.parse({ ...pr, changedFiles: ['apps/web/a.ts'], removedFiles: ['cypress/e2e/old.cy.ts'], specs: ['cypress/e2e/a.cy.ts'] });
+        expect(parsed).toMatchObject({ changedFiles: ['apps/web/a.ts'], removedFiles: ['cypress/e2e/old.cy.ts'], specs: ['cypress/e2e/a.cy.ts'] });
+        expect(RuntimeSuiteRequestedSchema.safeParse({ ...pr, changedFiles: ['x'.repeat(513)] }).success).toBe(false);
+    });
+
+    it('a retry brings its own sealed tokens, since the product alone holds the credentials', () => {
+        const base = { suiteRunId: pr.suiteRunId, organizationId: 'org-a', requestedBy: actor, requestedAt, key: 'k-retry', scope: 'failed' as const };
+        expect(RuntimeSuiteRetriedSchema.safeParse({ ...base, repoToken: 'sealed:v1:abc', moreRepoTokens: ['sealed:v1:abc'] }).success).toBe(true);
+        expect(RuntimeSuiteRetriedSchema.safeParse({ ...base, repoToken: 'ghs_plain' }).success).toBe(false);
+    });
 });

@@ -174,6 +174,13 @@ describe('runtime config', () => {
             expect(() => loadWorkerConfig({ ...base, RUNTIME_SETUP_PER_ORG: bad })).toThrow(/RUNTIME_SETUP_PER_ORG/);
     });
 
+    it('runs 2 suites of one organization at once, 4 across the app and spreads one over 8 hosts unless set', () => {
+        const base = { RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX };
+        expect(loadWorkerConfig(base)).toMatchObject({ suitePerOrg: 2, suiteConcurrency: 4, suiteMaxHosts: 8 });
+        expect(loadWorkerConfig({ ...base, RUNTIME_SUITE_PER_ORG: '8', RUNTIME_SUITE_CONCURRENCY: '16', RUNTIME_SUITE_MAX_HOSTS: '16' })).toMatchObject({ suitePerOrg: 8, suiteConcurrency: 16, suiteMaxHosts: 16 });
+        for (const [name, bad] of [['RUNTIME_SUITE_PER_ORG', '9'], ['RUNTIME_SUITE_CONCURRENCY', '0'], ['RUNTIME_SUITE_MAX_HOSTS', '17']]) expect(() => loadWorkerConfig({ ...base, [name]: bad })).toThrow(new RegExp(name));
+    });
+
     it('requires an explicit worker release in production and uses development only outside production', () => {
         const base = { RUNTIME_SECRET_SEAL_KEY: DEV_SECRET_SEAL_KEY_HEX };
         expect(loadWorkerConfig(base).releaseVersion).toBe('development');

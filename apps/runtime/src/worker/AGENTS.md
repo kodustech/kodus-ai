@@ -70,6 +70,7 @@ Imports these Runtime modules:
 - [`apps/runtime/src/worker/sandbox`](sandbox/AGENTS.md)
 - [`apps/runtime/src/worker/secrets`](secrets/AGENTS.md)
 - [`apps/runtime/src/worker/setup`](setup/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](suite/AGENTS.md)
 - [`libs/runtime/blockers`](../../../../libs/runtime/blockers/AGENTS.md)
 - [`libs/runtime/environment`](../../../../libs/runtime/environment/AGENTS.md)
 - [`libs/runtime/run`](../../../../libs/runtime/run/AGENTS.md)
