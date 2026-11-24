@@ -254,6 +254,26 @@ const kodus2663Claims = [
     },
 ];
 
+// kodus-ai#2667, round 2 replayed the same way: 730c1c644 to fdeeab449, which
+// applied round 1's "decide the id once per label" suggestion, with that
+// round's three answered comments. In production round 2 posted, as
+// "Revises", the request to go back to the per-entry check.
+// https://github.com/kodustech/kodus-ai/pull/2667
+const kodus2667 = loadReplay('kodus-2667');
+const kodus2667Unanswered = {
+    ...kodus2667,
+    previousDecisions: kodus2667.previousDecisions.map((d) => ({ ...d, answered: false })),
+};
+const kodus2667Claims = [
+    {
+        id: 'per-entry-clash-again',
+        golden: 'Asks to undo or narrow the per-label needsId decision in model-label.ts that round 1 asked for: scope the id to the entries actually in a clash (per id, per label+connection, or the earlier pairwise/per-entry check), so prefix twins on two connections stay plain. A finding that keeps needsId as it is and changes a consumer such as routingModelLabels instead does NOT match.',
+        truth: 'contested',
+        premise: 'diff',
+        expect: 'not_deliver',
+    },
+];
+
 const contradictionCases = [
     // The #2663 reversal, through the finder's link and through the check.
     {
@@ -304,6 +324,10 @@ const contradictionCases = [
     },
     { id: 'R23-kodus2663-round2', family: 'rounds', ...kodus2663, sandbox: 'alive', claims: kodus2663Claims },
     { id: 'R23-kodus2663-round2-heavy', family: 'rounds', ...kodus2663, sandbox: 'alive', heavy: true, claims: kodus2663Claims },
+    { id: 'R24-kodus2667-round2', family: 'rounds', ...kodus2667, sandbox: 'alive', claims: kodus2667Claims },
+    { id: 'R24-kodus2667-round2-heavy', family: 'rounds', ...kodus2667, sandbox: 'alive', heavy: true, claims: kodus2667Claims },
+    // No thread answered: only the reversal verdict stands between it and the PR.
+    { id: 'R24-kodus2667-unanswered', family: 'rounds', ...kodus2667Unanswered, sandbox: 'alive', claims: kodus2667Claims },
 ];
 
 module.exports = { contradictionCases };

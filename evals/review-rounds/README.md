@@ -145,6 +145,7 @@ which vendors this repository's own public history in `fixtures/kodus-2011/`.
 | R20/R21/R22-check-* | the same with every repeat-check call failing (`repeatCheckFault`: `timeout` or `parse`) | linked reversal and answered point → `not_deliver`; the unrelated bug → `deliver` |
 | R20/R21-heavy | the same through heavy mode, whose lenses never see the history | `not_deliver` |
 | R23 | kodus-ai#2663 round 2 replayed from this repository: the applied host filter and round 1's seven answered comments | reversal and both re-raises → `not_deliver`; `-heavy` the same through heavy mode |
+| R24 | kodus-ai#2667 round 2 replayed: the applied per-label `needsId` and round 1's three answered comments | the per-entry reversal → `not_deliver`; `-heavy` through heavy mode; `-unanswered` with no thread answered, so only the reversal verdict holds it |
 
 K5–K12 and R15–R17 reproduce repost shapes from a production sample (500
 later-round comments, 2026-10-05→12, #2114) with invented code; the volumes are
