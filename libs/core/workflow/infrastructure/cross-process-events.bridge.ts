@@ -739,8 +739,12 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
      * removes the row.
      */
     async pollFallback(): Promise<void> {
-        if (!this.isPrimary || this.stopped || !this.infraReady) return;
+        if (!this.isPrimary || this.stopped) return;
         try {
+            // Normally done when LISTEN connects. A LISTEN connection that
+            // never comes up (a direct host that is down or misconfigured)
+            // must not also turn off polling, the fallback for that case.
+            await this.ensureInfra();
             if (!this.pollInitialized) {
                 // Anchor to a stable MAX(id) — apply the same 1s visibility
                 // gap as the working query below, otherwise the first anchor
@@ -1137,14 +1141,23 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
      */
     private async verifyListenDelivery(client: Client): Promise<void> {
         const nonce = `${PROBE_PREFIX}${INSTANCE_ID}:${randomUUID()}`;
-        let timer: NodeJS.Timeout | undefined;
+        let settle!: (delivered: boolean) => void;
         const delivered = new Promise<boolean>((resolve) => {
-            timer = setTimeout(() => resolve(false), LISTEN_PROBE_TIMEOUT_MS);
-            timer.unref?.();
-            this.pendingProbe = (payload) => {
-                if (payload === nonce) resolve(true);
-            };
+            settle = resolve;
         });
+        // Registered before the NOTIFY is sent: it can arrive before the
+        // query returns.
+        const handler = (payload: string) => {
+            if (payload === nonce) settle(true);
+        };
+        this.pendingProbe = handler;
+        // Probes overlap across a reconnect. Each one clears only its own
+        // handler, and only the probe of the current connection writes the
+        // status: a reconnect or shutdown since it started owns it.
+        const release = () => {
+            if (this.pendingProbe === handler) this.pendingProbe = null;
+        };
+        const current = () => !this.stopped && this.client === client;
 
         try {
             await this.runQuery('SELECT pg_notify($1, $2)', [
@@ -1152,8 +1165,8 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
                 nonce,
             ]);
         } catch (error) {
-            clearTimeout(timer);
-            this.pendingProbe = null;
+            release();
+            if (!current()) return;
             this.listenHealth = {
                 status: 'unknown',
                 connection: this.listenTarget,
@@ -1168,11 +1181,14 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
             return;
         }
 
+        // The deadline starts once the NOTIFY is sent: time spent waiting
+        // for a pool connection is not delivery time.
+        const timer = setTimeout(() => settle(false), LISTEN_PROBE_TIMEOUT_MS);
+        timer.unref?.();
         const ok = await delivered;
         clearTimeout(timer);
-        this.pendingProbe = null;
-        // A reconnect or shutdown since the probe started owns the status.
-        if (this.stopped || this.client !== client) return;
+        release();
+        if (!current()) return;
 
         this.listenHealth = {
             status: ok ? 'delivering' : 'not-delivering',
