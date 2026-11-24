@@ -630,8 +630,9 @@ export class IssuesRepository implements IIssuesRepository {
 
     async findScanIssuesToExport(params: {
         organizationId: string;
-        scanId: string;
+        repositoryId: string;
         since: string;
+        until: string;
         severities: string[];
         integrationId: string;
         limit: number;
@@ -639,10 +640,13 @@ export class IssuesRepository implements IIssuesRepository {
         const docs = await this.issuesModel
             .find({
                 'organizationId': params.organizationId,
+                'repository.id': params.repositoryId,
                 'source': IssueSource.SECURITY_SCAN,
                 'status': IssueStatus.OPEN,
-                'lastSeenScanId': params.scanId,
-                'createdAt': { $gte: new Date(params.since) },
+                'createdAt': {
+                    $gte: new Date(params.since),
+                    $lte: new Date(params.until),
+                },
                 'severity': { $in: params.severities as SeverityLevel[] },
                 'exports.integrationId': { $ne: params.integrationId },
             } as Record<string, unknown>)

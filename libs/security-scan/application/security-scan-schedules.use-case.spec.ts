@@ -162,7 +162,9 @@ describe('SecurityScanSchedulesUseCase: filing a finished run', () => {
             findById: jest.fn(async () => ({
                 uuid: 'scan-9',
                 status: 'completed',
+                repository: { id: 'repo-1' },
                 startedAt: '2026-11-24T03:00:05.000Z',
+                finishedAt: '2026-11-24T03:40:00.000Z',
                 createdAt: '2026-11-24T03:00:00.000Z',
                 ...scanOver,
             })),
@@ -192,8 +194,9 @@ describe('SecurityScanSchedulesUseCase: filing a finished run', () => {
 
         expect(issues.findScanIssuesToExport).toHaveBeenCalledWith({
             organizationId: 'org-1',
-            scanId: 'scan-9',
+            repositoryId: 'repo-1',
             since: '2026-11-24T03:00:05.000Z',
+            until: '2026-11-24T03:40:00.000Z',
             severities: ['high', 'critical'],
             integrationId: 'int-linear',
             limit: 25,

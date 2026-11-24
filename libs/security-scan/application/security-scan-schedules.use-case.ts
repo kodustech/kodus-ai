@@ -265,8 +265,9 @@ export class SecurityScanSchedulesUseCase {
             try {
                 const issues = await this.issuesService.findScanIssuesToExport({
                     organizationId: schedule.organizationId,
-                    scanId: scan.uuid,
+                    repositoryId: scan.repository.id,
                     since: scan.startedAt ?? scan.createdAt,
+                    until: scan.finishedAt ?? new Date().toISOString(),
                     severities: severitiesFrom(target.minSeverity),
                     integrationId: target.integrationId,
                     limit: EXPORT_MAX_ISSUES,

@@ -236,13 +236,16 @@ export interface IIssuesRepository {
     ): Promise<void>;
 
     /**
-     * Open issues a scan opened, at or above a severity, not yet filed
-     * through this plugin: what a schedule exports when its scan ends.
+     * Open scan issues of a repository opened between `since` and `until`
+     * (one scan runs on a repository at a time: that scan's new issues), at
+     * or above a severity, not yet filed through this plugin: what a
+     * schedule exports when its scan ends.
      */
     findScanIssuesToExport(params: {
         organizationId: string;
-        scanId: string;
+        repositoryId: string;
         since: string;
+        until: string;
         severities: string[];
         integrationId: string;
         limit: number;
