@@ -563,6 +563,54 @@ describe('WebhookContextService', () => {
         });
     });
 
+    describe('connections', () => {
+        const connectionConfig = (
+            integrationUuid: string,
+            reviewEnabled?: boolean,
+        ) => ({
+            team: { uuid: 'team-uuid', organization: { uuid: 'org-uuid' } },
+            integration: {
+                uuid: integrationUuid,
+                ...(reviewEnabled === undefined ? {} : { reviewEnabled }),
+                authIntegration: { authDetails: {} },
+            },
+        });
+
+        it('names the connection the repository is listed on', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [connectionConfig('conn-gh-b')],
+            );
+
+            const result = await service.getContext(PlatformType.GITHUB, '123');
+
+            expect(result?.organizationAndTeamData).toEqual({
+                organizationId: 'org-uuid',
+                teamId: 'team-uuid',
+                integrationId: 'conn-gh-b',
+            });
+        });
+
+        it('skips a connection whose reviews are turned off', async () => {
+            const warn = jest
+                .spyOn((service as any).logger, 'warn')
+                .mockImplementation(() => undefined);
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [connectionConfig('conn-off', false)],
+            );
+
+            const result = await service.getContext(PlatformType.GITHUB, '123');
+
+            expect(result).toBeNull();
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    metadata: expect.objectContaining({
+                        reviewDisabledConnectionIds: ['conn-off'],
+                    }),
+                }),
+            );
+        });
+    });
+
     describe('observability', () => {
         it('logs a warning when a connected repository has no active code review automation', async () => {
             const config = buildConfig('org-uuid', 'team-uuid');
