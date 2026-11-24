@@ -39,6 +39,7 @@ function useCaseWith(
         failStale: jest.fn(async () => 0),
         findActive: jest.fn(async () => null),
         countActive: jest.fn(async () => 0),
+        findOldestActiveIds: jest.fn(async () => ['scan-2']),
         findLatest: jest.fn(async () => last),
         create: jest.fn(async (scan: any) => ({ uuid: 'scan-2', ...scan })),
         update: jest.fn(async () => null),
@@ -511,7 +512,7 @@ describe('StartSecurityScanUseCase — how the scan runs', () => {
         expect(scans.create.mock.calls[1][0].mode).toBe('full');
     });
 
-    it('runs on the model picked for it, and keeps that choice for its continuations', async () => {
+    it('runs on the model picked for it, and records it for the job slices that run it', async () => {
         (resolveScanModel as jest.Mock).mockResolvedValueOnce({
             model: {
                 modelName: 'anthropic:claude-opus',
@@ -553,6 +554,23 @@ describe('StartSecurityScanUseCase — a share of the workers per organization',
         expect(error.message).toBe(TOO_MANY_ACTIVE_SCANS_MESSAGE);
         expect(error.getStatus()).toBe(429);
         expect(scans.create).not.toHaveBeenCalled();
+        expect(jobQueue.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('gives the place back when another start of the organization took it first', async () => {
+        const { scans, start, jobQueue } = useCaseWith(null);
+        scans.findOldestActiveIds.mockResolvedValue(['scan-a', 'scan-b', 'scan-c']);
+
+        const error = await start().catch((e) => e);
+
+        expect(error.getStatus()).toBe(429);
+        expect(scans.update).toHaveBeenCalledWith(
+            'scan-2',
+            expect.objectContaining({
+                status: SecurityScanStatus.FAILED,
+                error: TOO_MANY_ACTIVE_SCANS_MESSAGE,
+            }),
+        );
         expect(jobQueue.enqueue).not.toHaveBeenCalled();
     });
 });

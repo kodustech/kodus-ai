@@ -21,6 +21,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@components/ui/select";
+import { EXPORT_MAX_ISSUES } from "@libs/security-scan/domain/scan-schedule";
 import type { IssueListItem } from "@services/issues/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
@@ -31,9 +32,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { SendIcon, XCircleIcon } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { extractRejectionMessage } from "src/core/utils/extract-error-message";
-
-/** The most findings one export files, as the API takes them. */
-export const EXPORT_MAX_FINDINGS = 25;
 
 const RESULT_LABEL: Record<ExportResult["status"], string> = {
     created: "Filed",
@@ -56,7 +54,7 @@ export const ExportFindingsButton = ({
 
     if (!canExport || findings.length === 0) return null;
 
-    const count = Math.min(findings.length, EXPORT_MAX_FINDINGS);
+    const count = Math.min(findings.length, EXPORT_MAX_ISSUES);
 
     return (
         <>
@@ -70,7 +68,7 @@ export const ExportFindingsButton = ({
 
             {open && (
                 <ExportFindingsDialog
-                    findings={findings.slice(0, EXPORT_MAX_FINDINGS)}
+                    findings={findings.slice(0, EXPORT_MAX_ISSUES)}
                     onClose={() => setOpen(false)}
                 />
             )}

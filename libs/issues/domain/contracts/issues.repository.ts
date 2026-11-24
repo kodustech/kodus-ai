@@ -241,15 +241,15 @@ export interface IIssuesRepository {
      * or above a severity, not yet filed through this plugin: what a
      * schedule exports when its scan ends.
      */
-    findScanIssuesToExport(params: {
-        organizationId: string;
-        repositoryId: string;
-        since: string;
-        until: string;
-        severities: string[];
-        integrationId: string;
-        limit: number;
-    }): Promise<IssuesEntity[]>;
+    findScanIssuesToExport(
+        params: ScanRepositoryScope & {
+            since: string;
+            until: string;
+            severities: string[];
+            integrationId: string;
+            limit: number;
+        },
+    ): Promise<IssuesEntity[]>;
 
     /** Records that these issues were compared with the others just now. */
     markScanIssuesConsolidated(

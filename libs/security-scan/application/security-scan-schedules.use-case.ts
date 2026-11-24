@@ -12,12 +12,14 @@ import {
     Injectable,
 } from '@nestjs/common';
 
+import type { PlatformType } from '@libs/core/domain/enums';
 import { createLogger } from '@libs/core/log/logger';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 import { validateBudget } from '../domain/budget-meter';
 import type { SecurityScanMode } from '../domain/coverage-ledger';
 import {
+    EXPORT_MAX_ISSUES,
     nextRunAt,
     SCAN_CADENCES,
     severitiesFrom,
@@ -34,10 +36,7 @@ import {
     IIssuesService,
     ISSUES_SERVICE_TOKEN,
 } from '@libs/issues/domain/contracts/issues.service.contract';
-import {
-    EXPORT_MAX_ISSUES,
-    ExportScanIssuesUseCase,
-} from './export-scan-issues.use-case';
+import { ExportScanIssuesUseCase } from './export-scan-issues.use-case';
 import type { SecurityScanBudget } from '../domain/security-scan.types';
 import {
     ISecurityScanScheduleRepository,
@@ -49,7 +48,9 @@ import { StartSecurityScanUseCase } from './start-security-scan.use-case';
 const logger = createLogger('SecurityScanSchedules');
 
 /** How long one caller holds filing a run's findings. */
-const EXPORT_CLAIM_MS = 15 * 60 * 1000;
+const EXPORT_CLAIM_MS = 60 * 60 * 1000;
+/** The filing run stops well within the claim, so no other caller takes it mid-run. */
+const EXPORT_RUN_MS = 20 * 60 * 1000;
 
 /** Most scheduled scans one cron run starts; the rest stay due for the next. */
 export const MAX_SCHEDULED_STARTS_PER_RUN = 20;
@@ -87,9 +88,9 @@ export class SecurityScanSchedulesUseCase {
         visibleRepositoryIds?: string[],
     ): Promise<SecurityScanSchedule[]> {
         const all = await this.schedules.list(organizationId);
-        return visibleRepositoryIds
-            ? all.filter((s) => visibleRepositoryIds.includes(s.repository.id))
-            : all;
+        if (!visibleRepositoryIds) return all;
+        const visible = new Set(visibleRepositoryIds);
+        return all.filter((s) => visible.has(s.repository.id));
     }
 
     async save(
@@ -162,11 +163,9 @@ export class SecurityScanSchedulesUseCase {
         );
         let started = 0;
         for (const schedule of due) {
-            const next = nextRunAt(
-                schedule.cadence,
-                now,
-                schedule.lastRunAt ? new Date(schedule.lastRunAt) : undefined,
-            );
+            // Counted from the run starting now: a weekly one comes back a
+            // week later, also after its first run.
+            const next = nextRunAt(schedule.cadence, now, now);
             if (
                 !(await this.schedules.claim(
                     schedule.uuid,
@@ -233,7 +232,8 @@ export class SecurityScanSchedulesUseCase {
      * Files the new findings of each schedule's last run, once it ended, in
      * the plugin the schedule names: at most EXPORT_MAX_ISSUES per schedule
      * per call, the rest on the next. A run is done exporting when nothing
-     * is left, or when an attempt filed nothing (said on the schedule).
+     * is left, or when an attempt filed nothing (said on the schedule); a
+     * finding that failed beside filed ones is tried again on a later call.
      * Returns how many findings were filed.
      */
     async exportFinished(): Promise<number> {
@@ -278,6 +278,9 @@ export class SecurityScanSchedulesUseCase {
             try {
                 const issues = await this.issuesService.findScanIssuesToExport({
                     organizationId: schedule.organizationId,
+                    repositoryPlatform: scan.repository
+                        .platform as PlatformType,
+                    repositoryHost: scan.repository.host ?? '',
                     repositoryId: scan.repository.id,
                     since: scan.startedAt ?? scan.createdAt,
                     until: scan.finishedAt ?? new Date().toISOString(),
@@ -299,6 +302,7 @@ export class SecurityScanSchedulesUseCase {
                     destinationNote: target.destinationNote,
                     readableRepositoryIds: null,
                     requestedBy: 'schedule',
+                    signal: AbortSignal.timeout(EXPORT_RUN_MS),
                 });
                 const created = results.filter(
                     (r) => r.status === 'created',
@@ -309,7 +313,10 @@ export class SecurityScanSchedulesUseCase {
                         results.find((r) => r.error)?.error ??
                             'The findings could not be filed in the plugin.',
                     );
-                } else if (issues.length < EXPORT_MAX_ISSUES) {
+                } else if (
+                    issues.length < EXPORT_MAX_ISSUES &&
+                    results.every((r) => r.status !== 'failed')
+                ) {
                     await done();
                 }
             } catch (error) {

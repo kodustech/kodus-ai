@@ -601,7 +601,9 @@ export class IssuesRepository implements IIssuesRepository {
             },
             { $set: update },
         );
-        if (!moved?.modifiedCount) {
+        // Matched is enough: a holder that already lists these places (an
+        // earlier attempt that stopped before the dismissal) changes nothing.
+        if (!moved?.matchedCount) {
             return false;
         }
         const dismissed = await this.issuesModel.updateOne(
@@ -628,20 +630,18 @@ export class IssuesRepository implements IIssuesRepository {
         );
     }
 
-    async findScanIssuesToExport(params: {
-        organizationId: string;
-        repositoryId: string;
-        since: string;
-        until: string;
-        severities: string[];
-        integrationId: string;
-        limit: number;
-    }): Promise<IssuesEntity[]> {
+    async findScanIssuesToExport(
+        params: ScanRepositoryScope & {
+            since: string;
+            until: string;
+            severities: string[];
+            integrationId: string;
+            limit: number;
+        },
+    ): Promise<IssuesEntity[]> {
         const docs = await this.issuesModel
             .find({
-                'organizationId': params.organizationId,
-                'repository.id': params.repositoryId,
-                'source': IssueSource.SECURITY_SCAN,
+                ...scanScope(params),
                 'status': IssueStatus.OPEN,
                 'createdAt': {
                     $gte: new Date(params.since),

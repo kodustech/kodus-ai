@@ -86,19 +86,24 @@ export interface ISecurityScanRepository {
         organizationId: string,
         repository: ScanRepositoryKey,
     ): Promise<SecurityScanRecord | null>;
-    /**
-     * Marks as failed the organization's scans nothing has touched for their
-     * state's window: the worker running them stopped, or the job waiting for
-     * one was lost. Returns how many.
-     */
     /** How many scans of the organization are queued or running. */
     countActive(organizationId: string): Promise<number>;
+    /** The organization's oldest queued or running scans, at most `limit`. */
+    findOldestActiveIds(
+        organizationId: string,
+        limit: number,
+    ): Promise<string[]>;
     /**
      * Claims filing a finished scan's findings until `until`: only one caller
      * (one cron run, one API instance) files them; true for that one. A
      * claim that expired (its caller died) can be taken again.
      */
     claimExport(uuid: string, until: Date): Promise<boolean>;
+    /**
+     * Marks as failed the organization's scans nothing has touched for their
+     * state's window: the worker running them stopped, or the job waiting for
+     * one was lost. Returns how many.
+     */
     failStale(organizationId: string, after: StaleScanWindows): Promise<number>;
     /** What earlier scans concluded about the repository, per file and class. */
     findCoverage(
@@ -496,6 +501,19 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         return this.model
             .countDocuments({ organizationId, status: { $in: ACTIVE } })
             .exec();
+    }
+
+    async findOldestActiveIds(
+        organizationId: string,
+        limit: number,
+    ): Promise<string[]> {
+        const docs = await this.model
+            .find({ organizationId, status: { $in: ACTIVE } }, { _id: 1 })
+            .sort({ createdAt: 1, _id: 1 })
+            .limit(limit)
+            .lean()
+            .exec();
+        return docs.map((d) => String(d._id));
     }
 
     async failStale(

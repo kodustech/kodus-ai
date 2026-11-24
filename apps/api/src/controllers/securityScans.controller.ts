@@ -30,9 +30,11 @@ import {
     IsOptional,
     IsPositive,
     IsString,
+    ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+import { truncateKeepingSurrogatePairs } from '@libs/common/utils/truncate-text';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
     Action,
@@ -55,10 +57,8 @@ import {
     DeepScanGate,
 } from '@libs/security-scan/application/deep-scan.gate';
 import { SecurityScanSchedulesUseCase } from '@libs/security-scan/application/security-scan-schedules.use-case';
-import {
-    EXPORT_MAX_ISSUES,
-    ExportScanIssuesUseCase,
-} from '@libs/security-scan/application/export-scan-issues.use-case';
+import { ExportScanIssuesUseCase } from '@libs/security-scan/application/export-scan-issues.use-case';
+import { EXPORT_MAX_ISSUES } from '@libs/security-scan/domain/scan-schedule';
 
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
@@ -110,6 +110,27 @@ export class StartSecurityScanDto {
     modelId?: string;
 }
 
+export class ScheduleExportToDto {
+    @ApiProperty({
+        description:
+            'The plugin connection to file through (GET /security-scans/export-destinations).',
+    })
+    @IsString()
+    integrationId: string;
+
+    @ApiPropertyOptional({
+        description:
+            'Where in that tool, in plain words: "Linear team SEC", "Jira project APPSEC".',
+    })
+    @IsOptional()
+    @IsString()
+    destinationNote?: string;
+
+    @ApiProperty({ enum: ['critical', 'high', 'medium', 'low'] })
+    @IsIn(['critical', 'high', 'medium', 'low'])
+    minSeverity: 'critical' | 'high' | 'medium' | 'low';
+}
+
 export class SaveSecurityScanScheduleDto {
     @ApiProperty()
     @IsString()
@@ -158,11 +179,9 @@ export class SaveSecurityScanScheduleDto {
             "File each run's new findings, from minSeverity up, in one of the organization's plugins (GET /security-scans/export-destinations).",
     })
     @IsOptional()
-    exportTo?: {
-        integrationId: string;
-        destinationNote?: string;
-        minSeverity: 'critical' | 'high' | 'medium' | 'low';
-    };
+    @ValidateNested()
+    @Type(() => ScheduleExportToDto)
+    exportTo?: ScheduleExportToDto;
 
     @ApiPropertyOptional({
         description: 'Pause the schedule without deleting it.',
@@ -416,24 +435,18 @@ export class SecurityScansController {
             },
             mode: body.mode,
             modelId: body.modelId,
-            exportTo: body.exportTo?.integrationId
+            exportTo: body.exportTo
                 ? {
-                      integrationId: String(body.exportTo.integrationId),
+                      integrationId: body.exportTo.integrationId,
                       ...(body.exportTo.destinationNote
                           ? {
-                                destinationNote: String(
+                                destinationNote: truncateKeepingSurrogatePairs(
                                     body.exportTo.destinationNote,
-                                ).slice(0, 300),
+                                    300,
+                                ),
                             }
                           : {}),
-                      minSeverity: [
-                          'critical',
-                          'high',
-                          'medium',
-                          'low',
-                      ].includes(body.exportTo.minSeverity)
-                          ? body.exportTo.minSeverity
-                          : 'high',
+                      minSeverity: body.exportTo.minSeverity,
                   }
                 : undefined,
             enabled: body.enabled,

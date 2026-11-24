@@ -63,6 +63,9 @@ export function nextRunAt(
     return next;
 }
 
+/** The most findings one export files: one agent run holds them all. */
+export const EXPORT_MAX_ISSUES = 25;
+
 /** A plugin a schedule files its new findings in, from a severity up. */
 export interface ScanExportTarget {
     integrationId: string;

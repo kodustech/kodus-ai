@@ -70,50 +70,59 @@ export class SecurityScanScheduleRepository implements ISecurityScanScheduleRepo
         repository: ScanRepositoryKey,
         settings: SecurityScanScheduleSettings,
     ): Promise<SecurityScanSchedule> {
-        const doc = await this.model
-            .findOneAndUpdate(
-                { organizationId, ...sameRepository(repository) },
-                {
-                    $set: {
-                        organizationId,
-                        repository: {
-                            platform: repository.platform,
-                            host: repository.host,
-                            id: repository.id,
+        const write = () =>
+            this.model
+                .findOneAndUpdate(
+                    { organizationId, ...sameRepository(repository) },
+                    {
+                        $set: {
+                            organizationId,
+                            repository: {
+                                platform: repository.platform,
+                                host: repository.host,
+                                id: repository.id,
+                            },
+                            teamId: settings.teamId,
+                            cadence: settings.cadence,
+                            budget: settings.budget,
+                            mode: settings.mode,
+                            enabled: settings.enabled,
+                            nextRunAt: new Date(settings.nextRunAt),
+                            ...(settings.modelId
+                                ? { modelId: settings.modelId }
+                                : {}),
+                            ...(settings.exportTo
+                                ? { exportTo: settings.exportTo }
+                                : {}),
+                            ...(settings.createdBy
+                                ? { createdBy: settings.createdBy }
+                                : {}),
                         },
-                        teamId: settings.teamId,
-                        cadence: settings.cadence,
-                        budget: settings.budget,
-                        mode: settings.mode,
-                        enabled: settings.enabled,
-                        nextRunAt: new Date(settings.nextRunAt),
-                        ...(settings.modelId
-                            ? { modelId: settings.modelId }
-                            : {}),
-                        ...(settings.exportTo
-                            ? { exportTo: settings.exportTo }
-                            : {}),
-                        ...(settings.createdBy
-                            ? { createdBy: settings.createdBy }
-                            : {}),
+                        // Back to the Deep scan routing when no model is picked;
+                        // no export when none is set.
+                        ...(settings.modelId && settings.exportTo
+                            ? {}
+                            : {
+                                  $unset: {
+                                      ...(settings.modelId
+                                          ? {}
+                                          : { modelId: '' }),
+                                      ...(settings.exportTo
+                                          ? {}
+                                          : { exportTo: '' }),
+                                  },
+                              }),
                     },
-                    // Back to the Deep scan routing when no model is picked;
-                    // no export when none is set.
-                    ...(settings.modelId && settings.exportTo
-                        ? {}
-                        : {
-                              $unset: {
-                                  ...(settings.modelId ? {} : { modelId: '' }),
-                                  ...(settings.exportTo
-                                      ? {}
-                                      : { exportTo: '' }),
-                              },
-                          }),
-                },
-                { upsert: true, new: true },
-            )
-            .lean()
-            .exec();
+                    { upsert: true, new: true },
+                )
+                .lean()
+                .exec();
+        // Two saves of one repository can both insert: the unique index
+        // refuses the second, which then lands as an update of the first.
+        const doc = await write().catch((error) => {
+            if (error?.code !== 11000) throw error;
+            return write();
+        });
         return toSchedule(doc);
     }
 
@@ -141,7 +150,7 @@ export class SecurityScanScheduleRepository implements ISecurityScanScheduleRepo
             organizationId,
             ...sameRepository(repository),
         });
-        return (result?.deletedCount ?? 0) > 0;
+        return result.deletedCount > 0;
     }
 
     async findExporting(limit: number): Promise<SecurityScanSchedule[]> {

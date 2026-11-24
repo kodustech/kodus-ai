@@ -1112,13 +1112,14 @@ const CONSOLIDATION_WINDOW_MS = 6 * 60 * 1000;
 /**
  * The limit the lenses run within: the scan's, less what folding duplicate
  * issues at the end may spend (5% of it, at least $0.05 and at most $0.50,
- * or the same share of a token limit). No limit, no reserve.
+ * or the same share of a token limit, never more than half of a small one).
+ * No limit, no reserve.
  */
 export function withFoldingReserve(
     budget: SecurityScanRecord['budget'],
 ): SecurityScanRecord['budget'] {
     const share = (total: number, floor: number, ceiling: number) =>
-        Math.max(0, total - Math.min(ceiling, Math.max(floor, total * 0.05)));
+        total - Math.min(ceiling, Math.max(floor, total * 0.05), total / 2);
     return {
         ...(budget.maxUsd !== undefined
             ? { maxUsd: share(budget.maxUsd, 0.05, 0.5) }

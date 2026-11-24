@@ -1320,7 +1320,6 @@ describe('SecurityScanEngine', () => {
             ...baseParams(),
             // The model sees them and says two fixes are needed.
             identify,
-            identify,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             units: [
@@ -2750,7 +2749,7 @@ describe('independent verification of each finding', () => {
             expect(req.lensInput.agentName).toBe('security-scan-authz');
             return {
                 keep: true,
-                severity: 'medium',
+                severity: 'medium' as const,
                 assumption: 'the orders API is exposed to tenants',
                 rationale: 'reached by any logged-in user',
                 judged: true,

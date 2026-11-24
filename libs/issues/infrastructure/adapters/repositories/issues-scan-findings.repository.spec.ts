@@ -792,7 +792,7 @@ describe('IssuesRepository — one issue per root cause', () => {
                 ...docs[Object.keys(docs).find((k) => docs[k]._id === filter._id)!],
                 ...(update.$set ?? {}),
             })),
-            updateOne: jest.fn(async () => ({ modifiedCount: 1 })),
+            updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
             updateMany: jest.fn(async () => ({ modifiedCount: 1 })),
             create: jest.fn(),
         };
@@ -927,5 +927,33 @@ describe('IssuesRepository — one issue per root cause', () => {
         const [foldedFilter, foldedUpdate] = model.updateOne.mock.calls[1] as any;
         expect(foldedFilter).toEqual({ _id: 'i-2', status: IssueStatus.OPEN });
         expect(foldedUpdate.$set).toMatchObject({ status: IssueStatus.DISMISSED, duplicateOf: 'fp-1' });
+    });
+
+    const foldModel = () =>
+        modelOf({
+            'fp-dos': { _id: 'i-2', fingerprint: 'fp-dos', status: IssueStatus.OPEN, filePath: 'a.ts', severity: 'high' },
+            'fp-1': { _id: 'i-1', fingerprint: 'fp-1', status: IssueStatus.OPEN, severity: 'high' },
+        });
+
+    it('dismisses the duplicate when the holder already lists its places from an earlier attempt', async () => {
+        const model = foldModel();
+        model.updateOne.mockResolvedValueOnce({ matchedCount: 1, modifiedCount: 0 });
+        const repository = new IssuesRepository(model as any);
+
+        await expect(
+            repository.foldScanIssueInto({ ...scope, fingerprint: 'fp-dos', into: 'fp-1' }),
+        ).resolves.toBe(true);
+        expect(model.updateOne).toHaveBeenCalledTimes(2);
+    });
+
+    it('leaves the duplicate open when the holder changed since it was read', async () => {
+        const model = foldModel();
+        model.updateOne.mockResolvedValueOnce({ matchedCount: 0, modifiedCount: 0 });
+        const repository = new IssuesRepository(model as any);
+
+        await expect(
+            repository.foldScanIssueInto({ ...scope, fingerprint: 'fp-dos', into: 'fp-1' }),
+        ).resolves.toBe(false);
+        expect(model.updateOne).toHaveBeenCalledTimes(1);
     });
 });

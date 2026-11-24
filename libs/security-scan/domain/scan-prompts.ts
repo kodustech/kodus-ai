@@ -1,6 +1,7 @@
 import type { SurfaceHit, VulnClass } from './surface/surface.types';
 import type { ScanUnit } from './security-scan.types';
 import { fenced } from '@libs/common/utils/markdown-fence';
+import { truncateKeepingSurrogatePairs } from '@libs/common/utils/truncate-text';
 
 export { fenced };
 
@@ -420,7 +421,7 @@ export function buildRootCauseUserPrompt(params: {
                       .map((s) => `${s.file}:${s.line}`)
                       .join(' -> ')}`
                 : '',
-            f.description.slice(0, 1200),
+            truncateKeepingSurrogatePairs(f.description, 1200),
         ]
             .filter(Boolean)
             .join('\n');

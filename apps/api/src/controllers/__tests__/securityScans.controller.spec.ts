@@ -26,6 +26,8 @@ describe('SecurityScansController.start', () => {
             {} as any,
             authorizationService as any,
             { isEnabledFor: jest.fn(async () => true) } as any,
+            {} as any,
+            {} as any,
         );
         return { controller, startSecurityScan, authorizationService };
     };
@@ -104,6 +106,8 @@ describe('SecurityScansController.cancel', () => {
             cancelSecurityScan as any,
             authorizationService as any,
             { isEnabledFor: jest.fn(async () => true) } as any,
+            {} as any,
+            {} as any,
         );
         return {
             controller,

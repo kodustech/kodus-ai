@@ -1,3 +1,5 @@
+import { truncateKeepingSurrogatePairs } from '@libs/common/utils/truncate-text';
+
 import type { IIssue } from './interfaces/issues.interface';
 
 /** The most characters of a finding's text an exported ticket carries. */
@@ -63,7 +65,7 @@ export function buildExportBody(issue: ExportedIssue): string {
     if (description) {
         parts.push(
             description.length > EXPORT_MAX_DESCRIPTION_CHARS
-                ? `${description.slice(0, EXPORT_MAX_DESCRIPTION_CHARS)}\n\n[truncated]`
+                ? `${truncateKeepingSurrogatePairs(description, EXPORT_MAX_DESCRIPTION_CHARS)}\n\n[truncated]`
                 : description,
         );
     }

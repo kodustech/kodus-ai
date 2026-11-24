@@ -33,7 +33,14 @@ function setup() {
         execute: jest.fn(async () => ({ uuid: 'scan-9' })),
     };
     const gate = { isEnabledFor: jest.fn(async () => true) };
-    const useCase = new SecurityScanSchedulesUseCase(schedules as any, start as any, gate as any);
+    const useCase = new SecurityScanSchedulesUseCase(
+        schedules as any,
+        start as any,
+        gate as any,
+        {} as any,
+        {} as any,
+        {} as any,
+    );
     return { useCase, schedules, start, gate };
 }
 
@@ -63,6 +70,19 @@ describe('SecurityScanSchedulesUseCase', () => {
             lastRunAt: now.toISOString(),
             lastScanId: 'scan-9',
         });
+    });
+
+    it("counts a weekly schedule's next run from the run it starts, also the first one", async () => {
+        const { useCase, schedules } = setup();
+        schedules.findDue.mockResolvedValue([schedule({ cadence: 'weekly' })]);
+
+        await useCase.runDue(now);
+
+        expect(schedules.claim).toHaveBeenCalledWith(
+            'sch-1',
+            '2026-11-24T03:00:00.000Z',
+            new Date('2026-12-01T03:00:00.000Z'),
+        );
     });
 
     it('starts nothing another instance claimed first', async () => {
@@ -162,7 +182,7 @@ describe('SecurityScanSchedulesUseCase: filing a finished run', () => {
             findById: jest.fn(async () => ({
                 uuid: 'scan-9',
                 status: 'completed',
-                repository: { id: 'repo-1' },
+                repository: repositoryKey,
                 startedAt: '2026-11-24T03:00:05.000Z',
                 finishedAt: '2026-11-24T03:40:00.000Z',
                 createdAt: '2026-11-24T03:00:00.000Z',
@@ -195,6 +215,8 @@ describe('SecurityScanSchedulesUseCase: filing a finished run', () => {
 
         expect(issues.findScanIssuesToExport).toHaveBeenCalledWith({
             organizationId: 'org-1',
+            repositoryPlatform: 'GITHUB',
+            repositoryHost: 'github.com',
             repositoryId: 'repo-1',
             since: '2026-11-24T03:00:05.000Z',
             until: '2026-11-24T03:40:00.000Z',
@@ -208,9 +230,21 @@ describe('SecurityScanSchedulesUseCase: filing a finished run', () => {
                 integrationId: 'int-linear',
                 destinationNote: 'team SEC',
                 requestedBy: 'schedule',
+                signal: expect.any(AbortSignal),
             }),
         );
         expect(scans.update).toHaveBeenCalledWith('scan-9', { exportedAt: expect.any(String) });
+    });
+
+    it('leaves a run open for a later call when a finding failed beside filed ones', async () => {
+        const { useCase, scans, exporter } = withExport();
+        exporter.execute.mockResolvedValue([
+            { issueId: 'i1', status: 'created', url: 'https://linear.app/i1' },
+            { issueId: 'i2', status: 'failed', error: 'rate limited' },
+        ] as any);
+
+        expect(await useCase.exportFinished()).toBe(1);
+        expect(scans.update).not.toHaveBeenCalled();
     });
 
     it('waits for the run to end', async () => {

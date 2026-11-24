@@ -89,6 +89,15 @@ export const RELEASE_INDEX = {
             unique: true,
         },
     },
+    // The issue a folded deep-scan place belongs to, found by its alias.
+    scanIssueByAlias: {
+        collection: 'issues',
+        key: { organizationId: 1, fingerprintAliases: 1 },
+        options: {
+            name: 'organization_fingerprint_aliases',
+            partialFilterExpression: { fingerprintAliases: { $exists: true } },
+        },
+    },
     // Schedules due to run, read by the deep-scan schedule cron.
     scanSchedulesDue: {
         collection: 'security_scan_schedules',

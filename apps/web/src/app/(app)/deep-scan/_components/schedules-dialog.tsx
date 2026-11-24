@@ -145,6 +145,10 @@ const SchedulesDialog = ({ onClose }: { onClose: () => void }) => {
             return;
         setSaving(true);
         setError(undefined);
+        // A paused schedule stays paused when it is edited.
+        const paused = schedules.data.some(
+            (s) => s.repository.id === repositoryId && !s.enabled,
+        );
         try {
             await saveSecurityScanSchedule({
                 teamId,
@@ -152,6 +156,7 @@ const SchedulesDialog = ({ onClose }: { onClose: () => void }) => {
                 cadence,
                 maxUsd: limit,
                 mode,
+                ...(paused ? { enabled: false } : {}),
                 ...(modelId === ROUTING_MODEL ? {} : { modelId }),
                 ...(exportTo === NO_EXPORT
                     ? {}
@@ -221,11 +226,12 @@ const SchedulesDialog = ({ onClose }: { onClose: () => void }) => {
                                             ` · ${scanModels.nameOf(s.modelId) ?? "picked model"}`}
                                     </span>
                                     <span className="text-text-tertiary truncate text-xs">
-                                        Next{" "}
-                                        {formatDistanceToNow(
-                                            new Date(s.nextRunAt),
-                                            { addSuffix: true },
-                                        )}
+                                        {s.enabled
+                                            ? `Next ${formatDistanceToNow(
+                                                  new Date(s.nextRunAt),
+                                                  { addSuffix: true },
+                                              )}`
+                                            : "Paused"}
                                         {s.exportTo &&
                                             ` · files ${s.exportTo.minSeverity}+ in ${destinations.data.find((d) => d.integrationId === s.exportTo?.integrationId)?.name ?? "a plugin"}`}
                                         {s.lastError && (

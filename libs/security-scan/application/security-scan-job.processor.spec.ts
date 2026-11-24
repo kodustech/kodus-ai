@@ -1374,6 +1374,9 @@ describe('the reserve for folding duplicates at the end of a scan', () => {
         expect(withFoldingReserve({ maxUsd: 50 })).toEqual({ maxUsd: 49.5 });
         expect(withFoldingReserve({ maxTokens: 2_000_000 })).toEqual({ maxTokens: 1_900_000 });
         expect(withFoldingReserve({})).toEqual({});
+        // A small limit keeps at least half for the lenses.
+        expect(withFoldingReserve({ maxUsd: 0.05 })).toEqual({ maxUsd: 0.025 });
+        expect(withFoldingReserve({ maxTokens: 50_000 })).toEqual({ maxTokens: 25_000 });
     });
 
     it('folds duplicates even when the lenses stopped at the limit', async () => {

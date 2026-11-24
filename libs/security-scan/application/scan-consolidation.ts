@@ -128,9 +128,10 @@ export async function consolidateOpenIssues<T extends OpenScanIssue>(
         shouldStop?: () => boolean;
     } = {},
 ): Promise<ConsolidationResult<T>> {
+    const rankOf = (severity: string) =>
+        Object.hasOwn(SEVERITY_RANK, severity) ? SEVERITY_RANK[severity] : 4;
     const ordered = [...open].sort(
-        (a, b) =>
-            (SEVERITY_RANK[a.severity] ?? 4) - (SEVERITY_RANK[b.severity] ?? 4),
+        (a, b) => rankOf(a.severity) - rankOf(b.severity),
     );
     const absorbedSet = new Set<string>();
     const absorbed: ConsolidationResult<T>['absorbed'] = [];
@@ -172,10 +173,11 @@ export async function consolidateOpenIssues<T extends OpenScanIssue>(
     }
     // An issue folded into one that was later folded itself points at the
     // one that stays.
+    const intoOf = new Map(absorbed.map((a) => [a.issue, a.into]));
     const finalOf = (f: T): T => {
         let at = f;
         for (let i = 0; i < absorbed.length; i++) {
-            const next = absorbed.find((a) => a.issue === at)?.into;
+            const next = intoOf.get(at);
             if (!next) break;
             at = next;
         }

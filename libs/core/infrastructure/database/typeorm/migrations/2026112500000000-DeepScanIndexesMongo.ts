@@ -8,8 +8,8 @@ import { ensureReleaseIndexes } from '../../mongo/release-indexes/ensure-release
 import { RELEASE_INDEX } from '../../mongo/release-indexes/release-index-definitions';
 
 /**
- * MongoDB migration: the deep scan's recorded conclusions (incremental scans)
- * and schedules. Same contract as ReleaseIndexesMongo2026112100000000: a build
+ * MongoDB migration: the deep scan's recorded conclusions (incremental scans),
+ * schedules and the lookup of a folded issue's aliases. Same contract as ReleaseIndexesMongo2026112100000000: a build
  * existing data or an older index refuses is logged and skipped, never thrown.
  */
 export class DeepScanIndexesMongo2026112500000000 implements MigrationInterface {
@@ -32,6 +32,7 @@ export class DeepScanIndexesMongo2026112500000000 implements MigrationInterface 
                     RELEASE_INDEX.scanCoveragePerArea,
                     RELEASE_INDEX.scanSchedulesDue,
                     RELEASE_INDEX.oneScanSchedulePerRepository,
+                    RELEASE_INDEX.scanIssueByAlias,
                 ],
             );
         } finally {

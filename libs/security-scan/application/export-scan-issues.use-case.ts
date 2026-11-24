@@ -45,13 +45,12 @@ import { extractLastJsonObjectWith } from '@libs/llm/structured-output-repair';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { KODUS_MCP_INTEGRATION_ID } from '@libs/mcp-server/utils/mcp-auth.constants';
 
+import { EXPORT_MAX_ISSUES } from '../domain/scan-schedule';
 import { fenced } from '../domain/scan-prompts';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 
 const logger = createLogger('ExportScanIssues');
 
-/** The most findings one export files: one agent run holds them all. */
-export const EXPORT_MAX_ISSUES = 25;
 const EXPORT_RESULT_TOOL = 'submitExport';
 
 export const EXPORT_NO_PLUGIN_MESSAGE =
@@ -261,10 +260,12 @@ export class ExportScanIssuesUseCase {
                 issues: toFile,
                 signal: input.signal,
             });
-            const reported = readExportResults(state);
+            const reported = new Map(
+                readExportResults(state).map((r) => [r.issueId, r]),
+            );
             const now = new Date().toISOString();
             for (const issue of toFile) {
-                const row = reported.find((r) => r.issueId === issue.uuid);
+                const row = reported.get(issue.uuid);
                 if (row && (row.url || row.ticketId) && !row.error) {
                     await this.issuesService.recordIssueExport(
                         orgTeam.organizationId,

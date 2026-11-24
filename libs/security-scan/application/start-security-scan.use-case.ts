@@ -102,7 +102,7 @@ export const MAX_ACTIVE_SCANS_PER_ORGANIZATION = boundedEnvInt(
     100,
 );
 
-export const TOO_MANY_ACTIVE_SCANS_MESSAGE = `This organization already has ${MAX_ACTIVE_SCANS_PER_ORGANIZATION} deep scans running. Start this one when one of them finishes, or schedule it.`;
+export const TOO_MANY_ACTIVE_SCANS_MESSAGE = `This organization already has ${MAX_ACTIVE_SCANS_PER_ORGANIZATION} deep scans queued or running. Start this one when one of them finishes, or schedule it.`;
 
 export const SCAN_QUEUE_UNAVAILABLE_MESSAGE =
     'The deep scan worker is not taking jobs right now. Try again in a moment.';
@@ -268,6 +268,29 @@ export class StartSecurityScanUseCase {
                 }
                 throw error;
             });
+
+        // Starts of two repositories can pass the count above together: the
+        // oldest scans keep their share, a later one gives its place back.
+        if (
+            !(
+                await this.scans.findOldestActiveIds(
+                    orgTeam.organizationId,
+                    MAX_ACTIVE_SCANS_PER_ORGANIZATION,
+                )
+            ).includes(scan.uuid)
+        ) {
+            await this.scans
+                .update(scan.uuid, {
+                    status: SecurityScanStatus.FAILED,
+                    error: TOO_MANY_ACTIVE_SCANS_MESSAGE,
+                    finishedAt: new Date().toISOString(),
+                })
+                .catch(() => undefined);
+            throw new HttpException(
+                TOO_MANY_ACTIVE_SCANS_MESSAGE,
+                HttpStatus.TOO_MANY_REQUESTS,
+            );
+        }
 
         try {
             await this.jobQueue.enqueue({

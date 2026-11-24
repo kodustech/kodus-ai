@@ -44,6 +44,9 @@ const EXPECTED_RULES: Record<string, Record<string, unknown>> = {
         partialFilterExpression: { activeKey: { $exists: true } },
     },
     repository_file_class_unique: { unique: true },
+    organization_fingerprint_aliases: {
+        partialFilterExpression: { fingerprintAliases: { $exists: true } },
+    },
     enabled_next_run: {},
     one_schedule_per_repository: { unique: true },
 };

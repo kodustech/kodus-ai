@@ -182,3 +182,10 @@ IssuesSchema.index(
     RELEASE_INDEX.oneIssuePerFinding.key,
     RELEASE_INDEX.oneIssuePerFinding.options,
 );
+
+// 7. The deep-scan issue that holds a folded place: a finding without an
+// issue of its own looks it up by its fingerprint among the aliases.
+IssuesSchema.index(
+    RELEASE_INDEX.scanIssueByAlias.key,
+    RELEASE_INDEX.scanIssueByAlias.options,
+);
