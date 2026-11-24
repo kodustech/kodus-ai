@@ -59,4 +59,17 @@ describe("Kody's Dockerfiles declare the mirror's build args", () => {
     it('the Firebase emulators mirror is a build arg of the shared list', () => {
         expect(MIRROR_BUILD_ARGS.firebase).toEqual(['FIREBASE_EMULATORS_MIRROR']);
     });
+
+    // A Nuxt app's postinstall (`nuxt prepare`) loads @nuxt/telemetry, which asks for consent and posts to
+    // telemetry.nuxt.com (not a build passthrough host). It never fails the prepare, but it is a refused connection
+    // from every Nuxt install; the env turns it off before the module loads.
+    it('a stage that installs with npm, pnpm or yarn turns Nuxt telemetry off, once, after its ARGs', () => {
+        const out = declareMirrorBuildArgs('.kodus/Dockerfile', 'FROM node:22-bookworm\nRUN pnpm install --frozen-lockfile\n');
+        expect(out.content).toBe(`FROM node:22-bookworm\n${[...MIRROR_BUILD_ARGS.npm, ...MIRROR_BUILD_ARGS.ci].map((n) => `ARG ${n}`).join('\n')}\nENV NUXT_TELEMETRY_DISABLED=1\nRUN pnpm install --frozen-lockfile\n`);
+        expect(declareMirrorBuildArgs('.kodus/Dockerfile', out.content)).toEqual({ content: out.content, changes: [] });
+        const own = 'FROM node:22\nENV NUXT_TELEMETRY_DISABLED=0 CI=true\nRUN npm ci\n';
+        expect(declareMirrorBuildArgs('.kodus/Dockerfile', own).content).not.toMatch(/ENV NUXT_TELEMETRY_DISABLED=1/);
+        const py = declareMirrorBuildArgs('.kodus/Dockerfile', 'FROM python:3.12\nRUN pip install -r r.txt\n');
+        expect(py.content).not.toMatch(/NUXT/);
+    });
 });
