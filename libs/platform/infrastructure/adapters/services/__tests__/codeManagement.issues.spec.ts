@@ -9,13 +9,13 @@ import { PlatformIntegrationFactory } from '../platformIntegration.factory';
 describe('CodeManagementService issue dispatch', () => {
     let service: CodeManagementService;
     let factory: PlatformIntegrationFactory;
-    let integrationService: { findOne: jest.Mock };
+    let integrationService: { resolveCodeManagementConnection: jest.Mock };
 
     const orgTeam = { organizationId: 'org-1', teamId: 'team-1' };
     const repository = { owner: 'kodustech', name: 'kodus-ai' };
 
     beforeEach(async () => {
-        integrationService = { findOne: jest.fn() };
+        integrationService = { resolveCodeManagementConnection: jest.fn() };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -33,7 +33,10 @@ describe('CodeManagementService issue dispatch', () => {
     });
 
     const usePlatform = (platform: PlatformType) =>
-        integrationService.findOne.mockResolvedValue({ platform });
+        integrationService.resolveCodeManagementConnection.mockResolvedValue({
+            ambiguous: false,
+            platform,
+        });
 
     it('dispatches listIssues to the team platform implementation', async () => {
         usePlatform(PlatformType.GITHUB);
@@ -55,7 +58,10 @@ describe('CodeManagementService issue dispatch', () => {
     });
 
     it('returns [] when the team has no code-management integration', async () => {
-        integrationService.findOne.mockResolvedValue(null);
+        integrationService.resolveCodeManagementConnection.mockResolvedValue({
+            platform: null,
+            ambiguous: false,
+        });
 
         expect(
             await service.listIssues({
@@ -94,7 +100,10 @@ describe('CodeManagementService issue dispatch', () => {
             }),
         ).toEqual({ number: 7 });
 
-        integrationService.findOne.mockResolvedValue(null);
+        integrationService.resolveCodeManagementConnection.mockResolvedValue({
+            platform: null,
+            ambiguous: false,
+        });
         expect(
             await service.getIssue({
                 organizationAndTeamData: orgTeam,

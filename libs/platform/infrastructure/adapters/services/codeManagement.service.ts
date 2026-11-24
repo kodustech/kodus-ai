@@ -3,7 +3,6 @@ import { Inject, Injectable, forwardRef } from '@nestjs/common';
 
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { extractOrganizationAndTeamData } from '@libs/common/utils/helpers';
-import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import {
@@ -15,6 +14,7 @@ import { Commit } from '@libs/core/infrastructure/config/types/general/commit.ty
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.type';
 import {
+    ConnectionRepositoryHint,
     IIntegrationService,
     INTEGRATION_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
@@ -67,19 +67,74 @@ export class CodeManagementService implements ICodeManagementService {
     ) {}
 
     /**
-     * The platform of the team's active code integration, or null when it has
-     * none. A failed lookup throws, so a caller can tell it from an absence.
+     * The platform of the team's active code connection, or null when it has
+     * none or several on different platforms. A failed lookup throws, so a
+     * caller can tell it from an absence.
      */
     async findTypeIntegration(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PlatformType | null> {
-        const integration = await this.integrationService.findOne({
-            organization: { uuid: organizationAndTeamData.organizationId },
-            team: { uuid: organizationAndTeamData.teamId },
-            integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
-            status: true,
-        });
-        return integration?.platform ?? null;
+        const resolved =
+            await this.integrationService.resolveCodeManagementConnection(
+                organizationAndTeamData,
+            );
+        return resolved.platform;
+    }
+
+    /**
+     * Picks the connection a call is for and names it on the params handed
+     * to the provider, so its credential lookup reads that connection. The
+     * caller's objects are never written to.
+     */
+    private async route<P>(
+        params: P,
+        type?: PlatformType,
+    ): Promise<{ type: PlatformType | null; params: P }> {
+        const organizationAndTeamData = extractOrganizationAndTeamData(params);
+
+        if (organizationAndTeamData?.integrationId && type) {
+            return { type, params };
+        }
+
+        try {
+            const resolved =
+                await this.integrationService.resolveCodeManagementConnection(
+                    organizationAndTeamData,
+                    {
+                        platform: type,
+                        repository: repositoryHint(params),
+                    },
+                );
+
+            const routedType = type ?? resolved.platform;
+            const integrationId = resolved.integration?.uuid;
+            if (!integrationId) {
+                return { type: routedType, params };
+            }
+
+            return {
+                type: routedType,
+                params: {
+                    ...params,
+                    organizationAndTeamData: {
+                        ...organizationAndTeamData,
+                        integrationId,
+                    },
+                },
+            };
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to resolve the Git connection',
+                context: CodeManagementService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    platform: type,
+                },
+            });
+            return { type: type ?? null, params };
+        }
     }
 
     async getTypeIntegration(
@@ -105,11 +160,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: ListIssuesParams,
         type?: PlatformType,
     ): Promise<CodeManagementIssue[]> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return [];
@@ -131,9 +182,9 @@ export class CodeManagementService implements ICodeManagementService {
         params: ApprovalTeamMembershipParams,
     ): Promise<ApprovalTeamMembership> {
         try {
-            const type = await this.getTypeIntegration(
-                params.organizationAndTeamData,
-            );
+            const routed = await this.route(params);
+            const type = routed.type;
+            params = routed.params;
             if (!type) return 'unavailable';
             const provider =
                 this.platformIntegrationFactory.getCodeManagementService(type);
@@ -150,11 +201,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: GetIssueParams,
         type?: PlatformType,
     ): Promise<CodeManagementIssue | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return null;
@@ -219,11 +266,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<Array<{ path: string; patch: string }>> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                params.organizationAndTeamData,
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return [];
@@ -259,11 +302,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: GetCheckEvidenceParams,
         type?: PlatformType,
     ): Promise<CheckEvidence[]> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                params.organizationAndTeamData,
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return [];
@@ -337,11 +376,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<Partial<Repository> | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return null;
@@ -368,11 +403,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<Partial<PullRequest> | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return null;
@@ -396,11 +427,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<boolean> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return false;
@@ -425,11 +452,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<Commit[]> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return [];
@@ -462,11 +485,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<Repositories[]> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return [];
@@ -478,11 +497,7 @@ export class CodeManagementService implements ICodeManagementService {
         return codeManagementService.getRepositories(params);
     }
     async getListMembers(params: any, type?: PlatformType): Promise<any> {
-        type =
-            type ??
-            (await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            ));
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return [];
@@ -498,11 +513,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: any,
         type?: PlatformType,
     ): Promise<CodeManagementConnectionStatus> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) return null;
 
@@ -516,11 +527,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: any,
         type?: PlatformType,
     ): Promise<void> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -532,11 +539,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: any,
         type?: PlatformType,
     ): Promise<void> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -548,11 +551,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: any,
         type?: PlatformType,
     ): Promise<void> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -580,11 +579,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<PullRequest[]> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -599,11 +594,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -618,11 +609,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -638,11 +625,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<PullRequestAuthor[]> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return [];
@@ -678,11 +661,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<PullRequestAuthor[] | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return null;
@@ -704,11 +683,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -728,11 +703,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -741,11 +712,7 @@ export class CodeManagementService implements ICodeManagementService {
     }
 
     async getChangedFilesSinceLastCommit(params: any, type?: PlatformType) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -759,11 +726,7 @@ export class CodeManagementService implements ICodeManagementService {
         >[0],
         type?: PlatformType,
     ): Promise<FileChange[] | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -781,11 +744,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -803,11 +762,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -824,11 +779,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<Map<string, any> | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -843,11 +794,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<Map<string, any> | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -863,11 +810,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -892,11 +835,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -914,11 +853,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -938,11 +873,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -959,11 +890,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -986,11 +913,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1002,11 +925,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: any,
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1017,11 +936,7 @@ export class CodeManagementService implements ICodeManagementService {
     }
 
     async getDefaultBranch(params: any, type?: PlatformType) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1030,11 +945,7 @@ export class CodeManagementService implements ICodeManagementService {
     }
 
     async getPullRequestReviewComment(params: any, type?: PlatformType) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return [];
@@ -1052,11 +963,7 @@ export class CodeManagementService implements ICodeManagementService {
      * per-PR walk rather than treat it as "no comments".
      */
     async getRecentRepositoryComments(params: any, type?: PlatformType) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return null;
@@ -1073,11 +980,7 @@ export class CodeManagementService implements ICodeManagementService {
     }
 
     async createResponseToComment(params: any, type?: PlatformType) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1094,11 +997,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<PullRequest | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1115,11 +1014,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1133,11 +1028,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1153,11 +1044,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return [];
@@ -1183,11 +1070,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<any | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1217,11 +1100,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<RepositoryFile[]> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1236,11 +1115,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1256,11 +1131,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1278,11 +1149,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<GitCloneParams> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         // Same guard the list-returning methods here already apply: with no
         // integration, getTypeIntegration answers null and the factory would
@@ -1308,11 +1175,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1329,11 +1192,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1350,11 +1209,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1369,11 +1224,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ) {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1389,11 +1240,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<any | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1408,11 +1255,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<any | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1427,11 +1270,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<any | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1448,11 +1287,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<any | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1468,11 +1303,7 @@ export class CodeManagementService implements ICodeManagementService {
         params: any,
         type?: PlatformType,
     ): Promise<any | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1488,11 +1319,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<PullRequestReviewComment[] | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1515,11 +1342,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<any[]> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1535,11 +1358,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<any | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1554,11 +1373,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<PullRequestsWithChangesRequested[] | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1576,11 +1391,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<any[] | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1596,11 +1407,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<any | null> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                extractOrganizationAndTeamData(params),
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1611,9 +1418,9 @@ export class CodeManagementService implements ICodeManagementService {
     async deleteWebhook(params: {
         organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<void> {
-        const type = await this.getTypeIntegration(
-            params.organizationAndTeamData,
-        );
+        const routed = await this.route(params);
+        const type = routed.type;
+        params = routed.params;
 
         if (!type) {
             return;
@@ -1632,11 +1439,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<WebhookSetupResult> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                params.organizationAndTeamData,
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             throw new Error(
@@ -1654,9 +1457,9 @@ export class CodeManagementService implements ICodeManagementService {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
     }): Promise<boolean> {
-        const type = await this.getTypeIntegration(
-            params.organizationAndTeamData,
-        );
+        const routed = await this.route(params);
+        const type = routed.type;
+        params = routed.params;
 
         if (!type) {
             return false;
@@ -1677,7 +1480,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<boolean | undefined> {
-        type ??= await this.getTypeIntegration(params.organizationAndTeamData);
+        ({ type, params } = await this.route(params, type));
         if (!type) {
             return undefined;
         }
@@ -1690,9 +1493,9 @@ export class CodeManagementService implements ICodeManagementService {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string; fullName?: string };
     }): Promise<RepositoryAccessDiagnosis> {
-        const type = await this.getTypeIntegration(
-            params.organizationAndTeamData,
-        );
+        const routed = await this.route(params);
+        const type = routed.type;
+        params = routed.params;
 
         if (!type) {
             return { ...UNKNOWN_REPOSITORY_ACCESS };
@@ -1720,11 +1523,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<string> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                params.organizationAndTeamData,
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
@@ -1747,11 +1546,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<TreeItem[]> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                params.organizationAndTeamData,
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return [];
@@ -1771,11 +1566,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<TreeItem[]> {
-        if (!type) {
-            type = await this.getTypeIntegration(
-                params.organizationAndTeamData,
-            );
-        }
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return [];
@@ -1795,9 +1586,9 @@ export class CodeManagementService implements ICodeManagementService {
         repository: { id: string; name: string; fullName?: string };
         prNumber: number;
     }): Promise<any | null> {
-        const type = await this.getTypeIntegration(
-            params.organizationAndTeamData,
-        );
+        const routed = await this.route(params);
+        const type = routed.type;
+        params = routed.params;
 
         if (!type) {
             return null;
@@ -1814,9 +1605,9 @@ export class CodeManagementService implements ICodeManagementService {
         repository: Partial<Repository>;
         prNumber: number;
     }): Promise<boolean> {
-        const type = await this.getTypeIntegration(
-            params.organizationAndTeamData,
-        );
+        const routed = await this.route(params);
+        const type = routed.type;
+        params = routed.params;
 
         if (!type) {
             return false;
@@ -1836,7 +1627,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<PullRequestReviewState | null> {
-        type ??= await this.getTypeIntegration(params.organizationAndTeamData);
+        ({ type, params } = await this.route(params, type));
 
         if (!type) {
             return null;
@@ -1854,9 +1645,9 @@ export class CodeManagementService implements ICodeManagementService {
         prNumber: number;
         reason: string;
     }): Promise<number> {
-        const type = await this.getTypeIntegration(
-            params.organizationAndTeamData,
-        );
+        const routed = await this.route(params);
+        const type = routed.type;
+        params = routed.params;
         const provider =
             this.platformIntegrationFactory.getCodeManagementService(type);
         // Every host implements it; one that does not must fail the step
@@ -1874,7 +1665,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<boolean> {
-        type ??= await this.getTypeIntegration(params.organizationAndTeamData);
+        ({ type, params } = await this.route(params, type));
         const provider =
             this.platformIntegrationFactory.getCodeManagementService(type);
         // A host that cannot tell is never taken for Kody.
@@ -1890,7 +1681,7 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<number> {
-        type ??= await this.getTypeIntegration(params.organizationAndTeamData);
+        ({ type, params } = await this.route(params, type));
         const provider =
             this.platformIntegrationFactory.getCodeManagementService(type);
         // A host that can show Kody's change request must be able to take it
@@ -1909,9 +1700,9 @@ export class CodeManagementService implements ICodeManagementService {
         prNumber: number;
         reaction: Reaction;
     }): Promise<void> {
-        const type = await this.getTypeIntegration(
-            params.organizationAndTeamData,
-        );
+        const routed = await this.route(params);
+        const type = routed.type;
+        params = routed.params;
 
         if (!type) {
             return;
@@ -1930,9 +1721,9 @@ export class CodeManagementService implements ICodeManagementService {
         commentId: number;
         reaction: Reaction;
     }): Promise<void> {
-        const type = await this.getTypeIntegration(
-            params.organizationAndTeamData,
-        );
+        const routed = await this.route(params);
+        const type = routed.type;
+        params = routed.params;
 
         if (!type) {
             return;
@@ -1950,9 +1741,9 @@ export class CodeManagementService implements ICodeManagementService {
         prNumber: number;
         reactions: Reaction[];
     }): Promise<void> {
-        const type = await this.getTypeIntegration(
-            params.organizationAndTeamData,
-        );
+        const routed = await this.route(params);
+        const type = routed.type;
+        params = routed.params;
 
         if (!type) {
             return;
@@ -1971,9 +1762,9 @@ export class CodeManagementService implements ICodeManagementService {
         commentId: number;
         reactions: Reaction[];
     }): Promise<void> {
-        const type = await this.getTypeIntegration(
-            params.organizationAndTeamData,
-        );
+        const routed = await this.route(params);
+        const type = routed.type;
+        params = routed.params;
 
         if (!type) {
             return;
@@ -1984,4 +1775,26 @@ export class CodeManagementService implements ICodeManagementService {
 
         return codeManagementService.removeReactionsFromComment?.(params);
     }
+}
+
+/** The repository a call is about, as far as its params tell. */
+function repositoryHint(params: unknown): ConnectionRepositoryHint | undefined {
+    if (!params || typeof params !== 'object') return undefined;
+    const p = params as {
+        repository?: {
+            id?: string | number;
+            name?: string;
+            fullName?: string;
+            full_name?: string;
+        };
+        repositoryId?: string | number;
+    };
+    if (p.repository && typeof p.repository === 'object') {
+        const { id, name } = p.repository;
+        const fullName = p.repository.fullName ?? p.repository.full_name;
+        if (id == null && !name && !fullName) return undefined;
+        return { id, name, fullName };
+    }
+    if (p.repositoryId != null) return { id: p.repositoryId };
+    return undefined;
 }

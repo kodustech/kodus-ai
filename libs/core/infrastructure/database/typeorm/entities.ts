@@ -13,6 +13,7 @@ import { PermissionsModel } from '../../../../identity/infrastructure/adapters/r
 import { ProfileModel } from '../../../../identity/infrastructure/adapters/repositories/schemas/profile.model';
 import { ProfileConfigModel } from '../../../../identity/infrastructure/adapters/repositories/schemas/profileConfig.model';
 import { UserModel } from '../../../../identity/infrastructure/adapters/repositories/schemas/user.model';
+import { UserConnectionAccessModel } from '../../../../identity/infrastructure/adapters/repositories/schemas/userConnectionAccess.model';
 import { AuthIntegrationModel } from '../../../../integrations/infrastructure/adapters/repositories/schemas/authIntegration.model';
 import { IntegrationModel } from '../../../../integrations/infrastructure/adapters/repositories/schemas/integration.model';
 import { IntegrationConfigModel } from '../../../../integrations/infrastructure/adapters/repositories/schemas/integrationConfig.model';
@@ -62,6 +63,7 @@ export const ENTITIES = [
     GlobalParametersModel,
     TeamAutomationModel,
     PermissionsModel,
+    UserConnectionAccessModel,
     IssuesModel,
     AutomationExecutionModel,
     ProfileConfigModel,

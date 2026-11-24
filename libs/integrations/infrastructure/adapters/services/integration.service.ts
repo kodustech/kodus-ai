@@ -13,7 +13,11 @@ import {
     IIntegrationRepository,
     INTEGRATION_REPOSITORY_TOKEN,
 } from '@libs/integrations/domain/integrations/contracts/integration.repository.contracts';
-import { IIntegrationService } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
+import {
+    ConnectionRepositoryHint,
+    IIntegrationService,
+    ResolvedConnection,
+} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
 import { IIntegration } from '@libs/integrations/domain/integrations/interfaces/integration.interface';
 
@@ -127,11 +131,10 @@ export class IntegrationService implements IIntegrationService {
         platform: PlatformType,
     ): Promise<T> {
         try {
-            const integration = await this.findOne({
-                organization: { uuid: organizationAndTeamData.organizationId },
-                team: { uuid: organizationAndTeamData.teamId },
-                platform: platform,
-            });
+            const integration = await this.findPlatformConnection(
+                organizationAndTeamData,
+                platform,
+            );
 
             if (!integration) return null;
 
@@ -159,5 +162,156 @@ export class IntegrationService implements IIntegrationService {
                 metadata: { organizationAndTeamData, platform },
             });
         }
+    }
+
+    /**
+     * The workspace's connection on `platform`. A named connection
+     * (`integrationId`) wins; otherwise a workspace with several on the same
+     * platform gets the first one, logged, until the caller names it.
+     */
+    private async findPlatformConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        platform: PlatformType,
+    ): Promise<IntegrationEntity | undefined> {
+        const scope = {
+            organization: { uuid: organizationAndTeamData.organizationId },
+            team: { uuid: organizationAndTeamData.teamId },
+            platform,
+        };
+
+        if (organizationAndTeamData.integrationId) {
+            return this.findOne({
+                ...scope,
+                uuid: organizationAndTeamData.integrationId,
+            });
+        }
+
+        const candidates = (await this.find(scope)) ?? [];
+
+        if (candidates.length > 1) {
+            this.logger.warn({
+                message: 'connection_ambiguous',
+                context: IntegrationService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    platform,
+                    candidateIds: candidates.map((c) => c.uuid),
+                },
+            });
+        }
+
+        return candidates[0];
+    }
+
+    async resolveCodeManagementConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        hint: {
+            platform?: PlatformType;
+            repository?: ConnectionRepositoryHint;
+        } = {},
+    ): Promise<ResolvedConnection> {
+        const scope = {
+            organization: { uuid: organizationAndTeamData.organizationId },
+            team: { uuid: organizationAndTeamData.teamId },
+            integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+            status: true,
+        };
+
+        if (organizationAndTeamData.integrationId) {
+            const integration = await this.findOne({
+                ...scope,
+                uuid: organizationAndTeamData.integrationId,
+                ...(hint.platform ? { platform: hint.platform } : {}),
+            });
+            return {
+                integration,
+                platform: integration?.platform ?? null,
+                ambiguous: false,
+            };
+        }
+
+        const all = (await this.find(scope)) ?? [];
+        const candidates = hint.platform
+            ? all.filter((c) => c.platform === hint.platform)
+            : all;
+
+        if (candidates.length <= 1) {
+            return {
+                integration: candidates[0],
+                platform: candidates[0]?.platform ?? null,
+                ambiguous: false,
+            };
+        }
+
+        if (hint.repository) {
+            const matches = await this.connectionsListingRepository(
+                candidates,
+                organizationAndTeamData,
+                hint.repository,
+            );
+            if (matches.length === 1) {
+                return {
+                    integration: matches[0],
+                    platform: matches[0].platform,
+                    ambiguous: false,
+                };
+            }
+        }
+
+        this.logger.warn({
+            message: 'connection_ambiguous',
+            context: IntegrationService.name,
+            metadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                platform: hint.platform,
+                repository: hint.repository,
+                candidateIds: candidates.map((c) => c.uuid),
+            },
+        });
+
+        const platforms = new Set(candidates.map((c) => c.platform));
+        return {
+            integration: undefined,
+            platform: platforms.size === 1 ? candidates[0].platform : null,
+            ambiguous: true,
+        };
+    }
+
+    private async connectionsListingRepository(
+        candidates: IntegrationEntity[],
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: ConnectionRepositoryHint,
+    ): Promise<IntegrationEntity[]> {
+        const id = repository.id != null ? String(repository.id) : undefined;
+        const lists = await Promise.allSettled(
+            candidates.map((candidate) =>
+                this.integrationConfigService.findOne({
+                    integration: { uuid: candidate.uuid },
+                    team: { uuid: organizationAndTeamData.teamId },
+                    configKey: IntegrationConfigKey.REPOSITORIES,
+                }),
+            ),
+        );
+
+        return candidates.filter((_, index) => {
+            const result = lists[index];
+            if (result.status !== 'fulfilled') return false;
+            const repos = Array.isArray(result.value?.configValue)
+                ? (result.value.configValue as Array<{
+                      id?: string | number;
+                      name?: string;
+                      full_name?: string;
+                  }>)
+                : [];
+            return repos.some((repo) =>
+                id !== undefined
+                    ? String(repo?.id) === id
+                    : repository.fullName
+                      ? repo?.full_name === repository.fullName
+                      : !!repository.name && repo?.name === repository.name,
+            );
+        });
     }
 }

@@ -11,6 +11,8 @@ export interface IIntegration<TOrganization = IOrganization, TTeam = ITeam> {
     platform: PlatformType;
     integrationCategory: IntegrationCategory;
     status: boolean;
+    name?: string | null;
+    reviewEnabled?: boolean;
     organization?: Partial<TOrganization>;
     team?: Partial<TTeam>;
     authIntegration?: Partial<
