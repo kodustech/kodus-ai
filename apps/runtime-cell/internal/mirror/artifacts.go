@@ -79,6 +79,18 @@ func DefaultArtifacts() []ArtifactEntry {
 			ID: "prisma", Upstream: mustURL("https://binaries.prisma.sh"), PathPrefix: "/all_commits/",
 			Name: nameRE(`[0-9a-f]{40}/(?:(?:debian|rhel)-openssl-[0-9]+\.[0-9]+\.x|linux-(?:musl-)?(?:arm64-)?openssl-[0-9]+\.[0-9]+\.x|linux-musl|linux-static-(?:x64|arm64))/(?:libquery_engine\.so\.node|query-engine|schema-engine)\.gz(?:\.sha256)?`), MaxBytes: 64 << 20,
 		},
+		// The Cypress app (cypress 13.x and 14.x, lib/tasks/download.js): its
+		// npm package's postinstall downloads it, and `cypress run` needs it.
+		// With CYPRESS_DOWNLOAD_MIRROR=<root>/cypress and the path template
+		// buildmirror sets, the URL is <root>/cypress/desktop/<version>/
+		// linux-<x64|arm64>/cypress.zip: the exact object download.cypress.io
+		// redirects to on cdn.cypress.io (about 200 MB). The CDN's
+		// x-amz-meta-checksum goes through (integrityHeaders): the package
+		// checks the zip's SHA-512 against it.
+		{
+			ID: "cypress", Upstream: mustURL("https://cdn.cypress.io"), PathPrefix: "/desktop/",
+			Name: nameRE(`[0-9]+\.[0-9]+\.[0-9]+/linux-(?:x64|arm64)/cypress\.zip`), MaxBytes: 512 << 20,
+		},
 		// MongoDB server builds for Linux (mongodb-memory-server-core 9.5.0 and
 		// 10.4.3, MongoBinaryDownloadUrl and MongoBinaryDownload):
 		// <MONGOMS_DOWNLOAD_MIRROR>/linux/mongodb-linux-<x86_64|aarch64>[-<distro>]-<version>.tgz
@@ -107,6 +119,13 @@ func NewArtifacts(entries []ArtifactEntry, allowed func(*http.Request) bool) *Ar
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}}
 }
+
+// integrityHeaders are the publisher's own checksum and size of an object,
+// which a client checks what it downloaded against (Cypress's install reads
+// both): passed on when they are plain tokens, never any other header.
+var integrityHeaders = []string{"X-Amz-Meta-Checksum", "X-Amz-Meta-Size"}
+
+var integrityValue = regexp.MustCompile(`^[0-9a-fA-F]{1,256}$`)
 
 // credentialHeaders say the request carries an identity: a private object
 // would be reached with it, and the mirror serves public ones only.
@@ -190,6 +209,11 @@ func (p *ArtifactProxy) fetch(w http.ResponseWriter, r *http.Request, e Artifact
 	if resp.ContentLength > e.MaxBytes {
 		http.Error(w, "file larger than the mirror serves", http.StatusBadGateway)
 		return
+	}
+	for _, h := range integrityHeaders {
+		if v := resp.Header.Get(h); integrityValue.MatchString(v) {
+			w.Header().Set(h, v)
+		}
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("X-Content-Type-Options", "nosniff")

@@ -11,8 +11,9 @@ import { MIRROR_BUILD_ARGS } from '@libs/runtime/protocol/egress-catalog';
 const INSTALLS: Array<{ family: keyof typeof MIRROR_BUILD_ARGS; run: RegExp }> = [
     { family: 'npm', run: /\b(?:npm|npx|pnpm|yarn|corepack)\b/ },
     { family: 'pypi', run: /\b(?:pip3?|pipx|uv)\b|\bpython3?\s+-m\s+pip\b/ },
-    // Prisma's engines and mongodb-memory-server's binaries download at install or generate time.
-    { family: 'artifacts', run: /\bprisma\b|mongodb-memory-server/ },
+    // Prisma's engines, mongodb-memory-server's binaries and the Cypress app download at install (their packages' postinstall,
+    // which a plain `npm ci` runs) or at generate time: every stage that installs Node packages declares them.
+    { family: 'artifacts', run: /\bprisma\b|mongodb-memory-server|\bcypress\b|\b(?:npm|pnpm|yarn|bun)\b/ },
     { family: 'go', run: /\bgo\s+(?:mod|build|get|install|work|generate|test)\b/ },
     // The Runtime builds like CI (GitHub Actions always sets CI=true, and tools change behavior on it): every stage with a RUN.
     { family: 'ci', run: /\S/ },
@@ -59,6 +60,7 @@ export function declareMirrorBuildArgs(path: string, content: string): { content
     });
     return {
         content: out.join('\n'),
-        changes: [`${path}: declared ${[...added].join(', ')}: a build installs only through the cell's read-only mirror, which the cell passes as these build args`],
+        // The why first: the list is long, and a change line is cut when it is shown.
+        changes: [`${path}: a build installs only through the cell's read-only mirror, which the cell passes as build args; declared ${[...added].join(', ')}`],
     };
 }

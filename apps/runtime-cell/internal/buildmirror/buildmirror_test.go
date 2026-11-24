@@ -17,6 +17,7 @@ func TestEveryBuildGetsTheMirrorsAndTheProjectsOwnValueWins(t *testing.T) {
 		"PIP_INDEX_URL": m.PyPI, "PIP_TRUSTED_HOST": "mirror.cell.internal",
 		"UV_DEFAULT_INDEX": m.PyPI, "UV_INSECURE_HOST": "mirror.cell.internal",
 		"PRISMA_ENGINES_MIRROR": "http://mirror.cell.internal:8080/artifacts/prisma", "MONGOMS_DOWNLOAD_MIRROR": "http://mirror.cell.internal:8080/artifacts/mongodb", "MONGOMS_USE_HTTP": "1",
+		"CYPRESS_DOWNLOAD_MIRROR": "http://mirror.cell.internal:8080/artifacts/cypress", "CYPRESS_DOWNLOAD_PATH_TEMPLATE": "${endpoint}/${platform}-${arch}/cypress.zip",
 	}
 	if !maps.Equal(got, want) {
 		t.Fatalf("%v", got)

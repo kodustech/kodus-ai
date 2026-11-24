@@ -181,13 +181,14 @@ func TestTheFixedListIsReviewedShape(t *testing.T) {
 		"firebase-dataconnect": {"storage.googleapis.com", "/firemat-preview-drop/emulator/", "dataconnect-emulator-linux-amd64-v2.17.3"},
 		"prisma":               {"binaries.prisma.sh", "/all_commits/", "605197351a3c8bdd595af2d2a9bc3025bca48ea2/debian-openssl-3.0.x/libquery_engine.so.node.gz"},
 		"mongodb":              {"fastdl.mongodb.org", "/linux/", "mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz"},
+		"cypress":              {"cdn.cypress.io", "/desktop/", "13.17.0/linux-x64/cypress.zip"},
 	} {
 		e, ok := byID[id]
 		if !ok || e.Upstream.Host != c.host || e.PathPrefix != c.prefix || !e.matches(c.ok) {
 			t.Errorf("%s: %+v", id, e)
 		}
 	}
-	if len(list) != len(byID) || len(list) != 4 {
+	if len(list) != len(byID) || len(list) != 5 {
 		t.Fatalf("%d entries", len(list))
 	}
 }
@@ -221,6 +222,9 @@ func TestTheFixedListSpellsWhatTheToolsReallyRequest(t *testing.T) {
 			commit + "/rhel-openssl-3.0.x/schema-engine.gz",
 			commit + "/linux-musl/libquery_engine.so.node.gz",
 		},
+		// cypress 13.17.0 lib/tasks/download.js with CYPRESS_DOWNLOAD_PATH_TEMPLATE (buildmirror.CypressPathTemplate):
+		// download.cypress.io/desktop/13.17.0?platform=linux&arch=x64 redirects to exactly this object.
+		"cypress": {"13.17.0/linux-x64/cypress.zip", "14.5.4/linux-arm64/cypress.zip"},
 		// mongodb-memory-server-core 9.5.0 and 10.4.3, MongoBinaryDownloadUrl and makeMD5check.
 		"mongodb": {
 			"mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz", "mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz.md5",
@@ -239,6 +243,10 @@ func TestTheFixedListSpellsWhatTheToolsReallyRequest(t *testing.T) {
 			commit + "/debian-openssl-3.0.x/libquery_engine.so.node", commit + "/darwin-arm64/schema-engine.gz",
 			commit + "/windows/schema-engine.exe.gz", commit + "/debian-openssl-3.0.x/prisma-fmt.gz", "latest/debian-openssl-3.0.x/schema-engine.gz",
 			commit[:39] + "/debian-openssl-3.0.x/schema-engine.gz", commit + "/debian-openssl-3.0.x/schema-engine.gz/x",
+		},
+		"cypress": {
+			"13.17.0", "13.17.0/darwin-arm64/cypress.zip", "13.17.0/win32-x64/cypress.zip", "13.17.0/linux-x64/other.zip",
+			"latest/linux-x64/cypress.zip", "13.17/linux-x64/cypress.zip", "13.17.0/linux-x64/cypress.zip/x",
 		},
 		"mongodb": {
 			"mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz.sha256", "mongodb-linux-x86_64-ubuntu2204-7.0.14.tgz.sig",
@@ -259,5 +267,48 @@ func TestTheFixedListSpellsWhatTheToolsReallyRequest(t *testing.T) {
 				t.Errorf("%s: %q is served", id, n)
 			}
 		}
+	}
+}
+
+// Cypress checks the zip it downloaded against the CDN's checksum: the publisher's integrity
+// headers go through when they are plain tokens, and nothing else of the upstream's does.
+func TestThePublishersIntegrityHeadersGoThroughAndNoOtherHeader(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Amz-Meta-Checksum", "74e5d06f8569ff3177d89f0b04cec3ae")
+		w.Header().Set("X-Amz-Meta-Size", "4")
+		w.Header().Set("Set-Cookie", "session=1")
+		w.Header().Set("X-Amz-Meta-Other", "x")
+		_, _ = io.WriteString(w, "abcd")
+	}))
+	defer up.Close()
+	u, _ := url.Parse(up.URL)
+	m := httptest.NewServer(NewArtifacts([]ArtifactEntry{{ID: "app", Upstream: u, PathPrefix: "/d/", Name: nameRE(`[a-z]+\.zip`), MaxBytes: 10}}, func(*http.Request) bool { return true }))
+	defer m.Close()
+	resp, err := http.Get(m.URL + "/artifacts/app/d/a.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.Header.Get("X-Amz-Meta-Checksum") != "74e5d06f8569ff3177d89f0b04cec3ae" || resp.Header.Get("X-Amz-Meta-Size") != "4" {
+		t.Fatalf("integrity headers %v", resp.Header)
+	}
+	if resp.Header.Get("Set-Cookie") != "" || resp.Header.Get("X-Amz-Meta-Other") != "" {
+		t.Fatalf("an upstream header went through: %v", resp.Header)
+	}
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Amz-Meta-Checksum", "abc\" onload=\"x")
+		_, _ = io.WriteString(w, "abcd")
+	}))
+	defer bad.Close()
+	bu, _ := url.Parse(bad.URL)
+	bm := httptest.NewServer(NewArtifacts([]ArtifactEntry{{ID: "app", Upstream: bu, PathPrefix: "/d/", Name: nameRE(`[a-z]+\.zip`), MaxBytes: 10}}, func(*http.Request) bool { return true }))
+	defer bm.Close()
+	r2, err := http.Get(bm.URL + "/artifacts/app/d/a.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r2.Body.Close()
+	if r2.Header.Get("X-Amz-Meta-Checksum") != "" {
+		t.Fatal("a checksum that is no plain token went through")
 	}
 }

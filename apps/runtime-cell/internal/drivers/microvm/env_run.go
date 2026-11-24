@@ -204,6 +204,11 @@ func withMirrorArgs(build any, mirror buildmirror.Mirror) (any, error) {
 	}
 	out := make(map[string]any, len(args))
 	for k, v := range args {
+		// The file's own value stays as written; a mirror value goes into a compose file, which
+		// interpolates "$" (the Cypress path template's placeholders are the install's own).
+		if _, theirs := own[k]; !theirs {
+			v = strings.ReplaceAll(v, "$", "$$")
+		}
 		out[k] = v
 	}
 	b["args"] = out

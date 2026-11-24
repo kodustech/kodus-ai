@@ -17,8 +17,8 @@ describe("Kody's Dockerfiles declare the mirror's build args", () => {
     it('a Next/Node repo: every stage that runs pnpm declares the npm family right after its FROM', () => {
         const out = declareMirrorBuildArgs('.kodus/Dockerfile', fixture('next.Dockerfile'));
         const [deps, runtime] = out.content.split(/\n(?=FROM )/);
-        expect(argsOf(deps)).toEqual([...MIRROR_BUILD_ARGS.npm, ...MIRROR_BUILD_ARGS.ci]);
-        expect(argsOf(runtime)).toEqual([...MIRROR_BUILD_ARGS.npm, ...MIRROR_BUILD_ARGS.ci]);
+        expect(argsOf(deps)).toEqual([...MIRROR_BUILD_ARGS.npm, ...MIRROR_BUILD_ARGS.artifacts, ...MIRROR_BUILD_ARGS.ci]);
+        expect(argsOf(runtime)).toEqual([...MIRROR_BUILD_ARGS.npm, ...MIRROR_BUILD_ARGS.artifacts, ...MIRROR_BUILD_ARGS.ci]);
         expect(deps.split('\n')[1]).toBe('ARG npm_config_registry');
         expect(out.changes).toEqual([expect.stringContaining("installs only through the cell's read-only mirror")]);
         expect(checkAuthoredDockerfile('.kodus/Dockerfile', out.content)).toEqual([]);
@@ -42,10 +42,12 @@ describe("Kody's Dockerfiles declare the mirror's build args", () => {
         expect(MIRROR_BUILD_ARGS.pypi).toEqual(expect.arrayContaining(['PIP_INDEX_URL', 'PIP_TRUSTED_HOST', 'UV_DEFAULT_INDEX', 'UV_INSECURE_HOST']));
     });
 
-    it('a stage that runs prisma also declares the artifact mirrors (Prisma engines, MongoDB test binaries)', () => {
+    it('a stage that installs Node packages or runs prisma also declares the artifact mirrors (Prisma engines, MongoDB test binaries, the Cypress app)', () => {
         const out = declareMirrorBuildArgs('.kodus/Dockerfile', 'FROM node:22\nRUN npx prisma generate\n');
-        expect(argsOf(out.content)).toEqual([...MIRROR_BUILD_ARGS.npm, 'PRISMA_ENGINES_MIRROR', 'MONGOMS_DOWNLOAD_MIRROR', 'MONGOMS_USE_HTTP', 'CI']);
-        expect(MIRROR_BUILD_ARGS.artifacts).toEqual(['PRISMA_ENGINES_MIRROR', 'MONGOMS_DOWNLOAD_MIRROR', 'MONGOMS_USE_HTTP']);
+        expect(argsOf(out.content)).toEqual([...MIRROR_BUILD_ARGS.npm, ...MIRROR_BUILD_ARGS.artifacts, 'CI']);
+        expect(MIRROR_BUILD_ARGS.artifacts).toEqual(['PRISMA_ENGINES_MIRROR', 'MONGOMS_DOWNLOAD_MIRROR', 'MONGOMS_USE_HTTP', 'CYPRESS_DOWNLOAD_MIRROR', 'CYPRESS_DOWNLOAD_PATH_TEMPLATE']);
+        // A plain install runs the packages' postinstalls, which download them: the cypress package's fetches the Cypress app.
+        expect(argsOf(declareMirrorBuildArgs('.kodus/Dockerfile', 'FROM node:22\nRUN npm ci\n').content)).toEqual(expect.arrayContaining(['CYPRESS_DOWNLOAD_MIRROR', 'CYPRESS_DOWNLOAD_PATH_TEMPLATE']));
     });
 
     it('every stage that runs something declares CI, because the cell builds with CI=true like GitHub Actions does', () => {
@@ -65,7 +67,7 @@ describe("Kody's Dockerfiles declare the mirror's build args", () => {
     // from every Nuxt install; the env turns it off before the module loads.
     it('a stage that installs with npm, pnpm or yarn turns Nuxt telemetry off, once, after its ARGs', () => {
         const out = declareMirrorBuildArgs('.kodus/Dockerfile', 'FROM node:22-bookworm\nRUN pnpm install --frozen-lockfile\n');
-        expect(out.content).toBe(`FROM node:22-bookworm\n${[...MIRROR_BUILD_ARGS.npm, ...MIRROR_BUILD_ARGS.ci].map((n) => `ARG ${n}`).join('\n')}\nENV NUXT_TELEMETRY_DISABLED=1\nRUN pnpm install --frozen-lockfile\n`);
+        expect(out.content).toBe(`FROM node:22-bookworm\n${[...MIRROR_BUILD_ARGS.npm, ...MIRROR_BUILD_ARGS.artifacts, ...MIRROR_BUILD_ARGS.ci].map((n) => `ARG ${n}`).join('\n')}\nENV NUXT_TELEMETRY_DISABLED=1\nRUN pnpm install --frozen-lockfile\n`);
         expect(declareMirrorBuildArgs('.kodus/Dockerfile', out.content)).toEqual({ content: out.content, changes: [] });
         const own = 'FROM node:22\nENV NUXT_TELEMETRY_DISABLED=0 CI=true\nRUN npm ci\n';
         expect(declareMirrorBuildArgs('.kodus/Dockerfile', own).content).not.toMatch(/ENV NUXT_TELEMETRY_DISABLED=1/);

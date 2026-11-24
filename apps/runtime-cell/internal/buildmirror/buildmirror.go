@@ -114,9 +114,19 @@ func (m Mirror) Args(project map[string]string) map[string]string {
 		// the emulators it names from here (the mirror's firebase-emulators
 		// entry) into the cache firebase-tools reads (docs/runtime/egress-allowlist.md §17).
 		set("FIREBASE_EMULATORS_MIRROR", m.Artifacts+"firebase-emulators")
+		// The Cypress app: its install asks download.cypress.io with a query
+		// (?platform=&arch=), which the mirror never serves; the path template
+		// names the CDN object itself (mirror.DefaultArtifacts' cypress entry).
+		set("CYPRESS_DOWNLOAD_MIRROR", m.Artifacts+"cypress")
+		set("CYPRESS_DOWNLOAD_PATH_TEMPLATE", CypressPathTemplate)
 	}
 	return args
 }
+
+// CypressPathTemplate is the Cypress install's URL template (its own
+// placeholders, which it fills): <mirror>/desktop/<version>/<platform>-<arch>/cypress.zip.
+// A compose file interpolates "$": where it goes into one, write it with "$$".
+const CypressPathTemplate = "${endpoint}/${platform}-${arch}/cypress.zip"
 
 var hostPort = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?:[0-9]{1,5}$`)
 

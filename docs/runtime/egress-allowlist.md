@@ -687,6 +687,7 @@ URL up to the id.
 | `firebase-dataconnect` | `storage.googleapis.com` | `/firemat-preview-drop/emulator/` | `dataconnect-emulator-linux[-amd64]-v<x.y.z>` | 256 MiB | firebase-tools (same) |
 | `prisma` | `binaries.prisma.sh` | `/all_commits/` | `<40 hex>/<linux target>/(libquery_engine.so.node\|query-engine\|schema-engine).gz`, plus `.gz.sha256` | 64 MiB | `PRISMA_ENGINES_MIRROR` |
 | `mongodb` | `fastdl.mongodb.org` | `/linux/` | `mongodb-linux-(x86_64\|aarch64)[-<distro>]-<x.y.z>[-rcN].tgz`, plus `.tgz.md5` | 512 MiB | `MONGOMS_DOWNLOAD_MIRROR` |
+| `cypress` | `cdn.cypress.io` | `/desktop/` | `<x.y.z>/linux-(x64\|arm64)/cypress.zip` | 512 MiB | `CYPRESS_DOWNLOAD_MIRROR` and `CYPRESS_DOWNLOAD_PATH_TEMPLATE` |
 
 Linux targets the Prisma pattern admits: `debian-openssl-<n.n>.x`, `rhel-openssl-<n.n>.x`,
 `linux-[musl-][arm64-]openssl-<n.n>.x`, `linux-musl`, `linux-static-(x64\|arm64)`.
@@ -760,6 +761,13 @@ How a build or recipe uses it.
   npm, PyPI and Go addresses included (`agent.Config.ServiceEnv`, `buildmirror.Mirror.Args`), so a spec that downloads a
   MongoDB binary or a Prisma engine while it runs reaches the mirror. A value the compose file or the recipe sets
   stays.
+- Cypress: the `cypress` package's postinstall downloads the app from `download.cypress.io/desktop/<version>?platform=&arch=`,
+  which redirects to `cdn.cypress.io/desktop/<version>/linux-x64/cypress.zip` (about 200 MB). The mirror serves no query, so
+  the cell passes `CYPRESS_DOWNLOAD_MIRROR=<root>/cypress` and `CYPRESS_DOWNLOAD_PATH_TEMPLATE=${endpoint}/${platform}-${arch}/cypress.zip`
+  (the install's own placeholders, read in cypress 13.17.0 `lib/tasks/download.js`), which name the CDN object itself. The
+  CDN's `x-amz-meta-checksum` and `x-amz-meta-size` go through, and the install checks the zip's SHA-512 against them. Kody's
+  Dockerfiles declare both in every stage that installs Node packages; a hand-written one adds the two ARGs where it runs
+  the install. In a compose file the template is written with `$$`. Until this entry no Cypress suite could install.
 - Firebase: firebase-tools has no variable for the download URL, so it would try `storage.googleapis.com` directly
   and be refused. The recipe fetches the files from the mirror before the emulator starts, into the cache firebase-tools
   looks in (`${FIREBASE_EMULATORS_PATH:-$HOME/.cache/firebase/emulators}`), under the name it expects, which is the
