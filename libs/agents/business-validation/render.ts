@@ -218,8 +218,14 @@ function displayRequirementSource(source: string): string {
     const normalized = source.trim();
     // `AC #1`, `AC#1`, `AC-1`, `AC1` and `AC01` all name criterion 1: the
     // model writes the source freely, and two spellings read as two rows.
-    const criterion = /^AC[\s#-]*0*(\d+)$/i.exec(normalized);
-    return criterion ? `AC${criterion[1].padStart(2, '0')}` : normalized;
+    // One digit run, its zeros stripped after: `0*(\d+)` backtracks
+    // polynomially on `AC000…x` (CodeQL).
+    const criterion = /^AC[\s#-]*(\d+)$/i.exec(normalized);
+    if (!criterion) {
+        return normalized;
+    }
+    const number = criterion[1].replace(/^0+(?=\d)/, '');
+    return `AC${number.padStart(2, '0')}`;
 }
 
 function requirementRow(requirement: RequirementVerdict): string {

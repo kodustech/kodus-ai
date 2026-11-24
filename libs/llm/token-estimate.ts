@@ -66,14 +66,6 @@ function worstCaseTokens(length: number, nonAscii: number): number {
     );
 }
 
-function nonAsciiUnits(text: string): number {
-    let count = 0;
-    for (let i = 0; i < text.length; i++) {
-        if (text.charCodeAt(i) > 0x7f) count++;
-    }
-    return count;
-}
-
 let encoder: Tiktoken | null = null;
 let encoderFailed = false;
 
@@ -310,7 +302,8 @@ export function estimateTextTokens(
             // fall through to the char estimate
         }
     }
+    // A byte-level BPE spends at most a token per UTF-8 byte.
     return worstCase
-        ? worstCaseTokens(text.length, nonAsciiUnits(text))
+        ? Buffer.byteLength(text, 'utf8')
         : Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN);
 }

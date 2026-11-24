@@ -277,6 +277,19 @@ describe('one criterion, however the model spells it', () => {
         }
     });
 
+    it('reads a long run of zeros that is no criterion without stalling', () => {
+        const sample = outcome();
+        // The model writes `source` freely: `AC` + 30k zeros + `x` took 5.9s
+        // under the old `0*(\\d+)` pattern, 0ms now.
+        const source = `AC${'0'.repeat(30_000)}x`;
+        sample.checks[0].verdict.requirements![0].source = source;
+        const started = Date.now();
+        expect(renderComment(sample)).toContain(source);
+        expect(Date.now() - started).toBeLessThan(1_000);
+        sample.checks[0].verdict.requirements![0].source = 'AC007';
+        expect(renderComment(sample)).toContain('<sub>AC07</sub>');
+    });
+
     it('names two met rows apart when their words share a long beginning', () => {
         const met = outcome({ passed: true });
         met.passed = true;
