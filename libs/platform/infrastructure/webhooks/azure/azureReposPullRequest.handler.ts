@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { reviewCommandAccess } from '@libs/platform/application/services/commenter-access';
 
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
@@ -564,6 +565,12 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                         reviewDirective: parseReviewDirective(comment.body),
                         requestedReviewMode: requestedReviewModeOf(
                             comment.body,
+                        ),
+                        requestedReviewModeAccess: await reviewCommandAccess(
+                            this.codeManagement,
+                            params,
+                            context?.organizationAndTeamData,
+                            requestedReviewModeOf(comment.body),
                         ),
                         onlyCustomAgent: customAgentSlug,
                     },

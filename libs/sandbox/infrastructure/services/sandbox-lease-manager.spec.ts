@@ -25,6 +25,7 @@ import { SandboxLeaseManager } from './sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import {
+    assertValidPrKey,
     SandboxCircuitOpenError,
     SandboxWaitAbortedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';

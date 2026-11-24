@@ -23,6 +23,7 @@ type ModelInput = Pick<
     | 'byokModel'
     | 'byokModelId'
     | 'defaultModelOverride'
+    | 'forcedModel'
 >;
 
 /**
@@ -73,6 +74,14 @@ export async function resolveReviewAgentModel(
     // it resolves, and falls back to it when that model was deleted.
     pinnedModelId?: string,
 ): Promise<ResolvedAgentModel> {
+    // An Ultra run's model is chosen by the review, not routed per task.
+    if (input.forcedModel) {
+        return {
+            byokConfig: input.forcedModel,
+            main: mainParams(input.forcedModel),
+        };
+    }
+
     // Route the `task` to its slot through the single task→slot entry point owned
     // by the permission service. byokModelId (id) wins over the legacy byokModel
     // NAME; resolveTaskSlot handles the id-THEN-name match, the capability gate,
@@ -93,17 +102,7 @@ export async function resolveReviewAgentModel(
     // The MAIN bundle from the routed slot (undefined on a BLOCKED/managed verdict
     // or no BYOK → the env/managed default, whose NAME `defaultModelOverride`
     // still sets). `modelName` is the human `provider:model` label for telemetry.
-    const main: AgentModelParams = {
-        role: 'main',
-        modelName: getModelName(slot, input.defaultModelOverride),
-        modelId: getModelId(slot, input.defaultModelOverride),
-        maxInputTokens: slot?.maxInputTokens,
-        reasoningEffort: slot?.reasoningEffort,
-        reasoningConfigOverride: slot?.reasoningConfigOverride,
-        byokProvider: slot?.provider,
-        openrouterProviderOrder: (slot as any)?.openrouterProviderOrder,
-        openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
-    };
+    const main = mainParams(slot ?? undefined, input.defaultModelOverride);
 
     // 1 model per task: no fallback slot is resolved or returned. No BYOK →
     // null slot → `undefined` byokConfig (the optional-field contract; callers
@@ -111,4 +110,21 @@ export async function resolveReviewAgentModel(
     const byokConfig = slot ?? undefined;
 
     return { byokConfig, main };
+}
+
+function mainParams(
+    slot: NormalizedModel | undefined,
+    defaultModelOverride?: string,
+): AgentModelParams {
+    return {
+        role: 'main',
+        modelName: getModelName(slot, defaultModelOverride),
+        modelId: getModelId(slot, defaultModelOverride),
+        maxInputTokens: slot?.maxInputTokens,
+        reasoningEffort: slot?.reasoningEffort,
+        reasoningConfigOverride: slot?.reasoningConfigOverride,
+        byokProvider: slot?.provider,
+        openrouterProviderOrder: (slot as any)?.openrouterProviderOrder,
+        openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
+    };
 }

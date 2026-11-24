@@ -4,6 +4,8 @@
  */
 
 import type { RequestedReviewMode } from '@libs/code-review/domain/review-mode';
+import type { ReviewCommandAccess } from '@libs/platform/application/services/commenter-access';
+import { ultraReviewRecord } from '@libs/code-review/domain/ultra-review-record';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -206,6 +208,8 @@ export class CodeReviewHandlerService {
         requestedReviewMode?: RequestedReviewMode,
         // `@kody -v <slug>` — run only that custom agent (#2172).
         onlyCustomAgent?: string,
+        // Whether the author of a `--heavy` / `--ultra` command can write.
+        requestedReviewModeAccess?: ReviewCommandAccess,
     ) {
         let initialContext: CodeReviewPipelineContext;
 
@@ -214,6 +218,7 @@ export class CodeReviewHandlerService {
                 correlationId,
                 workflowJobId,
                 parentSignal,
+                pipelineStartedAt: Date.now(),
                 statusInfo: {
                     status: AutomationStatus.IN_PROGRESS,
                     message: 'Pipeline started',
@@ -232,6 +237,7 @@ export class CodeReviewHandlerService {
                 userGitId,
                 reviewDirective,
                 requestedReviewMode,
+                requestedReviewModeAccess,
                 ...(onlyCustomAgent ? { onlyCustomAgent } : {}),
                 pipelineMetadata: {
                     lastExecution: {
@@ -376,6 +382,7 @@ export class CodeReviewHandlerService {
                 ),
                 linkedRepositoriesMetadata: result?.linkedRepositoriesMetadata,
                 heavy: result?.heavy,
+                ultra: ultraReviewRecord(result?.ultra),
             };
         } catch (error) {
             if (initialContext) {

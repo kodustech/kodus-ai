@@ -22,6 +22,11 @@ import {
 } from "src/features/ee/byok/_components/routing/routing-state";
 import { ModelCombobox } from "src/features/ee/byok/_components/routing/task-override-grid";
 import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
+import {
+    isUltraTrioSet,
+    ultraModelResolver,
+    ultraModelUsable,
+} from "src/features/ee/ultra-review/plan";
 
 import { FormattedConfigLevel, type CodeReviewFormType } from "../../../_types";
 
@@ -73,6 +78,11 @@ export const BYOKModelSelectorSection = ({
               : "repository";
     const models = (llmConfigStatus?.models ?? []).filter(
         (model) => !model.managed,
+    );
+    const ultraSet = isUltraTrioSet(
+        llmConfigStatus?.modelRouting?.ultraModelIds,
+        ultraModelResolver(llmConfigStatus?.models),
+        ultraModelUsable(llmConfigStatus?.models),
     );
     const modelFor = indexRoutingModels(models);
     const labels = routingModelLabels(models);
@@ -210,6 +220,12 @@ export const BYOKModelSelectorSection = ({
                                         : "Uses the routing models."
                                     : `Uses one model for Balanced and Heavy in this ${scope}.`}
                             </p>
+                            {!inherited && ultraSet && (
+                                <p className="text-text-secondary text-sm">
+                                    Ultra is not affected: it always runs on the
+                                    three Ultra models set in Routing.
+                                </p>
+                            )}
                         </CardHeader>
                         <CardContent>
                             <ModelCombobox

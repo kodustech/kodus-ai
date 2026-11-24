@@ -67,6 +67,7 @@ export enum OrganizationParametersConfigKey {
     BYOK_CONFIG = "byok_config",
     COCKPIT_METRICS_VISIBILITY = "cockpit_metrics_visibility",
     AUTO_LICENSE_ASSIGNMENT = "auto_license_assignment",
+    REVIEW_COMMAND_MODES_CONFIG = "review_command_modes_config",
 }
 
 export enum BoardPriorityType {
@@ -132,6 +133,12 @@ export enum Timezone {
 export type OrganizationParametersAutoJoinConfig = {
     enabled: boolean;
     domains: string[];
+};
+
+/** Review modes turned off for PR commands; a missing switch is on. */
+export type OrganizationParametersReviewCommandModesConfig = {
+    heavyBlocked?: boolean;
+    ultraBlocked?: boolean;
 };
 
 export type OrganizationParametersAutoAssignConfig = {
