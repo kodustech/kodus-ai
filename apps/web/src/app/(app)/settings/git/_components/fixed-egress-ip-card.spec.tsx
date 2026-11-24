@@ -105,6 +105,10 @@ describe("FixedEgressIpCard", () => {
             />,
         );
         expect(screen.getByRole("switch")).toBeEnabled();
+        expect(
+            screen.queryByText(/could not confirm your plan/i),
+        ).not.toBeInTheDocument();
+        expect(screen.getByText("203.0.113.10")).toBeInTheDocument();
     });
 
     it("cannot be turned on from a plan without it, and points to the plans", () => {
