@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import type { Pool } from 'pg';
 
 import type { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
@@ -12,11 +13,14 @@ import { AmqpSuitePublishRequester } from '../publish/amqp-suite-publish-request
 import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
 import { PgSuiteBaselines } from './pg-suite-baselines';
 import { PgSuiteCoverageMaps } from './pg-suite-coverage-maps';
+import { PgSuiteSelectionState, PgSuiteShadows } from './pg-suite-shadows';
 import type { PgSuiteRuns } from './pg-suite-runs';
 import { PgSuiteSpecStats } from './pg-suite-spec-stats';
 import { PlacementSuiteDemand } from './suite-adapters';
 import { SuitePublisher } from './suite-publisher';
-import { SuiteService } from './suite-service';
+import { type SelectionAlert, SuiteService } from './suite-service';
+
+const logger = new Logger('SuiteSelection');
 
 /**
  * The one suite service both modes run: the `runtime.suite` workflow (CI mode and the baseline) and the Run's stage (Run mode)
@@ -32,6 +36,8 @@ export function buildSuiteService(d: {
     maxHosts: number;
     /** The evidence store the artifacts of failed specs are written to; absent: none are kept. */
     evidence?: Pick<EvidenceStore, 'put'>;
+    /** Where a selection miss is raised (an alert a person sees); absent: it is only logged. */
+    alert?: (e: SelectionAlert) => void;
 }): SuiteService {
     const templates = new PgEnvTemplates(d.pool);
     const pools = new PgHostPoolReader(d.pool);
@@ -45,6 +51,13 @@ export function buildSuiteService(d: {
         baselines: new PgSuiteBaselines(d.pool),
         maps: new PgSuiteCoverageMaps(d.pool),
         ...(d.evidence ? { evidence: d.evidence } : {}),
+        shadows: new PgSuiteShadows(d.pool),
+        selection: new PgSuiteSelectionState(d.pool),
+        alerts: (e) => {
+            // Paths and spec names only. A miss is an event to read, never a failure of the pull request's check.
+            logger.warn({ msg: 'suite.selection_miss', environmentId: e.environmentId, shadowRunId: e.shadowRunId, sourceRunId: e.sourceRunId, specs: e.specs, off: e.off });
+            d.alert?.(e);
+        },
         templates: { hasReady: (organizationId, environmentId) => templates.hasReady(organizationId, environmentId) },
         headroom: async () => d.maxHosts,
         baselineRequests: new PgSuiteBaselineRequests(d.pool),

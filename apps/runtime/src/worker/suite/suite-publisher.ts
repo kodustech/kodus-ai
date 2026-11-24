@@ -27,7 +27,7 @@ export class SuitePublisher {
     ) {}
 
     async started(cmd: RuntimeSuiteRequested): Promise<void> {
-        if (cmd.mode === 'baseline') return;
+        if (cmd.mode === 'baseline' || cmd.mode === 'shadow') return;
         await this.requester.request({
             ...this.envelope(cmd, 'running'),
             check: { status: 'in_progress' },
@@ -47,7 +47,7 @@ export class SuitePublisher {
     }
 
     async finished(cmd: RuntimeSuiteRequested, result: SuiteServiceResult, suite: { cwd?: string }): Promise<void> {
-        if (cmd.mode === 'baseline' || result.status === 'off') return;
+        if (cmd.mode === 'baseline' || cmd.mode === 'shadow' || result.status === 'off') return;
         const report = await this.reportOf(cmd, result, suite);
         if (!report) return;
         await this.requester.request({ ...this.envelope(cmd, 'final'), check: { status: 'completed', conclusion: suiteConclusionOf(report.state) }, report });
@@ -55,7 +55,7 @@ export class SuitePublisher {
 
     /** The check of a suite that was cancelled before it had a stored run to report from (a cancel between the opening of the check and the engine): closed cancelled, with no results. */
     async cancelled(cmd: RuntimeSuiteRequested): Promise<void> {
-        if (cmd.mode === 'baseline') return;
+        if (cmd.mode === 'baseline' || cmd.mode === 'shadow') return;
         await this.requester.request({
             ...this.envelope(cmd, 'final'),
             check: { status: 'completed', conclusion: suiteConclusionOf('cancelled') },
@@ -80,7 +80,7 @@ export class SuitePublisher {
 
     private async reportOf(cmd: RuntimeSuiteRequested, result: Exclude<SuiteServiceResult, { status: 'off' }>, suite: { cwd?: string }): Promise<SuiteReport | undefined> {
         const run = await this.runs.get(cmd.organizationId, cmd.suiteRunId);
-        if (!run || run.mode === 'baseline') return undefined;
+        if (!run || run.mode === 'baseline' || run.mode === 'shadow') return undefined;
         const results = await this.runs.results(cmd.organizationId, cmd.suiteRunId);
         const total = new Set(results.filter((r) => r.phase === 'shard').map((r) => r.spec)).size;
         return buildSuiteReport({

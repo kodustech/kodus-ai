@@ -7,7 +7,7 @@ import { suiteDigestOf } from '@libs/runtime/suite';
 import { InMemoryEvidenceStore } from '../../shared/evidence/testing';
 
 import { suiteConfigOf } from './suite-config';
-import { FakeSuiteCell, FakeSuiteDemand, InMemorySuiteBaselines, InMemorySuiteCoverageMaps, InMemorySuiteRuns, InMemorySuiteSpecStats, SuiteClock, type FakeSuiteWorld } from './testing';
+import { FakeSuiteCell, FakeSuiteDemand, InMemorySuiteBaselines, InMemorySuiteCoverageMaps, InMemorySuiteRuns, InMemorySuiteSelectionState, InMemorySuiteShadows, InMemorySuiteSpecStats, SuiteClock, type FakeSuiteWorld } from './testing';
 import { SuiteService, type SuiteServiceDeps } from './suite-service';
 
 // The workflow body of a suite run (docs/runtime/e2e-suites.md section 11): read the recipe's suite block, list the specs on
@@ -36,7 +36,7 @@ const request = (over: Partial<RuntimeSuiteRequested> = {}): RuntimeSuiteRequest
 
 const cancelError = () => Object.assign(new Error('workflow cancelled'), { name: 'DBOSWorkflowCancelledError' });
 
-function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any; maps?: InMemorySuiteCoverageMaps; evidence?: InMemoryEvidenceStore; shots?: Record<string, Buffer> } = {}) {
+function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any; maps?: InMemorySuiteCoverageMaps; evidence?: InMemoryEvidenceStore; shots?: Record<string, Buffer>; shadow?: { shadows: InMemorySuiteShadows; selection: InMemorySuiteSelectionState; alerts?: unknown[] } } = {}) {
     const published: string[] = [];
     const finishedStates: string[] = [];
     const clock = new SuiteClock();
@@ -74,6 +74,7 @@ function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuit
         stats: new InMemorySuiteSpecStats(),
         baselines,
         ...(over.evidence ? { evidence: over.evidence } : {}),
+        ...(over.shadow ? { shadows: over.shadow.shadows, selection: over.shadow.selection, alerts: (e: unknown) => void over.shadow!.alerts?.push(e) } : {}),
         templates: { hasReady: async () => over.ready ?? true },
         baselineRequests: { markStarted: async (_o, _e, sha) => void baselineStarted.push(sha) },
         clock,
@@ -312,6 +313,121 @@ describe('running a suite as a workflow', () => {
             await w.runs.finish(ORG, 'sr-1', 'failed', new Date(), {});
             // A replay of the step finds the run it created: a finished one is answered, never planned against itself.
             expect(await w.service.run(request(), passthrough)).toMatchObject({ replayed: true });
+        });
+    });
+});
+
+// docs/runtime/e2e-suites.md section 6.1 (Proof b) and D14, build-plan step 19: the shadow check of selection.
+describe('the shadow check of selection', () => {
+    const recipe = parseRecipe(RECIPE);
+    const names = ['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts', 'cypress/e2e/c.cy.ts', 'cypress/e2e/d.cy.ts', 'cypress/e2e/e.cy.ts'];
+    const digest = suiteDigestOf(suiteConfigOf((recipe as { recipe: Parameters<typeof suiteConfigOf>[0] }).recipe)!.config, names);
+    const map = { mainSha: MAIN, suiteDigest: digest, finishedAt: new Date('2026-11-23T11:00:00.000Z'), specs: { 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'], 'cypress/e2e/c.cy.ts': ['src/z.ts'], 'cypress/e2e/d.cy.ts': ['src/d.ts'], 'cypress/e2e/e.cy.ts': ['src/e.ts'] } };
+    const plain = Object.fromEntries(names.map((n) => [n, {}]));
+    const kit = () => ({ shadows: new InMemorySuiteShadows(), selection: new InMemorySuiteSelectionState(), alerts: [] as unknown[] });
+    const pr = (n: number, over: Partial<RuntimeSuiteRequested> = {}) => request({ suiteRunId: `sr-${n}`, key: `sr-${n}`, prNumber: n, changedFiles: ['src/x.ts'], ...over });
+    const w = (shadow: ReturnType<typeof kit>, over: Parameters<typeof world>[0] = {}) => world({ main: names, map, shadow, ...over });
+    const shadowOf = (n: number, over: Partial<RuntimeSuiteRequested> = {}) => request({ suiteRunId: `sh-${n}`, key: `sh-${n}`, mode: 'shadow', prNumber: n, changedFiles: ['src/x.ts'], ...over });
+
+    it('every 5th selected run of an environment also enqueues a full background run, with the specs it ran and the files the PR changed', async () => {
+        const shadow = kit();
+        for (let n = 1; n <= 4; n++) await w(shadow).service.run(pr(n), passthrough);
+        expect(shadow.shadows.rows.size).toBe(0);
+        await w(shadow).service.run(pr(5), passthrough);
+        expect([...shadow.shadows.rows.values()]).toEqual([expect.objectContaining({ organizationId: ORG, environmentId: ENV, sourceRunId: 'sr-5', prNumber: 5, prSha: PR, mergeBase: MAIN, mainSha: MAIN, state: 'queued', selected: ['cypress/e2e/a.cy.ts'], changedFiles: ['src/x.ts'] })]);
+    });
+
+    it('counts only runs that were selected: the whole suite, a retry and a baseline never count', async () => {
+        const shadow = kit();
+        // Five whole-suite runs (the safety net: a lockfile changed) and five retries.
+        for (let n = 1; n <= 5; n++) await w(shadow).service.run(pr(n, { changedFiles: ['pnpm-lock.yaml'] }), passthrough);
+        for (let n = 6; n <= 10; n++) await w(shadow).service.run(pr(n, { specs: ['cypress/e2e/a.cy.ts'] }), passthrough);
+        expect(shadow.shadows.rows.size).toBe(0);
+        expect(shadow.selection.rows.get(ENV)?.selected ?? 0).toBe(0);
+    });
+
+    it('the shadow is the whole suite in the background: never published, whatever it finds, and it is no earlier run of the PR', async () => {
+        const shadow = kit();
+        const x = w(shadow, { publisher: true, specs: { ...plain, 'cypress/e2e/b.cy.ts': { pr: [{ fail: 'boom' }] } } });
+        const out = await x.service.run(shadowOf(1), passthrough);
+        expect(out).toMatchObject({ status: 'ran', state: 'failed' });
+        expect(x.published).toEqual([]);
+        expect([...x.cell.starts[0].specs].sort()).toEqual(names);
+        expect((await x.runs.get(ORG, 'sh-1'))?.selection).toEqual({ mode: 'full', reason: 'shadow', total: 5 });
+        expect(await x.runs.latestForPr(ORG, ENV, 1)).toBeNull();
+    });
+
+    describe('what a shadow finds', () => {
+        const broken = { ...plain, 'cypress/e2e/b.cy.ts': { pr: [{ fail: 'boom' as const }] } };
+        const queue = async (shadow: ReturnType<typeof kit>, n: number, selected = ['cypress/e2e/a.cy.ts']) => {
+            await shadow.shadows.request({ shadowRunId: `sh-${n}`, organizationId: ORG, environmentId: ENV, repositoryId: 'repo-1', sourceRunId: `sr-${n}`, prNumber: n, prSha: PR, mergeBase: MAIN, mainSha: MAIN, selected, changedFiles: ['src/x.ts'], removedFiles: [] });
+        };
+
+        it('a spec the selection skipped and the full run fails is a selection miss, stored with the changed files; the environment runs the whole suite for the next 10 PRs and an alert is raised', async () => {
+            const shadow = kit();
+            await queue(shadow, 1);
+            await w(shadow, { specs: broken }).service.run(shadowOf(1), passthrough);
+            expect(await shadow.shadows.get(ORG, 'sh-1')).toMatchObject({ state: 'done', misses: ['cypress/e2e/b.cy.ts'], conclusive: true, changedFiles: ['src/x.ts'] });
+            expect(await shadow.selection.read(ORG, ENV)).toEqual({ off: false, fullPrsLeft: 10 });
+            expect(shadow.alerts).toEqual([expect.objectContaining({ type: 'selection_miss', environmentId: ENV, specs: ['cypress/e2e/b.cy.ts'], off: false })]);
+            // The next pull request runs the whole suite, with the reason; the window counts it once, however often it is pushed.
+            const next = w(shadow, { specs: broken });
+            await next.service.run(pr(2), passthrough);
+            expect((await next.runs.get(ORG, 'sr-2'))?.selection).toEqual({ mode: 'full', reason: 'selection_miss', total: 5 });
+            expect((await shadow.selection.read(ORG, ENV)).fullPrsLeft).toBe(9);
+            const again = w(shadow, { specs: broken });
+            await again.runs.create({ suiteRunId: 'sr-2', organizationId: ORG, environmentId: ENV, repositoryId: 'repo-1', mode: 'ci', prNumber: 2, prSha: 'c'.repeat(40), mergeBase: MAIN, mainSha: MAIN, requestedAt: new Date('2026-11-23T11:00:00.000Z'), selection: { mode: 'full', reason: 'selection_miss', total: 5 } });
+            await again.runs.finish(ORG, 'sr-2', 'passed', new Date('2026-11-23T11:20:00.000Z'));
+            await again.service.run(pr(2, { suiteRunId: 'sr-2b', key: 'sr-2b' }), passthrough);
+            expect((await again.runs.get(ORG, 'sr-2b'))?.selection).toMatchObject({ mode: 'full', reason: 'selection_miss' });
+            expect((await shadow.selection.read(ORG, ENV)).fullPrsLeft).toBe(9);
+        });
+
+        it('two misses in ten shadows turn selection off for the environment until a person turns it on: every PR then runs the whole suite', async () => {
+            const shadow = kit();
+            await queue(shadow, 1);
+            await queue(shadow, 2);
+            await w(shadow, { specs: broken }).service.run(shadowOf(1), passthrough);
+            expect((await shadow.selection.read(ORG, ENV)).off).toBe(false);
+            await w(shadow, { specs: broken }).service.run(shadowOf(2), passthrough);
+            expect((await shadow.selection.read(ORG, ENV)).off).toBe(true);
+            expect(shadow.alerts.map((a) => (a as { type: string; off: boolean }).off)).toEqual([false, true]);
+            const next = w(shadow);
+            await next.service.run(pr(3), passthrough);
+            expect((await next.runs.get(ORG, 'sr-3'))?.selection).toEqual({ mode: 'full', reason: 'selection_off', total: 5 });
+            await shadow.selection.reenable(ORG, ENV);
+            const back = w(shadow);
+            await back.service.run(pr(4), passthrough);
+            expect((await back.runs.get(ORG, 'sr-4'))?.selection).toMatchObject({ mode: 'selected' });
+        });
+
+        it('noise is no miss: a flaky spec, one red on main too, and a spec the selection did run', async () => {
+            const shadow = kit();
+            await queue(shadow, 1, ['cypress/e2e/a.cy.ts']);
+            const specs = { ...plain, 'cypress/e2e/a.cy.ts': { pr: [{ fail: 'boom' as const }] }, 'cypress/e2e/b.cy.ts': { pr: [{ fail: 'x' as const }, 'pass' as const] }, 'cypress/e2e/c.cy.ts': { pr: [{ fail: 'old' as const }], main: [{ fail: 'old' as const }] } };
+            await w(shadow, { specs }).service.run(shadowOf(1), passthrough);
+            expect(await shadow.shadows.get(ORG, 'sh-1')).toMatchObject({ state: 'done', misses: [], conclusive: true });
+            expect(await shadow.selection.read(ORG, ENV)).toEqual({ off: false, fullPrsLeft: 0 });
+            expect(shadow.alerts).toEqual([]);
+        });
+
+        it('a shadow that could not run is no evidence: it is completed inconclusive and the brake stays where it was', async () => {
+            const shadow = kit();
+            await queue(shadow, 1);
+            await w(shadow, { ready: false }).service.run(shadowOf(1), passthrough);
+            expect(await shadow.shadows.get(ORG, 'sh-1')).toMatchObject({ state: 'done', misses: [], conclusive: false });
+            expect(await shadow.selection.read(ORG, ENV)).toEqual({ off: false, fullPrsLeft: 0 });
+        });
+
+        it('a shadow asked again after it finished changes nothing: the brake is applied once', async () => {
+            const shadow = kit();
+            await queue(shadow, 1);
+            const x = w(shadow, { specs: broken });
+            await x.service.run(shadowOf(1), passthrough);
+            await shadow.selection.consumeFullPr(ORG, ENV);
+            await x.service.run(shadowOf(1), passthrough);
+            expect((await shadow.selection.read(ORG, ENV)).fullPrsLeft).toBe(9);
+            expect(shadow.alerts).toHaveLength(1);
         });
     });
 });

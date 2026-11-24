@@ -25,3 +25,4 @@ export { planSuiteRun } from './plan';
 export type { SuitePlan, SuitePlanInput } from './plan';
 export { artifactOwner, planArtifacts } from './artifacts';
 export type { ArtifactDropReason, ArtifactFile, ArtifactPlan } from './artifacts';
+export { BRAKE_MISSES, BRAKE_WINDOW_SHADOWS, brakeAfterMiss, FULL_AFTER_MISS_PRS, missesOf, SHADOW_EARLY_RUNS, SHADOW_EVERY, SHADOW_EVERY_EARLY, shadowDue } from './shadow';

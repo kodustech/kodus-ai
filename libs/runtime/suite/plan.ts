@@ -23,6 +23,8 @@ export interface SuitePlanInput {
     ignore?: readonly string[];
     importersOf?: SelectInput['importersOf'];
     workspaceSpecsOf?: SelectInput['workspaceSpecsOf'];
+    /** The whole suite regardless of the map and of an earlier run (a shadow run; the brake of the shadow check): the reason says which. */
+    forceFull?: SelectInput['forceFull'];
 }
 
 export interface SuitePlan {
@@ -47,6 +49,10 @@ export function planSuiteRun(i: SuitePlanInput): SuitePlan {
         return !i.map && s.mode === 'selected' ? full('map_missing', 'no coverage map for this environment yet') : s;
     };
 
+    if (i.forceFull) {
+        const f = select({ allSpecs: all, changed: [], suiteDigest: i.suiteDigest, forceFull: i.forceFull });
+        return { specs: all, failedBefore: i.previous ? (i.previous.failures.filter((x) => x.class !== 'pre_existing').map((x) => x.spec).filter((s) => all.includes(s))) : [], diffCoverage: {}, selection: { mode: 'full', ...(f.mode === 'full' ? { reason: f.reason } : {}), total }, text: f.text };
+    }
     if (i.previous) {
         // A whole-suite re-push carries the reason of the selection that sent it there.
         let reason: FullReason | undefined;

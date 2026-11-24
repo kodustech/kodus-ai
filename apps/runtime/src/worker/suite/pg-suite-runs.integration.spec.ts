@@ -127,6 +127,13 @@ const run: SuiteRunRecord = {
         expect((await store.get('org-a', '0b5c2f6e-6f1d-4c53-9a43-1d1f5f3a9c12'))?.selection).toBeUndefined();
     });
 
+    it('a shadow is no run of the PR: it never feeds the re-push rule and a new push does not cancel it', async () => {
+        await store.create(run);
+        await store.create({ ...run, suiteRunId: 'r-shadow', mode: 'shadow', prSha: 'd'.repeat(40), requestedAt: new Date('2026-11-23T13:00:00.000Z') });
+        expect((await store.latestForPr('org-a', 'env-1', 7))!.suiteRunId).toBe(run.suiteRunId);
+        expect((await store.livePullRequestRuns('org-a', 'repo-1', 7)).map((r) => r.suiteRunId)).toEqual([run.suiteRunId]);
+    });
+
     it('lists the live runs of one PR in one repository of one organization, except those of the head it keeps, and never a baseline or a finished run', async () => {
         const other = (suiteRunId: string, over: Partial<SuiteRunRecord>) => store.create({ ...run, suiteRunId, ...over });
         await other('r-old', { prSha: 'a'.repeat(40) });

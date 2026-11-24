@@ -125,6 +125,7 @@ import {
     RUNTIME_ENVIRONMENT_REPOSITORY_STORE,
     RUNTIME_ENVIRONMENT_SETUP_READER,
     RUNTIME_SUITE_BASELINE_READER,
+    RUNTIME_SUITE_SHADOW_READER,
     RUNTIME_TEMPLATE_SETUP_READER,
     RUNTIME_BUILD_STATE_EVICTION_READER,
     RUNTIME_LESSON_READER,
@@ -195,6 +196,8 @@ import { RUNTIME_EXTERNAL_FINDINGS, RUNTIME_EXTERNAL_FINDINGS_STORE, RUNTIME_EXT
 import { RuntimeExternalSubmissionModel, RuntimeExternalMessageModel } from './infrastructure/runtime-external-finding.models';
 import { TypeOrmExternalFindingsStore } from './infrastructure/typeorm-external-findings.store';
 import { PgSuiteBaselineReader } from './infrastructure/pg-suite-baseline.reader';
+import { PgSuiteShadowReader } from './infrastructure/pg-suite-shadow.reader';
+import { RuntimeSuiteShadowRequests } from './application/suite-shadow-requests.service';
 import { PgTemplateSetupReader } from './infrastructure/pg-template-setup.reader';
 import { RuntimeSuiteBaselineRequests } from './application/suite-baseline-requests.service';
 import { RuntimeSuiteCiTrigger } from './application/suite-ci-trigger.service';
@@ -370,6 +373,12 @@ const useCases = [
             useFactory: (db: RuntimeReadDb) => new PgSuiteBaselineReader(db),
         },
         RuntimeSuiteBaselineRequests,
+        {
+            provide: RUNTIME_SUITE_SHADOW_READER,
+            inject: [RuntimeReadDb],
+            useFactory: (db: RuntimeReadDb) => new PgSuiteShadowReader(db),
+        },
+        RuntimeSuiteShadowRequests,
         RuntimeSuiteInputs,
         RuntimeSuiteRequester,
         RuntimeSuiteCiTrigger,

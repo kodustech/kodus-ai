@@ -342,7 +342,7 @@ export class SuiteEngine {
         const keeper = this.d.artifacts;
         const dirs = ctx.inputs.config.artifacts ?? [];
         const failed = [...shard.done].filter(([, r]) => r.status === 'failed').map(([spec]) => spec);
-        if (!keeper || dirs.length === 0 || ctx.req.mode === 'baseline' || !shard.claimId || failed.length === 0) return Promise.resolve();
+        if (!keeper || dirs.length === 0 || ctx.req.mode === 'baseline' || ctx.req.mode === 'shadow' || !shard.claimId || failed.length === 0) return Promise.resolve();
         const claimId = shard.claimId;
         const turn = ctx.artifactChain.then(async () => {
             const remaining = (ctx.inputs.artifactBudgetBytes ?? SUITE_ARTIFACT_BUDGET_BYTES) - ctx.artifactBytes;

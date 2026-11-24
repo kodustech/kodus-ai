@@ -37,6 +37,12 @@ export const FULL_REASONS = [
     'noise_file',
     'ready_for_review',
     'baseline',
+    /** A shadow run (D14) is the whole suite on purpose: it is what selection is compared with. */
+    'shadow',
+    /** A selection miss turned the environment to the whole suite for the next pull requests (D14). */
+    'selection_miss',
+    /** Two misses in ten shadows turned selection off until a person re-enables it (D14). */
+    'selection_off',
 ] as const;
 export type FullReason = (typeof FULL_REASONS)[number];
 
@@ -54,7 +60,7 @@ export interface SelectInput {
     importersOf?: (file: string) => readonly string[];
     /** Specs of every app that depends on the workspace `file` is in (manifests only, reverse closure). */
     workspaceSpecsOf?: (file: string) => readonly string[];
-    forceFull?: 'ready_for_review' | 'baseline';
+    forceFull?: Extract<FullReason, 'ready_for_review' | 'baseline' | 'shadow' | 'selection_miss' | 'selection_off'>;
 }
 
 export type Selection =
@@ -98,6 +104,9 @@ export function select(i: SelectInput): Selection {
     const all = [...i.allSpecs];
     if (i.forceFull === 'ready_for_review') return full(all, 'ready_for_review', 'the pull request is ready for review');
     if (i.forceFull === 'baseline') return full(all, 'baseline', 'baseline run');
+    if (i.forceFull === 'shadow') return full(all, 'shadow', 'shadow run, the whole suite to compare the selection with');
+    if (i.forceFull === 'selection_miss') return full(all, 'selection_miss', 'selection missed a regression recently, so the whole suite runs for a while');
+    if (i.forceFull === 'selection_off') return full(all, 'selection_off', 'selection is off for this environment until a person turns it on');
 
     // 1 to 3 of the net: the file alone says it, whatever the map holds.
     for (const f of i.changed) {

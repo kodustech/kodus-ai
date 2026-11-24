@@ -411,8 +411,8 @@ export const RuntimeOrganizationPurgeRequestedSchema = z.strictObject({
 });
 export type RuntimeOrganizationPurgeRequested = z.infer<typeof RuntimeOrganizationPurgeRequestedSchema>;
 
-/** How a suite run starts (docs/runtime/e2e-suites.md section 11): a Run's stage, a CI check, or the baseline of a main commit. */
-export const SUITE_MODES = ['run', 'ci', 'baseline'] as const;
+/** How a suite run starts (docs/runtime/e2e-suites.md section 11): a Run's stage, a CI check, the baseline of a main commit, or the shadow of a selected PR run (the whole suite in the background, D14: never published, never a verdict). */
+export const SUITE_MODES = ['run', 'ci', 'baseline', 'shadow'] as const;
 export type SuiteMode = (typeof SUITE_MODES)[number];
 
 /** A download token as the product seals it for a suite run (bound to the command's key). */

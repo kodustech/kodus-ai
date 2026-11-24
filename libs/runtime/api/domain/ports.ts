@@ -890,6 +890,29 @@ export interface RuntimeSuiteBaselineReader {
 
 export const RUNTIME_SUITE_BASELINE_READER = Symbol.for('RuntimeApi.SuiteBaselineReader');
 
+/** The shadow of a selected PR run (docs/runtime/e2e-suites.md section 6.1 Proof b, D14) the Runtime recorded, and nobody has issued yet. */
+export interface PendingSuiteShadow {
+    organizationId: string;
+    environmentId: string;
+    repositoryId: string;
+    /** The id the shadow's suite run will have: the command's `suiteRunId` and key. */
+    shadowRunId: string;
+    prNumber: number;
+    prSha: string;
+    mergeBase: string;
+    mainSha: string;
+    /** What the PR changed and removed: the full run lists the PR's own spec files, not main's alone. */
+    changedFiles: string[];
+    removedFiles: string[];
+}
+
+/** Reads runtime_suite_shadows (written by the worker): the queued ones whose suite run does not exist yet. Read-only; the worker moves one out of the queue when it starts it. */
+export interface RuntimeSuiteShadowReader {
+    pending(limit: number): Promise<PendingSuiteShadow[]>;
+}
+
+export const RUNTIME_SUITE_SHADOW_READER = Symbol.for('RuntimeApi.SuiteShadowReader');
+
 /**
  * Reads runtime_build_state_evictions (written by the hub from each cell's
  * heartbeat): the cells whose disk floor removed the environment's build

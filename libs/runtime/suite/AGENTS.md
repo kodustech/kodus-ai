@@ -16,6 +16,8 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 - `spec-list.ts` `specListOf`: the spec files one run executes: main's listing under the recipe's glob, plus the specs the PR adds, minus the ones it removes (paths read relative to the suite directory), or exactly the specs a retry names.
 - `plan.ts` `planSuiteRun` (section 6.1 on the request path: `select` over the change set, `planRepush` when the PR has an earlier run, the safety net everywhere an input is missing). With no coverage map (none recorded yet for the environment) every plan is the whole suite with the reason `map_missing`, or the more specific file reason (a lockfile, a manifest, a config); an ignored-only change is not trusted to select nothing without a map; a change set the product could not read is `changes_unknown`, never an empty list.
 - `report.ts` `buildSuiteReport` (the structured report of section 10.1 from a run's stored state, its first-pass results and its classification: totals, red tests by class, how the specs were chosen, the baseline and the drift, at most `ANNOTATIONS_MAX` 200 annotations, regressions first, each with the failing line of the spec read from the error's stack, a message cut to 400 characters), `suiteConclusionOf` (D4: a regression fails, flaky and pre-existing never do, unclassified is neutral; the run's state carries timed out and cancelled), `pageAnnotations` (GitHub takes `ANNOTATION_PAGE` 50 a request), `failingLineOf`. Never a sentence of the Runtime's own: the product writes the words.
+- `artifacts.ts` `planArtifacts` and `artifactOwner` (section 7, D8): which files a run left on a host become evidence: only those of failed specs, each of a kind the evidence holds and within its size, all within the suite's byte budget; a file belongs to the spec whose path (or file name) appears in its path, the longest match, a tie is no owner.
+- `shadow.ts` (section 6.1 Proof b, D14): `shadowDue` (every 5th of the first 50 selected runs, then every 10th), `missesOf` (the regressions a full run found in specs the selection skipped) and `brakeAfterMiss` (the whole suite for 10 pull requests; off at two misses among the last ten shadows).
 
 ## Does not own
 - Storing results, baselines and durations, the shard hosts, the detached command and its polling, publishing: later steps of the build plan (section 17), in the runtime-worker and `libs/runtime-publish`.
@@ -37,7 +39,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 
 ## Module map
 
-Files (16, tests apart): `artifacts.ts`, `balance.ts`, `classifier.ts`, `digest.ts`, `error-signature.ts`, `hosts.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `plan.ts`, `report.ts`, `repush.ts`, `select.ts`, `spec-list.ts`, `types.ts`
+Files (17, tests apart): `artifacts.ts`, `balance.ts`, `classifier.ts`, `digest.ts`, `error-signature.ts`, `hosts.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `plan.ts`, `report.ts`, `repush.ts`, `select.ts`, `shadow.ts`, `spec-list.ts`, `types.ts`
 
 Imports these Runtime modules:
 

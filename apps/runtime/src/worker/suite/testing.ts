@@ -4,6 +4,7 @@ import type { CoverageMapRecord } from './coverage-collector';
 import { POLL_STATES } from './detached-exec';
 import type { BaselineRecord, PgSuiteBaselines } from './pg-suite-baselines';
 import type { PgSuiteRuns, StoredSuiteResult, SuiteArtifactRef, SuiteRunEnd, StoredSuiteRun, StoredSuiteShard, SuitePhase, SuiteResultRow, SuiteRunRecord, SuiteRunState, SuiteShardPlan } from './pg-suite-runs';
+import type { PgSuiteSelectionState, PgSuiteShadows, SelectionState, ShadowRequest, StoredShadow } from './pg-suite-shadows';
 import { STATS_WINDOW, type PgSuiteSpecStats, type SpecObservation } from './pg-suite-spec-stats';
 import type { SuiteHostDemand, SuiteShardHost } from './suite-engine';
 
@@ -94,7 +95,7 @@ export class InMemorySuiteRuns implements Pick<PgSuiteRuns, 'create' | 'get' | '
         return r && r.organizationId === organizationId ? r : null;
     }
     async latestForPr(organizationId: string, environmentId: string, prNumber: number, before?: Date) {
-        return [...this.runs.values()].filter((r) => r.organizationId === organizationId && r.environmentId === environmentId && r.prNumber === prNumber && (!before || r.requestedAt.getTime() < before.getTime())).sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime())[0] ?? null;
+        return [...this.runs.values()].filter((r) => r.mode !== 'shadow' && r.organizationId === organizationId && r.environmentId === environmentId && r.prNumber === prNumber && (!before || r.requestedAt.getTime() < before.getTime())).sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime())[0] ?? null;
     }
     async finish(organizationId: string, suiteRunId: string, state: SuiteRunState, at: Date, end: SuiteRunEnd = {}) {
         const r = this.runs.get(suiteRunId);
@@ -188,6 +189,69 @@ export class InMemorySuiteCoverageMaps {
     async newest(organizationId: string, environmentId: string) {
         const m = [...this.rows.values()].filter((r) => r.organizationId === organizationId && r.environmentId === environmentId && r.status === 'complete').sort((a, b) => b.finishedAt.getTime() - a.finishedAt.getTime())[0];
         return m ? { mainSha: m.mainSha, suiteDigest: m.suiteDigest, finishedAt: m.finishedAt, specs: m.specs } : undefined;
+    }
+}
+
+/** The shadows of selected runs, as the Postgres store keeps them. */
+export class InMemorySuiteShadows implements Pick<PgSuiteShadows, 'request' | 'get' | 'pending' | 'markStarted' | 'complete' | 'recentMisses'> {
+    readonly rows = new Map<string, StoredShadow & { finishedAt?: Date }>();
+    async request(r: ShadowRequest) {
+        if ([...this.rows.values()].some((x) => x.sourceRunId === r.sourceRunId) || this.rows.has(r.shadowRunId)) return { created: false };
+        this.rows.set(r.shadowRunId, { ...r, state: 'queued', misses: [] });
+        return { created: true };
+    }
+    async get(organizationId: string, shadowRunId: string) {
+        const r = this.rows.get(shadowRunId);
+        return r && r.organizationId === organizationId ? r : null;
+    }
+    async pending(limit: number) {
+        return [...this.rows.values()].filter((r) => r.state === 'queued').slice(0, limit);
+    }
+    async markStarted(organizationId: string, shadowRunId: string) {
+        const r = this.rows.get(shadowRunId);
+        if (r && r.organizationId === organizationId && r.state === 'queued') r.state = 'started';
+    }
+    async complete(organizationId: string, shadowRunId: string, result: { misses: readonly string[]; conclusive: boolean }, at: Date = new Date(0)) {
+        const r = this.rows.get(shadowRunId);
+        if (!r || r.organizationId !== organizationId || r.state === 'done') return { first: false };
+        Object.assign(r, { state: 'done', misses: [...result.misses], conclusive: result.conclusive, finishedAt: at });
+        return { first: true };
+    }
+    async recentMisses(organizationId: string, environmentId: string, window = 10, since?: Date) {
+        const done = [...this.rows.values()].filter((r) => r.organizationId === organizationId && r.environmentId === environmentId && r.state === 'done' && r.conclusive && (!since || r.finishedAt! > since));
+        return done.sort((a, b) => b.finishedAt!.getTime() - a.finishedAt!.getTime()).slice(0, window).reduce((n, r) => n + r.misses.length, 0);
+    }
+}
+
+/** What each environment's selection is doing because of the shadow check. */
+export class InMemorySuiteSelectionState implements Pick<PgSuiteSelectionState, 'read' | 'recordSelected' | 'applyMiss' | 'consumeFullPr' | 'reenable'> {
+    readonly rows = new Map<string, { organizationId: string; selected: number; fullPrsLeft: number; off: boolean; reenabledAt?: Date }>();
+    private row(o: string, e: string) {
+        const r = this.rows.get(e) ?? { organizationId: o, selected: 0, fullPrsLeft: 0, off: false };
+        this.rows.set(e, r);
+        return r.organizationId === o ? r : undefined;
+    }
+    async read(o: string, e: string): Promise<SelectionState> {
+        const r = this.rows.get(e);
+        return r && r.organizationId === o ? { off: r.off, fullPrsLeft: r.fullPrsLeft, ...(r.reenabledAt ? { reenabledAt: r.reenabledAt } : {}) } : { off: false, fullPrsLeft: 0 };
+    }
+    async recordSelected(o: string, e: string) {
+        const r = this.row(o, e);
+        return r ? ++r.selected : 0;
+    }
+    async applyMiss(o: string, e: string, brake: { fullPrs: number; off: boolean }) {
+        const r = this.row(o, e);
+        if (r) Object.assign(r, { fullPrsLeft: brake.fullPrs, off: r.off || brake.off });
+    }
+    async consumeFullPr(o: string, e: string) {
+        const r = this.rows.get(e);
+        if (r && r.organizationId === o) r.fullPrsLeft = Math.max(0, r.fullPrsLeft - 1);
+    }
+    async reenable(o: string, e: string, at: Date = new Date(0)) {
+        const r = this.rows.get(e);
+        if (!r || r.organizationId !== o) return undefined;
+        Object.assign(r, { off: false, fullPrsLeft: 0, reenabledAt: at });
+        return at;
     }
 }
 

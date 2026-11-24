@@ -1245,6 +1245,47 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         // suite page can open them by key. The objects live in the evidence store under the run's `suite-artifact` keys and follow its TTL.
         sql: `ALTER TABLE runtime.runtime_suite_results ADD COLUMN IF NOT EXISTS artifacts jsonb;`,
     },
+    {
+        version: 57,
+        name: 'the shadow check of selection: shadows, their misses and the environment selection state',
+        // docs/runtime/e2e-suites.md section 6.1 (Proof b) and D14. A shadow is a selected PR run that also ran in full in the background:
+        // the worker records the request (it holds no repository credentials; the product issues the run), then what the full run found that
+        // the selection skipped (`selection_misses`, one spec each, with the PR's changed files). The state row is what that does to the
+        // environment: selected runs counted (every 5th, then 10th, gets a shadow), pull requests left on the whole suite after a miss, and off.
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_suite_shadows (
+            shadow_run_id    text PRIMARY KEY,
+            organization_id  text NOT NULL,
+            environment_id   text NOT NULL,
+            repository_id    text NOT NULL,
+            source_run_id    text NOT NULL UNIQUE,
+            pr_number        integer NOT NULL,
+            pr_sha           text NOT NULL,
+            merge_base       text NOT NULL,
+            main_sha         text NOT NULL,
+            selected         jsonb NOT NULL DEFAULT '[]'::jsonb,
+            changed_files    jsonb NOT NULL DEFAULT '[]'::jsonb,
+            removed_files    jsonb NOT NULL DEFAULT '[]'::jsonb,
+            state            text NOT NULL DEFAULT 'queued',
+            selection_misses jsonb NOT NULL DEFAULT '[]'::jsonb,
+            conclusive       boolean,
+            requested_at     timestamptz NOT NULL DEFAULT now(),
+            started_at       timestamptz,
+            finished_at      timestamptz,
+            updated_at       timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS runtime_suite_shadows_env_idx ON runtime.runtime_suite_shadows (organization_id, environment_id, finished_at DESC) WHERE state = 'done';
+        CREATE INDEX IF NOT EXISTS runtime_suite_shadows_queued_idx ON runtime.runtime_suite_shadows (requested_at) WHERE state = 'queued';
+        CREATE TABLE IF NOT EXISTS runtime.runtime_suite_selection_state (
+            organization_id text NOT NULL,
+            environment_id  text PRIMARY KEY,
+            selected_runs   integer NOT NULL DEFAULT 0,
+            full_prs_left   integer NOT NULL DEFAULT 0,
+            off             boolean NOT NULL DEFAULT false,
+            off_at          timestamptz,
+            reenabled_at    timestamptz,
+            updated_at      timestamptz NOT NULL DEFAULT now()
+        );`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

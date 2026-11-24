@@ -68,3 +68,24 @@ describe('with a coverage map', () => {
         expect(p.specs).toEqual(['a.cy.ts']);
     });
 });
+
+describe('the brake of the shadow check (D14)', () => {
+    const m = map({ 'a.cy.ts': ['src/x.ts'], 'b.cy.ts': ['src/y.ts'], 'c.cy.ts': ['src/z.ts'] });
+    const green = { prSha: 'q'.repeat(40), mergeBase: 'm'.repeat(40), mode: 'full' as const, green: true, failures: [] };
+
+    it.each([['selection_miss' as const], ['selection_off' as const]])('%s runs the whole suite with that reason, whatever the map would select', (forceFull) => {
+        const p = planSuiteRun(input({ map: m, forceFull }));
+        expect(p.specs).toEqual(ALL);
+        expect(p.selection).toEqual({ mode: 'full', reason: forceFull, total: 3 });
+    });
+
+    it('also for a re-push: a previous green full run with an empty delta runs none, but not while the brake is on', () => {
+        const p = planSuiteRun(input({ map: m, previous: green, deltaFiles: [], forceFull: 'selection_miss' }));
+        expect(p.specs).toEqual(ALL);
+        expect(p.selection).toEqual({ mode: 'full', reason: 'selection_miss', total: 3 });
+    });
+
+    it('a shadow run is the whole suite with its own reason', () => {
+        expect(planSuiteRun(input({ map: m, forceFull: 'shadow' })).selection).toEqual({ mode: 'full', reason: 'shadow', total: 3 });
+    });
+});

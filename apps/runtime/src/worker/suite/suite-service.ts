@@ -1,7 +1,8 @@
 import { type Claim } from '@libs/runtime/environment';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
-import { type CoverageMapInput, MAP_MAX_COMMITS_BEHIND, type PreviousSuiteRun, planSuiteRun, type SuiteSelectionReport, specListOf, suiteDigestOf } from '@libs/runtime/suite';
+import { sha256, uuidV5From } from '@libs/runtime/contracts/derive-id';
+import { BRAKE_WINDOW_SHADOWS, brakeAfterMiss, type CoverageMapInput, MAP_MAX_COMMITS_BEHIND, missesOf, type PreviousSuiteRun, planSuiteRun, shadowDue, type SuiteSelectionReport, specListOf, suiteDigestOf } from '@libs/runtime/suite';
 
 import type { PgSuiteBaselineRequests } from '../../shared/persistence/suite-baseline-requests';
 import type { CoverageMapRecord } from './coverage-collector';
@@ -9,7 +10,8 @@ import type { EvidenceStore } from '../../shared/evidence/file-evidence-store';
 import type { Canary } from '../canary/canary';
 import type { PgSuiteBaselines } from './pg-suite-baselines';
 import type { StoredCoverageMap } from './pg-suite-coverage-maps';
-import type { PgSuiteRuns, SuiteRunState } from './pg-suite-runs';
+import type { PgSuiteSelectionState, PgSuiteShadows } from './pg-suite-shadows';
+import type { PgSuiteRuns, StoredSuiteRun, SuiteRunState } from './pg-suite-runs';
 import type { PgSuiteSpecStats } from './pg-suite-spec-stats';
 import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
 import { isCancellation } from '../workflow-cancellation';
@@ -42,6 +44,20 @@ export interface SuiteEnvironmentContext {
     tokens: string[];
 }
 
+/** Raised when a shadow run found a regression the selection skipped (D14): a person should know selection may be unsafe here. Never carries a value of the repository, only paths. */
+export interface SelectionAlert {
+    type: 'selection_miss';
+    organizationId: string;
+    environmentId: string;
+    shadowRunId: string;
+    sourceRunId: string;
+    /** The specs the selection skipped that the full run found a regression in. */
+    specs: string[];
+    changedFiles: string[];
+    /** Two misses in the last ten shadows: selection is now off for the environment. */
+    off: boolean;
+}
+
 export interface SuiteServiceDeps {
     setups: Pick<EnvironmentSetupStore, 'get'>;
     environment(ctx: SuiteEnvironmentContext): SuiteEnvironment;
@@ -60,6 +76,14 @@ export interface SuiteServiceDeps {
     headroom?(): Promise<number>;
     /** The baseline request a baseline run answers: marked started once the workflow holds it, so the product does not issue it again. */
     baselineRequests?: Pick<PgSuiteBaselineRequests, 'markStarted'>;
+    /**
+     * The shadow check of selection (6.1 Proof b, D14): every 5th, then 10th, selected run of an environment also enqueues a full
+     * background run (`shadows`), and what that run finds the selection skipped turns the environment to the whole suite or off
+     * (`selection`). Absent: no shadow, no brake.
+     */
+    shadows?: Pick<PgSuiteShadows, 'request' | 'get' | 'markStarted' | 'complete' | 'recentMisses'>;
+    selection?: Pick<PgSuiteSelectionState, 'read' | 'recordSelected' | 'applyMiss' | 'consumeFullPr'>;
+    alerts?(e: SelectionAlert): void;
     clock: { now(): number; sleep(ms: number): Promise<void> };
     /** The suite's check: opened when the run starts, closed with its conclusion. Absent: nothing is published. */
     publisher?: Pick<SuitePublisher, 'started' | 'finished' | 'cancelled'>;
@@ -90,9 +114,13 @@ export class SuiteService {
 
     async run(cmd: RuntimeSuiteRequested, step: SuiteStep, opts: { deadlineAt?: string; cancellationSignal?: () => AbortSignal | undefined; canaries?: readonly Canary[] } = {}): Promise<SuiteServiceResult> {
         const started = await step('suite:start', () => this.start(cmd));
-        if ('status' in started) return started;
+        if ('status' in started) {
+            if (cmd.mode === 'shadow') await step('suite:shadow-settle', () => this.settleShadow(cmd, started));
+            return started;
+        }
         // Publish steps retry (run-engine.service.ts `isPublishStep`): a broker that restarts never ends the suite without its check.
-        const publisher = this.d.publisher;
+        // A shadow (the whole suite in the background, D14) never publishes: the PR's check is the selected run's alone.
+        const publisher = cmd.mode === 'shadow' ? undefined : this.d.publisher;
         const suite = { ...(started.suite.config.cwd ? { cwd: started.suite.config.cwd } : {}) };
         let closed = false;
         try {
@@ -107,6 +135,7 @@ export class SuiteService {
                 return out;
             });
             if (publisher && !closed) await step('publish:suite-final', () => publisher.finished(cmd, result, suite));
+            if (cmd.mode === 'shadow') await step('suite:shadow-settle', () => this.settleShadow(cmd, result));
             return result;
         } catch (e) {
             // The workflow was cancelled (a newer push, the PR closed, the Run stopped) before the engine could close the check.
@@ -118,6 +147,7 @@ export class SuiteService {
     private async start(cmd: RuntimeSuiteRequested): Promise<Started | Extract<SuiteServiceResult, { status: 'off' }>> {
         // The baseline request is answered once a workflow holds it, whatever the recipe says: it is not asked for again.
         if (cmd.mode === 'baseline') await this.d.baselineRequests?.markStarted(cmd.organizationId, cmd.environmentId, cmd.mainSha).catch(() => undefined);
+        if (cmd.mode === 'shadow') await this.d.shadows?.markStarted(cmd.organizationId, cmd.suiteRunId).catch(() => undefined);
         const setup = await this.d.setups.get(cmd.environmentId);
         const content = setup?.organizationId === cmd.organizationId && setup.recipe?.state === 'found' ? setup.recipe.content : undefined;
         const parsed = content ? parseRecipe(content) : undefined;
@@ -156,7 +186,9 @@ export class SuiteService {
         // A baseline is main alone: the PR's files are not part of it.
         const whole = specListOf(cmd.mode === 'baseline' ? { glob: common.glob, listed: listing.specs, ...(common.cwd ? { cwd: common.cwd } : {}) } : common);
         const digest = suiteDigestOf(s.suite.config, whole.map((x) => x.path));
-        const plan = await this.plan(cmd, s, whole.map((x) => x.path), digest);
+        const plan = await this.plan(cmd, s, whole.map((x) => x.path), digest, !held);
+        // A selected run is counted (and every 5th, then 10th, is shadowed) once: a step that runs again finds its run row and counts nothing.
+        if (!held && !cmd.specs && cmd.mode !== 'baseline' && cmd.mode !== 'shadow' && (plan.selection.mode === 'selected' || plan.selection.mode === 'none')) await this.shadowIfDue(cmd, plan.specs);
         const wanted = new Set(plan.specs);
         // A retry runs exactly the specs it names; a selection runs the ones the plan chose (in the list's order).
         const specs = cmd.specs ? specListOf({ ...common, only: cmd.specs }) : whole.filter((x) => wanted.has(x.path));
@@ -202,12 +234,17 @@ export class SuiteService {
      * Which specs this run executes (6.1): the whole suite for a baseline; for a PR the plan of `planSuiteRun` over the change set,
      * the re-push rule when the PR has an earlier finished run, and the coverage map when there is one. A retry names its own specs.
      */
-    private async plan(cmd: RuntimeSuiteRequested, s: Started, all: readonly string[], digest: string) {
+    private async plan(cmd: RuntimeSuiteRequested, s: Started, all: readonly string[], digest: string, first: boolean) {
+        if (cmd.mode === 'shadow') return planSuiteRun({ allSpecs: all, suiteDigest: digest, mergeBase: cmd.mergeBase!, prSha: cmd.prSha!, forceFull: 'shadow' });
         if (cmd.mode === 'baseline' || cmd.specs) return { specs: [...all], failedBefore: [] as string[], diffCoverage: {} as Record<string, number>, selection: { mode: 'full', reason: 'baseline', total: all.length } as SuiteSelectionReport };
-        const stored = await this.d.maps?.newest(cmd.organizationId, cmd.environmentId);
+        const prev = await this.previousRunOf(cmd);
+        const previous = this.previousOf(cmd, prev);
+        // The brake of the shadow check: off, or the whole suite after a miss; the whole suite is then the plan whatever the map says.
+        const brake = await this.brakeOf(cmd, prev, first);
+        const stored = brake ? undefined : await this.d.maps?.newest(cmd.organizationId, cmd.environmentId);
         const map = stored ? this.mapInputOf(stored, cmd) : undefined;
-        const previous = await this.previousOf(cmd);
         return planSuiteRun({
+            ...(brake ? { forceFull: brake } : {}),
             allSpecs: all,
             suiteDigest: digest,
             mergeBase: cmd.mergeBase!,
@@ -229,10 +266,75 @@ export class SuiteService {
         return { suiteDigest: m.suiteDigest, commitsBehindMain: at >= 0 ? at : MAP_MAX_COMMITS_BEHIND + 1, ageMs: Math.max(0, this.d.clock.now() - m.finishedAt.getTime()), specs: m.specs };
     }
 
+    private async previousRunOf(cmd: RuntimeSuiteRequested) {
+        return cmd.prNumber === undefined ? null : this.d.runs.latestForPr(cmd.organizationId, cmd.environmentId, cmd.prNumber, new Date(cmd.requestedAt));
+    }
+
+    /**
+     * The shadow check's brake on this PR (D14): selection off, or the whole suite for the next `M` pull requests after a miss. Each
+     * new pull request takes one of the `M` (a re-push of one that already ran under the brake stays on the whole suite and takes none).
+     */
+    private async brakeOf(cmd: RuntimeSuiteRequested, prev: StoredSuiteRun | null, first: boolean): Promise<'selection_off' | 'selection_miss' | undefined> {
+        if (!this.d.selection) return undefined;
+        const state = await this.d.selection.read(cmd.organizationId, cmd.environmentId);
+        if (state.off) return 'selection_off';
+        const underBrake = prev?.selection?.mode === 'full' && prev.selection.reason === 'selection_miss';
+        if (underBrake) return 'selection_miss';
+        if (state.fullPrsLeft <= 0) return undefined;
+        if (first) await this.d.selection.consumeFullPr(cmd.organizationId, cmd.environmentId);
+        return 'selection_miss';
+    }
+
+    /** Counts this selected run and, on the 5th (then every 10th), asks for its shadow: the product issues the full run, since only it can mint the download tokens. */
+    private async shadowIfDue(cmd: RuntimeSuiteRequested, selected: readonly string[]): Promise<void> {
+        const { selection, shadows } = this.d;
+        if (!selection || !shadows) return;
+        const count = await selection.recordSelected(cmd.organizationId, cmd.environmentId);
+        if (!shadowDue(count)) return;
+        await shadows.request({
+            shadowRunId: uuidV5From(sha256(`suite-shadow:${cmd.organizationId}:${cmd.suiteRunId}`)),
+            organizationId: cmd.organizationId,
+            environmentId: cmd.environmentId,
+            repositoryId: cmd.repositoryId,
+            sourceRunId: cmd.suiteRunId,
+            prNumber: cmd.prNumber!,
+            prSha: cmd.prSha!,
+            mergeBase: cmd.mergeBase!,
+            mainSha: cmd.mainSha,
+            selected: [...selected],
+            changedFiles: [...(cmd.changedFiles ?? [])],
+            removedFiles: [...(cmd.removedFiles ?? [])],
+        });
+    }
+
+    /**
+     * What a finished shadow says (6.1 Proof b): the regressions the full run found in specs the selection skipped are its misses. A miss
+     * puts the environment on the whole suite for the next 10 pull requests and raises an alert; two misses in the last ten shadows turn
+     * selection off. A shadow that did not finish (no host, a timeout, a cancel) is no evidence and counts for nothing. Applied once:
+     * a shadow already completed changes nothing.
+     */
+    private async settleShadow(cmd: RuntimeSuiteRequested, result: Pick<SuiteServiceResult, 'status'>): Promise<void> {
+        const { shadows, selection } = this.d;
+        if (!shadows) return;
+        const shadow = await shadows.get(cmd.organizationId, cmd.suiteRunId);
+        if (!shadow || shadow.state === 'done') return;
+        const run = result.status === 'ran' ? await this.d.runs.get(cmd.organizationId, cmd.suiteRunId) : null;
+        const classification = run?.classification;
+        const conclusive = !!classification && !!run && ['passed', 'failed', 'neutral'].includes(run.state);
+        const misses = conclusive ? missesOf({ selected: shadow.selected, classification }) : [];
+        if (misses.length > 0 && selection) {
+            const state = await selection.read(cmd.organizationId, cmd.environmentId);
+            const recent = (await shadows.recentMisses(cmd.organizationId, cmd.environmentId, BRAKE_WINDOW_SHADOWS, state.reenabledAt)) + misses.length;
+            const brake = brakeAfterMiss({ missesInWindow: recent });
+            await selection.applyMiss(cmd.organizationId, cmd.environmentId, brake);
+            this.d.alerts?.({ type: 'selection_miss', organizationId: cmd.organizationId, environmentId: cmd.environmentId, shadowRunId: shadow.shadowRunId, sourceRunId: shadow.sourceRunId, specs: misses, changedFiles: shadow.changedFiles, off: brake.off });
+        }
+        await shadows.complete(cmd.organizationId, cmd.suiteRunId, { misses, conclusive }, new Date(this.d.clock.now()));
+    }
+
     /** The PR's earlier finished run, as the re-push rule reads it: what it ran and what was red after classification. */
-    private async previousOf(cmd: RuntimeSuiteRequested): Promise<PreviousSuiteRun | undefined> {
+    private previousOf(cmd: RuntimeSuiteRequested, prev: StoredSuiteRun | null): PreviousSuiteRun | undefined {
         if (cmd.prNumber === undefined) return undefined;
-        const prev = await this.d.runs.latestForPr(cmd.organizationId, cmd.environmentId, cmd.prNumber, new Date(cmd.requestedAt));
         if (!prev?.finishedAt || prev.suiteRunId === cmd.suiteRunId || !prev.prSha || !prev.mergeBase) return undefined;
         return {
             prSha: prev.prSha,

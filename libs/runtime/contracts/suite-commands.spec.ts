@@ -27,8 +27,14 @@ describe('the suite commands', () => {
         }
     });
 
+    it('a shadow run (the whole suite in the background, D14) names its PR, head and merge base like a PR suite, and is no baseline', () => {
+        expect(RuntimeSuiteRequestedSchema.safeParse({ ...pr, mode: 'shadow' }).success).toBe(true);
+        const { prSha: _gone, ...noHead } = pr;
+        expect(RuntimeSuiteRequestedSchema.safeParse({ ...noHead, mode: 'shadow' }).success).toBe(false);
+    });
+
     it('refuses a mode it does not know, a short sha, an unknown key and a plain token', () => {
-        expect(RuntimeSuiteRequestedSchema.safeParse({ ...pr, mode: 'shadow' }).success).toBe(false);
+        expect(RuntimeSuiteRequestedSchema.safeParse({ ...pr, mode: 'nightly' }).success).toBe(false);
         expect(RuntimeSuiteRequestedSchema.safeParse({ ...pr, prSha: 'abc' }).success).toBe(false);
         expect(RuntimeSuiteRequestedSchema.safeParse({ ...pr, extra: 1 }).success).toBe(false);
         expect(RuntimeSuiteRequestedSchema.safeParse({ ...pr, repoToken: 'ghs_plain' }).success).toBe(false);

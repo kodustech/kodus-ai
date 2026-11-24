@@ -9,6 +9,7 @@ import { type DistributedLock, DistributedLockService } from '@libs/core/workflo
 
 import { RuntimePoolController } from '../application/pool-controller.service';
 import { RuntimeSuiteBaselineRequests } from '../application/suite-baseline-requests.service';
+import { RuntimeSuiteShadowRequests } from '../application/suite-shadow-requests.service';
 import { RuntimeTemplateSetupRequests } from '../application/template-setup-requests.service';
 
 // Every 5 minutes: a schedule opens or closes within that, a warm-up ends,
@@ -57,6 +58,9 @@ export class RuntimePoolSchedulerCron {
         // The baseline suite runs a template turning ready asked for (docs/runtime/e2e-suites.md section 2.1); same lock, same schedule.
         @Optional()
         private readonly suiteBaselines?: RuntimeSuiteBaselineRequests,
+        // The shadows of selected PR runs (D14): the whole suite in the background; same lock, same schedule.
+        @Optional()
+        private readonly suiteShadows?: RuntimeSuiteShadowRequests,
     ) {}
 
     @GatedCron(RUNTIME_CRON_SCHEDULES.poolScheduler, { name: 'Runtime pool scheduler' })
@@ -93,6 +97,7 @@ export class RuntimePoolSchedulerCron {
         } finally {
             await this.requestTemplateSetups();
             await this.requestSuiteBaselines();
+            await this.requestSuiteShadows();
             // DistributedLock.release logs its own failure, and the TTL frees the lock anyway.
             await lock.release().catch(() => undefined);
         }
@@ -117,6 +122,17 @@ export class RuntimePoolSchedulerCron {
             if (out.pending) this.logger.log({ message: 'Runtime suite baselines: pass', context: RuntimePoolSchedulerCron.name, metadata: out });
         } catch (error) {
             this.logger.error({ message: 'Runtime suite baselines: pass failed', context: RuntimePoolSchedulerCron.name, error: error instanceof Error ? error : undefined });
+        }
+    }
+
+    /** Never throws and never counts as a failed tick: the pool's schedule does not wait on a shadow. */
+    private async requestSuiteShadows(): Promise<void> {
+        if (!this.suiteShadows) return;
+        try {
+            const out = await this.suiteShadows.run();
+            if (out.pending) this.logger.log({ message: 'Runtime suite shadows: pass', context: RuntimePoolSchedulerCron.name, metadata: out });
+        } catch (error) {
+            this.logger.error({ message: 'Runtime suite shadows: pass failed', context: RuntimePoolSchedulerCron.name, error: error instanceof Error ? error : undefined });
         }
     }
 }

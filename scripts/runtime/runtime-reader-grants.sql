@@ -32,7 +32,9 @@ BEGIN
       'runtime_kept_check_results',
       -- The e2e suite's runs, shards, results, baselines and spec durations (v51; docs/runtime/e2e-suites.md): the suite
       -- page and the environment's suite settings. Results hold redacted errors cut to the evidence limits, never a secret.
-      'runtime_suite_runs', 'runtime_suite_shards', 'runtime_suite_results', 'runtime_suite_baselines', 'runtime_suite_spec_stats'
+      'runtime_suite_runs', 'runtime_suite_shards', 'runtime_suite_results', 'runtime_suite_baselines', 'runtime_suite_spec_stats',
+      -- The shadow check of selection (v57, D14): the product issues the queued shadows and shows what selection missed and whether it is off.
+      'runtime_suite_shadows', 'runtime_suite_selection_state'
     ] LOOP
       IF to_regclass(format('runtime.%I', t)) IS NOT NULL THEN
         EXECUTE format('GRANT SELECT ON runtime.%I TO kodus_runtime_reader', t);

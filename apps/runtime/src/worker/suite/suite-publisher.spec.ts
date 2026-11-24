@@ -13,7 +13,7 @@ const A = 'a'.repeat(40);
 const B = 'b'.repeat(40);
 const cmd = (over: Partial<RuntimeSuiteRequested> = {}): RuntimeSuiteRequested => ({ suiteRunId: ID, organizationId: ORG, environmentId: 'env-1', repositoryId: 'repo-1', mode: 'ci', prNumber: 7, prSha: B, mergeBase: A, mainSha: A, requestedAt: '2026-11-23T12:00:00.000Z', key: ID, ...over });
 
-async function world(over: { classification?: any; results?: any[]; state?: any; selection?: any; mode?: 'run' | 'ci' } = {}) {
+async function world(over: { classification?: any; results?: any[]; state?: any; selection?: any; mode?: 'run' | 'ci' | 'shadow' } = {}) {
     const runs = new InMemorySuiteRuns();
     const sent: RuntimeSuitePublishRequested[] = [];
     const publisher = new SuitePublisher(runs, { request: async (m) => void sent.push(m) });
@@ -26,6 +26,14 @@ const failing = { spec: 'a.cy.ts', status: 'failed' as const, durationMs: 5, tes
 const classification = { tests: [{ spec: 'a.cy.ts', title: 'works', class: 'regression', blocks: true, finding: true, baseDrift: 2 }], massFailure: false, requestTemplateBuild: false };
 
 describe('publishing the suite check', () => {
+    it('a shadow run (the whole suite in the background, D14) never publishes: not when it starts, ends or is cancelled', async () => {
+        const w = await world({ mode: 'shadow', results: [failing], classification });
+        await w.publisher.started(cmd({ mode: 'shadow' }));
+        await w.publisher.finished(cmd({ mode: 'shadow' }), { status: 'ran', suiteRunId: ID, state: 'failed', replayed: false }, {});
+        await w.publisher.cancelled(cmd({ mode: 'shadow' }));
+        expect(w.sent).toEqual([]);
+    });
+
     it('opens the check when the suite starts: in progress, no conclusion, the key of the running phase', async () => {
         const runs = new InMemorySuiteRuns();
         const sent: RuntimeSuitePublishRequested[] = [];

@@ -120,20 +120,20 @@ export class PgSuiteRuns {
         return r.rows[0] ? runOf(r.rows[0]) : null;
     }
 
-    /** The newest run of a PR in the environment, from before `before` when given (a run never reads itself as its previous): what the re-push rule reads. */
+    /** The newest run of a PR in the environment (a shadow is no run of the PR: it never feeds the re-push rule), from before `before` when given (a run never reads itself as its previous): what the re-push rule reads. */
     async latestForPr(organizationId: string, environmentId: string, prNumber: number, before?: Date): Promise<StoredSuiteRun | null> {
         const r = await this.pool.query(
-            `SELECT * FROM runtime.runtime_suite_runs WHERE organization_id = $1 AND environment_id = $2 AND pr_number = $3 AND ($4::timestamptz IS NULL OR requested_at < $4) ORDER BY requested_at DESC LIMIT 1`,
+            `SELECT * FROM runtime.runtime_suite_runs WHERE organization_id = $1 AND environment_id = $2 AND pr_number = $3 AND mode <> 'shadow' AND ($4::timestamptz IS NULL OR requested_at < $4) ORDER BY requested_at DESC LIMIT 1`,
             [organizationId, environmentId, prNumber, before ?? null],
         );
         return r.rows[0] ? runOf(r.rows[0]) : null;
     }
 
-    /** The PR's suite runs that have not ended (a baseline is no PR's), except those of `keepHead`: what a newer push or a closed PR cancels. */
+    /** The PR's suite runs that have not ended (a baseline is no PR's, and a shadow is background work that a new push does not cancel), except those of `keepHead`: what a newer push or a closed PR cancels. */
     async livePullRequestRuns(organizationId: string, repositoryId: string, prNumber: number, keepHead?: string): Promise<Array<{ suiteRunId: string; mode: SuiteMode }>> {
         const r = await this.pool.query(
             `SELECT suite_run_id, mode FROM runtime.runtime_suite_runs
-             WHERE organization_id = $1 AND repository_id = $2 AND pr_number = $3 AND finished_at IS NULL AND mode <> 'baseline' AND ($4::text IS NULL OR pr_sha IS DISTINCT FROM $4)
+             WHERE organization_id = $1 AND repository_id = $2 AND pr_number = $3 AND finished_at IS NULL AND mode NOT IN ('baseline', 'shadow') AND ($4::text IS NULL OR pr_sha IS DISTINCT FROM $4)
              ORDER BY requested_at`,
             [organizationId, repositoryId, prNumber, keepHead ?? null],
         );
