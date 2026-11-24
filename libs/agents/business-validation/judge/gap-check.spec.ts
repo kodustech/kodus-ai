@@ -519,6 +519,37 @@ describe("createGapCheck within the model's window (#2233)", () => {
         );
     });
 
+    it("fits the first message beside the slot's whole answer when that answer takes most of the window", async () => {
+        let spec: AgentSpec | undefined;
+        let message = '';
+        await createGapCheck(
+            async (s, prompt) => {
+                spec = s;
+                message = prompt;
+            },
+            { contextWindowTokens: 64_000, outputTokens: 52_000 },
+        )({ ...input, diff: bigDiff });
+        expect(message).toContain('<pr_diff');
+        expect(
+            worst(spec!.systemPrompt ?? '') +
+                worst(message) +
+                worst(JSON.stringify(spec!.tools.list())) +
+                52_000,
+        ).toBeLessThanOrEqual(64_000);
+    });
+
+    it("skips the second look when the slot's answer fills the window", async () => {
+        let ran = false;
+        const settled = await createGapCheck(
+            async () => {
+                ran = true;
+            },
+            { contextWindowTokens: 32_000, outputTokens: 32_000 },
+        )({ ...input, diff: bigDiff });
+        expect(ran).toBe(false);
+        expect(settled).toBeUndefined();
+    });
+
     it('skips the second look when the task alone would take half of a small window', async () => {
         let ran = false;
         const settled = await createGapCheck(
