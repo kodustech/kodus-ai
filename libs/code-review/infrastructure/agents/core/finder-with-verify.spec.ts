@@ -14,6 +14,8 @@ import type { ProgressLedger } from '@libs/agent-harness/domain/contracts/progre
 import type { ToolContext } from '@libs/agent-harness/domain/contracts/tool.contract';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
+import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 
 import {
     buildFinderAgentSpec,
@@ -193,6 +195,206 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
     });
 });
 
+describe("runFinderWithVerify within the model's window (#2233)", () => {
+    // The verify run reads files on up to ten steps with each read re-sent:
+    // without the finder's compressor it sent 2.4M tokens to 1M-token models.
+    it("shortens what each verify run re-sends to the finder's window", async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+            compressor: new ContextWindowCompressor(16_000),
+        });
+        const runner = new AiSdkAgentRunner(undefined);
+        const run = jest.spyOn(runner, 'run');
+
+        await runFinderWithVerify(
+            {
+                runner,
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                skipHeavyPasses: true,
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        const verifyRuns = run.mock.calls.filter(
+            ([spec]) => spec.phase === 'verify',
+        );
+        expect(verifyRuns.length).toBeGreaterThan(0);
+        const read = (i: number) => [
+            {
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: `r${i}`,
+                        toolName: 'readFile',
+                        input: { path: `src/f${i}.ts` },
+                    },
+                ],
+            },
+            {
+                role: 'tool',
+                content: [
+                    {
+                        type: 'tool-result',
+                        toolCallId: `r${i}`,
+                        toolName: 'readFile',
+                        output: {
+                            type: 'text',
+                            value: Array.from(
+                                { length: 400 },
+                                (_, line) =>
+                                    `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                            ).join('\n'),
+                        },
+                    },
+                ],
+            },
+        ];
+        const messages = [
+            { role: 'user', content: 'verify the finding' },
+            ...Array.from({ length: 8 }, (_, i) => read(i)).flat(),
+        ];
+        expect(estimateTextTokens(JSON.stringify(messages))).toBeGreaterThan(
+            16_000,
+        );
+        for (const [spec] of verifyRuns) {
+            const directives = await Promise.all(
+                spec.policies.map((p) =>
+                    p.prepareStep?.({ messages, stepNumber: 8 } as any),
+                ),
+            );
+            const sent = directives.find((d) => d?.messages)?.messages;
+            expect(sent).toBeDefined();
+            expect(
+                estimateTextTokens(JSON.stringify(sent)),
+            ).toBeLessThanOrEqual(16_000);
+        }
+    });
+});
+
+describe('runFinderWithVerify on a check model of its own (#2233)', () => {
+    it("shortens each verify run to the check model's window, not the finder's", async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+            compressor: new ContextWindowCompressor(64_000),
+        });
+        const verifyRunner = new AiSdkAgentRunner(undefined);
+        const verifyRun = jest.spyOn(verifyRunner, 'run');
+
+        await runFinderWithVerify(
+            {
+                runner: new AiSdkAgentRunner(undefined),
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                skipHeavyPasses: true,
+                verifyRunner,
+                verifyModelId: 'small-check-model',
+                verifyCompressor: new ContextWindowCompressor(8_000),
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(verifyRun).toHaveBeenCalled();
+        const messages = [
+            { role: 'user', content: 'verify the finding' },
+            ...Array.from({ length: 6 }, (_, i) => [
+                {
+                    role: 'assistant',
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: `r${i}`,
+                            toolName: 'readFile',
+                            input: { path: `src/f${i}.ts` },
+                        },
+                    ],
+                },
+                {
+                    role: 'tool',
+                    content: [
+                        {
+                            type: 'tool-result',
+                            toolCallId: `r${i}`,
+                            toolName: 'readFile',
+                            output: {
+                                type: 'text',
+                                value: Array.from(
+                                    { length: 300 },
+                                    (_, line) =>
+                                        `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                                ).join('\n'),
+                            },
+                        },
+                    ],
+                },
+            ]).flat(),
+        ];
+        const before = estimateTextTokens(JSON.stringify(messages));
+        expect(before).toBeGreaterThan(8_000);
+        expect(before).toBeLessThan(64_000 * 0.7);
+        for (const [spec] of verifyRun.mock.calls) {
+            const directives = await Promise.all(
+                spec.policies.map((p) =>
+                    p.prepareStep?.({ messages, stepNumber: 6 } as any),
+                ),
+            );
+            const sent = directives.find((d) => d?.messages)?.messages;
+            expect(sent).toBeDefined();
+            expect(
+                estimateTextTokens(JSON.stringify(sent)),
+            ).toBeLessThanOrEqual(8_000);
+        }
+    });
+});
+
+describe('runFinderWithVerify on a check runner with no window guard of its own', () => {
+    it("keeps the finder's compression on every verify run", async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+            compressor: new ContextWindowCompressor(16_000),
+        });
+        const verifyRunner = new AiSdkAgentRunner(undefined);
+        const verifyRun = jest.spyOn(verifyRunner, 'run');
+
+        await runFinderWithVerify(
+            {
+                runner: new AiSdkAgentRunner(undefined),
+                finderSpec,
+                modelId: 'mock',
+                tools,
+                skipHeavyPasses: true,
+                verifyRunner,
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(verifyRun).toHaveBeenCalled();
+        for (const [spec] of verifyRun.mock.calls) {
+            expect(spec.policies.some((p) => p.name === 'compression')).toBe(
+                true,
+            );
+        }
+    });
+});
+
 describe('runFinderWithVerify — repo_instruction findings', () => {
     // The verifier is told to drop a quote it cannot find, and did not always:
     // a PR that adds an instruction to CLAUDE.md is not checked against it.
@@ -203,7 +405,8 @@ describe('runFinderWithVerify — repo_instruction findings', () => {
                 {
                     relevantFile: 'a.ts',
                     label: 'repo_instruction',
-                    suggestionContent: 'CLAUDE.md says "Amounts are integer cents."',
+                    suggestionContent:
+                        'CLAUDE.md says "Amounts are integer cents."',
                     existingCode: 'x',
                     improvedCode: 'y',
                     severity: 'medium',
@@ -211,7 +414,8 @@ describe('runFinderWithVerify — repo_instruction findings', () => {
                 {
                     relevantFile: 'b.ts',
                     label: 'repo_instruction',
-                    suggestionContent: 'CLAUDE.md says "Use isinstance() instead of getattr on unions."',
+                    suggestionContent:
+                        'CLAUDE.md says "Use isinstance() instead of getattr on unions."',
                     existingCode: 'p',
                     improvedCode: 'q',
                     severity: 'medium',
@@ -223,10 +427,21 @@ describe('runFinderWithVerify — repo_instruction findings', () => {
                 doGenerate: (async (opts: any) => {
                     const sys = JSON.stringify(opts?.prompt ?? '');
                     const tc = sys.includes('REFUTE')
-                        ? { id: 'v', name: 'submitVerdict', input: { keep: true, rationale: 'ok' } }
+                        ? {
+                              id: 'v',
+                              name: 'submitVerdict',
+                              input: { keep: true, rationale: 'ok' },
+                          }
                         : { id: 'f', name: 'submitResult', input: findings };
                     return {
-                        content: [{ type: 'tool-call', toolCallId: tc.id, toolName: tc.name, input: JSON.stringify(tc.input) }],
+                        content: [
+                            {
+                                type: 'tool-call',
+                                toolCallId: tc.id,
+                                toolName: tc.name,
+                                input: JSON.stringify(tc.input),
+                            },
+                        ],
                         finishReason: 'tool-calls',
                         usage: { inputTokens: 5, outputTokens: 5 },
                         warnings: [],
@@ -253,7 +468,14 @@ describe('runFinderWithVerify — repo_instruction findings', () => {
                 modelId: 'mock',
                 tools,
                 repoInstructions: {
-                    files: [{ path: 'CLAUDE.md', content: 'Amounts are integer cents.', appliesTo: '**', truncated: false }],
+                    files: [
+                        {
+                            path: 'CLAUDE.md',
+                            content: 'Amounts are integer cents.',
+                            appliesTo: '**',
+                            truncated: false,
+                        },
+                    ],
                     otherFiles: [],
                     dropped: [],
                     truncated: false,
@@ -265,8 +487,12 @@ describe('runFinderWithVerify — repo_instruction findings', () => {
         );
 
         expect(r.kept.map((f) => f.relevantFile)).toEqual(['a.ts']);
-        expect(r.droppedByVerify.map((d) => d.finding.relevantFile)).toEqual(['b.ts']);
-        expect(r.droppedByVerify[0].evidence).toMatch(/not in the target-branch/);
+        expect(r.droppedByVerify.map((d) => d.finding.relevantFile)).toEqual([
+            'b.ts',
+        ]);
+        expect(r.droppedByVerify[0].evidence).toMatch(
+            /not in the target-branch/,
+        );
     });
 });
 

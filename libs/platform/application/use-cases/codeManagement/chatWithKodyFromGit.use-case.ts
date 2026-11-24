@@ -2600,7 +2600,11 @@ export class ChatWithKodyFromGitUseCase {
                       )
                     : undefined,
         });
-        return replyFor(published.outcome, published.comment);
+        return replyFor(
+            published.outcome,
+            published.comment,
+            published.changed,
+        );
     }
 
     private async handleConversation(context: {

@@ -264,8 +264,10 @@ export class BusinessLogicReplies {
             request: { ...request, door: 'command' },
             result: {
                 outcome,
-                references: [],
-                attempts: [],
+                // The run it answers, read again: the next re-check is
+                // compared with this one (#2423).
+                references: run.references as never,
+                attempts: run.attempts as never,
                 trackers: run.trackers,
             },
             settings,

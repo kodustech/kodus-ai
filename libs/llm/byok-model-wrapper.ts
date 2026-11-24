@@ -26,7 +26,10 @@ import {
     readProviderUsage,
 } from '@libs/llm/ai-sdk-usage';
 import { admitRequest, meterAdmitsRequests } from '@libs/llm/usage-meter';
-import { reasoningBudgetFrom } from '@libs/llm/reasoning-budget';
+import {
+    budgetAddedToAnswerCap,
+    optionsNamespace,
+} from '@libs/llm/answer-cap-budget';
 import {
     attachClassification,
     classifyLLMError,
@@ -44,69 +47,8 @@ import {
     withoutRefusedFields,
     withReasoningOff,
 } from '@libs/llm/rejected-reasoning-field';
-import { REGISTRY } from '@libs/llm/providers/kernel/registry';
 
 const logger = createLogger('ByokModelWrapper');
-
-/**
- * Adapters that send max_tokens = answer cap + reasoning budget, read in
- * their source: @ai-sdk/anthropic (`maxTokens + thinkingBudget`) and
- * @ai-sdk/amazon-bedrock (`maxTokens += thinkingBudget`). Others hold the
- * reasoning inside the answer cap (OpenAI, Gemini).
- */
-const ADDS_BUDGET_TO_ANSWER_CAP = new Set(['anthropic', 'amazonBedrock']);
-
-/**
- * The reasoning budget a request adds on top of its answer cap: read only from
- * the options the served adapter parses, and only for an adapter that adds it.
- * An adapter parses its own key, or else a legacy alias (Bedrock's `bedrock`),
- * so the first of them present is the one sent.
- */
-function budgetAddedToAnswerCap(
-    providerOptions: Record<string, unknown> | undefined,
-    slot: NormalizedModel | undefined,
-    namespace: string | undefined,
-): number | undefined {
-    if (!namespace || !ADDS_BUDGET_TO_ANSWER_CAP.has(namespace)) {
-        return undefined;
-    }
-    const aliases =
-        REGISTRY.get(slot!.provider).providerOptionsNamespaceAliases?.(
-            slot!.provider,
-        ) ?? [];
-    const parsed = [namespace, ...aliases].find(
-        (key) => providerOptions?.[key] != null,
-    );
-    if (!parsed) {
-        return undefined;
-    }
-    const options = providerOptions![parsed] as Record<string, unknown>;
-    const budget = reasoningBudgetFrom(options);
-    if (budget !== undefined) {
-        return budget;
-    }
-    // Thinking enabled with no budget: @ai-sdk/anthropic sends its default
-    // budget, 1024, on top of the answer cap all the same.
-    const thinking = (options as { thinking?: { type?: unknown } }).thinking;
-    return namespace === 'anthropic' && thinking?.type === 'enabled'
-        ? ANTHROPIC_DEFAULT_THINKING_BUDGET
-        : undefined;
-}
-
-/** What @ai-sdk/anthropic budgets for thinking enabled without a budget. */
-const ANTHROPIC_DEFAULT_THINKING_BUDGET = 1024;
-
-/** The provider-options key the slot's adapter reads, so an effort the call
- *  never carried can be added there when the upstream asks for it. */
-function optionsNamespace(
-    slot: NormalizedModel | undefined,
-): string | undefined {
-    if (!slot?.provider || !REGISTRY.has(slot.provider)) return undefined;
-    return REGISTRY.get(slot.provider).providerOptionsNamespace?.(
-        slot.provider,
-        slot.model,
-    );
-}
 
 /**
  * PRE-call token estimate for the tpm reservoir. Serializes the wire prompt the
@@ -116,8 +58,7 @@ function optionsNamespace(
  */
 function estimatePromptTokens(prompt: unknown): number {
     if (prompt == null) return 0;
-    const text =
-        typeof prompt === 'string' ? prompt : safeSerialize(prompt);
+    const text = typeof prompt === 'string' ? prompt : safeSerialize(prompt);
     return estimateTextTokens(text);
 }
 
@@ -184,12 +125,10 @@ function safeSerialize(value: unknown): string {
  * reservoir leaves the pre-call estimate standing as the net debit.
  */
 function extractUsageTotal(result: unknown): number | undefined {
-    const usage = (result as { usage?: Record<string, unknown> } | null)
-        ?.usage;
+    const usage = (result as { usage?: Record<string, unknown> } | null)?.usage;
     if (!usage) return undefined;
     if (typeof usage.totalTokens === 'number') return usage.totalTokens;
-    const input =
-        typeof usage.inputTokens === 'number' ? usage.inputTokens : 0;
+    const input = typeof usage.inputTokens === 'number' ? usage.inputTokens : 0;
     const output =
         typeof usage.outputTokens === 'number' ? usage.outputTokens : 0;
     const sum = input + output;
