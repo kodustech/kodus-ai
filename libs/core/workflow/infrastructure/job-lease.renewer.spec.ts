@@ -113,6 +113,7 @@ describe('startJobLeaseRenewal (#1830)', () => {
         const controller = new AbortController();
 
         startJobLeaseRenewal({
+            organizationId: 'org-1',
             signal: controller.signal,
             renew,
             logger: logger as any,
