@@ -1,4 +1,4 @@
-import { templateSetupKey, boundKeyOfRun, boundKeyOfTemplate, candidatePools, type PoolView } from './candidate-pools';
+import { templateSetupKey, boundKeyOfRun, boundKeyOfSuite, boundKeyOfTemplate, candidatePools, suiteKeyOf, type PoolView } from './candidate-pools';
 
 const pool = (over: Partial<PoolView> & Pick<PoolView, 'poolId'>): PoolView => ({
     scope: 'kodus',
@@ -75,5 +75,36 @@ describe('candidatePools', () => {
         expect(templateSetupKey('a', 'template:a/')).toBeNull();
         expect(templateSetupKey('a', 'template:a/e/x')).toBeNull();
         expect(templateSetupKey('a', undefined)).toBeNull();
+    });
+
+    describe('a suite shard (docs/runtime/e2e-suites.md section 5)', () => {
+        const shard = { organizationId: 'kodus', consumer: 'suite', suiteRunId: 'sr-1', shard: 2 };
+
+        it('gets its own perRun host: the key names the org, the suite run and the shard', () => {
+            expect(boundKeyOfSuite('kodus', 'sr-1', 2)).toBe('suite:kodus/sr-1/2');
+            expect(candidatePools([kodusStatic, boat], shard)).toEqual({ pools: ['boat-eu-perrun', 'kodus-static'], perRun: ['boat-eu-perrun'], boundKey: 'suite:kodus/sr-1/2' });
+        });
+
+        it('two shards of one run, and two orgs with one run id, never share a host', () => {
+            expect(boundKeyOfSuite('a', 'sr', 0)).not.toBe(boundKeyOfSuite('a', 'sr', 1));
+            expect(boundKeyOfSuite('a', 'sr', 0)).not.toBe(boundKeyOfSuite('b', 'sr', 0));
+            expect(boundKeyOfSuite('a', 'sr', 0)).not.toBe(boundKeyOfRun('a', 'sr'));
+        });
+
+        it('with no suite run or no shard there is no host to bind: placement stays unrestricted', () => {
+            expect(candidatePools([kodusStatic, boat], { ...shard, suiteRunId: undefined })).toBeNull();
+            expect(candidatePools([kodusStatic, boat], { ...shard, shard: undefined })).toBeNull();
+            // A Run id alone does not make a suite shard.
+            expect(candidatePools([kodusStatic, boat], { organizationId: 'kodus', consumer: 'suite', runId: 'r-1' })).toBeNull();
+        });
+
+        it("reads a suite key back only for the claim's own org and a numeric shard", () => {
+            expect(suiteKeyOf('kodus', 'suite:kodus/sr-1/2')).toEqual({ suiteRunId: 'sr-1', shard: 2 });
+            expect(suiteKeyOf('acme', 'suite:kodus/sr-1/2')).toBeNull();
+            expect(suiteKeyOf('kodus', 'suite:kodus/sr-1/x')).toBeNull();
+            expect(suiteKeyOf('kodus', 'suite:kodus/sr-1')).toBeNull();
+            expect(suiteKeyOf('kodus', 'run:kodus/r-1')).toBeNull();
+            expect(suiteKeyOf('kodus', undefined)).toBeNull();
+        });
     });
 });

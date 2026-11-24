@@ -91,6 +91,9 @@ export interface CellWant {
     /** Who places the claim ('runtime' for a Run's side), its Run and environment: what placement and demand need. */
     consumer?: string;
     runId?: string;
+    /** A suite shard's claim (consumer 'suite'): the suite run and the shard, which name the host bound to it. */
+    suiteRunId?: string;
+    shard?: number;
     environmentId?: string;
     /** The pools the claim may use, in order (libs/runtime/placement); absent: computed by the directory, or none. */
     placement?: Placement;
@@ -308,7 +311,7 @@ export async function reserveCellFor(
         // The Run's own host: only its bound cell, and the demand that makes the fleet start one.
         pools = [first!];
         key = placement!.boundKey!;
-        const demand = await recordPoolDemand(pool, { poolId: first!, boundKey: key, organizationId: orgId, environmentId: opts.environmentId, runId: opts.runId, sizeMb: opts.size?.memoryMb });
+        const demand = await recordPoolDemand(pool, { poolId: first!, boundKey: key, organizationId: orgId, environmentId: opts.environmentId, runId: opts.suiteRunId ?? opts.runId, sizeMb: opts.size?.memoryMb });
         if (demand.failure) return { refused: 'host_unavailable', pool: first!, reason: demand.failure };
     } else if (pools && placement) {
         pools = pools.filter((p) => !placement.perRun.includes(p));
@@ -399,7 +402,7 @@ export class PgCellDirectory implements CellDirectory {
         const placement =
             want.placement ??
             (this.opts.pools && want.consumer
-                ? (candidatePools(await this.opts.pools.list(), { organizationId: orgId, consumer: want.consumer, runId: want.runId, isolation: want.isolation }) ?? undefined)
+                ? (candidatePools(await this.opts.pools.list(), { organizationId: orgId, consumer: want.consumer, runId: want.runId, suiteRunId: want.suiteRunId, shard: want.shard, isolation: want.isolation }) ?? undefined)
                 : undefined);
         const r = await reserveCellCapped(this.opts.inTransaction, orgId, { ...want, placement, sharedClaimCap: this.opts.sharedClaimCap ?? DEFAULT_ORG_SHARED_CLAIM_CAP });
         if ('row' in r) return { cellId: r.row.cell_id, replicaUrl: r.row.replica_url, owner: r.row.owner, orgId: r.row.org_id };

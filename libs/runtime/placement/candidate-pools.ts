@@ -27,6 +27,9 @@ export interface PlacementAsk {
     /** 'runtime' (a Run's side), 'setup', 'sandbox', ... */
     consumer: string;
     runId?: string;
+    /** A suite shard (consumer 'suite'): the suite run and the shard's index, which together name its host. */
+    suiteRunId?: string;
+    shard?: number;
     isolation?: IsolationMinimum;
 }
 
@@ -45,6 +48,21 @@ export const boundKeyOfRun = (organizationId: string, runId: string) => `run:${o
 /** The key that binds a template's setup host to one environment of one org (docs/runtime/host-providers.md §8.2): it receives only that environment's setup. */
 export const boundKeyOfTemplate = (organizationId: string, environmentId: string) => `template:${organizationId}/${environmentId}`;
 
+/** The key that binds a perRun host to one shard of one suite run of one org (docs/runtime/e2e-suites.md section 5). */
+export const boundKeyOfSuite = (organizationId: string, suiteRunId: string, shard: number) => `suite:${organizationId}/${suiteRunId}/${shard}`;
+
+/**
+ * The suite run and shard a `suite:<org>/<suiteRun>/<shard>` key names, only for the claim's own org and a
+ * non-negative integer shard. Anything else (a Run's or a template's key, another org's, malformed) is null.
+ */
+export function suiteKeyOf(organizationId: string, key: string | undefined): { suiteRunId: string; shard: number } | null {
+    if (!key) return null;
+    const prefix = `suite:${organizationId}/`;
+    if (!key.startsWith(prefix)) return null;
+    const m = /^([^/\s]{1,128})\/(\d{1,3})$/.exec(key.slice(prefix.length));
+    return m ? { suiteRunId: m[1], shard: Number(m[2]) } : null;
+}
+
 /**
  * The pools the claim may use, in order: the org's own first, then by weight, then by id. null: no pool a
  * controller drives admits the claim, so placement is what it was before pools (every connected cell the org
@@ -52,7 +70,8 @@ export const boundKeyOfTemplate = (organizationId: string, environmentId: string
  */
 export function candidatePools(pools: readonly PoolView[], ask: PlacementAsk): Placement | null {
     const own = `org:${ask.organizationId}`;
-    const runBound = ask.consumer === 'runtime' && !!ask.runId;
+    const suiteBound = ask.consumer === 'suite' && !!ask.suiteRunId && ask.shard !== undefined;
+    const runBound = (ask.consumer === 'runtime' && !!ask.runId) || suiteBound;
     const usable = pools.filter(
         (p) =>
             (p.scope === own || (p.scope === 'kodus' && (!p.allowOrgs || p.allowOrgs.includes(ask.organizationId)))) &&
@@ -67,7 +86,7 @@ export function candidatePools(pools: readonly PoolView[], ask: PlacementAsk): P
     return {
         pools: ordered.map((p) => p.poolId),
         perRun,
-        ...(perRun.length ? { boundKey: boundKeyOfRun(ask.organizationId, ask.runId!) } : {}),
+        ...(perRun.length ? { boundKey: suiteBound ? boundKeyOfSuite(ask.organizationId, ask.suiteRunId!, ask.shard!) : boundKeyOfRun(ask.organizationId, ask.runId!) } : {}),
     };
 }
 

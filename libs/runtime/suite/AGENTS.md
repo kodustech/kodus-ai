@@ -11,6 +11,8 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 - `repush.ts` `planRepush`: a new push on the same PR runs what was red before (minus `pre_existing`) plus what the delta reaches; a green previous run and an empty delta run none; a delta in the safety net escalates to full; a rebase selects again from the new merge base.
 - `order.ts`: `orderBin` / `orderBins` (inside a shard: failed before, then specs covering the diff by number of changed files, then the rest longest first; the balance is untouched) and `failFast` (more than 25% of the first `max(5, 10%)` specs failed: stop the first pass and name the rest `not_run`; the classifier then sees a mass failure).
 
+- `hosts.ts` `hostsToAsk` (one host per shard, at most the pool headroom, at least one) and `spreadOnto` (every spec onto the shards that got a host, balanced by the stored durations; the missing shards carry none).
+
 ## Does not own
 - Storing results, baselines and durations, the shard hosts, the detached command and its polling, publishing: later steps of the build plan (section 17), in the runtime-worker and `libs/runtime-publish`.
 - The `suite:` recipe block: `libs/runtime/protocol/recipe.ts`.
@@ -31,7 +33,7 @@ The pure part of running a repository's own e2e suite (docs/runtime/e2e-suites.m
 
 ## Module map
 
-Files (10, tests apart): `balance.ts`, `classifier.ts`, `error-signature.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `repush.ts`, `select.ts`, `types.ts`
+Files (11, tests apart): `balance.ts`, `classifier.ts`, `error-signature.ts`, `hosts.ts`, `index.ts`, `junit.ts`, `mochawesome.ts`, `order.ts`, `repush.ts`, `select.ts`, `types.ts`
 
 Imports these Runtime modules:
 

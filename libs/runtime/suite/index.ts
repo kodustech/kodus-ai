@@ -13,3 +13,5 @@ export { planRepush } from './repush';
 export type { PreviousSuiteRun, RepushInput, RepushPlan } from './repush';
 export { FAIL_FAST_BATCH_SHARE, FAIL_FAST_MIN_BATCH, FAIL_FAST_RATIO, failFast, orderBin, orderBins } from './order';
 export type { FailFastDecision, FailFastInput, OrderContext } from './order';
+export { hostsToAsk, spreadOnto } from './hosts';
+export type { ShardSpecs } from './hosts';

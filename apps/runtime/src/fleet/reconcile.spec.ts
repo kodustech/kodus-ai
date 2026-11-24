@@ -47,6 +47,17 @@ describe('the fleet reconcile pass', () => {
         expect(w.store.pools.get(w.poolId)!.status.scalable).toBe(true);
     });
 
+    it("a suite run's shards each start a host of their own at once, and a shard whose demand failed does not hold the others back", async () => {
+        const w = world();
+        for (const shard of [0, 1, 2]) w.store.addDemand({ poolId: w.poolId, boundKey: `suite:org-a/sr-1/${shard}`, organizationId: 'org-a', environmentId: 'env-1', runId: 'sr-1' });
+        await w.store.failDemand(w.poolId, 'suite:org-a/sr-1/1', 'registration_timeout');
+        await reconcileOnce(w.deps);
+        await reconcileOnce(w.deps);
+        expect(w.started.map((s) => s.boundKey)).toEqual(['suite:org-a/sr-1/0', 'suite:org-a/sr-1/2']);
+        expect(new Set(w.started.map((s) => s.hostId)).size).toBe(2);
+        expect(w.started.every((s) => s.environmentId === 'env-1')).toBe(true);
+    });
+
     it('a pool whose last hosts failed in a row stops taking Runs until its cooldown ends, then tries one again', async () => {
         const w = world();
         for (let i = 0; i < 3; i++) await w.store.recordPoolOutcome(w.poolId, { ok: false, reason: 'registration_timeout' });

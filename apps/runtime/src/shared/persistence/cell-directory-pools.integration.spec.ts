@@ -139,6 +139,35 @@ const BOAT = 'boat-eu-perrun';
             expect(cellOf(await cells.reserveCell(org, { claimId: pr, consumer: 'runtime', runId: 'r-2', sameBackendAs: [base] }))).toBe(fallback);
         }));
 
+    it("a suite shard waits for its own host on the perRun pool, records its demand under the suite key, and never takes another shard's host, a Run's host or the static cell", () =>
+        isolated(async (db, s) => {
+            const org = `org-${randomUUID()}`;
+            await boatPool(db, [org]);
+            const fallback = await connect(db, s, { slots: 9 });
+            const otherShard = await connect(db, s, { poolId: BOAT, boundKey: `suite:${org}/sr-1/1` });
+            const runHost = await connect(db, s, { poolId: BOAT, boundKey: `run:${org}/sr-1` });
+            const cells = directory(db);
+            const want = { claimId: claimIdFor(org, 'sr-1:0'), consumer: 'suite', suiteRunId: 'sr-1', shard: 0, environmentId: 'env-1' } as const;
+
+            expect(await cells.reserveCell(org, want)).toEqual({ refused: 'no_capacity', pool: BOAT, hostStarting: true });
+            const demand = (await db.query(`SELECT pool_id, bound_key, environment_id FROM runtime.runtime_pool_demand`)).rows;
+            expect(demand).toEqual([{ pool_id: BOAT, bound_key: `suite:${org}/sr-1/0`, environment_id: 'env-1' }]);
+            for (const id of [fallback, otherShard, runHost]) expect(await freeSlots(db, id)).toBe(id === fallback ? 9 : 4);
+
+            const host = await connect(db, s, { poolId: BOAT, boundKey: `suite:${org}/sr-1/0` });
+            expect(cellOf(await cells.reserveCell(org, want))).toBe(host);
+        }));
+
+    it("a suite shard's host takes no Run and no other shard", () =>
+        isolated(async (db, s) => {
+            const org = `org-${randomUUID()}`;
+            await boatPool(db, [org]);
+            await connect(db, s, { poolId: BOAT, boundKey: `suite:${org}/sr-1/0` });
+            const cells = directory(db);
+            expect(await cells.reserveCell(org, { claimId: claimIdFor(org, 'r-9:base:1'), consumer: 'runtime', runId: 'r-9' })).toMatchObject({ refused: 'no_capacity', hostStarting: true });
+            expect(await cells.reserveCell(org, { claimId: claimIdFor(org, 'sr-1:1'), consumer: 'suite', suiteRunId: 'sr-1', shard: 1 })).toMatchObject({ refused: 'no_capacity', hostStarting: true });
+        }));
+
     it('a host the fleet could not make is host_unavailable, naming the pool and why, not a wait', () =>
         isolated(async (db, s) => {
             const org = `org-${randomUUID()}`;

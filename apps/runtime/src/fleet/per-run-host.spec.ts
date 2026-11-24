@@ -19,11 +19,11 @@ const pool = (provider: 'fake' | 'boat' = 'fake', base?: string) =>
     });
 
 /** A perRun pool with one Run waiting for its host, and everything the workflow talks to. */
-function world(opts: { provider?: 'fake' | 'boat'; base?: string; template?: string | null; registersAfterMs?: number | null } = {}) {
+function world(opts: { provider?: 'fake' | 'boat'; base?: string; template?: string | null; registersAfterMs?: number | null; boundKey?: string } = {}) {
     const clock = new FakeClock();
     const store = new InMemoryFleetStore(clock);
     const poolId = store.addPool(pool(opts.provider ?? 'fake', opts.base));
-    const boundKey = 'run:org-a/r-1';
+    const boundKey = opts.boundKey ?? 'run:org-a/r-1';
     store.addDemand({ poolId, boundKey, organizationId: 'org-a', environmentId: 'env-1', runId: 'r-1' });
     const provider = new FakeHostProvider({ installation: 'it', startState: 'running' });
     const hub = new FakeHubFleet();
@@ -57,6 +57,29 @@ function world(opts: { provider?: 'fake' | 'boat'; base?: string; template?: str
 }
 
 describe('the perRun host workflow', () => {
+    // docs/runtime/e2e-suites.md section 5: one host per shard of a suite run, kept for the re-run, gone with the suite.
+    it("a suite shard's host boots from the environment's template and stays up between its first pass and its re-run, while no claim holds it, until the suite run ends its demand", async () => {
+        const w = world({ provider: 'boat', boundKey: 'suite:org-a/sr-1/0' });
+        const suiteEndsAt = w.clock.t + 40 * 60_000;
+        w.runEndsAt(suiteEndsAt);
+        const hostState: Array<{ at: number; provider: string }> = [];
+        const sleep = w.deps.sleep;
+        w.deps.sleep = async (ms) => {
+            await sleep(ms);
+            const elapsed = w.clock.t - (suiteEndsAt - 40 * 60_000);
+            // first pass from minute 2 to 12, nothing for 8 minutes (the other shards finish), the re-run from 20 to 24.
+            w.store.claims.set(w.hostId, (elapsed >= 2 * 60_000 && elapsed < 12 * 60_000) || (elapsed >= 20 * 60_000 && elapsed < 24 * 60_000) ? 1 : 0);
+            hostState.push({ at: elapsed, provider: [...w.provider.hosts.values()][0]?.state ?? 'none' });
+        };
+        expect(await runPerRunHost(w.input, w.deps)).toEqual({ outcome: 'served' });
+        expect([...w.provider.hosts.values()][0].from).toBe('kodus-env-a1-b2-c3');
+        expect(w.provider.hosts.size).toBe(1);
+        // Up through the gap with no claim; only the end of the suite's demand (minute 40) retires it.
+        expect(hostState.filter((h) => h.at < 39 * 60_000).every((h) => h.provider === 'running')).toBe(true);
+        expect(w.hub.retired).toEqual([w.hostId]);
+        expect(w.store.events.map((e) => e.to).slice(-2)).toEqual(['terminating', 'terminated']);
+    });
+
     it('creates one host from the template with a single-use token, serves the Run until it stops asking, then retires the cell and destroys the host', async () => {
         const w = world();
         w.runEndsAt(w.clock.t + 30 * 60_000);

@@ -4,7 +4,7 @@ Which pools may take a claim, and in which order (docs/runtime/host-providers.md
 
 ## Owns
 - `candidate-pools.ts` `candidatePools`: the pools an org may use (its own, and Kodus pools whose admission list names it), minus cordoned and not-scalable ones, minus perRun pools for anything but a Run, minus pools whose isolation label does not satisfy the claim; own first, then weight, then id.
-- `boundKeyOfRun`: the key a perRun host's cell is bound to (`run:<org>/<runId>`).
+- `boundKeyOfRun`: the key a perRun host's cell is bound to (`run:<org>/<runId>`). `boundKeyOfSuite` and `suiteKeyOf`: the same for one shard of an e2e suite run (`suite:<org>/<suiteRunId>/<shard>`, docs/runtime/e2e-suites.md section 5); a claim of consumer `suite` that names its suite run and shard goes to a perRun pool like a Run does, and its host serves that shard alone.
 - `PoolView`, `PlacementAsk`, `Placement`.
 
 ## Does not own

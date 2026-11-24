@@ -7,6 +7,7 @@ The Runtime Postgres as both control-plane apps use it: the schema and its migra
 - Locks: `locks.ts` `DistributedLocks`, `PgDistributedLocks` (session advisory locks on a dedicated connection; `withLock`, `tryWithLock`, `currentClient`). `lock-scoped-pg.ts` `LockScopedPg`: a store that joins the lock's live connection instead of taking a second pool slot, and refuses nested transactions.
 - Commands the API decided: `pg-command-store.ts` `PgCommandStore` (`CommandStore`: fork and egress approvals, egress audit and settings, stops, cell tokens, `revokeCell`), `egressScopes`.
 - Cell choice: `cell-directory.ts` `PgCellDirectory` (`reserveCell`, `replicaForClaim`, `replicaForCell`), `reserveCellFor` / `reserveCellCapped` (the capped, org-locked reservation in `runtime_cell_reservations`), `reserveCellRow` (the hub's uncapped one), and the SQL they share (`RESERVE_CELL_SQL`, `CELL_CAPACITY_SQL`, `BEST_CELL_SQL`).
+- Suite demand: `suite-demand.ts` `PgSuiteDemand` (`request`: one `runtime_pool_demand` row per shard of a suite run, keyed `suite:<org>/<suiteRun>/<shard>`; `status`: per shard `starting | ready | failed`; `end`: the run's demand expires at once). `CellWant` carries `suiteRunId` and `shard` for a claim of consumer `suite`.
 - The organization purge: `organization-purge.ts` `PgOrganizationPurgeStore` (`liveClaims`, `cordonPools`, `deleteOrganization`: every row of one organization in batches, the tables in `ORGANIZATION_PURGE_TABLES`; a host that is not terminated stays with its pool). `organization-purge.integration.spec.ts` fails when a `runtime` table with an organization column is missing from the list.
 - Previews: `preview-store.ts` `PgPreviewStore` (records and state, tunnel tickets, edge sessions, grants seen, tunnel holders), `normalizedSerial`, `sessionHashOf`.
 - Snapshot placements: `snapshot-placements.ts` `PgSnapshotPlacements` (which cell holds a sandbox's template or session snapshot, and the PR a session belongs to).
@@ -36,7 +37,7 @@ The Runtime Postgres as both control-plane apps use it: the schema and its migra
 
 ## Module map
 
-Files (11, tests apart): `cell-directory.ts`, `host-pools.ts`, `lock-scoped-pg.ts`, `locks.ts`, `organization-purge.ts`, `pg-command-store.ts`, `preview-store.ts`, `runtime-schema.ts`, `snapshot-placements.ts`, `testing.ts`, `workflow-retention.ts`
+Files (12, tests apart): `cell-directory.ts`, `host-pools.ts`, `lock-scoped-pg.ts`, `locks.ts`, `organization-purge.ts`, `pg-command-store.ts`, `preview-store.ts`, `runtime-schema.ts`, `snapshot-placements.ts`, `suite-demand.ts`, `testing.ts`, `workflow-retention.ts`
 
 Imports these Runtime modules:
 

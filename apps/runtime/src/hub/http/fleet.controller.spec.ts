@@ -37,6 +37,14 @@ describe('the hub fleet routes', () => {
         expect(await status(controller.mint({}, { ...body, hostId: 'tpl-2', boundKey: 'other:org-a/env-1' }))).toBe(400);
     });
 
+    it('mints a token bound to a suite shard (suite:<org>/<suiteRun>/<shard>) and refuses a shard that is not a number', async () => {
+        const { controller, tokens } = setup();
+        await controller.mint({}, { ...body, hostId: 'sh-1', boundKey: 'suite:org-a/sr-1/2' });
+        expect([...tokens.records.values()].some((x) => x.boundKey === 'suite:org-a/sr-1/2')).toBe(true);
+        expect(await status(controller.mint({}, { ...body, hostId: 'sh-2', boundKey: 'suite:org-a/sr-1/main' }))).toBe(400);
+        expect(await status(controller.mint({}, { ...body, hostId: 'sh-3', boundKey: 'suite:org-a/sr-1' }))).toBe(400);
+    });
+
     it('mints a kcf_ token for a host of a pool a controller drives, storing only its hash, bound to pool, host and Run', async () => {
         const { tokens, controller } = setup();
         const r = await controller.mint({ socket: undefined }, body);
