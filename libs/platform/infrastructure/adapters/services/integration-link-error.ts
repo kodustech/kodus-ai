@@ -1,3 +1,4 @@
+import { SimpleLogger } from '@libs/core/log/logger';
 import { BadRequestException, HttpException } from '@nestjs/common';
 
 /**
@@ -121,4 +122,36 @@ export function toIntegrationLinkError(
 /** A refusal worded for the user (4xx), as opposed to a fault on our side. */
 export function isIntegrationLinkRefusal(err: unknown): err is HttpException {
     return err instanceof HttpException && err.getStatus() < 500;
+}
+
+/**
+ * One log per failed link: a refusal as a warning with the reason the user
+ * sees, a fault as an error with the original error. `metadata` must carry
+ * named fields only: link params hold tokens.
+ */
+export function logIntegrationLinkFailure(
+    logger: Pick<SimpleLogger, 'warn' | 'error'>,
+    params: {
+        provider: string;
+        context: string;
+        err: Error;
+        linkError: unknown;
+        metadata: Record<string, unknown>;
+    },
+): void {
+    const { provider, context, err, linkError, metadata } = params;
+    if (isIntegrationLinkRefusal(linkError)) {
+        logger.warn({
+            message: `${provider} integration refused`,
+            context,
+            metadata: { ...metadata, reason: linkError.message },
+        });
+        return;
+    }
+    logger.error({
+        message: `Failed to create ${provider} integration`,
+        context,
+        error: err,
+        metadata,
+    });
 }

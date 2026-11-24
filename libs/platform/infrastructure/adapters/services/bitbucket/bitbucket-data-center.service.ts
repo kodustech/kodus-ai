@@ -82,6 +82,10 @@ import {
     WebhookSetupResult,
 } from '../webhook-setup/webhook-setup';
 import { recordWebhookSetupOutcome } from '../webhook-setup/webhook-setup-failures.service';
+import {
+    logIntegrationLinkFailure,
+    toIntegrationLinkError,
+} from '../integration-link-error';
 
 const FILES_PAGE_SIZE = 1000;
 const MAX_FILE_PAGES = 200;
@@ -264,7 +268,7 @@ export class BitbucketDataCenterService implements Omit<
                 testResponse.status !== 200 ||
                 !Array.isArray(testResponse.data?.values)
             ) {
-                throw new Error(
+                throw new BadRequestException(
                     'Bitbucket Data Center failed to validate the provided token.',
                 );
             }
@@ -291,19 +295,22 @@ export class BitbucketDataCenterService implements Omit<
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            this.logger.error({
-                message: 'Error authenticating with Data Center token',
+            const linkError = toIntegrationLinkError(
+                err,
+                'Bitbucket Data Center',
+            );
+            logIntegrationLinkFailure(this.logger, {
+                provider: 'Bitbucket Data Center',
                 context: BitbucketDataCenterService.name,
-                error: err,
+                err,
+                linkError,
                 // Named fields only: params carries the PAT.
                 metadata: {
                     organizationAndTeamData: params?.organizationAndTeamData,
                     host: params?.host,
                 },
             });
-            throw new BadRequestException(
-                'Error authenticating with Bitbucket Data Center.',
-            );
+            throw linkError;
         }
     }
 
@@ -385,7 +392,8 @@ export class BitbucketDataCenterService implements Omit<
                 config: {
                     hasRepositories: hasRepositories,
                     status: bitbucketRepositories?.installationStatus,
-                    host: bitbucketOrg?.authIntegration?.authDetails?.host ?? '',
+                    host:
+                        bitbucketOrg?.authIntegration?.authDetails?.host ?? '',
                 },
                 category: IntegrationCategory.CODE_MANAGEMENT,
             };
@@ -953,14 +961,12 @@ export class BitbucketDataCenterService implements Omit<
     ): Promise<void> {
         const startedAt = new Date().toISOString();
 
-        const repositories = <Repositories[]>(
-            (
-                await this.integrationConfigService.findOne({
-                    team: { uuid: organizationAndTeamData.teamId },
-                    configKey: IntegrationConfigKey.REPOSITORIES,
-                })
-            )?.configValue || []
-        );
+        const repositories = <Repositories[]>((
+            await this.integrationConfigService.findOne({
+                team: { uuid: organizationAndTeamData.teamId },
+                configKey: IntegrationConfigKey.REPOSITORIES,
+            })
+        )?.configValue || []);
 
         if (!repositories.length) {
             return;
@@ -1054,7 +1060,9 @@ export class BitbucketDataCenterService implements Omit<
                 const existingHooksRes = await axiosClient.get(path);
                 const existingHooks = existingHooksRes?.data?.values || [];
 
-                if (existingHooks.some((hook: any) => hook?.url === webhookUrl)) {
+                if (
+                    existingHooks.some((hook: any) => hook?.url === webhookUrl)
+                ) {
                     return;
                 }
 
@@ -1075,7 +1083,10 @@ export class BitbucketDataCenterService implements Omit<
                 this.logger.log({
                     message: 'Bitbucket Data Center webhook created',
                     context: BitbucketDataCenterService.name,
-                    metadata: { organizationAndTeamData, repositoryId: repo.id },
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: repo.id,
+                    },
                 });
             },
             labels,
@@ -3323,15 +3334,13 @@ export class BitbucketDataCenterService implements Omit<
                 this.createWebhook(
                     params.organizationAndTeamData,
                     integration?.uuid,
-                ).catch(
-                    (err) => {
-                        this.logger.warn({
-                            message: 'Failed to background create webhooks',
-                            context: BitbucketDataCenterService.name,
-                            error: err,
-                        });
-                    },
-                );
+                ).catch((err) => {
+                    this.logger.warn({
+                        message: 'Failed to background create webhooks',
+                        context: BitbucketDataCenterService.name,
+                        error: err,
+                    });
+                });
             }
         } catch (error) {
             this.logger.error({

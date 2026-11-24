@@ -136,6 +136,10 @@ import {
 import { gitlabRequesterFn } from './gitlab-request-handler';
 import { listingFailed } from './repository-listing';
 import {
+    logIntegrationLinkFailure,
+    toIntegrationLinkError,
+} from './integration-link-error';
+import {
     failWebhookSetupForAll,
     runWebhookSetup,
     WebhookSetupResult,
@@ -1370,7 +1374,20 @@ export class GitlabService implements Omit<
 
             return res;
         } catch (err) {
-            throw new BadRequestException(err);
+            const linkError = toIntegrationLinkError(err, 'GitLab');
+            logIntegrationLinkFailure(this.logger, {
+                provider: 'GitLab',
+                context: GitlabService.name,
+                err,
+                linkError,
+                // Named fields only: params carries the PAT or OAuth code.
+                metadata: {
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    authMode: params?.authMode,
+                    host: params?.host,
+                },
+            });
+            throw linkError;
         }
     }
 
@@ -1389,7 +1406,9 @@ export class GitlabService implements Omit<
             );
 
             if (!tokenResponse || !tokenResponse.data) {
-                throw new Error('Gitlab failed to generate auth token');
+                throw new BadRequestException(
+                    'Gitlab failed to generate auth token',
+                );
             }
 
             const gitlabHost = process.env.API_GITLAB_TOKEN_URL
@@ -1433,9 +1452,7 @@ export class GitlabService implements Omit<
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            throw new BadRequestException(
-                err.message || 'Error authenticating with PAT.',
-            );
+            throw toIntegrationLinkError(err, 'GitLab');
         }
     }
 
@@ -1453,7 +1470,9 @@ export class GitlabService implements Omit<
             });
 
             if (!testResponse || !testResponse.data) {
-                throw new Error('GitLab failed to validate the PAT.');
+                throw new BadRequestException(
+                    'GitLab failed to validate the PAT.',
+                );
             }
 
             const authDetails = {
@@ -1486,10 +1505,8 @@ export class GitlabService implements Omit<
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
-        } catch {
-            throw new BadRequestException(
-                'Error authenticating with GITLAB PAT.',
-            );
+        } catch (err) {
+            throw toIntegrationLinkError(err, 'GitLab');
         }
     }
 

@@ -7,6 +7,7 @@ import {
 
 import {
     isIntegrationLinkRefusal,
+    logIntegrationLinkFailure,
     toIntegrationLinkError,
 } from '../integration-link-error';
 
@@ -132,5 +133,51 @@ describe('isIntegrationLinkRefusal', () => {
         ['a non-Error value', 'boom', false],
     ])('%s is a refusal: %s', (_name, err, expected) => {
         expect(isIntegrationLinkRefusal(err)).toBe(expected);
+    });
+});
+
+describe('logIntegrationLinkFailure', () => {
+    const logger = () => ({ warn: jest.fn(), error: jest.fn() });
+    const metadata = { organizationAndTeamData: { organizationId: 'o1' } };
+
+    it('logs a refusal as a warning with its reason', () => {
+        const log = logger();
+        const refusal = new BadRequestException('Token refused.');
+
+        logIntegrationLinkFailure(log, {
+            provider: 'GitLab',
+            context: 'GitlabService',
+            err: refusal,
+            linkError: refusal,
+            metadata,
+        });
+
+        expect(log.error).not.toHaveBeenCalled();
+        expect(log.warn).toHaveBeenCalledWith({
+            message: 'GitLab integration refused',
+            context: 'GitlabService',
+            metadata: { ...metadata, reason: 'Token refused.' },
+        });
+    });
+
+    it('logs a fault as an error with the original error', () => {
+        const log = logger();
+        const fault = new TypeError('boom');
+
+        logIntegrationLinkFailure(log, {
+            provider: 'Forgejo',
+            context: 'ForgejoService',
+            err: fault,
+            linkError: fault,
+            metadata,
+        });
+
+        expect(log.warn).not.toHaveBeenCalled();
+        expect(log.error).toHaveBeenCalledWith({
+            message: 'Failed to create Forgejo integration',
+            context: 'ForgejoService',
+            error: fault,
+            metadata,
+        });
     });
 });

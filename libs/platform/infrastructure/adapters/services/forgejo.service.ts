@@ -171,6 +171,10 @@ import {
     WebhookSetupResult,
 } from './webhook-setup/webhook-setup';
 import { recordWebhookSetupOutcome } from './webhook-setup/webhook-setup-failures.service';
+import {
+    logIntegrationLinkFailure,
+    toIntegrationLinkError,
+} from './integration-link-error';
 
 /**
  * The Forgejo client returns failures instead of throwing. Turns one into an
@@ -1117,8 +1121,14 @@ export class ForgejoService implements Omit<
         try {
             const { token, host, organizationAndTeamData } = params;
 
-            if (!host) throw new Error('Forgejo host URL is required');
-            if (!token) throw new Error('Forgejo access token is required');
+            if (!host) {
+                throw new BadRequestException('Forgejo host URL is required');
+            }
+            if (!token) {
+                throw new BadRequestException(
+                    'Forgejo access token is required',
+                );
+            }
 
             const normalizedHost = host.replace(/\/+$/, '');
 
@@ -1155,17 +1165,19 @@ export class ForgejoService implements Omit<
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
         } catch (err) {
-            const errorMessage =
-                err?.response?.data?.message || err?.message || 'Unknown error';
-            this.logger.error({
-                message: 'Error authenticating with Forgejo token',
+            const linkError = toIntegrationLinkError(err, 'Forgejo');
+            logIntegrationLinkFailure(this.logger, {
+                provider: 'Forgejo',
                 context: ForgejoService.name,
-                error: err,
-                metadata: { errorMessage },
+                err,
+                linkError,
+                // Named fields only: params carries the token.
+                metadata: {
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    host: params?.host,
+                },
             });
-            throw new BadRequestException(
-                `Error authenticating with Forgejo: ${errorMessage}`,
-            );
+            throw linkError;
         }
     }
 

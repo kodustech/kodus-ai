@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import {
     isIntegrationLinkRefusal,
+    logIntegrationLinkFailure,
     toIntegrationLinkError,
 } from '../integration-link-error';
 import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
@@ -611,27 +612,18 @@ export class GithubService
             if (params?.authMode === AuthMode.OAUTH) {
                 throw linkError;
             }
-            // Named fields only: params carries the PAT.
-            const metadata = {
-                organizationAndTeamData: params?.organizationAndTeamData,
-                authMode: params?.authMode,
-                host: params?.host,
-            };
-            if (isIntegrationLinkRefusal(linkError)) {
-                this.logger.warn({
-                    message: 'GitHub integration refused',
-                    context: GithubService.name,
-                    metadata: { ...metadata, reason: linkError.message },
-                });
-            } else {
-                this.logger.error({
-                    message: 'Failed to create GitHub integration',
-                    context: GithubService.name,
-                    serviceName: GithubService.name,
-                    error: err,
-                    metadata,
-                });
-            }
+            logIntegrationLinkFailure(this.logger, {
+                provider: 'GitHub',
+                context: GithubService.name,
+                err,
+                linkError,
+                // Named fields only: params carries the PAT.
+                metadata: {
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    authMode: params?.authMode,
+                    host: params?.host,
+                },
+            });
             throw linkError;
         }
     }
