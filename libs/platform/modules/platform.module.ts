@@ -34,6 +34,7 @@ import { WebhookContextService } from '../application/services/webhook-context.s
 import { RepositoryConnectionService } from '../application/services/repository-sync/repository-connection.service';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { GetConnectionsUseCase } from '../application/use-cases/integrations/get-connections.use-case';
+import { UpdateConnectionUseCase } from '../application/use-cases/integrations/update-connection.use-case';
 import { GetOrganizationLanguageUseCase } from '../application/use-cases/organization/get-organization-language.use-case';
 import { PlatformCoreModule } from './platform-core.module';
 
@@ -80,6 +81,7 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
     providers: [
         ...CodeManagementUseCases,
         GetConnectionsUseCase,
+        UpdateConnectionUseCase,
         GetOrganizationLanguageUseCase,
         OrganizationMemberListService,
         WebhookContextService,
@@ -120,6 +122,7 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         GithubModule,
         ...CodeManagementUseCases,
         GetConnectionsUseCase,
+        UpdateConnectionUseCase,
         GetOrganizationLanguageUseCase,
         OrganizationMemberListService,
         WebhookContextService,

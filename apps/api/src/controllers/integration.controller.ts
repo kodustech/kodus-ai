@@ -3,6 +3,8 @@ import {
     Controller,
     Get,
     Inject,
+    Param,
+    Patch,
     Post,
     Query,
     UseGuards,
@@ -23,6 +25,7 @@ import { checkPermissions } from '@libs/identity/infrastructure/adapters/service
 import { CheckHasIntegrationByPlatformUseCase } from '@libs/integrations/application/use-cases/check-has-connection.use-case';
 import { CloneIntegrationUseCase } from '@libs/integrations/application/use-cases/clone-integration.use-case';
 import { GetConnectionsUseCase } from '@libs/platform/application/use-cases/integrations/get-connections.use-case';
+import { UpdateConnectionUseCase } from '@libs/platform/application/use-cases/integrations/update-connection.use-case';
 import { GetOrganizationIdUseCase } from '@libs/integrations/application/use-cases/get-organization-id.use-case';
 import { TeamQueryDto } from '@libs/organization/dtos/teamId-query.dto';
 import {
@@ -52,6 +55,7 @@ export class IntegrationController {
         private readonly cloneIntegrationUseCase: CloneIntegrationUseCase,
         private readonly checkHasIntegrationByPlatformUseCase: CheckHasIntegrationByPlatformUseCase,
         private readonly getConnectionsUseCase: GetConnectionsUseCase,
+        private readonly updateConnectionUseCase: UpdateConnectionUseCase,
         private readonly codeManagementService: CodeManagementService,
         // HTTP-only controller — REQUEST carries the org from the JWT; the team
         // comes from the query (the web passes the selected team).
@@ -186,5 +190,32 @@ export class IntegrationController {
     @ApiOkResponse({ type: ApiArrayResponseDto })
     public async getConnections(@Query() query: TeamQueryDto) {
         return this.getConnectionsUseCase.execute(query.teamId);
+    }
+
+    @Patch('/connections/:connectionId')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Update,
+            resource: ResourceType.GitSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Update a Git connection',
+        description:
+            'Rename a Git connection of the workspace, or turn its reviews on or off.',
+    })
+    @ApiQuery({ name: 'teamId', type: String, required: true })
+    public async updateConnection(
+        @Param('connectionId') connectionId: string,
+        @Query() query: TeamQueryDto,
+        @Body() body: { name?: string | null; reviewEnabled?: boolean },
+    ) {
+        return this.updateConnectionUseCase.execute({
+            teamId: query.teamId,
+            connectionId,
+            name: body?.name,
+            reviewEnabled: body?.reviewEnabled,
+        });
     }
 }

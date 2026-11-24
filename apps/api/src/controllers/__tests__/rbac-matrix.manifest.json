@@ -792,6 +792,17 @@
     }
   },
   {
+    "key": "integration.controller.ts#updateConnection",
+    "httpMethod": "PATCH",
+    "urlPath": "/integration/connections/:connectionId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "integrationConfig.controller.ts#getIntegrationConfigsByIntegrationCategory",
     "httpMethod": "GET",
     "urlPath": "/integration-config/get-integration-configs-by-integration-category",
