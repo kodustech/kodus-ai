@@ -712,17 +712,11 @@ env_set WORKER_ROLE "code-review"
 # obviously won't actually send. Override RESEND_API_KEY before running
 # provision.sh if you want real notifications.
 env_set RESEND_API_KEY "${RESEND_API_KEY:-disabled-for-dev}"
-# LLM provider keys — required for Kodus to actually review PRs.
-# Without these, the dashboard shows a "No LLM provider configured" banner.
-if [ -n "${API_OPEN_AI_API_KEY:-}" ]; then
-    env_set API_OPEN_AI_API_KEY "$API_OPEN_AI_API_KEY"
-fi
-if [ -n "${API_OPENAI_FORCE_BASE_URL:-}" ]; then
-    env_set API_OPENAI_FORCE_BASE_URL "$API_OPENAI_FORCE_BASE_URL"
-fi
-if [ -n "${API_LLM_PROVIDER_MODEL:-}" ]; then
-    env_set API_LLM_PROVIDER_MODEL "$API_LLM_PROVIDER_MODEL"
-fi
+# LLM provider config — required for Kodus to actually review PRs.
+# Without it, the dashboard shows a "No LLM provider configured" banner.
+# Expanded locally: one env_set per var set in the config (_common.sh), so
+# API_LLM_PROVIDER reaches the VM along with the legacy OpenAI-named vars.
+$(selfhosted_llm_env | while IFS= read -r line; do printf 'env_set %s "%s"\n' "${line%%=*}" "${line#*=}"; done)
 REMOTE
 
 if [ -n "${SH_LICENSE_KEY:-}" ]; then

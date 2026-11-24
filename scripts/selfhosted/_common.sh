@@ -30,6 +30,10 @@ __snap_GH_DEV_TOKEN="${GH_DEV_TOKEN+__SET__}${GH_DEV_TOKEN:-}"
 __snap_API_OPEN_AI_API_KEY="${API_OPEN_AI_API_KEY+__SET__}${API_OPEN_AI_API_KEY:-}"
 __snap_API_OPENAI_FORCE_BASE_URL="${API_OPENAI_FORCE_BASE_URL+__SET__}${API_OPENAI_FORCE_BASE_URL:-}"
 __snap_API_LLM_PROVIDER_MODEL="${API_LLM_PROVIDER_MODEL+__SET__}${API_LLM_PROVIDER_MODEL:-}"
+__snap_API_LLM_PROVIDER="${API_LLM_PROVIDER+__SET__}${API_LLM_PROVIDER:-}"
+__snap_API_LLM_API_KEY="${API_LLM_API_KEY+__SET__}${API_LLM_API_KEY:-}"
+__snap_API_LLM_BASE_URL="${API_LLM_BASE_URL+__SET__}${API_LLM_BASE_URL:-}"
+__snap_API_LLM_REASONING_EFFORT="${API_LLM_REASONING_EFFORT+__SET__}${API_LLM_REASONING_EFFORT:-}"
 __snap_KODUS_INSTALLER_PATH="${KODUS_INSTALLER_PATH+__SET__}${KODUS_INSTALLER_PATH:-}"
 __snap_TEST_VM_PROVIDER="${TEST_VM_PROVIDER+__SET__}${TEST_VM_PROVIDER:-}"
 __snap_IMAGE_TAG="${IMAGE_TAG+__SET__}${IMAGE_TAG:-}"
@@ -63,6 +67,10 @@ __restore_if_set GH_DEV_TOKEN              "$__snap_GH_DEV_TOKEN"
 __restore_if_set API_OPEN_AI_API_KEY       "$__snap_API_OPEN_AI_API_KEY"
 __restore_if_set API_OPENAI_FORCE_BASE_URL "$__snap_API_OPENAI_FORCE_BASE_URL"
 __restore_if_set API_LLM_PROVIDER_MODEL    "$__snap_API_LLM_PROVIDER_MODEL"
+__restore_if_set API_LLM_PROVIDER          "$__snap_API_LLM_PROVIDER"
+__restore_if_set API_LLM_API_KEY           "$__snap_API_LLM_API_KEY"
+__restore_if_set API_LLM_BASE_URL          "$__snap_API_LLM_BASE_URL"
+__restore_if_set API_LLM_REASONING_EFFORT  "$__snap_API_LLM_REASONING_EFFORT"
 __restore_if_set KODUS_INSTALLER_PATH      "$__snap_KODUS_INSTALLER_PATH"
 __restore_if_set TEST_VM_PROVIDER          "$__snap_TEST_VM_PROVIDER"
 __restore_if_set IMAGE_TAG                 "$__snap_IMAGE_TAG"
@@ -75,7 +83,8 @@ __restore_if_set HCLOUD_IMAGE              "$__snap_HCLOUD_IMAGE"
 
 unset __snap_DIGITALOCEAN_TOKEN __snap_HCLOUD_TOKEN __snap_SH_LICENSE_KEY \
       __snap_GH_DEV_TOKEN __snap_API_OPEN_AI_API_KEY __snap_API_OPENAI_FORCE_BASE_URL \
-      __snap_API_LLM_PROVIDER_MODEL \
+      __snap_API_LLM_PROVIDER_MODEL __snap_API_LLM_PROVIDER __snap_API_LLM_API_KEY \
+      __snap_API_LLM_BASE_URL __snap_API_LLM_REASONING_EFFORT \
       __snap_KODUS_INSTALLER_PATH __snap_TEST_VM_PROVIDER \
       __snap_IMAGE_TAG __snap_DO_REGION __snap_DO_SIZE __snap_DO_IMAGE \
       __snap_HCLOUD_LOCATION __snap_HCLOUD_SERVER_TYPE __snap_HCLOUD_IMAGE
@@ -122,7 +131,22 @@ __resolve_op_ref CLOUDFLARE_API_TOKEN      || exit 1
 __resolve_op_ref API_OPEN_AI_API_KEY       || exit 1
 __resolve_op_ref API_OPENAI_FORCE_BASE_URL || exit 1
 __resolve_op_ref API_LLM_PROVIDER_MODEL    || exit 1
+__resolve_op_ref API_LLM_API_KEY           || exit 1
+__resolve_op_ref API_LLM_BASE_URL          || exit 1
 unset -f __resolve_op_ref
+
+# The LLM vars the VM .env gets, as KEY=VALUE lines, set ones only.
+# API_LLM_PROVIDER + API_LLM_* is what setup.sh writes now; the OpenAI-named
+# vars still reach the VM so a config written before it keeps running as it
+# did (and API_OPEN_AI_API_KEY is also the embeddings key).
+SELFHOSTED_LLM_VARS="API_LLM_PROVIDER API_LLM_PROVIDER_MODEL API_LLM_API_KEY API_LLM_BASE_URL API_LLM_REASONING_EFFORT API_OPEN_AI_API_KEY API_OPENAI_FORCE_BASE_URL"
+selfhosted_llm_env() {
+    local var
+    for var in $SELFHOSTED_LLM_VARS; do
+        [ -n "${!var:-}" ] && printf '%s=%s\n' "$var" "${!var}"
+    done
+    return 0
+}
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BLUE='\033[0;34m'; GRAY='\033[0;90m'; NC='\033[0m'
 log()  { echo -e "${BLUE}[selfhosted]${NC} $*"; }
