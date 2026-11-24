@@ -475,6 +475,9 @@ describe('Runtime controllers over HTTP', () => {
             new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true, transformOptions: { enableImplicitConversion: true } }),
         );
         await app.init();
+        // Listen on 127.0.0.1 before supertest does: its own listen(0) binds every interface and dials 127.0.0.1, where
+        // another process on this machine may hold the same port and answer instead (a 404 or 401 from someone else).
+        await app.listen(0, '127.0.0.1');
     });
 
     afterAll(async () => {
@@ -967,8 +970,16 @@ describe('Runtime controllers over HTTP', () => {
         expect(recipeAuthorCalls[0].signal?.aborted).toBe(false);
 
         // The worker gives up on the request (its timeout, a restart): the agent run is aborted with it.
-        await expect(request(app.getHttpServer()).post('/internal/runtime/recipe-author').send({ hang: true }).timeout(200)).rejects.toThrow();
-        for (let i = 0; i < 50 && !recipeAuthorCalls[1]?.signal?.aborted; i++) await new Promise((r) => setTimeout(r, 10));
+        // Abort only once the handler holds the request, so a slow machine never aborts before it arrives.
+        const hanging = request(app.getHttpServer()).post('/internal/runtime/recipe-author').send({ hang: true });
+        hanging.then(
+            () => undefined,
+            () => undefined,
+        );
+        for (let i = 0; i < 500 && !recipeAuthorCalls[1]; i++) await new Promise((r) => setTimeout(r, 10));
+        expect(recipeAuthorCalls[1]).toBeDefined();
+        hanging.abort();
+        for (let i = 0; i < 500 && !recipeAuthorCalls[1]?.signal?.aborted; i++) await new Promise((r) => setTimeout(r, 10));
         expect(recipeAuthorCalls[1].signal?.aborted).toBe(true);
     });
 
