@@ -218,7 +218,9 @@ func TestPurgeOrgRemovesTheWholeTreeAndOnlyThatOrgs(t *testing.T) {
 	r := newRig(t)
 	r.mustIngest("a", hex64("1"), npmTree())
 	r.mustIngest("b", hex64("1"), npmTree())
-	r.store.RecordMiss("a", hex64("2"))
+	if err := r.store.RecordMiss("a", hex64("2")); err != nil {
+		t.Fatal(err)
+	}
 	if err := r.store.PurgeOrg("a"); err != nil {
 		t.Fatal(err)
 	}

@@ -583,7 +583,9 @@ func TestAnAppThatRefusedOnARunningMachineStaysUnreachable(t *testing.T) {
 	h := newHarness(t, func(cfg *Config) {
 		hd.Driver = cfg.Driver.(*fake.Driver)
 		cfg.Driver, cfg.Parts.Health = hd, hd
-		cfg.Observers = func(context.Context, ClaimInfo, []observer.Target) (observer.Client, error) { return refusedObserver{}, nil }
+		cfg.Observers = func(context.Context, ClaimInfo, []observer.Target) (observer.Client, error) {
+			return refusedObserver{}, nil
+		}
 	})
 	h.ready("claim-1")
 	probe := &protocol.ProbeRunBody{StepID: step1, Probe: protocol.Probe{

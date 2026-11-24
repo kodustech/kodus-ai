@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -86,7 +87,7 @@ func newLayerEnv(t *testing.T, withDigest bool) *layerEnv {
 func (e *layerEnv) sandboxReq(t *testing.T) driver.SandboxRequest {
 	t.Helper()
 	e.n++
-	id := "lay-" + string(rune('a'+e.n))
+	id := "lay-" + strconv.Itoa(e.n)
 	net, err := e.d.PrepareClaim(context.Background(), driver.ClaimNetworkSpec{CellID: "cell-1", OrgID: "org-a", ClaimID: id})
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +131,6 @@ func layerArchive(t *testing.T, trailer bool, extra ...tar.Header) []byte {
 		t.Fatal(err)
 	}
 	for _, h := range extra {
-		h := h
 		if err := tw.WriteHeader(&h); err != nil {
 			t.Fatal(err)
 		}
@@ -316,8 +316,14 @@ func TestALayerIDThatIsNotASafeMountNameIsRefused(t *testing.T) {
 	e := newLayerEnv(t, true)
 	key := strings.Repeat("a", 64)
 	for _, bad := range [][]driver.ToolLayerRef{
-		{{Key: key, ID: "../etc"}}, {{Key: key, ID: "a/b"}}, {{Key: key, ID: ".."}}, {{Key: key, ID: ""}}, {{Key: key, ID: "A"}},
-		{{Key: key, ID: strings.Repeat("a", 33)}}, {{Key: "../x", ID: "ok"}}, {{Key: key, ID: "a"}, {Key: key, ID: "a"}},
+		{{Key: key, ID: "../etc"}},
+		{{Key: key, ID: "a/b"}},
+		{{Key: key, ID: ".."}},
+		{{Key: key, ID: ""}},
+		{{Key: key, ID: "A"}},
+		{{Key: key, ID: strings.Repeat("a", 33)}},
+		{{Key: "../x", ID: "ok"}},
+		{{Key: key, ID: "a"}, {Key: key, ID: "a"}},
 	} {
 		req := e.sandboxReq(t)
 		req.ToolLayers = bad

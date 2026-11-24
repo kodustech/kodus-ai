@@ -27,7 +27,7 @@ func TestAFileChangedOnDiskIsRefusedEvictedAndAnsweredMiss(t *testing.T) {
 	r := newRig(t)
 	r.mustIngest("o", hex64("1"), npmTree())
 	h := r.mustHit("o", hex64("1"))
-	p := filepath.Join(h.TreePath, "node_modules/foo/package.json")
+	p := filepath.Join(h.TreePath, "node_modules", "foo", "package.json")
 	h.Release()
 	chmodWritable(t, p)
 	if err := os.WriteFile(p, []byte(`{"name":"evil","version":"1.2.3"}`), 0o600); err != nil {
@@ -39,22 +39,22 @@ func TestAFileChangedOnDiskIsRefusedEvictedAndAnsweredMiss(t *testing.T) {
 func TestOtherTamperingIsCaughtToo(t *testing.T) {
 	tamper := map[string]func(t *testing.T, tree string){
 		"mode change": func(t *testing.T, tree string) {
-			chmodWritable(t, filepath.Join(tree, "node_modules/foo/cli.js"))
+			chmodWritable(t, filepath.Join(tree, "node_modules", "foo", "cli.js"))
 		},
 		"file removed": func(t *testing.T, tree string) {
-			chmodWritable(t, filepath.Join(tree, "node_modules/foo"))
-			if err := os.Remove(filepath.Join(tree, "node_modules/foo/package.json")); err != nil {
+			chmodWritable(t, filepath.Join(tree, "node_modules", "foo"))
+			if err := os.Remove(filepath.Join(tree, "node_modules", "foo", "package.json")); err != nil {
 				t.Fatal(err)
 			}
 		},
 		"file added": func(t *testing.T, tree string) {
-			chmodWritable(t, filepath.Join(tree, "node_modules/foo"))
-			if err := os.WriteFile(filepath.Join(tree, "node_modules/foo/inject.js"), []byte("x"), 0o600); err != nil {
+			chmodWritable(t, filepath.Join(tree, "node_modules", "foo"))
+			if err := os.WriteFile(filepath.Join(tree, "node_modules", "foo", "inject.js"), []byte("x"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 		},
 		"symlink retargeted": func(t *testing.T, tree string) {
-			d := filepath.Join(tree, "node_modules/.bin")
+			d := filepath.Join(tree, "node_modules", ".bin")
 			chmodWritable(t, d)
 			l := filepath.Join(d, "foo")
 			if err := os.Remove(l); err != nil {

@@ -8,8 +8,10 @@ import (
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/toollayer"
 )
 
-var imageA = "sha256:" + strings.Repeat("a", 64)
-var imageB = "sha256:" + strings.Repeat("b", 64)
+var (
+	imageA = "sha256:" + strings.Repeat("a", 64)
+	imageB = "sha256:" + strings.Repeat("b", 64)
+)
 
 func baseKey() toollayer.KeyInput {
 	return toollayer.KeyInput{

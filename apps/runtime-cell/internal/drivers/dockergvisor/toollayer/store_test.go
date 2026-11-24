@@ -35,7 +35,7 @@ func TestIngestAcceptsANormalNpmTreeAndMountsItReadOnly(t *testing.T) {
 	if hit.Digest != layer.Digest || hit.BinaryPath != layer.BinaryPath {
 		t.Fatalf("hit = %+v", hit.Layer)
 	}
-	cli := filepath.Join(hit.TreePath, "node_modules/foo/cli.js")
+	cli := filepath.Join(hit.TreePath, "node_modules", "foo", "cli.js")
 	info, err := os.Lstat(cli)
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +50,7 @@ func TestIngestAcceptsANormalNpmTreeAndMountsItReadOnly(t *testing.T) {
 	if di.Mode().Perm() != 0o555 || !di.IsDir() {
 		t.Fatalf("dir mode = %v", di.Mode())
 	}
-	target, err := os.Readlink(filepath.Join(hit.TreePath, "node_modules/.bin/foo"))
+	target, err := os.Readlink(filepath.Join(hit.TreePath, "node_modules", ".bin", "foo"))
 	if err != nil || target != "../foo/cli.js" {
 		t.Fatalf("symlink = %q, %v", target, err)
 	}
@@ -274,8 +274,10 @@ func TestIngestNeedsAnImageDigestAndAKey(t *testing.T) {
 func TestIntegrityIsRecordedAndAnInvalidSignatureRefusesTheLayer(t *testing.T) {
 	r := newRig(t)
 	raw := buildTar(t, npmTree())
-	in := toollayer.IngestInput{Org: "o", Key: hex64("1"), ImageDigest: imageA, Binary: "foo", Tar: bytes.NewReader(raw),
-		Integrity: toollayer.Integrity{LockfileIntegrity: true, SignaturesVerified: 3, SignaturesMissing: 1, SignaturesInvalid: 1}}
+	in := toollayer.IngestInput{
+		Org: "o", Key: hex64("1"), ImageDigest: imageA, Binary: "foo", Tar: bytes.NewReader(raw),
+		Integrity: toollayer.Integrity{LockfileIntegrity: true, SignaturesVerified: 3, SignaturesMissing: 1, SignaturesInvalid: 1},
+	}
 	_, err := r.store.Ingest(context.Background(), in)
 	if !errors.Is(err, toollayer.ErrRefused) || toollayer.RefusalReason(err) != "invalid_signature" {
 		t.Fatalf("err = %v", err)
@@ -323,8 +325,8 @@ func TestOrgsNeverShareADirectoryOrAKey(t *testing.T) {
 	ha, hb := r.mustHit("org-a", hex64("1")), r.mustHit("org-b", hex64("1"))
 	defer ha.Release()
 	defer hb.Release()
-	fa, _ := os.Stat(filepath.Join(ha.TreePath, "node_modules/foo/package.json"))
-	fb, _ := os.Stat(filepath.Join(hb.TreePath, "node_modules/foo/package.json"))
+	fa, _ := os.Stat(filepath.Join(ha.TreePath, "node_modules", "foo", "package.json"))
+	fb, _ := os.Stat(filepath.Join(hb.TreePath, "node_modules", "foo", "package.json"))
 	if os.SameFile(fa, fb) {
 		t.Fatal("two orgs share a file")
 	}
@@ -337,8 +339,8 @@ func TestFilesAreSharedWithinAnOrg(t *testing.T) {
 	h1, h2 := r.mustHit("o", hex64("1")), r.mustHit("o", hex64("2"))
 	defer h1.Release()
 	defer h2.Release()
-	f1, _ := os.Stat(filepath.Join(h1.TreePath, "node_modules/foo/package.json"))
-	f2, _ := os.Stat(filepath.Join(h2.TreePath, "node_modules/foo/package.json"))
+	f1, _ := os.Stat(filepath.Join(h1.TreePath, "node_modules", "foo", "package.json"))
+	f2, _ := os.Stat(filepath.Join(h2.TreePath, "node_modules", "foo", "package.json"))
 	if !os.SameFile(f1, f2) {
 		t.Fatal("identical files of one org's layers are stored twice")
 	}
@@ -392,12 +394,12 @@ func TestStoreRootIsPrivate(t *testing.T) {
 	}
 	// A root that is a symlink is refused.
 	base := t.TempDir()
-	real := filepath.Join(base, "real")
-	if err := os.Mkdir(real, 0o700); err != nil {
+	realPath := filepath.Join(base, "real")
+	if err := os.Mkdir(realPath, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(base, "link")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(realPath, link); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := toollayer.New(toollayer.Config{Root: link}); err == nil {

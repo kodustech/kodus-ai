@@ -50,9 +50,14 @@ func (s *Store) gcOrg(od string, now time.Time, rep *GCReport) {
 			if err != nil || !hexRe.MatchString(d.Name()) {
 				continue
 			}
-			b, _ := os.ReadFile(p)
+			b, _ := os.ReadFile(p) //nolint:gosec // G304: p is od/keys/<name> with name from ReadDir (one path element) that hexRe accepted
 			digest := strings.TrimSpace(string(b))
-			_, lerr := os.Lstat(filepath.Join(od, "layers", digest, "layer.json"))
+			// The digest is file content: it is a path element only once it
+			// is a sha256 hex, so a tampered key file cannot probe outside od.
+			var lerr error
+			if hexRe.MatchString(digest) {
+				_, lerr = os.Lstat(filepath.Join(od, "layers", digest, "layer.json")) //nolint:gosec // G703: digest passed hexRe on the line above, so it is one path element; Lstat only inspects
+			}
 			if now.Sub(info.ModTime()) >= keyIdleBeforeGC || !hexRe.MatchString(digest) || lerr != nil {
 				if os.Remove(p) == nil {
 					rep.KeysRemoved++
@@ -108,7 +113,7 @@ func (s *Store) gcOrg(od string, now time.Time, rep *GCReport) {
 	if des, err := os.ReadDir(filepath.Join(od, "misses")); err == nil {
 		for _, d := range des {
 			p := filepath.Join(od, "misses", d.Name())
-			if b, err := os.ReadFile(p); err == nil {
+			if b, err := os.ReadFile(p); err == nil { //nolint:gosec // G304: p is od/misses/<name> with name from ReadDir, one path element under the store
 				var f missFile
 				if json.Unmarshal(b, &f) == nil && len(s.recentMisses(p, now)) == 0 {
 					if os.Remove(p) == nil {

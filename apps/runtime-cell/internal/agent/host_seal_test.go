@@ -16,7 +16,7 @@ type recSealer struct {
 }
 
 func (r *recSealer) Seal(context.Context) error { r.mu.Lock(); r.n++; r.mu.Unlock(); return nil }
-func (r *recSealer) count() int                  { r.mu.Lock(); defer r.mu.Unlock(); return r.n }
+func (r *recSealer) count() int                 { r.mu.Lock(); defer r.mu.Unlock(); return r.n }
 
 // A fleet cell with no claim live acks cell.seal and starts the host's seal once.
 func TestCellSealOnAFleetCellStartsTheHostSeal(t *testing.T) {

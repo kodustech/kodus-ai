@@ -51,6 +51,7 @@ func scriptedGuest(ctx context.Context, exec func(cmd string) protocol.SandboxEx
 			case protocol.SandboxOpKindExec:
 				e := exec(*b.Op.Command)
 				res.Exec = &e
+			default: // the cell under test sends only stat and exec here
 			}
 			out, _ := protocol.Encode(protocol.Header{ID: guest.NewID(), Re: m.Envelope.ID, CellID: m.Envelope.CellID}, &protocol.GuestResultBody{StepID: b.StepID, Result: res})
 			if err := guest.WriteFrame(machine, out); err != nil {
@@ -119,6 +120,7 @@ func (l *layerFake) States(ref driver.MachineRef) []driver.ToolLayerState {
 	defer l.mu.Unlock()
 	return l.states[ref.MachineID]
 }
+
 func (l *layerFake) BeginBuild(_, _ string) (func(bool), error) {
 	if l.admit != nil {
 		return nil, l.admit
@@ -132,6 +134,7 @@ func (l *layerFake) BeginBuild(_, _ string) (func(bool), error) {
 		})
 	}, nil
 }
+
 func (l *layerFake) Ingest(_ context.Context, _ string, _ driver.MachineRef, _ driver.ToolLayerBuild, in driver.ToolLayerIntegrity) (driver.ToolLayerBuilt, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -142,6 +145,7 @@ func (l *layerFake) Ingest(_ context.Context, _ string, _ driver.MachineRef, _ d
 	}
 	return driver.ToolLayerBuilt{Digest: layerDigest, Bytes: 4096, Unsigned: in.SignaturesMissing}, nil
 }
+
 func (l *layerFake) PurgeOrg(org string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()

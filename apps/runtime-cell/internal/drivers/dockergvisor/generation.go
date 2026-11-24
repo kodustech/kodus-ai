@@ -233,7 +233,8 @@ func (d *Driver) RecoverBakes(ctx context.Context) ([]driver.RecoveredBake, erro
 		return nil, err
 	}
 	if len(gone) > 0 {
-		for _, g := range gone {
+		for i := range gone {
+			g := &gone[i]
 			d.log().Warn("bake.recovery.retired", "env", g.Environment, "sha", g.SHA, "generation", g.ID, "reason", "artifacts missing or not owned")
 			c.Retire(g.ID)
 		}

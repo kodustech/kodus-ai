@@ -200,7 +200,7 @@ func (p toolLayerPart) ingest(ctx context.Context, org string, ref driver.Machin
 	if err != nil {
 		return driver.ToolLayerBuilt{}, err
 	}
-	defer rw.Close()
+	defer func() { _ = rw.Close() }() // the stream is read to its end above; a close error loses nothing
 	tr := &trailerReader{r: rw}
 	layer, err := d.layers.store.Ingest(sctx, toollayer.IngestInput{
 		Org: org, Key: b.Key, ImageDigest: d.layers.digest, Binary: b.Binary, Tar: tr,
@@ -238,7 +238,7 @@ func (t *trailerReader) Read(p []byte) (int, error) {
 			t.tail = t.tail[len(t.tail)-1024:]
 		}
 	}
-	if err == io.EOF && !(len(t.tail) == 1024 && bytes.Count(t.tail, []byte{0}) == 1024) {
+	if err == io.EOF && (len(t.tail) != 1024 || bytes.Count(t.tail, []byte{0}) != 1024) {
 		return n, errNoTrailer
 	}
 	return n, err

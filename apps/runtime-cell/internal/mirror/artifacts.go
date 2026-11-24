@@ -59,26 +59,34 @@ func DefaultArtifacts() []ArtifactEntry {
 		// by an exact version. The bucket host is on the deny list on purpose
 		// (writable object storage): this is the one read-only prefix. The UI
 		// "SNAPSHOT" zip (an experiment, no checksum) is not spelled here.
-		{ID: "firebase-emulators", Upstream: mustURL("https://storage.googleapis.com"), PathPrefix: "/firebase-preview-drop/emulator/",
-			Name: nameRE(`(?:firebase-database-emulator-v|cloud-firestore-emulator-v|cloud-storage-rules-runtime-v)[0-9]+\.[0-9]+\.[0-9]+\.jar|(?:ui-v|pubsub-emulator-)[0-9]+\.[0-9]+\.[0-9]+\.zip`), MaxBytes: 256 << 20},
+		{
+			ID: "firebase-emulators", Upstream: mustURL("https://storage.googleapis.com"), PathPrefix: "/firebase-preview-drop/emulator/",
+			Name: nameRE(`(?:firebase-database-emulator-v|cloud-firestore-emulator-v|cloud-storage-rules-runtime-v)[0-9]+\.[0-9]+\.[0-9]+\.jar|(?:ui-v|pubsub-emulator-)[0-9]+\.[0-9]+\.[0-9]+\.zip`), MaxBytes: 256 << 20,
+		},
 		// The Data Connect emulator, a Linux binary from a second bucket path:
 		// `-linux-v<ver>` in 13.x, `-linux-amd64-v<ver>` in 14.x (there is no
 		// arm64 build on Linux in either).
-		{ID: "firebase-dataconnect", Upstream: mustURL("https://storage.googleapis.com"), PathPrefix: "/firemat-preview-drop/emulator/",
-			Name: nameRE(`dataconnect-emulator-linux(?:-amd64)?-v[0-9]+\.[0-9]+\.[0-9]+`), MaxBytes: 256 << 20},
+		{
+			ID: "firebase-dataconnect", Upstream: mustURL("https://storage.googleapis.com"), PathPrefix: "/firemat-preview-drop/emulator/",
+			Name: nameRE(`dataconnect-emulator-linux(?:-amd64)?-v[0-9]+\.[0-9]+\.[0-9]+`), MaxBytes: 256 << 20,
+		},
 		// Prisma's engines (@prisma/fetch-engine 5.22.0 and 6.19.3, getDownloadUrl):
 		// <PRISMA_ENGINES_MIRROR>/all_commits/<engines commit>/<binary target>/<engine>.gz
 		// and the `.gz.sha256` next to it; nothing else (the `.sig` the
 		// publisher also keeps is never requested). The three engine names
 		// are the BinaryType values; an engine is about 8 MB.
-		{ID: "prisma", Upstream: mustURL("https://binaries.prisma.sh"), PathPrefix: "/all_commits/",
-			Name: nameRE(`[0-9a-f]{40}/(?:(?:debian|rhel)-openssl-[0-9]+\.[0-9]+\.x|linux-(?:musl-)?(?:arm64-)?openssl-[0-9]+\.[0-9]+\.x|linux-musl|linux-static-(?:x64|arm64))/(?:libquery_engine\.so\.node|query-engine|schema-engine)\.gz(?:\.sha256)?`), MaxBytes: 64 << 20},
+		{
+			ID: "prisma", Upstream: mustURL("https://binaries.prisma.sh"), PathPrefix: "/all_commits/",
+			Name: nameRE(`[0-9a-f]{40}/(?:(?:debian|rhel)-openssl-[0-9]+\.[0-9]+\.x|linux-(?:musl-)?(?:arm64-)?openssl-[0-9]+\.[0-9]+\.x|linux-musl|linux-static-(?:x64|arm64))/(?:libquery_engine\.so\.node|query-engine|schema-engine)\.gz(?:\.sha256)?`), MaxBytes: 64 << 20,
+		},
 		// MongoDB server builds for Linux (mongodb-memory-server-core 9.5.0 and
 		// 10.4.3, MongoBinaryDownloadUrl and MongoBinaryDownload):
 		// <MONGOMS_DOWNLOAD_MIRROR>/linux/mongodb-linux-<x86_64|aarch64>[-<distro>]-<version>.tgz
 		// and the `.tgz.md5` it checks it against (no `.sha256` is requested).
-		{ID: "mongodb", Upstream: mustURL("https://fastdl.mongodb.org"), PathPrefix: "/linux/",
-			Name: nameRE(`mongodb-linux-(?:x86_64|aarch64)-(?:[a-z]+[0-9]+(?:-clang)?-)?[0-9]+\.[0-9]+\.[0-9]+(?:-rc[0-9]+)?\.tgz(?:\.md5)?`), MaxBytes: 512 << 20},
+		{
+			ID: "mongodb", Upstream: mustURL("https://fastdl.mongodb.org"), PathPrefix: "/linux/",
+			Name: nameRE(`mongodb-linux-(?:x86_64|aarch64)-(?:[a-z]+[0-9]+(?:-clang)?-)?[0-9]+\.[0-9]+\.[0-9]+(?:-rc[0-9]+)?\.tgz(?:\.md5)?`), MaxBytes: 512 << 20,
+		},
 	}
 }
 
@@ -159,7 +167,7 @@ func (p *ArtifactProxy) route(r *http.Request) (ArtifactEntry, string, bool) {
 func (p *ArtifactProxy) fetch(w http.ResponseWriter, r *http.Request, e ArtifactEntry, upPath string) {
 	up := *e.Upstream
 	up.Path, up.RawPath, up.RawQuery = upPath, "", ""
-	req, err := http.NewRequestWithContext(r.Context(), r.Method, up.String(), nil) //nolint:gosec // G704: the upstream is a fixed entry; only a name its pattern accepted comes from the request
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, up.String(), nil)
 	if err != nil {
 		http.Error(w, "bad upstream request", http.StatusBadGateway)
 		return

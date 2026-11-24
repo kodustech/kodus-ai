@@ -102,8 +102,12 @@ func TestASandboxTakesBoundedTmpfsUnderOptOnly(t *testing.T) {
 		t.Fatalf("no tmpfs for the layer: %s", strings.Join(args, " "))
 	}
 	for _, bad := range []Tmpfs{
-		{Dir: "/opt/kcli/../etc", Size: "1m"}, {Dir: "/etc", Size: "1m"}, {Dir: "/opt/kcli/a,exec", Size: "1m"},
-		{Dir: "/opt/kcli/a", Size: "1g,exec"}, {Dir: "/opt/kcli/a", Size: ""}, {Dir: "/opt/kcli/a/b", Size: "1m"},
+		{Dir: "/opt/kcli/../etc", Size: "1m"},
+		{Dir: "/etc", Size: "1m"},
+		{Dir: "/opt/kcli/a,exec", Size: "1m"},
+		{Dir: "/opt/kcli/a", Size: "1g,exec"},
+		{Dir: "/opt/kcli/a", Size: ""},
+		{Dir: "/opt/kcli/a/b", Size: "1m"},
 	} {
 		s := sandboxSpec()
 		s.Tmpfs = []Tmpfs{bad}

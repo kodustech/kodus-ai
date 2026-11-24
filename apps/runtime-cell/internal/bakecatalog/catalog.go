@@ -214,29 +214,29 @@ func Open(ctx context.Context, cfg Config) (*Catalog, error) {
 		_ = r.Close()
 		return nil, err
 	}
-	fail := func(err error) (*Catalog, error) { _ = lock.Close(); _ = r.Close(); return nil, err }
+	fail := func(err error) error { _ = lock.Close(); _ = r.Close(); return err }
 	info, err := lock.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
-		return fail(errors.New("bakecatalog: unsafe lock"))
+		return nil, fail(errors.New("bakecatalog: unsafe lock"))
 	}
 	if err := unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-		return fail(errors.New("bakecatalog: already controlled"))
+		return nil, fail(errors.New("bakecatalog: already controlled"))
 	}
 	// Only the exclusive controller may remove abandoned atomic-write files.
 	// Names and file type are fixed; nothing from a checkout is traversed.
 	// One that cannot be removed is left: nothing ever reads it.
 	dir, err := r.Open(".")
 	if err != nil {
-		return fail(err)
+		return nil, fail(err)
 	}
 	defer func() { _ = dir.Close() }()
 	for {
 		if err := ctx.Err(); err != nil {
-			return fail(err)
+			return nil, fail(err)
 		}
 		entries, err := dir.ReadDir(128)
 		if err != nil && !errors.Is(err, io.EOF) {
-			return fail(err)
+			return nil, fail(err)
 		}
 		for _, entry := range entries {
 			if !strings.HasPrefix(entry.Name(), "pending-") || !IsHex(strings.TrimPrefix(entry.Name(), "pending-"), 24) {
@@ -266,7 +266,7 @@ func Open(ctx context.Context, cfg Config) (*Catalog, error) {
 		}
 		name, err := c.quarantine()
 		if err != nil {
-			return fail(err)
+			return nil, fail(err)
 		}
 		q.File = name
 		if cfg.Quarantined != nil {
@@ -311,7 +311,7 @@ func Open(ctx context.Context, cfg Config) (*Catalog, error) {
 		c.state, c.owner, c.validate = read, read.Cell, validate
 		c.adopt(cfg.Adopt.Org)
 		if err := c.saveLocked(); err != nil && !errors.Is(err, ErrCommitUncertain) {
-			return fail(err)
+			return nil, fail(err)
 		}
 	case !wellFormed(read, cfg.Driver, cfg.Cell, cfg.Valid):
 		return quarantine("invalid", &read)
@@ -327,7 +327,8 @@ func Open(ctx context.Context, cfg Config) (*Catalog, error) {
 func (c *Catalog) adopt(org string) {
 	s := &c.state
 	a := Adopted{From: s.Cell}
-	for id, g := range s.Generations {
+	for id := range s.Generations {
+		g := s.Generations[id]
 		if g.Org != org {
 			s.Retired[id] = g
 			delete(s.Generations, id)

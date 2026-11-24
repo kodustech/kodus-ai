@@ -23,9 +23,9 @@ func testStore(t *testing.T) (*Store, *clockT) {
 	c := &clockT{t: time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)}
 	root := filepath.Join(t.TempDir(), "tl")
 	t.Cleanup(func() {
-		filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 			if err == nil && d.IsDir() {
-				os.Chmod(p, 0o700)
+				_ = os.Chmod(p, 0o700) //nolint:gosec // G122: the tree lives in the test's own t.TempDir(); nothing races it
 			}
 			return nil
 		})

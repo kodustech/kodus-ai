@@ -23,7 +23,7 @@ func findEntry(entries []Entry, binary string, head func(sha string) ([]byte, er
 	}
 	sawNonFile := false
 	for _, d := range entryDirs {
-		real, e, ok := resolveInLayer(byPath, d+"/"+binary)
+		target, e, ok := resolveInLayer(byPath, d+"/"+binary)
 		if !ok {
 			continue
 		}
@@ -42,7 +42,7 @@ func findEntry(entries []Entry, binary string, head func(sha string) ([]byte, er
 		if interp == "" {
 			return "", "", refused("no_shebang", binary+" has no supported shebang (node, python, bash or sh)")
 		}
-		return real, interp, nil
+		return target, interp, nil
 	}
 	if sawNonFile {
 		return "", "", refused("entry_not_file", binary)
@@ -113,6 +113,6 @@ func resolveInLayer(byPath map[string]*Entry, p string) (string, *Entry, bool) {
 	if len(cur) == 0 {
 		return "", nil, false
 	}
-	real := strings.Join(cur, "/")
-	return real, byPath[real], true
+	joined := strings.Join(cur, "/")
+	return joined, byPath[joined], true
 }

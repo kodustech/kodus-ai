@@ -32,7 +32,7 @@ func (s *Store) missPath(org, key string) (string, error) {
 }
 
 func (s *Store) recentMisses(p string, now time.Time) []int64 {
-	raw, err := os.ReadFile(p)
+	raw, err := os.ReadFile(p) //nolint:gosec // G304: p comes from missPath: the org id is hashed and the key must be a sha256 hex
 	if err != nil {
 		return nil
 	}

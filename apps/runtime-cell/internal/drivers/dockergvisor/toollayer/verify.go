@@ -107,7 +107,13 @@ func (s *Store) changedShared(od, tree string, want, got []Entry) []string {
 		if e.Type != "file" || have[e.Path] == e.SHA256 {
 			continue
 		}
-		a, errA := os.Lstat(filepath.Join(tree, filepath.FromSlash(e.Path)))
+		// The manifest is read from disk: only a local path and a sha256 hex
+		// may reach the Lstat calls below, so a tampered one cannot probe
+		// outside the tree or the files/ directory.
+		if !filepath.IsLocal(filepath.FromSlash(e.Path)) || !hexRe.MatchString(e.SHA256) {
+			continue
+		}
+		a, errA := os.Lstat(filepath.Join(tree, filepath.FromSlash(e.Path))) //nolint:gosec // G703: e.Path passed filepath.IsLocal above; Lstat only inspects
 		b, errB := os.Lstat(filepath.Join(od, "files", e.SHA256))
 		if errA == nil && errB == nil && os.SameFile(a, b) {
 			bad = append(bad, e.SHA256)
@@ -120,7 +126,7 @@ func (s *Store) changedShared(od, tree string, want, got []Entry) []string {
 // reads every file. It never follows a link.
 func scanTree(ctx context.Context, tree string, hash bool) ([]Entry, error) {
 	var out []Entry
-	err := filepath.WalkDir(tree, func(p string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(tree, func(p string, d fs.DirEntry, err error) error { //nolint:gosec // G703: tree is the layer tree the store built from a verified digest; WalkDir does not follow links
 		if err != nil {
 			return err
 		}
@@ -171,11 +177,11 @@ func scanTree(ctx context.Context, tree string, hash bool) ([]Entry, error) {
 }
 
 func hashFile(p string) (string, error) {
-	f, err := os.Open(p)
+	f, err := os.Open(p) //nolint:gosec // G304: p is a file WalkDir found under the layer tree (the only caller)
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // read-only: a close error loses nothing
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err

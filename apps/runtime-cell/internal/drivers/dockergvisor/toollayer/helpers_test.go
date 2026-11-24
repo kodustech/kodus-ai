@@ -23,11 +23,13 @@ type fakeClock struct {
 func newClock() *fakeClock {
 	return &fakeClock{t: time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)}
 }
+
 func (c *fakeClock) Now() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.t
 }
+
 func (c *fakeClock) Advance(d time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -43,9 +45,11 @@ type ent struct {
 	size int64 // overrides len(body) for the header when non-zero
 }
 
-func dir(name string) ent          { return ent{name: name, typ: tar.TypeDir, mode: 0o755} }
-func file(name, body string) ent   { return ent{name: name, typ: tar.TypeReg, mode: 0o644, body: body} }
+func dir(name string) ent        { return ent{name: name, typ: tar.TypeDir, mode: 0o755} }
+func file(name, body string) ent { return ent{name: name, typ: tar.TypeReg, mode: 0o644, body: body} }
+
 func script(name, body string) ent { return ent{name: name, typ: tar.TypeReg, mode: 0o755, body: body} }
+
 func symlink(name, target string) ent {
 	return ent{name: name, typ: tar.TypeSymlink, mode: 0o777, link: target}
 }
@@ -190,9 +194,9 @@ func chmodWritable(t *testing.T, paths ...string) {
 
 // unlock makes the read-only trees removable by the test's temp dir cleanup.
 func unlock(root string) {
-	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err == nil && d.IsDir() {
-			os.Chmod(p, 0o700)
+			_ = os.Chmod(p, 0o700) //nolint:gosec // G122: the tree lives in the test's own t.TempDir(); nothing races it
 		}
 		return nil
 	})

@@ -146,8 +146,10 @@ func TestTheCatalogOfAnotherCellIsQuarantinedAndOnlyTheNewestKept(t *testing.T) 
 	}
 	_ = foreign.Close()
 	var got []Quarantine
-	cfg := Config{Dir: dir, Cell: "cell-2", Driver: "test", Valid: func(g Generation) bool { return g.Cell == "cell-2" },
-		Quarantined: func(q Quarantine) { got = append(got, q) }}
+	cfg := Config{
+		Dir: dir, Cell: "cell-2", Driver: "test", Valid: func(g Generation) bool { return g.Cell == "cell-2" },
+		Quarantined: func(q Quarantine) { got = append(got, q) },
+	}
 	cfg.Now = func() time.Time { return time.Unix(1, 0) }
 	c, err := Open(context.Background(), cfg)
 	if err != nil {
@@ -194,8 +196,10 @@ func TestAnUnsafeCatalogFileIsQuarantined(t *testing.T) {
 }
 
 func adoptConfig(dir, org string) Config {
-	return Config{Dir: dir, Cell: "cell-2", Driver: "test", Valid: func(g Generation) bool { return g.Cell == "cell-2" },
-		Adopt: &Adoption{Org: org, Valid: func(owner string) func(Generation) bool { return func(g Generation) bool { return g.Cell == owner } }}}
+	return Config{
+		Dir: dir, Cell: "cell-2", Driver: "test", Valid: func(g Generation) bool { return g.Cell == "cell-2" },
+		Adopt: &Adoption{Org: org, Valid: func(owner string) func(Generation) bool { return func(g Generation) bool { return g.Cell == owner } }},
+	}
 }
 
 // A host made from a template adopts the template's catalog for the org it

@@ -34,14 +34,20 @@ func TestShouldBuildOnlyOnTheSecondMissWithinSevenDays(t *testing.T) {
 func TestMissesOutsideTheWindowDoNotCount(t *testing.T) {
 	r := newRig(t)
 	key := hex64("1")
-	r.store.RecordMiss("o", key)
+	if err := r.store.RecordMiss("o", key); err != nil {
+		t.Fatal(err)
+	}
 	r.clock.Advance(8 * 24 * time.Hour)
-	r.store.RecordMiss("o", key)
+	if err := r.store.RecordMiss("o", key); err != nil {
+		t.Fatal(err)
+	}
 	if r.store.ShouldBuild("o", key) {
 		t.Fatal("two misses 8 days apart count as a repeat")
 	}
 	r.clock.Advance(time.Hour)
-	r.store.RecordMiss("o", key)
+	if err := r.store.RecordMiss("o", key); err != nil {
+		t.Fatal(err)
+	}
 	if !r.store.ShouldBuild("o", key) {
 		t.Fatal("two misses inside the window do not")
 	}
@@ -49,10 +55,18 @@ func TestMissesOutsideTheWindowDoNotCount(t *testing.T) {
 
 func TestMissesAreKeptPerOrgAndKeyAndSurviveARestart(t *testing.T) {
 	r := newRig(t)
-	r.store.RecordMiss("a", hex64("1"))
-	r.store.RecordMiss("a", hex64("1"))
-	r.store.RecordMiss("a", hex64("2"))
-	r.store.RecordMiss("b", hex64("1"))
+	if err := r.store.RecordMiss("a", hex64("1")); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.store.RecordMiss("a", hex64("1")); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.store.RecordMiss("a", hex64("2")); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.store.RecordMiss("b", hex64("1")); err != nil {
+		t.Fatal(err)
+	}
 	r.reopen()
 	if !r.store.ShouldBuild("a", hex64("1")) {
 		t.Fatal("misses lost on restart")

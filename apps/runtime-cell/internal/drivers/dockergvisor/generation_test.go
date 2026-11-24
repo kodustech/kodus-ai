@@ -120,8 +120,7 @@ func TestGenerationCatalogRecoversOnlyVerifiedBakes(t *testing.T) {
 			if err := d.Close(); err != nil {
 				t.Fatal(err)
 			}
-			switch fault {
-			case "surviving holder":
+			if fault == "surviving holder" {
 				docker.plant(dockercli.Container{Name: "old-holder", Labels: map[string]string{"kodus.cell": "cell-1", labelMachine: "old-holder"}})
 			}
 			restarted, err := New(context.Background(), docker, d.cfg)

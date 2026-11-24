@@ -90,7 +90,7 @@ func extract(ctx context.Context, r io.Reader, stage string, maxBytes int64, max
 			return nil, err
 		}
 		hdr, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -167,7 +167,7 @@ func extract(ctx context.Context, r io.Reader, stage string, maxBytes int64, max
 			if hdr.Size > maxBytes-total {
 				return nil, refused("too_large", p)
 			}
-			sum, err := storeBlob(ctx, tr, blobs, hdr.Size)
+			sum, err := storeBlob(ctx, tr, blobs)
 			if err != nil {
 				return nil, err
 			}
@@ -252,7 +252,7 @@ func checkLinkTarget(linkSegs []string, target string) error {
 }
 
 // storeBlob writes one file's content to blobs/<sha256> and returns the sha256.
-func storeBlob(ctx context.Context, src io.Reader, blobs string, size int64) (string, error) {
+func storeBlob(ctx context.Context, src io.Reader, blobs string) (string, error) {
 	f, err := os.CreateTemp(blobs, ".tmp-")
 	if err != nil {
 		return "", err
@@ -267,7 +267,7 @@ func storeBlob(ctx context.Context, src io.Reader, blobs string, size int64) (st
 		err = ctx.Err()
 	}
 	if err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp) // best-effort: the write error is what the caller needs
 		return "", err
 	}
 	sum := hex.EncodeToString(h.Sum(nil))
@@ -275,12 +275,12 @@ func storeBlob(ctx context.Context, src io.Reader, blobs string, size int64) (st
 	if _, statErr := os.Lstat(dst); statErr == nil {
 		return sum, os.Remove(tmp)
 	}
-	if err := os.Chmod(tmp, 0o444); err != nil {
-		os.Remove(tmp)
+	if err := os.Chmod(tmp, 0o444); err != nil { //nolint:gosec // G302: blobs are read-only (0444) on purpose, inside a 0700 store dir, and the sandbox user must read them
+		_ = os.Remove(tmp) // best-effort: the write error is what the caller needs
 		return "", err
 	}
 	if err := os.Rename(tmp, dst); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp) // best-effort: the write error is what the caller needs
 		return "", err
 	}
 	return sum, nil

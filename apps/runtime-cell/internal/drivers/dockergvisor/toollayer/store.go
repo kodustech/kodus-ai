@@ -95,7 +95,7 @@ func New(cfg Config) (*Store, error) {
 	if sys, ok := sysOf(info); ok && sys.uid != os.Geteuid() {
 		return nil, fmt.Errorf("toollayer: %s is owned by uid %d, not the cell's (%d)", root, sys.uid, os.Geteuid())
 	}
-	if err := os.Chmod(root, 0o700); err != nil {
+	if err := os.Chmod(root, 0o700); err != nil { //nolint:gosec // G302: the store root is a directory and needs its search bit; 0700 is owner-only
 		return nil, err
 	}
 	s := &Store{cfg: cfg, holds: map[string]int{}, verified: map[string]time.Time{}}
@@ -146,7 +146,7 @@ func (s *Store) ensureOrg(org string) (string, error) {
 // realDir is an Lstat check: p exists, is a directory and is not a link
 // (MkdirAll and Chmod would follow one).
 func realDir(p string) error {
-	info, err := os.Lstat(p)
+	info, err := os.Lstat(p) //nolint:gosec // G703: Lstat only inspects p (never follows or modifies); p is the store root or an org dir derived from a sha256 of the org id
 	if err != nil {
 		return err
 	}
@@ -193,7 +193,7 @@ func (s *Store) Ingest(ctx context.Context, in IngestInput) (Layer, error) {
 	if err != nil {
 		return Layer{}, err
 	}
-	defer removeTree(stage)
+	defer func() { _ = removeTree(stage) }() // best-effort: staging is also swept at start-up
 
 	ex, err := extract(ctx, in.Tar, stage, s.cfg.MaxLayerBytes, s.cfg.MaxEntries)
 	if err != nil {
@@ -201,14 +201,14 @@ func (s *Store) Ingest(ctx context.Context, in IngestInput) (Layer, error) {
 	}
 	blobs := filepath.Join(stage, "blobs")
 	rel, interpreter, err := findEntry(ex.entries, in.Binary, func(sha string) ([]byte, error) {
-		f, err := os.Open(filepath.Join(blobs, sha))
+		f, err := os.Open(filepath.Join(blobs, sha)) //nolint:gosec // G304: sha is the hex digest extract computed itself, a file name under this layer's own staging dir
 		if err != nil {
 			return nil, err
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }() // read-only: a close error loses nothing
 		b := make([]byte, 4096)
 		n, err := io.ReadFull(f, b)
-		if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
 			return nil, err
 		}
 		return b[:n], nil
@@ -254,7 +254,7 @@ func (s *Store) Ingest(ctx context.Context, in IngestInput) (Layer, error) {
 		return Layer{}, err
 	}
 	if err := s.writeLayerJSON(layerPath, layer); err != nil {
-		removeTree(layerPath)
+		_ = removeTree(layerPath) // best-effort: the write error is returned
 		return Layer{}, err
 	}
 	s.touch(filepath.Join(layerPath, "used"))
@@ -302,12 +302,12 @@ func (s *Store) assemble(od, stage string, ex *extraction, layer *Layer) error {
 	}
 	for i := len(ex.entries) - 1; i >= 0; i-- { // deepest first
 		if e := ex.entries[i]; e.Type == "dir" {
-			if err := os.Chmod(filepath.Join(treeDir, filepath.FromSlash(e.Path)), 0o555); err != nil {
+			if err := os.Chmod(filepath.Join(treeDir, filepath.FromSlash(e.Path)), 0o555); err != nil { //nolint:gosec // G302: layer trees are read-only (0555/0444) by design; the sandbox user binds them read-only
 				return err
 			}
 		}
 	}
-	if err := os.Chmod(treeDir, 0o555); err != nil {
+	if err := os.Chmod(treeDir, 0o555); err != nil { //nolint:gosec // G302: the tree root is a read-only directory (0555) by design; it is bound read-only into the sandbox
 		return err
 	}
 	// Fingerprints last: chmod and linking change ctime.
@@ -324,7 +324,7 @@ func (s *Store) assemble(od, stage string, ex *extraction, layer *Layer) error {
 		fp := fingerprintOf(info)
 		layer.Entries[i].FP = &fp
 	}
-	return os.Chmod(filepath.Join(stage, "layer"), 0o700)
+	return os.Chmod(filepath.Join(stage, "layer"), 0o700) //nolint:gosec // G302: a directory, which needs its search bit; owner-only
 }
 
 // layerDigest is the sha256 of the sorted canonical manifest: path, type,
@@ -351,7 +351,7 @@ func layerDigest(entries []Entry) string {
 }
 
 func readLayer(layerPath string) (Layer, error) {
-	raw, err := os.ReadFile(filepath.Join(layerPath, "layer.json"))
+	raw, err := os.ReadFile(filepath.Join(layerPath, "layer.json")) //nolint:gosec // G304: layerPath is od/layers/<digest> with a sha256 hex digest, and the name is a constant
 	if err != nil {
 		return Layer{}, err
 	}
@@ -389,15 +389,17 @@ func writeAtomic(dir, name string, data []byte, mode os.FileMode) error {
 		err = cerr
 	}
 	if err == nil {
-		err = os.Rename(tmp, filepath.Join(dir, name))
+		err = os.Rename(tmp, filepath.Join(dir, name)) //nolint:gosec // G703: dir is a store directory and name a sha256 hex key or a constant, never raw request data
 	}
 	if err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp) //nolint:gosec // G703: tmp is the name os.CreateTemp returned inside dir
 		return err
 	}
-	if d, derr := os.Open(dir); derr == nil {
-		d.Sync()
-		d.Close()
+	// Syncing the directory narrows the crash window; a filesystem that
+	// cannot is no reason to fail a write that already landed.
+	if d, derr := os.Open(dir); derr == nil { //nolint:gosec // G703: dir is the store-owned directory writeAtomic just wrote into (callers pass od/<fixed name> or a layer path), never request data
+		_ = d.Sync()
+		_ = d.Close()
 	}
 	return nil
 }
@@ -412,10 +414,10 @@ func (s *Store) swapKey(od, key, digest string) error {
 
 func (s *Store) touch(p string) {
 	now := s.cfg.Now()
-	if f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
-		f.Close()
+	if f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY, 0o600); err == nil { //nolint:gosec // G304: p is od/keys/<sha256 hex key> or <layer>/used, built from validated components
+		_ = f.Close()
 	}
-	os.Chtimes(p, now, now)
+	_ = os.Chtimes(p, now, now) // best-effort: a stale mtime only makes GC earlier
 }
 
 // Hit is a verified layer, held against GC until Release.
@@ -466,7 +468,7 @@ func (s *Store) Lookup(ctx context.Context, org, key string) (*Hit, error) {
 		return nil, &MissError{Reason: "no_key"}
 	}
 	od := s.OrgDir(org)
-	raw, err := os.ReadFile(filepath.Join(od, "keys", key))
+	raw, err := os.ReadFile(filepath.Join(od, "keys", key)) //nolint:gosec // G304: key passed hexRe above, so it is one path element
 	digest := strings.TrimSpace(string(raw))
 	if err != nil || !hexRe.MatchString(digest) {
 		return nil, &MissError{Reason: "no_key"}
@@ -474,7 +476,7 @@ func (s *Store) Lookup(ctx context.Context, org, key string) (*Hit, error) {
 	layerPath := filepath.Join(od, "layers", digest)
 
 	s.mu.Lock()
-	if _, err := os.Lstat(filepath.Join(layerPath, "layer.json")); err != nil {
+	if _, err := os.Lstat(filepath.Join(layerPath, "layer.json")); err != nil { //nolint:gosec // G703: layerPath is od/layers/<digest> with a sha256 hex digest (hexRe above); Lstat only inspects
 		s.mu.Unlock()
 		return nil, &MissError{Reason: "evicted"}
 	}
@@ -505,17 +507,18 @@ func (s *Store) Lookup(ctx context.Context, org, key string) (*Hit, error) {
 // (a rebuild must not link it again).
 func (s *Store) evictLocked(od, digest string, badFiles []string) {
 	for _, name := range badFiles {
-		os.Remove(filepath.Join(od, "files", name))
+		_ = os.Remove(filepath.Join(od, "files", name)) // best-effort: GC removes what is left
 	}
 	if des, err := os.ReadDir(filepath.Join(od, "keys")); err == nil {
 		for _, d := range des {
+			//nolint:gosec // G304: d.Name() comes from ReadDir, one path element under od/keys
 			if b, err := os.ReadFile(filepath.Join(od, "keys", d.Name())); err == nil && strings.TrimSpace(string(b)) == digest {
-				os.Remove(filepath.Join(od, "keys", d.Name()))
+				_ = os.Remove(filepath.Join(od, "keys", d.Name())) // best-effort: GC removes what is left
 			}
 		}
 	}
 	delete(s.verified, s.holdKey(od, digest))
-	removeTree(filepath.Join(od, "layers", digest))
+	_ = removeTree(filepath.Join(od, "layers", digest)) // best-effort: GC removes what is left
 }
 
 type layerInfo struct {
@@ -615,12 +618,13 @@ func (s *Store) PurgeOrg(org string) error {
 // removeTree deletes a directory of read-only trees (0555 directories cannot
 // be emptied) without following a link.
 func removeTree(p string) error {
-	_ = filepath.WalkDir(p, func(q string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(p, func(q string, d fs.DirEntry, err error) error { //nolint:gosec // G703: p is a store-owned directory (staging, a layer, an org dir); WalkDir does not follow links
 		if err == nil && d.IsDir() {
-			os.Chmod(q, 0o700) //nolint:gosec // G302: a directory, which needs its search bit
+			_ = os.Chmod(q, 0o700) //nolint:gosec // G302: a directory, which needs its search bit
 		}
 		return nil
 	})
+	//nolint:gosec // G703: p is a store-owned directory (staging, a layer, an org dir), never request data
 	if err := os.RemoveAll(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}

@@ -38,6 +38,7 @@ func hostSealer(unitFile string, run func(ctx context.Context, name string, args
 }
 
 func runCommand(ctx context.Context, name string, args ...string) error {
+	//nolint:gosec // G204: name and args come from systemdSealer (fixed verbs and the seal unit path), never from a request
 	if out, err := exec.CommandContext(ctx, name, args...).CombinedOutput(); err != nil {
 		return fmt.Errorf("%s %v: %w: %s", name, args, err, out)
 	}
