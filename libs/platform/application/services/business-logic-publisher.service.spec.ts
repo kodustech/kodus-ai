@@ -277,7 +277,7 @@ describe('BusinessLogicPublisher', () => {
         expect(changed.changed).toBe(true);
     });
 
-    it('bounds the per-PR queue: another platform never waits, and a hung publish stops gating after the cap', async () => {
+    it('bounds the per-PR queue: another platform never waits, and a hung publish makes the next one skip instead of interleave', async () => {
         jest.useFakeTimers();
         try {
             const { publisher, service, code } = build();
@@ -306,8 +306,8 @@ describe('BusinessLogicPublisher', () => {
             expect(gitlab.comment).toBe('created');
             expect(code.createIssueComment).toHaveBeenCalledTimes(1);
 
-            // A second GitHub publish shares the key, but the cap lets it
-            // through instead of waiting on the hung publish forever.
+            // A second GitHub publish shares the key: it waits, and at the cap
+            // it writes nothing instead of interleaving with the hung one.
             let settled = false;
             const next = publisher
                 .publish({ request, result })
@@ -319,8 +319,10 @@ describe('BusinessLogicPublisher', () => {
             expect(settled).toBe(false);
 
             await jest.advanceTimersByTimeAsync(5 * 60_000);
-            await expect(next).resolves.toMatchObject({ comment: 'created' });
-            expect(code.createIssueComment).toHaveBeenCalledTimes(2);
+            await expect(next).resolves.toMatchObject({ comment: 'none' });
+            // Only the GitLab publish wrote; the skipped one must not create a
+            // second comment behind the still-running publish's back.
+            expect(code.createIssueComment).toHaveBeenCalledTimes(1);
         } finally {
             jest.useRealTimers();
         }

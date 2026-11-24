@@ -358,40 +358,64 @@ export class BusinessLogicPublisher {
      * interleave, and even then `changed` only decides a sentence, never the
      * verdict.
      */
-    publish(input: PublishInput): Promise<PublishResult> {
+    async publish(input: PublishInput): Promise<PublishResult> {
         const key = turnKey(input);
         if (!key) {
             return this.publishOne(input);
         }
-        const earlier = this.queue.get(key) ?? Promise.resolve();
-        const mine = earlier.then(
-            () => this.publishOne(input),
-            () => this.publishOne(input),
-        );
-        // The queue only gates the NEXT publish. If this one never settles (a
-        // platform, tracker or model call that hangs), keeping its pending
-        // promise as the gate would block every later re-check of the PR
-        // forever and their replies would never be posted. Cap the gate and
-        // let the chain drain through the timeout; the caller still awaits the
-        // real publish below.
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        const gate = Promise.race([
-            mine.catch(() => undefined),
-            new Promise<void>((resolve) => {
-                timer = setTimeout(resolve, PUBLISH_QUEUE_WAIT_MS);
-                timer.unref?.();
-            }),
-        ]).finally(() => {
-            if (timer) {
-                clearTimeout(timer);
-            }
-        });
-        this.queue.set(key, gate);
+        const earlier = this.queue.get(key);
+        if (earlier && !(await this.waitFor(earlier))) {
+            // The exclusion stays tied to the earlier publish, so two runs
+            // never interleave their read-compare-write. Waiting forever is
+            // not an option either: the caller's reply would never be posted,
+            // so after the cap this run writes nothing and says so ('none' is
+            // the existing "no comment was written" outcome).
+            this.logger.warn({
+                message:
+                    'Skipped a business-logic publish: the previous publish for this PR is still running',
+                context: BusinessLogicPublisher.name,
+                metadata: {
+                    organizationId:
+                        input.request.organizationAndTeamData.organizationId,
+                    repositoryId: input.request.repository?.id,
+                    prNumber: input.request.pullRequest?.number,
+                },
+            });
+            return { outcome: input.result.outcome, comment: 'none' };
+        }
+
+        const mine = this.publishOne(input);
+        const settled = mine.catch(() => undefined);
+        this.queue.set(key, settled);
         return mine.finally(() => {
-            if (this.queue.get(key) === gate) {
+            if (this.queue.get(key) === settled) {
                 this.queue.delete(key);
             }
         });
+    }
+
+    /** Bounded wait: true when the earlier publish settled, false on the cap. */
+    private async waitFor(earlier: Promise<unknown>): Promise<boolean> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            return await Promise.race([
+                earlier.then(
+                    () => true,
+                    () => true,
+                ),
+                new Promise<boolean>((resolve) => {
+                    timer = setTimeout(
+                        () => resolve(false),
+                        PUBLISH_QUEUE_WAIT_MS,
+                    );
+                    timer.unref?.();
+                }),
+            ]);
+        } finally {
+            if (timer) {
+                clearTimeout(timer);
+            }
+        }
     }
 
     private async publishOne(input: PublishInput): Promise<PublishResult> {
