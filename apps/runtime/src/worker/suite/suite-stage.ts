@@ -20,7 +20,7 @@ export class SuiteRunStage implements SuiteStage {
         private readonly runs: Pick<PgSuiteRuns, 'get'>,
     ) {}
 
-    async run(req: RuntimeRunRequested, step: SuiteStep): Promise<SuiteStageResult> {
+    async run(req: RuntimeRunRequested, step: SuiteStep, opts: { deadlineAt?: string } = {}): Promise<SuiteStageResult> {
         const s = req.suite;
         if (!s) return { status: 'off' };
         const cmd: RuntimeSuiteRequested = {
@@ -44,7 +44,7 @@ export class SuiteRunStage implements SuiteStage {
             ...(s.deltaFiles ? { deltaFiles: s.deltaFiles } : {}),
             ...(req.traceparent ? { traceparent: req.traceparent } : {}),
         };
-        const result = await this.service.run(cmd, step);
+        const result = await this.service.run(cmd, step, opts);
         if (result.status === 'off') return { status: 'off' };
         if (result.status === 'unavailable') return { status: 'unavailable' };
         // The classification is read once, in a step, so a replay of the Run sees what the first read saw.

@@ -25,7 +25,7 @@ import {
     type RuntimeRepoTokenIssuer,
 } from '../domain/ports';
 import { RUNTIME_PLATFORM_RESOLVER, type RuntimePlatformResolver } from './runtime-run-enqueuer.service';
-import { sealForRuntime } from './secret-sealer';
+import { RuntimeSuiteInputs } from './suite-inputs.service';
 import { suiteOfRecipeAt } from './suite-recipe';
 
 export type SuiteCiOutcome =
@@ -55,7 +55,12 @@ export class RuntimeSuiteRequester {
         @Inject(RUNTIME_RUN_TARGET_STORE_TOKEN) private readonly targets: Pick<RunTargetStore, 'record'>,
         @Inject(RUNTIME_PLATFORM_RESOLVER) private readonly platforms: RuntimePlatformResolver,
         @Optional() @Inject(RUNTIME_RELEASE_GATE) private readonly release?: RuntimeReleaseGate,
-    ) {}
+        @Optional() @Inject(RuntimeSuiteInputs) inputs?: RuntimeSuiteInputs,
+    ) {
+        this.inputs = inputs ?? new RuntimeSuiteInputs(git, repoTokens, config, setups);
+    }
+
+    private readonly inputs: RuntimeSuiteInputs;
 
     async requestCi(input: { environment: ProductEnvironment; prNumber: number }): Promise<SuiteCiOutcome> {
         const env = input.environment;
@@ -79,11 +84,10 @@ export class RuntimeSuiteRequester {
         const suiteRunId = uuidV5From(sha256(`suite-ci:${env.organizationId}:${env.environmentId}:${input.prNumber}:${head.headSha}`));
         const diff = await this.git.getPullRequestDiff({ ...orgTeam, ...repo, prNumber: input.prNumber, headSha: head.headSha });
         // A diff the product had to cut says nothing of the files it left out: unknown, so the whole suite runs.
-        const changedFiles = diff.truncated ? undefined : [...new Set(diff.files.flatMap((f) => [f.path, ...(f.previousPath ? [f.previousPath] : [])]))].sort();
+        const { changedFiles } = this.inputs.changesOf(diff);
 
         // One token per claim: the spec listing, each shard, the fresh host and the main host.
-        const tokens: string[] = [];
-        for (let i = 0; i < suite.shards + 3; i++) tokens.push(sealForRuntime(this.config, await this.repoTokens.issue({ ...orgTeam, ...repo }), suiteRunId));
+        const tokens = await this.inputs.tokensFor({ ...orgTeam, ...repo }, suite.shards, suiteRunId);
 
         const target: RunTarget = {
             runId: suiteRunId,

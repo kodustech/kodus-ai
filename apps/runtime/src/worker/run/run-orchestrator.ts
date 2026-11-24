@@ -120,6 +120,8 @@ export interface RunStart {
 /** The queue budget a Run decides by: its checkpoint's, never the config of a later process. */
 export const runQueueTimeoutOf = (started: RunStart, deps: Pick<RunDeps, 'queueTimeoutMs'>) => started.queueTimeoutMs ?? queueTimeoutOf(deps);
 export const RUN_TIMEOUT_MS = 45 * 60_000;
+/** What the Run keeps for itself when it runs the e2e suite: the exercised read, the verdict and the publish after the stage. */
+export const SUITE_STAGE_MARGIN_MS = 5 * 60_000;
 
 export interface RunResult {
     state: RunState;
@@ -760,6 +762,8 @@ interface RunScope {
     /** Renewals of the Run's claims, from each side's boot until the Run ends (lease-keeper.ts). */
     leases: RunLeaseHolds;
     reportingAt?: number;
+    /** When both sides had room: the machines' 45 minutes (RUN_TIMEOUT_MS) count from here. Set once booted; the suite stage's deadline derives from it. */
+    roomAt?: string;
     /** The plan the agent makes while the PR side boots (early-plan.ts); absent once taken or dropped, or when the plan is given. */
     early?: { result: Promise<EarlyPlan>; abort: AbortController };
     /** The first base rounds played with that plan while the PR built (early-plan.ts), once the plan is taken. */
@@ -921,6 +925,7 @@ async function bootSides(run: RunScope, planEarly: boolean): Promise<BootedSides
     // A wait for room is not boot time: the machines' clock (and the 45 min limit) starts once both had room.
     const waitedMs = Math.max(firstBoot.base.waitedMs ?? 0, firstBoot.pr.waitedMs ?? 0);
     const roomAt = new Date(Date.parse(bootingAt) + waitedMs).toISOString();
+    run.roomAt = roomAt;
     if (waitedMs > 0) {
         await deps.step('booting:room', async () => {
             await deps.projection.upsert(req.runId, { phase: 'booting', bootingAt: roomAt, capacityWait: null, capacityWaitMs: waitedMs });
@@ -1996,7 +2001,9 @@ async function suiteStage(run: RunScope): Promise<SuiteStageResult | undefined> 
     const { deps, req, ctx } = run;
     if (!deps.suite || !req.suite || ctx.stoppedEarly) return undefined;
     try {
-        return await deps.suite.run(req, deps.step);
+        // The suite shares the Run's 45 minutes (design 12.1): it ends in time for the verdict and the publish that follow it.
+        const deadlineAt = run.roomAt ? new Date(Date.parse(run.roomAt) + RUN_TIMEOUT_MS - SUITE_STAGE_MARGIN_MS).toISOString() : undefined;
+        return await deps.suite.run(req, deps.step, deadlineAt ? { deadlineAt } : undefined);
     } catch (e) {
         if (isCancellation(e)) throw e;
         return { status: 'unavailable' };

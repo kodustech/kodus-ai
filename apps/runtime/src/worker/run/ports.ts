@@ -153,9 +153,9 @@ export interface KeptCheckResults {
 export interface SuiteStage {
     /**
      * Runs the suite the Run's request carries (`req.suite`) through the same engine as CI mode, inside the Run's workflow
-     * with its step runner, and says how it ended. Throws only a cancellation; anything else the stage turns into `unavailable`.
+     * with its step runner, and says how it ended. `deadlineAt` is when the suite must be over so the Run keeps its own 45 minutes. Throws only a cancellation; anything else the stage turns into `unavailable`.
      */
-    run(req: RuntimeRunRequested, step: StepRunner): Promise<SuiteStageResult>;
+    run(req: RuntimeRunRequested, step: StepRunner, opts?: { deadlineAt?: string }): Promise<SuiteStageResult>;
 }
 
 export interface RunDeps {

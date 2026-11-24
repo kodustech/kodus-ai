@@ -77,13 +77,13 @@ interface Started {
 export class SuiteService {
     constructor(private readonly d: SuiteServiceDeps) {}
 
-    async run(cmd: RuntimeSuiteRequested, step: SuiteStep): Promise<SuiteServiceResult> {
+    async run(cmd: RuntimeSuiteRequested, step: SuiteStep, opts: { deadlineAt?: string } = {}): Promise<SuiteServiceResult> {
         const started = await step('suite:start', () => this.start(cmd));
         if ('status' in started) return started;
         // Publish steps retry (run-engine.service.ts `isPublishStep`): a broker that restarts never ends the suite without its check.
         const publisher = this.d.publisher;
         if (publisher) await step('publish:suite-started', () => publisher.started(cmd));
-        const result = await step('suite:run', () => this.runEngine(cmd, started));
+        const result = await step('suite:run', () => this.runEngine(cmd, started, opts.deadlineAt ? Date.parse(opts.deadlineAt) : undefined));
         if (publisher) await step('publish:suite-final', () => publisher.finished(cmd, result, { ...(started.suite.config.cwd ? { cwd: started.suite.config.cwd } : {}) }));
         return result;
     }
@@ -100,7 +100,7 @@ export class SuiteService {
         return { suite, imageId: setup.imageId ?? 'latest', expose: setup.expose ?? [] };
     }
 
-    private async runEngine(cmd: RuntimeSuiteRequested, s: Started): Promise<SuiteServiceResult> {
+    private async runEngine(cmd: RuntimeSuiteRequested, s: Started, deadlineAt?: number): Promise<SuiteServiceResult> {
         const { runs, clock } = this.d;
         const held = await runs.get(cmd.organizationId, cmd.suiteRunId);
         if (held?.finishedAt) return { status: 'ran', suiteRunId: cmd.suiteRunId, state: held.state, replayed: true };
@@ -156,6 +156,7 @@ export class SuiteService {
             config: s.suite.config,
             specs,
             mainHistory: mainHistoryOf(cmd),
+            ...(deadlineAt !== undefined && Number.isFinite(deadlineAt) ? { deadlineAt } : {}),
             // A retry or a selection runs part of the suite; the digest that keys a baseline is the whole suite's.
             suiteDigest: digest,
             selection: cmd.specs ? { mode: 'selected', selected: specs.length, total: whole.length } : plan.selection,

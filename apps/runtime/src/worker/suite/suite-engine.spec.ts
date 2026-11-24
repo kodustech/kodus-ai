@@ -81,6 +81,16 @@ describe('the first pass of a suite run', () => {
         expect(out.state).toBe('neutral');
     });
 
+    it('a run with a deadline (the Run\'s 45 minutes) never goes past it: the shard is stopped there, the rest is not_run and nothing re-runs after it', async () => {
+        const w = world({ specs: { 'a.cy.ts': { ms: MIN }, 'b.cy.ts': { ms: 90 * MIN } } }, { maxShards: 1 });
+        const started = w.clock.now();
+        const out = await w.engine.run(request(), { ...w.inputs(['a.cy.ts', 'b.cy.ts']), deadlineAt: started + 10 * MIN });
+        expect(statusOf(out)).toEqual({ 'a.cy.ts': 'passed', 'b.cy.ts': 'not_run' });
+        expect(out.state).toBe('neutral');
+        // Polling granularity aside, the run ends at the deadline, not at the recipe's 25 minute shard cap or the 12 minute re-run phase.
+        expect(w.clock.now() - started).toBeLessThanOrEqual(10 * MIN + 2 * MIN);
+    });
+
     it('a runner that crashed after some results re-runs the specs it had not reported, once, on the same host', async () => {
         const w = world({ specs: { 'a.cy.ts': {}, 'b.cy.ts': { pr: ['crash', 'pass'] }, 'c.cy.ts': {} } }, { maxShards: 1 });
         const out = await w.engine.run(request(), w.inputs(['a.cy.ts', 'b.cy.ts', 'c.cy.ts']));

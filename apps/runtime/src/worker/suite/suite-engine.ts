@@ -77,6 +77,11 @@ export interface SuiteInputs {
     suiteDigest?: string;
     /** How the specs were chosen (the whole suite with the reason, or the selection): kept on the run for its check. */
     selection?: SuiteSelectionReport;
+    /**
+     * When the suite must be over, as the clock's `now()` counts (epoch ms): a suite that runs as a stage of a Run (Run mode) shares
+     * the Run's 45 minutes (design 12.1), so no wait, command or re-run goes past it; what did not run is `not_run`. Absent: only the recipe's own caps.
+     */
+    deadlineAt?: number;
     /** The risk-first order inside a shard (6.1): the specs red on the previous push first, then those that cover the diff. The balance is untouched. */
     order?: { failedBefore: readonly string[]; diffCoverage: Readonly<Record<string, number>> };
 }
@@ -284,7 +289,7 @@ export class SuiteEngine {
     /** The shards whose host is up; waits until each asked shard is up or failed, or the wait runs out. */
     private async waitForHosts(ctx: RunCtx, asked: readonly number[]): Promise<number[]> {
         const { clock } = this.d;
-        const deadline = clock.now() + HOST_WAIT_MS;
+        const deadline = Math.min(clock.now() + HOST_WAIT_MS, ctx.inputs.deadlineAt ?? Infinity);
         for (;;) {
             const status = await this.d.demand.status();
             const state = (s: number) => status.find((h) => h.shard === s)?.state ?? 'starting';
@@ -358,7 +363,13 @@ export class SuiteEngine {
         if (o.clear) await this.clearResults(ctx, host.claimId, keyBase);
         let remaining = [...specs];
         for (let attempt = 0; attempt <= o.crashRetries && remaining.length > 0; attempt++) {
-            const out = await this.runCommand(ctx, col, remaining, attempt === 0 ? keyBase : `${keyBase}-r${attempt}`, o.timeoutMs);
+            // Time the run may still use: past its deadline nothing starts, and a command is cut at it.
+            const timeoutMs = Math.min(o.timeoutMs, (ctx.inputs.deadlineAt ?? Infinity) - this.d.clock.now());
+            if (timeoutMs <= 0) {
+                for (const s of remaining) missing.set(s, 'not_run');
+                return { done: col.done, missing };
+            }
+            const out = await this.runCommand(ctx, col, remaining, attempt === 0 ? keyBase : `${keyBase}-r${attempt}`, timeoutMs);
             remaining = remaining.filter((s) => !col.done.has(s));
             if (out.outcome === 'finished' || out.outcome === 'timeout') {
                 for (const s of remaining) missing.set(s, 'not_run');

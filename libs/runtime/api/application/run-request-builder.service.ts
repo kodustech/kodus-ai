@@ -40,6 +40,7 @@ import {
 } from '../domain/ports';
 import { RuntimeEnvironmentMembers } from './environment-members.service';
 import { sealForRuntime } from './secret-sealer';
+import { RuntimeSuiteInputs } from './suite-inputs.service';
 
 /** A branch name the request may carry (what the report says a repository ran from), or nothing. */
 const branchOf = (branch: string | undefined) => (branch && branch.length <= 256 ? { branch } : {});
@@ -95,6 +96,10 @@ export class RuntimeRunRequestBuilder {
         @Optional()
         @Inject(RUNTIME_LINKED_TASKS)
         private readonly linkedTasks?: RuntimeLinkedTasksReader,
+        // Optional: a builder made without it sends no suite section (Run mode of the e2e suite is off).
+        @Optional()
+        @Inject(RuntimeSuiteInputs)
+        private readonly suiteInputs?: RuntimeSuiteInputs,
     ) {}
 
     /** The tasks the PR links, within a budget: a slow or failing tracker never holds up the Run, it only leaves them out. */
@@ -181,6 +186,7 @@ export class RuntimeRunRequestBuilder {
         const { exercisedThreshold, partlyTestedCheck } = await this.orgJudgementOf(env.organizationId);
         // An external finding's plan is closed: it plays only the probes the product admitted.
         const kept = input.trigger === 'external_finding' ? [] : await this.keptChecksOf(env.organizationId, env.environmentId, own.repositoryId);
+        const suite = await this.suiteOf({ env, own: own.repositoryId, repo, head, diff, runId, trigger: input.trigger });
         return RuntimeRunRequestedSchema.parse({
             runId,
             attempt,
@@ -224,6 +230,33 @@ export class RuntimeRunRequestBuilder {
             ...(workspace ? { workspace } : {}),
             // The repository's kept checks as they are now (docs/runtime/kept-checks.md §5): a snapshot of this Run.
             ...(kept.length ? { keptChecks: kept } : {}),
+            // The repository's own e2e suite as a stage of this Run, when the environment's recipe declares one (docs/runtime/e2e-suites.md §10.2).
+            ...(suite ? { suite } : {}),
+        });
+    }
+
+    /**
+     * The suite section of the request (docs/runtime/e2e-suites.md §10.2): only for the environment's primary repository (the suite
+     * runs on it), never for a fork (its code waits for a maintainer and tokens minted now would expire), an external finding's
+     * closed plan or a simulation.
+     */
+    private async suiteOf(input: {
+        env: Pick<ProductEnvironment, 'environmentId' | 'organizationId' | 'teamId' | 'repositoryId'>;
+        own: string;
+        repo: { repositoryId: string; repositoryName: string };
+        head: PullRequestHead;
+        diff: PullRequestDiff;
+        runId: string;
+        trigger: RuntimeRunRequested['trigger'];
+    }): Promise<RuntimeRunRequested['suite']> {
+        if (!this.suiteInputs || input.head.fork || input.own !== input.env.repositoryId) return undefined;
+        if (input.trigger === 'external_finding' || input.trigger === 'simulate') return undefined;
+        const { env } = input;
+        return this.suiteInputs.forRun({
+            repo: { organizationId: env.organizationId, teamId: env.teamId, ...input.repo },
+            environmentId: env.environmentId,
+            diff: input.diff,
+            runId: input.runId,
         });
     }
 

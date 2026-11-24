@@ -198,6 +198,7 @@ import { PgSuiteBaselineReader } from './infrastructure/pg-suite-baseline.reader
 import { PgTemplateSetupReader } from './infrastructure/pg-template-setup.reader';
 import { RuntimeSuiteBaselineRequests } from './application/suite-baseline-requests.service';
 import { RuntimeSuiteCiTrigger } from './application/suite-ci-trigger.service';
+import { RuntimeSuiteInputs } from './application/suite-inputs.service';
 import { RuntimeSuiteRequester } from './application/suite-requester.service';
 import { RuntimeTemplateSetupRequests } from './application/template-setup-requests.service';
 import { PgExternalStopReader } from './infrastructure/pg-external-stop.reader';
@@ -369,6 +370,7 @@ const useCases = [
             useFactory: (db: RuntimeReadDb) => new PgSuiteBaselineReader(db),
         },
         RuntimeSuiteBaselineRequests,
+        RuntimeSuiteInputs,
         RuntimeSuiteRequester,
         RuntimeSuiteCiTrigger,
         {

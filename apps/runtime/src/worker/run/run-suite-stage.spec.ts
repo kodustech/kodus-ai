@@ -39,7 +39,7 @@ async function run(stage: SuiteStage | undefined, opts: { suite?: boolean } = {}
 }
 const stageOf = (outcome: SuiteStageResult | (() => never)): SuiteStage & { calls: unknown[] } => {
     const calls: unknown[] = [];
-    return { calls, run: async (req, step) => (calls.push({ runId: req.runId, step }), typeof outcome === 'function' ? outcome() : outcome) };
+    return { calls, run: async (req, step, opts) => (calls.push({ runId: req.runId, step, ...(opts ? { opts } : {}) }), typeof outcome === 'function' ? outcome() : outcome) };
 };
 
 describe('the suite as a stage of the Run', () => {
@@ -85,6 +85,13 @@ describe('the suite as a stage of the Run', () => {
     it('runs the stage once, after the probes, with the Run request and the Run\'s own step runner', async () => {
         const stage = stageOf({ status: 'ran', state: 'passed' });
         const { req, h } = await run(stage);
-        expect(stage.calls).toEqual([{ runId: req.runId, step: h.deps.step }]);
+        expect(stage.calls).toEqual([{ runId: req.runId, step: h.deps.step, opts: expect.anything() }]);
+    });
+
+    it("tells the stage when the Run's 45 minutes end, less five minutes to judge and publish, so a suite never runs the Run out of time", async () => {
+        const stage = stageOf({ status: 'ran', state: 'passed' });
+        const { projection } = await run(stage);
+        const [call] = stage.calls as Array<{ opts: { deadlineAt: string } }>;
+        expect(Date.parse(call.opts.deadlineAt)).toBe(Date.parse(projection.bootingAt!) + 40 * 60_000);
     });
 });

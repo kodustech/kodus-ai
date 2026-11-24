@@ -65,7 +65,7 @@ function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuit
         ...(over.map ? { maps: { newest: async () => over.map } } : {}),
         ...(over.publisher ? { publisher: { started: async (c) => void published.push(`started:${c.mode}`), finished: async (_c, r, s) => void published.push(`finished:${r.status}:${s.cwd}`) } } : {}),
     };
-    return { service: new SuiteService(deps), cell, runs, baselines, demand, tokens, baselineStarted, published };
+    return { service: new SuiteService(deps), clockNow: () => clock.now(), cell, runs, baselines, demand, tokens, baselineStarted, published };
 }
 
 describe('running a suite as a workflow', () => {
@@ -84,6 +84,14 @@ describe('running a suite as a workflow', () => {
         const w = world({ specs: { 'cypress/e2e/a.cy.ts': {}, 'cypress/e2e/new.cy.ts': {} } });
         await w.service.run(request({ changedFiles: ['apps/dashboard/cypress/e2e/new.cy.ts'], removedFiles: ['apps/dashboard/cypress/e2e/b.cy.ts'] }), passthrough);
         expect(w.cell.starts.flatMap((s) => s.specs).sort()).toEqual(['cypress/e2e/a.cy.ts', 'cypress/e2e/new.cy.ts']);
+    });
+
+    it('given a deadline (a suite inside a Run) it stops there: a spec still running is not_run and the run ends neutral', async () => {
+        const w = world({ specs: { 'cypress/e2e/a.cy.ts': { ms: 60_000 }, 'cypress/e2e/b.cy.ts': { ms: 90 * 60_000 } } });
+        const deadlineAt = new Date(w.clockNow() + 12 * 60_000).toISOString();
+        const out = await w.service.run(request(), passthrough, { deadlineAt });
+        expect(out).toMatchObject({ status: 'ran', state: 'neutral' });
+        expect(w.clockNow()).toBeLessThanOrEqual(Date.parse(deadlineAt) + 2 * 60_000);
     });
 
     it('a baseline is the whole suite on main, recorded for the baseline request, which is marked started', async () => {

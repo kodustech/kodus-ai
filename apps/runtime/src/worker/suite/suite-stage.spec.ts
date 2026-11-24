@@ -19,8 +19,8 @@ async function world(result: SuiteServiceResult, classification?: unknown) {
     const runs = new InMemorySuiteRuns();
     const seen: any[] = [];
     const service = {
-        run: async (cmd: any, step: any) => {
-            seen.push({ cmd, step });
+        run: async (cmd: any, step: any, opts?: any) => {
+            seen.push({ cmd, step, opts });
             await runs.create({ suiteRunId: cmd.suiteRunId, organizationId: cmd.organizationId, environmentId: cmd.environmentId, repositoryId: cmd.repositoryId, mode: cmd.mode, prNumber: cmd.prNumber, prSha: cmd.prSha, mergeBase: cmd.mergeBase, mainSha: cmd.mainSha, requestedAt: new Date(cmd.requestedAt) });
             await runs.finish(cmd.organizationId, cmd.suiteRunId, (result as any).state ?? 'neutral', new Date(), classification ? { classification: classification as never } : {});
             return 'suiteRunId' in result ? { ...result, suiteRunId: cmd.suiteRunId } : result;
@@ -52,6 +52,12 @@ describe('the suite stage of a Run', () => {
         expect(step).toBe(passthrough);
         await w.stage.run(req, passthrough);
         expect(w.seen[1].cmd.suiteRunId).toBe(cmd.suiteRunId);
+    });
+
+    it("hands the Run's deadline to the service, so the suite ends within the Run's own time", async () => {
+        const w = await world({ status: 'ran', suiteRunId: 's', state: 'passed', replayed: false });
+        await w.stage.run(withSuite(), passthrough, { deadlineAt: '2026-11-23T12:40:00.000Z' });
+        expect(w.seen[0].opts).toEqual({ deadlineAt: '2026-11-23T12:40:00.000Z' });
     });
 
     it('answers the state of the run and the classification it stored', async () => {
