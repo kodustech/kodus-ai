@@ -1316,7 +1316,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 );
             if (
                 finalExecution?.uuid !== latest.uuid ||
-                finalExecution?.status !== AutomationStatus.SUCCESS
+                !reviewExecutionAllowsApproval(finalExecution)
             )
                 return hold(
                     'A newer review must complete before automatic approval.',

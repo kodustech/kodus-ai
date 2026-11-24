@@ -1,5 +1,6 @@
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 import { CheckIfPRCanBeApprovedCronProvider } from './CheckIfPRCanBeApproved.cron';
 
 jest.mock('@libs/core/log/logger', () => ({
@@ -20,6 +21,9 @@ type Deps = {
         getPullRequestReviewThreads: jest.Mock;
         getPullRequestReviewComments: jest.Mock;
         checkIfPullRequestShouldBeApproved: jest.Mock;
+        getReviewStatusByPullRequest: jest.Mock;
+        approvePullRequest: jest.Mock;
+        getAllCommentsInPullRequest: jest.Mock;
     };
     pullRequestMessagesService: {
         findOne: jest.Mock;
@@ -39,6 +43,9 @@ function buildDeps(): Deps {
             checkIfPullRequestShouldBeApproved: jest
                 .fn()
                 .mockResolvedValue(undefined),
+            getReviewStatusByPullRequest: jest.fn().mockResolvedValue('NONE'),
+            approvePullRequest: jest.fn().mockResolvedValue(undefined),
+            getAllCommentsInPullRequest: jest.fn().mockResolvedValue([]),
         },
         pullRequestMessagesService: {
             findOne: jest.fn().mockResolvedValue(null),
@@ -49,6 +56,7 @@ function buildDeps(): Deps {
 function buildProvider(
     deps: Deps,
     conditionalApprovalEnabled = true,
+    approvalPolicies?: { evaluate: jest.Mock },
 ): CheckIfPRCanBeApprovedCronProvider {
     return new CheckIfPRCanBeApprovedCronProvider(
         {} as any, // teamService
@@ -64,6 +72,8 @@ function buildProvider(
         {
             isEnabled: jest.fn().mockResolvedValue(conditionalApprovalEnabled),
         } as any,
+        undefined, // organizationParameters
+        approvalPolicies as any,
     );
 }
 
@@ -606,6 +616,76 @@ describe('CheckIfPRCanBeApprovedCronProvider (deterministic logic)', () => {
             });
 
             expect(result).toBe(true);
+        });
+    });
+
+    describe('approveByNamedPolicy', () => {
+        it('approves when the final execution is a summary-only PARTIAL_ERROR', async () => {
+            const deps = buildDeps();
+            const finalPr = {
+                number: 7,
+                title: 'A change',
+                body: '',
+                user: { login: 'ana' },
+                labels: [],
+                head: { sha: 'sha-1' },
+                base: { sha: 'base-1' },
+            };
+            const execution = {
+                uuid: 'exec-1',
+                status: AutomationStatus.PARTIAL_ERROR,
+                dataExecution: {
+                    reviewApprovalBlocked: false,
+                    lastAnalyzedCommit: 'sha-1',
+                    approvalReviewSummary: {
+                        complete: true,
+                        lineFindings: 0,
+                        prFindings: 0,
+                    },
+                    approvalDecision: {
+                        reviewedHeadSha: 'sha-1',
+                        reviewedBaseSha: 'base-1',
+                        reviewedMetadataKey: approvalPrMetadataKey(finalPr),
+                    },
+                },
+            };
+            deps.automationExecutionService.findLatestExecutionByFilters
+                // The same execution backs the first gate and the final check.
+                .mockResolvedValue(execution);
+            deps.codeManagementService.getPullRequest.mockResolvedValue(
+                finalPr,
+            );
+            deps.codeManagementService.getReviewStatusByPullRequest
+                .mockResolvedValueOnce('PENDING')
+                .mockResolvedValueOnce('APPROVED');
+
+            const approvalPolicies = {
+                evaluate: jest.fn().mockResolvedValue({
+                    decision: {
+                        kind: 'approve',
+                        reviewedHeadSha: 'sha-1',
+                        reviewedBaseSha: 'base-1',
+                        reviewedMetadataKey: approvalPrMetadataKey(finalPr),
+                    },
+                    eligibility: {},
+                }),
+            };
+            const provider = buildProvider(deps, true, approvalPolicies);
+
+            const approved = await (provider as any).approveByNamedPolicy({
+                organizationAndTeamData: ORG_DATA,
+                pr: { ...basePr(), suggestions: [] },
+                codeReviewConfig: { pullRequestApprovalActive: true },
+                teamAutomationId: 'ta-1',
+            });
+
+            expect(approved).toBe(true);
+            expect(
+                deps.codeManagementService.approvePullRequest,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ headSha: 'sha-1' }),
+                PlatformType.GITHUB,
+            );
         });
     });
 });
