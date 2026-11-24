@@ -457,9 +457,12 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         const result = await run(stage, makeContext([applied]));
 
         expect(published(result)).toEqual([]);
-        expect(
-            result.discardedSuggestions.map((s: any) => s.priorityStatus),
-        ).toContain('discarded-by-reversal');
+        expect(result.discardedSuggestions).toContainEqual(
+            expect.objectContaining({
+                priorityStatus: PriorityStatus.DISCARDED_BY_REVERSAL,
+                deliveryStatus: 'not_sent',
+            }),
+        );
     });
 
     it('links a kept finding when the repeat check identifies the earlier suggestion', async () => {

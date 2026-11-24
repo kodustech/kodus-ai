@@ -180,6 +180,18 @@ function stripComments(code: string): string {
         .replace(/(^|\s)#.*$/gm, ' ');
 }
 
+/** Code with its comments and string literals blanked, so only real code
+ *  names remain. */
+export function withoutCommentsOrStrings(
+    code: string,
+    language?: string,
+): string {
+    return stripStringLiterals(
+        outsideStringLiterals(code, language, stripComments),
+        language,
+    );
+}
+
 /**
  * A JS/TS regex literal (`/["']/g`, `/^\d+$/`) is neither a string nor a
  * comment, but its content is just as opaque — the quote characters inside

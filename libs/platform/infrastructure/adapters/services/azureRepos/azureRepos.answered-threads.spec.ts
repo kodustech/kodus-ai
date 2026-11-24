@@ -19,7 +19,7 @@ const comment = (id: number, extra: Record<string, unknown> = {}) => ({
 const fileContext = { filePath: '/src/a.ts' };
 
 describe('AzureReposService.getAnsweredReviewThreadRootIds', () => {
-    it('keys answered file threads by thread id and skips PR-level, system and deleted', async () => {
+    it('keys answered file threads by thread id and skips PR-level, system and deleted replies, even under a deleted root', async () => {
         const threads = [
             {
                 id: 100,
@@ -36,6 +36,11 @@ describe('AzureReposService.getAnsweredReviewThreadRootIds', () => {
                 id: 103,
                 threadContext: fileContext,
                 comments: [comment(1), comment(2, { isDeleted: true })],
+            },
+            {
+                id: 105,
+                threadContext: fileContext,
+                comments: [comment(1, { isDeleted: true }), comment(2)],
             },
             {
                 id: 104,
@@ -59,6 +64,6 @@ describe('AzureReposService.getAnsweredReviewThreadRootIds', () => {
 
         await expect(
             service.getAnsweredReviewThreadRootIds(params),
-        ).resolves.toEqual(new Set(['100']));
+        ).resolves.toEqual(new Set(['100', '105']));
     });
 });

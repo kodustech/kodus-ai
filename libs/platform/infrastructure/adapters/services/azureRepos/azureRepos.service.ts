@@ -2561,13 +2561,14 @@ export class AzureReposService implements Omit<
                     )
                     .map((thread) => ({
                         rootIds: [thread.id],
+                        // comments[0] is the root, deleted or not.
                         replies: (thread.comments ?? [])
+                            .slice(1)
                             .filter(
                                 (comment) =>
                                     !(comment as any)?.isDeleted &&
                                     comment?.commentType !== 'system',
                             )
-                            .slice(1)
                             .map((comment) => ({ body: comment.content })),
                     })),
             );

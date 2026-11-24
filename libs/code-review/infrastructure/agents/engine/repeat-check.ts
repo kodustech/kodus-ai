@@ -37,6 +37,7 @@ import { hasManagedModelKey } from '@libs/llm/managed-slot';
 import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 
 import { contentSimilarity } from './dedup-prompt';
+import { withoutCommentsOrStrings } from './is-usable-fix';
 
 const logger = createLogger('RepeatCheck');
 
@@ -214,12 +215,15 @@ const identifiers = (text?: string) =>
         ) ?? [],
     );
 
+const codeIdentifiers = (code?: string) =>
+    identifiers(code ? withoutCommentsOrStrings(code) : '');
+
 /** What an applied suggestion added: its code's identifiers that the code it
  *  pointed at did not have. */
 function introducedIdentifiers(earlier: PrDecisionRecord): string[] {
     if (!applied(earlier) || !earlier.improvedCode) return [];
-    const before = identifiers(earlier.existingCode);
-    return [...identifiers(earlier.improvedCode)].filter(
+    const before = codeIdentifiers(earlier.existingCode);
+    return [...codeIdentifiers(earlier.improvedCode)].filter(
         (name) => !before.has(name) && !COMMON_IDENTIFIERS.has(name),
     );
 }
@@ -233,9 +237,10 @@ function touchesAppliedCode(
     const added = introducedIdentifiers(earlier);
     if (!added.length) return false;
     const named = identifiers(
-        `${finding.suggestionContent ?? ''} ${finding.oneSentenceSummary ?? ''} ${finding.existingCode ?? ''}`,
+        `${finding.suggestionContent ?? ''} ${finding.oneSentenceSummary ?? ''}`,
     );
-    return added.some((name) => named.has(name));
+    const inCode = codeIdentifiers(finding.existingCode);
+    return added.some((name) => named.has(name) || inCode.has(name));
 }
 
 /** Earlier comments that could be the same occurrence: the one the finder
@@ -253,29 +258,25 @@ export function repeatCandidates(
     const byLink = comparable.filter((earlier) =>
         linkedByFinder(finding, earlier),
     );
+    const taken = new Set<PrDecisionRecord>(byLink);
     const linked = comparable.filter(
         (earlier) =>
-            !byLink.includes(earlier) &&
+            !taken.has(earlier) &&
             ((!!file && normalizePath(earlier.relevantFile) === file) ||
                 sharesRule(finding, earlier) ||
                 (code.length >= MIN_CODE_MATCH &&
                     normalizeCode(earlier.existingCode) === code)),
     );
+    linked.forEach((earlier) => taken.add(earlier));
     const onAppliedCode = comparable
         .filter(
             (earlier) =>
-                !byLink.includes(earlier) &&
-                !linked.includes(earlier) &&
-                touchesAppliedCode(finding, earlier),
+                !taken.has(earlier) && touchesAppliedCode(finding, earlier),
         )
         .slice(0, MAX_APPLIED_CANDIDATES);
+    onAppliedCode.forEach((earlier) => taken.add(earlier));
     const similar = comparable
-        .filter(
-            (earlier) =>
-                !byLink.includes(earlier) &&
-                !linked.includes(earlier) &&
-                !onAppliedCode.includes(earlier),
-        )
+        .filter((earlier) => !taken.has(earlier))
         .map((earlier) => ({
             earlier,
             score: contentSimilarity(finding, {

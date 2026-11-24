@@ -196,6 +196,24 @@ describe('repeatCandidates', () => {
         ).toEqual([]);
     });
 
+    it('reads only code names as what an applied change added, not its comments or strings', () => {
+        const applied = earlier({
+            suggestionId: 'drop-archived',
+            relevantFile: 'src/items/list.ts',
+            outcome: 'implemented',
+            existingCode: 'return [...items];',
+            improvedCode:
+                "// Hidden from the dashboard\nlog('dashboard filter');\nreturn items;",
+            suggestionContent: 'Do not list everything.',
+        });
+        const finding: RepeatCheckFinding = {
+            label: 'bug',
+            relevantFile: 'src/items/report.ts',
+            suggestionContent: 'The dashboard shows a stale total.',
+        };
+        expect(repeatCandidates(finding, [applied])).toEqual([]);
+    });
+
     it("a rule finding's link is not trusted: rule reposts carry it too", () => {
         expect(
             repeatCandidates(
