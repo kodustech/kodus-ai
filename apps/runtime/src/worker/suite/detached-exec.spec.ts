@@ -133,6 +133,21 @@ describe('a suite command run detached', () => {
             expect(w.env.calls.some((c) => 'service' in c)).toBe(false);
         });
 
+        it('the suite cwd is a path under the service container\'s own workdir: the scripts cd into it, the exec carries no absolute cwd', async () => {
+            const w = world({ runMs: 2 * MIN, resultsAt: { 'results/a.xml': 1 * MIN } }, { service: 'e2e', cwd: 'apps/dashboard' });
+            await w.go();
+            const start = w.env.calls.find((c) => c.kind === 'start')!;
+            expect(start.command).toContain(`sh -c 'cd "$1" && sh "$2"; echo $? > "$3/exit"' sh 'apps/dashboard'`);
+            expect(w.env.calls.filter((c) => c.kind === 'poll').every((c) => c.command.includes("cd 'apps/dashboard'"))).toBe(true);
+            expect(w.env.calls.every((c) => c.service === 'e2e')).toBe(true);
+        });
+
+        it('a cwd that leaves the container workdir is refused before any call', async () => {
+            const w = world({ runMs: 2 * MIN }, { service: 'e2e', cwd: '../elsewhere' });
+            expect(await w.go()).toMatchObject({ outcome: 'infra', reason: 'bad_input' });
+            expect(w.env.calls).toHaveLength(0);
+        });
+
         it('a cell that cannot run in a service is infra with its own reason, and nothing is polled', async () => {
             const w = world({ runMs: 2 * MIN, refusesService: true }, { service: 'e2e' });
             expect(await w.go()).toMatchObject({ outcome: 'infra', reason: 'service_unsupported' });

@@ -113,7 +113,7 @@ disk). A host boots in 10 to 20 s with main's build ready (`host-providers.md` 8
   **Built:** the command, its polls, its kill and the result, artifact and coverage reads run in the named
   service's container (`exec.service`, hello feature `execService`, docker-gvisor only). A cell without the feature
   makes the shard `infra` (`service_unsupported`), and a service the project does not run is an error of the exec, never
-  another container. `suite.cwd` is relative to that container's working directory.
+  another container. `suite.cwd` is relative to that container's working directory (the Go driver joins it to the target's workdir and refuses a path that leaves it; the shard's scripts `cd` into it from there).
   **`image:` is not built:** the engine does not turn an image into a compose service (the cell composes only the
   environment's own compose file, sandboxed and verified, and the suite service needs the checkout mounted); the recipe
   validator refuses `suite.image` with the message to add the image as a service of the compose file and name it with
