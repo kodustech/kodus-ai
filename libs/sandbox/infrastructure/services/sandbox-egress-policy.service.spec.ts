@@ -8,7 +8,10 @@ import {
     LICENSE_SERVICE_TOKEN,
     SubscriptionStatus,
 } from '@libs/ee/license/interfaces/license.interface';
-import { FixedEgressIpPlanRequiredError } from '@libs/sandbox/domain/egress-plan';
+import {
+    FixedEgressIpPlanRequiredError,
+    FixedEgressIpPlanUnconfirmedError,
+} from '@libs/sandbox/domain/egress-plan';
 import { INTEGRATION_CONFIG_SERVICE_TOKEN } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { GLOBAL_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/global-parameters/contracts/global-parameters.service.contract';
 
@@ -321,6 +324,38 @@ describe('SandboxEgressPolicyService fixed IP setting', () => {
             FixedEgressIpPlanRequiredError,
         );
         expect(integrationConfigs.createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('refuses to turn it on while billing cannot say the plan, and stores nothing', async () => {
+        for (const opts of [
+            { license: 'unavailable' as const },
+            { licenseError: new Error('billing down') },
+        ]) {
+            const { service, integrationConfigs } = build({
+                rollout: on,
+                ...opts,
+            });
+            await expect(
+                service.setFixedIp(scope, true),
+            ).rejects.toBeInstanceOf(FixedEgressIpPlanUnconfirmedError);
+            expect(
+                integrationConfigs.createOrUpdateConfig,
+            ).not.toHaveBeenCalled();
+        }
+    });
+
+    it('lets a team turn it off while billing cannot say the plan', async () => {
+        const { service, integrationConfigs } = build({
+            rollout: on,
+            license: 'unavailable',
+        });
+        await service.setFixedIp(scope, false);
+        expect(integrationConfigs.createOrUpdateConfig).toHaveBeenCalledWith(
+            IntegrationConfigKey.EGRESS_FIXED_IP,
+            expect.objectContaining({ required: false }),
+            INTEGRATION,
+            expect.anything(),
+        );
     });
 
     it('lets a team that left a paid plan turn it off', async () => {

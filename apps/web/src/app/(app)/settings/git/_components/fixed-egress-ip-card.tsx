@@ -24,6 +24,7 @@ import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { ClipboardHelpers } from "src/core/utils/clipboard";
+import { isSelfHosted } from "src/core/utils/self-hosted";
 
 /** The API's refusal message (403 on a plan without it), if it sent one. */
 const apiMessage = (error: unknown): string | undefined => {
@@ -39,8 +40,11 @@ const apiMessage = (error: unknown): string | undefined => {
  */
 export const FixedEgressIpCard = ({
     initialSetting,
+    loadFailed = false,
 }: {
     initialSetting: FixedEgressIp;
+    /** The setting could not be read: say so instead of hiding the card. */
+    loadFailed?: boolean;
 }) => {
     const router = useRouter();
     const { teamId } = useSelectedTeamId();
@@ -55,6 +59,22 @@ export const FixedEgressIpCard = ({
         setSetting(initialSetting);
     }
 
+    // A self-hosted install never shows the card, read or not.
+    if (loadFailed && !isSelfHosted) {
+        return (
+            <Card className="mb-4">
+                <CardHeader className="space-y-2">
+                    <CardTitle className="text-base">
+                        Fixed outbound IP
+                    </CardTitle>
+                    <CardDescription>
+                        Kodus could not load this setting. Refresh the page to
+                        try again.
+                    </CardDescription>
+                </CardHeader>
+            </Card>
+        );
+    }
     if (!setting.available) return null;
 
     const onToggle = async (enabled: boolean) => {

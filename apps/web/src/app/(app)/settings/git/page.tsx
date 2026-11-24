@@ -66,6 +66,7 @@ export default async function GitSettings() {
     let webhookFailuresUnavailable = false;
     let repositorySelection: RepositorySelection = MANUAL_SELECTION;
     let fixedEgressIp: FixedEgressIp = NO_FIXED_EGRESS_IP;
+    let fixedEgressIpUnavailable = false;
     let connectionsError = false;
 
     try {
@@ -93,8 +94,12 @@ export default async function GitSettings() {
                 return {};
             }),
             getRepositorySelection(teamId).catch(() => MANUAL_SELECTION),
-            // Ancillary too: a failed read hides the card, nothing else.
-            getFixedEgressIp(teamId).catch(() => NO_FIXED_EGRESS_IP),
+            // Ancillary too, and like the webhook read it says the setting
+            // could not be loaded instead of answering "not available".
+            getFixedEgressIp(teamId).catch(() => {
+                fixedEgressIpUnavailable = true;
+                return NO_FIXED_EGRESS_IP;
+            }),
         ]);
     } catch (err) {
         console.error("[GitSettings] error fetching data:", err);
@@ -190,6 +195,7 @@ export default async function GitSettings() {
                                 />
                                 <FixedEgressIpCard
                                     initialSetting={fixedEgressIp}
+                                    loadFailed={fixedEgressIpUnavailable}
                                 />
                                 <GitRepositoriesTable
                                     platformName={gitConnection.platformName}

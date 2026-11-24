@@ -19,6 +19,7 @@ import {
 import {
     FixedEgressIpNoIntegrationError,
     FixedEgressIpPlanRequiredError,
+    FixedEgressIpPlanUnconfirmedError,
     isFixedEgressIpPlanAllowed,
 } from '@libs/sandbox/domain/egress-plan';
 
@@ -270,8 +271,11 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
 
     /**
      * Turns the team's fixed outbound IP on or off by hand. A manual marker
-     * never expires. Turning it on needs a plan that includes it; turning it
-     * off never does, so a team that left a paid plan can still clear it.
+     * never expires. Turning it on needs a plan that includes it, read from
+     * billing: an unread plan refuses rather than grants (routing keeps an
+     * existing marker through a billing outage, turning it on does not).
+     * Turning it off never needs the plan, so a team that left a paid plan
+     * can still clear it.
      * This process routes the team the new way at once; other workers
      * within the marker cache window.
      */
@@ -280,8 +284,10 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
         enabled: boolean,
         actorUserId?: string,
     ): Promise<FixedEgressIpSetting> {
-        if (enabled && !(await this.readPlan(scope)).allowed) {
-            throw new FixedEgressIpPlanRequiredError();
+        if (enabled) {
+            const plan = await this.readPlan(scope);
+            if (plan.failed) throw new FixedEgressIpPlanUnconfirmedError();
+            if (!plan.allowed) throw new FixedEgressIpPlanRequiredError();
         }
         const integrationId = await this.codeManagementIntegrationId(scope);
         if (!integrationId) throw new FixedEgressIpNoIntegrationError();
@@ -374,15 +380,19 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
     }
 
     /**
-     * The plan answer, uncached. `definitive` is false when billing could
-     * not answer: that read keeps the fixed IP and is not reused.
+     * The plan answer, uncached. `definitive` is false when there was no
+     * billing answer to reuse; `failed` is true when billing was asked and
+     * could not answer. Either way routing keeps the fixed IP; only a failed
+     * read stops the switch from turning it on.
      */
     private async readPlan(
         scope: EgressScope,
-    ): Promise<{ allowed: boolean; definitive: boolean }> {
+    ): Promise<{ allowed: boolean; definitive: boolean; failed: boolean }> {
         // No license service (tests, an install without billing): the plan
         // never takes a team's fixed IP away.
-        if (!this.licenseService) return { allowed: true, definitive: false };
+        if (!this.licenseService) {
+            return { allowed: true, definitive: false, failed: false };
+        }
         try {
             const license =
                 await this.licenseService.validateOrganizationLicense({
@@ -392,6 +402,7 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
             return {
                 allowed: isFixedEgressIpPlanAllowed(license),
                 definitive: !license?.unavailable,
+                failed: Boolean(license?.unavailable),
             };
         } catch (error) {
             this.logger.warn({
@@ -401,7 +412,7 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
                 error,
                 metadata: { ...scope },
             });
-            return { allowed: true, definitive: false };
+            return { allowed: true, definitive: false, failed: true };
         }
     }
 

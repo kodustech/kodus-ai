@@ -18,13 +18,11 @@ export type FixedEgressIp = {
     fixedIp?: string;
 };
 
-const UNAVAILABLE: FixedEgressIp = {
-    available: false,
-    allowedByPlan: false,
-    enabled: false,
-};
-
-/** Server components: reads through the authorized server-side path. */
+/**
+ * Server components: reads through the authorized server-side path. A read
+ * that brings no setting throws rather than answer "not available", so the
+ * page can tell a failed load from a team without the card.
+ */
 export const getFixedEgressIp = async (
     teamId: string,
 ): Promise<FixedEgressIp> => {
@@ -32,7 +30,9 @@ export const getFixedEgressIp = async (
         CODE_MANAGEMENT_API_PATHS.FIXED_EGRESS_IP,
         { params: { teamId } },
     );
-    return response ?? UNAVAILABLE;
+    if (!response)
+        throw new Error("The fixed outbound IP setting came back empty");
+    return response;
 };
 
 // `axiosAuthorized.put` resolves to the response body, which the API wraps

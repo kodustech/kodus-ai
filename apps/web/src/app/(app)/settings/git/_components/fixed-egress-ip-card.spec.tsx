@@ -20,7 +20,12 @@ jest.mock("@services/permissions/hooks", () => ({
 jest.mock("src/core/providers/selected-team-context", () => ({
     useSelectedTeamId: () => ({ teamId: "team-1" }),
 }));
-jest.mock("src/core/utils/self-hosted", () => ({ isSelfHosted: false }));
+const mockDeployment = { selfHosted: false };
+jest.mock("src/core/utils/self-hosted", () => ({
+    get isSelfHosted() {
+        return mockDeployment.selfHosted;
+    },
+}));
 
 const setMock = setFixedEgressIp as jest.MockedFunction<
     typeof setFixedEgressIp
@@ -34,7 +39,10 @@ const paid = {
 };
 
 describe("FixedEgressIpCard", () => {
-    beforeEach(() => jest.clearAllMocks());
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockDeployment.selfHosted = false;
+    });
 
     it("is not shown where sandboxes never leave through Kodus's network", () => {
         const { container } = render(
@@ -45,6 +53,25 @@ describe("FixedEgressIpCard", () => {
                     enabled: false,
                 }}
             />,
+        );
+        expect(container).toBeEmptyDOMElement();
+    });
+
+    it("says the setting could not be loaded instead of hiding it", () => {
+        const none = { available: false, allowedByPlan: false, enabled: false };
+        render(<FixedEgressIpCard initialSetting={none} loadFailed />);
+        expect(screen.getByText("Fixed outbound IP")).toBeInTheDocument();
+        expect(
+            screen.getByText(/could not load this setting/i),
+        ).toBeInTheDocument();
+        expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    });
+
+    it("stays hidden on a self-hosted install even when the read failed", () => {
+        mockDeployment.selfHosted = true;
+        const none = { available: false, allowedByPlan: false, enabled: false };
+        const { container } = render(
+            <FixedEgressIpCard initialSetting={none} loadFailed />,
         );
         expect(container).toBeEmptyDOMElement();
     });

@@ -3,6 +3,7 @@ import {
     ForbiddenException,
     Inject,
     Injectable,
+    ServiceUnavailableException,
 } from '@nestjs/common';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -10,6 +11,7 @@ import { environment } from '@libs/ee/configs/environment';
 import {
     FixedEgressIpNoIntegrationError,
     FixedEgressIpPlanRequiredError,
+    FixedEgressIpPlanUnconfirmedError,
 } from '@libs/sandbox/domain/egress-plan';
 import {
     FixedEgressIpSetting,
@@ -79,6 +81,9 @@ export class SetFixedEgressIpUseCase {
         } catch (error) {
             if (error instanceof FixedEgressIpPlanRequiredError) {
                 throw new ForbiddenException(error.message);
+            }
+            if (error instanceof FixedEgressIpPlanUnconfirmedError) {
+                throw new ServiceUnavailableException(error.message);
             }
             if (error instanceof FixedEgressIpNoIntegrationError) {
                 throw new BadRequestException(error.message);

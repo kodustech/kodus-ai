@@ -1,8 +1,13 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ForbiddenException,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 
 import {
     FixedEgressIpNoIntegrationError,
     FixedEgressIpPlanRequiredError,
+    FixedEgressIpPlanUnconfirmedError,
 } from '@libs/sandbox/domain/egress-plan';
 
 import {
@@ -93,6 +98,19 @@ describe('SetFixedEgressIpUseCase', () => {
             .catch((e) => e);
         expect(error).toBeInstanceOf(ForbiddenException);
         expect(error.message).toContain('Teams and Enterprise');
+    });
+
+    it('answers 503 asking to try again when billing cannot confirm the plan', async () => {
+        const policy = policyWith({
+            setFixedIp: jest.fn(async () => {
+                throw new FixedEgressIpPlanUnconfirmedError();
+            }),
+        });
+        const error = await new SetFixedEgressIpUseCase(policy)
+            .execute({ organizationAndTeamData, enabled: true })
+            .catch((e) => e);
+        expect(error).toBeInstanceOf(ServiceUnavailableException);
+        expect(error.message).toContain('Try again');
     });
 
     it('answers 400 when the team has no git integration to hold the setting', async () => {

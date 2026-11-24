@@ -30,6 +30,20 @@ export class FixedEgressIpPlanRequiredError extends Error {
     }
 }
 
+/**
+ * Turning the fixed outbound IP on while billing cannot say what the plan is.
+ * Granting a paid feature on an unread plan would hand it to free teams during
+ * a billing outage, so the switch refuses and asks to try again.
+ */
+export class FixedEgressIpPlanUnconfirmedError extends Error {
+    constructor() {
+        super(
+            'Kodus could not confirm your plan right now, so the fixed outbound IP was not turned on. Try again in a few minutes.',
+        );
+        this.name = 'FixedEgressIpPlanUnconfirmedError';
+    }
+}
+
 /** The team has no code management integration to hold its egress setting. */
 export class FixedEgressIpNoIntegrationError extends Error {
     constructor() {
