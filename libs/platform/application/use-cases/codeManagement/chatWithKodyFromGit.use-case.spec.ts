@@ -5,6 +5,16 @@ jest.mock('@libs/common/utils/thread-id', () => ({
     })),
 }));
 
+// Pass-through by default; a spec makes the open's observation fail.
+jest.mock('@libs/core/log/langfuse', () => ({
+    ...jest.requireActual('@libs/core/log/langfuse'),
+    withLangfuseObservation: jest.fn(
+        (_name: string, fn: (traceId?: string) => Promise<unknown>) =>
+            fn(undefined),
+    ),
+}));
+
+import { withLangfuseObservation } from '@libs/core/log/langfuse';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 import { ChatWithKodyFromGitUseCase } from './chatWithKodyFromGit.use-case';
@@ -1046,6 +1056,30 @@ describe('ChatWithKodyFromGitUseCase', () => {
                     expect.objectContaining({ type: 'null' }),
                 );
                 expect(leaseManager.release).not.toHaveBeenCalled();
+                expect(
+                    codeManagementService.createResponseToComment,
+                ).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        body: expect.stringContaining('an answer'),
+                    }),
+                );
+            });
+
+            it('keeps the reply and releases the lease when the open fails after acquiring', async () => {
+                (withLangfuseObservation as jest.Mock).mockImplementationOnce(
+                    async (_name: string, fn: () => Promise<unknown>) => {
+                        await fn();
+                        throw new Error('span export failed');
+                    },
+                );
+                // The repository tools catch a rejected open (they answer
+                // REPOSITORY_UNAVAILABLE), as this read does.
+                conversationAgentUseCase.execute.mockImplementation(
+                    readsWith((open) => open().catch(() => undefined)),
+                );
+
+                await useCase.execute(conversationPayload());
+                expect(leaseManager.release).toHaveBeenCalledWith('lease-test');
                 expect(
                     codeManagementService.createResponseToComment,
                 ).toHaveBeenCalledWith(

@@ -68,6 +68,23 @@ describe('buildNativeToolConfigs', () => {
         },
     );
 
+    it.each(['grep', 'readFile', 'listDir', 'exec'])(
+        'answers %s that the checkout is unavailable when the open fails',
+        async (name) => {
+            const call = runOn(() => Promise.reject(new Error('clone failed')));
+
+            await expect(
+                call(name, {
+                    pattern: 'x',
+                    path: 'a.ts',
+                    start: 1,
+                    end: 2,
+                    command: 'git log',
+                }),
+            ).resolves.toEqual({ error: REPOSITORY_UNAVAILABLE });
+        },
+    );
+
     it('opens nothing for a call it refuses', async () => {
         const open = jest.fn().mockResolvedValue(sandbox);
 

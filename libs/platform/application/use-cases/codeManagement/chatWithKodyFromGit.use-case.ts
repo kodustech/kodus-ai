@@ -2632,8 +2632,8 @@ export class ChatWithKodyFromGitUseCase {
                 prKey,
                 prepareContext,
                 organizationAndTeamData,
+                (acquired) => (leaseId = acquired),
             );
-            leaseId = lease?.leaseId;
             return lease?.sandbox ?? NULL_SANDBOX_INSTANCE;
         });
         const canOpen = Boolean(
@@ -2652,8 +2652,17 @@ export class ChatWithKodyFromGitUseCase {
             });
         } finally {
             // An open still in flight when the run ends is waited for, so the
-            // lease it takes is released too.
-            await sandbox.settled();
+            // lease it takes is released too. A failure there must not cost
+            // the reply, nor the release of a lease it already took.
+            await sandbox.settled().catch((error) =>
+                this.logger.warn({
+                    message:
+                        'Conversation sandbox open failed after the run; releasing what it acquired',
+                    context: ChatWithKodyFromGitUseCase.name,
+                    error,
+                    metadata: { prKey, organizationAndTeamData },
+                }),
+            );
             if (leaseId) {
                 await this.leaseManager.release(leaseId);
             }
@@ -2668,11 +2677,14 @@ export class ChatWithKodyFromGitUseCase {
      * answer that the checkout is unavailable. The open is its own
      * observation in the conversation's trace: how long the first read
      * waited for it, and whether it created the sandbox or joined one.
+     * `onLease` gets the lease the moment it is acquired, so it is released
+     * even when what follows the acquire fails.
      */
     private openConversationSandbox(
         prKey: string,
         prepareContext: any,
         organizationAndTeamData: OrganizationAndTeamData,
+        onLease: (leaseId: string) => void,
     ): Promise<AcquireResult | undefined> {
         return withLangfuseObservation(
             'conversationSandboxOpen',
@@ -2687,12 +2699,14 @@ export class ChatWithKodyFromGitUseCase {
                         organizationAndTeamData,
                     );
                     // 5min TTL covers the rest of the run + comment posting.
-                    return await this.leaseManager.acquire(
+                    const lease = await this.leaseManager.acquire(
                         prKey,
                         'conversation',
                         5 * 60 * 1000,
                         cloneParams,
                     );
+                    onLease(lease.leaseId);
+                    return lease;
                 } catch (error) {
                     this.logger.warn({
                         message:

@@ -62,6 +62,23 @@ describe('withLangfuseObservation', () => {
         ).resolves.toEqual({ wasCreated: true, secret: 'x' });
         expect(updates).toEqual([{ output: { wasCreated: true } }]);
     });
+
+    it('returns the result when building the output throws', async () => {
+        process.env.LANGFUSE_TRACING = 'true';
+        process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
+        process.env.LANGFUSE_SECRET_KEY = 'sk-test';
+
+        await expect(
+            withLangfuseObservation(
+                'open',
+                async () => 'lease',
+                undefined,
+                () => {
+                    throw new Error('bad output');
+                },
+            ),
+        ).resolves.toBe('lease');
+    });
 });
 
 describe('pullRequestSessionId', () => {

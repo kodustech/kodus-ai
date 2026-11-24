@@ -236,27 +236,32 @@ export function withLangfuseObservation<T>(
     );
     return startActiveObservation(name, async (observation) => {
         if (Object.keys(tags).length > 0) {
-            updateObservation(observation, name, { metadata: tags });
+            updateObservation(observation, name, () => ({ metadata: tags }));
         }
         const result = await fn(getActiveTraceId());
         if (output) {
-            updateObservation(observation, name, { output: output(result) });
+            updateObservation(observation, name, () => ({
+                output: output(result),
+            }));
         }
         return result;
     });
 }
 
-/** Observability never breaks the call it observes: a failed update is logged. */
+/**
+ * Observability never breaks the call it observes: an update that fails,
+ * building its attributes included, is logged.
+ */
 function updateObservation(
     observation: LangfuseSpan,
     name: string,
-    arg: LangfuseSpanAttributes,
+    attributes: () => LangfuseSpanAttributes,
 ): void {
     try {
-        observation.update(arg);
+        observation.update(attributes());
     } catch (error) {
         langfuseLogger.warn({
-            message: `Langfuse observation update failed for ${name}; the call runs without its ${Object.keys(arg)[0]}`,
+            message: `Langfuse observation update failed for ${name}; the call runs without it`,
             error,
             context: 'Langfuse',
         });

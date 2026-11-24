@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
 import {
     cutLongLines,
     MAX_TOOL_LINE_CHARS,
@@ -54,7 +55,7 @@ export const REPOSITORY_UNAVAILABLE =
  * `openSandbox` must hand every call the same sandbox (`openOnFirstUse`), so
  * the parallel first reads of one step share one open.
  *
- * A null sandbox (no provider, or an open that failed) answers every call
+ * A null sandbox (no provider) or an open that failed answers every call
  * with REPOSITORY_UNAVAILABLE; the agent keeps its MCP tools.
  */
 export function buildNativeToolConfigs(
@@ -174,7 +175,11 @@ export function buildNativeToolConfigs(
         guardConversationTool({
             ...tool,
             execute: async (input: unknown) => {
-                const sandbox = await openSandbox();
+                // The opener's caller reports a failed open (the chat logs
+                // it, the eval stops on it); the agent only needs to know.
+                const sandbox = await openSandbox().catch(
+                    () => NULL_SANDBOX_INSTANCE,
+                );
                 if (sandbox.type === 'null') {
                     return { error: REPOSITORY_UNAVAILABLE };
                 }
