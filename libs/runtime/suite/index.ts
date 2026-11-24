@@ -5,3 +5,5 @@ export { parseJUnit } from './junit';
 export { parseMochawesome } from './mochawesome';
 export { isFlakyInRun, specResultOf } from './types';
 export type { SpecResult, SpecStatus, TestAttempt, TestResult, TestStatus } from './types';
+export { BASELINE_MAX_COMMITS_BEHIND, classifyFailures, MASS_FAILURE_RATIO, needsMainRerun, planReruns, RERUN_BUDGET, testKey } from './classifier';
+export type { BaselineEvidence, Classification, ClassifiedTest, ClassifyInput, FailureClass, MainSide, Rerun, RerunPlan, SuiteFailure, UnclassifiedReason } from './classifier';
