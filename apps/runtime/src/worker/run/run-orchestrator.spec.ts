@@ -98,13 +98,14 @@ describe('Run image pin from acquired manifests (#2505)', () => {
         expect(h.resets.mock.calls.every(([, image]) => image === concrete)).toBe(true);
     });
 
-    // demo-shop #2 on the dev cell: the cell had been reinstalled, both sides came up from source, and the Run said "could not finish, run again".
-    it('says the environment has to be set up again when the cell holds no bake of it, and tests nothing', async () => {
+    // demo-shop #2 on the dev cell: both sides came up from source, and the Run said "could not finish, run again".
+    // On two cells nothing makes the two sides one environment.
+    it('says the environment has to be set up again when two cells holding no bake of it took the sides, and tests nothing', async () => {
         const h = fixture();
         const acquire = h.acquired.getMockImplementation()!;
         h.acquired.mockImplementation(async (request) => {
             const result = await acquire(request);
-            return 'status' in result ? result : { ...result, manifest: { ...result.manifest, imageId: 'latest' } };
+            return 'status' in result ? result : { ...result, cellId: request.ref.side === 'pr' ? 'cell-b' : 'cell-a', manifest: { ...result.manifest, imageId: 'latest' } };
         });
         await seed(h.projection, h.req);
         const result = await runRuntimeRun(h.req, h.deps);
@@ -115,6 +116,37 @@ describe('Run image pin from acquired manifests (#2505)', () => {
         expect(run.reason).toBe('platform:environment_not_prepared');
         expect(run.bootFailure).toMatchObject({ side: 'base' });
         expect(JSON.stringify(run.bootFailure)).toContain('environment_not_prepared');
+    });
+
+    // A Run host the fleet made from the cell base while the template is not ready (host-providers.md §8.2): the cell built
+    // both sides cold. Every such Run used to end "Could not boot, environment_not_prepared" (kr-shop #47 and #49, 24/11).
+    it('tests both sides one cell built cold, pinned as latest on every reset', async () => {
+        // The cell has no bake: every manifest and step result of its claims names latest, as a real cell's cold claim does.
+        const fake = new FakeEnvironmentRuntime({ ...SCENARIOS, shop: { ...SCENARIOS.shop, imageId: 'latest' } }, () => new Date());
+        const h = inMemoryRunDeps({ env: fake });
+        const req = shopRunRequest();
+        req.environment.imageId = 'latest';
+        const resets = jest.spyOn(h.deps.env, 'reset');
+        const probe = jest.spyOn(h.deps.env, 'probe');
+        await seed(h.projection, req);
+        const result = await runRuntimeRun(req, h.deps);
+        expect(result.state).toBe('regression');
+        expect((await h.projection.get(req.runId))!.imageId).toBe('latest');
+        expect(probe).toHaveBeenCalled();
+        expect(resets.mock.calls.length).toBeGreaterThan(0);
+        expect(resets.mock.calls.every(([, image]) => image === 'latest')).toBe(true);
+    });
+
+    it('a requested image that neither cold side has is no cold pair: the environment has to be set up again', async () => {
+        const h = fixture(concrete);
+        const acquire = h.acquired.getMockImplementation()!;
+        h.acquired.mockImplementation(async (request) => {
+            const result = await acquire(request);
+            return 'status' in result ? result : { ...result, manifest: { ...result.manifest, imageId: 'latest' } };
+        });
+        await seed(h.projection, h.req);
+        expect(await runRuntimeRun(h.req, h.deps)).toMatchObject({ state: 'could_not_boot' });
+        expect(h.probe).not.toHaveBeenCalled();
     });
 
     // The base's own image decides before any plan: a base off the requested image is never planned on.

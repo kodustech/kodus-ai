@@ -145,12 +145,12 @@ class RunAbort extends Error {
 const unresolvedImage = (c: Claim): boolean => !c.manifest.imageId?.trim() || c.manifest.imageId === LATEST_IMAGE;
 
 /**
- * Both sides came up, and neither names a prepared image: the cell that took
- * the Run holds no bake of the environment (a new or reinstalled cell, or a
- * setup that ran on another one). Nothing pins the two sides to one image, so
- * the Run does not test; it says what is missing and what to do, the setup
- * again, instead of "could not finish, run again" (demo-shop #2 on the dev cell).
- * One side without an image while the other has one is a fault, not this.
+ * Both sides came up, and neither names a prepared image, on two cells: no
+ * bake pins them to one environment, so the Run does not test; it says what
+ * is missing and what to do, the setup again, instead of "could not finish,
+ * run again" (demo-shop #2 on the dev cell). On one cell both sides were built
+ * cold by it from the recipe at their commits (coldPair). One side without an
+ * image while the other has one is a fault, not this.
  */
 export const ENVIRONMENT_NOT_PREPARED = {
     kind: 'platform',
@@ -158,8 +158,22 @@ export const ENVIRONMENT_NOT_PREPARED = {
     message: 'the cell that took this Run has no prepared image of the environment; the environment has to be set up again',
 } as const;
 
+/**
+ * Both sides built cold by the one cell that took them: a Run host the fleet
+ * made from the cell base while the environment's template is not ready
+ * (docs/runtime/host-providers.md §8.2, the first Run of an environment, a
+ * rebuild, a new cell base), or a cell with no bake yet. The cell built both
+ * from the recipe at their commits, so they are one environment, pinned as
+ * `latest` (every step result of a cold claim names it). Only when the Run
+ * asked for the latest: a requested image that neither side has is not this.
+ */
+function coldPair(requested: string, base: Claim, pr: Claim): boolean {
+    return requested === LATEST_IMAGE && unresolvedImage(base) && unresolvedImage(pr) && !!base.cellId && base.cellId === pr.cellId;
+}
+
 /** Resolve aliases from durable acquire outputs, never from a process-local claim cache. */
 function acquiredImagePin(requested: string, base: Claim, pr: Claim): string {
+    if (coldPair(requested, base, pr)) return LATEST_IMAGE;
     const imageId = base.manifest.imageId;
     if (!imageId?.trim() || imageId === LATEST_IMAGE || !pr.manifest.imageId?.trim() || pr.manifest.imageId === LATEST_IMAGE) {
         throw new RunAbort('errored', 'the acquired claims did not resolve a concrete environment image');
@@ -1098,7 +1112,8 @@ async function settleBoot(run: RunScope, b: BootedSides): Promise<ReadySides | {
         return { finished: await finishRun(run, 'regression', v) };
     }
     // The cell holds no bake of the environment: the setup has to run again there.
-    if (unresolvedImage(base) && unresolvedImage(pr)) return { finished: await couldNotBoot(run, b, { status: 'blocked', blockers: [{ ...ENVIRONMENT_NOT_PREPARED }], cellId: base.cellId }) };
+    if (unresolvedImage(base) && unresolvedImage(pr) && !coldPair(req.environment.imageId, base, pr))
+        return { finished: await couldNotBoot(run, b, { status: 'blocked', blockers: [{ ...ENVIRONMENT_NOT_PREPARED }], cellId: base.cellId }) };
     // Both final acquire outputs are durable: recovery derives the same pin before any LLM or probe.
     const pinnedImageId = acquiredImagePin(req.environment.imageId, base, pr);
     await deps.step('image:pin', async () => deps.projection.upsert(req.runId, { imageId: pinnedImageId }));
