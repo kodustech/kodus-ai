@@ -188,4 +188,40 @@ describe('sameResult (#2423)', () => {
         expect(sameResult(missing('PAY-12'), missing('PAY-21'))).toBe(false);
         expect(sameResult(missing('PAY-12'), missing('PAY-12'))).toBe(true);
     });
+
+    it('reads an acceptance given by someone else, or moved elsewhere, as a change', () => {
+        const accepted = (acceptance?: Record<string, unknown>) =>
+            run(
+                {},
+                {
+                    requirements: [
+                        {
+                            requirement: 'Refunds are logged',
+                            state: 'missing',
+                            evidence: [],
+                            confidence: 'high',
+                            ...(acceptance ? { accepted: acceptance } : {}),
+                        },
+                    ],
+                },
+            );
+        const by = (who: string, movedTo?: string, at = '2026-11-01') => ({
+            by: who,
+            at,
+            ...(movedTo ? { movedTo } : {}),
+        });
+        expect(
+            sameResult(
+                accepted(by('ana')),
+                accepted(by('ana', undefined, '2026-11-02')),
+            ),
+        ).toBe(true);
+        expect(sameResult(accepted(by('ana')), accepted(by('rui')))).toBe(
+            false,
+        );
+        expect(
+            sameResult(accepted(by('ana')), accepted(by('ana', 'PAY-30'))),
+        ).toBe(false);
+        expect(sameResult(accepted(), accepted(by('ana')))).toBe(false);
+    });
 });

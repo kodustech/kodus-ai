@@ -243,6 +243,90 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
         }
     });
 
+    it('keeps the larger answer of the check model and its fallback out of what each verify run re-sends', async () => {
+        const { model } = makeModel();
+        const run = jest.spyOn(AiSdkAgentRunner.prototype, 'run');
+        try {
+            await runAgentLoopViaCore(makeInput(model), {
+                ...secrets,
+                byokConfig: { provider: 'openai', model: 'run-model' },
+                verifyByokConfig: {
+                    provider: 'anthropic',
+                    model: 'check-model',
+                    maxInputTokens: 32_000,
+                    maxOutputTokens: 4_000,
+                    // LLM.run re-sends to it with its own, larger answer.
+                    fallback: {
+                        provider: 'anthropic',
+                        model: 'check-fallback',
+                        maxInputTokens: 32_000,
+                        maxOutputTokens: 16_000,
+                    },
+                },
+            });
+            const verifyRuns = run.mock.calls.filter(
+                ([spec]) => spec.phase === 'verify',
+            );
+            expect(verifyRuns.length).toBeGreaterThan(0);
+            // Under the soft threshold (70% of 32k), so only the answer the
+            // check model declares can make the history too long.
+            const messages = [
+                { role: 'user', content: 'verify the finding' },
+                ...Array.from({ length: 8 }, (_, i) => [
+                    {
+                        role: 'assistant',
+                        content: [
+                            {
+                                type: 'tool-call',
+                                toolCallId: `r${i}`,
+                                toolName: 'readFile',
+                                input: { path: `src/f${i}.ts` },
+                            },
+                        ],
+                    },
+                    {
+                        role: 'tool',
+                        content: [
+                            {
+                                type: 'tool-result',
+                                toolCallId: `r${i}`,
+                                toolName: 'readFile',
+                                output: {
+                                    type: 'text',
+                                    value: Array.from(
+                                        { length: 160 },
+                                        (_, line) =>
+                                            `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                                    ).join('\n'),
+                                },
+                            },
+                        ],
+                    },
+                ]).flat(),
+            ];
+            const before = estimateTextTokens(JSON.stringify(messages));
+            expect(before).toBeLessThan(32_000 * 0.7);
+            expect(before + 16_000).toBeGreaterThan(32_000);
+            for (const [spec] of verifyRuns) {
+                const compression = spec.policies.find(
+                    (p) => p.name === 'compression',
+                );
+                const sent =
+                    (
+                        await compression?.prepareStep?.({
+                            messages,
+                            stepNumber: 8,
+                        } as any)
+                    )?.messages ?? messages;
+                expect(
+                    estimateTextTokens(JSON.stringify(sent)) + 16_000,
+                ).toBeLessThanOrEqual(32_000);
+            }
+        } finally {
+            run.mockRestore();
+        }
+    });
+
     it('keeps verify on the run slot when the check slot is the same model', async () => {
         const { model } = makeModel();
         const input = makeInput(model);

@@ -92,5 +92,11 @@ describe('conversationCompression', () => {
         const sent = await send(messages);
 
         expect(worst(sent) + 4_000).toBeLessThanOrEqual(32_000);
+        // Cut, not dropped: the model still gets the result's start.
+        const kept = sent.at(-1).content[0];
+        expect(kept.toolCallId).toBe('diff');
+        expect(JSON.stringify(kept.output)).toContain(
+            '![logo](data:image/png;base64,',
+        );
     });
 });

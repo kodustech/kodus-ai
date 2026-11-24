@@ -6,6 +6,7 @@ import type {
 import { deriveStatus } from '../judge/validation-verdict';
 import type { CheckedCommit } from '../render';
 import { matchPrevious, requirementKey, taskTextHash } from '../carry-over';
+import type { Acceptance } from '../judge/validation.types';
 import type { RunAuthor, RunTask } from './validation-run.model';
 import type {
     NewValidationRun,
@@ -128,6 +129,21 @@ function outlineKey(run: ResultFields): string {
     ]);
 }
 
+/**
+ * An acceptance as the comment shows it: who gave it, why and where the work
+ * went. Not its time: the same acceptance carried to a re-check keeps it, and
+ * none (absent) is its own value.
+ */
+function acceptanceKey(accepted: Acceptance | undefined): string {
+    return accepted
+        ? JSON.stringify([
+              accepted.by,
+              accepted.reason ?? null,
+              accepted.movedTo ?? null,
+          ])
+        : 'none';
+}
+
 function sameTaskVerdict(before: RunTask, now: RunTask): boolean {
     const was = before.requirements ?? [];
     const is = now.requirements ?? [];
@@ -145,12 +161,15 @@ function sameTaskVerdict(before: RunTask, now: RunTask): boolean {
         return (
             !!prior &&
             prior.state === r.state &&
-            !!prior.accepted === !!r.accepted
+            acceptanceKey(prior.accepted) === acceptanceKey(r.accepted)
         );
     });
     const changes = (run: RunTask) =>
         (run.outOfScope ?? [])
-            .map((o) => `${requirementKey(o.change)}:${o.accepted ? 1 : 0}`)
+            .map(
+                (o) =>
+                    `${requirementKey(o.change)}:${acceptanceKey(o.accepted)}`,
+            )
             .sort()
             .join('\n');
     return sameRequirements && changes(before) === changes(now);
