@@ -39,6 +39,11 @@ export interface IIssueReproduction {
 export interface IIssueEvidence {
     attackPath: { file: string; line: number; note: string }[];
     reproduction?: IIssueReproduction;
+    /**
+     * The deployment or configuration fact the finding depends on, when the
+     * scan's verifier could not read it in the code.
+     */
+    assumption?: string;
 }
 
 export interface IIssue {

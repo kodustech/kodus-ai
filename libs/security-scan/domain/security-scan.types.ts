@@ -52,6 +52,8 @@ export interface ScanUnitProgress {
     unitId: string;
     state: ScanUnitState;
     findings: number;
+    /** Findings the independent check refuted in this unit: not reported. */
+    refuted?: number;
     error?: string;
     /**
      * On a unit a slice left pending: the classes whose lens already ended,
@@ -70,6 +72,8 @@ export interface SecurityScanOutcomeCounts {
     reopened: number;
     dismissed: number;
     resolved: number;
+    /** Findings the independent check refuted: never reported. */
+    refuted?: number;
 }
 
 /** The files a lens of one class read to the end. */
@@ -182,6 +186,11 @@ export interface ScanFinding {
     suggestedFix?: string;
     /** One setting the whole application shares, not this place's own bug. */
     appWide?: boolean;
+    /**
+     * The deployment or configuration fact the verdict depends on, when the
+     * verifier could not read it in the code.
+     */
+    assumption?: string;
     reproduction?: {
         path: string;
         content: string;

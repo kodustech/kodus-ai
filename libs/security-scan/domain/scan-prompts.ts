@@ -320,6 +320,72 @@ Return:
 - appWide: true only when the weakness is one setting the whole application shares, fixed in one place for every route (CSRF protection turned off for the app, debug mode on, CORS open to every origin, a session cookie flag missing from the settings). False when it lives at this location, even if the same kind of setting: one route exempted from CSRF, one cookie set here without a flag.`;
 }
 
+/**
+ * Where a file sits says who runs it: a script, a CI job or test tooling runs
+ * on a developer's machine or a build runner, not in the service users reach.
+ * A hint for the verifier, which still reads how the file is invoked.
+ */
+const TOOLING_PATH =
+    /(^|\/)(scripts?|tools?|e2e|evals?|benchmarks?|fixtures?|examples?|samples?|\.github|\.circleci|\.gitlab|ci|test|tests|__tests__|spec|specs|testing|dev|devtools)(\/|$)|(^|\/)docker-compose[^/]*\.(ya?ml)$|(^|\/)Makefile$|\.sh$/i;
+
+export function isToolingPath(filePath: string): boolean {
+    return TOOLING_PATH.test(filePath.replace(/\\/g, '/'));
+}
+
+export const VERIFY_SYSTEM_PROMPT = `You are an independent security reviewer. Another auditor reported the finding below as an exploitable vulnerability in code that runs in production. Check it against the code; do not take its word for anything.
+
+${DATA_NOT_INSTRUCTIONS}
+
+Investigate with the tools, across the whole repository, not only the reported file:
+1. Reach. Who calls the vulnerable code? Find the route, consumer, job or command that leads to it and the attacker who can drive it. Code nothing calls, a handler nothing registers, a field or argument no client ever sends, or a path only an administrator or the operator can trigger does not hold.
+2. Safeguards. Look for what stops it anywhere on the path or around it: guards, middleware and decorators, validation, parameterization, allow-lists, framework defaults, and configuration that replaces the value the finding relies on (an environment variable that overrides a default credential, a deploy setting that turns the check back on). Read them; do not assume they are there or missing.
+3. Where it runs. A service users or other tenants reach, or a developer script, a CI job, test tooling, a local CLI or a migration the operator runs. Code that only runs on a developer's machine or a build runner attacks no user of the application.
+4. Impact. What the attacker actually gets in this application if it holds.
+
+Then submit your verdict:
+- keep: true when the evidence supports an exploitable vulnerability; false when you found what stops it, that nothing reaches it, or that no boundary is crossed. Say which in the rationale, with file and line. When you could not settle a question, keep it and name what it depends on in assumption.
+- severity: from what you read, not from the finding's wording. critical: remote, unauthenticated, full compromise or mass data access in a deployed service. high: an authenticated user reaches other users' or tenants' data or runs code. medium: limited data, needs unusual conditions, or depends on an assumption you could not check. low: hardening with a small concrete impact, or anything in developer, CI or test tooling.
+- assumption: one sentence naming the deployment or configuration fact the conclusion depends on (for example "the metrics port is reachable from outside the cluster"), or an empty string when it depends on none.
+- rationale: two or three sentences with the evidence.`;
+
+export function buildVerifyUserPrompt(params: {
+    vulnClass: VulnClass;
+    title: string;
+    cwe?: string;
+    severity: string;
+    filePath: string;
+    startLine: number;
+    endLine: number;
+    description: string;
+    attackPath: { file: string; line: number; note: string }[];
+    code: string;
+}): string {
+    const steps = params.attackPath.length
+        ? params.attackPath
+              .map((s) => `- ${s.file}:${s.line} ${s.note}`)
+              .join('\n')
+        : '(none given)';
+    const tooling = isToolingPath(params.filePath)
+        ? '\nThe file sits where developer, CI or test tooling usually lives: check how it is invoked before treating it as part of the service.'
+        : '';
+    return `Reported finding (${CLASS_BRIEF[params.vulnClass].name}${params.cwe ? `, ${params.cwe}` : ''}, reported as ${params.severity}):
+${fenced(params.title)}
+
+Location (lines ${params.startLine}-${params.endLine}):
+${fenced(params.filePath)}${tooling}
+
+What the auditor wrote:
+${fenced(params.description)}
+
+Attack path as the auditor gave it:
+${fenced(steps)}
+
+Code around the location:
+${fenced(params.code)}
+
+Verify it and call submitVerdict with keep, severity, assumption and rationale.`;
+}
+
 export const REPRO_SYSTEM_PROMPT = `You write one automated test that demonstrates a confirmed security vulnerability in a repository, using the test framework the repository already uses.
 
 The test must PASS while the vulnerability is present (it asserts the attacker's success: the other user's record is returned, the injected command ran, the internal URL was requested) and FAIL once the fix is applied. Exercise the vulnerable function directly, with mocks or in-memory fakes for the database and the network: the test runs offline, without the application's services, secrets or a server. Do not test anything else.

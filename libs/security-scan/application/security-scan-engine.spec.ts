@@ -3,6 +3,18 @@ jest.mock('@libs/llm/managed-slot', () => {
     const actual = jest.requireActual('@libs/llm/managed-slot');
     return { ...actual, hasManagedModelKey: jest.fn(() => false) };
 });
+// The independent check keeps every finding as reported unless a test says otherwise.
+jest.mock('./scan-verifier', () => {
+    const actual = jest.requireActual('./scan-verifier');
+    return {
+        ...actual,
+        verifyScanFinding: jest.fn(async () => ({
+            keep: true,
+            rationale: '',
+            judged: true,
+        })),
+    };
+});
 // No platform embedding key unless a test configures one.
 jest.mock('@libs/common/utils/document', () => {
     const actual = jest.requireActual('@libs/common/utils/document');
@@ -3111,5 +3123,141 @@ describe('requests after a slice ended', () => {
             expect(refused).toBe(true);
             expect(meter.snapshot().requests).toBe(0);
         } finally { jest.useRealTimers(); }
+    });
+});
+
+describe('independent verification of each finding', () => {
+    const plan = {
+        units: [
+            {
+                file: 'src/orders/orders.controller.ts',
+                relatedFiles: [],
+                classes: ['authz'],
+                priority: 90,
+                reason: 'loads orders by id',
+            },
+        ],
+    };
+    const authzOnly = (file: string, cls: string) =>
+        file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [];
+
+    it('drops a finding the verifier refutes and keeps its rationale', async () => {
+        const verify = jest.fn(async () => ({
+            keep: false,
+            rationale: 'OrdersGuard on the module scopes every query to the caller.',
+            judged: true,
+        }));
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(authzOnly),
+            llm: fakeLlm(plan),
+            collectSurface: jest.fn(async () => SURFACE),
+            verify,
+        });
+        const onUnitDone = jest.fn(async () => undefined);
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            onUnitDone,
+        } as any);
+
+        expect(verify).toHaveBeenCalledTimes(1);
+        expect(result.findings).toEqual([]);
+        expect(result.refuted).toEqual([
+            expect.objectContaining({
+                rationale: expect.stringContaining('OrdersGuard'),
+                finding: expect.objectContaining({
+                    filePath: 'src/orders/orders.controller.ts',
+                }),
+            }),
+        ]);
+        // The unit records how many it refuted.
+        const unitIdor = onUnitDone.mock.calls.find(
+            ([p]: any) => p.unitId && p.refuted,
+        ) as any;
+        expect(unitIdor?.[0].refuted).toBe(1);
+    });
+
+    it('takes the severity and assumption the verifier read', async () => {
+        const verify = jest.fn(async (req: any) => {
+            // The verifier starts from the claim, the location and the code.
+            expect(req.userPrompt).toContain('src/orders/orders.controller.ts');
+            expect(req.userPrompt).toContain('Any user reads any order');
+            expect(req.lensInput.agentName).toBe('security-scan-authz');
+            return {
+                keep: true,
+                severity: 'medium',
+                assumption: 'the orders API is exposed to tenants',
+                rationale: 'reached by any logged-in user',
+                judged: true,
+            };
+        });
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(authzOnly),
+            llm: fakeLlm(plan),
+            collectSurface: jest.fn(async () => SURFACE),
+            verify,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings).toEqual([
+            expect.objectContaining({
+                severity: 'medium',
+                assumption: 'the orders API is exposed to tenants',
+            }),
+        ]);
+    });
+
+    it('keeps the finding as reported when the verifier fails', async () => {
+        const verify = jest.fn(async () => {
+            throw new Error('provider down');
+        });
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(authzOnly),
+            llm: fakeLlm(plan),
+            collectSurface: jest.fn(async () => SURFACE),
+            verify,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings).toEqual([
+            expect.objectContaining({ severity: 'high' }),
+        ]);
+        expect(result.refuted).toEqual([]);
+    });
+
+    it('does not verify a finding that repeats one this unit already reported', async () => {
+        const verify = jest.fn(async () => ({
+            keep: true,
+            rationale: '',
+            judged: true,
+        }));
+        // Two readings of the same lines: the second is a duplicate.
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) => (authzOnly(file, cls).length ? [IDOR, IDOR] : [])),
+            llm: fakeLlm(plan),
+            collectSurface: jest.fn(async () => SURFACE),
+            verify,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings).toHaveLength(1);
+        expect(verify).toHaveBeenCalledTimes(1);
     });
 });

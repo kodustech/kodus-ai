@@ -441,6 +441,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             reopened: scan.outcome?.reopened ?? 0,
             dismissed: scan.outcome?.dismissed ?? 0,
             resolved: scan.outcome?.resolved ?? 0,
+            refuted: scan.outcome?.refuted ?? 0,
         };
 
         // Only this job writes the scan's progress while it runs, so it is
@@ -590,6 +591,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                         .clearIssuesCache(scan.organizationId)
                         .catch(() => undefined);
                 }
+                counts.refuted = (counts.refuted ?? 0) + (progress.refuted ?? 0);
                 const earlier = unitStates.get(progress.unitId);
                 if (earlier) {
                     tally(earlier.state, -1);
@@ -838,6 +840,9 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     attackPath: finding.attackPath,
                     ...(finding.reproduction
                         ? { reproduction: finding.reproduction }
+                        : {}),
+                    ...(finding.assumption
+                        ? { assumption: finding.assumption }
                         : {}),
                 },
                 lastSeenScanId: scan.uuid,

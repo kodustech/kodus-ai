@@ -39,7 +39,10 @@ import {
     buildLensUserPrompt,
     buildMapUserPrompt,
     buildReproUserPrompt,
+    buildVerifyUserPrompt,
+    VERIFY_SYSTEM_PROMPT,
 } from '../domain/scan-prompts';
+import { verifyScanFinding, type ScanVerifier } from './scan-verifier';
 import {
     heuristicUnits,
     isSourceFile,
@@ -109,6 +112,8 @@ export interface SecurityScanEngineDeps {
     collectSurface?: typeof collectSurface;
     /** The review's own dedup (finding-dedup.ts), run on each unit's findings. */
     dedup?: typeof deduplicateFindings;
+    /** The independent check each finding takes before it is reported. */
+    verify?: ScanVerifier;
     now?: () => number;
 }
 
@@ -160,6 +165,8 @@ export interface SecurityScanEngineResult {
     units: ScanUnit[];
     progress: ScanUnitProgress[];
     findings: ScanFinding[];
+    /** Findings the independent check refuted, and why: never reported. */
+    refuted: RefutedFinding[];
     languages: string[];
     /** Every unit is done or failed; nothing is left for a later run. */
     finished: boolean;
@@ -219,6 +226,7 @@ export class SecurityScanEngine {
     private readonly llm: typeof LLM.run;
     private readonly collect: typeof collectSurface;
     private readonly dedup: typeof deduplicateFindings;
+    private readonly verifier: ScanVerifier;
     private readonly now: () => number;
 
     constructor(deps: SecurityScanEngineDeps = {}) {
@@ -226,6 +234,7 @@ export class SecurityScanEngine {
         this.llm = deps.llm ?? LLM.run.bind(LLM);
         this.collect = deps.collectSurface ?? collectSurface;
         this.dedup = deps.dedup ?? deduplicateFindings;
+        this.verifier = deps.verify ?? verifyScanFinding;
         this.now = deps.now ?? Date.now;
     }
 
@@ -459,6 +468,7 @@ export class SecurityScanEngine {
         );
         this.known = new Set(known);
         const findings: ScanFinding[] = [];
+        const refuted: RefutedFinding[] = [];
         const examined = new Set<string>();
         const examinedByClass = new Map<VulnClass, Set<string>>();
         let stoppedByBudget = false;
@@ -488,6 +498,10 @@ export class SecurityScanEngine {
         let folded: Promise<void> = Promise.resolve();
 
         const fold = async (unit: ScanUnit, result: AuditResult) => {
+            refuted.push(...(result.refuted ?? []));
+            const refutedHere = result.refuted?.length
+                ? { refuted: result.refuted.length }
+                : {};
             if (result.aborted) {
                 // What the unit found before it stopped is kept, but
                 // the unit is not counted as examined: its files were
@@ -519,6 +533,7 @@ export class SecurityScanEngine {
                         unitId: unit.id,
                         state: 'skipped_budget',
                         findings: result.findings.length,
+                        ...refutedHere,
                     });
                     await params.onUnitDone?.(
                         progress.get(unit.id),
@@ -535,12 +550,14 @@ export class SecurityScanEngine {
                         findings: 0,
                         lensesRun: result.lensesRun,
                         lensesExamined: result.lensesExamined,
+                        ...refutedHere,
                     };
                     progress.set(unit.id, pending);
                     if (
                         result.findings.length ||
                         result.sighted?.length ||
-                        result.lensesRun?.length
+                        result.lensesRun?.length ||
+                        result.refuted?.length
                     ) {
                         await params.onUnitDone?.(
                             pending,
@@ -579,6 +596,7 @@ export class SecurityScanEngine {
                 unitId: unit.id,
                 state: result.error ? 'failed' : 'done',
                 findings: result.findings.length,
+                ...refutedHere,
                 examinedByClass: (result.examinedClasses ?? []).map(
                     (vulnerabilityClass) => ({
                         vulnerabilityClass,
@@ -686,6 +704,7 @@ export class SecurityScanEngine {
             units,
             progress: progressList,
             findings,
+            refuted,
             languages,
             finished,
             surfaceErrors: surface.errors,
@@ -746,6 +765,85 @@ export class SecurityScanEngine {
         finding.storedAs = first.fingerprint;
         sighted.push(...others);
         return true;
+    }
+
+    /** Whether `refreshes` would store the finding as an open issue, without recording it. */
+    private mayRefresh(
+        finding: ScanFinding,
+        repeats: ScanReportedFinding[],
+    ): boolean {
+        return (
+            repeats.every((r) => this.known.has(r)) &&
+            (!!finding.storedAs || !!repeats[0]?.fingerprint)
+        );
+    }
+
+    private async verifyFinding(
+        params: SecurityScanEngineParams,
+        unit: ScanUnit,
+        vulnClass: VulnClass,
+        hits: SurfaceHit[],
+        finding: ScanFinding,
+        signal: AbortSignal,
+    ) {
+        const { snippet } = await this.readAround(
+            params.sandbox,
+            finding.filePath,
+            finding.startLine,
+            finding.endLine,
+            40,
+        );
+        try {
+            return await scanAwait(
+                this.verifier({
+                    lensInput: this.lensInput(
+                        params,
+                        unit,
+                        vulnClass,
+                        hits,
+                        signal,
+                    ),
+                    secrets: {
+                        remoteCommands: params.sandbox.remoteCommands,
+                        byokConfig: params.model.slot,
+                    },
+                    systemPrompt: VERIFY_SYSTEM_PROMPT,
+                    userPrompt: buildVerifyUserPrompt({
+                        vulnClass,
+                        title: finding.title,
+                        cwe: finding.cwe,
+                        severity: finding.severity,
+                        filePath: finding.filePath,
+                        startLine: finding.startLine,
+                        endLine: finding.endLine,
+                        description: finding.description,
+                        attackPath: finding.attackPath,
+                        code: snippet,
+                    }),
+                    signal,
+                }),
+                signal,
+            );
+        } catch (error) {
+            // Stopped by the cap or the slice: the caller sees the signal.
+            if (signal.aborted) {
+                return { keep: true, rationale: 'stopped', judged: false };
+            }
+            logger.warn({
+                message:
+                    'Security finding verification failed; kept as reported',
+                context: SecurityScanEngine.name,
+                error,
+                metadata: {
+                    organizationId: params.organizationId,
+                    teamId: params.teamId,
+                    repositoryId: params.repositoryId,
+                    unit: unit.id,
+                    vulnClass,
+                },
+            });
+            return { keep: true, rationale: 'verification failed', judged: false };
+        }
     }
 
     private async withoutDuplicates(
@@ -1024,6 +1122,8 @@ export class SecurityScanEngine {
         resume?: ScanUnitProgress,
     ): Promise<AuditResult> {
         const findings: ScanFinding[] = [];
+        // Findings the independent check refuted: never reported.
+        const refuted: RefutedFinding[] = [];
         let failures = 0;
         // Classes a lens did not read to the end: failed, or stopped short.
         const unfinished = new Set<VulnClass>();
@@ -1034,6 +1134,7 @@ export class SecurityScanEngine {
         const sighted: ScanReportedFinding[] = [];
         const progressSoFar = () => ({
             sighted,
+            refuted,
             lensesRun: [...ran],
             lensesExamined: [
                 ...new Set([
@@ -1206,19 +1307,53 @@ export class SecurityScanEngine {
                         unfinished.add(vulnClass);
                         continue;
                     }
-                    const repeats = finding
-                        ? duplicatesOf(earlier, finding)
-                        : [];
+                    if (!finding) {
+                        continue;
+                    }
+                    const repeats = duplicatesOf(earlier, finding);
                     // Kept only when it is no duplicate of this unit's own:
                     // then new, or stored as the open issue it repeats.
                     // Dropped, what it repeats is still found again.
-                    const keep =
-                        !!finding &&
-                        !isDuplicate(findings, finding) &&
-                        (!repeats.length ||
-                            this.refreshes(finding, repeats, sighted));
-                    if (keep) {
-                        findings.push(finding!);
+                    if (
+                        isDuplicate(findings, finding) ||
+                        (repeats.length && !this.mayRefresh(finding, repeats))
+                    ) {
+                        sighted.push(...repeats);
+                        continue;
+                    }
+                    // Only what would be reported takes the independent
+                    // check: a refuted finding is dropped, and an open issue
+                    // it repeated is not found again by it.
+                    const verdict = await this.verifyFinding(
+                        params,
+                        unit,
+                        vulnClass,
+                        hits,
+                        finding,
+                        signal,
+                    );
+                    if (
+                        signal.aborted ||
+                        (params.deadlineAt && this.now() >= params.deadlineAt)
+                    ) {
+                        return { findings, aborted: true, ...progressSoFar() };
+                    }
+                    if (!verdict.keep) {
+                        refuted.push({
+                            finding,
+                            rationale: verdict.rationale,
+                        });
+                        continue;
+                    }
+                    if (verdict.severity) finding.severity = verdict.severity;
+                    if (verdict.assumption) {
+                        finding.assumption = verdict.assumption;
+                    }
+                    if (
+                        !repeats.length ||
+                        this.refreshes(finding, repeats, sighted)
+                    ) {
+                        findings.push(finding);
                     } else {
                         sighted.push(...repeats);
                     }
@@ -1289,9 +1424,10 @@ export class SecurityScanEngine {
                       : 'no lens read the area to the end',
                 examinedClasses,
                 sighted,
+                refuted,
             };
         }
-        return { findings, examinedClasses, sighted };
+        return { findings, examinedClasses, sighted, refuted };
     }
 
     private lensInput(
@@ -2151,8 +2287,16 @@ function sampleListing(listing: string[], limit: number): string[] {
     );
 }
 
+/** A finding the independent check refuted, and why. */
+export interface RefutedFinding {
+    finding: ScanFinding;
+    rationale: string;
+}
+
 interface AuditResult {
     findings: ScanFinding[];
+    /** Findings the independent check refuted: not reported. */
+    refuted?: RefutedFinding[];
     /** Earlier findings one of the unit's repeated, so dropped. */
     sighted?: ScanReportedFinding[];
     /** The classes whose every lens ran to the end. */
