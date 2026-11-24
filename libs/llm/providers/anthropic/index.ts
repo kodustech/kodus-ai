@@ -62,8 +62,14 @@ export const anthropicModule: ProviderModule = {
 
     capabilities(model: string): ModelCapabilities {
         const reasoningConfig = anthropicReasoningConfig(model);
+        // MiniMax M3: thinks on every call and rejects a disable, but no
+        // level can be expressed on this transport.
+        const alwaysOn =
+            !reasoningConfig &&
+            resolveCompatibleReasoningTraits(model).canDisableThinking === false;
         return {
             supportsReasoning: !!reasoningConfig,
+            ...(alwaysOn ? { reasoningAlwaysOn: true } : {}),
             reasoningConfig,
             // Anthropic does structured output via tool use, not a native
             // response_format json_schema → 'none' at this tier.

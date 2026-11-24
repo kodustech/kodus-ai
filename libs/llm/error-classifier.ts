@@ -471,13 +471,26 @@ function namesASpentCap(lower: string): boolean {
 }
 
 /**
- * True for a quota the provider resets every minute (Google's
- * "...PerModelPerMinute..." quota ids, "per minute" prose). A daily quota in
- * the same text is not a per-minute limit.
+ * True for a quota the provider resets every minute: Google's
+ * "...PerModelPerMinute..." quota ids or "per minute" prose, or, when only the
+ * message reached us (#2130), a retry delay of a minute or less. A per-minute
+ * quota clears within the minute; a daily one asks for hours, and a spent
+ * billing quota gives no delay. A daily quota in the same text is never a
+ * per-minute limit.
  */
 function looksLikePerMinuteLimit(lower: string): boolean {
-    return /per[\s_-]?minute/.test(lower) && !/per[\s_-]?day/.test(lower);
+    if (/per[\s_-]?day/.test(lower)) {
+        return false;
+    }
+    if (/per[\s_-]?minute/.test(lower)) {
+        return true;
+    }
+    const delay = /retry in (\d+(?:\.\d+)?)\s*s\b/.exec(lower);
+    return !!delay && Number(delay[1]) <= PER_MINUTE_RETRY_MAX_SECONDS;
 }
+
+/** The longest retry delay a per-minute quota asks for. */
+const PER_MINUTE_RETRY_MAX_SECONDS = 60;
 
 /**
  * Detects the "model exists but you're not entitled to it" shape. Vertex is

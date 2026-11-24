@@ -356,6 +356,46 @@ describe('classifyLLMError', () => {
             ).toBe(LlmErrorCategory.TRANSIENT);
         });
 
+        // #2130: the Gemini 429 a large review hit, as the review saw it: the
+        // message alone, no response body. A per-minute input-token quota
+        // that says when to retry is a rate limit, not spent credits.
+        it('Gemini per-minute input-token 429 with only its message → RATE_LIMIT (#2130)', () => {
+            const err = Object.assign(
+                new Error(
+                    'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_paid_tier_input_token_count, limit: 2000000, model: gemini-3.8-flash Please retry in 17.320234636s.',
+                ),
+                { name: 'AI_APICallError', statusCode: 429 },
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.RATE_LIMIT,
+            );
+        });
+
+        // The other side of #2130: a quota that is really spent must stay
+        // QUOTA_EXCEEDED, or a key with no credit is retried forever.
+        it.each([
+            [
+                'a daily quota, retried hours later',
+                'You exceeded your current quota. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 50 Please retry in 52843.1s.',
+            ],
+            [
+                'a billing quota, with no retry delay',
+                'You exceeded your current quota, please check your plan and billing details.',
+            ],
+            [
+                'a delay just past a minute',
+                'You exceeded your current quota. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_paid_tier_input_token_count Please retry in 61s.',
+            ],
+        ])('keeps %s on a 429 as QUOTA_EXCEEDED', (_case, message) => {
+            const err = Object.assign(new Error(message), {
+                name: 'AI_APICallError',
+                statusCode: 429,
+            });
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+
         it('OpenAI "exceeds the context window" → CONTEXT_OVERFLOW', () => {
             const err = new Error(
                 'Your input exceeds the context window of this model. Please adjust your input and try again.',

@@ -134,6 +134,10 @@ export interface CatalogModel {
     id: string;
     name: string;
     supportsReasoning?: boolean;
+    /** The model always reasons and refuses to have it turned off, while no
+     *  reasoning level can be sent for it (#2036): the form must not call it
+     *  a model without reasoning. */
+    reasoningAlwaysOn?: boolean;
     reasoningConfig?: ReasoningConfig;
     /** Curated pick for code review — the picker shows a badge. */
     recommended?: boolean;

@@ -275,12 +275,19 @@ export const ByokAdvancedSettings = ({
                             )}
                         />
 
-                        {reasoningUnsupported && (
-                            <p className="text-text-tertiary text-xs">
-                                This model doesn&apos;t support reasoning — it
-                                always runs without a thinking budget.
-                            </p>
-                        )}
+                        {reasoningUnsupported &&
+                            (caps?.reasoningAlwaysOn ? (
+                                <p className="text-text-tertiary text-xs">
+                                    This model always reasons. Its level
+                                    can&apos;t be set on this endpoint, so it
+                                    runs at the model&apos;s own default.
+                                </p>
+                            ) : (
+                                <p className="text-text-tertiary text-xs">
+                                    This model doesn&apos;t support reasoning —
+                                    it always runs without a thinking budget.
+                                </p>
+                            ))}
 
                         {isCustom && (
                             <Controller
