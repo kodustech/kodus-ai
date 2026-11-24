@@ -51,6 +51,14 @@ describe('re-running what failed in the first pass', () => {
         expect(out.state).toBe('failed');
     });
 
+    it('keeps the classification on the run, so the publisher reads what each red test was after the engine is gone', async () => {
+        const w = world({ specs: { ...oks, 'reg.cy.ts': { pr: [{ fail: ERR }] } } });
+        const out = await w.run();
+        const stored = await w.runs.get(ORG, 'sr-1');
+        expect(stored?.classification).toEqual(out.classification);
+        expect(stored?.classification?.tests[0]).toMatchObject({ spec: 'reg.cy.ts', class: 'regression' });
+    });
+
     it('fails on the PR twice and on main with the same error: pre-existing, which never fails the run', async () => {
         const w = world({ specs: { ...oks, 'old.cy.ts': { pr: [{ fail: ERR }], main: [{ fail: ERR }] } } });
         const out = await w.run();

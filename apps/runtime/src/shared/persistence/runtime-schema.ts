@@ -1205,6 +1205,13 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         );
         CREATE INDEX IF NOT EXISTS runtime_suite_baseline_requests_queued_idx ON runtime.runtime_suite_baseline_requests (requested_at) WHERE state = 'queued';`,
     },
+    {
+        version: 53,
+        name: 'the classification a suite run ends with',
+        // docs/runtime/e2e-suites.md section 9: whose fault each red test was. The publisher reads it from the run after
+        // the engine has gone (the check, the annotations, the Run's findings). Null for a baseline and for a run that ended before it.
+        sql: `ALTER TABLE runtime.runtime_suite_runs ADD COLUMN IF NOT EXISTS classification jsonb;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

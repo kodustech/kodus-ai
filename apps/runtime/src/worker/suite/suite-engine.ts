@@ -622,7 +622,7 @@ export class SuiteEngine {
         );
         if (ctx.req.mode === 'baseline') await this.recordBaseline(ctx, firstPass);
         const state = this.stateOf(ctx, firstPass, classification);
-        await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, state, new Date(this.d.clock.now()));
+        await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, state, new Date(this.d.clock.now()), classification ? { classification } : {});
         return { suiteRunId: ctx.req.suiteRunId, state, replayed: false, firstPass, ...(classification ? { classification } : {}) };
     }
 

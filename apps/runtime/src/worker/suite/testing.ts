@@ -2,7 +2,7 @@ import type { AcquireRequest, Blocked, Claim, EnvError, ExecRequest, StepResult 
 
 import { POLL_STATES } from './detached-exec';
 import type { BaselineRecord, PgSuiteBaselines } from './pg-suite-baselines';
-import type { PgSuiteRuns, StoredSuiteResult, StoredSuiteRun, StoredSuiteShard, SuitePhase, SuiteResultRow, SuiteRunRecord, SuiteRunState, SuiteShardPlan } from './pg-suite-runs';
+import type { PgSuiteRuns, StoredSuiteResult, SuiteRunEnd, StoredSuiteRun, StoredSuiteShard, SuitePhase, SuiteResultRow, SuiteRunRecord, SuiteRunState, SuiteShardPlan } from './pg-suite-runs';
 import { STATS_WINDOW, type PgSuiteSpecStats, type SpecObservation } from './pg-suite-spec-stats';
 import type { SuiteHostDemand, SuiteShardHost } from './suite-engine';
 
@@ -95,9 +95,9 @@ export class InMemorySuiteRuns implements Pick<PgSuiteRuns, 'create' | 'get' | '
     async latestForPr(organizationId: string, environmentId: string, prNumber: number) {
         return [...this.runs.values()].filter((r) => r.organizationId === organizationId && r.environmentId === environmentId && r.prNumber === prNumber).sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime())[0] ?? null;
     }
-    async finish(organizationId: string, suiteRunId: string, state: SuiteRunState, at: Date) {
+    async finish(organizationId: string, suiteRunId: string, state: SuiteRunState, at: Date, end: SuiteRunEnd = {}) {
         const r = this.runs.get(suiteRunId);
-        if (r && r.organizationId === organizationId && !r.finishedAt) Object.assign(r, { state, finishedAt: at });
+        if (r && r.organizationId === organizationId && !r.finishedAt) Object.assign(r, { state, finishedAt: at, ...(end.classification ? { classification: end.classification } : {}) });
     }
     async savePlan(organizationId: string, suiteRunId: string, shards: readonly SuiteShardPlan[]) {
         if (this.runs.get(suiteRunId)?.organizationId !== organizationId) return;

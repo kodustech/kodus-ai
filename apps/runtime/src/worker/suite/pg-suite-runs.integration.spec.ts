@@ -85,4 +85,14 @@ const run: SuiteRunRecord = {
         expect((await store.latestForPr('org-a', 'env-1', 7))!.prSha).toBe('c'.repeat(40));
         expect(await store.latestForPr('org-a', 'env-1', 99)).toBeNull();
     });
+
+    it('keeps the classification a finished run ends with, and the first conclusion stays', async () => {
+        await store.create(run);
+        const classification = { tests: [{ spec: 'a.cy.ts', title: 't', class: 'regression', blocks: true, finding: true, baseDrift: 0 }], massFailure: false, requestTemplateBuild: false };
+        await store.finish('org-a', run.suiteRunId, 'failed', new Date('2026-11-23T12:30:00.000Z'), { classification: classification as never });
+        await store.finish('org-a', run.suiteRunId, 'passed', new Date('2026-11-23T12:40:00.000Z'), { classification: undefined });
+        const stored = await store.get('org-a', run.suiteRunId);
+        expect(stored?.state).toBe('failed');
+        expect(stored?.classification).toEqual(classification);
+    });
 });

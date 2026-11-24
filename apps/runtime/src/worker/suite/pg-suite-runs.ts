@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 
 import type { SuiteMode } from '@libs/runtime/contracts/runtime-commands';
+import type { Classification } from '@libs/runtime/suite';
 
 /**
  * The suite run, its shards and its per-spec results (docs/runtime/e2e-suites.md section 7): runtime_suite_runs,
@@ -31,6 +32,13 @@ export interface StoredSuiteRun extends SuiteRunRecord {
     state: SuiteRunState;
     suiteDigest?: string;
     finishedAt?: Date;
+    /** Whose fault each red test was (docs section 9), written once with the conclusion; absent for a baseline and for a run that ended before it. */
+    classification?: Classification;
+}
+
+/** What a run ends with beside its state. */
+export interface SuiteRunEnd {
+    classification?: Classification;
 }
 
 export interface SuiteShardPlan {
@@ -72,6 +80,7 @@ const runOf = (x: Record<string, any>): StoredSuiteRun => ({
     ...(x.suite_digest ? { suiteDigest: x.suite_digest } : {}),
     requestedAt: x.requested_at,
     ...(x.finished_at ? { finishedAt: x.finished_at } : {}),
+    ...(x.classification ? { classification: x.classification } : {}),
 });
 
 export class PgSuiteRuns {
@@ -101,10 +110,10 @@ export class PgSuiteRuns {
     }
 
     /** The first conclusion stays: a run that ended is never moved again. */
-    async finish(organizationId: string, suiteRunId: string, state: SuiteRunState, at: Date): Promise<void> {
+    async finish(organizationId: string, suiteRunId: string, state: SuiteRunState, at: Date, end: SuiteRunEnd = {}): Promise<void> {
         await this.pool.query(
-            `UPDATE runtime.runtime_suite_runs SET state = $3, finished_at = $4, updated_at = now() WHERE organization_id = $1 AND suite_run_id = $2 AND finished_at IS NULL`,
-            [organizationId, suiteRunId, state, at],
+            `UPDATE runtime.runtime_suite_runs SET state = $3, finished_at = $4, classification = $5::jsonb, updated_at = now() WHERE organization_id = $1 AND suite_run_id = $2 AND finished_at IS NULL`,
+            [organizationId, suiteRunId, state, at, end.classification ? JSON.stringify(end.classification) : null],
         );
     }
 
