@@ -278,6 +278,10 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             medium: 2,
             low: 1,
         };
+        const rank = (severity?: string) => {
+            const key = (severity || '').toLowerCase();
+            return Object.hasOwn(severityOrder, key) ? severityOrder[key] : 0;
+        };
         // Ids are given before anything is posted, so the comment, the stored
         // suggestion and a change request over it all name the same finding.
         const withId = (suggestion: Partial<CodeSuggestion>) =>
@@ -294,11 +298,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 const fileB = b.relevantFile || '';
                 if (fileA < fileB) return -1;
                 if (fileA > fileB) return 1;
-                const rankA =
-                    severityOrder[(a.severity || '').toLowerCase()] ?? 0;
-                const rankB =
-                    severityOrder[(b.severity || '').toLowerCase()] ?? 0;
-                return rankB - rankA;
+                return rank(b.severity) - rank(a.severity);
             });
         const allDiscardedSuggestions =
             discardedSuggestionsBySafeGuard.map(withId);

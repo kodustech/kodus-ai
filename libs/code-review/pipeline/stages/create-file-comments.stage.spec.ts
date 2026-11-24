@@ -232,7 +232,7 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
                 lastAnalyzedCommit: 'abc',
             });
         const ctx = baseContext({
-            codeReviewConfig: {},
+            codeReviewConfig: {} as never,
             validSuggestions: [
                 { relevantFile: 'src/foo.ts', severity: 'critical' },
                 { id: 'kept', relevantFile: 'src/foo.ts', severity: 'high' },
