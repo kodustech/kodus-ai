@@ -620,10 +620,18 @@ const leafText = (l: NonNullable<ReportPath['leafChanges']>['undescribed'][numbe
 const leafSentence = (set: NonNullable<ReportPath['leafChanges']>): string => {
     const shown = set.undescribed.slice(0, MAX_LEAVES_SHOWN).map(leafText).join('; ');
     const more = set.undescribedCount - Math.min(set.undescribed.length, MAX_LEAVES_SHOWN);
+    const head = `not described by the PR: ${shown}${more > 0 ? ` (+${more} more on the Run page)` : ''}.`;
+    // The described leaves come after the finding and are worded as what holds, never as a second finding.
+    const listed = (set.described ?? []).slice(0, MAX_LEAVES_SHOWN);
+    if (listed.length) {
+        const text = listed.map((l) => `${leafText(l)}${l.by === 'diff' ? ' (the diff spells it)' : ''}`).join('; ');
+        const left = set.describedCount - listed.length;
+        return `${head} Described and matching the PR: ${text}${left > 0 ? ` (+${left} more on the Run page)` : ''}.`;
+    }
     const names = [...new Set(set.mentions.map(lastKeyOf))].slice(0, 3);
     const mentions = names.length ? ` The description only mentions ${names.map(code).join(', ')}.` : '';
     const rest = set.describedCount > 0 ? ` (${set.describedCount} other ${set.describedCount === 1 ? 'change matches' : 'changes match'} what the PR describes.)` : '';
-    return `${shown}${more > 0 ? ` (+${more} more on the Run page)` : ''}.${mentions}${rest}`;
+    return `${head}${mentions}${rest}`;
 };
 
 const pathLine = (p: ReportPath, links: RuntimeLinks, all: readonly ReportPath[] = []) => {
@@ -1054,8 +1062,11 @@ function intentLines(report: RuntimeRunReport): string[] {
     }
     if (intent.assertions > 0) {
         // A finding that names leaves its description does not read: the assertions held on the fields they read, not on the whole answer.
-        const onFields = report.paths.some((p) => p.verdict === 'finding' && p.leafChanges) ? ' on the fields they read' : '';
-        lines.push('', `${intent.held} of ${plural(intent.assertions, 'assertion')} from what the PR describes held${onFields}.`);
+        const withLeaves = report.paths.filter((p) => p.verdict === 'finding' && p.leafChanges);
+        const names = [...new Set(withLeaves.flatMap((p) => p.leafChanges?.mentions ?? []).map(lastKeyOf))].slice(0, 3);
+        const held = `${intent.held} of ${plural(intent.assertions, 'assertion')} from what the PR describes held`;
+        // It never says the object is fine: an undescribed leaf changed next to the ones the assertions read.
+        lines.push('', withLeaves.length ? `${held}, only on the fields they read${names.length ? ` (${names.map(code).join(', ')})` : ''}; it says nothing of the undescribed ${withLeaves.length > 1 || (withLeaves[0].leafChanges?.undescribedCount ?? 1) > 1 ? 'changes' : 'change'} above.` : `${held}.`);
     } else {
         lines.push('', "This pull request's description and linked tasks describe no behavior Kody can check, so only the comparison with main ran.");
     }

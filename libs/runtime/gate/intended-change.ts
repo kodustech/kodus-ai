@@ -1,5 +1,7 @@
 import { isDocumentation } from '@libs/runtime/entry-points/no-effect';
 
+import type { LeafChange } from '@libs/runtime/run/leaf-changes';
+
 import type { GateDecision, GateStep } from './gate';
 import { isMeasureField } from './gate';
 import { HTML_TEXT_FIELD } from './html-fields';
@@ -564,4 +566,29 @@ export function decideIntendedChange<D extends GateDecision>(
         } as D;
     }
     return { ...decision, reason: `changed as the PR intended: ${said}`, intendedChange: changes } as D;
+}
+
+/**
+ * The diff-spelled string rule, applied to one leaf of an object or array
+ * field (docs/runtime/monorepo-speed-and-targeting.md section 3): a leaf whose
+ * two values are strings is spelled by the diff when one change block of a
+ * file the probed route is declared in removes main's literal and adds the
+ * PR's, with the same strictness as a whole field (`explainPair`, a one-word
+ * value only on a row that names its key). Added, removed and reordered
+ * leaves and values that are not strings are never spelled.
+ */
+export function leafSpelledByDiff(opts: { diff: readonly IntendedChangeDiffFile[]; reachableFiles: readonly string[] }): (leaf: LeafChange) => boolean {
+    const reachable = new Set(opts.reachableFiles);
+    const blocks = changeBlocksOf(opts.diff.filter((f) => reachable.has(f.path)));
+    return (leaf) => {
+        if (!blocks.length || leaf.kind !== 'changed' || leaf.base === undefined || leaf.pr === undefined) return false;
+        const bl = stringLiteralOf(leaf.base);
+        const pl = stringLiteralOf(leaf.pr);
+        if (bl === undefined || pl === undefined) return false;
+        const oneWord = !/\s/.test(norm(bl)) || !/\s/.test(norm(pl));
+        // A leaf path spells indexes in brackets (`details[0].paths[0]`): the key is the last name, indexes taken out.
+        const key = oneWord ? leaf.path.replace(/\[\d+\]/g, '').split('.').pop() || undefined : undefined;
+        if (oneWord && !key) return false;
+        return explainPair(bl, pl, blocks, key) !== undefined;
+    };
 }

@@ -25,6 +25,15 @@ describe('leafChangesReportOf', () => {
         expect(ReportLeafChangesSchema.parse(leafChanges)).toBeTruthy();
     });
 
+    it('lists the described leaves too, 5 at most, each with what described it', () => {
+        const set = { undescribed: [leaf(0)], described: Array.from({ length: 7 }, (_, i) => ({ ...leaf(30 + i), by: 'description' as const })), mentions: [], truncated: false };
+        const { leafChanges } = leafChangesReportOf(verdict({ leafChanges: set }));
+        expect(leafChanges?.described).toHaveLength(5);
+        expect(leafChanges?.described?.[0]).toMatchObject({ path: 'a[30]', by: 'description' });
+        expect(leafChanges?.describedCount).toBe(7);
+        expect(ReportLeafChangesSchema.parse(leafChanges)).toBeTruthy();
+    });
+
     it('is absent for a verdict that is not a finding, or a finding without undescribed leaves', () => {
         expect(leafChangesReportOf(verdict({ verdict: 'described_change' }))).toEqual({});
         expect(leafChangesReportOf(verdict({ leafChanges: { undescribed: [], described: [leaf(0)], mentions: [], truncated: false } }))).toEqual({});

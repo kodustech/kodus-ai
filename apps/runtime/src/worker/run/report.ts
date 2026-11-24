@@ -30,6 +30,17 @@ export function leafChangesReportOf(p: ProbeVerdict): { leafChanges?: NonNullabl
                 ...(l.base !== undefined ? { base: clip(l.base, 200) } : {}),
                 ...(l.pr !== undefined ? { pr: clip(l.pr, 200) } : {}),
             })),
+            ...(set.described.length
+                ? {
+                      described: set.described.slice(0, 5).map((l) => ({
+                          path: clip(l.path, 256),
+                          kind: l.kind,
+                          ...(l.base !== undefined ? { base: clip(l.base, 200) } : {}),
+                          ...(l.pr !== undefined ? { pr: clip(l.pr, 200) } : {}),
+                          by: l.by ?? ('description' as const),
+                      })),
+                  }
+                : {}),
             undescribedCount: set.undescribed.length,
             describedCount: set.described.length,
             mentions: set.mentions.slice(0, 5).map((m) => clip(m, 256)),

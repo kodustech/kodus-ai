@@ -27,7 +27,12 @@ export interface LeafChange {
     kind: LeafChangeKind;
     base?: string;
     pr?: string;
+    /** On a described leaf: what described it, a passed assertion of the description or the diff spelling the swap. */
+    by?: LeafDescribedBy;
 }
+
+export const LEAF_DESCRIBED_BY = ['description', 'diff'] as const;
+export type LeafDescribedBy = (typeof LEAF_DESCRIBED_BY)[number];
 
 export interface LeafChanges {
     leaves: LeafChange[];

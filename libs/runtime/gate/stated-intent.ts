@@ -12,7 +12,7 @@ import type { Probe, ProbeResult } from '@libs/runtime/probe/probe.schema';
 
 import type { FindingKind, GateStep, Verdict } from './gate';
 import { LATEST_IMAGE } from './gate';
-import { isPathUnder, type LeafChange, type LeafChangeSet, leafChanges, LEAF_MENTIONS_MAX, leafPathOf } from '@libs/runtime/run/leaf-changes';
+import { isPathUnder, type LeafChange, type LeafDescribedBy, type LeafChangeSet, leafChanges, LEAF_MENTIONS_MAX, leafPathOf } from '@libs/runtime/run/leaf-changes';
 
 // The intent oracle's verdict (docs/runtime/intent-oracle.md §7, §8): what the
 // PR says it does, as closed assertions the intent author quoted from its
@@ -221,6 +221,7 @@ function leafSetOf(
     reads: readonly string[],
     masked: readonly string[],
     clean?: (text: string) => string,
+    spelled?: (leaf: LeafChange) => boolean,
 ): LeafChangeSet | undefined {
     const unread = differing.filter((f) => !fieldRead(f) && !masked.includes(f));
     if (!unread.length || !differing.every(isJsonField)) return undefined;
@@ -239,9 +240,13 @@ function leafSetOf(
         truncated ||= out.truncated;
     }
     if (!leaves.length) return undefined;
+    // The diff describes a leaf only when the description names none: once it names the leaves it means,
+    // a sibling the diff also changes is not covered by that sentence (a typo in the same object stays the finding).
+    const describedBy = (l: LeafChange): LeafDescribedBy | undefined => (isDescribed(l, reads) ? 'description' : !reads.length && spelled?.(l) ? 'diff' : undefined);
+    const by = leaves.map((l) => ({ l, by: describedBy(l) }));
     return {
-        undescribed: leaves.filter((l) => !isDescribed(l, reads)),
-        described: leaves.filter((l) => isDescribed(l, reads)),
+        undescribed: by.filter((x) => !x.by).map((x) => x.l),
+        described: by.filter((x) => x.by).map((x) => ({ ...x.l, by: x.by })),
         mentions: reads.slice(0, LEAF_MENTIONS_MAX),
         truncated,
     };
@@ -253,9 +258,9 @@ function leafSetOf(
  * `details[0].paths[0]` and not only `json.applinks.details`. Undefined for
  * anything else, and when its fields are not JSON.
  */
-export function leavesOfFinding(decision: VerdictLike, steps: readonly GateStep[], clean?: (text: string) => string): LeafChangeSet | undefined {
+export function leavesOfFinding(decision: VerdictLike, steps: readonly GateStep[], clean?: (text: string) => string, spelled?: (leaf: LeafChange) => boolean): LeafChangeSet | undefined {
     if (decision.verdict !== 'finding' || decision.findingKind !== 'behavior_change') return undefined;
-    return leafSetOf(decision.differingFields ?? [], () => false, steps, [], decision.maskedFields ?? [], clean);
+    return leafSetOf(decision.differingFields ?? [], () => false, steps, [], decision.maskedFields ?? [], clean, spelled);
 }
 
 const keysOnly = (p: readonly unknown[]): p is string[] => p.every((s) => typeof s === 'string');
@@ -339,7 +344,7 @@ export function decideStatedIntent<D extends VerdictLike>(
     decision: D,
     steps: GateStep[],
     checks: readonly StatedIntentCheck[],
-    opts: { mismatch: boolean; pinnedImageId: string; requestBody?: string; clean?: (text: string) => string },
+    opts: { mismatch: boolean; pinnedImageId: string; requestBody?: string; clean?: (text: string) => string; spelled?: (leaf: LeafChange) => boolean },
 ): { decision: D; statedIntents: StatedIntentResult[]; leaves?: LeafChangeSet } {
     const rounds = prRounds(steps, opts.pinnedImageId);
     if (!rounds.length || !checks.length) return { decision, statedIntents: [] };
@@ -370,7 +375,7 @@ export function decideStatedIntent<D extends VerdictLike>(
     }
     if (!isFinding || differing.length === 0 || reordered.length > 0) return { decision, statedIntents };
     // The fields are compared whole: a path through an array index reads one leaf of one, so the leaves decide.
-    const leaves = leafSetOf(notReordered, fieldRead, steps, readPathsOf(kept), decision.maskedFields ?? [], opts.clean);
+    const leaves = leafSetOf(notReordered, fieldRead, steps, readPathsOf(kept), decision.maskedFields ?? [], opts.clean, opts.spelled);
     if (!leaves) return { decision, statedIntents };
     if (!leaves.undescribed.length && !leaves.truncated) {
         return { decision: { ...rest, verdict: 'described_change', reason: "every difference from main is what the pull request's own text says, and it held on every PR round" } as D, statedIntents };

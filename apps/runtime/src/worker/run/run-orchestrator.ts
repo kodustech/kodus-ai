@@ -12,6 +12,7 @@ import {
     baseUnstableFields,
     browserStepKindsOf,
     decideIntendedChange,
+    leafSpelledByDiff,
     decideNewEndpoint,
     decideStatedIntent,
     GateStep,
@@ -1515,7 +1516,9 @@ async function replayProbes(run: RunScope, ready: ReadySides, t: TestedRun, beha
             ...(lanes ? { lanes } : {}),
             ...(responseDiff ? { responseDiff } : {}),
             ...(statusChange ? { statusChange } : {}),
-            ...leafChangesOf(leavesOfFinding(decision, steps, (text) => redactCanaries(redactPatterns(text).text, canaries))),
+            ...leafChangesOf(
+                leavesOfFinding(decision, steps, (text) => redactCanaries(redactPatterns(text).text, canaries), leafSpelledByDiff({ diff: req.diff, reachableFiles: routeFilesOf(t.entryPoints, entryPoint) })),
+            ),
             ...diffRefFor(entryPoint, planned.via && entryPoint === planned.entryPoint ? planned.via : undefined),
         });
         deps.metrics.recordVerdict(decision.verdict, { orgId: req.organizationId });
@@ -1694,6 +1697,7 @@ async function replayIntentProbes(run: RunScope, ready: ReadySides, t: TestedRun
             mismatch: true,
             pinnedImageId: ready.pinnedImageId,
             clean: cleanLeaf,
+            spelled: leafSpelledByDiff({ diff: req.diff, reachableFiles: routeFilesOf(t.entryPoints, entryPoint) }),
             ...(probe.spec.kind === 'http' && probe.spec.body ? { requestBody: probe.spec.body } : {}),
         });
         const intendedChange = decision.intendedChange?.map((c) => ({ ...c, base: redactPatterns(c.base).text, pr: redactPatterns(c.pr).text }));

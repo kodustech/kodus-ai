@@ -6,7 +6,7 @@ import { RepositoryAliasSchema } from '@libs/runtime/contracts/workspace';
 import { BROWSER_STEP_KINDS } from '@libs/runtime/probe/probe.schema';
 import { EXERCISED_LANGUAGES, EXERCISED_LINES_LIMITS, ExercisedResultSchema } from '@libs/runtime/protocol/messages';
 
-import { LEAF_CHANGE_KINDS } from './leaf-changes';
+import { LEAF_CHANGE_KINDS, LEAF_DESCRIBED_BY } from './leaf-changes';
 import { RUN_STATES } from './run-state';
 
 export { BLOCKER_KINDS, RUN_TRIGGERS };
@@ -130,6 +130,19 @@ export const ReportLeafChangesSchema = z.strictObject({
         )
         .min(1)
         .max(5),
+    /** The leaves a passed assertion or the diff describes, at most 5, each with what described it. */
+    described: z
+        .array(
+            z.strictObject({
+                path: z.string().min(1).max(256),
+                kind: z.enum(LEAF_CHANGE_KINDS),
+                base: z.string().max(200).optional(),
+                pr: z.string().max(200).optional(),
+                by: z.enum(LEAF_DESCRIBED_BY),
+            }),
+        )
+        .max(5)
+        .optional(),
     undescribedCount: z.number().int().min(1).max(10_000),
     describedCount: z.number().int().min(0).max(10_000),
     mentions: z.array(z.string().min(1).max(256)).max(5),

@@ -571,8 +571,12 @@ for Runs in flight.
 `gate/leaf-changes.ts`, `stated-intent.ts` (`leavesOfFinding`, `decideStatedIntent` returns `leaves`), the verdict's
 `leafChanges`, the report's `ReportPath.leafChanges`, the comment line and the Run page sentence. Differences from the
 text above: the report keeps the undescribed leaves (at most 5) and **counts** of the rest and of the described ones, not
-an array of described leaves; the diff-spelled string rule (`intended-change.ts`) is not applied per leaf yet, so a leaf
-only the diff explains stays undescribed (never weaker than today); the leaf diff reads the first healthy round of each
+an array of described leaves; the diff-spelled string rule is applied per leaf (`leafSpelledByDiff` in `intended-change.ts`,
+same strictness as a whole field) only when no passed assertion reads any leaf of the finding: once the description names
+the leaves it means, a sibling the diff also changes (a typo in the same object) stays undescribed. The report also keeps
+up to 5 described leaves, each with `by` (`description` or `diff`), and the comment words the undescribed leaf as the
+finding ("not described by the PR: ...") followed by "Described and matching the PR: ...", and the held line says the
+assertions held "only on the fields they read" and say nothing of the undescribed change; the leaf diff reads the first healthy round of each
 side and leaves out a leaf the base's own rounds disagree on, in place of a per-leaf `maskedFields`.
 
 ## Open (needs the user)

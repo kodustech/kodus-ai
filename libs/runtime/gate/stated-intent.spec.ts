@@ -3,6 +3,7 @@ import type { Probe, ProbeResult } from '@libs/runtime/probe/probe.schema';
 
 import { decideNewEndpoint, decideProbe, type GateDecision, type GateStep } from './gate';
 import { expectedHolds, normalizeFields } from './probe-fields';
+import { leafSpelledByDiff } from './intended-change';
 import { decideStatedIntent, leavesOfFinding, type StatedIntentCheck, statedIntentChecksFor } from './stated-intent';
 
 // The kr-shop pairs of docs/runtime/intent-oracle.md, 2026-11-18: each feature
@@ -550,6 +551,50 @@ describe('described and undescribed leaves of one array field (an association fi
         expect(set?.undescribed.map((l) => l.path)).toEqual(['applinks.details[0].paths[0]']);
         expect(set?.described).toEqual([]);
         expect(set?.mentions).toEqual([]);
+    });
+
+    it('each described leaf says what described it: the description', () => {
+        const out = run(entry(['TEAM.app.two'], ['/shares/*']));
+        expect(out.leaves?.described).toEqual([{ path: 'applinks.details[0].appIDs[0]', kind: 'changed', base: '"TEAM.app.one"', pr: '"TEAM.app.two"', by: 'description' }]);
+        expect(out.leaves?.undescribed.every((l) => l.by === undefined)).toBe(true);
+    });
+
+    describe('the diff-spelled string rule, per leaf', () => {
+        // The association file's JSON in the diff: appIDs and paths both change in it.
+        const patch = ['@@ -1,6 +1,6 @@', ' {', '-  "appIDs": ["TEAM.app.one"],', '-  "paths": ["/share/*"]', '+  "appIDs": ["TEAM.app.two"],', '+  "paths": ["/shares/*"]', ' }'].join('\n');
+        const spelled = leafSpelledByDiff({ diff: [{ path: 'public/association.json', patch }], reachableFiles: ['public/association.json'] });
+        const changed = () => replay(p, base, entry(['TEAM.app.two'], ['/shares/*']));
+
+        it('with no stated intent, a leaf the diff spells as a string swap is described by the diff', () => {
+            const { decision, steps } = changed();
+            const set = leavesOfFinding(decision as never, steps, undefined, spelled);
+            expect(set?.undescribed).toEqual([]);
+            expect(set?.described.map((l) => [l.path, l.by])).toEqual([
+                ['applinks.details[0].appIDs[0]', 'diff'],
+                ['applinks.details[0].paths[0]', 'diff'],
+            ]);
+        });
+
+        it('a leaf the diff does not spell stays undescribed', () => {
+            const { decision, steps } = changed();
+            const onlyAppIds = leafSpelledByDiff({ diff: [{ path: 'public/association.json', patch: patch.replace(/.*paths.*\n?/g, '') }], reachableFiles: ['public/association.json'] });
+            const set = leavesOfFinding(decision as never, steps, undefined, onlyAppIds);
+            expect(set?.undescribed.map((l) => l.path)).toEqual(['applinks.details[0].paths[0]']);
+            expect(set?.described.map((l) => l.path)).toEqual(['applinks.details[0].appIDs[0]']);
+        });
+
+        it('a file the route does not reach describes nothing', () => {
+            const { decision, steps } = changed();
+            const other = leafSpelledByDiff({ diff: [{ path: 'public/association.json', patch }], reachableFiles: ['elsewhere.json'] });
+            expect(leavesOfFinding(decision as never, steps, undefined, other)?.described).toEqual([]);
+        });
+
+        it('when the description names appIDs, the diff does not describe the sibling path: the typo stays the finding', () => {
+            const out = decideStatedIntent(changed().decision, changed().steps, [said], { mismatch: true, pinnedImageId: IMAGE, spelled });
+            expect(out.decision.verdict).toBe('finding');
+            expect(out.leaves?.undescribed.map((l) => l.path)).toEqual(['applinks.details[0].paths[0]']);
+            expect(out.leaves?.described.map((l) => [l.path, l.by])).toEqual([['applinks.details[0].appIDs[0]', 'description']]);
+        });
     });
 
     it('a finding whose fields are scalars has no leaves: its field-level line stands', () => {

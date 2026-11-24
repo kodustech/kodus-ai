@@ -1171,21 +1171,38 @@ describe('a finding on an array field names its undescribed leaf (docs/runtime/m
     it('says which leaf changed, from what to what, and what the description mentions, in place of the field name', () => {
         const body = run(finding());
         expect(body).toContain(
-            `- **Regression** \`${route}\`: \`applinks.details[0].paths[0]\` changed from \`"/share/*"\` to \`"/shares/*"\`. The description only mentions \`appIDs\`. (1 other change matches what the PR describes.) [Command and output](${RUN_URL})`,
+            `- **Regression** \`${route}\`: not described by the PR: \`applinks.details[0].paths[0]\` changed from \`"/share/*"\` to \`"/shares/*"\`. The description only mentions \`appIDs\`. (1 other change matches what the PR describes.) [Command and output](${RUN_URL})`,
         );
         expect(body).not.toContain('differs in');
     });
 
+    it('lists the described leaf apart from the undescribed one, so the typo is the finding and the described change is not', () => {
+        const described = { path: 'applinks.details[0].appIDs[0]', kind: 'changed' as const, base: '"TEAM.app.one"', pr: '"TEAM.app.two"', by: 'description' as const };
+        const body = run(finding({ leafChanges: { undescribed: [leaf], described: [described], undescribedCount: 1, describedCount: 1, mentions: ['applinks.details[0].appIDs'] } }));
+        expect(body).toContain(
+            `: not described by the PR: \`applinks.details[0].paths[0]\` changed from \`"/share/*"\` to \`"/shares/*"\`. Described and matching the PR: \`applinks.details[0].appIDs[0]\` changed from \`"TEAM.app.one"\` to \`"TEAM.app.two"\`. [Command and output]`,
+        );
+        const finding1 = body.split('\n').find((l) => l.startsWith('- **Regression**')) ?? '';
+        expect(finding1.indexOf('not described by the PR')).toBeLessThan(finding1.indexOf('Described and matching'));
+    });
+
+    it('says when the diff, not the description, spells a described leaf', () => {
+        const spelled = { path: 'a.b', kind: 'changed' as const, base: '"x"', pr: '"y"', by: 'diff' as const };
+        const body = run(finding({ leafChanges: { undescribed: [leaf], described: [spelled], undescribedCount: 1, describedCount: 1, mentions: [] } }));
+        expect(body).toContain('Described and matching the PR: `a.b` changed from `"x"` to `"y"` (the diff spells it).');
+    });
+
     it('does not say the assertion explains the finding: it held on the fields it reads', () => {
         const body = run(finding());
-        expect(body).toContain('1 of 1 assertion from what the PR describes held on the fields they read.');
+        expect(body).toContain('1 of 1 assertion from what the PR describes held, only on the fields they read (`appIDs`); it says nothing of the undescribed change above.');
         expect(body).not.toContain('1 of 1 assertion from what the PR describes held.');
+        expect(body).not.toContain('held on the fields they read.');
     });
 
     it('lists at most 3 leaves and counts the rest', () => {
         const many = Array.from({ length: 5 }, (_, i) => ({ ...leaf, path: `a[${i}]` }));
         const body = run(finding({ leafChanges: { undescribed: many, undescribedCount: 8, describedCount: 0, mentions: [] } }));
-        expect(body).toContain('`a[0]` changed from `"/share/*"` to `"/shares/*"`; `a[1]` changed from `"/share/*"` to `"/shares/*"`; `a[2]` changed from `"/share/*"` to `"/shares/*"` (+5 more on the Run page).');
+        expect(body).toContain('not described by the PR: `a[0]` changed from `"/share/*"` to `"/shares/*"`; `a[1]` changed from `"/share/*"` to `"/shares/*"`; `a[2]` changed from `"/share/*"` to `"/shares/*"` (+5 more on the Run page).');
         expect(body).not.toContain('`a[3]`');
         expect(body).not.toContain('The description only mentions');
     });
@@ -1205,13 +1222,13 @@ describe('a finding on an array field names its undescribed leaf (docs/runtime/m
                 },
             }),
         );
-        expect(body).toContain('`x[1]` was added as `2`; `y` was removed (it was `"k"`); `z` was reordered.');
+        expect(body).toContain('not described by the PR: `x[1]` was added as `2`; `y` was removed (it was `"k"`); `z` was reordered.');
     });
 
     it('a secret-looking leaf prints [redacted] and the report schema accepts the path', () => {
         const redacted = finding({ leafChanges: { undescribed: [{ path: 'auth.apiToken', kind: 'changed', base: '[redacted]', pr: '[redacted]' }], undescribedCount: 1, describedCount: 0, mentions: [] } });
         expect(RuntimeRunReportSchema.parse(report({ paths: [redacted] }))).toBeTruthy();
-        expect(run(redacted)).toContain('`auth.apiToken` changed from `[redacted]` to `[redacted]`.');
+        expect(run(redacted)).toContain('not described by the PR: `auth.apiToken` changed from `[redacted]` to `[redacted]`.');
     });
 
     it('without leaves the old line and the old held sentence are unchanged', () => {
