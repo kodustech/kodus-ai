@@ -25,6 +25,7 @@ import {
     isFileMatchingGlobCaseInsensitive,
 } from '@libs/common/utils/glob-utils';
 import {
+    CreateAuthIntegrationResult,
     CreateAuthIntegrationStatus,
     IntegrationCategory,
     IntegrationConfigKey,
@@ -3350,7 +3351,7 @@ export class BitbucketCloudService implements Omit<
         username?: string;
         email?: string;
         host?: string;
-    }): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+    }): Promise<CreateAuthIntegrationResult> {
         try {
             let res: {
                 success: boolean;
@@ -4246,7 +4247,8 @@ export class BitbucketCloudService implements Omit<
         token: string;
         email?: string;
         host?: string;
-    }): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+        newConnection?: boolean;
+    }): Promise<CreateAuthIntegrationResult> {
         try {
             const { organizationAndTeamData, token, username, email } = params;
 
@@ -4278,14 +4280,16 @@ export class BitbucketCloudService implements Omit<
                 return checkRepos;
             }
 
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: organizationAndTeamData.organizationId,
-                },
-                team: { uuid: organizationAndTeamData.teamId },
-                ...connectionScope(organizationAndTeamData),
-                platform: PlatformType.BITBUCKET,
-            });
+            const integration = params?.newConnection
+                ? undefined
+                : await this.integrationService.findOne({
+                      organization: {
+                          uuid: organizationAndTeamData.organizationId,
+                      },
+                      team: { uuid: organizationAndTeamData.teamId },
+                      ...connectionScope(organizationAndTeamData),
+                      platform: PlatformType.BITBUCKET,
+                  });
 
             const authDetails: BitbucketAuthDetail = {
                 username: username,
@@ -4295,7 +4299,7 @@ export class BitbucketCloudService implements Omit<
                 host: params.host,
             };
 
-            await this.handleIntegration(
+            const integrationId = await this.handleIntegration(
                 integration,
                 authDetails,
                 organizationAndTeamData,
@@ -4304,6 +4308,7 @@ export class BitbucketCloudService implements Omit<
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             this.logger.error({
@@ -4370,17 +4375,21 @@ export class BitbucketCloudService implements Omit<
         integration: IntegrationEntity | null,
         authDetails: BitbucketAuthDetail,
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<void> {
+    ): Promise<string | undefined> {
         if (!integration) {
-            await this.addAccessToken(organizationAndTeamData, authDetails);
-        } else {
-            await this.updateAuthIntegration({
+            const created = await this.addAccessToken(
                 organizationAndTeamData,
-                authIntegrationId: integration?.authIntegration?.uuid,
-                integrationId: integration?.uuid,
                 authDetails,
-            });
+            );
+            return created?.uuid;
         }
+        await this.updateAuthIntegration({
+            organizationAndTeamData,
+            authIntegrationId: integration?.authIntegration?.uuid,
+            integrationId: integration?.uuid,
+            authDetails,
+        });
+        return integration?.uuid;
     }
 
     async addAccessToken(

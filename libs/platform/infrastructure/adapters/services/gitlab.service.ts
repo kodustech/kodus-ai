@@ -34,6 +34,7 @@ import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integ
 import { resolveGitlabDraftStatus } from '@libs/common/utils/webhooks/gitlab-draft.utils';
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
+    CreateAuthIntegrationResult,
     CreateAuthIntegrationStatus,
     GitlabPullRequestState,
     IntegrationCategory,
@@ -1291,17 +1292,21 @@ export class GitlabService implements Omit<
         integration: any,
         authDetails: any,
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<void> {
+    ): Promise<string | undefined> {
         if (!integration) {
-            await this.addAccessToken(organizationAndTeamData, authDetails);
-        } else {
-            await this.updateAuthIntegration({
+            const created = await this.addAccessToken(
                 organizationAndTeamData,
-                authIntegrationId: integration?.authIntegration?.uuid,
-                integrationId: integration?.uuid,
                 authDetails,
-            });
+            );
+            return created?.uuid;
         }
+        await this.updateAuthIntegration({
+            organizationAndTeamData,
+            authIntegrationId: integration?.authIntegration?.uuid,
+            integrationId: integration?.uuid,
+            authDetails,
+        });
+        return integration?.uuid;
     }
 
     async createOrUpdateIntegrationConfig(params: any): Promise<any> {
@@ -1351,7 +1356,7 @@ export class GitlabService implements Omit<
 
     async createAuthIntegration(
         params: any,
-    ): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+    ): Promise<CreateAuthIntegrationResult> {
         try {
             let res: {
                 success: boolean;
@@ -1416,16 +1421,18 @@ export class GitlabService implements Omit<
 
             if (!checkRepos.success) return checkRepos;
 
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: params.organizationAndTeamData.organizationId,
-                },
-                team: { uuid: params.organizationAndTeamData.teamId },
-                ...connectionScope(params.organizationAndTeamData),
-                platform: PlatformType.GITLAB,
-            });
+            const integration = params?.newConnection
+                ? undefined
+                : await this.integrationService.findOne({
+                      organization: {
+                          uuid: params.organizationAndTeamData.organizationId,
+                      },
+                      team: { uuid: params.organizationAndTeamData.teamId },
+                      ...connectionScope(params.organizationAndTeamData),
+                      platform: PlatformType.GITLAB,
+                  });
 
-            await this.handleIntegration(
+            const integrationId = await this.handleIntegration(
                 integration,
                 authDetails,
                 params.organizationAndTeamData,
@@ -1434,6 +1441,7 @@ export class GitlabService implements Omit<
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             throw new BadRequestException(
@@ -1471,16 +1479,18 @@ export class GitlabService implements Omit<
 
             if (!checkRepos.success) return checkRepos;
 
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: params.organizationAndTeamData.organizationId,
-                },
-                team: { uuid: params.organizationAndTeamData.teamId },
-                ...connectionScope(params.organizationAndTeamData),
-                platform: PlatformType.GITLAB,
-            });
+            const integration = params?.newConnection
+                ? undefined
+                : await this.integrationService.findOne({
+                      organization: {
+                          uuid: params.organizationAndTeamData.organizationId,
+                      },
+                      team: { uuid: params.organizationAndTeamData.teamId },
+                      ...connectionScope(params.organizationAndTeamData),
+                      platform: PlatformType.GITLAB,
+                  });
 
-            await this.handleIntegration(
+            const integrationId = await this.handleIntegration(
                 integration,
                 authDetails,
                 params.organizationAndTeamData,
@@ -1489,6 +1499,7 @@ export class GitlabService implements Omit<
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch {
             throw new BadRequestException(

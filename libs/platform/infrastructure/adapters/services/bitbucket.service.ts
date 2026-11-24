@@ -659,12 +659,16 @@ export class BitbucketService implements Omit<
     }
 
     async createAuthIntegration(params: any) {
-        const impl = await this.getImplementation(
-            params?.organizationAndTeamData,
-            // The submitted host decides, not the stored one: on the first
-            // Data Center connection there is nothing stored to read.
-            params?.host,
-        );
+        // The submitted host decides, not the stored one: on the first Data
+        // Center connection there is nothing stored to read, and a new
+        // connection beside a Data Center one is Cloud when it names no host.
+        const impl =
+            params?.newConnection && !params?.host?.trim()
+                ? this.bitbucketCloudService
+                : await this.getImplementation(
+                      params?.organizationAndTeamData,
+                      params?.host,
+                  );
         return impl.createAuthIntegration(params);
     }
 

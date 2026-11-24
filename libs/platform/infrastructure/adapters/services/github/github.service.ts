@@ -71,6 +71,7 @@ import {
 } from '@libs/common/utils/translations/translations';
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
+    CreateAuthIntegrationResult,
     CreateAuthIntegrationStatus,
     InstallationStatus,
     IntegrationCategory,
@@ -268,21 +269,44 @@ export class GithubService
         private readonly mcpManagerService?: MCPManagerService,
     ) {}
 
+    /** Creates the connection or rewrites its credentials; returns its id. */
     private async handleIntegration(
         integration: any,
         authDetails: any,
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<void> {
+    ): Promise<string | undefined> {
         if (!integration) {
-            await this.addAccessToken(organizationAndTeamData, authDetails);
-        } else {
-            await this.updateAuthIntegration({
+            const created = await this.addAccessToken(
                 organizationAndTeamData,
-                authIntegrationId: integration?.authIntegration?.uuid,
-                integrationId: integration?.uuid,
                 authDetails,
-            });
+            );
+            return created?.uuid;
         }
+        await this.updateAuthIntegration({
+            organizationAndTeamData,
+            authIntegrationId: integration?.authIntegration?.uuid,
+            integrationId: integration?.uuid,
+            authDetails,
+        });
+        return integration?.uuid;
+    }
+
+    /**
+     * The connection a connect call rewrites: none when the caller adds a
+     * new one, otherwise the one it names or the workspace's GitHub one.
+     */
+    private async findConnectionToUpdate(params: any): Promise<any> {
+        if (params?.newConnection) {
+            return undefined;
+        }
+        return this.integrationService.findOne({
+            organization: {
+                uuid: params.organizationAndTeamData.organizationId,
+            },
+            team: { uuid: params.organizationAndTeamData.teamId },
+            ...connectionScope(params.organizationAndTeamData),
+            platform: PlatformType.GITHUB,
+        });
     }
 
     private normalizeGithubHost(host?: string): string | undefined {
@@ -581,7 +605,7 @@ export class GithubService
 
     async createAuthIntegration(
         params: any,
-    ): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+    ): Promise<CreateAuthIntegrationResult> {
         try {
             let res: {
                 success: boolean;
@@ -766,6 +790,17 @@ export class GithubService
                 'This GitHub installation is already connected to another Kodus organization.',
             );
         }
+        if (
+            params?.newConnection &&
+            linked.some(
+                (integration) =>
+                    integration?.organization?.uuid === organizationId,
+            )
+        ) {
+            throw new BadRequestException(
+                'This GitHub account is already connected in this Kodus organization.',
+            );
+        }
     }
 
     private createUserOctokit(userToken: string): Octokit {
@@ -774,7 +809,7 @@ export class GithubService
 
     async authenticateWithCodeOauth(
         params: any,
-    ): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+    ): Promise<CreateAuthIntegrationResult> {
         // Which step a failed link stopped at: the error below is rewrapped
         // for the client, so without it the log only shows the catch.
         const progress: InstallationLinkProgress = { step: 'check-env' };
@@ -848,28 +883,24 @@ export class GithubService
             }
 
             progress.step = 'find-integration';
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: params.organizationAndTeamData.organizationId,
-                },
-                team: { uuid: params.organizationAndTeamData.teamId },
-                ...connectionScope(params.organizationAndTeamData),
-                platform: PlatformType.GITHUB,
-            });
+            const integration = await this.findConnectionToUpdate(params);
 
             progress.step = integration
                 ? 'update-integration'
                 : 'create-integration';
-            await this.handleIntegration(
+            const integrationId = await this.handleIntegration(
                 integration,
                 authDetails,
                 params.organizationAndTeamData,
             );
+            const connectionTeamData = {
+                ...params.organizationAndTeamData,
+                integrationId,
+            };
 
             progress.step = 'update-installation-status';
-            const githubStatus = await this.findOneByOrganizationId(
-                params.organizationAndTeamData,
-            );
+            const githubStatus =
+                await this.findOneByOrganizationId(connectionTeamData);
             if (
                 githubStatus?.installationStatus === InstallationStatus.PENDING
             ) {
@@ -878,7 +909,7 @@ export class GithubService
                         installationStatus: InstallationStatus.SUCCESS,
                         organizationName: accountLogin,
                     },
-                    params.organizationAndTeamData,
+                    connectionTeamData,
                 );
             }
 
@@ -888,12 +919,14 @@ export class GithubService
                 metadata: {
                     ...installationLinkLogMetadata(params, progress),
                     created: !integration,
+                    integrationId,
                 },
             });
 
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             const metadata = installationLinkLogMetadata(params, progress);
@@ -924,7 +957,7 @@ export class GithubService
 
     async authenticateWithToken(
         params: any,
-    ): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+    ): Promise<CreateAuthIntegrationResult> {
         try {
             const { token } = params;
             const normalizedHost = this.normalizeGithubHost(params.host);
@@ -960,16 +993,9 @@ export class GithubService
 
             if (!repoPermissions.success) return repoPermissions;
 
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: params.organizationAndTeamData.organizationId,
-                },
-                team: { uuid: params.organizationAndTeamData.teamId },
-                ...connectionScope(params.organizationAndTeamData),
-                platform: PlatformType.GITHUB,
-            });
+            const integration = await this.findConnectionToUpdate(params);
 
-            await this.handleIntegration(
+            const integrationId = await this.handleIntegration(
                 integration,
                 authDetails,
                 params.organizationAndTeamData,
@@ -978,6 +1004,7 @@ export class GithubService
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             throw new BadRequestException(

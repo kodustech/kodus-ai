@@ -14,6 +14,7 @@ import { v4 } from 'uuid';
 
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import {
+    CreateAuthIntegrationResult,
     CreateAuthIntegrationStatus,
     IntegrationCategory,
     IntegrationConfigKey,
@@ -224,7 +225,8 @@ export class BitbucketDataCenterService implements Omit<
         email?: string;
         host?: string;
         authMode?: AuthMode;
-    }): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+        newConnection?: boolean;
+    }): Promise<CreateAuthIntegrationResult> {
         try {
             const {
                 organizationAndTeamData,
@@ -270,15 +272,24 @@ export class BitbucketDataCenterService implements Omit<
                 );
             }
 
-            const integration = await this.integrationService.findOne({
-                organization: { uuid: organizationAndTeamData.organizationId },
-                team: { uuid: organizationAndTeamData.teamId },
-                ...connectionScope(organizationAndTeamData),
-                platform: PlatformType.BITBUCKET,
-            });
+            const integration = params.newConnection
+                ? undefined
+                : await this.integrationService.findOne({
+                      organization: {
+                          uuid: organizationAndTeamData.organizationId,
+                      },
+                      team: { uuid: organizationAndTeamData.teamId },
+                      ...connectionScope(organizationAndTeamData),
+                      platform: PlatformType.BITBUCKET,
+                  });
 
+            let integrationId = integration?.uuid;
             if (!integration) {
-                await this.addAccessToken(organizationAndTeamData, authDetails);
+                const created = await this.addAccessToken(
+                    organizationAndTeamData,
+                    authDetails,
+                );
+                integrationId = created?.uuid;
             } else {
                 await this.updateAuthIntegration({
                     organizationAndTeamData,
@@ -291,6 +302,7 @@ export class BitbucketDataCenterService implements Omit<
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             this.logger.error({

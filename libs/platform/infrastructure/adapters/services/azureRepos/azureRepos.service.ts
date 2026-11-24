@@ -14,6 +14,7 @@ import pLimit from 'p-limit';
 import { v4 } from 'uuid';
 
 import {
+    CreateAuthIntegrationResult,
     CreateAuthIntegrationStatus,
     IntegrationCategory,
     IntegrationConfigKey,
@@ -3147,7 +3148,8 @@ export class AzureReposService implements Omit<
         orgUrl: string;
         token: string;
         orgName: string;
-    }): Promise<{ success: boolean; status?: CreateAuthIntegrationStatus }> {
+        newConnection?: boolean;
+    }): Promise<CreateAuthIntegrationResult> {
         try {
             const { organizationAndTeamData, token, orgUrl, orgName } = params;
 
@@ -3168,16 +3170,18 @@ export class AzureReposService implements Omit<
                 return checkRepos;
             }
 
-            const integration = await this.integrationService.findOne({
-                organization: {
-                    uuid: organizationAndTeamData.organizationId,
-                },
-                team: { uuid: organizationAndTeamData.teamId },
-                ...connectionScope(organizationAndTeamData),
-                platform: PlatformType.AZURE_REPOS,
-            });
+            const integration = params?.newConnection
+                ? undefined
+                : await this.integrationService.findOne({
+                      organization: {
+                          uuid: organizationAndTeamData.organizationId,
+                      },
+                      team: { uuid: organizationAndTeamData.teamId },
+                      ...connectionScope(organizationAndTeamData),
+                      platform: PlatformType.AZURE_REPOS,
+                  });
 
-            await this.handleIntegration(
+            const integrationId = await this.handleIntegration(
                 integration,
                 authDetails,
                 organizationAndTeamData,
@@ -3186,6 +3190,7 @@ export class AzureReposService implements Omit<
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             this.logger.error({
@@ -3293,17 +3298,21 @@ export class AzureReposService implements Omit<
         integration: IntegrationEntity | null,
         authDetails: AzureReposAuthDetail,
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<void> {
+    ): Promise<string | undefined> {
         if (!integration) {
-            await this.addAccessToken(organizationAndTeamData, authDetails);
-        } else {
-            await this.updateAuthIntegration({
+            const created = await this.addAccessToken(
                 organizationAndTeamData,
-                authIntegrationId: integration?.authIntegration?.uuid,
-                integrationId: integration?.uuid,
                 authDetails,
-            });
+            );
+            return created?.uuid;
         }
+        await this.updateAuthIntegration({
+            organizationAndTeamData,
+            authIntegrationId: integration?.authIntegration?.uuid,
+            integrationId: integration?.uuid,
+            authDetails,
+        });
+        return integration?.uuid;
     }
 
     async addAccessToken(

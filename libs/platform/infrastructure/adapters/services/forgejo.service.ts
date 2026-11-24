@@ -35,6 +35,7 @@ import {
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
 import {
+    CreateAuthIntegrationResult,
     CreateAuthIntegrationStatus,
     IntegrationCategory,
     IntegrationConfigKey,
@@ -1116,7 +1117,8 @@ export class ForgejoService implements Omit<
         token: string;
         host: string;
         organizationAndTeamData: OrganizationAndTeamData;
-    }): Promise<{ success: boolean; status: CreateAuthIntegrationStatus }> {
+        newConnection?: boolean;
+    }): Promise<CreateAuthIntegrationResult> {
         try {
             const { token, host, organizationAndTeamData } = params;
 
@@ -1136,15 +1138,24 @@ export class ForgejoService implements Omit<
             });
             if (!checkRepos.success) return checkRepos;
 
-            const integration = await this.integrationService.findOne({
-                organization: { uuid: organizationAndTeamData.organizationId },
-                team: { uuid: organizationAndTeamData.teamId },
-                ...connectionScope(organizationAndTeamData),
-                platform: PlatformType.FORGEJO,
-            });
+            const integration = params.newConnection
+                ? undefined
+                : await this.integrationService.findOne({
+                      organization: {
+                          uuid: organizationAndTeamData.organizationId,
+                      },
+                      team: { uuid: organizationAndTeamData.teamId },
+                      ...connectionScope(organizationAndTeamData),
+                      platform: PlatformType.FORGEJO,
+                  });
 
+            let integrationId = integration?.uuid;
             if (!integration) {
-                await this.addAccessToken(organizationAndTeamData, authDetails);
+                const created = await this.addAccessToken(
+                    organizationAndTeamData,
+                    authDetails,
+                );
+                integrationId = created?.uuid;
             } else {
                 await this.updateAuthIntegration({
                     organizationAndTeamData,
@@ -1157,6 +1168,7 @@ export class ForgejoService implements Omit<
             return {
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
+                integrationId,
             };
         } catch (err) {
             const errorMessage =
@@ -1175,7 +1187,7 @@ export class ForgejoService implements Omit<
 
     private async checkRepositoryPermissions(params: {
         authDetails: ForgejoAuthDetail;
-    }): Promise<{ success: boolean; status: CreateAuthIntegrationStatus }> {
+    }): Promise<CreateAuthIntegrationResult> {
         try {
             const client = this.createForgejoClient(params.authDetails);
 
@@ -1233,7 +1245,7 @@ export class ForgejoService implements Omit<
     private async addAccessToken(
         organizationAndTeamData: OrganizationAndTeamData,
         authDetails: ForgejoAuthDetail,
-    ): Promise<void> {
+    ): Promise<{ uuid: string }> {
         const integrationUuid = uuidv4();
         const authIntegrationUuid = uuidv4();
 
@@ -1254,6 +1266,8 @@ export class ForgejoService implements Omit<
             organization: { uuid: organizationAndTeamData.organizationId },
             team: { uuid: organizationAndTeamData.teamId },
         });
+
+        return { uuid: newIntegration.uuid };
     }
 
     async updateAuthIntegration(params: {
