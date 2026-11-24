@@ -1220,6 +1220,24 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         sql: `ALTER TABLE runtime.runtime_suite_runs ADD COLUMN IF NOT EXISTS baseline_sha text;
         ALTER TABLE runtime.runtime_suite_runs ADD COLUMN IF NOT EXISTS base_drift integer;`,
     },
+    {
+        version: 55,
+        name: 'the coverage maps of suite baselines',
+        // docs/runtime/e2e-suites.md section 6.1: per spec the repository files it exercised on main, which selection reads to run only
+        // the specs a PR reaches. Unique per (environment, main commit, suite digest) like a baseline, so a changed suite never reuses an
+        // old map; the store keeps the newest complete map and the one before. The worker owns it: the product does not read it.
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_suite_coverage_maps (
+            organization_id text NOT NULL,
+            environment_id  text NOT NULL,
+            main_sha        text NOT NULL,
+            suite_digest    text NOT NULL,
+            status          text NOT NULL,
+            specs           jsonb NOT NULL DEFAULT '{}'::jsonb,
+            finished_at     timestamptz NOT NULL,
+            PRIMARY KEY (environment_id, main_sha, suite_digest)
+        );
+        CREATE INDEX IF NOT EXISTS runtime_suite_coverage_maps_env_idx ON runtime.runtime_suite_coverage_maps (organization_id, environment_id, finished_at DESC);`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

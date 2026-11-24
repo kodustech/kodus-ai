@@ -57,6 +57,7 @@ export const ORGANIZATION_PURGE_TABLES: ReadonlyArray<readonly [table: string, c
     ['runtime_stops', 'organization_id'],
     ['runtime_suite_baseline_requests', 'organization_id'],
     ['runtime_suite_baselines', 'organization_id'],
+    ['runtime_suite_coverage_maps', 'organization_id'],
     ['runtime_suite_results', 'organization_id'],
     ['runtime_suite_runs', 'organization_id'],
     ['runtime_suite_shards', 'organization_id'],

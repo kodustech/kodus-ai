@@ -10,6 +10,7 @@ import type { RunDependenciesFactory } from '../dbos/run-deps.factory';
 import { AmqpSuitePublishRequester } from '../publish/amqp-suite-publish-requester';
 import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
 import { PgSuiteBaselines } from './pg-suite-baselines';
+import { PgSuiteCoverageMaps } from './pg-suite-coverage-maps';
 import type { PgSuiteRuns } from './pg-suite-runs';
 import { PgSuiteSpecStats } from './pg-suite-spec-stats';
 import { PlacementSuiteDemand } from './suite-adapters';
@@ -39,6 +40,7 @@ export function buildSuiteService(d: {
         runs: d.runs,
         stats: new PgSuiteSpecStats(d.pool),
         baselines: new PgSuiteBaselines(d.pool),
+        maps: new PgSuiteCoverageMaps(d.pool),
         templates: { hasReady: (organizationId, environmentId) => templates.hasReady(organizationId, environmentId) },
         headroom: async () => d.maxHosts,
         baselineRequests: new PgSuiteBaselineRequests(d.pool),

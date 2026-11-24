@@ -178,6 +178,11 @@ export class InMemorySuiteCoverageMaps {
         this.rows.set(k, m);
         return { stored: true };
     }
+    /** The newest complete map of the environment, as the Postgres store answers it. */
+    async newest(organizationId: string, environmentId: string) {
+        const m = [...this.rows.values()].filter((r) => r.organizationId === organizationId && r.environmentId === environmentId && r.status === 'complete').sort((a, b) => b.finishedAt.getTime() - a.finishedAt.getTime())[0];
+        return m ? { mainSha: m.mainSha, suiteDigest: m.suiteDigest, finishedAt: m.finishedAt, specs: m.specs } : undefined;
+    }
 }
 
 /** The fleet's demand rows for a suite run, as the engine sees them: which shards asked for a host, which hosts came. */

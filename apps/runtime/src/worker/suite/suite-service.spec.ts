@@ -5,7 +5,7 @@ import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import { suiteDigestOf } from '@libs/runtime/suite';
 
 import { suiteConfigOf } from './suite-config';
-import { FakeSuiteCell, FakeSuiteDemand, InMemorySuiteBaselines, InMemorySuiteRuns, InMemorySuiteSpecStats, SuiteClock, type FakeSuiteWorld } from './testing';
+import { FakeSuiteCell, FakeSuiteDemand, InMemorySuiteBaselines, InMemorySuiteCoverageMaps, InMemorySuiteRuns, InMemorySuiteSpecStats, SuiteClock, type FakeSuiteWorld } from './testing';
 import { SuiteService, type SuiteServiceDeps } from './suite-service';
 
 // The workflow body of a suite run (docs/runtime/e2e-suites.md section 11): read the recipe's suite block, list the specs on
@@ -34,7 +34,7 @@ const request = (over: Partial<RuntimeSuiteRequested> = {}): RuntimeSuiteRequest
 
 const cancelError = () => Object.assign(new Error('workflow cancelled'), { name: 'DBOSWorkflowCancelledError' });
 
-function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any } = {}) {
+function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any; maps?: InMemorySuiteCoverageMaps } = {}) {
     const published: string[] = [];
     const finishedStates: string[] = [];
     const clock = new SuiteClock();
@@ -65,7 +65,7 @@ function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuit
         templates: { hasReady: async () => over.ready ?? true },
         baselineRequests: { markStarted: async (_o, _e, sha) => void baselineStarted.push(sha) },
         clock,
-        ...(over.map ? { maps: { newest: async () => over.map } } : {}),
+        ...(over.maps ? { maps: over.maps } : over.map ? { maps: { newest: async () => over.map, record: async () => ({ stored: true }) } } : {}),
         ...(over.publisher ? { publisher: { started: async (c) => void published.push(`started:${c.mode}`), finished: async (_c, r, s) => void (published.push(`finished:${r.status}:${s.cwd}`), 'state' in r && finishedStates.push(r.state)), cancelled: async () => void published.push('cancelled') } } : {}),
     };
     return { service: new SuiteService(deps), finishedStates, clockNow: () => clock.now(), cell, runs, baselines, demand, tokens, baselineStarted, published };
@@ -213,7 +213,7 @@ describe('running a suite as a workflow', () => {
     describe('which specs run (docs section 6.1)', () => {
         const recipe = parseRecipe(RECIPE);
         const digest = suiteDigestOf(suiteConfigOf((recipe as { recipe: Parameters<typeof suiteConfigOf>[0] }).recipe)!.config, ['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts']);
-        const mapOf = (specs: Record<string, string[]>) => ({ suiteDigest: digest, commitsBehindMain: 0, ageMs: 0, specs });
+        const mapOf = (specs: Record<string, string[]>, over: { mainSha?: string; suiteDigest?: string; finishedAt?: Date } = {}) => ({ mainSha: MAIN, suiteDigest: digest, finishedAt: new Date('2026-11-23T11:00:00.000Z'), specs, ...over });
 
         it('runs the whole suite and keeps on the run why: there is no coverage map yet', async () => {
             const w = world();
@@ -251,6 +251,37 @@ describe('running a suite as a workflow', () => {
             await w.service.run(request({ changedFiles: ['src/x.ts', 'src/y.ts'], deltaFiles: ['src/x.ts'] }), passthrough);
             expect(w.cell.starts[0].specs).toEqual(['cypress/e2e/b.cy.ts', 'cypress/e2e/a.cy.ts']);
             expect((await w.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'selected', selected: 2, total: 2 });
+        });
+
+        it('a map of another commit than the one the run is judged on, or older than three days, is stale: the whole suite, with the reason', async () => {
+            const specs = { 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] };
+            const other = world({ map: mapOf(specs, { mainSha: 'd'.repeat(40) }) });
+            await other.service.run(request({ changedFiles: ['src/x.ts'] }), passthrough);
+            expect((await other.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'full', reason: 'map_stale', total: 2 });
+            const old = world({ map: mapOf(specs, { finishedAt: new Date('2026-11-19T12:00:00.000Z') }) });
+            await old.service.run(request({ changedFiles: ['src/x.ts'] }), passthrough);
+            expect((await old.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'full', reason: 'map_stale', total: 2 });
+        });
+
+        it('a spec list that changed gives another digest: the map of the old list is not reused', async () => {
+            const w = world({ main: ['cypress/e2e/a.cy.ts', 'cypress/e2e/b.cy.ts', 'cypress/e2e/c.cy.ts'], map: mapOf({ 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] }) });
+            await w.service.run(request({ changedFiles: ['src/x.ts'] }), passthrough);
+            expect((await w.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'full', reason: 'map_digest', total: 3 });
+            expect(w.cell.starts.flatMap((s) => s.specs)).toHaveLength(3);
+        });
+
+        it('a baseline collects coverage into the map store, and the next PR run selects by that map', async () => {
+            const maps = new InMemorySuiteCoverageMaps();
+            const covers = { 'cypress/e2e/a.cy.ts': { covers: ['src/x.ts'] }, 'cypress/e2e/b.cy.ts': { covers: ['src/y.ts'] } };
+            const base = world({ maps, specs: covers });
+            await base.service.run(request({ suiteRunId: 'sr-b', key: 'sr-b', mode: 'baseline', prNumber: undefined, prSha: undefined, mergeBase: undefined }), passthrough);
+            expect(base.cell.starts.map((x) => x.specs.length)).toEqual([1, 1]);
+            expect((await maps.newest(ORG, ENV))?.specs).toEqual({ 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'] });
+            const pr = world({ maps, specs: covers });
+            await pr.service.run(request({ changedFiles: ['src/y.ts'] }), passthrough);
+            expect(pr.cell.starts.flatMap((x) => x.specs)).toEqual(['cypress/e2e/b.cy.ts']);
+            expect(pr.cell.starts.some((x) => 'NODE_V8_COVERAGE' in x.env)).toBe(false);
+            expect((await pr.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'selected', selected: 1, total: 2 });
         });
 
         it('does not take itself for the previous run when a crashed step runs again', async () => {

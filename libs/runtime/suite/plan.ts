@@ -4,8 +4,8 @@ import type { SuiteSelectionReport } from './report';
 
 // The specs one suite run executes (docs/runtime/e2e-suites.md section 6.1), on the request path: a normal run selects from the
 // change set, a re-push of the same PR (`previous`) runs what was red plus what the new commits reach, and the safety net
-// returns the whole suite whenever an input is missing. Pure. The coverage map is a later step of the plan, so today `map` is
-// absent and every plan is the whole suite with the reason `map_missing`; nothing here skips a spec on a guess.
+// returns the whole suite whenever an input is missing. Pure. `map` is the newest complete coverage map of
+// the environment; absent (none recorded yet) every plan is the whole suite with the reason `map_missing`; nothing here skips a spec on a guess.
 
 export interface SuitePlanInput {
     allSpecs: readonly string[];
@@ -18,7 +18,7 @@ export interface SuitePlanInput {
     deltaFiles?: readonly string[];
     /** The earlier run of this PR, for the re-push rule. */
     previous?: PreviousSuiteRun;
-    /** The newest complete coverage map of the environment; absent until the map store exists. */
+    /** The newest complete coverage map of the environment; absent while none was recorded. */
     map?: CoverageMapInput;
     ignore?: readonly string[];
     importersOf?: SelectInput['importersOf'];

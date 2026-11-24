@@ -1,10 +1,12 @@
 import { type Claim } from '@libs/runtime/environment';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
-import { type CoverageMapInput, type PreviousSuiteRun, planSuiteRun, type SuiteSelectionReport, specListOf, suiteDigestOf } from '@libs/runtime/suite';
+import { type CoverageMapInput, MAP_MAX_COMMITS_BEHIND, type PreviousSuiteRun, planSuiteRun, type SuiteSelectionReport, specListOf, suiteDigestOf } from '@libs/runtime/suite';
 
 import type { PgSuiteBaselineRequests } from '../../shared/persistence/suite-baseline-requests';
+import type { CoverageMapRecord } from './coverage-collector';
 import type { PgSuiteBaselines } from './pg-suite-baselines';
+import type { StoredCoverageMap } from './pg-suite-coverage-maps';
 import type { PgSuiteRuns, SuiteRunState } from './pg-suite-runs';
 import type { PgSuiteSpecStats } from './pg-suite-spec-stats';
 import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
@@ -45,8 +47,11 @@ export interface SuiteServiceDeps {
     stats: Pick<PgSuiteSpecStats, 'read' | 'record'>;
     baselines?: Pick<PgSuiteBaselines, 'record' | 'findAmong'>;
     templates?: SuiteTemplates;
-    /** The environment's newest complete coverage map (a later step of the plan): absent, every PR run is the whole suite with the reason `map_missing`. */
-    maps?: { newest(organizationId: string, environmentId: string): Promise<CoverageMapInput | undefined> };
+    /**
+     * The coverage maps of baselines (`PgSuiteCoverageMaps`): a baseline records one, a PR run reads the environment's newest complete
+     * one. Absent: a baseline collects no coverage and every PR run is the whole suite with the reason `map_missing`.
+     */
+    maps?: { record(m: CoverageMapRecord): Promise<{ stored: boolean }>; newest(organizationId: string, environmentId: string): Promise<StoredCoverageMap | undefined> };
     headroom?(): Promise<number>;
     /** The baseline request a baseline run answers: marked started once the workflow holds it, so the product does not issue it again. */
     baselineRequests?: Pick<PgSuiteBaselineRequests, 'markStarted'>;
@@ -166,6 +171,7 @@ export class SuiteService {
             demand,
             clock,
             ...(this.d.baselines ? { baselines: this.d.baselines } : {}),
+            ...(this.d.maps ? { maps: this.d.maps } : {}),
             ...(this.d.templates ? { templates: this.d.templates } : {}),
             ...(this.d.headroom ? { headroom: this.d.headroom } : {}),
         });
@@ -179,6 +185,8 @@ export class SuiteService {
             suiteDigest: digest,
             selection: cmd.specs ? { mode: 'selected', selected: specs.length, total: whole.length } : plan.selection,
             order: { failedBefore: plan.failedBefore, diffCoverage: plan.diffCoverage },
+            // Only a baseline pays for coverage, and only where a map store keeps it.
+            ...(cmd.mode === 'baseline' && this.d.maps ? { coverage: true } : {}),
         });
         return { status: 'ran', suiteRunId: cmd.suiteRunId, state: out.state, replayed: out.replayed };
     }
@@ -189,7 +197,8 @@ export class SuiteService {
      */
     private async plan(cmd: RuntimeSuiteRequested, s: Started, all: readonly string[], digest: string) {
         if (cmd.mode === 'baseline' || cmd.specs) return { specs: [...all], failedBefore: [] as string[], diffCoverage: {} as Record<string, number>, selection: { mode: 'full', reason: 'baseline', total: all.length } as SuiteSelectionReport };
-        const map = await this.d.maps?.newest(cmd.organizationId, cmd.environmentId);
+        const stored = await this.d.maps?.newest(cmd.organizationId, cmd.environmentId);
+        const map = stored ? this.mapInputOf(stored, cmd) : undefined;
         const previous = await this.previousOf(cmd);
         return planSuiteRun({
             allSpecs: all,
@@ -202,6 +211,15 @@ export class SuiteService {
             ...(map ? { map } : {}),
             ignore: s.suite.ignore,
         });
+    }
+
+    /**
+     * The stored map as selection reads it (D12). How far behind main it is comes from the history the run is judged on: the map's
+     * commit is main's head (the template's sha) or the merge base; any other commit cannot be placed, and an unplaced map is stale.
+     */
+    private mapInputOf(m: StoredCoverageMap, cmd: RuntimeSuiteRequested): CoverageMapInput {
+        const at = mainHistoryOf(cmd).indexOf(m.mainSha);
+        return { suiteDigest: m.suiteDigest, commitsBehindMain: at >= 0 ? at : MAP_MAX_COMMITS_BEHIND + 1, ageMs: Math.max(0, this.d.clock.now() - m.finishedAt.getTime()), specs: m.specs };
     }
 
     /** The PR's earlier finished run, as the re-push rule reads it: what it ran and what was red after classification. */
