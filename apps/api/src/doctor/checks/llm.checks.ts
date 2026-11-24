@@ -3,7 +3,7 @@ import {
     isEndpointSuffixWarning,
     isForeignHostWarning,
 } from '@libs/llm/env-declared-provider';
-import { LLM_TASK } from '@libs/llm/llm-tasks';
+import { LLM_TASK, type LlmTask } from '@libs/llm/llm-tasks';
 import { LLM } from '@libs/llm/llm';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
@@ -97,9 +97,9 @@ function envModelResults(
             isEndpointSuffixWarning(warning)
                 ? {
                       check: 'llm.env_base_url',
-                      status: 'warn',
+                      status: 'info',
                       title: warning,
-                      impact: 'As written, the URL would fail on every call; Kodus calls the corrected one instead.',
+                      impact: 'As written, the URL would fail on every call; Kodus calls the corrected one instead, so reviews are not affected.',
                       fix: 'Remove the endpoint path from that variable so it ends at the API root (usually /v1).',
                   }
                 : isForeignHostWarning(warning)
@@ -137,27 +137,135 @@ function envModelResults(
     return results;
 }
 
+/** Tasks a review routes besides codeReview, and what their failure costs. */
+export const REVIEW_SIDE_TASKS: Array<{
+    task: LlmTask;
+    what: string;
+    impact: string;
+}> = [
+    {
+        task: LLM_TASK.kodyRulesReview,
+        what: 'Kody Rules checks',
+        impact: 'Kody Rules are not checked on pull requests.',
+    },
+    {
+        task: LLM_TASK.prSummary,
+        what: 'pull request summaries',
+        impact: 'Pull request summaries are not written.',
+    },
+    {
+        task: LLM_TASK.riskAssessment,
+        what: 'the pre-review risk assessment',
+        impact: 'The risk assessment made before each review fails.',
+    },
+    {
+        task: LLM_TASK.codeReviewHeavy,
+        what: 'heavy reviews',
+        impact: 'Heavy reviews fail.',
+    },
+    {
+        task: LLM_TASK.customAgent,
+        what: 'custom agents',
+        impact: 'Custom agents do not run.',
+    },
+];
+
+type ProbeOutcome =
+    | { kind: 'ok' }
+    /** The primary failed; the fallback the runtime fails over to answered. */
+    | { kind: 'fallback'; error: string; fallback: string }
+    | { kind: 'failed'; error: string; fallback?: string }
+    /** Not started: the budget could not give it its full timeout. */
+    | { kind: 'untested' };
+
 /**
  * Which model each org's reviews actually run on, a real completion on it,
  * and whether it is big enough. Mirrors the review path: BYOK routes via
- * resolveTaskSlot (codeReview task); no slot means the env/managed model.
+ * resolveTaskSlot (codeReview, and the side tasks of REVIEW_SIDE_TASKS); no
+ * slot means the env/managed model. A primary that fails is retried on the
+ * fallback the runtime would fail over to (model-failover.ts).
  */
 export function llmCheck(deps: LlmDeps): DoctorCheck {
     return {
         id: 'llm',
+        blocking: true,
         async run(ctx: DoctorContext): Promise<DoctorResult[]> {
             const results: DoctorResult[] = [];
             const envDescriptor = describeEnvLLMConfig(ctx.env);
             const envModel = envDescriptor.configured
                 ? envDescriptor.model
                 : undefined;
-            const tested = new Map<string, DoctorResult | null>();
+            const outcomes = new Map<string, ProbeOutcome>();
+            /** One result per probed model, shared by the orgs that use it. */
+            const shared = new Map<string, DoctorResult>();
             const reported = new Set<DoctorResult>();
             /** Orgs whose reviews run on the server model, not their own. */
             const envOrgs: string[] = [];
             let usesEnvModel = false;
             const now = deps.now ?? Date.now;
             const deadline = now() + LLM_BUDGET_MS;
+
+            const keyOf = (
+                slot: NormalizedModel | undefined,
+                organizationId: string,
+            ) =>
+                slot
+                    ? `byok:${slot.provider}:${slot.model}:${slot.baseURL ?? ''}:${organizationId}`
+                    : 'env';
+
+            // A probe gets its full timeout or does not start: cutting it
+            // short would fail a slow but working model as "did not answer"
+            // and blame its key.
+            const probe = async (
+                slot: NormalizedModel | undefined,
+                organizationId: string,
+            ): Promise<ProbeOutcome> => {
+                const key = keyOf(slot, organizationId);
+                const known = outcomes.get(key);
+                if (known) {
+                    return known;
+                }
+                const call = (target?: NormalizedModel) =>
+                    deps.complete({
+                        slot: target,
+                        organizationId: organizationId || undefined,
+                        timeoutMs: PROBE_TIMEOUT_MS,
+                    });
+                let outcome: ProbeOutcome;
+                if (deadline - now() < PROBE_TIMEOUT_MS) {
+                    outcome = { kind: 'untested' };
+                } else {
+                    try {
+                        await call(slot);
+                        outcome = { kind: 'ok' };
+                    } catch (error) {
+                        const fallback = slot?.fallback;
+                        if (!fallback || deadline - now() < PROBE_TIMEOUT_MS) {
+                            outcome = {
+                                kind: 'failed',
+                                error: errorText(error),
+                            };
+                        } else {
+                            try {
+                                await call(fallback);
+                                outcome = {
+                                    kind: 'fallback',
+                                    error: errorText(error),
+                                    fallback: modelLabel(fallback),
+                                };
+                            } catch {
+                                outcome = {
+                                    kind: 'failed',
+                                    error: errorText(error),
+                                    fallback: modelLabel(fallback),
+                                };
+                            }
+                        }
+                    }
+                }
+                outcomes.set(key, outcome);
+                return outcome;
+            };
 
             // Only organizations that review: a sign-up that created its own
             // empty organization would otherwise fail the probe for a model no
@@ -183,19 +291,30 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                     LLM_TASK.codeReview,
                 );
 
-                if (config && !slot) {
+                // A named review model with no usable credential blocks every
+                // review outside a trial, which self-hosted never is
+                // (permissionValidation.service.ts, BYOK integrity).
+                if (config && !slot && verdict?.modelId) {
                     const chosen = config.models?.find(
-                        (m) => m.id === verdict?.modelId,
+                        (m) => m.id === verdict.modelId,
                     );
                     results.push({
-                        check: 'llm.byok_fallback',
-                        status: 'warn',
+                        check: 'llm.byok_credential',
+                        status: 'fail',
                         scope,
-                        title: verdict?.modelId
-                            ? `The model chosen for reviews (${chosen?.model ?? verdict.modelId}) has an incomplete credential, so reviews use the server default model instead.`
-                            : 'Your own model settings could not be applied, so reviews use the server default model instead.',
-                        impact: 'Reviews run on a different model than the one configured, with different cost and quality.',
+                        title: `The model chosen for reviews (${chosen?.model ?? verdict.modelId}) has an incomplete credential.`,
+                        impact: 'Every review is skipped ("BYOK Configuration Required"): Kodus does not fall back to the server model for it.',
                         fix: 'Open the BYOK page (user menu > BYOK), re-enter the API key of the review model and save; or remove the custom settings to use the server model on purpose.',
+                    });
+                    continue;
+                }
+                if (config && !slot) {
+                    results.push({
+                        check: 'llm.byok_fallback',
+                        status: 'info',
+                        scope,
+                        title: 'Your BYOK settings route no model to reviews, so reviews use the server default model.',
+                        fix: 'Fine if intended; otherwise choose the review model in the BYOK page (user menu > BYOK).',
                     });
                 }
 
@@ -223,62 +342,62 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 }
                 if (!slot) {
                     usesEnvModel = true;
+                    if (scope) {
+                        envOrgs.push(scope);
+                    }
                 }
 
                 const label = modelLabel(slot, envModel);
-                const key = slot
-                    ? `byok:${slot.provider}:${slot.model}:${slot.baseURL ?? ''}:${organizationId}`
-                    : 'env';
-                if (!slot && scope) {
-                    envOrgs.push(scope);
-                }
-                const remaining = deadline - now();
-                // A probe gets its full timeout or does not start: cutting it
-                // short would fail a slow but working model as "did not
-                // answer" and blame its key.
-                if (!tested.has(key) && remaining < PROBE_TIMEOUT_MS) {
-                    tested.set(key, {
-                        check: 'llm.completion',
-                        status: 'unknown',
-                        scope: slot ? scope : undefined,
-                        title: `Did not test the review model (${label}): the doctor ran out of time.`,
-                        fix: 'Run the doctor again; the models of the other organizations were slow to answer.',
-                    });
-                }
-                if (!tested.has(key)) {
-                    try {
-                        await deps.complete({
-                            slot,
-                            organizationId: organizationId || undefined,
-                            timeoutMs: PROBE_TIMEOUT_MS,
-                        });
-                        tested.set(key, null);
-                    } catch (error) {
-                        tested.set(key, {
-                            check: 'llm.completion',
-                            status: 'fail',
-                            scope: slot ? scope : undefined,
-                            title: `The review model (${label}) did not answer a test request.`,
-                            impact: 'Reviews fail when they call the model.',
-                            fix: slot
-                                ? `Check the API key, model name and base URL in the BYOK page (user menu > BYOK). Provider said: ${errorText(error)}`
-                                : `Check API_LLM_PROVIDER, API_LLM_PROVIDER_MODEL, API_LLM_API_KEY and API_LLM_BASE_URL. Provider said: ${errorText(error)}`,
-                        });
-                    }
-                }
-                const failure = tested.get(key);
-                if (failure) {
-                    if (!reported.has(failure)) {
-                        reported.add(failure);
-                        results.push(failure);
-                    }
-                } else {
+                const key = keyOf(slot, organizationId);
+                const outcome = await probe(slot, organizationId);
+                const where = slot
+                    ? 'Check the API key, model name and base URL in the BYOK page (user menu > BYOK).'
+                    : 'Check API_LLM_PROVIDER, API_LLM_PROVIDER_MODEL, API_LLM_API_KEY and API_LLM_BASE_URL.';
+                if (outcome.kind === 'ok') {
                     results.push({
                         check: 'llm.completion',
                         status: 'ok',
                         scope,
                         title: `The review model (${label}) answered a test request.`,
                     });
+                } else {
+                    let result = shared.get(key);
+                    if (!result) {
+                        result =
+                            outcome.kind === 'untested'
+                                ? {
+                                      check: 'llm.completion',
+                                      status: 'unknown',
+                                      scope: slot ? scope : undefined,
+                                      title: `Did not test the review model (${label}): the doctor ran out of time.`,
+                                      fix: 'Run the doctor again; the models of the other organizations were slow to answer.',
+                                      blocking: true,
+                                  }
+                                : outcome.kind === 'fallback'
+                                  ? {
+                                        check: 'llm.completion',
+                                        status: 'warn',
+                                        scope: slot ? scope : undefined,
+                                        title: `The review model (${label}) did not answer a test request; its fallback (${outcome.fallback}) did.`,
+                                        impact: 'Reviews run on the fallback model, with different cost and quality.',
+                                        fix: `${where} Provider said: ${outcome.error}`,
+                                    }
+                                  : {
+                                        check: 'llm.completion',
+                                        status: 'fail',
+                                        scope: slot ? scope : undefined,
+                                        title: outcome.fallback
+                                            ? `The review model (${label}) and its fallback (${outcome.fallback}) did not answer a test request.`
+                                            : `The review model (${label}) did not answer a test request.`,
+                                        impact: 'Reviews fail when they call the model.',
+                                        fix: `${where} Provider said: ${outcome.error}`,
+                                    };
+                        shared.set(key, result);
+                    }
+                    if (!reported.has(result)) {
+                        reported.add(result);
+                        results.push(result);
+                    }
                 }
 
                 const window = resolveContextWindow({
@@ -295,15 +414,76 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                         fix: `Use a model with a context window of ${MIN_CONTEXT_WINDOW.toLocaleString('en-US')} tokens or more, or set its real limit in the BYOK page (user menu > BYOK) if it is larger.`,
                     });
                 }
+
+                // Without BYOK every task runs on the model just probed.
+                if (!config) {
+                    continue;
+                }
+                for (const side of REVIEW_SIDE_TASKS) {
+                    const routed = resolveTaskSlot(config, side.task);
+                    if (!routed.slot) {
+                        if (routed.verdict?.modelId) {
+                            const chosen = config.models?.find(
+                                (m) => m.id === routed.verdict?.modelId,
+                            );
+                            results.push({
+                                check: 'llm.task_model',
+                                status: 'warn',
+                                scope,
+                                title: `The model chosen for ${side.what} (${chosen?.model ?? routed.verdict.modelId}) has an incomplete credential.`,
+                                impact: envModel
+                                    ? `${side.what[0].toUpperCase()}${side.what.slice(1)} run on the server default model instead.`
+                                    : side.impact,
+                                fix: 'Open the BYOK page (user menu > BYOK), re-enter the API key of that model and save.',
+                            });
+                        }
+                        continue;
+                    }
+                    if (keyOf(routed.slot, organizationId) === key) {
+                        continue;
+                    }
+                    const sideOutcome = await probe(
+                        routed.slot,
+                        organizationId,
+                    );
+                    const sideLabel = modelLabel(routed.slot);
+                    if (sideOutcome.kind === 'failed') {
+                        results.push({
+                            check: 'llm.task_model',
+                            status: 'warn',
+                            scope,
+                            title: `The model routed to ${side.what} (${sideLabel}) did not answer a test request.`,
+                            impact: side.impact,
+                            fix: `Check the API key, model name and base URL of that model in the BYOK page (user menu > BYOK). Provider said: ${sideOutcome.error}`,
+                        });
+                    } else if (sideOutcome.kind === 'fallback') {
+                        results.push({
+                            check: 'llm.task_model',
+                            status: 'warn',
+                            scope,
+                            title: `The model routed to ${side.what} (${sideLabel}) did not answer a test request; its fallback (${sideOutcome.fallback}) did.`,
+                            impact: `${side.what[0].toUpperCase()}${side.what.slice(1)} run on the fallback model.`,
+                            fix: `Check the API key, model name and base URL of that model in the BYOK page (user menu > BYOK). Provider said: ${sideOutcome.error}`,
+                        });
+                    } else if (sideOutcome.kind === 'untested') {
+                        results.push({
+                            check: 'llm.task_model',
+                            status: 'unknown',
+                            scope,
+                            title: `Did not test the model routed to ${side.what} (${sideLabel}): the doctor ran out of time.`,
+                            fix: 'Run the doctor again.',
+                        });
+                    }
+                }
             }
 
             // The server model is probed once for every org that uses it, so its
             // failure has no single owner. Name them: an admin whose own org runs
             // on BYOK would otherwise read "reviews fail" about reviews that run
             // (#2021).
-            const envFailure = tested.get('env');
-            if (envFailure && envOrgs.length) {
-                envFailure.scope = envOrgs.join(', ');
+            const envResult = shared.get('env');
+            if (envResult && envOrgs.length) {
+                envResult.scope = envOrgs.join(', ');
             }
 
             if (usesEnvModel) {

@@ -65,9 +65,25 @@ interface Loss {
     title(count: number, total: number): string;
     impact: string;
     fix: string;
+    /** A quality note the admin cannot act on: never turns the verdict DEGRADED. */
+    infoOnly?: true;
 }
 
 const kind = (k: string) => (run: ReviewRun) => run.warningKinds.includes(k);
+const anyKind = (kinds: string[]) => (run: ReviewRun) =>
+    run.warningKinds.some((k) => kinds.includes(k));
+
+const KNOWLEDGE_KINDS = [
+    'SKILL_NOT_FOUND',
+    'SKILL_INVALID',
+    'DOC_NOT_FOUND',
+    'KNOWLEDGE_UNAVAILABLE',
+    'KNOWLEDGE_TRUNCATED',
+    'SKILL_COMPATIBILITY',
+];
+const AGENT_TOOL_KINDS = ['CLI_INSTALL_FAILED', 'AST_GREP_UNAVAILABLE'];
+/** Recorded by design, nothing was lost (review-warnings.ts). */
+const BENIGN_KINDS = new Set(['SKILL_CHANGED_IN_PR']);
 
 const LOSSES: Record<string, Loss> = {
     'reviews.sandbox': {
@@ -135,7 +151,275 @@ const LOSSES: Record<string, Loss> = {
         impact: 'Part of those pull requests was not reviewed.',
         fix: 'Check the review timeline of those pull requests in the dashboard; a slow model or a very large pull request causes it.',
     },
+    'reviews.verify': {
+        matches: kind('VERIFY_UNAVAILABLE'),
+        title: (n, t) =>
+            `${n} of ${t} reviews discarded findings because their verification failed.`,
+        impact: 'Those findings were never posted.',
+        fix: 'Verification calls the review model: check the model lines above, then the worker logs for "verify".',
+    },
+    'reviews.knowledge': {
+        matches: anyKind(KNOWLEDGE_KINDS),
+        title: (n, t) =>
+            `${n} of ${t} reviews ran without some of the skills or docs linked to your custom agents.`,
+        impact: 'Those agents reviewed without the guidance you linked.',
+        fix: "Check that each linked skill and doc exists on the pull request's target branch (Settings > Custom agents); the review timeline names the missing ones.",
+    },
+    'reviews.agent_tools': {
+        matches: anyKind(AGENT_TOOL_KINDS),
+        title: (n, t) =>
+            `${n} of ${t} reviews ran a custom agent without one of its tools (a CLI or ast-grep).`,
+        impact: 'Those agents could not run the checks that need the tool.',
+        fix: 'Check the worker logs for "CLI install"; the sandbox needs network access to install a CLI.',
+    },
+    'reviews.cross_repo': {
+        matches: kind('CROSS_REPO_UNAVAILABLE'),
+        title: (n, t) =>
+            `${n} of ${t} reviews could not read the linked repositories.`,
+        impact: 'Those reviews stayed single-repository.',
+        fix: 'Linked repositories are read from the checkout: see the sandbox lines.',
+    },
+    'reviews.config_file': {
+        matches: kind('CONFIG_FILE_KEY_IGNORED'),
+        title: (n, t) =>
+            `${n} of ${t} reviews ignored keys of kodus-config.yml that are set only in the app (customAgents, knowledge).`,
+        impact: 'What those keys say did not apply.',
+        fix: 'Configure custom agents and their knowledge in the app, and remove those keys from kodus-config.yml.',
+        infoOnly: true,
+    },
+    'reviews.fix_downgraded': {
+        matches: kind('BAD_FIX_DOWNGRADED'),
+        title: (n, t) =>
+            `${n} of ${t} reviews posted a finding without its code fix, because the fix was unusable.`,
+        impact: 'Those findings came as plain comments.',
+        fix: 'Nothing to configure; a stronger review model produces fewer of them.',
+        infoOnly: true,
+    },
 };
+
+/** Kinds no line above explains: still a loss, never a "ran in full". */
+const MAPPED_KINDS = new Set([
+    'SANDBOX_UNAVAILABLE',
+    'CALLGRAPH_FAILED',
+    'PROVIDER_FALLBACK',
+    ...CONTEXT_WINDOW_KINDS,
+    'LOW_SIGNAL_FILES_DROPPED',
+    'KODY_RULES_PARTIAL',
+    'RULE_CONTEXT_UNAVAILABLE',
+    'SUGGESTIONS_DROPPED_PATH_MISMATCH',
+    'VERIFY_UNAVAILABLE',
+    ...KNOWLEDGE_KINDS,
+    ...AGENT_TOOL_KINDS,
+    'CROSS_REPO_UNAVAILABLE',
+    'CONFIG_FILE_KEY_IGNORED',
+    'BAD_FIX_DOWNGRADED',
+    ...BENIGN_KINDS,
+]);
+
+function unmappedKinds(run: ReviewRun): string[] {
+    return run.warningKinds.filter((k) => !MAPPED_KINDS.has(k));
+}
+
+type SkipKind = 'settings' | 'seat' | 'failure' | 'other';
+
+interface SkipReason {
+    kind: SkipKind;
+    label: string;
+    fix?: string;
+}
+
+/**
+ * The reasons a review is skipped, by the start of the message the pipeline
+ * records (PipelineReasons, AutomationMessage). Only `settings` is the team's
+ * choice; `failure` is a review that should have run.
+ */
+export const SKIP_REASONS: Array<{ prefix: string } & SkipReason> = [
+    {
+        prefix: 'Automated Review is disabled',
+        kind: 'settings',
+        label: 'automatic review off',
+    },
+    { prefix: 'Title Ignored', kind: 'settings', label: 'ignored title' },
+    { prefix: 'Draft PR Skipped', kind: 'settings', label: 'draft' },
+    {
+        prefix: 'Branch Mismatch',
+        kind: 'settings',
+        label: 'target branch not reviewed',
+    },
+    {
+        prefix: 'All Files Ignored',
+        kind: 'settings',
+        label: 'every file ignored',
+    },
+    {
+        prefix: 'No files remain after applying ignore patterns',
+        kind: 'settings',
+        label: 'every file ignored',
+    },
+    { prefix: 'Too Many Files', kind: 'settings', label: 'too many files' },
+    { prefix: 'No New Commits', kind: 'settings', label: 'no new commits' },
+    {
+        prefix: 'No new commits since the last run',
+        kind: 'settings',
+        label: 'no new commits',
+    },
+    {
+        prefix: 'Only Merge Commits',
+        kind: 'settings',
+        label: 'only merge commits',
+    },
+    {
+        prefix: 'Only merge commits since the last run',
+        kind: 'settings',
+        label: 'only merge commits',
+    },
+    {
+        prefix: 'Rebase Without Changes',
+        kind: 'settings',
+        label: 'rebase without changes',
+    },
+    { prefix: 'PR is Closed', kind: 'settings', label: 'closed' },
+    { prefix: 'PR is Locked', kind: 'settings', label: 'locked' },
+    {
+        prefix: 'User is ignored by configuration',
+        kind: 'settings',
+        label: 'ignored author',
+    },
+    {
+        prefix: 'Manual mode requires',
+        kind: 'settings',
+        label: 'manual cadence',
+    },
+    { prefix: 'PR is paused', kind: 'settings', label: 'paused' },
+    {
+        prefix: 'Code reviews are disabled for the',
+        kind: 'settings',
+        label: 'configuration repository',
+    },
+    {
+        prefix: 'No custom agent matches',
+        kind: 'settings',
+        label: 'unknown agent asked for',
+    },
+    // license.seats reports these with their own fix.
+    {
+        prefix: 'User Not Licensed',
+        kind: 'seat',
+        label: 'author without a seat',
+    },
+    {
+        prefix: 'Provider Rate Limited',
+        kind: 'failure',
+        label: 'the Git provider rate-limited Kodus',
+        fix: 'Give Kodus a token of its own (or a GitHub App, which has its own quota), then ask again with @kody start-review.',
+    },
+    {
+        prefix: 'The Git provider rate-limited the request',
+        kind: 'failure',
+        label: 'the Git provider rate-limited Kodus',
+        fix: 'Give Kodus a token of its own (or a GitHub App, which has its own quota), then ask again with @kody start-review.',
+    },
+    {
+        prefix: 'Unable to load or resolve the review configuration',
+        kind: 'failure',
+        label: 'the review configuration could not be read',
+        fix: 'Check the kodus-config.yml of the repository (a syntax error is the usual cause), then the worker logs for "ResolveConfigStage".',
+    },
+    {
+        prefix: 'Error during configuration validation',
+        kind: 'failure',
+        label: 'the review configuration failed to validate',
+        fix: 'Check the worker logs for "ValidateConfigStage".',
+    },
+    {
+        prefix: 'No code-review configuration found',
+        kind: 'failure',
+        label: 'no review configuration was loaded',
+        fix: 'Open Settings > Code Review and save once, then check the worker logs.',
+    },
+    {
+        prefix: 'Changes Unreadable',
+        kind: 'failure',
+        label: "the Git provider's diff could not be read",
+        fix: 'Ask again with @kody start-review; if it repeats, check that the token can read the repository.',
+    },
+    {
+        prefix: 'Invalid Context Data',
+        kind: 'failure',
+        label: 'pull request data was missing',
+        fix: 'Check the worker logs for "ValidatePrerequisitesStage".',
+    },
+    {
+        prefix: 'Prerequisites validation failed',
+        kind: 'failure',
+        label: 'the prerequisites check failed',
+        fix: 'Check the worker logs for "ValidatePrerequisitesStage".',
+    },
+    {
+        prefix: 'BYOK Configuration Required',
+        kind: 'failure',
+        label: 'the BYOK configuration is incomplete',
+        fix: 'See the model lines above (user menu > BYOK).',
+    },
+    {
+        prefix: 'No Active Subscription',
+        kind: 'failure',
+        label: 'no valid license',
+        fix: 'See the edition line (KODUS_LICENSE_KEY).',
+    },
+    {
+        prefix: 'Plan Limit Exceeded',
+        kind: 'failure',
+        label: "the license's limit was reached",
+        fix: 'See the edition and seat lines.',
+    },
+    {
+        prefix: 'Subscription Check Unavailable',
+        kind: 'failure',
+        label: 'the license could not be checked',
+        fix: 'Check the api logs for "license", then ask again with @kody start-review.',
+    },
+    {
+        prefix: 'Custom agents are in beta',
+        kind: 'failure',
+        label: 'custom agents need BETA_FEATURES=true',
+        fix: 'Set BETA_FEATURES=true on api and worker and restart them.',
+    },
+    {
+        prefix: "Custom agents are not on this organization's plan",
+        kind: 'failure',
+        label: 'custom agents are not on the license',
+        fix: 'Custom agents need a Teams or Enterprise license.',
+    },
+    { prefix: 'No Files Changed', kind: 'other', label: 'no changed files' },
+    {
+        prefix: 'No changed files in this pull request',
+        kind: 'other',
+        label: 'no changed files',
+    },
+];
+
+export function skipReasonOf(message?: string | null): SkipReason {
+    const text = (message ?? '').trim();
+    const known = SKIP_REASONS.find((r) => text.startsWith(r.prefix));
+    if (known) {
+        return { kind: known.kind, label: known.label, fix: known.fix };
+    }
+    return {
+        kind: 'other',
+        label: text.split(' — ')[0].slice(0, 80) || 'no reason recorded',
+    };
+}
+
+function breakdown(labels: string[]): string {
+    const counts = new Map<string, number>();
+    for (const l of labels) counts.set(l, (counts.get(l) ?? 0) + 1);
+    return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([l, n]) => `${n} ${l}`)
+        .join(', ');
+}
 
 function mostCommon(
     values: Array<string | null | undefined>,
@@ -153,63 +437,135 @@ export function isDegraded(count: number, total: number): boolean {
 
 /**
  * Whether the reviews of the last RECENT_DAYS ran in full (#2066). Read from
- * what each run recorded; it never judges whether a finding was right.
+ * what each run recorded; it never judges whether a finding was right. A run
+ * skipped for a reason that is not a setting (rate limit, broken config,
+ * BYOK) is a review that did not happen, not "skipped by your settings".
  */
 export function recentReviewsCheck(deps: ReviewRunsDeps): DoctorCheck {
     return {
         id: 'reviews.recent',
+        blocking: true,
         async run(ctx: DoctorContext): Promise<DoctorResult[]> {
             const results: DoctorResult[] = [];
 
             for (const team of reviewableTeams(ctx)) {
                 const scope = teamScope(team);
                 const runs = await deps.runs(team);
+                const skips = runs
+                    .filter((r) => r.status === 'skipped')
+                    .map((r) => ({
+                        run: r,
+                        reason: skipReasonOf(r.errorMessage),
+                    }));
+                const onPurpose = skips.filter(
+                    (s) => s.reason.kind === 'settings',
+                );
+                const failedSkips = skips.filter(
+                    (s) => s.reason.kind === 'failure',
+                );
+                const unclear = skips.filter((s) => s.reason.kind === 'other');
                 const reviewed = runs.filter((r) => r.status !== 'skipped');
+                const errors = reviewed.filter((r) => r.status === 'error');
+                /** Pull requests a review was owed to (seat skips: license.seats). */
+                const attempted = reviewed.length + failedSkips.length;
 
-                if (!reviewed.length) {
+                if (onPurpose.length) {
+                    results.push({
+                        check: 'reviews.skipped',
+                        status: 'skip',
+                        scope,
+                        title: `${onPurpose.length} pull request(s) in the last ${RECENT_DAYS} days were skipped by your settings (${breakdown(onPurpose.map((s) => s.reason.label))}).`,
+                        fix: 'See the "configured to skip" lines; change them in Settings > Code Review if this is not intended.',
+                    });
+                }
+                if (unclear.length) {
+                    results.push({
+                        check: 'reviews.skipped_other',
+                        status: 'info',
+                        scope,
+                        title: `${unclear.length} pull request(s) in the last ${RECENT_DAYS} days were skipped (${breakdown(unclear.map((s) => s.reason.label))}).`,
+                        fix: 'Expected for pull requests that change nothing. If they did change code, check that the Git token can read them (see the Git lines).',
+                    });
+                }
+
+                if (!attempted) {
                     results.push({
                         check: 'reviews.none',
                         status: 'info',
                         scope,
-                        title: `No pull request was reviewed in the last ${RECENT_DAYS} days${runs.length ? ` (${runs.length} skipped by your settings)` : ''}.`,
-                        fix: runs.length
-                            ? 'See the "skipped by your settings" lines below.'
+                        title: `No pull request was reviewed in the last ${RECENT_DAYS} days.`,
+                        fix: skips.length
+                            ? 'Every pull request of the window was skipped: see the skip lines.'
                             : 'If pull requests were opened, check the webhook lines above.',
                     });
                     continue;
                 }
 
-                const failed = reviewed.filter((r) => r.status === 'error');
-                const topError = mostCommon(failed.map((r) => r.errorMessage));
-                if (
-                    failed.length === reviewed.length &&
-                    reviewed.length >= MIN_DEGRADED_RUNS
-                ) {
+                const failures = errors.length + failedSkips.length;
+                const topCause = () => {
+                    const causes = [
+                        ...errors.map((r) => ({
+                            label: r.errorMessage || 'no error recorded',
+                            fix: 'Check the worker logs.',
+                        })),
+                        ...failedSkips.map((s) => ({
+                            label: `not run: ${s.reason.label}`,
+                            fix: s.reason.fix ?? 'Check the worker logs.',
+                        })),
+                    ];
+                    const top = mostCommon(causes.map((c) => c.label));
+                    return causes.find((c) => c.label === top)!;
+                };
+                if (failures === attempted && attempted >= MIN_DEGRADED_RUNS) {
+                    const cause = topCause();
                     results.push({
                         check: 'reviews.failed',
                         status: 'fail',
                         scope,
-                        title: `Every review in the last ${RECENT_DAYS} days failed (${failed.length}).`,
+                        title: `No pull request got a review in the last ${RECENT_DAYS} days: all ${attempted} attempts failed.`,
                         impact: "No pull request gets Kody's comments.",
-                        fix: `Most common error: ${topError ?? 'none recorded'}. Check the worker logs.`,
+                        fix: `Most common cause: ${cause.label}. ${cause.fix}`,
                     });
                     continue;
                 }
-                if (failed.length) {
+                if (errors.length) {
+                    const topError = mostCommon(
+                        errors.map((r) => r.errorMessage),
+                    );
                     results.push({
                         check: 'reviews.failed',
-                        status: isDegraded(failed.length, reviewed.length)
+                        status: isDegraded(errors.length, attempted)
                             ? 'warn'
                             : 'info',
                         scope,
-                        title: `${failed.length} of ${reviewed.length} reviews in the last ${RECENT_DAYS} days failed.`,
+                        title: `${errors.length} of ${attempted} reviews in the last ${RECENT_DAYS} days failed.`,
                         impact: 'Those pull requests got no review.',
                         fix: `Most common error: ${topError ?? 'none recorded'}. Check the worker logs.`,
+                    });
+                }
+                if (failedSkips.length) {
+                    const top = mostCommon(
+                        failedSkips.map((s) => s.reason.label),
+                    );
+                    const reason = failedSkips.find(
+                        (s) => s.reason.label === top,
+                    )!.reason;
+                    results.push({
+                        check: 'reviews.not_run',
+                        status: isDegraded(failedSkips.length, attempted)
+                            ? 'warn'
+                            : 'info',
+                        scope,
+                        title: `${failedSkips.length} of ${attempted} pull requests in the last ${RECENT_DAYS} days were not reviewed (${breakdown(failedSkips.map((s) => s.reason.label))}).`,
+                        impact: 'Those pull requests got no review, although nothing in the settings asked for that.',
+                        fix: reason.fix ?? 'Check the worker logs.',
                     });
                 }
 
                 const completed = reviewed.filter((r) => r.status !== 'error');
                 const lossCounts = new Map<string, number>();
+                const unmapped = new Set<string>();
+                let unmappedRuns = 0;
                 for (const run of completed) {
                     for (const [check, loss] of Object.entries(LOSSES)) {
                         if (loss.matches(run)) {
@@ -219,22 +575,38 @@ export function recentReviewsCheck(deps: ReviewRunsDeps): DoctorCheck {
                             );
                         }
                     }
+                    const other = unmappedKinds(run);
+                    if (other.length) {
+                        unmappedRuns += 1;
+                        other.forEach((k) => unmapped.add(k));
+                    }
                 }
                 for (const [check, loss] of Object.entries(LOSSES)) {
                     const count = lossCounts.get(check) ?? 0;
                     if (!count) continue;
                     results.push({
                         check,
-                        status: isDegraded(count, completed.length)
-                            ? 'warn'
-                            : 'info',
+                        status:
+                            !loss.infoOnly &&
+                            isDegraded(count, completed.length)
+                                ? 'warn'
+                                : 'info',
                         scope,
                         title: loss.title(count, completed.length),
                         impact: loss.impact,
                         fix: loss.fix,
                     });
                 }
-                if (!lossCounts.size && completed.length) {
+                if (unmappedRuns) {
+                    results.push({
+                        check: 'reviews.other_losses',
+                        status: 'info',
+                        scope,
+                        title: `${unmappedRuns} of ${completed.length} reviews recorded other losses (${[...unmapped].slice(0, 4).join(', ')}).`,
+                        fix: 'Open the review timeline of those pull requests in the dashboard for the details.',
+                    });
+                }
+                if (!lossCounts.size && !unmappedRuns && completed.length) {
                     results.push({
                         check: 'reviews.full',
                         status: 'ok',
@@ -260,8 +632,27 @@ export function recentSuggestionsCheck(deps: SuggestionsDeps): DoctorCheck {
                 organizations.set(team.organizationId, team.organizationName);
             }
 
-            for (const [organizationId, organizationName] of organizations) {
-                const s = await deps.suggestions(organizationId);
+            // Each org costs up to two Mongo aggregations (30s cap each): run
+            // them together so a few slow orgs do not outlive the check.
+            const collected = await Promise.all(
+                [...organizations].map(async ([organizationId, name]) => {
+                    const collectReactions =
+                        !!ctx.env.API_CRON_SYNC_CODE_REVIEW_REACTIONS;
+                    const [suggestions, feedback] = await Promise.all([
+                        deps.suggestions(organizationId),
+                        collectReactions
+                            ? deps.feedback(organizationId)
+                            : Promise.resolve(null),
+                    ]);
+                    return { name, suggestions, feedback };
+                }),
+            );
+
+            for (const {
+                name: organizationName,
+                suggestions: s,
+                feedback,
+            } of collected) {
                 const attempted = s.sent + s.deliveryFailed;
                 if (s.deliveryFailed) {
                     results.push({
@@ -296,7 +687,7 @@ export function recentSuggestionsCheck(deps: SuggestionsDeps): DoctorCheck {
                     // The cron stores each comment's running total, so this is the
                     // total of the comments it refreshed, not the reactions given
                     // in the window.
-                    const f = await deps.feedback(organizationId);
+                    const f = feedback!;
                     results.push({
                         check: 'feedback.reactions',
                         status: 'info',

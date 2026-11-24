@@ -26,6 +26,7 @@ const ORDER = ['fail', 'warn', 'unknown', 'info', 'skip', 'ok'];
 const MARK = { fail: '✘', warn: '!', unknown: '?', info: 'i', skip: '-', ok: '✔' };
 const VERDICT = {
     NOT_RUNNING: 'Reviews: NOT RUNNING',
+    UNVERIFIED: 'Reviews: COULD NOT VERIFY',
     DEGRADED: 'Reviews: RUNNING, DEGRADED',
     OK: 'Reviews: OK',
 };
@@ -62,7 +63,7 @@ export function toText(report, { verbose = false, color = false } = {}) {
     const paint = (code, s) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
     const tint = { fail: '31', warn: '33', unknown: '35', info: '36', skip: '90', ok: '32' };
     const out = [];
-    const verdictColor = { NOT_RUNNING: '31', DEGRADED: '33', OK: '32' }[report.verdict];
+    const verdictColor = { NOT_RUNNING: '31', UNVERIFIED: '35', DEGRADED: '33', OK: '32' }[report.verdict];
     out.push(paint(`1;${verdictColor}`, VERDICT[report.verdict] ?? report.verdict));
 
     const byStatus = (s) => report.results.filter((r) => r.status === s);

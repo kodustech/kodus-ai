@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+
 import * as amqplib from 'amqplib';
 import { DataSource } from 'typeorm';
 
@@ -25,10 +27,46 @@ export const DELAYED_EXCHANGE = 'workflow.exchange.delayed';
 
 export const STALE_JOB_MINUTES = 30;
 
+/** Jobs a pull request goes through before Kody comments. */
+export const REVIEW_JOB_TYPES = [
+    'WEBHOOK_PROCESSING',
+    'CODE_REVIEW',
+    'CLI_CODE_REVIEW',
+];
+
+/**
+ * A FAILED job is retried through the delayed exchange at most an hour later
+ * (rate-limit waits are capped there, rabbitmq-error.handler.ts); past this it
+ * will not run again.
+ */
+export const FINAL_FAILURE_MINUTES = 90;
+/** Same thresholds as reviews.recent: a few failures in many are noise. */
+const MIN_FAILED_JOBS = 3;
+const FAILED_JOBS_SHARE = 0.1;
+
+/**
+ * Longest a review job may run (CODE_REVIEW_PROCESS_TIMEOUT_MS, 1h45) plus the
+ * cleanup margin: a job PROCESSING longer than this lost its worker.
+ */
+export const STRANDED_JOB_MINUTES = 180;
+
+/** The x-delay the probe asks for, and how long it waits for the message. */
+export const DELAYED_PROBE_DELAY_MS = 1000;
+export const DELAYED_PROBE_WAIT_MS = 8000;
+
 export interface BrokerProbe {
     connect(uri: string): Promise<{
         consumerCount(queue: string): Promise<number | null>;
         exchangeExists(exchange: string): Promise<boolean>;
+        /**
+         * Publishes one message with an x-delay to a private queue bound to
+         * the exchange, and resolves whether it arrived within `waitMs`.
+         */
+        delayedRoundTrip(
+            exchange: string,
+            delayMs: number,
+            waitMs: number,
+        ): Promise<boolean>;
         close(): Promise<void>;
     }>;
 }
@@ -72,6 +110,35 @@ export const amqpBrokerProbe: BrokerProbe = {
                     await ch.checkExchange(exchange);
                     return true;
                 }, false),
+            // An exclusive, server-named queue bound with a key no consumer
+            // pattern matches (workflow.jobs.*.<TYPE>): the probe message
+            // reaches nobody else, and the queue goes away with the channel.
+            delayedRoundTrip: (exchange, delayMs, waitMs) =>
+                withChannel(async (ch) => {
+                    const { queue } = await ch.assertQueue('', {
+                        exclusive: true,
+                        autoDelete: true,
+                        durable: false,
+                    });
+                    const routingKey = `kodus.doctor.probe.${randomUUID()}`;
+                    await ch.bindQueue(queue, exchange, routingKey);
+                    let timer: NodeJS.Timeout | undefined;
+                    const arrived = new Promise<boolean>((resolve) => {
+                        timer = setTimeout(() => resolve(false), waitMs);
+                        void ch.consume(queue, (msg) => msg && resolve(true), {
+                            noAck: true,
+                        });
+                    });
+                    ch.publish(exchange, routingKey, Buffer.from('{}'), {
+                        headers: { 'x-delay': delayMs },
+                        persistent: false,
+                    });
+                    try {
+                        return await arrived;
+                    } finally {
+                        clearTimeout(timer);
+                    }
+                }, false),
             close: () => connection.close().catch(() => undefined),
         };
     },
@@ -80,6 +147,7 @@ export const amqpBrokerProbe: BrokerProbe = {
 export function brokerCheck(probe: BrokerProbe): DoctorCheck {
     return {
         id: 'broker',
+        blocking: true,
         async run({ env }: DoctorContext): Promise<DoctorResult[]> {
             if (
                 (env.API_RABBITMQ_ENABLED ?? 'true').toLowerCase() === 'false'
@@ -150,6 +218,29 @@ export function brokerCheck(probe: BrokerProbe): DoctorCheck {
                         impact: 'Retries and scheduled review steps are lost.',
                         fix: `Enable the rabbitmq_delayed_message_exchange plugin (exchange ${DELAYED_EXCHANGE} is missing), or use the kodus-rabbitmq image, then restart the worker.`,
                     });
+                } else if (
+                    // The exchange can exist and still drop every delayed
+                    // message (RabbitMQ 4.2 with the khepri_db flag, #2654):
+                    // only a message that comes back proves it works.
+                    await broker.delayedRoundTrip(
+                        DELAYED_EXCHANGE,
+                        DELAYED_PROBE_DELAY_MS,
+                        DELAYED_PROBE_WAIT_MS,
+                    )
+                ) {
+                    results.push({
+                        check: 'broker.delayed_delivery',
+                        status: 'ok',
+                        title: 'A delayed test message came back: retries are delivered.',
+                    });
+                } else {
+                    results.push({
+                        check: 'broker.delayed_delivery',
+                        status: 'warn',
+                        title: `A test message sent with a ${DELAYED_PROBE_DELAY_MS / 1000}s delay never came back after ${DELAYED_PROBE_WAIT_MS / 1000}s.`,
+                        impact: 'Retries are lost: a review that hits a temporary error (rate limit, provider timeout) is never retried, so that pull request gets no review.',
+                        fix: 'A known problem of RabbitMQ 4.2 with the khepri_db feature flag on (rabbitmqctl list_feature_flags), tracked in kodustech/kodus-ai#2654. Until a broker image without it ships, ask again for a review that failed with @kody start-review.',
+                    });
                 }
             } finally {
                 await broker.close();
@@ -163,6 +254,7 @@ export function brokerCheck(probe: BrokerProbe): DoctorCheck {
 export function staleJobsCheck(dataSource: DataSource): DoctorCheck {
     return {
         id: 'jobs.stale',
+        blocking: true,
         async run(): Promise<DoctorResult[]> {
             // PENDING is never reaped (WorkflowJobRepository) and FAILED outbox
             // rows are never cleaned (OutboxRelayService.cleanupOldMessages), so
@@ -173,10 +265,48 @@ export function staleJobsCheck(dataSource: DataSource): DoctorCheck {
                 `SELECT COUNT(*)::int AS count, MIN("createdAt") AS oldest
                    FROM kodus_workflow.workflow_jobs
                   WHERE status = 'PENDING'
+                    AND "workflowType"::text = ANY($3)
                     AND "createdAt" < now() - make_interval(mins => $1)
                     AND "createdAt" > now() - make_interval(days => $2)
                     AND ("scheduledAt" IS NULL OR "scheduledAt" < now() - make_interval(mins => $1))`,
-                [STALE_JOB_MINUTES, RECENT_DAYS],
+                [STALE_JOB_MINUTES, RECENT_DAYS, REVIEW_JOB_TYPES],
+            );
+            // Code graph builds queue one per selected repository and run one
+            // at a time (single active consumer, up to 19 min each): a backlog
+            // after selecting repositories is expected and stops no review.
+            const backlog: Array<{ type: string; count: number }> =
+                await dataSource.query(
+                    `SELECT "workflowType"::text AS type, COUNT(*)::int AS count
+                       FROM kodus_workflow.workflow_jobs
+                      WHERE status = 'PENDING'
+                        AND NOT ("workflowType"::text = ANY($3))
+                        AND "createdAt" < now() - make_interval(mins => $1)
+                        AND "createdAt" > now() - make_interval(days => $2)
+                        AND ("scheduledAt" IS NULL OR "scheduledAt" < now() - make_interval(mins => $1))
+                      GROUP BY 1`,
+                    [STALE_JOB_MINUTES, RECENT_DAYS, REVIEW_JOB_TYPES],
+                );
+            // Review jobs of the window by how they ended. FAILED is final
+            // once no retry came for longer than the longest retry delay;
+            // PROCESSING past the longest run lost its worker (OOM, restart).
+            const [outcome] = await dataSource.query(
+                `SELECT COUNT(*)::int AS total,
+                        COUNT(*) FILTER (WHERE status = 'FAILED'
+                                           AND "updatedAt" < now() - make_interval(mins => $2))::int AS failed,
+                        COUNT(*) FILTER (WHERE status = 'PROCESSING'
+                                           AND COALESCE("startedAt", "updatedAt") < now() - make_interval(mins => $3))::int AS stranded,
+                        MODE() WITHIN GROUP (ORDER BY left("lastError", 160))
+                            FILTER (WHERE status = 'FAILED') AS "topError"
+                   FROM kodus_workflow.workflow_jobs
+                  WHERE "workflowType"::text = ANY($4)
+                    AND "createdAt" > now() - make_interval(days => $1)
+                    AND "updatedAt" > now() - make_interval(days => $1)`,
+                [
+                    RECENT_DAYS,
+                    FINAL_FAILURE_MINUTES,
+                    STRANDED_JOB_MINUTES,
+                    REVIEW_JOB_TYPES,
+                ],
             );
             const [unsent] = await dataSource.query(
                 `SELECT COUNT(*)::int AS count
@@ -207,7 +337,45 @@ export function staleJobsCheck(dataSource: DataSource): DoctorCheck {
                     fix: 'Check that the worker is running and consuming (see the worker line above), then check the worker logs.',
                 });
             }
-            if (!results.length) {
+
+            const total = outcome?.total ?? 0;
+            const failed = outcome?.failed ?? 0;
+            if (failed > 0) {
+                const all = failed === total && total >= MIN_FAILED_JOBS;
+                results.push({
+                    check: 'jobs.failed',
+                    status: all
+                        ? 'fail'
+                        : failed >= MIN_FAILED_JOBS &&
+                            failed / total >= FAILED_JOBS_SHARE
+                          ? 'warn'
+                          : 'info',
+                    title: `${failed} of ${total} review job(s) in the last ${RECENT_DAYS} days failed for good (no retry left).`,
+                    impact: 'The pull requests behind them got no review.',
+                    fix: `Most common error: ${outcome?.topError ?? 'none recorded'}. Check the worker logs; a lost retry also shows here when delayed messages are not delivered (see the message queue lines).`,
+                });
+            }
+            if (outcome?.stranded > 0) {
+                results.push({
+                    check: 'jobs.stranded',
+                    status: 'warn',
+                    title: `${outcome.stranded} review job(s) started more than ${STRANDED_JOB_MINUTES / 60} hours ago and never finished.`,
+                    impact: 'The worker running them stopped mid-review, so those pull requests got no review.',
+                    fix: 'Check whether the worker was killed (docker inspect: OOMKilled, RestartCount; Kubernetes: lastState) and give it more memory if so.',
+                });
+            }
+            const waiting = backlog.reduce((n, b) => n + b.count, 0);
+            if (waiting > 0) {
+                results.push({
+                    check: 'jobs.background',
+                    status: 'info',
+                    title: `${waiting} background job(s) are waiting their turn (${backlog
+                        .map((b) => `${b.count} ${b.type}`)
+                        .join(', ')}).`,
+                    impact: 'Reviews are not affected; code graph builds run one at a time, so a backlog after selecting repositories is expected.',
+                });
+            }
+            if (!unsent?.count && !pending?.count) {
                 results.push({
                     check: 'jobs.pending',
                     status: 'ok',
