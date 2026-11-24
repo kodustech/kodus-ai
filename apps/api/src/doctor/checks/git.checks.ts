@@ -167,6 +167,8 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                 const appSilent: string[] = [];
                 /** No hook seen, and the received events could not be read. */
                 const hookUnreadable: string[] = [];
+                /** GitHub App install whose delivery could not be measured. */
+                const appUnreadable: string[] = [];
                 /** Token rejected by this api, yet the repository delivered this week. */
                 const staleButDelivered: string[] = [];
                 /** Token rejected by this api; whether events still arrive could not be read. */
@@ -212,11 +214,10 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                               ? staleUnreadable
                               : hookStale
                         ).push(repo.name);
-                    } else if (
-                        (d.hook === 'missing' || d.hook === 'app-level') &&
-                        !delivered
-                    ) {
+                    } else if (d.hook === 'missing' && !delivered) {
                         hookUnreadable.push(repo.name);
+                    } else if (d.hook === 'app-level' && !delivered) {
+                        appUnreadable.push(repo.name);
                     } else if (d.hook === 'missing' && !deliveredHere) {
                         (delivered!.platformEvents
                             ? hookUncovered
@@ -327,6 +328,16 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                         blocking: true,
                     });
                 }
+                if (appUnreadable.length) {
+                    results.push({
+                        check: 'git.webhook',
+                        status: 'unknown',
+                        scope,
+                        title: `Could not tell whether the GitHub App delivers events for ${names(appUnreadable)}: the events Kodus received could not be read.`,
+                        fix: `Open a pull request there to confirm, or check the app's webhook URL (${webhookUrl}) and its "Recent deliveries" in GitHub > Settings > Developer settings > GitHub Apps.`,
+                        blocking: true,
+                    });
+                }
                 if (staleUnreadable.length) {
                     results.push({
                         check: 'git.webhook',
@@ -432,6 +443,7 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                             staleUnreadable,
                             hookUncovered,
                             hookUnreadable,
+                            appUnreadable,
                             appSilent,
                             unverified.hook,
                         ),

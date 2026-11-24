@@ -790,6 +790,21 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             ).toMatchObject({ status: 'unknown', blocking: true });
         });
 
+        it('a GitHub App repository with unreadable events gets App advice, not repository-hook advice', async () => {
+            const git = {
+                ...healthyGit({ hook: 'app-level' }),
+                deliveredEvents: jest.fn(async () => {
+                    throw new Error('statement timeout');
+                }),
+            };
+            const results = await gitAccessCheck(git).run(ctx());
+            const line = results.find((r) => r.check === 'git.webhook');
+            expect(line).toMatchObject({ status: 'unknown', blocking: true });
+            expect(line?.title).toContain('GitHub App');
+            expect(line?.title).not.toContain('No repository webhook');
+            expect(line?.fix).toContain('GitHub Apps');
+        });
+
         it('a stale hook is unverified, not failed, when the received events could not be read', async () => {
             const git = {
                 ...healthyGit({ hook: 'stale' }),
