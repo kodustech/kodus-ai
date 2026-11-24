@@ -113,6 +113,10 @@ export const amqpBrokerProbe: BrokerProbe = {
             blocked = reason || 'resource alarm';
             onBlocked.forEach((notify) => notify(blocked!));
         });
+        // The alarm cleared while the doctor ran: publishing works again.
+        connection.on('unblocked', () => {
+            blocked = null;
+        });
 
         const withChannel = async <T>(
             fn: (ch: amqplib.Channel) => Promise<T>,

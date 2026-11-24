@@ -169,6 +169,8 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                 const hookUnreadable: string[] = [];
                 /** Token rejected by this api, yet the repository delivered this week. */
                 const staleButDelivered: string[] = [];
+                /** Token rejected by this api; whether events still arrive could not be read. */
+                const staleUnreadable: string[] = [];
                 /** Write access unreported; settled by comments Kody posted. */
                 const writeUnknown: Array<{ id: string; name: string }> = [];
                 const unverified = {
@@ -204,9 +206,12 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                         repo.id,
                     );
                     if (d.hook === 'stale') {
-                        (deliveredHere ? staleButDelivered : hookStale).push(
-                            repo.name,
-                        );
+                        (deliveredHere
+                            ? staleButDelivered
+                            : !delivered
+                              ? staleUnreadable
+                              : hookStale
+                        ).push(repo.name);
                     } else if (
                         (d.hook === 'missing' || d.hook === 'app-level') &&
                         !delivered
@@ -226,11 +231,18 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                     }
                 }
 
-                // Together and within the same ceiling as the diagnoses: one
-                // slow Mongo count per repository must not time the check out.
-                const posted = deps.postedComments
-                    ? await Promise.all(
-                          writeUnknown.map((repo) =>
+                // A few at a time and within the diagnoses' ceiling: one slow
+                // Mongo count per repository must not time the check out, nor
+                // 25 of them land on Mongo at once.
+                const evidence = deps.postedComments
+                    ? await mapWithinBudget(
+                          writeUnknown,
+                          {
+                              concurrency: GIT_PROBE_CONCURRENCY,
+                              deadline: deadline + GIT_PROBE_GRACE_MS,
+                              now,
+                          },
+                          (repo) =>
                               withCeiling(
                                   deps.postedComments!(team, repo.id).catch(
                                       () => 0,
@@ -238,14 +250,18 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                                   deadline + GIT_PROBE_GRACE_MS - now(),
                                   0,
                               ),
-                          ),
                       )
-                    : writeUnknown.map(() => 0);
-                writeUnknown.forEach((repo, i) => {
-                    if (!posted[i]) {
+                    : { done: [] };
+                const proven = new Set(
+                    evidence.done
+                        .filter(({ result }) => result > 0)
+                        .map(({ item }) => item.id),
+                );
+                for (const repo of writeUnknown) {
+                    if (!proven.has(repo.id)) {
                         unverified.write.push(repo.name);
                     }
-                });
+                }
 
                 const providerSaid = errors.size
                     ? ` Provider said: ${[...errors].slice(0, 2).join('; ')}`
@@ -308,6 +324,16 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                         scope,
                         title: `No repository webhook was found on ${names(hookUnreadable)}, and the events Kodus received could not be read to tell whether ${hookUnreadable.length === 1 ? 'it delivers' : 'they deliver'} anyway.`,
                         fix: `Open a pull request there to confirm; check the repository's webhooks in ${git} for ${webhookUrl}.`,
+                        blocking: true,
+                    });
+                }
+                if (staleUnreadable.length) {
+                    results.push({
+                        check: 'git.webhook',
+                        status: 'unknown',
+                        scope,
+                        title: `The Kodus webhook on ${names(staleUnreadable)} carries a token this api no longer accepts, and the events Kodus received could not be read to tell whether ${staleUnreadable.length === 1 ? 'it still delivers' : 'they still deliver'}.`,
+                        fix: 'If CODE_MANAGEMENT_SECRET or CODE_MANAGEMENT_WEBHOOK_TOKEN changed, deselect and reselect these repositories in Settings > Git to recreate the hook.',
                         blocking: true,
                     });
                 }
@@ -403,6 +429,7 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                             hookMissing,
                             hookStale,
                             staleButDelivered,
+                            staleUnreadable,
                             hookUncovered,
                             hookUnreadable,
                             appSilent,

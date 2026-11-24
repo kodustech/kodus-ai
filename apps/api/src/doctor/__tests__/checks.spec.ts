@@ -790,6 +790,47 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             ).toMatchObject({ status: 'unknown', blocking: true });
         });
 
+        it('a stale hook is unverified, not failed, when the received events could not be read', async () => {
+            const git = {
+                ...healthyGit({ hook: 'stale' }),
+                deliveredEvents: jest.fn(async () => {
+                    throw new Error('statement timeout');
+                }),
+            };
+            const results = await gitAccessCheck(git).run(ctx());
+            expect(problems(results)).toEqual([]);
+            expect(
+                results.find((r) => r.check === 'git.webhook'),
+            ).toMatchObject({ status: 'unknown', blocking: true });
+        });
+
+        it('comment lookups run a few at a time, not one per repository at once', async () => {
+            const repos = Array.from({ length: 10 }, (_, i) => ({
+                id: String(i + 1),
+                name: `repo-${i + 1}`,
+            }));
+            let inFlight = 0;
+            let peak = 0;
+            const git = {
+                ...healthyGit({ write: 'unknown' }),
+                postedComments: jest.fn(async () => {
+                    inFlight += 1;
+                    peak = Math.max(peak, inFlight);
+                    await new Promise((r) => setImmediate(r));
+                    inFlight -= 1;
+                    return 1;
+                }),
+            };
+            const results = await gitAccessCheck(git).run(
+                ctx({ teams: [team({ repositories: repos })] }),
+            );
+            expect(git.postedComments).toHaveBeenCalledTimes(10);
+            expect(peak).toBeLessThanOrEqual(3);
+            expect(
+                results.find((r) => r.check === 'git.unverified'),
+            ).toBeUndefined();
+        });
+
         it('a comment lookup that hangs is cut at the ceiling, the check still reports', async () => {
             let clock = 0;
             const git = {
