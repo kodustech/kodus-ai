@@ -587,7 +587,7 @@ On boat, the host image and the environment's warm state are one artifact: a **s
 | --- | --- | --- |
 | Host recipe | `cell-host.sh install` (kodus-installer): the microVM kit, the cell release, units, sysctls, state disk, nftables base | Release pipeline; the same script on every provider |
 | boat cell base | The recipe on a boat base sandbox, `cell preflight` passing, saved as `kodus-cell-<release>-<kit>`. Never enrolled | Template step, once per release |
-| **boat environment template** | A setup host created `from` the cell base, enrolled with a `kcf_` token bound to `template:<org>/<env>`, that ran the environment's setup on the **default branch only** (S-52: never PR code): the baked images, the seeded data and, if the spike allows it, the microVM memory snapshot. Then sealed (cell stopped, identity, token file and `/tmp` removed) and saved as `kodus-env-<org-hash>-<env-hash>-<fingerprint>` | Template step (`apps/runtime/src/fleet/template/`), per environment and build fingerprint |
+| **boat environment template** | A setup host created `from` the cell base, enrolled with a `kcf_` token bound to `template:<org>/<env>`, that ran the environment's setup on the **default branch only** (S-52: never PR code): the baked images, the seeded data and, if the spike allows it, the microVM memory snapshot. Then sealed (cell stopped, identity, token file and `/tmp` removed) and saved as `kodus-env-<org-hash>-<env-hash>-<fingerprint>-<base-hash>` | Template step (`apps/runtime/src/fleet/template/`), per environment, build fingerprint and cell base |
 | AWS AMI, bare-metal image | The recipe by Packer, Image Builder or PXE | Later, with the `pooled` loop |
 | Shared bake registry ([shared-baked-environments.md](shared-baked-environments.md)) | An environment's OCI images by digest | Stays for static and `pooled` pools; boat pools do not use it |
 
@@ -598,6 +598,11 @@ Rules:
 - **Replacement.** A new template is recorded in `runtime_env_templates` (org, environment, fingerprint, snapshot name,
   state). Once it is `ready`, the older one of that environment is marked replaced and its saved snapshot deleted. A
   name is at most 63 characters (`^[a-z0-9][a-z0-9-]{0,62}$`), so org and environment go in as short hashes.
+- **A new cell base rebuilds the template.** A template's disk holds the cell of the base its setup host booted, so the
+  row records that base (`cell_base`, migration 61). Once the pool names another base (a cell release, a security fix),
+  the old template is no ready template: Run hosts boot the new base (cold) and the rebuild pass builds the template
+  again on it, under a name of its own; promoted, the old snapshot is deleted. Without this, a new cell reached Run
+  hosts only when the repository's setup changed.
 - **Customer data at rest in boat.** A template holds the environment's seeded data and images. boat's snapshots "can
   be stored outside the EU" ([Security]), so until legal signs off a boat pool admits only Kodus's org
   (`admission.allowOrgs`), and the template step refuses any other org.

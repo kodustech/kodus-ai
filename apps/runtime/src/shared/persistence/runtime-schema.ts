@@ -1310,6 +1310,16 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         // terminated host for the retention window: without this each page view scans it whole. text_pattern_ops serves the prefix LIKE.
         sql: `CREATE INDEX IF NOT EXISTS runtime_hosts_org_bound_key_idx ON runtime.runtime_hosts (organization_id, bound_key text_pattern_ops) WHERE bound_key IS NOT NULL;`,
     },
+    {
+        version: 61,
+        name: 'an environment template records the cell base it was built from',
+        // A template is a disk saved from a setup host that booted the pool's cell base, so it carries that base's cell. A pool
+        // moved to a new base (a cell release, a security fix) must not keep starting Run hosts on the old cell until the
+        // repository's setup changes: a template of another base is no ready template (template-store.ts), and the build that
+        // replaces it records the old snapshot to delete once the new one is promoted. Rows from before this have no base ('').
+        sql: `ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS cell_base text NOT NULL DEFAULT '';
+        ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS retired_snapshot text;`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

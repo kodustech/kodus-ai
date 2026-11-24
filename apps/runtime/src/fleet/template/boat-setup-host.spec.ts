@@ -110,8 +110,8 @@ describe('the live setup host on boat (docs/runtime/host-providers.md §8.2)', (
     it('runs the whole template workflow: ready template named for the environment, setup host destroyed', async () => {
         const w = world();
         const r = await buildEnvironmentTemplate(w.req, { store: w.store, provider: w.provider, setupHosts: w.host, cellBase: 'kodus-cell-r42-kit7', poll: { sleep: async () => undefined, attempts: 5 } });
-        expect(r).toEqual({ ok: true, name: templateNameOf('org-kodus', 'env-shop', FP), reused: false });
-        expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun')).toBe(r.ok ? r.name : '');
+        expect(r).toEqual({ ok: true, name: templateNameOf('org-kodus', 'env-shop', FP, 'kodus-cell-r42-kit7'), reused: false });
+        expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', 'kodus-cell-r42-kit7')).toBe(r.ok ? r.name : '');
         expect([...w.provider.hosts.values()].every((h) => h.state === 'gone')).toBe(true);
     });
 });

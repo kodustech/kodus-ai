@@ -101,6 +101,14 @@ describe('when an environment template is built', () => {
         expect(w.builds).toEqual([expect.objectContaining({ organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP })]);
         w.release();
     });
+    it('starts a build when the ready template was built from a cell base the pool no longer names', async () => {
+        const w = world();
+        await w.store.begin({ organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP, name: 'n-old', cellBase: 'kodus-cell-v9' });
+        await w.store.promote({ organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP });
+        await w.trigger.onDemand(demand);
+        expect(w.builds).toEqual([expect.objectContaining({ environmentId: 'env-1', fingerprint: FP })]);
+        w.release();
+    });
     it('starts at most one build per environment at a time', async () => {
         const w = world();
         await w.trigger.onDemand(demand);
@@ -111,7 +119,7 @@ describe('when an environment template is built', () => {
     });
     it('builds nothing when the template is ready, the environment is unknown, or the setup is not an active default-branch one', async () => {
         const ready = world();
-        await ready.store.begin({ organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP, name: 'n' });
+        await ready.store.begin({ organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP, name: 'n', cellBase: '' });
         await ready.store.promote({ organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP });
         await ready.trigger.onDemand(demand);
         await ready.trigger.onSetupFinished(record());

@@ -28,7 +28,7 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
     it("a Run host starts from the environment's one ready template on its pool; a newer build replaces it and names the old snapshot", async () => {
         const store = new PgTemplateStore(pool);
         const resolver = new StoreTemplateResolver(store);
-        const key = (fingerprint: string) => ({ organizationId: 'org-k', environmentId: 'env-1', poolId: 'boat-eu-perrun', fingerprint });
+        const key = (fingerprint: string) => ({ organizationId: 'org-k', environmentId: 'env-1', poolId: 'boat-eu-perrun', fingerprint, cellBase: '' });
         const [a, b] = ['a'.repeat(64), 'b'.repeat(64)];
         await store.begin({ ...key(a), name: templateNameOf('org-k', 'env-1', a) });
         expect(await resolver.resolve({ organizationId: 'org-k', environmentId: 'env-1', poolId: 'boat-eu-perrun' })).toBeNull();
@@ -42,10 +42,46 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         expect((await store.find('org-k', 'env-1', 'boat-eu-perrun', b))?.state).toBe('ready');
     });
 
+    it('a pool moved to a new cell base serves no template of the old one; the build on the new base replaces it and names the old snapshot', async () => {
+        const store = new PgTemplateStore(pool);
+        const resolver = new StoreTemplateResolver(store);
+        const fp = 'c'.repeat(64);
+        const at = { organizationId: 'org-n', environmentId: 'env-n', poolId: 'p', fingerprint: fp };
+        const [v9, v10] = ['kodus-cell-v9', 'kodus-cell-v10'];
+        const on = (cellBase: string) => ({ organizationId: 'org-n', environmentId: 'env-n', poolId: 'p', provider: 'boat', cellBase });
+        expect(await store.begin({ ...at, name: templateNameOf('org-n', 'env-n', fp, v9), cellBase: v9 })).toBe(true);
+        await store.promote(at);
+        expect(await resolver.resolve(on(v9))).toBe(templateNameOf('org-n', 'env-n', fp, v9));
+        // The pool now names v10: the v9 disk holds the old cell, so a Run host boots the base and the template needs a build.
+        expect(await resolver.resolve(on(v10))).toBeNull();
+        expect(await store.holds({ ...at, cellBase: v10 }, new Date(Date.now() - 1_800_000))).toBe(false);
+        expect(await store.holds({ ...at, cellBase: v9 }, new Date(Date.now() - 1_800_000))).toBe(true);
+        // Ready on its own base, a second build of the same base is refused; on the new base it takes the row over.
+        expect(await store.begin({ ...at, name: templateNameOf('org-n', 'env-n', fp, v9), cellBase: v9 })).toBe(false);
+        expect(await store.begin({ ...at, name: templateNameOf('org-n', 'env-n', fp, v10), cellBase: v10, setupHostId: 'tpl-v10' })).toBe(true);
+        expect(await store.find('org-n', 'env-n', 'p', fp)).toMatchObject({ state: 'building', cellBase: v10, name: templateNameOf('org-n', 'env-n', fp, v10) });
+        // Promoted, the v9 snapshot is the one to delete, once.
+        expect(await store.promote(at)).toEqual([templateNameOf('org-n', 'env-n', fp, v9)]);
+        expect(await resolver.resolve(on(v10))).toBe(templateNameOf('org-n', 'env-n', fp, v10));
+        expect(await store.promote(at)).toEqual([]);
+    });
+
+    it('a failed build on the new base keeps the old snapshot to delete until a later build is promoted', async () => {
+        const store = new PgTemplateStore(pool);
+        const fp = '9'.repeat(64);
+        const at = { organizationId: 'org-f', environmentId: 'env-f', poolId: 'p', fingerprint: fp };
+        await store.begin({ ...at, name: templateNameOf('org-f', 'env-f', fp, 'v1'), cellBase: 'v1' });
+        await store.promote(at);
+        await store.begin({ ...at, name: templateNameOf('org-f', 'env-f', fp, 'v2'), cellBase: 'v2' });
+        await store.fail(at, 'bake_failed');
+        await store.begin({ ...at, name: templateNameOf('org-f', 'env-f', fp, 'v2'), cellBase: 'v2' });
+        expect(await store.promote(at)).toEqual([templateNameOf('org-f', 'env-f', fp, 'v1')]);
+    });
+
     it('the setup request marks only the building row of that environment', async () => {
         const store = new PgTemplateStore(pool);
         const fp = 'd'.repeat(64);
-        const row = (env: string) => ({ organizationId: 'org-r', environmentId: env, poolId: 'p', fingerprint: fp, name: templateNameOf('org-r', env, fp) });
+        const row = (env: string) => ({ organizationId: 'org-r', environmentId: env, poolId: 'p', fingerprint: fp, name: templateNameOf('org-r', env, fp), cellBase: '' });
         await store.begin(row('env-a'));
         await store.begin(row('env-b'));
         await new PgTemplateSetupRequester(pool).request({ organizationId: 'org-r', environmentId: 'env-a', poolId: 'p', fingerprint: fp, key: 'template:org-r/env-a:tpl-1', boundKey: 'template:org-r/env-a' });
@@ -59,7 +95,7 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
     it("names the setup host of every template still building, a retry's new host replacing the failed one, and none once it is over", async () => {
         const store = new PgTemplateStore(pool);
         const fp = 'e'.repeat(64);
-        const row = { organizationId: 'org-h', environmentId: 'env-h', poolId: 'p', fingerprint: fp, name: templateNameOf('org-h', 'env-h', fp) };
+        const row = { organizationId: 'org-h', environmentId: 'env-h', poolId: 'p', fingerprint: fp, name: templateNameOf('org-h', 'env-h', fp), cellBase: '' };
         await store.begin({ ...row, setupHostId: 'tpl-first' });
         expect(await store.buildingSetupHosts()).toContain('tpl-first');
         await store.fail(row, 'build_error');
@@ -72,7 +108,7 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
     it('holds a fingerprint while a ready or building template has it, or its build failed after the backoff start', async () => {
         const store = new PgTemplateStore(pool);
         const fp = 'f'.repeat(64);
-        const row = { organizationId: 'org-b', environmentId: 'env-b', poolId: 'p', fingerprint: fp, name: templateNameOf('org-b', 'env-b', fp) };
+        const row = { organizationId: 'org-b', environmentId: 'env-b', poolId: 'p', fingerprint: fp, name: templateNameOf('org-b', 'env-b', fp), cellBase: '' };
         const ago = (ms: number) => new Date(Date.now() - ms);
         expect(await store.holds(row, ago(1_800_000))).toBe(false);
         await store.begin(row);
@@ -104,7 +140,7 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
     it('a build left building for hours (its fleet died) is dead: a new build takes it over and it holds nothing', async () => {
         const store = new PgTemplateStore(pool);
         const fp = 'f'.repeat(64);
-        const row = { organizationId: 'org-s', environmentId: 'env-s', poolId: 'p', fingerprint: fp, name: templateNameOf('org-s', 'env-s', fp) };
+        const row = { organizationId: 'org-s', environmentId: 'env-s', poolId: 'p', fingerprint: fp, name: templateNameOf('org-s', 'env-s', fp), cellBase: '' };
         await store.begin({ ...row, setupHostId: 'tpl-dead' });
         expect(await store.holds(row, new Date(Date.now() - 30 * 60_000))).toBe(true);
         await pool.query(`UPDATE runtime.runtime_env_templates SET updated_at = now() - interval '4 hours' WHERE org_id = 'org-s'`);

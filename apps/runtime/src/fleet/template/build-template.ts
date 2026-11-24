@@ -60,13 +60,15 @@ export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: Bui
     // Customer data at rest in the provider needs legal sign-off: until then the pool's admission list is the gate.
     if (req.pool.admission && !req.pool.admission.allowOrgs.includes(req.organizationId)) return { ok: false, reason: 'org_not_admitted' };
     if (!d.provider.images) return { ok: false, reason: 'no_images' };
-    const name = templateNameOf(req.organizationId, req.environmentId, req.fingerprint);
+    const name = templateNameOf(req.organizationId, req.environmentId, req.fingerprint, d.cellBase);
     const key = { organizationId: req.organizationId, environmentId: req.environmentId, poolId: req.poolId, fingerprint: req.fingerprint };
-    if ((await d.store.find(req.organizationId, req.environmentId, req.poolId, req.fingerprint))?.state === 'ready') return { ok: true, name, reused: true };
+    // Ready on another cell base is not this template: its disk holds the old cell (template-store.ts).
+    const found = await d.store.find(req.organizationId, req.environmentId, req.poolId, req.fingerprint);
+    if (found?.state === 'ready' && found.cellBase === d.cellBase) return { ok: true, name: found.name, reused: true };
     // One host per attempt: the hub enrolls a host id once, so a retry of the same template needs its own.
     const hostId = `tpl-${randomBytes(12).toString('hex')}`;
     // The row names the setup host before it exists: the orphan pass spares it while the template builds.
-    if (!(await d.store.begin({ ...key, name, setupHostId: hostId }))) return { ok: false, reason: 'already_building' };
+    if (!(await d.store.begin({ ...key, name, cellBase: d.cellBase, setupHostId: hostId }))) return { ok: false, reason: 'already_building' };
     const fail = async (reason: Exclude<BuildTemplateResult, { ok: true }>['reason'], cause?: string) => {
         await d.store.fail(key, cause ? `${reason}:${cause}` : reason);
         return { ok: false as const, reason, ...(cause ? { cause } : {}) };

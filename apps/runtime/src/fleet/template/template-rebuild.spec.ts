@@ -7,16 +7,16 @@ import { TemplateRebuildPass } from './template-rebuild';
 const FP = 'c'.repeat(64);
 const pool = parseHostPool({ kind: 'HostPool', name: 'boat-perrun', scope: 'kodus', provider: 'boat', lifecycle: 'perRun', hostClass: { kind: 'HostClass', name: 'c', provider: 'boat', boat: { type: 'large' } } });
 const record = (over: Partial<EnvironmentSetupRecord> = {}) => ({ environmentId: 'env-1', organizationId: 'org-1', repositoryId: 'r', key: 'k', state: 'active', steps: [], blockers: [], refSource: 'default_branch', bakeRefsDigest: FP, ...over }) as EnvironmentSetupRecord;
-const tpl = { organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP, name: 'n' };
+const tpl = { organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP, name: 'n', cellBase: '' };
 
-function world(recs: EnvironmentSetupRecord[]) {
+function world(recs: EnvironmentSetupRecord[], onPool = pool) {
     const templates = new InMemoryTemplateStore();
     const finished: EnvironmentSetupRecord[] = [];
     const locks = { withLock: async (_k: string, fn: () => Promise<any>) => fn(), tryWithLock: async (_k: string, fn: () => Promise<any>) => fn() };
     const pass = new TemplateRebuildPass(locks, {
         setups: { activeSince: async () => recs },
         templates,
-        boatPools: async () => [{ poolId: 'p', pool }],
+        boatPools: async () => [{ poolId: 'p', pool: onPool }],
         trigger: { onSetupFinished: async (r) => void finished.push(r) },
         now: () => Date.now(),
     });
@@ -50,6 +50,19 @@ describe('the template rebuild pass', () => {
         await building.pass.tick();
         expect(ready.finished).toEqual([]);
         expect(building.finished).toEqual([]);
+    });
+    it('builds the template again when the pool moved to a new cell base: the ready one holds the old cell', async () => {
+        const v10 = parseHostPool({ ...pool, hostClass: { ...pool.hostClass, boat: { type: 'large', base: 'kodus-cell-v10' } } } as any);
+        const w = world([record()], v10);
+        await w.templates.begin({ ...tpl, cellBase: 'kodus-cell-v9' });
+        await w.templates.promote(tpl);
+        await w.pass.tick();
+        expect(w.finished).toHaveLength(1);
+        const same = world([record()], v10);
+        await same.templates.begin({ ...tpl, cellBase: 'kodus-cell-v10' });
+        await same.templates.promote(tpl);
+        await same.pass.tick();
+        expect(same.finished).toEqual([]);
     });
     it('waits out the backoff after a failed build, then tries again', async () => {
         const w = world([record()]);

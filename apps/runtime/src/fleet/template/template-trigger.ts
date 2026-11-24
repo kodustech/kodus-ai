@@ -1,4 +1,4 @@
-import type { HostPool } from '@libs/runtime/fleet/pool';
+import { cellBaseOf, type HostPool } from '@libs/runtime/fleet/pool';
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import type { EnvironmentSetupRecord } from '@libs/runtime/run';
 
@@ -57,9 +57,9 @@ export class TemplateBuildTrigger {
     async onDemand(req: { organizationId: string; environmentId: string | null; poolId: string; provider: string }): Promise<void> {
         if (!req.environmentId || req.provider !== 'boat') return;
         try {
-            if (await this.d.store.readyName(req.organizationId, req.environmentId, req.poolId)) return;
             const stored = await this.d.poolOf(req.poolId);
-            if (stored) await this.start(req.organizationId, req.environmentId, stored.poolId, stored.pool);
+            if (!stored || (await this.d.store.readyName(req.organizationId, req.environmentId, req.poolId, cellBaseOf(stored.pool.hostClass) ?? ''))) return;
+            await this.start(req.organizationId, req.environmentId, stored.poolId, stored.pool);
         } catch (e) {
             this.d.log?.('template.trigger_failed', { environmentId: req.environmentId, error: (e as Error).message });
         }
@@ -92,7 +92,10 @@ export class TemplateBuildTrigger {
         // Only what the environment's active default-branch setup baked can be templated.
         if (!rec || rec.organizationId !== organizationId || rec.state !== 'active' || rec.refSource !== 'default_branch') return;
         const fingerprint = bakeFingerprintOf(rec);
-        if (!fingerprint || (await this.d.store.find(organizationId, environmentId, poolId, fingerprint))?.state === 'ready') return;
+        if (!fingerprint) return;
+        const found = await this.d.store.find(organizationId, environmentId, poolId, fingerprint);
+        // Ready on the pool's base now: nothing to build. Ready on another base holds the old cell, and is built again.
+        if (found?.state === 'ready' && found.cellBase === (cellBaseOf(pool.hostClass) ?? '')) return;
         this.inflight.add(key);
         void this.d
             .build({ organizationId, environmentId, poolId, pool, fingerprint })
@@ -113,7 +116,7 @@ export class TriggeringTemplateResolver implements TemplateResolver {
         private readonly trigger: Pick<TemplateBuildTrigger, 'onDemand'>,
     ) {}
 
-    async resolve(req: { organizationId: string; environmentId: string | null; poolId: string; provider: string }) {
+    async resolve(req: { organizationId: string; environmentId: string | null; poolId: string; provider: string; cellBase?: string }) {
         const name = await this.inner.resolve(req);
         if (!name) void this.trigger.onDemand(req);
         return name;

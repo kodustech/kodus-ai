@@ -1,4 +1,4 @@
-import type { HostPool } from '@libs/runtime/fleet/pool';
+import { cellBaseOf, type HostPool } from '@libs/runtime/fleet/pool';
 import type { EnvironmentSetupRecord } from '@libs/runtime/run';
 
 import type { DistributedLocks } from '../../shared/persistence/locks';
@@ -64,13 +64,15 @@ export class TemplateRebuildPass {
         return triggered;
     }
 
-    private async needsBuild(rec: EnvironmentSetupRecord, pools: Array<{ poolId: string }>, now: number): Promise<boolean> {
+    private async needsBuild(rec: EnvironmentSetupRecord, pools: Array<{ poolId: string; pool: HostPool }>, now: number): Promise<boolean> {
         // A template build's own setup (bound key `template:`) is never a reason to build again.
         if (rec.state !== 'active' || rec.refSource !== 'default_branch' || rec.key.startsWith('template:')) return false;
         const fingerprint = bakeFingerprintOf(rec);
         if (!fingerprint) return false;
         const failedAfter = new Date(now - REBUILD_FAILURE_BACKOFF_MS);
-        for (const p of pools) if (!(await this.d.templates.holds({ organizationId: rec.organizationId, environmentId: rec.environmentId, poolId: p.poolId, fingerprint }, failedAfter))) return true;
+        // A template of the pool's former cell base holds nothing: the pool moved to a new cell, and the template is built again on it.
+        for (const p of pools)
+            if (!(await this.d.templates.holds({ organizationId: rec.organizationId, environmentId: rec.environmentId, poolId: p.poolId, fingerprint, cellBase: cellBaseOf(p.pool.hostClass) ?? '' }, failedAfter))) return true;
         return false;
     }
 }

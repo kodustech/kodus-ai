@@ -197,7 +197,7 @@ export type FleetDepsOverrides = Partial<Omit<PerRunHostDeps, 'step' | 'sleep' |
 
 /** runtime_env_templates in memory, as PgTemplateStore. */
 export class InMemoryTemplateStore implements TemplateStore {
-    readonly rows: Array<TemplateRow & { failure?: string; setupHostId?: string; failedAt?: number }> = [];
+    readonly rows: Array<TemplateRow & { failure?: string; setupHostId?: string; failedAt?: number; retired?: string }> = [];
     private at = 0;
     private readonly readyAt = new Map<TemplateRow, number>();
 
@@ -208,15 +208,16 @@ export class InMemoryTemplateStore implements TemplateStore {
         const r = this.row(o, e, p, f);
         return r ? { ...r } : null;
     }
-    async readyName(o: string, e: string, p: string) {
-        const ready = this.rows.filter((t) => t.organizationId === o && t.environmentId === e && t.poolId === p && t.state === 'ready');
+    async readyName(o: string, e: string, p: string, cellBase: string) {
+        const ready = this.rows.filter((t) => t.organizationId === o && t.environmentId === e && t.poolId === p && t.state === 'ready' && t.cellBase === cellBase);
         ready.sort((a, b) => (this.readyAt.get(b) ?? 0) - (this.readyAt.get(a) ?? 0));
         return ready[0]?.name ?? null;
     }
     async begin(t: Omit<TemplateRow, 'state'> & { setupHostId?: string }) {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
         if (!r) this.rows.push({ ...t, state: 'building' });
-        else if (r.state === 'failed' || r.state === 'replaced') Object.assign(r, { state: 'building', setupHostId: t.setupHostId });
+        else if (r.state === 'failed' || r.state === 'replaced' || (r.state === 'ready' && r.cellBase !== t.cellBase))
+            Object.assign(r, { state: 'building', setupHostId: t.setupHostId, name: t.name, cellBase: t.cellBase, retired: r.state === 'ready' && r.name !== t.name ? r.name : r.retired });
         else return false;
         return true;
     }
@@ -227,16 +228,18 @@ export class InMemoryTemplateStore implements TemplateStore {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
         if (r?.state === 'building') Object.assign(r, { state: 'failed', failure: reason, failedAt: Date.now() });
     }
-    async holds(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, failedAfter: Date) {
+    async holds(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint' | 'cellBase'>, failedAfter: Date) {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
-        return !!r && (r.state === 'ready' || r.state === 'building' || (r.state === 'failed' && (r.failedAt ?? 0) > failedAfter.getTime()));
+        return !!r && ((r.state === 'ready' && r.cellBase === t.cellBase) || r.state === 'building' || (r.state === 'failed' && (r.failedAt ?? 0) > failedAfter.getTime()));
     }
     async promote(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>) {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint)!;
         r.state = 'ready';
+        const retired = r.retired;
+        delete r.retired;
         this.readyAt.set(r, ++this.at);
         const older = this.rows.filter((x) => x !== r && x.organizationId === t.organizationId && x.environmentId === t.environmentId && x.poolId === t.poolId && x.state === 'ready');
         for (const o of older) o.state = 'replaced';
-        return older.map((o) => o.name);
+        return [...older.map((o) => o.name), ...(retired ? [retired] : [])];
     }
 }

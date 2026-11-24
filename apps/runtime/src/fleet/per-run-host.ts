@@ -35,7 +35,8 @@ export interface HubFleetPort {
 
 /** The environment's template (a boat saved snapshot name): §8.2. */
 export interface TemplateResolver {
-    resolve(req: { organizationId: string; environmentId: string | null; poolId: string; provider: string }): Promise<string | null>;
+    /** `cellBase`: the pool's base now; a template built from another base is not returned (its disk holds the old cell). */
+    resolve(req: { organizationId: string; environmentId: string | null; poolId: string; provider: string; cellBase?: string }): Promise<string | null>;
 }
 
 export interface PerRunTiming {
@@ -120,7 +121,11 @@ export async function runPerRunHost(input: PerRunHostInput, d: PerRunHostDeps): 
         try {
             if (!provider) throw new HostFailed('provider_unavailable');
             // The environment's own template, else the class's cell base (the Run then builds its environment cold).
-            const template = await d.step('template', () => d.templates.resolve({ organizationId: input.organizationId, environmentId: input.environmentId, poolId, provider: pool.provider }), FLEET_STEP_RETRY);
+            const template = await d.step(
+                'template',
+                () => d.templates.resolve({ organizationId: input.organizationId, environmentId: input.environmentId, poolId, provider: pool.provider, cellBase: cellBaseOf(pool.hostClass) ?? '' }),
+                FLEET_STEP_RETRY,
+            );
             const from = template ?? cellBaseOf(pool.hostClass) ?? null;
             if (!from && NEEDS_TEMPLATE.has(pool.provider)) throw new HostFailed('template_missing');
             if (!providerId) {

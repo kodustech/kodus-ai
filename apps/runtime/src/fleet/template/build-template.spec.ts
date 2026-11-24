@@ -40,11 +40,13 @@ class FakeSetupHosts implements SetupHostPort {
     }
 }
 
+const BASE = 'kodus-cell-r42-kit7';
+
 function world() {
     const provider = new FakeHostProvider({ installation: 'it' });
     const store = new InMemoryTemplateStore();
     const hosts = new FakeSetupHosts(provider);
-    const deps = { store, provider, setupHosts: hosts, cellBase: 'kodus-cell-r42-kit7', poll: { sleep: async () => undefined, attempts: 5 } };
+    const deps = { store, provider, setupHosts: hosts, cellBase: BASE, poll: { sleep: async () => undefined, attempts: 5 } };
     const req = { organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', pool, fingerprint: FP };
     return { provider, store, hosts, deps, req };
 }
@@ -53,10 +55,10 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
     it("bakes the default branch on a setup host, seals it, saves it under the environment's name, records it, and destroys the setup host", async () => {
         const w = world();
         const r = await buildEnvironmentTemplate(w.req, w.deps);
-        const name = templateNameOf('org-kodus', 'env-shop', FP);
+        const name = templateNameOf('org-kodus', 'env-shop', FP, BASE);
         expect(r).toEqual({ ok: true, name, reused: false });
         expect(w.provider.savedImages.get(name)?.state).toBe('ready');
-        expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun')).toBe(name);
+        expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', BASE)).toBe(name);
         expect(w.hosts.sealed).toEqual(w.hosts.booted);
         expect(w.hosts.destroyed).toEqual(w.hosts.booted);
     });
@@ -68,15 +70,27 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         await buildEnvironmentTemplate({ ...w.req, fingerprint: old }, w.deps);
         w.hosts.bake = { ok: true, fingerprint: FP, ref: 'default_branch' };
         await buildEnvironmentTemplate(w.req, w.deps);
-        expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun')).toBe(templateNameOf('org-kodus', 'env-shop', FP));
-        expect(w.provider.savedImages.has(templateNameOf('org-kodus', 'env-shop', old))).toBe(false);
+        expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', BASE)).toBe(templateNameOf('org-kodus', 'env-shop', FP, BASE));
+        expect(w.provider.savedImages.has(templateNameOf('org-kodus', 'env-shop', old, BASE))).toBe(false);
         expect(w.store.rows.find((t) => t.fingerprint === old)?.state).toBe('replaced');
+    });
+
+    it('a pool moved to a new cell base builds the template again on it and deletes the old disk, which held the old cell', async () => {
+        const w = world();
+        await buildEnvironmentTemplate(w.req, w.deps);
+        const next = { ...w.deps, cellBase: 'kodus-cell-r43-kit7' };
+        const r = await buildEnvironmentTemplate(w.req, next);
+        expect(r).toEqual({ ok: true, name: templateNameOf('org-kodus', 'env-shop', FP, 'kodus-cell-r43-kit7'), reused: false });
+        expect(w.hosts.booted).toHaveLength(2);
+        expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', 'kodus-cell-r43-kit7')).toBe(templateNameOf('org-kodus', 'env-shop', FP, 'kodus-cell-r43-kit7'));
+        expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', BASE)).toBeNull();
+        expect(w.provider.savedImages.has(templateNameOf('org-kodus', 'env-shop', FP, BASE))).toBe(false);
     });
 
     it('a template of the same build already ready is reused: no setup host', async () => {
         const w = world();
         await buildEnvironmentTemplate(w.req, w.deps);
-        expect(await buildEnvironmentTemplate(w.req, w.deps)).toEqual({ ok: true, name: templateNameOf('org-kodus', 'env-shop', FP), reused: true });
+        expect(await buildEnvironmentTemplate(w.req, w.deps)).toEqual({ ok: true, name: templateNameOf('org-kodus', 'env-shop', FP, BASE), reused: true });
         expect(w.hosts.booted).toHaveLength(1);
     });
 
@@ -95,7 +109,7 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
             expect(w.provider.savedImages.size).toBe(0);
             expect(w.hosts.sealed).toEqual([]);
             expect(w.hosts.destroyed).toEqual(w.hosts.booted);
-            expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun')).toBeNull();
+            expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', BASE)).toBeNull();
         }
     });
 
@@ -107,7 +121,7 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         w.hosts.bake = { ok: true, fingerprint: FP, ref: 'default_branch' };
         w.provider.images.save = async ({ name }) => ({ name, state: 'failed' });
         expect(await buildEnvironmentTemplate(w.req, w.deps)).toEqual({ ok: false, reason: 'save_failed' });
-        expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun')).toBe(templateNameOf('org-kodus', 'env-shop', old));
+        expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', BASE)).toBe(templateNameOf('org-kodus', 'env-shop', old, BASE));
     });
 
     it("the template's name fits boat's saved-snapshot names and keeps the org's id out of it", () => {
@@ -116,11 +130,15 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         expect(name.startsWith('kodus-env-')).toBe(true);
         expect(name).not.toContain('org-with');
         expect(templateNameOf('a', 'e', FP)).not.toBe(templateNameOf('b', 'e', FP));
+        // A new cell base is a new disk, under its own name, still a boat name.
+        const based = templateNameOf('org-with-a-very-long-identifier-0000000000000000', 'env-with-a-long-id-11111111', FP, 'kodus-cell-dev-473818b5e-gvisor-v10');
+        expect(based).toMatch(/^[a-z0-9][a-z0-9-]{0,62}$/);
+        expect(based).not.toBe(templateNameOf('org-with-a-very-long-identifier-0000000000000000', 'env-with-a-long-id-11111111', FP, 'kodus-cell-dev-99e21eb85-gvisor-v9'));
     });
 
     it('a template another build is making now is left to it: no second setup host', async () => {
         const w = world();
-        await w.store.begin({ organizationId: w.req.organizationId, environmentId: w.req.environmentId, poolId: w.req.poolId, fingerprint: FP, name: templateNameOf(w.req.organizationId, w.req.environmentId, FP), setupHostId: 'tpl-other' });
+        await w.store.begin({ organizationId: w.req.organizationId, environmentId: w.req.environmentId, poolId: w.req.poolId, fingerprint: FP, name: templateNameOf(w.req.organizationId, w.req.environmentId, FP, BASE), cellBase: BASE, setupHostId: 'tpl-other' });
         const r = await buildEnvironmentTemplate(w.req, w.deps);
         expect(r).toEqual({ ok: false, reason: 'already_building' });
         expect(w.hosts.booted).toEqual([]);
