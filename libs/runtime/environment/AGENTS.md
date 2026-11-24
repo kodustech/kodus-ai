@@ -1,6 +1,6 @@
 # libs/runtime/environment
 
-The one port for "this app up at this SHA" (docs §5, ADR-002): `EnvironmentRuntime`, which every consumer of a claim (a Run, a setup, an env session, a sandbox, a preview) calls in the runtime-worker. The control plane never talks to a cloud or a machine; the port's implementation sends messages through the hub to the cell. This module is the port, its types and the claim ceilings, plus an in-memory driver.
+The one port for "this app up at this SHA" (docs §5, ADR-002): `EnvironmentRuntime`, which every consumer of a claim (a Run, a setup, an env session, a sandbox, a preview, a suite shard) calls in the runtime-worker. The control plane never talks to a cloud or a machine; the port's implementation sends messages through the hub to the cell. This module is the port, its types and the claim ceilings, plus an in-memory driver.
 
 ## Owns
 - The port: `environment-runtime.ts` `EnvironmentRuntime` (`acquire`, `probe`, `exec`, `reset`, `release`, and the optional `exploreBrowser`, `snapshotRound`, `renew`, `bake`, `poolTarget`, `progress`, `upload`, `status`), with `AcquireRequest`, `Claim`, `Blocked`, `EnvError`, `ProbeOutcome`, `StepResult`.
@@ -58,6 +58,7 @@ Imported by:
 - [`apps/runtime/src/worker/run`](../../../apps/runtime/src/worker/run/AGENTS.md)
 - [`apps/runtime/src/worker/sandbox`](../../../apps/runtime/src/worker/sandbox/AGENTS.md)
 - [`apps/runtime/src/worker/setup`](../../../apps/runtime/src/worker/setup/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../../../apps/runtime/src/worker/suite/AGENTS.md)
 - [`libs/runtime/api/application`](../api/application/AGENTS.md)
 - [`libs/runtime/api/application/use-cases`](../api/application/use-cases/AGENTS.md)
 - [`libs/runtime/api/domain`](../api/domain/AGENTS.md)

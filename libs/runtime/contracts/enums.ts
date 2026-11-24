@@ -164,7 +164,9 @@ export const isClaimStateIn = (states: readonly ClaimState[], s: string): boolea
 // sandbox: a code sandbox (docs/runtime/sandbox.md), one tool container and no Run.
 // preview: one side of a finished Run booted again for a person to open in a
 // browser (docs/runtime/preview-urls.md), never the Run's own machines.
-export const CLAIM_CONSUMERS = ['runtime', 'setup', 'mcp', 'custom_agent', 'sandbox', 'preview'] as const;
+// suite: one shard of the repository's own e2e suite (docs/runtime/e2e-suites.md section 4), a Run-like claim that
+// never produces probes: it runs the repository's command in the PR (or main) build.
+export const CLAIM_CONSUMERS = ['runtime', 'setup', 'mcp', 'custom_agent', 'sandbox', 'preview', 'suite'] as const;
 export type ClaimConsumer = (typeof CLAIM_CONSUMERS)[number];
 
 /** What started a Run. */

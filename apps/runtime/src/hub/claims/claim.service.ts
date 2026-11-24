@@ -523,6 +523,11 @@ export class ClaimService {
             this.log('warn', 'claim.tool_layers_unsupported', ids);
             return { status: 'blocked', blockers: [{ kind: 'platform', signature: 'tool_layers_unsupported', message: 'this cell keeps no tool layers' }] };
         }
+        if (req.consumer === 'suite' && !supports(session, 'suite')) {
+            // Nothing was sent or recorded: a cell that does not name the feature would refuse the consumer at decode.
+            this.log('warn', 'claim.suite_unsupported', ids);
+            return { status: 'blocked', blockers: [{ kind: 'platform', signature: 'suite_unsupported', message: 'this cell runs no e2e suite shards' }] };
+        }
         if (req.consumer === 'preview' && !supports(session, 'preview')) {
             // Nothing was sent or recorded: a cell without the feature never routes the preview.
             this.log('warn', 'claim.preview_unsupported', ids);

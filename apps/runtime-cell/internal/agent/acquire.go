@@ -25,6 +25,9 @@ func hardCeiling(c protocol.Consumer) time.Duration {
 	case protocol.ConsumerPreview:
 		// One start of a preview (HARD_EXPIRY_MINUTES.preview, docs/runtime/preview-urls.md §5.2).
 		return 120 * time.Minute
+	case protocol.ConsumerSuite:
+		// The PR build (45 min) plus the suite run's total (60 min): HARD_EXPIRY_MINUTES.suite, docs/runtime/e2e-suites.md 12.1.
+		return 105 * time.Minute
 	case protocol.ConsumerSetup, protocol.ConsumerCustomAgent, protocol.ConsumerSandbox:
 		// the default ceiling below
 	}

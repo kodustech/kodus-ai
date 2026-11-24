@@ -17,4 +17,14 @@ describe('claim ceilings', () => {
     it('a setup waits for its build until a minute before its ceiling', () => {
         expect(READY_TIMEOUT_MINUTES.setup).toBe(HARD_EXPIRY_MINUTES.setup - 1);
     });
+
+    // docs/runtime/e2e-suites.md 12.1: the PR build keeps its 45 min boot budget and the suite's timers start after it:
+    // 60 min for the whole suite run, so the machines live 45 + 60 min, inside a boat host's 120 min.
+    it('a suite claim waits for the PR build as long as a setup does, and lives for that build plus the suite run total', () => {
+        expect(READY_TIMEOUT_MINUTES.suite).toBe(45);
+        expect(HARD_EXPIRY_MINUTES.suite).toBe(45 + 60);
+        expect(HARD_EXPIRY_MINUTES.suite).toBeLessThan(120);
+        // Renewed like a Run's: the first lease is a Run's, never past the ceiling.
+        expect(LEASE_TTL_MINUTES.suite).toBe(LEASE_TTL_MINUTES.runtime);
+    });
 });

@@ -395,9 +395,10 @@ export type ClaimProgress = {
 // large build (Grafana's backend: ~35 min) outlives a shorter lease and is swept mid-build.
 // A sandbox's lease matches the review's sandbox lease (30 min); its ceiling the E2B sandbox's order of magnitude.
 // A preview's lease is its idle stop (15 min, renewed by the edge's traffic) and its ceiling one start (2 h): docs/runtime/preview-urls.md §5.2.
-export const LEASE_TTL_MINUTES: Record<Consumer, number> = { runtime: 45, setup: 45, mcp: 120, custom_agent: 30, sandbox: 30, preview: 15 };
+// A suite shard's lease is a Run's; its ceiling is the PR build's 45 min plus the suite run's 60 min total (docs/runtime/e2e-suites.md 12.1), inside a boat host's 120.
+export const LEASE_TTL_MINUTES: Record<Consumer, number> = { runtime: 45, setup: 45, mcp: 120, custom_agent: 30, sandbox: 30, preview: 15, suite: 45 };
 /** When a claim's machines are destroyed whatever the lease says, by consumer. */
-export const HARD_EXPIRY_MINUTES: Record<Consumer, number> = { runtime: 60, setup: 45, mcp: 240, custom_agent: 45, sandbox: 45, preview: 120 };
+export const HARD_EXPIRY_MINUTES: Record<Consumer, number> = { runtime: 60, setup: 45, mcp: 240, custom_agent: 45, sandbox: 45, preview: 120, suite: 105 };
 /**
  * How long the hub waits from claim.acquire to claim.ready, by consumer. A
  * Run boots on a baked image; a setup builds from zero, so it waits until a
@@ -414,6 +415,8 @@ export const READY_TIMEOUT_MINUTES: Record<Consumer, number> = {
     sandbox: 2,
     // A preview's PR side builds the pull request's commit, as the Run's did.
     preview: PR_BUILD_READY_TIMEOUT_MINUTES_VALUE,
+    // A suite shard's PR side builds the commit under the Run's 45 min boot budget (docs/runtime/e2e-suites.md 12.1).
+    suite: 45,
 };
 /**
  * A Run's PR side does not boot on the baked image: the cell builds the pull

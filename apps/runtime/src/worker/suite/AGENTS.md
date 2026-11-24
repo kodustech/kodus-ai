@@ -7,6 +7,9 @@ The runtime-worker's side of running a repository's own e2e suite (docs/runtime/
 - `pg-suite-baselines.ts` `PgSuiteBaselines`: `runtime_suite_baselines`, unique per (environment, main sha, suite digest). `record` keeps the first complete baseline of a key and lets only a complete one replace an incomplete one; `find` and `findAmong` (nearest ancestor first) answer complete baselines only; every `record` prunes the environment: the newest `BASELINE_KEEP_COMMITS` (50), nothing older than `BASELINE_KEEP_DAYS` (30), and the newest complete baseline is never deleted.
 - `pg-suite-spec-stats.ts` `PgSuiteSpecStats`: `runtime_suite_spec_stats`, the duration the next plan balances by (`read` as `SpecStats`). `record` folds only passing specs into an exponential average over about 10 runs (`STATS_WINDOW`), atomically per spec; a failed, skipped or timed-out spec changes nothing.
 
+- `detached-exec.ts` `runDetached`: a suite command started once, detached, in the claim and polled by short `exec` calls (each under `POLL_TIMEOUT_MS`, 60 s, far under the protocol's 600 s), no protocol change (design decision D3). A wrapper writes the exit status and the log to a state directory; the marker file makes a second start (a replay) do nothing; each poll reads the state (`running`, `exited:<code>`, `dead`), the result files that exist (a path pattern, validated) and the log tail, and hands them to `onPoll`. Outcomes: `finished` (exited; red specs are results), `crashed` (died with result files: the engine keeps them and re-runs the rest once), `timeout` (the shard cap: the command and its children are stopped), `infra` (`no_result_file`, `transport_lost` after 3 lost polls in a row, `start_failed`, `bad_results_glob`, `bad_input`: never a regression). Clock and sleep are injected; step ids derive from the key and the poll number.
+- `testing.ts`: `SuiteClock`, `FakeSuiteEnvironment` (a suite command in fake time). Specs only.
+
 ## Does not own
 - The balance, classification, selection and order rules: `libs/runtime/suite`.
 - The hosts a suite runs on and their demand rows: `apps/runtime/src/fleet`, `shared/persistence/cell-directory.ts`.
@@ -15,6 +18,7 @@ The runtime-worker's side of running a repository's own e2e suite (docs/runtime/
 ## Rules and limits
 - Tables are migration 51 (`shared/persistence/runtime-schema.ts`); each carries `organization_id`, so the organization purge reaches them and a read is always scoped. The API reads them with the read-only role (`scripts/runtime/runtime-reader-grants.sql`).
 - Results hold redacted, bounded errors only; the engine redacts before it stores (docs section 7).
+- The start and poll scripts are POSIX `sh` (no `setsid`, no `base64`): the command text goes through a quoted heredoc, the results glob is limited to `[A-Za-z0-9_./*?-]`, relative and without `..`, and the key and the cwd are checked the same way. `detached-exec.shell.spec.ts` runs them in a real shell.
 - Stores take a `Pick<Pool, 'query'>` and no clock except the baseline store's injectable `now`.
 
 ## Where new code goes
@@ -28,11 +32,12 @@ The runtime-worker's side of running a repository's own e2e suite (docs/runtime/
 
 ## Module map
 
-Files (3, tests apart): `pg-suite-baselines.ts`, `pg-suite-runs.ts`, `pg-suite-spec-stats.ts`
+Files (5, tests apart): `detached-exec.ts`, `pg-suite-baselines.ts`, `pg-suite-runs.ts`, `pg-suite-spec-stats.ts`, `testing.ts`
 
 Imports these Runtime modules:
 
 - [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)
+- [`libs/runtime/environment`](../../../../../libs/runtime/environment/AGENTS.md)
 - [`libs/runtime/suite`](../../../../../libs/runtime/suite/AGENTS.md)
 
 Imported by:

@@ -52,7 +52,8 @@
         "bakeShare",
         "sandboxPool",
         "toolLayers",
-        "buildStateDiskFacts"
+        "buildStateDiskFacts",
+        "suite"
       ],
       "maxClaimSize": {
         "memoryMb": 16384,

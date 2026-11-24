@@ -196,6 +196,7 @@ const (
 	ConsumerCustomAgent Consumer = "custom_agent"
 	ConsumerSandbox     Consumer = "sandbox"
 	ConsumerPreview     Consumer = "preview"
+	ConsumerSuite       Consumer = "suite"
 )
 
 type GitProvider string

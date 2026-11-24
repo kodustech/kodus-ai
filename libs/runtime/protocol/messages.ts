@@ -374,6 +374,10 @@ export const CELL_FEATURES = [
     // sent only to a hub whose hello ack accepts it; at the end, like the
     // features before it, so an older hub's trim drops it first.
     'buildStateDiskFacts',
+    // claim.acquire consumer 'suite' (docs/runtime/e2e-suites.md section 4): a claim for one shard of the repository's own
+    // e2e suite. A cell's strict decoder refuses a consumer it does not know, so the hub sends it only to a cell that
+    // names this; at the end, like the features before it, so an older hub's trim drops it first.
+    'suite',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
 

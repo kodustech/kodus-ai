@@ -220,7 +220,7 @@ export const BLOCKER_SIGNATURE_CLASSES = [
     'image_too_large', 'isolation_unavailable', 'machine_minutes_exhausted', 'memory_unavailable', 'no_capacity', 'no_setup',
     'org_capacity', 'org_key', 'out_of_memory', 'recipe_capability_unsupported', 'recipe_invalid', 'recipe_needs_member',
     'preview_unsupported', 'recipe_needs_conflict', 'recipe_needs', 'repo_fetch', 'repo_refused', 'repo_source', 'repo_upload', 'restore_workload', 'snapshot_unsupported',
-    'sandbox_unsupported', 'tool_layers_unsupported', 'size_unavailable', 'sql_observer_configuration', 'sql_observer_unsupported',
+    'sandbox_unsupported', 'suite_unsupported', 'tool_layers_unsupported', 'size_unavailable', 'sql_observer_configuration', 'sql_observer_unsupported',
     'sql_provision_failed', 'workdir', 'workspace_layout', 'workspace_primary_alias', 'workspace_token_missing',
     // A security_violation's signature is the alert kind (internal/agent/alerts.go, internal/egress/alerts.go).
     'credential_exfiltration', 'bait_exfiltration', 'placeholder_leak',

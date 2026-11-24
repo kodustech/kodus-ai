@@ -510,7 +510,8 @@
             "mcp",
             "custom_agent",
             "sandbox",
-            "preview"
+            "preview",
+            "suite"
           ]
         },
         "repo": {
