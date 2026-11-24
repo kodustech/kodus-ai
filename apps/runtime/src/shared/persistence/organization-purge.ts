@@ -39,6 +39,7 @@ export const ORGANIZATION_PURGE_TABLES: ReadonlyArray<readonly [table: string, c
     ['runtime_lessons', 'organization_id'],
     ['runtime_machine_reservations', 'org_id'],
     ['runtime_org_machine_budget', 'organization_id'],
+    ['runtime_template_setups', 'organization_id'],
     ['runtime_pool_demand', 'organization_id'],
     ['runtime_pr_cancel_generations', 'organization_id'],
     ['runtime_pr_fences', 'organization_id'],

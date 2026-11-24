@@ -38,7 +38,7 @@ The environment setup: boot the default-branch head the product resolved with th
 
 ## Module map
 
-Files (16, tests apart): `author-repair.ts`, `blocker-message.ts`, `boot-once.ts`, `boot-phases.ts`, `environment-setup.service.ts`, `environment-setup.store.ts`, `learn-from-failure.ts`, `learn-loop.ts`, `lesson.store.ts`, `recipe-failure.ts`, `resolve-recipe.ts`, `resolve-ref.ts`, `setup-journal.ts`, `setup-scope.ts`, `setup-tokens.ts`, `testing.ts`
+Files (17, tests apart): `author-repair.ts`, `blocker-message.ts`, `boot-once.ts`, `boot-phases.ts`, `environment-setup.service.ts`, `environment-setup.store.ts`, `learn-from-failure.ts`, `learn-loop.ts`, `lesson.store.ts`, `recipe-failure.ts`, `resolve-recipe.ts`, `resolve-ref.ts`, `setup-journal.ts`, `setup-scope.ts`, `setup-tokens.ts`, `template-routing-setup.store.ts`, `testing.ts`
 
 Imports these Runtime modules:
 
@@ -53,6 +53,7 @@ Imports these Runtime modules:
 - [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)
 - [`libs/runtime/environment`](../../../../../libs/runtime/environment/AGENTS.md)
 - [`libs/runtime/gate`](../../../../../libs/runtime/gate/AGENTS.md)
+- [`libs/runtime/placement`](../../../../../libs/runtime/placement/AGENTS.md)
 - [`libs/runtime/protocol`](../../../../../libs/runtime/protocol/AGENTS.md)
 - [`libs/runtime/run`](../../../../../libs/runtime/run/AGENTS.md)
 - [`libs/runtime/run/adapters`](../../../../../libs/runtime/run/adapters/AGENTS.md)

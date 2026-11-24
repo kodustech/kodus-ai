@@ -5,10 +5,11 @@ import { bakeFingerprintOf, SetupRecordBakeProbe, templateSetupCommandKey } from
 const FP = 'b'.repeat(64);
 const req = { hostId: 'tpl-x', organizationId: 'org-1', environmentId: 'env-1' };
 const rec = (over: Partial<EnvironmentSetupRecord>) => ({ environmentId: 'env-1', organizationId: 'org-1', repositoryId: 'r', key: templateSetupCommandKey('org-1', 'env-1', 'tpl-x'), state: 'active', steps: [], blockers: [], refSource: 'default_branch', bakeRefsDigest: FP, ...over }) as EnvironmentSetupRecord;
-const probe = (r: EnvironmentSetupRecord | null) => new SetupRecordBakeProbe({ get: async () => r });
+// A store of template setup records, read by the exact key (runtime.runtime_template_setups).
+const probe = (...rs: Array<EnvironmentSetupRecord | null>) => new SetupRecordBakeProbe({ get: async (key) => rs.find((r) => r?.key === key) ?? null });
 
 describe('reading how the template host\'s setup ended (setup record)', () => {
-    it('is running while there is no record, or the record is an ordinary setup, or it is still setting up', async () => {
+    it('is running while there is no record for this host, or it is still setting up', async () => {
         expect(await probe(null).read(req)).toEqual({ state: 'running' });
         expect(await probe(rec({ key: 'ordinary-key' })).read(req)).toEqual({ state: 'running' });
         expect(await probe(rec({ state: 'setting_up' })).read(req)).toEqual({ state: 'running' });

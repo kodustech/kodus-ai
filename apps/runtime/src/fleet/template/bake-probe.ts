@@ -4,12 +4,12 @@ import { boundKeyOfTemplate } from '@libs/runtime/placement/candidate-pools';
 import type { BakeProbe, BakeState } from './boat-setup-host';
 
 // How the environment's setup on its template host ended (docs/runtime/host-providers.md §8.2), read from the
-// environment's setup record through the setup store, never from the host. Only the setup requested for this setup
+// template setup's own record through the setup store, never from the host. Only the setup requested for this setup
 // host counts: its command key is the template's bound key and this host's id.
 
-/** The read side of the setup records (runtime.runtime_environment_setups): `PgEnvironmentSetupStore` fits. */
+/** The read side of the template setup records (runtime.runtime_template_setups): `PgTemplateSetupStore` fits. */
 export interface SetupRecordReader {
-    get(environmentId: string): Promise<EnvironmentSetupRecord | null>;
+    get(setupKey: string, organizationId?: string): Promise<EnvironmentSetupRecord | null>;
 }
 
 /** The command key of the setup that builds an environment's template: the bound key and the setup host's id, so it is unique per build. */
@@ -32,9 +32,9 @@ export class SetupRecordBakeProbe implements BakeProbe {
     constructor(private readonly setups: SetupRecordReader) {}
 
     async read(req: { hostId: string; organizationId: string; environmentId: string }): Promise<BakeState> {
-        const rec = await this.setups.get(req.environmentId);
-        // Only this host's own setup counts: an earlier attempt's template setup may still be the record (active or blocked).
-        if (!rec || rec.organizationId !== req.organizationId || rec.key !== templateSetupCommandKey(req.organizationId, req.environmentId, req.hostId)) return { state: 'running' };
+        // Only this host's own setup counts: it is read by its exact key, an earlier attempt's record is another row.
+        const rec = await this.setups.get(templateSetupCommandKey(req.organizationId, req.environmentId, req.hostId), req.organizationId);
+        if (!rec || rec.organizationId !== req.organizationId) return { state: 'running' };
         if (rec.state === 'setting_up') return { state: 'running' };
         if (rec.state === 'blocked') return { state: 'failed', reason: 'bake_failed' };
         const fingerprint = bakeFingerprintOf(rec);

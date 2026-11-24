@@ -45,6 +45,10 @@ BEGIN
     IF to_regclass('runtime.runtime_env_templates') IS NOT NULL THEN
       EXECUTE 'GRANT SELECT (org_id, environment_id, state, setup_key, setup_requested_at) ON runtime.runtime_env_templates TO kodus_runtime_reader';
     END IF;
+    -- The template builds' setup records (v50): the pending-template reader only asks whether a key exists.
+    IF to_regclass('runtime.runtime_template_setups') IS NOT NULL THEN
+      EXECUTE 'GRANT SELECT (setup_key, organization_id, environment_id) ON runtime.runtime_template_setups TO kodus_runtime_reader';
+    END IF;
     IF to_regclass('runtime.runtime_stops') IS NOT NULL THEN
       EXECUTE 'GRANT SELECT (scope, organization_id, cleared_at) ON runtime.runtime_stops TO kodus_runtime_reader';
     END IF;

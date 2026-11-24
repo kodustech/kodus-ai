@@ -38,6 +38,7 @@ Imported by:
 - [`apps/runtime/src/fleet/template`](../../../apps/runtime/src/fleet/template/AGENTS.md)
 - [`apps/runtime/src/shared/admission`](../../../apps/runtime/src/shared/admission/AGENTS.md)
 - [`apps/runtime/src/shared/persistence`](../../../apps/runtime/src/shared/persistence/AGENTS.md)
+- [`apps/runtime/src/worker/setup`](../../../apps/runtime/src/worker/setup/AGENTS.md)
 - [`libs/runtime/api/application`](../api/application/AGENTS.md)
 
 <!-- module-map:end -->

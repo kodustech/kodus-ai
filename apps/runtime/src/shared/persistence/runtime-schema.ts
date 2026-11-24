@@ -1096,6 +1096,21 @@ CREATE INDEX IF NOT EXISTS runtime_lessons_org_active_idx ON runtime.runtime_les
         // (reconcile.ts) spares a host that runtime_hosts does not know while its template builds.
         sql: `ALTER TABLE runtime.runtime_env_templates ADD COLUMN IF NOT EXISTS setup_host_id text;`,
     },
+    {
+        version: 50,
+        name: 'the setup records of environment template builds',
+        // One row per template setup key (template:<org>/<env>:<hostId>): a template build's setup never writes the
+        // environment's own record (runtime_environment_setups), so a failed template build cannot block the environment.
+        sql: `CREATE TABLE IF NOT EXISTS runtime.runtime_template_setups (
+            setup_key       text PRIMARY KEY,
+            organization_id text NOT NULL,
+            environment_id  text NOT NULL,
+            state           text NOT NULL,
+            record          jsonb NOT NULL DEFAULT '{}'::jsonb,
+            updated_at      timestamptz NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS runtime_template_setups_env_idx ON runtime.runtime_template_setups (organization_id, environment_id);`,
+    },
 ];
 
 /** The migration lock: the only constant advisory key (advisory-lock.ts). */

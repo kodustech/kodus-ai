@@ -10,6 +10,7 @@ import { PgLessonStore } from '../../blockers/pg-lesson.store';
 import type { EnvironmentSetupRecord } from '../environment-setup';
 import { PgEnvironmentSetupStore } from './pg-environment-setup.store';
 import { PgSql } from './pg-sql';
+import { PgTemplateSetupStore } from './pg-template-setup.store';
 
 // The setups and the lessons the runtime-worker writes, against a real
 // Postgres (runtime.runtime_environment_setups and runtime.runtime_lessons,
@@ -21,6 +22,7 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
     let pool: Pool;
     let setups: PgEnvironmentSetupStore;
     let lessons: PgLessonStore;
+    let templates: PgTemplateSetupStore;
 
     beforeAll(async () => {
         await database.create();
@@ -29,6 +31,7 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         const sql = new PgSql(() => pool);
         setups = new PgEnvironmentSetupStore(sql);
         lessons = new PgLessonStore(sql);
+        templates = new PgTemplateSetupStore(sql);
     });
     afterAll(async () => {
         await pool?.end();
@@ -70,6 +73,33 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         await setups.saveProgress(running.environmentId, running.key, { ...progress, lines: ['late'] });
         await setups.saveProgress(running.environmentId, 'another-setup', { ...progress, lines: ['other'] });
         expect((await setups.get(running.environmentId))?.progress ?? null).toBeNull();
+    });
+
+    it("a template build's setups are kept one per key, apart from the environment's own record", async () => {
+        const own = setup({ state: 'active', imageId: 'img-live' });
+        await setups.save(own);
+        const key = (host: string) => `template:org-a/${own.environmentId}:${host}`;
+        const first = setup({ environmentId: own.environmentId, key: key('tpl-1'), state: 'blocked' });
+        const second = setup({ environmentId: own.environmentId, key: key('tpl-2') });
+        await templates.save(first);
+        await templates.save(second);
+        await templates.save({ ...second, state: 'active', updatedAt: '2026-11-12T10:09:00.000Z' });
+
+        expect(await templates.get(key('tpl-1'))).toEqual(first);
+        expect((await templates.get(key('tpl-2')))?.state).toBe('active');
+        expect(await templates.get(key('tpl-2'), 'org-b')).toBeNull();
+        expect(await setups.get(own.environmentId)).toEqual(own);
+    });
+
+    it("a template setup's progress reaches it while it runs, never after it ends", async () => {
+        const running = setup({ key: 'template:org-a/env-p:tpl-1' });
+        await templates.save(running);
+        const progress = { phases: [], lines: ['step 1/9'], updatedAt: '2026-11-12T10:01:00.000Z' };
+        await templates.saveProgress(running.environmentId, running.key, progress);
+        expect((await templates.get(running.key))?.progress).toEqual(progress);
+        await templates.save({ ...running, state: 'blocked' });
+        await templates.saveProgress(running.environmentId, running.key, { ...progress, lines: ['late'] });
+        expect((await templates.get(running.key))?.progress ?? null).toBeNull();
     });
 
     const lesson = (patch: Partial<Lesson> = {}): Lesson => ({

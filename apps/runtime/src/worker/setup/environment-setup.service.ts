@@ -76,6 +76,12 @@ export class EnvironmentSetupService {
         const previous = await step('load', () => this.deps.store.get(cmd.environmentId));
         // Same command delivered twice: the first answer stands.
         if (previous && previous.key === cmd.key && previous.state !== 'setting_up') return previous;
+        // A template build's setup keeps its record apart from the environment's.
+        // (A step only for a template key, so an ordinary setup's step ids are unchanged.)
+        if (cmd.key.startsWith('template:')) {
+            const template = await step('load-template', async () => (await this.deps.store.getTemplate?.(cmd.key)) ?? null);
+            if (template && template.state !== 'setting_up') return template;
+        }
 
         const setup = openSetup(this.deps, cmd, previous, step, cancellationSignal, execution);
         await setup.journal.done(await setup.journal.start('requested'));

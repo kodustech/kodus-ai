@@ -4,7 +4,6 @@ import { Pool } from 'pg';
 import { FakeHostProvider } from '@libs/runtime/fleet/fake-provider';
 import type { HostProvider } from '@libs/runtime/fleet/host-provider';
 import { cellBaseOf } from '@libs/runtime/fleet/pool';
-import { PgEnvironmentSetupStore } from '@libs/runtime/run/adapters/pg-environment-setup.store';
 
 import { type FleetConfig, RUNTIME_CONFIG, RUNTIME_PG_POOL } from '../shared/config';
 import { RuntimeLogger } from '../shared/observability/logger';
@@ -17,6 +16,7 @@ import { fleetPost, HubFleetClient } from './hub-fleet-client';
 import type { TemplateResolver } from './per-run-host';
 import { BoatHostProvider } from './providers/boat/boat-provider';
 import { ProviderRegistry } from './providers/registry';
+import { PgTemplateSetupStore } from '@libs/runtime/run/adapters/pg-template-setup.store';
 import { SetupRecordBakeProbe } from './template/bake-probe';
 import { BoatSetupHost, type HostSealer } from './template/boat-setup-host';
 import { HubHostSealer } from './template/hub-host-sealer';
@@ -80,7 +80,7 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
         // The environment template builder runs only where it can seal a host and ask for the setup on it.
         const boat = this.providers.get('boat');
         if (boat && this.requester && !this.templates) {
-            const setups = new PgEnvironmentSetupStore(this.pool);
+            const setups = new PgTemplateSetupStore(this.pool);
             const allBoatPools = async () => (await store.controlledPools()).pools.filter((p) => p.pool.provider === 'boat' && p.pool.lifecycle === 'perRun').map((p) => ({ poolId: p.poolId, pool: p.pool }));
             const boatPoolsOf = async (organizationId: string) => (await allBoatPools()).filter((p) => !p.pool.admission || p.pool.admission.allowOrgs.includes(organizationId));
             const poll = { sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)), attempts: 360, intervalMs: 10_000 };

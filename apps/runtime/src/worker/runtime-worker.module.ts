@@ -51,6 +51,8 @@ import { PgKeptCheckResults } from './run/pg-kept-check-results';
 import { AmqpPublishRequester } from './publish/amqp-publish-requester';
 import { SealedSecretOpener, SECRET_OPENER } from './secrets/sealed-tokens';
 import { ENVIRONMENT_SETUP_SERVICE, EnvironmentSetupService, type SetupOptions, setupOptionsFrom } from './setup/environment-setup.service';
+import { PgTemplateSetupStore } from '@libs/runtime/run/adapters/pg-template-setup.store';
+import { TemplateRoutingSetupStore } from './setup/template-routing-setup.store';
 import { ENVIRONMENT_SETUP_STORE, type EnvironmentSetupStore } from './setup/environment-setup.store';
 import { LESSON_STORE, type LessonStore } from './setup/lesson.store';
 import { EnvSessionListener } from './env-session/env-session.listener';
@@ -246,7 +248,8 @@ export class RuntimeWorkerModule implements OnApplicationShutdown {
                 {
                     provide: ENVIRONMENT_SETUP_STORE,
                     inject: [RUNTIME_PG_POOL],
-                    useFactory: (pool: Pool): EnvironmentSetupStore => new PgEnvironmentSetupStore(new PgSql(() => pool)),
+                    useFactory: (pool: Pool): EnvironmentSetupStore =>
+                        new TemplateRoutingSetupStore(new PgEnvironmentSetupStore(new PgSql(() => pool)), new PgTemplateSetupStore(new PgSql(() => pool))),
                 },
                 {
                     provide: LESSON_STORE,

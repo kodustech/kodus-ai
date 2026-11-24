@@ -12,6 +12,8 @@ export interface EnvironmentSetupStore {
      * carry it from the boot's end.
      */
     saveProgress?(environmentId: string, key: string, progress: EnvironmentSetupProgress): Promise<void>;
+    /** A template build's setup record by its command key (template-routing-setup.store.ts); other stores have none. */
+    getTemplate?(key: string): Promise<EnvironmentSetupRecord | null>;
 }
 
 /** The Runtime Postgres store (runtime.runtime_environment_setups), one row per environment (the latest setup). */

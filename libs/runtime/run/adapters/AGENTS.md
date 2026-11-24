@@ -30,7 +30,7 @@ The Postgres side of the Runtime's own stores and the pieces every Postgres stor
 
 ## Module map
 
-Files (7, tests apart): `advisory-lock.ts`, `file-run-stream.store.ts`, `pg-document.ts`, `pg-environment-setup.store.ts`, `pg-run-projection.store.ts`, `pg-run-stream.store.ts`, `pg-sql.ts`
+Files (8, tests apart): `advisory-lock.ts`, `file-run-stream.store.ts`, `pg-document.ts`, `pg-environment-setup.store.ts`, `pg-run-projection.store.ts`, `pg-run-stream.store.ts`, `pg-sql.ts`, `pg-template-setup.store.ts`
 
 Imports these Runtime modules:
 
