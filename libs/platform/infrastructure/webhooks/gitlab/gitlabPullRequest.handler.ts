@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { reviewCommandAccess } from '@libs/platform/application/services/commenter-access';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
@@ -19,7 +20,7 @@ import {
     isReviewCommand,
     parseReviewDirective,
     requestedReviewModeOf,
-    parseCustomAgentCommand
+    parseCustomAgentCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
 import {
@@ -27,6 +28,7 @@ import {
     type GitlabDraftChangesLike,
 } from '@libs/common/utils/webhooks/gitlab-draft.utils';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
+import { gitlabWebhookSource } from '@libs/common/utils/webhooks/webhook-source-host';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
 import { EnqueueCodeReviewJobUseCase } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
@@ -47,9 +49,11 @@ type GitlabCodeReviewTriggerPayload = {
         readonly last_commit?: { readonly id?: string | null } | null;
         readonly oldrev?: string | null;
     } | null;
-    readonly changes?: (GitlabDraftChangesLike & {
-        readonly description?: unknown;
-    }) | null;
+    readonly changes?:
+        | (GitlabDraftChangesLike & {
+              readonly description?: unknown;
+          })
+        | null;
 };
 
 export const shouldTriggerGitlabCodeReview = (
@@ -194,7 +198,7 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.GITLAB,
             String(payload?.project?.id),
-            { host: extractGitlabHost(payload) },
+            gitlabWebhookSource(payload),
         );
 
         // If no active automation found, complete the webhook processing immediately
@@ -215,7 +219,10 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
         try {
             // Check if we should trigger code review based on the MR action
             if (this.shouldTriggerCodeReviewForGitLab(payload)) {
-                await this.savePullRequestUseCase.execute(params);
+                await this.savePullRequestUseCase.execute({
+                    ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
+                });
 
                 if (
                     this.enqueueCodeReviewJobUseCase &&
@@ -304,9 +311,11 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
 
                 if (payload?.object_attributes?.action === 'merge') {
                     try {
-                        await this.generateIssuesFromPrClosedUseCase.execute(
-                            params,
-                        );
+                        await this.generateIssuesFromPrClosedUseCase.execute({
+                            ...params,
+                            organizationAndTeamData:
+                                context?.organizationAndTeamData,
+                        });
                     } catch (error) {
                         this.logger.error({
                             message: 'Failed to generate issues from merged MR',
@@ -359,7 +368,8 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
 
                                 this.enqueueAstGraphUpdateOnMergedUseCase
                                     ?.execute({
-                                        prNumber: payload?.object_attributes?.iid,
+                                        prNumber:
+                                            payload?.object_attributes?.iid,
                                         repoExternalId: repository.id,
                                         repoName: repository.name,
                                         platform: PlatformType.GITLAB,
@@ -375,7 +385,8 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                                     .catch((e) => {
                                         this.logger.warn({
                                             message: `[AST-GRAPH] Failed to enqueue graph update after MR#${mrNumber} merge`,
-                                            context: GitLabMergeRequestHandler.name,
+                                            context:
+                                                GitLabMergeRequestHandler.name,
                                             error: e,
                                         });
                                     });
@@ -392,22 +403,26 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                     if (context.organizationAndTeamData) {
                         // Durable sandbox invalidation via outbox (SBX-05).
                         const prKey = `${context.organizationAndTeamData.organizationId}:${repository.id}:${payload?.object_attributes?.iid}`;
-                        await this.outboxRepository.create({
-                            jobId: undefined,
-                            exchange: 'sandbox.events',
-                            routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
-                            payload: {
-                                prKey,
-                                reason: 'pr_closed',
-                            } satisfies SandboxInvalidatePayload,
-                        }).catch((err) => {
-                            this.logger.warn({
-                                message: '[SBX-05] Failed to write sandbox invalidation outbox message',
-                                context: GitLabMergeRequestHandler.name,
-                                error: err instanceof Error ? err : undefined,
-                                metadata: { prKey },
+                        await this.outboxRepository
+                            .create({
+                                jobId: undefined,
+                                exchange: 'sandbox.events',
+                                routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
+                                payload: {
+                                    prKey,
+                                    reason: 'pr_closed',
+                                } satisfies SandboxInvalidatePayload,
+                            })
+                            .catch((err) => {
+                                this.logger.warn({
+                                    message:
+                                        '[SBX-05] Failed to write sandbox invalidation outbox message',
+                                    context: GitLabMergeRequestHandler.name,
+                                    error:
+                                        err instanceof Error ? err : undefined,
+                                    metadata: { prKey },
+                                });
                             });
-                        });
 
                         // TODO(SBX-05): GitLab force-push events arrive as 'update' with
                         // oldrev !== last_commit.id — not distinguishable from regular push
@@ -431,22 +446,26 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                     if (context.organizationAndTeamData) {
                         // Durable sandbox invalidation via outbox (SBX-05).
                         const prKey = `${context.organizationAndTeamData.organizationId}:${repository.id}:${payload?.object_attributes?.iid}`;
-                        await this.outboxRepository.create({
-                            jobId: undefined,
-                            exchange: 'sandbox.events',
-                            routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
-                            payload: {
-                                prKey,
-                                reason: 'pr_closed',
-                            } satisfies SandboxInvalidatePayload,
-                        }).catch((err) => {
-                            this.logger.warn({
-                                message: '[SBX-05] Failed to write sandbox invalidation outbox message',
-                                context: GitLabMergeRequestHandler.name,
-                                error: err instanceof Error ? err : undefined,
-                                metadata: { prKey },
+                        await this.outboxRepository
+                            .create({
+                                jobId: undefined,
+                                exchange: 'sandbox.events',
+                                routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
+                                payload: {
+                                    prKey,
+                                    reason: 'pr_closed',
+                                } satisfies SandboxInvalidatePayload,
+                            })
+                            .catch((err) => {
+                                this.logger.warn({
+                                    message:
+                                        '[SBX-05] Failed to write sandbox invalidation outbox message',
+                                    context: GitLabMergeRequestHandler.name,
+                                    error:
+                                        err instanceof Error ? err : undefined,
+                                    metadata: { prKey },
+                                });
                             });
-                        });
 
                         this.eventEmitter.emit(
                             'pull-request.closed',
@@ -468,11 +487,18 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                 payload?.object_attributes?.action === 'update'
             ) {
                 // For closed or merged MRs, just save the state without triggering automation
-                await this.savePullRequestUseCase.execute(params);
+                await this.savePullRequestUseCase.execute({
+                    ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
+                });
 
                 if (payload?.object_attributes?.action === 'merge') {
                     this.generateIssuesFromPrClosedUseCase
-                        .execute(params)
+                        .execute({
+                            ...params,
+                            organizationAndTeamData:
+                                context?.organizationAndTeamData,
+                        })
                         .catch((error) => {
                             this.logger.error({
                                 message:
@@ -525,7 +551,7 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.GITLAB,
             String(payload?.project?.id),
-            { host: extractGitlabHost(payload) },
+            gitlabWebhookSource(payload),
         );
 
         // `getContext` returns null for a project with no active automation --
@@ -558,8 +584,7 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
             // the action field, so treat missing action as 'create'.
             // Gate on noteable_type to ignore issue/snippet/commit notes.
             if (
-                payload?.object_attributes?.noteable_type ===
-                    'MergeRequest' &&
+                payload?.object_attributes?.noteable_type === 'MergeRequest' &&
                 (!payload?.object_attributes?.action ||
                     payload?.object_attributes?.action === 'create')
             ) {
@@ -576,10 +601,17 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
 
                 const botUsername = context.botUsername;
                 // `@kody -v <agent>` reviews the PR again with that custom agent only.
-                const customAgentSlug = parseCustomAgentCommand(comment.body, botUsername);
+                const customAgentSlug = parseCustomAgentCommand(
+                    comment.body,
+                    botUsername,
+                );
                 const isStartCommand =
-                    isReviewCommand(comment.body, botUsername) || !!customAgentSlug;
-                const isForceCommand = isForceReviewCommand(comment.body, botUsername);
+                    isReviewCommand(comment.body, botUsername) ||
+                    !!customAgentSlug;
+                const isForceCommand = isForceReviewCommand(
+                    comment.body,
+                    botUsername,
+                );
                 const hasMarker = hasReviewMarker(comment.body);
 
                 if (isStartCommand && !hasMarker) {
@@ -593,13 +625,33 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                     // Prepare params for use cases
                     const updatedParams = {
                         ...params,
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
                         payload: {
                             ...payload,
                             action: 'synchronize',
-                            origin: isForceCommand ? 'command-force' : 'command',
+                            origin: isForceCommand
+                                ? 'command-force'
+                                : 'command',
                             triggerCommentId: comment?.id,
-                            reviewDirective: parseReviewDirective(comment.body, botUsername),
-                            requestedReviewMode: requestedReviewModeOf(comment.body, botUsername),
+                            reviewDirective: parseReviewDirective(
+                                comment.body,
+                                botUsername,
+                            ),
+                            requestedReviewMode: requestedReviewModeOf(
+                                comment.body,
+                                botUsername,
+                            ),
+                            requestedReviewModeAccess:
+                                await reviewCommandAccess(
+                                    this.codeManagement,
+                                    params,
+                                    context.organizationAndTeamData,
+                                    requestedReviewModeOf(
+                                        comment.body,
+                                        botUsername,
+                                    ),
+                                ),
                             onlyCustomAgent: customAgentSlug,
                         },
                     };
@@ -623,7 +675,11 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                     !isStartCommand &&
                     !hasMarker &&
                     (isKodyMentionNonReview(comment.body, botUsername) ||
-                        isNewThreadReply(PlatformType.GITLAB, params.event, payload))
+                        isNewThreadReply(
+                            PlatformType.GITLAB,
+                            params.event,
+                            payload,
+                        ))
                 ) {
                     this.chatWithKodyFromGitUseCase.execute(params);
                     return;
@@ -663,24 +719,9 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
 
 /**
  * Returns the lowercased host of the GitLab instance that emitted the webhook.
- * Used to disambiguate `IntegrationConfig`s when two self-hosted GitLab
- * instances share the same numeric `project.id`.
+ * GitLab numbers projects per instance, so webhooks are resolved on this
+ * host (`webhookConfigsOfInstance`).
  */
 export function extractGitlabHost(payload: any): string | undefined {
-    const sources = [
-        payload?.project?.git_http_url,
-        payload?.project?.web_url,
-        payload?.project?.url,
-        payload?.repository?.url,
-        payload?.repository?.homepage,
-    ];
-    for (const source of sources) {
-        if (typeof source !== 'string' || !source) continue;
-        try {
-            return new URL(source).hostname.toLowerCase();
-        } catch {
-            continue;
-        }
-    }
-    return undefined;
+    return gitlabWebhookSource(payload).host;
 }

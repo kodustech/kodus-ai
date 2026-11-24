@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { reviewCommandAccess } from '@libs/platform/application/services/commenter-access';
 import { EnqueueAstGraphUpdateOnMergedUseCase } from '@libs/code-review/application/use-cases/enqueue-ast-graph-update-on-merged.use-case';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
 import {
@@ -164,7 +165,10 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         }
 
         try {
-            await this.savePullRequestUseCase.execute(params);
+            await this.savePullRequestUseCase.execute({
+                ...params,
+                organizationAndTeamData: context?.organizationAndTeamData,
+            });
 
             if (this.enqueueCodeReviewJobUseCase) {
                 this.enqueueCodeReviewJobUseCase
@@ -242,7 +246,10 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
             }
 
             if (payload?.action === WebhookForgejoHookIssueAction.CLOSED) {
-                this.generateIssuesFromPrClosedUseCase.execute(params);
+                this.generateIssuesFromPrClosedUseCase.execute({
+                    ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
+                });
 
                 // Durable sandbox invalidation via outbox (SBX-05).
                 // Written in the same DB transaction context so it survives worker crashes.
@@ -643,6 +650,8 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
 
                     const updatedParams = {
                         ...params,
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
                         payload: {
                             ...payload,
                             action: 'synchronize',
@@ -654,6 +663,13 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                             requestedReviewMode: requestedReviewModeOf(
                                 comment.body,
                             ),
+                            requestedReviewModeAccess:
+                                await reviewCommandAccess(
+                                    this.codeManagement,
+                                    params,
+                                    context?.organizationAndTeamData,
+                                    requestedReviewModeOf(comment.body),
+                                ),
                             onlyCustomAgent: customAgentSlug,
                             pull_request:
                                 pullRequestData ||

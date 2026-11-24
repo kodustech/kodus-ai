@@ -60,6 +60,7 @@ export interface ICodeBaseConfigService {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { id: string; name: string };
         overrideConfig?: boolean;
+        tolerateReviewSettingsErrors?: boolean;
         directoryPath?: string;
         directoryId?: string;
         defaultBranch?: string;

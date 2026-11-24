@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { redirect, useRouter } from "next/navigation";
 import { SelectRepositories } from "@components/system/select-repositories";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
-import { Avatar, AvatarImage } from "@components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@components/ui/avatar";
 import { Button } from "@components/ui/button";
 import { FormControl } from "@components/ui/form-control";
 import { Heading } from "@components/ui/heading";
@@ -245,7 +245,7 @@ export default function App() {
 
     return (
         <Page.Root className="mx-auto flex min-h-full w-full flex-row p-6">
-            <div className="bg-card-lv1 flex flex-10 flex-col justify-center gap-10 rounded-3xl p-12">
+            <div className="bg-card-lv1 hidden flex-10 flex-col justify-center gap-10 rounded-3xl p-12 md:flex">
                 <div className="text-text-secondary flex flex-1 flex-col justify-center gap-8 text-[15px]">
                     <div className="flex flex-col gap-4">
                         <svg
@@ -275,9 +275,14 @@ export default function App() {
                         </p>
                     </div>
 
-                    <div className="flex flex-row gap-4">
-                        <Avatar>
-                            <AvatarImage src="https://t5y4w6q9.rocketcdn.me/wp-content/uploads/2025/04/Jonathan-Georgeu-1-1.jpeg" />
+                    <div className="flex flex-row items-center gap-4">
+                        <Avatar className="size-12">
+                            <AvatarImage
+                                src="/assets/images/testimonials/jonathan-georgeu.jpg"
+                                alt="Jonathan Georgeu"
+                                className="object-cover"
+                            />
+                            <AvatarFallback>JG</AvatarFallback>
                         </Avatar>
 
                         <div>
@@ -288,8 +293,8 @@ export default function App() {
                 </div>
             </div>
 
-            <div className="flex flex-14 flex-col items-center justify-center gap-10 p-10">
-                <div className="flex w-150 flex-1 flex-col justify-center gap-10">
+            <div className="flex min-w-0 flex-14 flex-col items-center justify-center gap-10 py-6 md:p-10">
+                <div className="flex w-full max-w-150 flex-1 flex-col justify-center gap-10">
                     <StepIndicators.Auto />
 
                     {hasRepositories === null ? (

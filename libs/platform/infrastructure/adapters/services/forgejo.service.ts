@@ -152,6 +152,7 @@ import {
     repoGetPullRequestCommits,
     repoGetPullRequestFiles,
     repoGetPullReviewComments,
+    repoGetRepoPermissions,
     repoListHooks,
     repoListPullRequests,
     repoListPullReviews,
@@ -1342,6 +1343,7 @@ export class ForgejoService implements Omit<
     async findTeamAndOrganizationIdByConfigKey(params: {
         repository: { id?: string | number; name?: string };
         host?: string;
+        repositoryFullName?: string;
     }): Promise<IntegrationConfigEntity | null> {
         try {
             const repositoryId = String(params?.repository?.id ?? '');
@@ -1360,7 +1362,8 @@ export class ForgejoService implements Omit<
                 forgejoConfigsForWebhook(configs, {
                     host: params.host,
                     repositoryId,
-                    repositoryFullName: params.repository.name,
+                    repositoryFullName:
+                        params.repositoryFullName ?? params.repository.name,
                 })[0] ?? null
             );
         } catch (error) {
@@ -1655,6 +1658,61 @@ export class ForgejoService implements Omit<
                 error,
             });
             return null;
+        }
+    }
+
+    /**
+     * Whether one user can push to the repository: write, admin or owner on
+     * it, teams and organization included. Undefined when Forgejo can't say.
+     */
+    async userCanWrite(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name?: string };
+        login?: string;
+    }): Promise<boolean | undefined> {
+        if (!params.login || !params.repository.name) {
+            return undefined;
+        }
+        const authDetail = await this.getAuthDetails(
+            params.organizationAndTeamData,
+        );
+        if (!authDetail) {
+            return undefined;
+        }
+        const repoInfo = this.extractRepoInfo(
+            params.repository.name,
+            'userCanWrite',
+        );
+        if (!repoInfo) {
+            return undefined;
+        }
+        try {
+            const result = await repoGetRepoPermissions({
+                client: this.createForgejoClient(authDetail),
+                path: {
+                    owner: repoInfo.owner,
+                    repo: repoInfo.repo,
+                    collaborator: params.login,
+                },
+            });
+            throwIfForgejoFailed(result);
+            return ['write', 'admin', 'owner'].includes(
+                result.data?.permission ?? '',
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: "Could not read a user's permission on the repository",
+                context: ForgejoService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData.organizationId,
+                    teamId: params.organizationAndTeamData.teamId,
+                    repositoryId: params.repository.id,
+                    reason: summarizeProviderError(error),
+                },
+            });
+            return undefined;
         }
     }
 

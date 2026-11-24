@@ -225,7 +225,8 @@ export class ExecuteCliReviewUseCase implements IUseCase {
             // asked for, else the review mode in settings; a --fast review
             // runs fast only. A trial review never runs heavy, and heavy runs
             // on Teams and Enterprise only: elsewhere the review runs Balanced
-            // and says why.
+            // and says why. The CLI has no Ultra: a team set to Ultra gets
+            // the heavy review each of its models runs.
             const heavyAsked =
                 !isTrialMode &&
                 isHeavyReview(
@@ -234,7 +235,9 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                         : input.config?.balanced
                           ? 'balanced'
                           : undefined,
-                    effectiveConfig?.reviewMode,
+                    effectiveConfig?.reviewMode === 'ultra'
+                        ? 'heavy'
+                        : effectiveConfig?.reviewMode,
                 );
             const heavy =
                 heavyAsked &&

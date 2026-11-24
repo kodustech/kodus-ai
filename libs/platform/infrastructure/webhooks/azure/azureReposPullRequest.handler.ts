@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { reviewCommandAccess } from '@libs/platform/application/services/commenter-access';
 
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
@@ -13,7 +14,7 @@ import {
     isReviewCommand,
     parseReviewDirective,
     requestedReviewModeOf,
-    parseCustomAgentCommand
+    parseCustomAgentCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
@@ -184,7 +185,11 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                         params,
                         context,
                     );
-                    await this.savePullRequestUseCase.execute(params);
+                    await this.savePullRequestUseCase.execute({
+                        ...params,
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
+                    });
 
                     if (shouldTrigger) {
                         if (
@@ -272,7 +277,11 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                         }
                     }
 
-                    this.generateIssuesFromPrClosedUseCase.execute(params);
+                    this.generateIssuesFromPrClosedUseCase.execute({
+                        ...params,
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
+                    });
 
                     const prStatus = params?.payload?.resource?.status;
                     const merged = prStatus === 'completed';
@@ -281,24 +290,31 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                     // Durable sandbox invalidation via outbox (SBX-05).
                     // Azure fires git.pullrequest.updated with status=completed (merged) or
                     // status=abandoned (closed without merge). Both paths must invalidate the sandbox.
-                    if ((merged || abandoned) && context.organizationAndTeamData) {
+                    if (
+                        (merged || abandoned) &&
+                        context.organizationAndTeamData
+                    ) {
                         const sandboxPrKey = `${context.organizationAndTeamData.organizationId}:${repository.id}:${params?.payload?.resource?.pullRequestId}`;
-                        this.outboxRepository.create({
-                            jobId: undefined,
-                            exchange: 'sandbox.events',
-                            routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
-                            payload: {
-                                prKey: sandboxPrKey,
-                                reason: 'pr_closed',
-                            } satisfies SandboxInvalidatePayload,
-                        }).catch((err) => {
-                            this.logger.warn({
-                                message: '[SBX-05] Failed to write sandbox invalidation outbox message',
-                                context: AzureReposPullRequestHandler.name,
-                                error: err instanceof Error ? err : undefined,
-                                metadata: { prKey: sandboxPrKey },
+                        this.outboxRepository
+                            .create({
+                                jobId: undefined,
+                                exchange: 'sandbox.events',
+                                routingKey: SANDBOX_INVALIDATE_ROUTING_KEY,
+                                payload: {
+                                    prKey: sandboxPrKey,
+                                    reason: 'pr_closed',
+                                } satisfies SandboxInvalidatePayload,
+                            })
+                            .catch((err) => {
+                                this.logger.warn({
+                                    message:
+                                        '[SBX-05] Failed to write sandbox invalidation outbox message',
+                                    context: AzureReposPullRequestHandler.name,
+                                    error:
+                                        err instanceof Error ? err : undefined,
+                                    metadata: { prKey: sandboxPrKey },
+                                });
                             });
-                        });
                     }
 
                     // TODO(SBX-05): Azure Repos does not expose a distinct force-push event;
@@ -351,13 +367,10 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                                                     ?.pullRequestId,
                                             repoExternalId: repository.id,
                                             repoName: repository.name,
-                                            platform:
-                                                PlatformType.AZURE_REPOS,
+                                            platform: PlatformType.AZURE_REPOS,
                                             baseBranch: baseRefFull,
-                                            newSha:
-                                                params?.payload?.resource
-                                                    ?.lastMergeCommit
-                                                    ?.commitId,
+                                            newSha: params?.payload?.resource
+                                                ?.lastMergeCommit?.commitId,
                                             organizationAndTeamData:
                                                 context.organizationAndTeamData,
                                         })
@@ -403,7 +416,11 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                     break;
                 }
                 case 'git.pullrequest.merge.attempted':
-                    await this.savePullRequestUseCase.execute(params);
+                    await this.savePullRequestUseCase.execute({
+                        ...params,
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
+                    });
                     break;
                 default:
                     this.logger.warn({
@@ -521,7 +538,6 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
             const customAgentSlug = parseCustomAgentCommand(comment.body);
 
             const isStartCommand =
-
                 isReviewCommand(comment.body) || !!customAgentSlug;
             const isForceCommand = isForceReviewCommand(comment.body);
             const hasMarker = hasReviewMarker(comment.body);
@@ -540,13 +556,22 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                 // Prepare params for the use cases
                 const updatedParams = {
                     ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
                     payload: {
                         ...payload,
                         action: 'synchronize',
                         origin: isForceCommand ? 'command-force' : 'command',
                         triggerCommentId: comment?.id,
                         reviewDirective: parseReviewDirective(comment.body),
-                        requestedReviewMode: requestedReviewModeOf(comment.body),
+                        requestedReviewMode: requestedReviewModeOf(
+                            comment.body,
+                        ),
+                        requestedReviewModeAccess: await reviewCommandAccess(
+                            this.codeManagement,
+                            params,
+                            context?.organizationAndTeamData,
+                            requestedReviewModeOf(comment.body),
+                        ),
                         onlyCustomAgent: customAgentSlug,
                     },
                 };

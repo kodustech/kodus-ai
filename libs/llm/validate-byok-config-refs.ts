@@ -85,6 +85,29 @@ export function validateByokConfigRefs(
                 );
             }
         }
+        const ultra = routing.ultraModelIds;
+        if (ultra !== undefined) {
+            if (!Array.isArray(ultra) || ultra.length > 3) {
+                errors.push(
+                    'routing.ultraModelIds must list up to three models',
+                );
+            } else {
+                for (const modelId of ultra) {
+                    if (modelId && !modelIds.has(modelId)) {
+                        errors.push(
+                            `routing.ultraModelIds "${modelId}" does not ` +
+                                `resolve to any model`,
+                        );
+                    }
+                }
+                const set = ultra.filter(Boolean);
+                if (new Set(set).size !== set.length) {
+                    errors.push(
+                        'routing.ultraModelIds must list three different models',
+                    );
+                }
+            }
+        }
     }
 
     return { valid: errors.length === 0, errors };
@@ -136,6 +159,10 @@ export function findModelReferences(
         if (id === modelId) {
             refs.push(TASK_LABEL[task] ?? `the ${task} model`);
         }
+    }
+    const ultraIndex = (routing.ultraModelIds ?? []).indexOf(modelId);
+    if (ultraIndex >= 0) {
+        refs.push(`Ultra review model ${ultraIndex + 1}`);
     }
 
     return refs;

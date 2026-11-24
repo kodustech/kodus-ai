@@ -11,9 +11,9 @@
  *  so the union has ONE source of truth across front and back (type-only import
  *  → erased at build, no runtime coupling). Imported for local use in this file
  *  AND re-exported so existing `import { LlmTask } from "../../_types"` keep working. */
-import type { LlmTask } from '@libs/llm/llm-tasks';
+import type { LlmTask } from "@libs/llm/llm-tasks";
 
-export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high';
+export type ReasoningEffort = "none" | "low" | "medium" | "high";
 
 export type { LlmTask };
 
@@ -55,13 +55,16 @@ export type BYOKModelConfig = {
 
 /** Routing policy (Manual = static task→model; Auto = the future router). */
 export type BYOKRouting = {
-    mode?: 'manual' | 'auto';
+    mode?: "manual" | "auto";
     /** Model id per task (Manual policy). */
     taskOverrides?: Partial<Record<LlmTask, string>>;
     /** Default model id when a task has no explicit override. */
     defaultModelId?: string;
     /** Fallback model id when the resolved tier fails the capability gate. */
     fallbackModelId?: string;
+    /** The three models an Ultra review runs on, in order; an empty string
+     *  is a slot not picked yet. */
+    ultraModelIds?: string[];
 };
 
 export type BYOKConfig = {

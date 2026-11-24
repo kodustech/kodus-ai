@@ -35,24 +35,19 @@ jest.mock('@libs/llm/llm-call', () => ({
     tracedGenerateText: (...args: any[]) => mockTracedGenerateText(...args),
 }));
 
-jest.mock(
-    '@libs/llm/byok-to-vercel',
-    () => ({
-        withStructuredOutputFallback: (...args: any[]) =>
-            mockWithStructuredOutputFallback(...args),
-        getModelName: jest.fn().mockReturnValue('test-model'),
-        // Off-trial default: undefined override (the stage falls through to the
-        // resolved slot / managed default). Split out of byok-to-vercel into
-        // byok-defaults and re-exported; the stage calls it before building.
-        trialDefaultModel: jest.fn().mockReturnValue(undefined),
-        // The model builder the stage calls to construct the LanguageModel.
-        buildModelFromSlot: jest.fn().mockReturnValue({ __mockModel: 'byok' }),
-        // Platform (non-BYOK) model seam used by the summary/secondary paths.
-        buildPlatformModel: jest
-            .fn()
-            .mockReturnValue({ __mockModel: 'platform' }),
-    }),
-);
+jest.mock('@libs/llm/byok-to-vercel', () => ({
+    withStructuredOutputFallback: (...args: any[]) =>
+        mockWithStructuredOutputFallback(...args),
+    getModelName: jest.fn().mockReturnValue('test-model'),
+    // Off-trial default: undefined override (the stage falls through to the
+    // resolved slot / managed default). Split out of byok-to-vercel into
+    // byok-defaults and re-exported; the stage calls it before building.
+    trialDefaultModel: jest.fn().mockReturnValue(undefined),
+    // The model builder the stage calls to construct the LanguageModel.
+    buildModelFromSlot: jest.fn().mockReturnValue({ __mockModel: 'byok' }),
+    // Platform (non-BYOK) model seam used by the summary/secondary paths.
+    buildPlatformModel: jest.fn().mockReturnValue({ __mockModel: 'platform' }),
+}));
 
 jest.mock('@libs/llm/llm', () => ({
     LLM: { run: (...args: any[]) => mockLlmRun(...args) },
@@ -282,7 +277,11 @@ describe('AgentReviewStage', () => {
                     type: 'e2b' as const,
                     sandboxId: 'mock-sandbox-id',
                     repoDir: '/home/user/repo',
-                    run: jest.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
+                    run: jest.fn().mockResolvedValue({
+                        stdout: '',
+                        stderr: '',
+                        exitCode: 0,
+                    }),
                     readFile: jest.fn().mockResolvedValue(''),
                     writeFile: jest.fn().mockResolvedValue(undefined),
                 },
@@ -331,7 +330,11 @@ describe('AgentReviewStage', () => {
                     type: 'e2b' as const,
                     sandboxId: 'mock-sandbox-id',
                     repoDir: '/home/user/repo',
-                    run: jest.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
+                    run: jest.fn().mockResolvedValue({
+                        stdout: '',
+                        stderr: '',
+                        exitCode: 0,
+                    }),
                     readFile: jest.fn().mockResolvedValue(''),
                     writeFile: jest.fn().mockResolvedValue(undefined),
                 },
@@ -357,6 +360,139 @@ describe('AgentReviewStage', () => {
         });
     });
 
+    // The orchestrator is the review's last reader of the checkout (#2628).
+    describe('sandbox release', () => {
+        const contextWithSandbox = (cleanup: jest.Mock) =>
+            createBaseContext({
+                changedFiles: [
+                    { filename: 'src/auth.ts' } as any,
+                    { filename: 'src/api.ts' } as any,
+                ],
+                sandboxHandle: {
+                    remoteCommands: {
+                        grep: jest.fn(),
+                        read: jest.fn(),
+                        listDir: jest.fn(),
+                    },
+                    cleanup,
+                    type: 'e2b' as const,
+                    sandboxId: 'mock-sandbox-id',
+                    repoDir: '/home/user/repo',
+                    run: jest.fn().mockResolvedValue({
+                        stdout: '',
+                        stderr: '',
+                        exitCode: 0,
+                    }),
+                    readFile: jest.fn().mockResolvedValue(''),
+                    writeFile: jest.fn().mockResolvedValue(undefined),
+                },
+            });
+
+        it('releases the sandbox once the orchestrator returns', async () => {
+            const steps: string[] = [];
+            const cleanup = jest.fn(async () => {
+                steps.push('release');
+            });
+            const execute = mockOrchestrator.execute.getMockImplementation()!;
+            mockOrchestrator.execute.mockImplementationOnce(async (input) => {
+                steps.push('orchestrator');
+                return execute(input);
+            });
+
+            const result = await (stage as any).executeStage(
+                contextWithSandbox(cleanup),
+            );
+
+            expect(steps).toEqual(['orchestrator', 'release']);
+            expect(result.fileAnalysisResults).toHaveLength(2);
+        });
+
+        it('releases the sandbox when the orchestrator fails', async () => {
+            const cleanup = jest.fn().mockResolvedValue(undefined);
+            mockOrchestrator.execute.mockRejectedValueOnce(
+                new Error('model not found'),
+            );
+
+            const result = await (stage as any).executeStage(
+                contextWithSandbox(cleanup),
+            );
+
+            expect(cleanup).toHaveBeenCalledTimes(1);
+            expect(result.errors).toEqual([
+                expect.objectContaining({ stage: 'AgentReviewStage' }),
+            ]);
+        });
+
+        // On the local provider the release deletes the clone; the comments
+        // must not wait for it
+        it('does not wait for the release to finish the stage', async () => {
+            const cleanup = jest.fn(() => new Promise<void>(() => {}));
+
+            const result = await (stage as any).executeStage(
+                contextWithSandbox(cleanup),
+            );
+
+            expect(cleanup).toHaveBeenCalledTimes(1);
+            expect(result.fileAnalysisResults).toHaveLength(2);
+        });
+
+        // The runs share the PR's sandbox: the executor releases it after
+        // the last one.
+        it.each(['native', 'auxiliary'] as const)(
+            'an Ultra %s pass leaves the sandbox to the executor',
+            async (scope) => {
+                const cleanup = jest.fn().mockResolvedValue(undefined);
+
+                await (stage as any).reviewPass(contextWithSandbox(cleanup), {
+                    scope,
+                    collect: jest.fn(),
+                });
+
+                expect(mockOrchestrator.execute).toHaveBeenCalled();
+                expect(cleanup).not.toHaveBeenCalled();
+            },
+        );
+
+        // Two builds on one checkout overwrite `.kodus-graph/*` and re-clone
+        // `_linked/<slug>` under each other.
+        it("an Ultra review's passes build the call graph and linked repositories once", async () => {
+            const graph = (stage as any).graphContext.generateContextLegacy;
+            const linked = jest.spyOn(
+                stage as any,
+                'resolveLinkedRepoAccessWithGate',
+            );
+            const context = contextWithSandbox(jest.fn());
+            const shared = {};
+
+            await Promise.all(
+                (['native', 'native', 'auxiliary'] as const).map((scope) =>
+                    (stage as any).reviewPass(context, {
+                        scope,
+                        shared,
+                        collect: jest.fn(),
+                    }),
+                ),
+            );
+
+            expect(graph).toHaveBeenCalledTimes(1);
+            expect(linked).toHaveBeenCalledTimes(1);
+        });
+
+        it('keeps the review when the release fails', async () => {
+            const cleanup = jest
+                .fn()
+                .mockRejectedValue(new Error('mongo down'));
+
+            const result = await (stage as any).executeStage(
+                contextWithSandbox(cleanup),
+            );
+
+            expect(cleanup).toHaveBeenCalledTimes(1);
+            expect(result.fileAnalysisResults).toHaveLength(2);
+            expect(result.errors ?? []).toEqual([]);
+        });
+    });
+
     describe('kody rules severity', () => {
         it('should use severity from the Kody Rule, not from the LLM or classifier', async () => {
             // Orchestrator returns a finding with ruleUuid and a LOW severity
@@ -366,7 +502,8 @@ describe('AgentReviewStage', () => {
                 suggestions: [
                     {
                         relevantFile: 'src/auth.ts',
-                        suggestionContent: 'Violates rule: must use strict null checks',
+                        suggestionContent:
+                            'Violates rule: must use strict null checks',
                         label: 'kody_rules',
                         severity: 'low', // LLM's opinion — should be ignored
                         brokenKodyRulesIds: ['rule-uuid-123'],
@@ -400,13 +537,21 @@ describe('AgentReviewStage', () => {
                     type: 'e2b' as const,
                     sandboxId: 'mock-sandbox-id',
                     repoDir: '/home/user/repo',
-                    run: jest.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
+                    run: jest.fn().mockResolvedValue({
+                        stdout: '',
+                        stderr: '',
+                        exitCode: 0,
+                    }),
                     readFile: jest.fn().mockResolvedValue(''),
                     writeFile: jest.fn().mockResolvedValue(undefined),
                 },
                 codeReviewConfig: {
                     codeReviewVersion: CodeReviewVersion.V3_AGENT,
-                    reviewOptions: { bug: true, security: true, performance: true },
+                    reviewOptions: {
+                        bug: true,
+                        security: true,
+                        performance: true,
+                    },
                     kodyRules: [
                         {
                             uuid: 'rule-uuid-123',
@@ -574,9 +719,7 @@ describe('AgentReviewStage', () => {
             expect(
                 mockAutomationService.findLatestStageLog,
             ).toHaveBeenCalledWith('exec-1', 'AgentReview::generalist');
-            expect(
-                mockAutomationService.updateStageLog,
-            ).toHaveBeenCalledWith(
+            expect(mockAutomationService.updateStageLog).toHaveBeenCalledWith(
                 'existing-log-1',
                 expect.objectContaining({ status: 'in_progress' }),
             );
@@ -606,9 +749,7 @@ describe('AgentReviewStage', () => {
             expect(
                 mockAutomationService.updateCodeReview,
             ).not.toHaveBeenCalled();
-            expect(
-                mockAutomationService.updateStageLog,
-            ).not.toHaveBeenCalled();
+            expect(mockAutomationService.updateStageLog).not.toHaveBeenCalled();
         });
 
         it('race condition: batch_started then started creates only one record', async () => {

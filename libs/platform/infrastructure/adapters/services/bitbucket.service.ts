@@ -1,6 +1,7 @@
 import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
+import { dataCenterConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import { IntegrationConfigKey, PlatformType } from '@libs/core/domain/enums';
 import { ICodeManagementService } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -72,7 +73,15 @@ export class BitbucketService implements Omit<
 
     private async getImplementation(
         organizationAndTeamData?: OrganizationAndTeamData,
+        requestedHost?: string,
     ): Promise<any> {
+        // A request that carries a Data Center host is a first-time setup: no
+        // auth is stored yet, so the lookup below cannot answer, and Cloud
+        // would take the call and report a connection it never made (#2570).
+        if (requestedHost?.trim()) {
+            return this.bitbucketDataCenterService;
+        }
+
         if (!organizationAndTeamData) {
             return this.bitbucketCloudService;
         }
@@ -128,10 +137,34 @@ export class BitbucketService implements Omit<
         params: any,
     ): Promise<IntegrationConfigEntity | null> {
         try {
+            // Bitbucket Data Center numbers repositories per server: a
+            // config takes the event only with the same project key and slug.
+            if (params?.dataCenterRepository) {
+                const repositoryId = String(params?.repository?.id ?? '');
+                const configs =
+                    await this.integrationConfigService.findIntegrationConfigWithTeams(
+                        IntegrationConfigKey.REPOSITORIES,
+                        repositoryId,
+                        PlatformType.BITBUCKET,
+                    );
+                return (
+                    dataCenterConfigsForWebhook(configs, {
+                        ...params.dataCenterRepository,
+                        repositoryId,
+                    })[0] ?? null
+                );
+            }
+
+            // Scoped to this platform's active integrations, as GitHub's
+            // is: the id alone also matches repositories of other platforms.
             const integrationConfig =
                 await this.integrationConfigService.findOne({
                     configKey: IntegrationConfigKey.REPOSITORIES,
                     configValue: [{ id: params?.repository?.id?.toString() }],
+                    integration: {
+                        status: true,
+                        platform: PlatformType.BITBUCKET,
+                    },
                 });
 
             return integrationConfig &&
@@ -454,6 +487,14 @@ export class BitbucketService implements Omit<
         return impl.getListMembers(params);
     }
 
+    /** Data Center reads the permission; Cloud cannot say. */
+    async userCanWrite(params: any): Promise<boolean | undefined> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.userCanWrite?.(params);
+    }
+
     async verifyConnection(params: any) {
         const impl = await this.getImplementation(
             params.organizationAndTeamData,
@@ -619,7 +660,10 @@ export class BitbucketService implements Omit<
 
     async createAuthIntegration(params: any) {
         const impl = await this.getImplementation(
-            params.organizationAndTeamData,
+            params?.organizationAndTeamData,
+            // The submitted host decides, not the stored one: on the first
+            // Data Center connection there is nothing stored to read.
+            params?.host,
         );
         return impl.createAuthIntegration(params);
     }

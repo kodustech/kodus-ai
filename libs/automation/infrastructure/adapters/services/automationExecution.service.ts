@@ -54,9 +54,22 @@ export class AutomationExecutionService implements IAutomationExecutionService {
 
     findLatestExecutionByFilters(
         filters?: Partial<any>,
+        options?: { rethrow?: boolean },
     ): Promise<AutomationExecutionEntity | null> {
         return this.automationExecutionRepository.findLatestExecutionByFilters(
             filters,
+            options,
+        );
+    }
+
+    hasPullRequestExecutionWithDataKey(params: {
+        teamAutomationId: string;
+        repositoryId: string;
+        pullRequestNumber: number;
+        key: string;
+    }): Promise<boolean> {
+        return this.automationExecutionRepository.hasPullRequestExecutionWithDataKey(
+            params,
         );
     }
 
