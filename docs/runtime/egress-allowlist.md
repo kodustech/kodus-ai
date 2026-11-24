@@ -756,8 +756,10 @@ How a build or recipe uses it.
   (`netguard.MirrorArtifactBuildArgNames`, `buildmirror.Mirror.Artifacts`). A Dockerfile Kody writes declares them in
   each stage that runs `prisma` or `mongodb-memory-server` (`declareMirrorBuildArgs`); a hand-written Dockerfile adds
   `ARG PRISMA_ENGINES_MIRROR` and `ARG MONGOMS_DOWNLOAD_MIRROR` itself. A project's own value wins.
-- A running service or test step (not a build): set the same variables to the mirror's address in the recipe's
-  environment.
+- A running service or test step (not a build): the cell gives every service the same variables a build gets, the
+  npm, PyPI and Go addresses included (`agent.Config.ServiceEnv`, `buildmirror.Mirror.Args`), so a spec that downloads a
+  MongoDB binary or a Prisma engine while it runs reaches the mirror. A value the compose file or the recipe sets
+  stays.
 - Firebase: firebase-tools has no variable for the download URL, so it would try `storage.googleapis.com` directly
   and be refused. The recipe fetches the files from the mirror before the emulator starts, into the cache firebase-tools
   looks in (`${FIREBASE_EMULATORS_PATH:-$HOME/.cache/firebase/emulators}`), under the name it expects, which is the

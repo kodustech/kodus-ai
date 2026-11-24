@@ -129,6 +129,13 @@ type Config struct {
 	// Zero selects DefaultMaxClaimSteps; explicit limits are 1 through 64.
 	MaxClaimSteps int
 
+	// ServiceEnv is the environment every running service gets unless its
+	// compose file or the recipe sets the name: the cell mirror's addresses
+	// (buildmirror.Mirror.Args), so a test that downloads a MongoDB binary or
+	// a Prisma engine, or installs a package, at run time reaches the mirror
+	// as the build did. Nil: CI=true only.
+	ServiceEnv map[string]string
+
 	Driver       driver.MachineDriver
 	Transport    transport.Transport
 	Observers    ObserverFactory

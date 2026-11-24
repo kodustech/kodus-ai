@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/agent"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildmirror"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/claimlimits"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
@@ -109,6 +110,8 @@ func wireDockerGVisor(ctx context.Context, w wiring, cfg *agent.Config) (opened,
 	// the transport carries no upload; exec runs in the project's public
 	// service container, under gVisor (Driver.Exec).
 	cfg.Driver, cfg.Parts, cfg.Transport = d, d.Parts(), transport.Compose{Run: d.Exec}
+	// What a build gets of the mirror, every running service gets too.
+	cfg.ServiceEnv = buildmirror.Mirror{GoProxy: st.GVisorMirrorGoProxy, NPM: st.GVisorMirrorNPM, PyPI: st.GVisorMirrorPyPI, Artifacts: st.GVisorMirrorArtifacts}.Args(nil)
 	cfg.FakeSupport = true
 	cfg.CellTrust = w.trust.Set()
 	if st.GVisorBrowserImage != "" {
@@ -156,6 +159,10 @@ func wireMicroVM(ctx context.Context, w wiring, cfg *agent.Config) (opened, erro
 	// environment's template; the observer is a VM of its own. A failed
 	// setup's bundle carries each VM's states and VMM log, kept past its jail.
 	cfg.Driver, cfg.Parts, cfg.Transport = d, d.Parts(), d
+	// The VMs name the mirror as their builds do (openMicroVM already checked it).
+	if m, err := buildmirror.At(w.st.MicroVM.Mirror); err == nil {
+		cfg.ServiceEnv = m.Args(nil)
+	}
 	cfg.SandboxPool = w.st.Sandbox.Pool
 	cfg.CellTrust = w.trust.Set()
 	cfg.OrgKey = func(org string) (string, error) { return "microvm-" + org, nil }
