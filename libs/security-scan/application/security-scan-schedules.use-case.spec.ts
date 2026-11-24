@@ -169,6 +169,7 @@ describe('SecurityScanSchedulesUseCase: filing a finished run', () => {
                 ...scanOver,
             })),
             update: jest.fn(async () => null),
+            claimExport: jest.fn(async () => true),
         };
         const issues = { findScanIssuesToExport: jest.fn(async () => found) };
         const exporter = {
@@ -241,5 +242,28 @@ describe('SecurityScanSchedulesUseCase: filing a finished run', () => {
             'sch-1',
             expect.objectContaining({ lastError: 'the destination is public' }),
         );
+    });
+});
+
+describe('SecurityScanSchedulesUseCase: one filer per run', () => {
+    it('files nothing another cron run or instance already claimed', async () => {
+        const schedules = {
+            findExporting: jest.fn(async () => [
+                schedule({ lastScanId: 'scan-9', exportTo: { integrationId: 'int', minSeverity: 'low' } }),
+            ]),
+            recordRun: jest.fn(),
+        };
+        const scans = {
+            findById: jest.fn(async () => ({ uuid: 'scan-9', status: 'completed', repository: { id: 'repo-1' }, createdAt: 'x' })),
+            update: jest.fn(),
+            claimExport: jest.fn(async () => false),
+        };
+        const issues = { findScanIssuesToExport: jest.fn() };
+        const exporter = { execute: jest.fn() };
+        const useCase = new SecurityScanSchedulesUseCase(schedules as any, {} as any, {} as any, scans as any, issues as any, exporter as any);
+
+        expect(await useCase.exportFinished()).toBe(0);
+        expect(issues.findScanIssuesToExport).not.toHaveBeenCalled();
+        expect(exporter.execute).not.toHaveBeenCalled();
     });
 });

@@ -48,6 +48,9 @@ import { StartSecurityScanUseCase } from './start-security-scan.use-case';
 
 const logger = createLogger('SecurityScanSchedules');
 
+/** How long one caller holds filing a run's findings. */
+const EXPORT_CLAIM_MS = 15 * 60 * 1000;
+
 /** Most scheduled scans one cron run starts; the rest stay due for the next. */
 export const MAX_SCHEDULED_STARTS_PER_RUN = 20;
 
@@ -246,6 +249,16 @@ export class SecurityScanSchedulesUseCase {
                     SecurityScanStatus.COMPLETED,
                     SecurityScanStatus.STOPPED_BY_BUDGET,
                 ].includes(scan.status)
+            ) {
+                continue;
+            }
+            // One caller files a run's findings: another cron run, or
+            // another API instance, finds it claimed and moves on.
+            if (
+                !(await this.scans.claimExport(
+                    scan.uuid,
+                    new Date(Date.now() + EXPORT_CLAIM_MS),
+                ))
             ) {
                 continue;
             }

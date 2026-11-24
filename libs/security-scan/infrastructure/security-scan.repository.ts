@@ -93,6 +93,12 @@ export interface ISecurityScanRepository {
      */
     /** How many scans of the organization are queued or running. */
     countActive(organizationId: string): Promise<number>;
+    /**
+     * Claims filing a finished scan's findings until `until`: only one caller
+     * (one cron run, one API instance) files them; true for that one. A
+     * claim that expired (its caller died) can be taken again.
+     */
+    claimExport(uuid: string, until: Date): Promise<boolean>;
     failStale(organizationId: string, after: StaleScanWindows): Promise<number>;
     /** What earlier scans concluded about the repository, per file and class. */
     findCoverage(
@@ -466,6 +472,24 @@ export class SecurityScanRepository implements ISecurityScanRepository {
             .sort({ createdAt: -1 })
             .exec();
         return doc ? toRecord(doc) : null;
+    }
+
+    async claimExport(uuid: string, until: Date): Promise<boolean> {
+        const now = new Date();
+        const result = await this.model
+            .updateOne(
+                {
+                    _id: uuid,
+                    exportedAt: { $exists: false },
+                    $or: [
+                        { exportClaimedUntil: { $exists: false } },
+                        { exportClaimedUntil: { $lt: now } },
+                    ],
+                },
+                { $set: { exportClaimedUntil: until } },
+            )
+            .exec();
+        return (result?.modifiedCount ?? 0) > 0;
     }
 
     async countActive(organizationId: string): Promise<number> {
