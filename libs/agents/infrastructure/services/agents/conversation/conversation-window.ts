@@ -6,7 +6,7 @@ import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compr
 import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { declaredAnswerTokens } from '@libs/llm/model-invocation';
-import { slotContextWindow } from '@libs/llm/slot-window';
+import { slotContextWindow, slotInputRoom } from '@libs/llm/slot-window';
 
 /**
  * Keeps every step of a conversation within its model's window (#2233). A
@@ -25,11 +25,15 @@ export async function conversationCompression(params: {
     answerTokens: number;
 }): Promise<CompressionPolicy> {
     const window = slotContextWindow(params.slot);
-    const answer = await declaredAnswerTokens(
-        params.slot,
-        params.slot?.maxOutputTokens && params.slot.maxOutputTokens > 0
-            ? params.slot.maxOutputTokens
-            : params.answerTokens,
+    // Each attempt (the slot, then its fallback) with its own window and
+    // its own answer: the room is the smaller of the two.
+    const room = await slotInputRoom(params.slot, (model) =>
+        declaredAnswerTokens(
+            model,
+            model?.maxOutputTokens && model.maxOutputTokens > 0
+                ? model.maxOutputTokens
+                : params.answerTokens,
+        ),
     );
     return new CompressionPolicy(
         new ContextWindowCompressor(window, {
@@ -38,7 +42,8 @@ export async function conversationCompression(params: {
                 params.tools,
             ),
             safetyMarginTokens:
-                Math.ceil(window * DEFAULT_SAFETY_MARGIN_RATIO) + answer,
+                Math.ceil(window * DEFAULT_SAFETY_MARGIN_RATIO) +
+                (window - room),
             // The PR diff a tool read is what the developer asked about: it
             // stays whole while the request fits (#2681 review).
             onlyWhenOverBudget: true,

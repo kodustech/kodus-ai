@@ -41,9 +41,9 @@ const withToolResult = (value: string) => [
     },
 ];
 
-async function send(messages: unknown[]) {
+async function send(messages: unknown[], on: any = slot) {
     const policy = await conversationCompression({
-        slot,
+        slot: on,
         systemPrompt: 'You answer questions about pull requests.',
         tools: [],
         answerTokens: 20_000,
@@ -98,5 +98,36 @@ describe('conversationCompression', () => {
         expect(JSON.stringify(kept.output)).toContain(
             '![logo](data:image/png;base64,',
         );
+    });
+
+    it("fits the tightest attempt when the slot's answer outgrows its fallback's window", async () => {
+        // Pasted in the question: the soft pass trims tool results, not this.
+        const diff = Array.from(
+            { length: 3_200 },
+            (_, line) => `+export const checkout${line} = price(${line});`,
+        ).join('\n');
+        const messages = [
+            { role: 'user', content: `@kody review this:\n${diff}` },
+        ];
+        const bigWithSmallFallback = {
+            ...slot,
+            maxInputTokens: 200_000,
+            maxOutputTokens: 64_000,
+            fallback: {
+                provider: 'openai_compatible',
+                model: 'small-fallback',
+                apiKey: '',
+                maxInputTokens: 32_000,
+                maxOutputTokens: 1_000,
+            },
+        };
+        const worst = (value: unknown) =>
+            estimateTextTokens(JSON.stringify(value), { worstCase: true });
+        expect(worst(messages) + 1_000).toBeGreaterThan(32_000);
+
+        const sent = await send(messages, bigWithSmallFallback);
+
+        expect(worst(sent) + 1_000).toBeLessThanOrEqual(32_000);
+        expect(JSON.stringify(sent[0].content)).toContain('@kody review this');
     });
 });

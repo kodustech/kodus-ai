@@ -55,3 +55,29 @@ export function knownSlotContextWindow(
         ? Math.min(primary.tokens, resolve(slot.fallback).tokens)
         : primary.tokens;
 }
+
+/**
+ * The input a call on this slot can send and still fit, on every attempt:
+ * `LLM.run` re-sends a failed call to the fallback, which brings its own
+ * window and its own answer. The smaller of `window - answer` over the
+ * attempts; never the smallest window beside the largest answer, which can
+ * leave less than nothing for a pair no attempt actually is (a 64k-answer
+ * primary with a 32k-window fallback).
+ */
+export async function slotInputRoom(
+    slot: NormalizedModel | undefined,
+    answerOf: (model: NormalizedModel | undefined) => Promise<number>,
+): Promise<number> {
+    const attempts: Array<NormalizedModel | undefined> = slot
+        ? [
+              { ...slot, fallback: undefined },
+              ...(slot.fallback ? [slot.fallback as NormalizedModel] : []),
+          ]
+        : [undefined];
+    const rooms = await Promise.all(
+        attempts.map(
+            async (model) => slotContextWindow(model) - (await answerOf(model)),
+        ),
+    );
+    return Math.min(...rooms);
+}

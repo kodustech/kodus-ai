@@ -1,7 +1,11 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 
-import { knownSlotContextWindow, slotContextWindow } from './slot-window';
+import {
+    knownSlotContextWindow,
+    slotContextWindow,
+    slotInputRoom,
+} from './slot-window';
 
 /**
  * The window a call on a slot must fit: `LLM.run` sends the same request to
@@ -71,5 +75,28 @@ describe('knownSlotContextWindow', () => {
     it('agrees with slotContextWindow wherever the window is known', () => {
         const s = slot({ model: 'a', maxInputTokens: 50_000 });
         expect(knownSlotContextWindow(s)).toBe(slotContextWindow(s));
+    });
+});
+
+describe('slotInputRoom', () => {
+    it('takes the tightest attempt, never the smallest window beside the largest answer', async () => {
+        const s = slot({
+            model: 'big',
+            maxInputTokens: 200_000,
+            maxOutputTokens: 64_000,
+            fallback: {
+                provider: 'openai_compatible',
+                apiKey: '',
+                model: 'small',
+                maxInputTokens: 32_000,
+                maxOutputTokens: 1_000,
+            },
+        });
+        const room = await slotInputRoom(
+            s,
+            async (model) => model?.maxOutputTokens ?? 0,
+        );
+        // 200k - 64k for the slot, 32k - 1k for the fallback.
+        expect(room).toBe(31_000);
     });
 });

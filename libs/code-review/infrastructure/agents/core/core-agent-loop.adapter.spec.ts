@@ -234,9 +234,13 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
                             stepNumber: 8,
                         } as any)
                     )?.messages ?? messages;
-                expect(
-                    estimateTextTokens(JSON.stringify(sent)) + 16_000,
-                ).toBeLessThanOrEqual(32_000);
+                // Cut, not emptied: the request and a read still go.
+                const text = JSON.stringify(sent);
+                expect(text).toContain('verify the finding');
+                expect(text).toContain('"type":"tool-result"');
+                expect(estimateTextTokens(text) + 16_000).toBeLessThanOrEqual(
+                    32_000,
+                );
             }
         } finally {
             run.mockRestore();
@@ -318,9 +322,74 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
                             stepNumber: 8,
                         } as any)
                     )?.messages ?? messages;
-                expect(
-                    estimateTextTokens(JSON.stringify(sent)) + 16_000,
-                ).toBeLessThanOrEqual(32_000);
+                // Cut, not emptied: the request and a read still go.
+                const text = JSON.stringify(sent);
+                expect(text).toContain('verify the finding');
+                expect(text).toContain('"type":"tool-result"');
+                expect(estimateTextTokens(text) + 16_000).toBeLessThanOrEqual(
+                    32_000,
+                );
+            }
+        } finally {
+            run.mockRestore();
+        }
+    });
+
+    it("sizes each verify run to the tightest attempt when the check slot's answer outgrows its fallback's window", async () => {
+        const { model } = makeModel();
+        const run = jest.spyOn(AiSdkAgentRunner.prototype, 'run');
+        try {
+            await runAgentLoopViaCore(makeInput(model), {
+                ...secrets,
+                byokConfig: { provider: 'openai', model: 'run-model' },
+                verifyByokConfig: {
+                    provider: 'anthropic',
+                    model: 'check-model',
+                    maxInputTokens: 200_000,
+                    maxOutputTokens: 64_000,
+                    fallback: {
+                        provider: 'openai_compatible',
+                        model: 'small-fallback',
+                        maxInputTokens: 32_000,
+                        maxOutputTokens: 1_000,
+                    },
+                },
+            });
+            const verifyRuns = run.mock.calls.filter(
+                ([spec]) => spec.phase === 'verify',
+            );
+            expect(verifyRuns.length).toBeGreaterThan(0);
+            // The finding's evidence, as the verify prompt carries it: the
+            // soft pass trims tool results, not this.
+            const evidence = Array.from(
+                { length: 2_600 },
+                (_, line) =>
+                    `${line + 1}: export const v${line} = load('${line}');`,
+            ).join('\n');
+            const messages = [
+                { role: 'user', content: `verify the finding\n${evidence}` },
+            ];
+            // Over what the 32k fallback can take beside its 1k answer.
+            expect(
+                estimateTextTokens(JSON.stringify(messages)) + 1_000,
+            ).toBeGreaterThan(32_000);
+            for (const [spec] of verifyRuns) {
+                const compression = spec.policies.find(
+                    (p) => p.name === 'compression',
+                );
+                const sent =
+                    (
+                        await compression?.prepareStep?.({
+                            messages,
+                            stepNumber: 8,
+                        } as any)
+                    )?.messages ?? messages;
+                const text = JSON.stringify(sent);
+                expect(text).toContain('verify the finding');
+                // Fits the fallback beside its answer, and the slot beside its.
+                expect(estimateTextTokens(text) + 1_000).toBeLessThanOrEqual(
+                    32_000,
+                );
             }
         } finally {
             run.mockRestore();

@@ -63,8 +63,7 @@ import {
     type VerificationTraceSummary,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { declaredAnswerTokens } from '@libs/llm/model-invocation';
-import type { NormalizedModel } from '@libs/llm/byok-config';
-import { slotContextWindow } from '@libs/llm/slot-window';
+import { slotContextWindow, slotInputRoom } from '@libs/llm/slot-window';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
 // buildAgentAnomalies is review-specific (anomaly summary shapes) — lives in its
@@ -357,25 +356,22 @@ export async function runAgentLoopViaCore(
         !!verifySlot &&
         (verifySlot.provider !== secrets.byokConfig?.provider ||
             verifySlot.model !== secrets.byokConfig?.model);
-    // The check model's compressor keeps the answer that model declares
-    // (its own limit, or what its adapter sends with none) beside the
-    // drift margin: a wide batch of reads plus a 64k answer overflowed.
-    const verifyWindow = verifyOnOwnModel ? slotContextWindow(verifySlot) : 0;
+    // The check model's compressor keeps, beside the drift margin, what each
+    // attempt declares as its answer (its own limit, or what its adapter
+    // sends with none): a wide batch of reads plus a 64k answer overflowed.
     // LLM.run re-sends a failed call to the slot's fallback with its own
-    // answer limit: the larger of the two, as the window is the smaller.
-    const answerOf = async (slot: NormalizedModel) =>
-        (await declaredAnswerTokens(
-            slot,
-            slot.maxOutputTokens && slot.maxOutputTokens > 0
-                ? slot.maxOutputTokens
-                : undefined,
-        )) ?? 0;
-    const verifyAnswer = verifyOnOwnModel
-        ? Math.max(
-              await answerOf(verifySlot),
-              verifySlot.fallback
-                  ? await answerOf(verifySlot.fallback as NormalizedModel)
-                  : 0,
+    // window and limit, so the room is the smaller of the two attempts'.
+    const verifyWindow = verifyOnOwnModel ? slotContextWindow(verifySlot) : 0;
+    const verifyRoom = verifyOnOwnModel
+        ? await slotInputRoom(
+              verifySlot,
+              async (slot) =>
+                  (await declaredAnswerTokens(
+                      slot,
+                      slot?.maxOutputTokens && slot.maxOutputTokens > 0
+                          ? slot.maxOutputTokens
+                          : undefined,
+                  )) ?? 0,
           )
         : 0;
     const ownVerify = verifyOnOwnModel
@@ -396,7 +392,7 @@ export async function runAgentLoopViaCore(
                   overheadTokens,
                   safetyMarginTokens:
                       Math.ceil(verifyWindow * DEFAULT_SAFETY_MARGIN_RATIO) +
-                      verifyAnswer,
+                      (verifyWindow - verifyRoom),
               }),
               verifyProviderOptions: buildProviderOptions(
                   `${input.agentName ?? 'finder'}/verify`,
