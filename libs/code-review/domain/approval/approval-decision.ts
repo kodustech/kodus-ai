@@ -2,6 +2,7 @@ import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import type { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import type { ChangeRiskAssessment } from '../risk/assess-change-risk';
+import type { RiskAssessmentResult } from '../risk/risk-assessment';
 
 export interface ApprovalPolicy {
     /** Any configured label matches. When authors are also set, both groups apply. */
@@ -25,6 +26,40 @@ export interface ApprovalDecision {
     reviewedHeadSha?: string;
     reviewedBaseSha?: string;
     reviewedMetadataKey?: string;
+}
+
+/**
+ * The old approval levels, projected from the shared assessment for persisted
+ * executions and the approval cron. Shared consumers read riskAssessment.
+ */
+export function approvalRiskFromShared(
+    sharedRisk: RiskAssessmentResult | undefined,
+    headSha: string,
+): ApprovalRiskAssessment {
+    return {
+        level:
+            sharedRisk?.status === 'assessed'
+                ? sharedRisk.riskIdentified
+                    ? 'high'
+                    : 'low'
+                : 'unknown',
+        reason:
+            sharedRisk && sharedRisk.status !== 'disabled'
+                ? sharedRisk.reason
+                : 'Risk assessment is unavailable.',
+        reviewedHeadSha:
+            sharedRisk?.status === 'assessed'
+                ? sharedRisk.snapshot.headSha
+                : headSha,
+        areaMapVersion:
+            sharedRisk?.status === 'assessed'
+                ? sharedRisk.areaMapVersion
+                : undefined,
+        failure:
+            sharedRisk?.status === 'unavailable'
+                ? sharedRisk.failure
+                : undefined,
+    };
 }
 
 const normalized = (value: string) => value.trim().toLocaleLowerCase('en-US');

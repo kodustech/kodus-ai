@@ -137,6 +137,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             findByKey: jest.fn().mockResolvedValue(undefined),
         };
         const approvalPolicies = { evaluate: jest.fn() };
+        const prRiskAssessment = { assess: jest.fn() };
 
         const cron = new CheckIfPRCanBeApprovedCronProvider(
             teamService,
@@ -157,12 +158,14 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 codeManagementService,
                 pullRequestService,
             ),
+            prRiskAssessment as any,
         );
 
         return {
             cron,
             deps: {
                 approvalPolicies,
+                prRiskAssessment,
                 teamService,
                 parametersService,
                 pullRequestService,
@@ -1288,6 +1291,190 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
                 ).toHaveBeenCalledTimes(1);
         },
     );
+
+    describe('a PR whose text changed after its review', () => {
+        const live = {
+            title: 'Fix the sheet',
+            body: 'Eval run linked after CI.',
+            head: { sha: 'same-sha' },
+            base: { sha: 'same-base' },
+            user: { login: 'alice' },
+        };
+        const snapshot = {
+            organizationId: 'org-1',
+            repositoryId: 'repo-b',
+            prNumber: 77,
+            baseSha: 'same-base',
+            headSha: 'same-sha',
+            assessmentKey: 'key',
+            configurationKey: prRiskConfigurationKey({}),
+            descriptionKey: prRiskDescriptionKey({
+                title: 'Fix the sheet',
+                body: 'Before the edit.',
+            }),
+        };
+        const execution = (riskAssessment: unknown) => ({
+            uuid: 'execution-1',
+            dataExecution: {
+                lastAnalyzedCommit: 'same-sha',
+                approvalDecision: { kind: 'approve' },
+                approvalRisk: {
+                    level: 'low',
+                    reviewedHeadSha: 'same-sha',
+                    reason: 'No material risk.',
+                },
+                riskAssessment,
+            },
+        });
+        const run = (cron: any) =>
+            cron.shouldApprovePR({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                pr: makeOpenPr(77, 'repo-b'),
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    riskAssessmentActive: true,
+                },
+                teamAutomationId: 'team-automation-1',
+            });
+        const fresh = (riskIdentified: boolean) => ({
+            status: 'assessed',
+            riskIdentified,
+            reason: riskIdentified ? 'Changes billing.' : 'Only styling.',
+            snapshot: {
+                ...snapshot,
+                descriptionKey: prRiskDescriptionKey(live),
+            },
+        });
+
+        it('assesses the same commits again instead of asking for a review, and stores it', async () => {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getReviewStatusByPullRequest
+                .mockResolvedValueOnce(PullRequestReviewState.NONE)
+                .mockResolvedValueOnce(PullRequestReviewState.APPROVED);
+            deps.codeManagementService.getPullRequest.mockResolvedValue(live);
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                execution({
+                    status: 'assessed',
+                    riskIdentified: false,
+                    reason: 'No material risk.',
+                    snapshot,
+                }),
+            );
+            deps.prRiskAssessment.assess.mockResolvedValue({
+                assessment: fresh(false),
+            });
+
+            expect(await run(cron)).toBe(true);
+            expect(deps.prRiskAssessment.assess).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    pullRequest: expect.objectContaining({
+                        number: 77,
+                        body: 'Eval run linked after CI.',
+                        head: { sha: 'same-sha' },
+                    }),
+                }),
+            );
+            expect(deps.automationExecutionService.update).toHaveBeenCalledWith(
+                { uuid: 'execution-1' },
+                {
+                    dataExecution: expect.objectContaining({
+                        riskAssessment: fresh(false),
+                        approvalRisk: expect.objectContaining({ level: 'low' }),
+                    }),
+                },
+            );
+            expect(
+                deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).toHaveBeenCalledTimes(1);
+        });
+
+        it('holds with the shared reason when the new assessment finds risk', async () => {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getPullRequest.mockResolvedValue(live);
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                execution({
+                    status: 'assessed',
+                    riskIdentified: false,
+                    reason: 'No material risk.',
+                    snapshot,
+                }),
+            );
+            deps.prRiskAssessment.assess.mockResolvedValue({
+                assessment: fresh(true),
+            });
+
+            expect(await run(cron)).toBe(false);
+            expect(
+                deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining(
+                        'Risk was identified in this PR.',
+                    ),
+                }),
+                expect.anything(),
+            );
+        });
+
+        it('keys a failed reassessment to the new text, so the next pass reuses it', async () => {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getPullRequest.mockResolvedValue(live);
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                execution({
+                    status: 'assessed',
+                    riskIdentified: false,
+                    reason: 'No material risk.',
+                    snapshot,
+                }),
+            );
+            deps.prRiskAssessment.assess.mockResolvedValue({
+                assessment: {
+                    status: 'unavailable',
+                    reason: 'Risk assessment could not run with the available model credits.',
+                },
+            });
+
+            expect(await run(cron)).toBe(false);
+            const stored =
+                deps.automationExecutionService.update.mock.calls[0][1]
+                    .dataExecution.riskAssessment;
+            expect(stored.snapshot.descriptionKey).toBe(
+                prRiskDescriptionKey(live),
+            );
+
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                execution(stored),
+            );
+            deps.codeManagementService.createIssueComment.mockClear();
+            expect(await run(cron)).toBe(false);
+            expect(deps.prRiskAssessment.assess).toHaveBeenCalledTimes(1);
+        });
+
+        it('still waits for a review when the commits changed', async () => {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getPullRequest.mockResolvedValue({
+                ...live,
+                base: { sha: 'moved-base' },
+            });
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                execution({
+                    status: 'assessed',
+                    riskIdentified: false,
+                    reason: 'No material risk.',
+                    snapshot,
+                }),
+            );
+
+            expect(await run(cron)).toBe(false);
+            expect(deps.prRiskAssessment.assess).not.toHaveBeenCalled();
+        });
+    });
 
     it('holds a clean zero-comment PR that changes a sensitive path without requiring labels', async () => {
         const { cron, deps } = makeCron();

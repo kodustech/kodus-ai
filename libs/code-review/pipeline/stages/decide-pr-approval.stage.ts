@@ -15,6 +15,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     approvalPathsOf,
     approvalPolicyForPlatform,
+    approvalRiskFromShared,
     approvalPolicyFromConfig,
     evaluateApproval,
     matchesApprovalScope,
@@ -247,30 +248,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         const sharedRisk = context.riskAssessment;
         let risk: ApprovalRiskAssessment | undefined =
             config.riskAssessmentActive === true
-                ? {
-                      level:
-                          sharedRisk?.status === 'assessed'
-                              ? ((sharedRisk.riskIdentified
-                                    ? 'high'
-                                    : 'low') as 'high' | 'low')
-                              : ('unknown' as const),
-                      reason:
-                          sharedRisk && sharedRisk.status !== 'disabled'
-                              ? sharedRisk.reason
-                              : 'Risk assessment is unavailable.',
-                      reviewedHeadSha:
-                          sharedRisk?.status === 'assessed'
-                              ? sharedRisk.snapshot.headSha
-                              : headSha,
-                      areaMapVersion:
-                          sharedRisk?.status === 'assessed'
-                              ? sharedRisk.areaMapVersion
-                              : undefined,
-                      failure:
-                          sharedRisk?.status === 'unavailable'
-                              ? sharedRisk.failure
-                              : undefined,
-                  }
+                ? approvalRiskFromShared(sharedRisk, headSha)
                 : undefined;
         // Preserve the assessment even if the required label arrives after
         // review; the cron can then reconsider this exact reviewed head.
