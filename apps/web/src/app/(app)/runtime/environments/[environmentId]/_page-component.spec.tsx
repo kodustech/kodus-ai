@@ -41,6 +41,11 @@ jest.mock("@services/runtime/queries", () => ({
     useRuntimeEnvironments: () => ({ data: mockEnvironments.data }),
     useRuntimeSettings: () => ({ data: { repositories: [] } }),
 }));
+jest.mock("./_components/e2e-suite", () => ({
+    EnvironmentSuiteSection: ({ environmentId }: { environmentId: string }) => (
+        <section aria-label="e2e suite">{environmentId}</section>
+    ),
+}));
 jest.mock("./_components/repositories", () => ({
     EnvironmentRepositories: ({
         env,
@@ -205,6 +210,12 @@ describe("Environment page", () => {
         expect(section("What Kody learned")).toBeInTheDocument();
     });
 
+    it("a managed environment has its e2e suite section, which is hidden by itself when the recipe declares none", () => {
+        mockEnvironment.data = env({ setup: setup() });
+        render(<EnvironmentDetailPage environmentId="env-1" />);
+        expect(screen.getByRole("region", { name: "e2e suite" })).toHaveTextContent("env-1");
+    });
+
     it("blocked: the blockers section stays, since the next step points at it", () => {
         mockEnvironment.data = env({
             state: "blocked",
@@ -274,6 +285,7 @@ describe("Environment page", () => {
         ).not.toBeInTheDocument();
         expect(fold("Settings")).toBeNull();
         expect(section("Simulate on past PRs")).not.toBeInTheDocument();
+        expect(screen.queryByRole("region", { name: "e2e suite" })).not.toBeInTheDocument();
         expect(
             screen
                 .getAllByRole("link")

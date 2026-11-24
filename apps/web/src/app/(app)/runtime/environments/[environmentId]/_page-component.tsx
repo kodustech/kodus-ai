@@ -61,6 +61,7 @@ import { ActivityIcon, ArrowLeftIcon } from "lucide-react";
 
 import { ApproveHostForm } from "./_components/egress-approval";
 import { EgressApprovalsList } from "@components/runtime/egress-access";
+import { EnvironmentSuiteSection } from "./_components/e2e-suite";
 import { EnvironmentLessons } from "./_components/lessons";
 import { MachineSizeSetting } from "./_components/machine-size";
 import { EnvironmentPreviewSection } from "./_components/environment-preview";
@@ -362,6 +363,13 @@ export const EnvironmentDetailPage = ({
                             canEdit={canEdit}
                         />
                     </RuntimeSection>
+                )}
+
+                {!runOnly && (
+                    <EnvironmentSuiteSection
+                        environmentId={env.environmentId}
+                        canManage={canManageRuntime}
+                    />
                 )}
 
                 {!runOnly && env.repositories && (
