@@ -12,6 +12,7 @@ const req = (key: string): AcquireRequest => ({ organizationId: 'org-a', environ
 function world(tokens: string[], renewal?: Parameters<typeof suiteEnvironment>[2]) {
     const acquired: Array<{ token: string; key: string }> = [];
     const calls: string[] = [];
+    const stepIds: string[] = [];
     const client = (token: string): EnvironmentRuntime =>
         ({
             renew: async (claimId: string, consumer: string) => {
@@ -22,13 +23,14 @@ function world(tokens: string[], renewal?: Parameters<typeof suiteEnvironment>[2
                 acquired.push({ token, key: r.idempotencyKey });
                 return { claimId: `claim-${r.idempotencyKey}` } as Claim;
             },
-            exec: async (claimId: string) => {
+            exec: async (claimId: string, r: { stepId: string }) => {
                 calls.push(`exec:${token}:${claimId}`);
+                stepIds.push(r.stepId);
                 return { stepId: 's', exitCode: 0, stdout: '', stderr: '', truncated: false, durationMs: 1, transport: 'ok' as const };
             },
             release: async (claimId: string) => void calls.push(`release:${token}:${claimId}`),
         }) as unknown as EnvironmentRuntime;
-    return { env: suiteEnvironment(client, tokens, renewal), acquired, calls };
+    return { env: suiteEnvironment(client, tokens, renewal), acquired, calls, stepIds };
 }
 
 describe('the environment of a suite run', () => {
@@ -54,6 +56,15 @@ describe('the environment of a suite run', () => {
         expect(isBlocked(out)).toBe(true);
         expect((out as { blockers: Array<{ signature: string }> }).blockers[0].signature).toBe('suite_tokens_exhausted');
         expect(w.acquired).toHaveLength(1);
+    });
+
+    it('sends every step to the hub under a UUID, the same one for the same step', async () => {
+        const w = world(['t1']);
+        await w.env.acquire(req('k0'));
+        for (const stepId of ['run-1-list', 'k:poll:3', 'run-1-list']) await w.env.exec('claim-k0', { stepId, command: 'true', timeoutMs: 1000 });
+        expect(w.stepIds.every((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id))).toBe(true);
+        expect(w.stepIds[0]).toBe(w.stepIds[2]);
+        expect(w.stepIds[0]).not.toBe(w.stepIds[1]);
     });
 
     it('runs commands and releases through any of its clients', async () => {

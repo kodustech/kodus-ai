@@ -1,3 +1,4 @@
+import { sha256, uuidV5From } from '@libs/runtime/contracts/derive-id';
 import type { AcquireOptions, AcquireRequest, Blocked, Claim, EnvironmentRuntime, EnvError, ExecRequest, StepResult } from '@libs/runtime/environment';
 
 import { ClaimLeaseKeeper, type LeaseKeeperOptions } from '../run/lease-keeper';
@@ -18,6 +19,14 @@ const exhausted = (): Blocked => ({
  * acquired again by its idempotency key (a replay) keeps its client and spends no second token; with none left the
  * acquire is blocked, which the engine reads as infra. Commands and releases go through whichever client acquired the claim.
  */
+/**
+ * The hub takes a step id only as a UUID. A suite names its steps by what they do (`<suiteRun>-list`, `<key>:poll:3`):
+ * the same name always gives the same UUID, so a replayed step is still the same step to the cell.
+ */
+export function suiteStepId(name: string): string {
+    return uuidV5From(sha256(`suite-step:${name}`));
+}
+
 export function suiteEnvironment(make: (sealedRepoToken: string) => EnvironmentRuntime, tokens: readonly string[], renewal?: Pick<LeaseKeeperOptions, 'everyMs' | 'retryMs' | 'timers' | 'onEvent'>): SuiteEnvironment {
     const byKey = new Map<string, EnvironmentRuntime>();
     const byClaim = new Map<string, EnvironmentRuntime>();
@@ -46,7 +55,7 @@ export function suiteEnvironment(make: (sealedRepoToken: string) => EnvironmentR
         async exec(claimId: string, req: ExecRequest): Promise<StepResult | EnvError> {
             const client = clientFor(claimId);
             if (!client) return { code: 'cell_unavailable', cellId: 'unknown' };
-            return client.exec(claimId, req);
+            return client.exec(claimId, { ...req, stepId: suiteStepId(req.stepId) });
         },
         async release(claimId: string): Promise<void> {
             holds.get(claimId)?.stop();
