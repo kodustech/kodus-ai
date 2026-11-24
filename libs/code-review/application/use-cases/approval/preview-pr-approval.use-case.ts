@@ -8,9 +8,9 @@ import {
     AUTOMATION_EXECUTION_SERVICE_TOKEN,
     type IAutomationExecutionService,
 } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
-import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { AutomationType } from '@libs/automation/domain/automation/enum/automation-type';
 import { approvalPathsOf } from '@libs/code-review/domain/approval/approval-decision';
+import { reviewExecutionAllowsApproval } from '@libs/code-review/domain/approval/review-approval-errors';
 import { approvalPolicyProviderError } from '@libs/code-review/domain/approval/approval-policy-provider';
 import {
     REVIEW_FINDINGS_UNVERIFIED,
@@ -213,7 +213,7 @@ export class PreviewPrApprovalUseCase {
                     : (analyzed?.sha ?? analyzed?.commitSha);
             const summary = data?.approvalReviewSummary;
             if (
-                latest?.status !== AutomationStatus.SUCCESS ||
+                !reviewExecutionAllowsApproval(latest) ||
                 analyzedHead !== snapshot.headSha ||
                 reviewed?.reviewedBaseSha !== snapshot.baseSha ||
                 !summary?.complete ||

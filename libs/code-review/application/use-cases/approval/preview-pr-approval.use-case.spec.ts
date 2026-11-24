@@ -118,6 +118,21 @@ describe(PreviewPrApprovalUseCase.name, () => {
         );
     });
 
+    it('accepts a recorded review whose only failure was the PR summary', async () => {
+        const { useCase, evaluate, executions } = setup();
+        const recorded =
+            (await executions.findPullRequestExecutionsByOrganizationAndTeam()) as any;
+        recorded.data[0].status = AutomationStatus.PARTIAL_ERROR;
+        recorded.data[0].dataExecution.reviewApprovalBlocked = false;
+
+        const result = await useCase.execute(input);
+
+        expect(result.decision).toMatchObject({ kind: 'approve' });
+        expect(evaluate).toHaveBeenCalledWith(
+            expect.objectContaining({ reviewClean: true }),
+        );
+    });
+
     it('holds a stale recorded review and evaluates draft policies only with the explicit assumption', async () => {
         const { useCase, evaluate } = setup('old');
         expect((await useCase.execute(input)).decision).toEqual({

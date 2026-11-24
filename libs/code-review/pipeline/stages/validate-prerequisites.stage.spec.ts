@@ -1,3 +1,4 @@
+import { isKodyAuthoredBody } from '@libs/common/utils/kody-identifiers';
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { Test, TestingModule } from '@nestjs/testing';
 
@@ -23,7 +24,7 @@ import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/con
 import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import {
-    USER_NO_LICENSE_NOTICE,
+    licenseNoticeBody,
     ValidatePrerequisitesStage,
 } from './validate-prerequisites.stage';
 
@@ -62,7 +63,10 @@ describe('ValidatePrerequisitesStage', () => {
         find: jest.Mock;
         countByAuthor: jest.Mock;
     };
-    let mockCodeBaseConfigService: { getConfig: jest.Mock };
+    let mockCodeBaseConfigService: {
+        getConfig: jest.Mock;
+        getKodusConfigFile: jest.Mock;
+    };
     let mockPullRequestManagerService: { getChangedFilesMetadata: jest.Mock };
     let mockAutomationExecutionService: {
         hasPullRequestExecutionWithDataKey: jest.Mock;
@@ -156,6 +160,7 @@ describe('ValidatePrerequisitesStage', () => {
             getConfig: jest
                 .fn()
                 .mockResolvedValue({ automatedReviewActive: true }),
+            getKodusConfigFile: jest.fn().mockResolvedValue(undefined),
         };
 
         mockPullRequestManagerService = {
@@ -1084,7 +1089,7 @@ describe('ValidatePrerequisitesStage', () => {
             ).toHaveBeenCalledWith(
                 expect.objectContaining({
                     prNumber: 42,
-                    body: USER_NO_LICENSE_NOTICE,
+                    body: licenseNoticeBody(PlatformType.GITHUB),
                 }),
             );
             expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
@@ -1131,7 +1136,9 @@ describe('ValidatePrerequisitesStage', () => {
                 expect(
                     mockCodeManagementService.createIssueComment,
                 ).toHaveBeenCalledWith(
-                    expect.objectContaining({ body: USER_NO_LICENSE_NOTICE }),
+                    expect.objectContaining({
+                        body: licenseNoticeBody(platformType),
+                    }),
                 );
                 expect(
                     mockCodeManagementService.addReactionToPR,
@@ -1158,7 +1165,7 @@ describe('ValidatePrerequisitesStage', () => {
             ).toHaveBeenCalledWith(
                 expect.objectContaining({
                     inReplyToId: 77,
-                    body: USER_NO_LICENSE_NOTICE,
+                    body: licenseNoticeBody(PlatformType.BITBUCKET),
                 }),
             );
             expect(
@@ -1195,7 +1202,9 @@ describe('ValidatePrerequisitesStage', () => {
             expect(
                 mockCodeManagementService.createIssueComment,
             ).toHaveBeenCalledWith(
-                expect.objectContaining({ body: USER_NO_LICENSE_NOTICE }),
+                expect.objectContaining({
+                    body: licenseNoticeBody(PlatformType.GITHUB),
+                }),
             );
             expect(result.licenseNoticePostedAt).toEqual(expect.any(String));
         });
@@ -1241,6 +1250,167 @@ describe('ValidatePrerequisitesStage', () => {
                 AutomationStatus.SKIPPED,
             );
             expect(result.licenseNoticePostedAt).toBeUndefined();
+        });
+
+        it('marks the notice with the HTML comment off Bitbucket and the chip on it', () => {
+            for (const platformType of [
+                PlatformType.GITHUB,
+                PlatformType.GITLAB,
+                PlatformType.AZURE_REPOS,
+                PlatformType.FORGEJO,
+            ]) {
+                const body = licenseNoticeBody(platformType);
+                expect(body.endsWith('<!-- kody-codereview -->')).toBe(true);
+                expect(isKodyAuthoredBody(body)).toBe(true);
+            }
+
+            const bitbucket = licenseNoticeBody(PlatformType.BITBUCKET);
+            expect(bitbucket.startsWith('`kody|code-review`\n\n## ')).toBe(
+                true,
+            );
+            expect(bitbucket).not.toContain('<!--');
+            expect(isKodyAuthoredBody(bitbucket)).toBe(true);
+        });
+
+        describe('showStatusFeedback in kodus-config.yml', () => {
+            const storedConfig = (
+                showStatusFeedback: boolean,
+                fileOverridesWeb: boolean | undefined,
+            ) =>
+                mockParametersService.findByKey.mockResolvedValue({
+                    configValue: {
+                        configs: { showStatusFeedback },
+                        repositories: [
+                            {
+                                id: 'repo-1',
+                                configs:
+                                    fileOverridesWeb === undefined
+                                        ? {}
+                                        : {
+                                              kodusConfigFileOverridesWebPreferences:
+                                                  fileOverridesWeb,
+                                          },
+                            },
+                        ],
+                    },
+                });
+
+            it('silences the reaction and the notice when the file turns it off', async () => {
+                failNoSeat();
+                storedConfig(true, true);
+                mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValue({
+                    showStatusFeedback: false,
+                });
+
+                const result = await stage.execute(makeContext());
+
+                expect(
+                    mockCodeBaseConfigService.getKodusConfigFile,
+                ).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        repository: { id: 'repo-1', name: 'repo-1' },
+                        overrideConfig: true,
+                        tolerateReviewSettingsErrors: true,
+                    }),
+                );
+                expect(
+                    mockCodeManagementService.addReactionToPR,
+                ).not.toHaveBeenCalled();
+                expect(
+                    mockCodeManagementService.createIssueComment,
+                ).not.toHaveBeenCalled();
+                expect(result.statusInfo?.status).toBe(
+                    AutomationStatus.SKIPPED,
+                );
+                expect(result.pipelineMetadata?.showStatusFeedback).toBe(false);
+                expect(result.licenseNoticePostedAt).toBeUndefined();
+            });
+
+            it('posts when the file turns it on over web settings that have it off', async () => {
+                failNoSeat();
+                storedConfig(false, true);
+                mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValue({
+                    showStatusFeedback: true,
+                });
+                mockCodeManagementService.createIssueComment.mockResolvedValue({
+                    id: 1,
+                });
+
+                const result = await stage.execute(makeContext());
+
+                expect(
+                    mockCodeManagementService.addReactionToPR,
+                ).toHaveBeenCalled();
+                expect(
+                    mockCodeManagementService.createIssueComment,
+                ).toHaveBeenCalledTimes(1);
+                expect(result.pipelineMetadata?.showStatusFeedback).toBe(true);
+                expect(result.licenseNoticePostedAt).toEqual(
+                    expect.any(String),
+                );
+            });
+
+            it.each([false, undefined])(
+                'leaves the web settings in charge when the repository has the file override %s',
+                async (fileOverridesWeb) => {
+                    failNoSeat();
+                    storedConfig(true, fileOverridesWeb);
+                    mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValue(
+                        { showStatusFeedback: false },
+                    );
+                    mockCodeManagementService.createIssueComment.mockResolvedValue(
+                        { id: 1 },
+                    );
+
+                    await stage.execute(makeContext());
+
+                    expect(
+                        mockCodeBaseConfigService.getKodusConfigFile,
+                    ).not.toHaveBeenCalled();
+                    expect(
+                        mockCodeManagementService.createIssueComment,
+                    ).toHaveBeenCalledTimes(1);
+                },
+            );
+
+            it('leaves the web settings in charge when the file has no value or cannot be read', async () => {
+                failNoSeat();
+                storedConfig(true, true);
+                mockCodeManagementService.createIssueComment.mockResolvedValue({
+                    id: 1,
+                });
+
+                mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValueOnce(
+                    { ignorePaths: [] },
+                );
+                await stage.execute(makeContext());
+
+                mockCodeBaseConfigService.getKodusConfigFile.mockRejectedValueOnce(
+                    new Error('provider down'),
+                );
+                await stage.execute(makeContext());
+
+                expect(
+                    mockCodeBaseConfigService.getKodusConfigFile,
+                ).toHaveBeenCalledTimes(2);
+                expect(
+                    mockCodeManagementService.createIssueComment,
+                ).toHaveBeenCalledTimes(2);
+            });
+
+            it.each(['IGNORED_USER', 'NOT_ALLOWED_USER'])(
+                'does not read the file for a %s author',
+                async (reason) => {
+                    failNoSeat(reason);
+                    storedConfig(true, true);
+
+                    await stage.execute(makeContext());
+
+                    expect(
+                        mockCodeBaseConfigService.getKodusConfigFile,
+                    ).not.toHaveBeenCalled();
+                },
+            );
         });
     });
 });
