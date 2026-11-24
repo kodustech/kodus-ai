@@ -145,14 +145,6 @@ const SchedulesDialog = ({ onClose }: { onClose: () => void }) => {
             return;
         setSaving(true);
         setError(undefined);
-        // A paused schedule stays paused when it is edited. The API finds the
-        // repository by team and id, so the schedule is matched the same way.
-        const paused = schedules.data.some(
-            (s) =>
-                s.teamId === teamId &&
-                s.repository.id === repositoryId &&
-                !s.enabled,
-        );
         try {
             await saveSecurityScanSchedule({
                 teamId,
@@ -160,7 +152,6 @@ const SchedulesDialog = ({ onClose }: { onClose: () => void }) => {
                 cadence,
                 maxUsd: limit,
                 mode,
-                ...(paused ? { enabled: false } : {}),
                 ...(modelId === ROUTING_MODEL ? {} : { modelId }),
                 ...(exportTo === NO_EXPORT
                     ? {}

@@ -64,6 +64,7 @@ export interface SaveScheduleInput {
     modelId?: string;
     /** Where each run's new findings are filed when it ends. */
     exportTo?: ScanExportTarget;
+    /** Omitted: the schedule keeps its state (a new one starts enabled). */
     enabled?: boolean;
     requestedBy?: { userId?: string; email?: string };
 }
@@ -119,6 +120,17 @@ export class SecurityScanSchedulesUseCase {
             input.organizationAndTeamData,
             input.repositoryId,
         );
+        // Saved without `enabled`, a schedule keeps its state: editing a
+        // paused one does not resume it. A new one starts enabled.
+        const enabled =
+            input.enabled ??
+            (
+                await this.schedules.find(
+                    input.organizationAndTeamData.organizationId,
+                    repositoryKey,
+                )
+            )?.enabled ??
+            true;
         return this.schedules.save(
             input.organizationAndTeamData.organizationId,
             repositoryKey,
@@ -129,7 +141,7 @@ export class SecurityScanSchedulesUseCase {
                 mode: input.mode ?? 'incremental',
                 modelId: input.modelId,
                 exportTo: input.exportTo,
-                enabled: input.enabled !== false,
+                enabled,
                 nextRunAt: nextRunAt(input.cadence, now).toISOString(),
                 createdBy: input.requestedBy,
             },

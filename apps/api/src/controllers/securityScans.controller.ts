@@ -184,7 +184,8 @@ export class SaveSecurityScanScheduleDto {
     exportTo?: ScheduleExportToDto;
 
     @ApiPropertyOptional({
-        description: 'Pause the schedule without deleting it.',
+        description:
+            'false pauses the schedule without deleting it, true resumes it. Omitted, the schedule keeps its state (a new one starts enabled).',
     })
     @IsOptional()
     @IsBoolean()
