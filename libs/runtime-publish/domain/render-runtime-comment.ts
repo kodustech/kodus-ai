@@ -167,8 +167,12 @@ function quoteSpan(value: string): string {
 /** Where a quoted sentence comes from, as the reader knows it. */
 const sourceWords = (source: string) => (source.startsWith('task:') ? `task ${code(source.slice('task:'.length))}` : 'the description');
 
-/** A code span inside a table row: a pipe would end the cell. */
-const cell = (value: string) => code(value).replace(/\|/g, '\\|');
+/**
+ * A code span inside a table row: a pipe would end the cell. The splitter reads
+ * `\\|` as an escaped backslash and a real pipe, so the backslashes before a
+ * pipe are doubled first (a value the PR controls must stay in its cell).
+ */
+const cell = (value: string) => code(value).replace(/(\\*)\|/g, '$1$1\\|');
 
 const link = (text: string, url: string | undefined) =>
     url ? `[${text}](${url})` : text;

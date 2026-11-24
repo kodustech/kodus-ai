@@ -367,6 +367,23 @@ describe('renderReportComment (screen 7)', () => {
         expect(body).toContain('GET /api/dashboards');
     });
 
+    it('a path value ending in a backslash before a pipe stays in one table cell (GFM reads \\| as a backslash and a real pipe)', () => {
+        const cells = (row: string) => row.slice(1).split(/(?<!(?:^|[^\\])(?:\\\\)*\\)\|/);
+        const body = renderReportComment(
+            report({
+                state: 'partly_tested',
+                verdictState: 'partly_tested',
+                paths: [{ entryPoint: 'GET /a\\|b | c', probeId: 'p1', verdict: 'not_reproduced', base: { status: 200 }, pr: { status: 200 } } as ReportPath],
+                uncovered: [],
+            }),
+            links,
+        );
+        const row = body.split('\n').find((l) => l.startsWith('| `GET /a')) ?? '';
+        expect(row).not.toBe('');
+        // Four cells and the closing pipe: path, main, PR, result.
+        expect(cells(row.trimEnd().replace(/\|$/, ''))).toHaveLength(4);
+    });
+
     it('lists an intended change apart, and its check waits for a person', () => {
         const intended = { ...report().paths[0], intent: 'intended' as const, suggestionId: undefined };
         const r = report({ state: 'partly_tested', verdictState: 'partly_tested', paths: [intended], uncovered: [] });
