@@ -24,7 +24,7 @@ export const SuiteReportSchema = z.strictObject({
     prSha: sha.optional(),
     baseline: z.strictObject({ sha }).optional(),
     baseDrift: count.optional(),
-    selection: z.strictObject({ mode: z.enum(['full', 'selected', 'none']), reason: z.enum(FULL_REASONS).optional(), selected: count.optional(), total: count }),
+    selection: z.strictObject({ mode: z.enum(['full', 'selected', 'none']), reason: z.enum(FULL_REASONS).optional(), selected: count.optional(), total: count, reachUnknown: z.enum(FULL_REASONS).optional() }),
     totals: z.strictObject({ passed: count, failed: count, skipped: count, notRun: count }),
     classes: z.strictObject({ regression: count, preExisting: count, flaky: count, unclassified: count, infra: count }),
     durationMs: z.number().int().min(0).optional(),

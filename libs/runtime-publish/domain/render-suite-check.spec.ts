@@ -57,6 +57,13 @@ describe('the suite check output', () => {
         expect(out.summary).toContain('main has moved 4 commits since this branch started: update the branch to confirm.');
     });
 
+    it('while main is ahead and the specs the change reaches are unknown, says why a failure cannot be confirmed, from the structured reason', () => {
+        const sel = { mode: 'full' as const, reason: 'map_stale' as const, total: 40, reachUnknown: 'map_stale' as const };
+        const out = renderSuiteCheckOutput(report({ baseDrift: 4, selection: sel }), {});
+        expect(out.summary).toContain('Which specs this change reaches is not known (the stored coverage map is too old to trust), so a failing spec cannot be confirmed as a regression until the branch is up to date.');
+        expect(renderSuiteCheckOutput(report({ selection: sel }), {}).summary).not.toContain('Which specs this change reaches');
+    });
+
     it('names a selection of specs and the one reason a whole run was chosen, as sentences the product wrote', () => {
         expect(renderSuiteCheckOutput(report({ selection: { mode: 'selected', selected: 6, total: 40 } }), {}).summary).toContain('Ran 6 of 40 specs the change can reach.');
         expect(renderSuiteCheckOutput(report({ selection: { mode: 'full', reason: 'lockfile', total: 40 } }), {}).summary).toContain('Ran the whole suite: a lockfile changed.');

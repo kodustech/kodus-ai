@@ -25,7 +25,24 @@ export interface SuitePlanInput {
     workspaceSpecsOf?: SelectInput['workspaceSpecsOf'];
     /** The whole suite regardless of the map and of an earlier run (a shadow run; the brake of the shadow check): the reason says which. */
     forceFull?: SelectInput['forceFull'];
+    /** The suite directory (relative to the repository root): `changed` is the repository's, the specs are the suite's. */
+    cwd?: string;
 }
+
+/** Why the reach of the diff is not known: the reasons of `select` that say nothing about which specs a change touches. */
+export type ReachUnknownReason = Extract<FullReason, 'map_missing' | 'map_stale' | 'map_digest' | 'changes_unknown' | 'uncovered_file' | 'noise_file'>;
+
+/**
+ * The specs the PR's diff reaches, which the classifier asks while main is ahead of the merge base (section 9.3). `unknown` is
+ * set when no usable coverage map (or nothing in the map) can say; `specs` then holds only what the PR changed itself.
+ */
+export interface DiffReach {
+    specs: string[];
+    unknown?: ReachUnknownReason;
+}
+
+/** Whole-suite reasons that mean everything may be affected: the file alone says it, whatever the map holds. */
+const EVERYTHING: ReadonlySet<FullReason> = new Set<FullReason>(['manifest', 'lockfile', 'config', 'shared_routing']);
 
 export interface SuitePlan {
     /** In the order of `allSpecs`. */
@@ -36,9 +53,31 @@ export interface SuitePlan {
     diffCoverage: Record<string, number>;
     selection: SuiteSelectionReport;
     text: string;
+    /** What the whole diff (merge base to PR sha) reaches; absent for a shadow run, which judges no diff. */
+    reach?: DiffReach;
+}
+
+/** Same map, same freshness and digest rules, same importer walk and workspace closure as `select`, over the whole diff; pure. */
+export function diffReach(i: SuitePlanInput): DiffReach {
+    const all = [...i.allSpecs];
+    const changed = new Set(i.changed ?? []);
+    // A spec the PR added or modified is always reached.
+    const own = all.filter((s) => changed.has(s) || (i.cwd !== undefined && changed.has(`${i.cwd.replace(/\/$/, '')}/${s}`)));
+    if (i.changed === undefined) return { specs: own, unknown: i.map ? 'changes_unknown' : 'map_missing' };
+    const s = select({ allSpecs: all, changed: i.changed, ...(i.map ? { map: i.map } : {}), suiteDigest: i.suiteDigest, ...(i.ignore ? { ignore: i.ignore } : {}), ...(i.importersOf ? { importersOf: i.importersOf } : {}), ...(i.workspaceSpecsOf ? { workspaceSpecsOf: i.workspaceSpecsOf } : {}) });
+    if (s.mode === 'full') return EVERYTHING.has(s.reason) ? { specs: all } : { specs: own, unknown: s.reason as ReachUnknownReason };
+    // Without a map nothing proves what the change reaches, not even an ignored-only one.
+    if (!i.map) return { specs: own, unknown: 'map_missing' };
+    const reached = new Set([...s.specs, ...own]);
+    return { specs: all.filter((x) => reached.has(x)) };
 }
 
 export function planSuiteRun(i: SuitePlanInput): SuitePlan {
+    const plan = planSpecs(i);
+    return i.forceFull === 'shadow' ? plan : { ...plan, reach: diffReach(i) };
+}
+
+function planSpecs(i: SuitePlanInput): SuitePlan {
     const all = [...i.allSpecs];
     const total = all.length;
     const full = (reason: FullReason, text: string): Selection => ({ mode: 'full', specs: all, reason, text });

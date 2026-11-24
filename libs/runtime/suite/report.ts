@@ -60,6 +60,8 @@ export interface SuiteSelectionReport {
     reason?: FullReason;
     selected?: number;
     total: number;
+    /** Set while main is ahead of the merge base and no coverage map could say which specs the diff reaches: why, so the check can. */
+    reachUnknown?: FullReason;
 }
 
 export interface SuiteReport {

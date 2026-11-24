@@ -86,6 +86,7 @@ export function renderSuiteCheckOutput(r: SuiteReport, links: RuntimeLinks): Sui
     lines.push('', selectionLine(r));
     if (r.baseline) lines.push(`Baseline: \`${r.baseline.sha.slice(0, 7)}\` on main.`);
     if (r.baseDrift) lines.push(`main has moved ${plural(r.baseDrift, 'commit')} since this branch started: update the branch to confirm.`);
+    if (r.baseDrift && r.selection.reachUnknown) lines.push(`Which specs this change reaches is not known (${FULL_REASON_TEXT[r.selection.reachUnknown]}), so a failing spec cannot be confirmed as a regression until the branch is up to date.`);
     if (r.durationMs !== undefined && !open) lines.push(`Time to result: ${minutes(r.durationMs)}.`);
     if (r.annotationsOmitted > 0) lines.push(`${r.annotationsOmitted} more failures are not annotated.`);
     if (links.run) lines.push('', `[Open the Run](${links.run})`);

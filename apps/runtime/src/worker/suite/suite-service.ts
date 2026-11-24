@@ -2,7 +2,7 @@ import { type Claim } from '@libs/runtime/environment';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import { sha256, uuidV5From } from '@libs/runtime/contracts/derive-id';
-import { BRAKE_WINDOW_SHADOWS, brakeAfterMiss, type CoverageMapInput, MAP_MAX_COMMITS_BEHIND, missesOf, type PreviousSuiteRun, planSuiteRun, shadowDue, type SuiteSelectionReport, specListOf, suiteDigestOf } from '@libs/runtime/suite';
+import { BRAKE_WINDOW_SHADOWS, brakeAfterMiss, type CoverageMapInput, diffReach, type DiffReach, MAP_MAX_COMMITS_BEHIND, missesOf, type PreviousSuiteRun, planSuiteRun, shadowDue, type SuiteSelectionReport, specListOf, suiteDigestOf } from '@libs/runtime/suite';
 
 import type { PgSuiteBaselineRequests } from '../../shared/persistence/suite-baseline-requests';
 import type { CoverageMapRecord } from './coverage-collector';
@@ -222,7 +222,9 @@ export class SuiteService {
             ...(canaries?.length ? { canaries } : {}),
             // A retry or a selection runs part of the suite; the digest that keys a baseline is the whole suite's.
             suiteDigest: digest,
-            selection: cmd.specs ? { mode: 'selected', selected: specs.length, total: whole.length } : plan.selection,
+            selection: this.withReach(cmd, cmd.specs ? { mode: 'selected', selected: specs.length, total: whole.length } : plan.selection, plan.reach),
+            // What the diff reaches decides, while main is ahead, whether a failing spec is a regression; unset when no map could say.
+            ...(plan.reach ? { diffReachedSpecs: plan.reach.specs } : {}),
             order: { failedBefore: plan.failedBefore, diffCoverage: plan.diffCoverage },
             // Only a baseline pays for coverage, and only where a map store keeps it.
             ...(cmd.mode === 'baseline' && this.d.maps ? { coverage: true } : {}),
@@ -236,13 +238,18 @@ export class SuiteService {
      */
     private async plan(cmd: RuntimeSuiteRequested, s: Started, all: readonly string[], digest: string, first: boolean) {
         if (cmd.mode === 'shadow') return planSuiteRun({ allSpecs: all, suiteDigest: digest, mergeBase: cmd.mergeBase!, prSha: cmd.prSha!, forceFull: 'shadow' });
-        if (cmd.mode === 'baseline' || cmd.specs) return { specs: [...all], failedBefore: [] as string[], diffCoverage: {} as Record<string, number>, selection: { mode: 'full', reason: 'baseline', total: all.length } as SuiteSelectionReport };
+        if (cmd.mode === 'baseline') return { specs: [...all], failedBefore: [] as string[], diffCoverage: {} as Record<string, number>, selection: { mode: 'full', reason: 'baseline', total: all.length } as SuiteSelectionReport, reach: undefined as DiffReach | undefined };
+        const stored = await this.d.maps?.newest(cmd.organizationId, cmd.environmentId);
+        const map = stored ? this.mapInputOf(stored, cmd) : undefined;
+        if (cmd.specs) {
+            // A retry runs the specs it names, but is judged on the same diff as the run it retries.
+            const reach = diffReach({ allSpecs: all, suiteDigest: digest, mergeBase: cmd.mergeBase!, prSha: cmd.prSha!, ...(cmd.changedFiles ? { changed: cmd.changedFiles } : {}), ...(map ? { map } : {}), ignore: s.suite.ignore, ...(s.suite.config.cwd ? { cwd: s.suite.config.cwd } : {}) });
+            return { specs: [...all], failedBefore: [] as string[], diffCoverage: {} as Record<string, number>, selection: { mode: 'full', reason: 'baseline', total: all.length } as SuiteSelectionReport, reach: reach as DiffReach | undefined };
+        }
         const prev = await this.previousRunOf(cmd);
         const previous = this.previousOf(cmd, prev);
         // The brake of the shadow check: off, or the whole suite after a miss; the whole suite is then the plan whatever the map says.
         const brake = await this.brakeOf(cmd, prev, first);
-        const stored = brake ? undefined : await this.d.maps?.newest(cmd.organizationId, cmd.environmentId);
-        const map = stored ? this.mapInputOf(stored, cmd) : undefined;
         return planSuiteRun({
             ...(brake ? { forceFull: brake } : {}),
             allSpecs: all,
@@ -254,7 +261,14 @@ export class SuiteService {
             ...(previous ? { previous } : {}),
             ...(map ? { map } : {}),
             ignore: s.suite.ignore,
+            ...(s.suite.config.cwd ? { cwd: s.suite.config.cwd } : {}),
         });
+    }
+
+    /** While main is ahead of the merge base, the check says why a failing spec cannot be confirmed when the diff's reach is unknown. */
+    private withReach(cmd: RuntimeSuiteRequested, selection: SuiteSelectionReport, reach: DiffReach | undefined): SuiteSelectionReport {
+        const ahead = !!cmd.mergeBase && cmd.mergeBase !== cmd.mainSha;
+        return ahead && reach?.unknown ? { ...selection, reachUnknown: reach.unknown } : selection;
     }
 
     /**

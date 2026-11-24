@@ -293,6 +293,56 @@ describe('running a suite as a workflow', () => {
             expect(w.cell.starts.flatMap((s) => s.specs)).toHaveLength(3);
         });
 
+        describe('a regression while main is ahead of the merge base (section 9.3)', () => {
+            const MERGE_BASE = 'c'.repeat(40);
+            // Five specs, so that one red spec is no mass failure (more than 25% would be).
+            const names = ['a', 'b', 'c', 'd', 'e'].map((n) => `cypress/e2e/${n}.cy.ts`);
+            const five = suiteDigestOf(suiteConfigOf((recipe as { recipe: Parameters<typeof suiteConfigOf>[0] }).recipe)!.config, names);
+            const covers = { 'cypress/e2e/a.cy.ts': ['src/x.ts'], 'cypress/e2e/b.cy.ts': ['src/y.ts'], 'cypress/e2e/c.cy.ts': ['src/z.ts'], 'cypress/e2e/d.cy.ts': ['src/w.ts'], 'cypress/e2e/e.cy.ts': ['src/v.ts'] };
+            const specs = { 'cypress/e2e/a.cy.ts': { pr: [{ fail: 'boom' as const }] } };
+            const ahead = (over: Partial<RuntimeSuiteRequested> = {}) => request({ mergeBase: MERGE_BASE, mainBehind: 4, changedFiles: ['src/x.ts', 'src/y.ts', 'src/z.ts', 'src/w.ts', 'src/v.ts'], ...over });
+            const world5 = (over: Parameters<typeof world>[0] = {}) => world({ main: names, specs, ...over });
+            const classes = async (w: ReturnType<typeof world>) => (await w.runs.get(ORG, 'sr-1'))?.classification?.tests.map((t) => t.class);
+
+            it('is a regression and fails the run when the coverage map says the diff reaches the spec', async () => {
+                const w = world5({ map: mapOf(covers, { suiteDigest: five }) });
+                const out = await w.service.run(ahead(), passthrough);
+                expect(await classes(w)).toEqual(['regression']);
+                expect(out).toMatchObject({ status: 'ran', state: 'failed' });
+            });
+
+            it('stays unconfirmed when the map says the diff does not reach the spec (a retry runs the whole suite on the same diff)', async () => {
+                const w = world5({ map: mapOf(covers, { suiteDigest: five }) });
+                const out = await w.service.run(ahead({ changedFiles: ['src/y.ts'], specs: names }), passthrough);
+                expect(await classes(w)).toEqual(['regression_unconfirmed']);
+                expect(out).not.toMatchObject({ state: 'failed' });
+            });
+
+            it('with no map it stays unconfirmed, and the run keeps the structured reason for the check', async () => {
+                const w = world5();
+                const out = await w.service.run(ahead(), passthrough);
+                expect(await classes(w)).toEqual(['regression_unconfirmed']);
+                expect(out).not.toMatchObject({ state: 'failed' });
+                expect((await w.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'full', reason: 'map_missing', total: 5, reachUnknown: 'map_missing' });
+            });
+
+            it('a spec the PR changed itself is reached even with no map; a lockfile reaches every spec', async () => {
+                const own = world5();
+                await own.service.run(ahead({ changedFiles: ['apps/dashboard/cypress/e2e/a.cy.ts'] }), passthrough);
+                expect(await classes(own)).toEqual(['regression']);
+                const lock = world5();
+                await lock.service.run(ahead({ changedFiles: ['pnpm-lock.yaml'] }), passthrough);
+                expect(await classes(lock)).toEqual(['regression']);
+                expect((await lock.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'full', reason: 'lockfile', total: 5 });
+            });
+
+            it('when main is not ahead the reason is not stored: nothing waits for the branch to update', async () => {
+                const w = world5();
+                await w.service.run(request({ changedFiles: ['src/x.ts'] }), passthrough);
+                expect((await w.runs.get(ORG, 'sr-1'))?.selection).toEqual({ mode: 'full', reason: 'map_missing', total: 5 });
+            });
+        });
+
         it('a baseline collects coverage into the map store, and the next PR run selects by that map', async () => {
             const maps = new InMemorySuiteCoverageMaps();
             const covers = { 'cypress/e2e/a.cy.ts': { covers: ['src/x.ts'] }, 'cypress/e2e/b.cy.ts': { covers: ['src/y.ts'] } };

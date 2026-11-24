@@ -35,7 +35,8 @@ describe('the suite publication the Runtime asks of the product', () => {
 
     it('is structured fields only: a report, a check state, and nothing that names a target', () => {
         expect(RuntimeSuitePublishRequestedSchema.safeParse(msg()).success).toBe(true);
-        for (const bad of [{ comment: { body: 'hi' } }, { check: { status: 'completed' } }, { report: { ...report, selection: { mode: 'full', reason: 'free text', total: 1 } } }, { report: { ...report, annotations: [{ ...report.annotations[0], level: 'info' }] } }, { report: { ...report, annotations: [{ ...report.annotations[0], line: 0 }] } }]) {
+        expect(RuntimeSuitePublishRequestedSchema.safeParse(msg({ report: { ...report, baseDrift: 3, selection: { ...report.selection, reachUnknown: 'map_missing' } } })).success).toBe(true);
+        for (const bad of [{ comment: { body: 'hi' } }, { check: { status: 'completed' } }, { report: { ...report, selection: { mode: 'full', reason: 'free text', total: 1 } } }, { report: { ...report, selection: { ...report.selection, reachUnknown: 'free text' } } }, { report: { ...report, annotations: [{ ...report.annotations[0], level: 'info' }] } }, { report: { ...report, annotations: [{ ...report.annotations[0], line: 0 }] } }]) {
             expect(RuntimeSuitePublishRequestedSchema.safeParse(msg(bad)).success).toBe(false);
         }
     });

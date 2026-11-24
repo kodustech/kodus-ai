@@ -89,3 +89,56 @@ describe('the brake of the shadow check (D14)', () => {
         expect(planSuiteRun(input({ map: m, forceFull: 'shadow' })).selection).toEqual({ mode: 'full', reason: 'shadow', total: 3 });
     });
 });
+
+// Which specs the PR's diff reaches, for the classifier (section 9.3): while main is ahead of the merge base, a failing spec
+// the diff does not reach is only `regression_unconfirmed`. Read from the same map and rules selection uses, never guessed.
+describe('the specs the diff reaches (diff reach)', () => {
+    const m = map({ 'a.cy.ts': ['src/x.ts'], 'b.cy.ts': ['src/y.ts'], 'c.cy.ts': ['src/z.ts'] });
+
+    it('with a usable map, is what the diff selects by coverage, whatever the re-push delta says', () => {
+        const p = planSuiteRun(input({ map: m, changed: ['src/x.ts', 'src/y.ts'], previous: { prSha: 'q'.repeat(40), mergeBase: 'm'.repeat(40), mode: 'selected', green: true, failures: [] }, deltaFiles: ['src/x.ts'] }));
+        expect(p.reach).toEqual({ specs: ['a.cy.ts', 'b.cy.ts'] });
+    });
+
+    it('follows the importer walk and the workspace closure selection applies', () => {
+        const importersOf = (f: string) => (f === 'src/deep.ts' ? ['src/y.ts'] : []);
+        expect(planSuiteRun(input({ map: m, changed: ['src/deep.ts'], importersOf })).reach).toEqual({ specs: ['b.cy.ts'] });
+        const workspaceSpecsOf = (f: string) => (f.startsWith('packages/ui/') ? ['c.cy.ts'] : []);
+        expect(planSuiteRun(input({ map: m, changed: ['packages/ui/button.ts'], workspaceSpecsOf })).reach).toEqual({ specs: ['c.cy.ts'] });
+    });
+
+    it('a spec the PR adds or changes is always reached, even one the map has never seen or suite.ignore covers', () => {
+        const p = planSuiteRun(input({ map: m, changed: ['src/x.ts', 'new.cy.ts'], allSpecs: [...ALL, 'new.cy.ts'] }));
+        expect(p.reach).toEqual({ specs: ['a.cy.ts', 'new.cy.ts'] });
+        const ignored = planSuiteRun(input({ map: m, changed: ['b.cy.ts'], ignore: ['*.cy.ts'] }));
+        expect(ignored.reach).toEqual({ specs: ['b.cy.ts'] });
+    });
+
+    it.each(['package.json', 'pnpm-lock.yaml', 'cypress.config.ts', 'src/router/index.ts'])('%s says everything may be affected: every spec is reached, map or not', (file) => {
+        expect(planSuiteRun(input({ map: m, changed: [file] })).reach).toEqual({ specs: ALL });
+        expect(planSuiteRun(input({ changed: [file] })).reach).toEqual({ specs: ALL });
+    });
+
+    it('with no usable map the reach is unknown, and says why; only the specs the PR changed itself are reached', () => {
+        expect(planSuiteRun(input({ changed: ['src/x.ts', 'a.cy.ts'] })).reach).toEqual({ specs: ['a.cy.ts'], unknown: 'map_missing' });
+        expect(planSuiteRun(input({ map: { ...m, commitsBehindMain: 21 } })).reach).toEqual({ specs: [], unknown: 'map_stale' });
+        expect(planSuiteRun(input({ map: { ...m, suiteDigest: 'other' } })).reach).toEqual({ specs: [], unknown: 'map_digest' });
+        expect(planSuiteRun(input({ map: m, changed: undefined })).reach).toEqual({ specs: [], unknown: 'changes_unknown' });
+    });
+
+    it('a file no spec covers, or one most specs cover, proves nothing about the reach: unknown', () => {
+        expect(planSuiteRun(input({ map: m, changed: ['src/nobody.ts'] })).reach).toEqual({ specs: [], unknown: 'uncovered_file' });
+        const noisy = map({ 'a.cy.ts': ['src/n.ts'], 'b.cy.ts': ['src/n.ts'], 'c.cy.ts': ['src/z.ts'] });
+        expect(planSuiteRun(input({ map: noisy, changed: ['src/n.ts'] })).reach).toEqual({ specs: [], unknown: 'noise_file' });
+    });
+
+    it('is computed under the brake too (the whole suite runs, the reach still reads the map)', () => {
+        const p = planSuiteRun(input({ map: m, forceFull: 'selection_miss' }));
+        expect(p.specs).toEqual(ALL);
+        expect(p.reach).toEqual({ specs: ['a.cy.ts'] });
+    });
+
+    it('a shadow run has no diff to judge: no reach is claimed', () => {
+        expect(planSuiteRun(input({ map: m, forceFull: 'shadow' })).reach).toBeUndefined();
+    });
+});

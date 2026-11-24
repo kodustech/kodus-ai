@@ -304,6 +304,12 @@ on the template's sha (`mainSha`), and records both `mainSha` and the PR's `merg
   to confirm". It still counts as `regression` only when the PR's failing tests are in files the PR touched or that the
   PR's diff reaches (the planner's entry points, `libs/runtime/entry-points`); otherwise it is `regression_unconfirmed`
   and is not a Kody finding (D2 lets the owner choose).
+  The reach is read from the coverage map selection uses (6.1: same freshness and digest rules, importer walk and
+  workspace closure) over the whole diff from the merge base, not the re-push delta: the specs the diff selects plus
+  the specs the PR added or changed. A manifest, lockfile, config or shared-routing change reaches every spec. With no
+  usable map (missing, stale, another digest, changes unknown) or a file nothing covers, only the specs the PR changed
+  are reached, so main-ahead stays `regression_unconfirmed`, and the report carries `selection.reachUnknown` (the
+  reason) so the check says why.
 - A baseline exists for `mergeBase` (the exact one): it is used as the main side when a main host is not available
   (9.5), and a spec failing in it is `pre_existing` without a re-run only if the same `errorSignature` failed in both
   that baseline and the PR's two attempts (saves a main run in the common "red since last week" case; the main
