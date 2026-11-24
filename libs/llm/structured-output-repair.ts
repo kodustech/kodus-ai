@@ -603,11 +603,15 @@ async function firstValidatingObjectAfter<T = unknown>(
               | ValidationResult<unknown>
               | PromiseLike<ValidationResult<unknown>>)
         | null,
-    /** Candidates must start at/after the primary candidate's span end, in
-     *  the coordinates of `text` as passed in (the window mapping below
-     *  adjusts it); null when there was no primary candidate — everything
-     *  competes. */
+    /** Candidates must END past the primary's span end, in the coordinates
+     *  of `text` as passed in (the window mapping below adjusts it): one
+     *  that starts after the span, or one that encloses it (the first fence
+     *  sat inside the answer's own string value). Null when the text has no
+     *  first fence and no balanced span — everything competes. */
     floor: number | null,
+    /** The first fence quoted code (no primary candidate came out of it):
+     *  objects before it may be the answer too, see the walk below. */
+    before = false,
 ): Promise<T | undefined> {
     // Same #2112 bound as salvageJsonText for the EXPENSIVE part: the
     // candidate walk (sliceBalancedJson + a parse per delimiter) scans at
@@ -623,7 +627,7 @@ async function firstValidatingObjectAfter<T = unknown>(
         text = text.slice(windowStart);
         floor = floor === null ? null : Math.max(0, floor - windowStart);
     }
-    const candidates: { value: unknown; start: number }[] = [];
+    const candidates: { value: unknown; end: number }[] = [];
     for (let i = 0; i < text.length; i++) {
         const ch = text[i];
         if (ch !== '{' && ch !== '[') continue;
@@ -647,7 +651,7 @@ async function firstValidatingObjectAfter<T = unknown>(
                 typeof parsed === 'object' &&
                 !Array.isArray(parsed)
             ) {
-                candidates.push({ value: parsed, start: i });
+                candidates.push({ value: parsed, end: i + slice.length });
             }
             i += slice.length - 1;
             continue;
@@ -656,39 +660,67 @@ async function firstValidatingObjectAfter<T = unknown>(
         // it (an unmatched brace before the answer, its closer after), so
         // keep scanning within instead of skipping the span whole.
     }
-    for (const { value, start } of candidates) {
-        if (floor !== null && start < floor) {
-            // Inside/at the primary candidate's span — the fallback only
-            // takes objects that come AFTER it (review 5939864639).
-            continue;
-        }
+    const accept = async (
+        value: unknown,
+    ): Promise<{ value: unknown } | undefined> => {
         if (!validate) {
-            return value as T;
+            return { value };
         }
         const r = await validate(value);
         if (r.success) {
-            return r.value as T;
+            return { value: r.value };
         }
         // The envelope models wrap around the payload (normalizeEnvelope's
         // keys): retry the wrapper's child before giving up on this candidate.
-        if (!Array.isArray(value)) {
-            for (const key of ENVELOPE_WRAPPER_KEYS) {
-                const child = (value as Record<string, unknown>)[key];
-                if (
-                    !child ||
-                    typeof child !== 'object' ||
-                    Array.isArray(child)
-                ) {
-                    continue;
-                }
-                const rc = await validate(child);
-                if (rc.success) {
-                    return rc.value as T;
-                }
+        for (const key of ENVELOPE_WRAPPER_KEYS) {
+            const child = (value as Record<string, unknown>)[key];
+            if (!child || typeof child !== 'object' || Array.isArray(child)) {
+                continue;
+            }
+            const rc = await validate(child);
+            if (rc.success) {
+                return { value: rc.value };
             }
         }
+        return undefined;
+    };
+    const firstAccepted = async (
+        list: { value: unknown }[],
+    ): Promise<{ value: unknown } | undefined> => {
+        for (const { value } of list) {
+            const hit = await accept(value);
+            if (hit) {
+                return hit;
+            }
+        }
+        return undefined;
+    };
+    // Before or inside the primary's span vs past it. An object that starts
+    // before the span but runs past it ENCLOSES it — the first fence sat
+    // inside the answer's own string value — so it counts as past.
+    const after = candidates.filter((c) => floor === null || c.end > floor);
+    const fromAfter = await firstAccepted(after);
+    if (!before) {
+        // A primary JSON candidate failed: the fallback only takes objects
+        // that come AFTER it (review 5939864639).
+        return fromAfter?.value as T | undefined;
     }
-    return undefined;
+    // The first fence quoted code, so it is no answer and the one before it
+    // is as plausible as the one after: `{answer} ```ts…``` Empty would be
+    // {…}` and `If nothing is wrong I would return {…} ```ts…``` {answer}`
+    // differ only in order. A schema-valid object on BOTH sides is
+    // ambiguous → re-ask, never a guess that can ship an empty review. An
+    // object before the quote stands only when nothing at all follows it.
+    const fromBefore = await firstAccepted(
+        candidates.filter((c) => floor !== null && c.end <= floor),
+    );
+    if (fromAfter) {
+        return fromBefore ? undefined : (fromAfter.value as T);
+    }
+    if (after.length > 0) {
+        return undefined;
+    }
+    return fromBefore?.value as T | undefined;
 }
 
 /**
@@ -740,17 +772,21 @@ export async function repairAndValidate<T = unknown>(
         }
     }
     // The fallback walks FORWARD from the primary candidate (review
-    // 5939864639): only objects that start after its SPAN compete. The span
+    // 5939864639): only objects that run past its SPAN compete. The span
     // comes from primarySpanEnd — pre-normalisation, because an indexOf of
     // the normalised candidate (`{,}` → `{}`) can land INSIDE the real
     // answer and exclude it — and it is computed only now that the primary
     // has FAILED: the success path, the common case, never pays the span
-    // scan. No primary candidate, or a span that cannot be established,
-    // → no floor — conservative, more candidates never fewer.
+    // scan. A first fence that quoted bracketless code yields no candidate
+    // but is still the span the extractor took, so it splits the walk too:
+    // without it a prose example BEFORE the quote (`If nothing is wrong I
+    // would return {"violations":[]}`) beat the real findings after it. No
+    // fence and no balanced span → no floor.
     return firstValidatingObjectAfter<T>(
         stripped,
         validate,
-        candidate != null ? primarySpanEnd(stripped) : null,
+        primarySpanEnd(stripped),
+        candidate == null,
     );
 }
 

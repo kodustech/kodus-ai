@@ -710,6 +710,79 @@ describe('repairAndValidate', () => {
             ).toBeUndefined();
         });
 
+        it('re-asks, never ships the empty example, when a prose example precedes a quoted code block and the findings', async () => {
+            // The shape-3 sentence, but the first fence quotes code (Kody,
+            // PR #2566 thread 4603260661). Main returned {"violations":[]}
+            // here: real findings became an empty review.
+            const text =
+                'If nothing is wrong I would return {"violations":[]}.\n' +
+                '```ts\nconst a = 1;\n```\n' +
+                findings;
+            expect(
+                await repairAndValidate(violationsWire, text),
+            ).toBeUndefined();
+        });
+
+        it('re-asks when the findings precede a quoted code block and an empty example follows', async () => {
+            // The mirror order: position alone cannot tell the answer from
+            // the example, so a valid object on both sides of the quote is
+            // ambiguous.
+            const text =
+                findings +
+                '\n```ts\nconst a = 1;\n```\n' +
+                'Empty would be {"violations":[]}';
+            expect(
+                await repairAndValidate(violationsWire, text),
+            ).toBeUndefined();
+        });
+
+        it('re-asks when a prose empty example precedes a quoted code block and an invalid answer', async () => {
+            const text =
+                'If nothing is wrong I would return {"violations":[]}.\n' +
+                '```ts\nconst a = 1;\n```\n' +
+                '{"violations":[{"body":"bug","line":"12"}]}';
+            expect(
+                await repairAndValidate(violationsWire, text),
+            ).toBeUndefined();
+        });
+
+        it('keeps an answer written before a trailing quoted code block', async () => {
+            const text =
+                answer('const real = 1;') +
+                '\nThe change in context:\n```ts\nconst real = 1;\n```';
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const real = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('recovers an answer whose own string value holds the fence the primary took', async () => {
+            // The first fence sits INSIDE the answer's improvedCode, so the
+            // answer starts before the primary's span and encloses it (Kody,
+            // PR #2566 review thread 4603261797).
+            const fenced = '```\n{a:1}\n```';
+            expect(await repairAndValidate(codeWire, answer(fenced))).toEqual({
+                improvedCode: fenced,
+                fixStatus: 'fixed',
+            });
+            const fencedJs = '```js\nconst o = {a:1};\n```';
+            expect(
+                await repairAndValidate(
+                    codeWire,
+                    'Here is the fix:\n' + answer(fencedJs),
+                ),
+            ).toEqual({ improvedCode: fencedJs, fixStatus: 'fixed' });
+        });
+
+        it('does NOT let a prose example that ends before the primary compete', async () => {
+            // The enclosing rule admits only objects that run PAST the
+            // primary's span; one that ends before it is still skipped.
+            const text =
+                'Format: {"improvedCode":"x","fixStatus":"fixed"}\n' +
+                '```json\n{"improvedCode":1,"fixStatus":"fixed"}\n```';
+            expect(await repairAndValidate(codeWire, text)).toBeUndefined();
+        });
+
         it('does NOT let a nested child stand in for the answer', async () => {
             // Top-level-only: the array-member and wrapper-nested `keep`
             // objects stay undefined (→ the caller re-asks), as before the
