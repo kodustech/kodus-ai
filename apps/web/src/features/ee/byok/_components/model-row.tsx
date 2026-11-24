@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
-import { formatModelLabel } from "../_data/model-label";
 import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type {
     BYOKConfig,
@@ -105,6 +104,7 @@ const STATUS_CHIP = "cursor-default button-hover:brightness-100";
  */
 export function ModelRow({
     model,
+    label,
     config,
     cost,
     periodLabel,
@@ -115,6 +115,8 @@ export function ModelRow({
     catalog,
 }: {
     model: BYOKModelConfig;
+    /** The model's name on this page (`visibleModelLabels`). */
+    label: string;
     config?: BYOKConfig | null;
     cost?: ByokModelCost;
     periodLabel?: string;
@@ -127,7 +129,7 @@ export function ModelRow({
      *  the list price the org is billed at. Absent for other providers. */
     catalog?: { name: string; pricing?: CatalogPricing };
 }) {
-    const displayName = catalog?.name ?? formatModelLabel(model.model);
+    const displayName = catalog?.name ?? label;
     const thinking = formatThinking(model.reasoningEffort);
 
     const credential = (config?.credentials ?? []).find(
@@ -155,6 +157,7 @@ export function ModelRow({
     const { confirmAndDelete, rejectionReasons } = useDeleteModel({
         config,
         model,
+        name: displayName,
         onDeleted,
     });
 

@@ -523,15 +523,17 @@ describe('ChatWithKodyFromGitUseCase', () => {
     });
 
     it("asks the other platforms for the organization's members, and knows the PR's author", async () => {
-        const getListMembers = jest.fn(async () => [{ id: 7, name: 'Nina' }]);
+        const getListMembers = jest.fn(async () => [
+            { id: 'u7', name: 'Nina' },
+        ]);
         (useCase as any).codeManagementService = { getListMembers };
         const access = (userId: number, authorId = 9) =>
             (useCase as any).senderAccess(
                 {
                     platformType: PlatformType.BITBUCKET,
                     payload: {
-                        actor: { account_id: userId, display_name: 'someone' },
-                        pullrequest: { author: { account_id: authorId } },
+                        actor: { uuid: `{u${userId}}`, display_name: 'Nina' },
+                        pullrequest: { author: { uuid: `{u${authorId}}` } },
                     },
                 },
                 { organizationId: 'org-1' },
@@ -548,9 +550,24 @@ describe('ChatWithKodyFromGitUseCase', () => {
         );
         getListMembers.mockRejectedValueOnce(new Error('403'));
         await expect(access(7)).rejects.toThrow('403');
+        // An actor with only account_id names no key members are listed by:
+        // it cannot be checked, rather than read as a non-member.
+        await expect(
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.BITBUCKET,
+                    payload: {
+                        actor: { account_id: 'u7', display_name: 'Nina' },
+                        pullrequest: { author: { uuid: '{u9}' } },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).rejects.toThrow(/named no commenter/);
     });
 
-    it("asks GitLab for the commenter's level, never the member list, and knows Forgejo's author", async () => {
+    it("asks GitLab and Forgejo for the commenter's permission, never the member list, and knows Forgejo's author", async () => {
         const getListMembers = jest.fn();
         const userCanWrite = jest.fn(async () => false);
         (useCase as any).codeManagementService = {
@@ -617,7 +634,6 @@ describe('ChatWithKodyFromGitUseCase', () => {
             ),
         ).rejects.toThrow(/could not say/);
 
-        getListMembers.mockResolvedValueOnce([]);
         await expect(
             (useCase as any).senderAccess(
                 {
@@ -629,9 +645,33 @@ describe('ChatWithKodyFromGitUseCase', () => {
                     },
                 },
                 { organizationId: 'org-1' },
+                { id: 'repo-1', name: 'acme/api' },
+            ),
+        ).resolves.toEqual({ isAuthor: true, canWrite: false });
+        expect(userCanWrite).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                login: 'ana',
+                repository: { id: 'repo-1', name: 'acme/api' },
+            }),
+            PlatformType.FORGEJO,
+        );
+        expect(getListMembers).not.toHaveBeenCalled();
+
+        // An empty member list is a read that failed, not nobody.
+        getListMembers.mockResolvedValueOnce([]);
+        await expect(
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.BITBUCKET,
+                    payload: {
+                        actor: { uuid: '{u5}' },
+                        pullrequest: { author: { uuid: '{u9}' } },
+                    },
+                },
+                { organizationId: 'org-1' },
                 { id: 'repo-1' },
             ),
-        ).resolves.toMatchObject({ isAuthor: true });
+        ).rejects.toThrow(/no members/);
     });
 
     // A bare `#12` is read from the PR's repository, which needs its owner.

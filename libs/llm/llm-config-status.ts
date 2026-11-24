@@ -156,6 +156,8 @@ export interface LLMConfigStatus {
         defaultModelId?: string;
         fallbackModelId?: string;
         riskAssessment: { modelId?: string; inherited: boolean };
+        /** The three models an Ultra review runs on, in order. */
+        ultraModelIds?: string[];
     };
 }
 
@@ -327,6 +329,9 @@ export function describeLLMConfigStatus(configValue: unknown): LLMConfigStatus {
         defaultModelId: byokMain?.byokModelId,
         fallbackModelId: configValue.routing?.fallbackModelId,
         riskAssessment: reviewModelOf(LLM_TASK.riskAssessment),
+        ...(Array.isArray(configValue.routing?.ultraModelIds) && {
+            ultraModelIds: configValue.routing.ultraModelIds,
+        }),
     };
     return {
         source,

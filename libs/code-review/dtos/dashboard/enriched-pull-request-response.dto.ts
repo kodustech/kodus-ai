@@ -24,7 +24,7 @@ export interface EnrichedPullRequestResponse {
     merged: boolean;
     /** The mode this execution reviewed in; absent when it reviewed nothing
      *  (skipped, failed before the review). */
-    reviewMode?: 'balanced' | 'heavy';
+    reviewMode?: 'balanced' | 'heavy' | 'ultra';
     reviewRoutingReason?: ReviewRoutingReason;
     approvalDecision?: Pick<
         ApprovalDecision,

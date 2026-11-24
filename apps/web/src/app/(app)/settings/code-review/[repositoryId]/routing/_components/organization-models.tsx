@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
 import { Link } from "@components/ui/link";
 import { Spinner } from "@components/ui/spinner";
+import { TruncateStart } from "@components/ui/truncate-start";
 import { ChevronsUpDownIcon } from "lucide-react";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { ProviderAvatar } from "src/features/ee/byok/_components/provider-avatar";
 import {
     ModelCombobox,
@@ -13,8 +15,7 @@ import {
     TaskOverrideGrid,
 } from "src/features/ee/byok/_components/routing/task-override-grid";
 import type { LlmTask } from "src/features/ee/byok/_types";
-
-import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
+import { UltraModelsRow } from "src/features/ee/ultra-review/ultra-models-row";
 
 import type { OrganizationRoutingController } from "./use-organization-routing";
 
@@ -38,10 +39,12 @@ const otherTasks: LlmTask[] = [
 export function OrganizationModels({
     controller,
     heavyAllowed,
+    ultraAllowed = false,
     canEdit,
 }: {
     controller: OrganizationRoutingController;
     heavyAllowed: boolean;
+    ultraAllowed?: boolean;
     canEdit: boolean;
 }) {
     const { pool, routing } = controller;
@@ -113,7 +116,7 @@ export function OrganizationModels({
                                                 }
                                                 className="w-full justify-between sm:max-w-80"
                                                 rightIcon={
-                                                    <ChevronsUpDownIcon className="opacity-50" />
+                                                    <ChevronsUpDownIcon className="shrink-0 opacity-50" />
                                                 }>
                                                 <span className="flex min-w-0 items-center gap-2">
                                                     <ProviderAvatar
@@ -121,10 +124,13 @@ export function OrganizationModels({
                                                             defaultModel?.provider
                                                         }
                                                     />
-                                                    <span className="truncate">
+                                                    <TruncateStart
+                                                        title={
+                                                            defaultModel?.label
+                                                        }>
                                                         {defaultModel?.label ??
                                                             "Select a connected model"}
-                                                    </span>
+                                                    </TruncateStart>
                                                 </span>
                                             </Button>
                                         }
@@ -173,7 +179,7 @@ export function OrganizationModels({
                                                 }
                                                 className="w-full justify-between sm:max-w-80"
                                                 rightIcon={
-                                                    <ChevronsUpDownIcon className="opacity-50" />
+                                                    <ChevronsUpDownIcon className="shrink-0 opacity-50" />
                                                 }>
                                                 <span className="flex min-w-0 items-center gap-2">
                                                     <ProviderAvatar
@@ -181,12 +187,15 @@ export function OrganizationModels({
                                                             fallbackModel?.provider
                                                         }
                                                     />
-                                                    <span className="truncate">
+                                                    <TruncateStart
+                                                        title={
+                                                            fallbackModel?.label
+                                                        }>
                                                         {fallbackModel?.label ??
                                                             (routing.fallbackModelId
                                                                 ? "Unavailable model"
                                                                 : "None")}
-                                                    </span>
+                                                    </TruncateStart>
                                                 </span>
                                             </Button>
                                         }
@@ -248,6 +257,14 @@ export function OrganizationModels({
                                         )}
                                     </div>
                                 ))}
+                                <UltraModelsRow
+                                    pool={pool}
+                                    ultraModelIds={routing.ultraModelIds}
+                                    fallbackModelId={routing.fallbackModelId}
+                                    planAllowed={ultraAllowed}
+                                    editable={editable}
+                                    onSelect={controller.setUltraModel}
+                                />
                             </div>
                             {single && (
                                 <p className="text-text-secondary mt-3 text-sm">

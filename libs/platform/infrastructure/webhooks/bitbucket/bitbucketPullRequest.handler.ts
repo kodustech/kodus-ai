@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { reviewCommandAccess } from '@libs/platform/application/services/commenter-access';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
@@ -569,6 +570,12 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
                         reviewDirective: parseReviewDirective(comment.body),
                         requestedReviewMode: requestedReviewModeOf(
                             comment.body,
+                        ),
+                        requestedReviewModeAccess: await reviewCommandAccess(
+                            this.codeManagement,
+                            params,
+                            context?.organizationAndTeamData,
+                            requestedReviewModeOf(comment.body),
                         ),
                         onlyCustomAgent: customAgentSlug,
                     },

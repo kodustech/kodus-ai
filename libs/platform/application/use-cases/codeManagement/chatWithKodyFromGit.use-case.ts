@@ -23,6 +23,13 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 import { WebhookContextService } from '@libs/platform/application/services/webhook-context.service';
 import {
+    bareId,
+    commenterCanWrite,
+    commenterOf,
+    commentRepositoryOf,
+    eventSenderOf,
+} from '@libs/platform/application/services/commenter-access';
+import {
     PermissionValidationService,
     ValidationErrorType,
 } from '@libs/ee/shared/services/permissionValidation.service';
@@ -746,7 +753,7 @@ export class ChatWithKodyFromGitUseCase {
                 },
                 message,
                 sender: {
-                    login: replySender(params, this.getSender(params)).login,
+                    login: commenterOf(params).login,
                     // Asked only when someone tries to accept: listing members
                     // on every Kody mention costs a call per repository.
                     access: () =>
@@ -796,95 +803,22 @@ export class ChatWithKodyFromGitUseCase {
         organizationAndTeamData: OrganizationAndTeamData,
         repository: Repository,
     ): Promise<{ canWrite?: boolean; isAuthor: boolean }> {
-        const sender = replySender(params, this.getSender(params));
-        const isAuthor = isPullRequestAuthor(params, sender);
-        if (params.platformType === PlatformType.GITHUB) {
-            // The association rules out a contributor or a stranger, but
-            // COLLABORATOR and MEMBER come with read access too: ask for the
-            // permission.
-            const association = params.payload?.comment?.author_association;
-            if (
-                !sender.login ||
-                (typeof association === 'string' &&
-                    !['OWNER', 'MEMBER', 'COLLABORATOR'].includes(association))
-            ) {
-                return { isAuthor, canWrite: false };
-            }
-        }
-        if (
-            (params.platformType === PlatformType.GITHUB && sender.login) ||
-            (params.platformType === PlatformType.GITLAB && sender.id)
-        ) {
-            // GitLab's listed members include Guests and Reporters: ask for
-            // the level.
-            return {
-                isAuthor,
-                canWrite: await this.codeManagementService
-                    .userCanWrite(
-                        {
-                            organizationAndTeamData,
-                            repository: {
-                                id: String(repository.id),
-                                ...(params.platformType === PlatformType.GITHUB
-                                    ? {
-                                          name: repository.name,
-                                          owner: repository.owner,
-                                      }
-                                    : {}),
-                            },
-                            ...(params.platformType === PlatformType.GITHUB
-                                ? { login: sender.login }
-                                : { userId: sender.id as string | number }),
-                        },
-                        params.platformType,
-                    )
-                    .then((canWrite) => {
-                        if (canWrite === undefined) {
-                            throw new Error(
-                                `${params.platformType} could not say whether the commenter can write`,
-                            );
-                        }
-                        return canWrite;
-                    })
-                    .catch((error) => {
-                        this.logAccessFailure(
-                            error,
-                            params,
-                            organizationAndTeamData,
-                            repository,
-                        );
-                        throw error;
-                    }),
-            };
-        }
-        const members = await this.codeManagementService
-            .getListMembers(
-                { organizationAndTeamData },
-                params.platformType as PlatformType,
-            )
-            .catch((error) => {
-                this.logAccessFailure(
-                    error,
-                    params,
-                    organizationAndTeamData,
-                    repository,
-                );
-                throw error;
-            });
-        const id = bareId(sender.id);
-        const login = sender.login?.toLowerCase();
-        return {
-            isAuthor,
-            canWrite:
-                Array.isArray(members) &&
-                members.some(
-                    (m: { id?: unknown; name?: unknown }) =>
-                        (!!id && bareId(m.id) === id) ||
-                        (!!login &&
-                            typeof m.name === 'string' &&
-                            m.name.toLowerCase() === login),
-                ),
-        };
+        const isAuthor = isPullRequestAuthor(params, commenterOf(params));
+        const canWrite = await commenterCanWrite(
+            this.codeManagementService,
+            params,
+            organizationAndTeamData,
+            repository,
+        ).catch((error) => {
+            this.logAccessFailure(
+                error,
+                params,
+                organizationAndTeamData,
+                repository,
+            );
+            throw error;
+        });
+        return { isAuthor, canWrite };
     }
 
     /** A lookup that failed accepts nothing; the log says why. */
@@ -894,7 +828,7 @@ export class ChatWithKodyFromGitUseCase {
         organizationAndTeamData: OrganizationAndTeamData,
         repository: Repository,
     ): void {
-        const sender = replySender(params, this.getSender(params));
+        const sender = commenterOf(params);
         this.logger.error({
             message:
                 "Could not read the commenter's access: nothing was accepted",
@@ -1722,7 +1656,7 @@ export class ChatWithKodyFromGitUseCase {
     }
 
     private getRepository(params: WebhookParams): Repository {
-        const repository = this.repositoryFromPayload(params);
+        const repository = commentRepositoryOf(params);
 
         // Webhook payloads carry the platform's numeric id (GitHub, GitLab,
         // Azure), while the stored configuration keys are strings and every
@@ -1731,89 +1665,6 @@ export class ChatWithKodyFromGitUseCase {
         // it was: callers already handle that shape.
         if (repository.id == null) return repository;
         return { ...repository, id: String(repository.id) };
-    }
-
-    private repositoryFromPayload(params: WebhookParams): Repository {
-        switch (params.platformType) {
-            case PlatformType.GITHUB: {
-                const fallbackRepository =
-                    this.extractRepositoryFromGitHubPullRequestUrl(params);
-
-                return {
-                    name:
-                        params.payload?.repository?.name ||
-                        fallbackRepository.name ||
-                        '',
-                    id: params.payload?.repository?.id,
-                    owner:
-                        params.payload?.repository?.owner?.login ||
-                        fallbackRepository.owner ||
-                        '',
-                };
-            }
-            case PlatformType.GITLAB:
-                return {
-                    name: params.payload?.project?.name,
-                    id: params.payload?.project?.id,
-                    // `namespace` is GitLab's display name (for example,
-                    // "Junior Sartori"), not necessarily its URL path. Keep
-                    // the canonical path so GitLab clones use the project
-                    // slug, rather than an encoded display name.
-                    fullName: params.payload?.project?.path_with_namespace,
-                    owner:
-                        params.payload?.project?.namespace ||
-                        params.payload?.project?.path_with_namespace
-                            ?.split('/')
-                            ?.slice(0, -1)
-                            ?.join('/') ||
-                        '',
-                };
-            case PlatformType.BITBUCKET:
-                return {
-                    name: params.payload?.repository?.name,
-                    id:
-                        params.payload?.repository?.uuid?.slice(1, -1) ||
-                        params.payload?.repository?.id,
-                    owner:
-                        params.payload?.repository?.workspace?.slug ||
-                        params.payload?.repository?.owner?.username ||
-                        params.payload?.repository?.full_name
-                            ?.split('/')
-                            ?.at(0) ||
-                        '',
-                };
-            case PlatformType.FORGEJO: {
-                // ForgejoService reads `owner/repo` from `name`, as the
-                // Forgejo webhook handler passes it.
-                const fullName = params.payload?.repository?.full_name ?? '';
-                return {
-                    name: fullName,
-                    id: params.payload?.repository?.id?.toString() ?? '',
-                    fullName,
-                    owner:
-                        params.payload?.repository?.owner?.login ||
-                        fullName.split('/').at(0) ||
-                        '',
-                };
-            }
-            case PlatformType.AZURE_REPOS:
-                return {
-                    name: params.payload?.resource?.pullRequest?.repository
-                        ?.name,
-                    id: params.payload?.resource?.pullRequest?.repository?.id,
-                    owner:
-                        params.payload?.resource?.repository?.project?.name ||
-                        params.payload?.resourceContainers?.project?.id ||
-                        '',
-                };
-            default:
-                this.logger.warn({
-                    message: `Unsupported platform type: ${params.platformType}`,
-                    context: ChatWithKodyFromGitUseCase.name,
-                    metadata: { platformType: params.platformType },
-                });
-                return { name: '', id: '' };
-        }
     }
 
     private getRepositoryOwner(
@@ -2466,39 +2317,7 @@ export class ChatWithKodyFromGitUseCase {
     }
 
     private getSender(params: WebhookParams): Sender {
-        switch (params.platformType) {
-            case PlatformType.GITHUB:
-                return {
-                    login: params.payload?.sender?.login,
-                    id: params.payload?.sender?.id,
-                };
-            case PlatformType.GITLAB:
-                return {
-                    login: params.payload?.user?.name,
-                    id: params.payload?.user?.id,
-                };
-            case PlatformType.BITBUCKET:
-                return {
-                    login:
-                        params.payload?.actor?.display_name ||
-                        params.payload?.actor?.nickname,
-                    id:
-                        params.payload?.actor?.uuid?.slice(1, -1) ||
-                        params.payload?.actor?.account_id,
-                };
-            case PlatformType.AZURE_REPOS:
-                return {
-                    login: params.payload?.resource?.comment?.author
-                        ?.displayName,
-                    id: params.payload?.resource?.comment?.author?.id,
-                };
-            default:
-                this.logger.warn({
-                    message: `Plataforma nu00e3o suportada: ${params.platformType}`,
-                    context: ChatWithKodyFromGitUseCase.name,
-                });
-                return { login: '', id: '' };
-        }
+        return eventSenderOf(params);
     }
 
     /**
@@ -3027,13 +2846,6 @@ export class ChatWithKodyFromGitUseCase {
 }
 
 /** An id as platforms write it, without Bitbucket's braces. */
-function bareId(id: unknown): string | undefined {
-    if (id === undefined || id === null || id === '') {
-        return undefined;
-    }
-    return String(id).replace(/^\{|\}$/g, '');
-}
-
 /** Whether the commenter opened the pull request, as each platform names its author. */
 function isPullRequestAuthor(
     params: WebhookParams,
@@ -3070,18 +2882,6 @@ function isPullRequestAuthor(
         default:
             return false;
     }
-}
-
-/** Who replied: Forgejo names the commenter as the event's `sender`. */
-function replySender(
-    params: WebhookParams,
-    sender: { login?: string; id?: unknown },
-): { login: string; id?: unknown } {
-    if (params.platformType === PlatformType.FORGEJO) {
-        const user = params.payload?.comment?.user ?? params.payload?.sender;
-        return { login: user?.login ?? '', id: user?.id };
-    }
-    return { login: sender.login ?? '', id: sender.id };
 }
 
 function sameId(a: unknown, b: unknown): boolean {

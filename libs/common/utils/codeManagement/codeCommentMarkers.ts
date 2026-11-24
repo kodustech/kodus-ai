@@ -93,6 +93,13 @@ export const KODY_BALANCED_REVIEW_COMMAND_PATTERN =
     /^\s*@kody\s+(?:start-review|review)\b[ \t]+[^\n]*?(?<![\w-])--?balanced(?![\w-])/i;
 
 /**
+ * Ultra-mode flag: `--ultra` runs the heavy review on the org's three Ultra
+ * models and merges them. Same rules as `--heavy`.
+ */
+export const KODY_ULTRA_REVIEW_COMMAND_PATTERN =
+    /^\s*@kody\s+(?:start-review|review)\b[ \t]+[^\n]*?(?<![\w-])--?ultra(?![\w-])/i;
+
+/**
  * Build a review command regex for a given bot username.
  * Falls back to DEFAULT_BOT_USERNAME when botUsername is empty/undefined.
  */
@@ -117,7 +124,7 @@ function buildForceReviewCommandPattern(botUsername?: string | null): RegExp {
  * bot username.
  */
 function buildReviewModeCommandPattern(
-    flag: 'heavy' | 'balanced',
+    flag: 'heavy' | 'balanced' | 'ultra',
     botUsername?: string | null,
 ): RegExp {
     const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
@@ -133,7 +140,7 @@ function buildReviewModeCommandPattern(
 function buildReviewCommandHeadPattern(botUsername?: string | null): RegExp {
     const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
     return new RegExp(
-        `^\\s*@${name}\\s+(?:start-review|review)\\b[ \\t]*(?:(?:--?force|--?heavy|--?balanced)(?![\\w-])[ \\t]*)*`,
+        `^\\s*@${name}\\s+(?:start-review|review)\\b[ \\t]*(?:(?:--?force|--?heavy|--?balanced|--?ultra)(?![\\w-])[ \\t]*)*`,
         'i',
     );
 }
@@ -187,14 +194,32 @@ export const isBalancedReviewCommand = (
 };
 
 /**
- * The review mode a command asks for, over the one set in settings: `heavy`
- * when it carries `--heavy` (it wins over `--balanced`), `balanced` for
- * `--balanced`, none otherwise.
+ * Check if the review command carries the ultra flag (`@kody review --ultra`).
+ */
+export const isUltraReviewCommand = (
+    text: string | undefined | null,
+    botUsername?: string | null,
+): boolean => {
+    if (!text) return false;
+    if (KODY_ULTRA_REVIEW_COMMAND_PATTERN.test(text)) return true;
+    if (
+        botUsername &&
+        buildReviewModeCommandPattern('ultra', botUsername).test(text)
+    )
+        return true;
+    return false;
+};
+
+/**
+ * The review mode a command asks for, over the one set in settings: `ultra`
+ * when it carries `--ultra` (it wins over the others), `heavy` for `--heavy`
+ * (it wins over `--balanced`), `balanced` for `--balanced`, none otherwise.
  */
 export const requestedReviewModeOf = (
     text: string | undefined | null,
     botUsername?: string | null,
-): 'heavy' | 'balanced' | undefined => {
+): 'ultra' | 'heavy' | 'balanced' | undefined => {
+    if (isUltraReviewCommand(text, botUsername)) return 'ultra';
     if (isHeavyReviewCommand(text, botUsername)) return 'heavy';
     if (isBalancedReviewCommand(text, botUsername)) return 'balanced';
     return undefined;
@@ -243,7 +268,7 @@ export const isForceReviewCommand = (
  * a free-text steering directive (e.g. `@kody review focus on the auth logic`).
  */
 const KODY_REVIEW_COMMAND_HEAD_PATTERN =
-    /^\s*@kody\s+(?:start-review|review)\b[ \t]*(?:(?:--?force|--?heavy|--?balanced)(?![\w-])[ \t]*)*/i;
+    /^\s*@kody\s+(?:start-review|review)\b[ \t]*(?:(?:--?force|--?heavy|--?balanced|--?ultra)(?![\w-])[ \t]*)*/i;
 
 /** Hard cap so a pasted wall of text can't blow up the prompt. */
 const MAX_REVIEW_DIRECTIVE_LENGTH = 500;
@@ -322,7 +347,10 @@ export const parseReviewDirective = (
             // otherwise pollute the <ReviewFocus> hint. A flag no word character or dash
             // touches keeps "forced", "--force-push" and "well-balanced" intact; the global flag handles
             // multiple flags in any order. Whitespace is collapsed downstream.
-            .replace(/\s*(?<![\w-])--?(?:heavy|balanced|force)(?![\w-])/gi, ''),
+            .replace(
+                /\s*(?<![\w-])--?(?:heavy|balanced|ultra|force)(?![\w-])/gi,
+                '',
+            ),
     );
 };
 

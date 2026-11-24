@@ -278,6 +278,8 @@ export type LLMConfigStatus = {
         defaultModelId?: string;
         fallbackModelId?: string;
         riskAssessment: { modelId?: string; inherited: boolean };
+        /** The three models an Ultra review runs on, in order. */
+        ultraModelIds?: string[];
     };
 };
 
