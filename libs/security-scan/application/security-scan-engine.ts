@@ -49,6 +49,7 @@ import {
     withRevisits,
 } from '../domain/scan-units';
 import { admitFindingPath } from '../domain/finding-path';
+import { boundedEnvInt } from '../domain/env-limits';
 import {
     coverageEntryOf,
     parseStagedListing,
@@ -94,7 +95,13 @@ const LENS_PASSES = 1;
  * Units audited at once. Each holds one lens loop, so this is also how many
  * model requests can be in flight; the budget reserve scales with it.
  */
-export const UNIT_CONCURRENCY = 4;
+export const UNIT_CONCURRENCY = boundedEnvInt(
+    'API_SECURITY_SCAN_UNIT_CONCURRENCY',
+    4,
+    1,
+    16,
+);
+
 const MAP_LISTING_SAMPLE = 600;
 
 export interface SecurityScanModel {
@@ -132,6 +139,12 @@ export interface SecurityScanEngineParams {
     signal?: AbortSignal;
     /** Abort in-flight lenses at this time (epoch ms); unfinished work resumes later. */
     deadlineAt?: number;
+    /**
+     * Start no more units than this in one run: the rest wait for the next
+     * job, so one scan holds a worker for a bounded piece of work and other
+     * repositories' scans get their turn in between.
+     */
+    maxUnitsPerRun?: number;
     maxUnits: number;
     /** A plan from an earlier run of the same scan: skip mapping. */
     units?: ScanUnit[];
@@ -535,8 +548,15 @@ export class SecurityScanEngine {
             const state = progress.get(unit.id)?.state;
             return state !== 'done' && state !== 'failed';
         });
+        let startedUnits = 0;
         const mayStart = (): boolean => {
             if (stopped) return false;
+            if (
+                params.maxUnitsPerRun !== undefined &&
+                startedUnits >= params.maxUnitsPerRun
+            ) {
+                return false;
+            }
             if (signal.aborted && !budgetSignal.aborted) {
                 stopped = true;
             } else if (budgetSignal.aborted || params.meter.isExhausted()) {
@@ -701,6 +721,7 @@ export class SecurityScanEngine {
         const worker = async () => {
             while (queue.length && mayStart()) {
                 const unit = queue.shift()!;
+                startedUnits++;
                 const unitHits = [unit.file, ...unit.relatedFiles].flatMap(
                     (file) => hitsByFile.get(file) ?? [],
                 );

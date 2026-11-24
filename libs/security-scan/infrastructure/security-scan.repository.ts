@@ -91,6 +91,8 @@ export interface ISecurityScanRepository {
      * state's window: the worker running them stopped, or the job waiting for
      * one was lost. Returns how many.
      */
+    /** How many scans of the organization are queued or running. */
+    countActive(organizationId: string): Promise<number>;
     failStale(organizationId: string, after: StaleScanWindows): Promise<number>;
     /** What earlier scans concluded about the repository, per file and class. */
     findCoverage(
@@ -464,6 +466,12 @@ export class SecurityScanRepository implements ISecurityScanRepository {
             .sort({ createdAt: -1 })
             .exec();
         return doc ? toRecord(doc) : null;
+    }
+
+    async countActive(organizationId: string): Promise<number> {
+        return this.model
+            .countDocuments({ organizationId, status: { $in: ACTIVE } })
+            .exec();
     }
 
     async failStale(

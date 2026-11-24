@@ -11,9 +11,11 @@ jest.mock('./scan-model', () => ({
 
 import { SecurityScanStatus } from '../domain/security-scan.types';
 import {
+    MAX_ACTIVE_SCANS_PER_ORGANIZATION,
     SCAN_MODEL_NOT_FOUND_MESSAGE,
     SCAN_QUEUE_UNAVAILABLE_MESSAGE,
     StartSecurityScanUseCase,
+    TOO_MANY_ACTIVE_SCANS_MESSAGE,
 } from './start-security-scan.use-case';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 
@@ -36,6 +38,7 @@ function useCaseWith(
     const scans = {
         failStale: jest.fn(async () => 0),
         findActive: jest.fn(async () => null),
+        countActive: jest.fn(async () => 0),
         findLatest: jest.fn(async () => last),
         create: jest.fn(async (scan: any) => ({ uuid: 'scan-2', ...scan })),
         update: jest.fn(async () => null),
@@ -537,5 +540,19 @@ describe('StartSecurityScanUseCase — how the scan runs', () => {
             SCAN_MODEL_NOT_FOUND_MESSAGE,
         );
         expect(scans.create).not.toHaveBeenCalled();
+    });
+});
+
+describe('StartSecurityScanUseCase — a share of the workers per organization', () => {
+    it("starts nothing past the organization's limit of running scans", async () => {
+        const { scans, start, jobQueue } = useCaseWith(null);
+        scans.countActive.mockResolvedValue(MAX_ACTIVE_SCANS_PER_ORGANIZATION);
+
+        const error = await start().catch((e) => e);
+
+        expect(error.message).toBe(TOO_MANY_ACTIVE_SCANS_MESSAGE);
+        expect(error.getStatus()).toBe(429);
+        expect(scans.create).not.toHaveBeenCalled();
+        expect(jobQueue.enqueue).not.toHaveBeenCalled();
     });
 });

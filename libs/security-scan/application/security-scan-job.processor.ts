@@ -61,6 +61,7 @@ import {
     SecurityScanEngine,
     type SecurityScanModel,
 } from './security-scan-engine';
+import { boundedEnvInt } from '../domain/env-limits';
 import {
     consolidateOpenIssues,
     occurrenceOf,
@@ -97,6 +98,17 @@ const LEASE_TTL_MS = 34 * 60 * 1000;
  * length: a plan runs across as many slices as it needs.
  */
 export const SCAN_MAX_UNITS = 2000;
+
+/**
+ * The most units one job starts. A job is a bounded piece of a scan: a
+ * crash loses little, and other repositories' scans queue in between.
+ */
+export const SCAN_UNITS_PER_JOB = boundedEnvInt(
+    'API_SECURITY_SCAN_UNITS_PER_JOB',
+    24,
+    1,
+    500,
+);
 
 export interface SecurityScanJobPayload {
     scanId: string;
@@ -501,6 +513,7 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
             meter,
             signal,
             deadlineAt: sliceStartedAt + SCAN_SLICE_MS,
+            maxUnitsPerRun: SCAN_UNITS_PER_JOB,
             maxUnits: SCAN_MAX_UNITS,
             units: scan.units,
             progress: scan.progress,

@@ -1,6 +1,8 @@
 import {
     BadRequestException,
     ConflictException,
+    HttpException,
+    HttpStatus,
     Inject,
     Injectable,
     NotFoundException,
@@ -31,6 +33,7 @@ import {
 } from '@libs/issues/domain/scan-fingerprint';
 
 import { validateBudget } from '../domain/budget-meter';
+import { boundedEnvInt } from '../domain/env-limits';
 import type { SecurityScanMode } from '../domain/coverage-ledger';
 import type { VulnClass } from '../domain/surface/surface.types';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
@@ -90,6 +93,16 @@ export const NO_DEFAULT_BRANCH_MESSAGE =
 
 export const NO_CODE_INTEGRATION_MESSAGE =
     'This team has no active code management integration to scan the repository through.';
+
+/** Scans one organization may have queued or running at once. */
+export const MAX_ACTIVE_SCANS_PER_ORGANIZATION = boundedEnvInt(
+    'API_SECURITY_SCAN_MAX_ACTIVE_PER_ORG',
+    3,
+    1,
+    100,
+);
+
+export const TOO_MANY_ACTIVE_SCANS_MESSAGE = `This organization already has ${MAX_ACTIVE_SCANS_PER_ORGANIZATION} deep scans running. Start this one when one of them finishes, or schedule it.`;
 
 export const SCAN_QUEUE_UNAVAILABLE_MESSAGE =
     'The deep scan worker is not taking jobs right now. Try again in a moment.';
@@ -155,6 +168,16 @@ export class StartSecurityScanUseCase {
         );
         if (active) {
             throw new ConflictException(ALREADY_RUNNING);
+        }
+        // One organization's scans take a bounded share of the scan workers.
+        if (
+            (await this.scans.countActive(orgTeam.organizationId)) >=
+            MAX_ACTIVE_SCANS_PER_ORGANIZATION
+        ) {
+            throw new HttpException(
+                TOO_MANY_ACTIVE_SCANS_MESSAGE,
+                HttpStatus.TOO_MANY_REQUESTS,
+            );
         }
 
         const resumed = await this.resumablePlan(

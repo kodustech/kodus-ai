@@ -3040,3 +3040,27 @@ describe('incremental scans', () => {
         });
     });
 });
+
+describe('a bounded piece of work per job', () => {
+    it('starts no more units than a run may, and leaves the rest for the next job', async () => {
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            maxUnitsPerRun: 1,
+        } as any);
+
+        const done = result.progress.filter((p) => p.state === 'done');
+        expect(done).toHaveLength(1);
+        expect(result.finished).toBe(false);
+        expect(result.stoppedByBudget).toBe(false);
+        expect(result.progress.filter((p) => p.state === 'pending').length).toBeGreaterThan(0);
+    });
+});
