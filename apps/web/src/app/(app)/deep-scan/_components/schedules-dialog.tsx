@@ -145,9 +145,13 @@ const SchedulesDialog = ({ onClose }: { onClose: () => void }) => {
             return;
         setSaving(true);
         setError(undefined);
-        // A paused schedule stays paused when it is edited.
+        // A paused schedule stays paused when it is edited. The API finds the
+        // repository by team and id, so the schedule is matched the same way.
         const paused = schedules.data.some(
-            (s) => s.repository.id === repositoryId && !s.enabled,
+            (s) =>
+                s.teamId === teamId &&
+                s.repository.id === repositoryId &&
+                !s.enabled,
         );
         try {
             await saveSecurityScanSchedule({
