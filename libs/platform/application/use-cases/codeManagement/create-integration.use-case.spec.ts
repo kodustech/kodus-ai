@@ -1,4 +1,7 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 
 import { CreateIntegrationUseCase } from './create-integration.use-case';
 
@@ -13,7 +16,13 @@ jest.mock('@libs/core/log/logger', () => ({
 const ORG = 'org-1';
 const TEAM = 'team-1';
 
-const build = (opts: { existingConnection?: unknown } = {}) => {
+const build = (
+    opts: {
+        existingConnection?: unknown;
+        workspaceConnections?: Array<{ uuid: string; createdAt?: Date }>;
+        bindPrimary?: boolean;
+    } = {},
+) => {
     const codeManagementService = {
         createAuthIntegration: jest.fn().mockResolvedValue({
             success: true,
@@ -23,7 +32,13 @@ const build = (opts: { existingConnection?: unknown } = {}) => {
     };
     const integrationService = {
         findOne: jest.fn().mockResolvedValue(opts.existingConnection),
+        find: jest.fn().mockResolvedValue(opts.workspaceConnections ?? []),
         update: jest.fn().mockResolvedValue(undefined),
+    };
+    const licenseService = {
+        bindPrimaryConnection: jest
+            .fn()
+            .mockResolvedValue(opts.bindPrimary ?? true),
     };
     const useCase = new CreateIntegrationUseCase(
         codeManagementService as any,
@@ -39,8 +54,14 @@ const build = (opts: { existingConnection?: unknown } = {}) => {
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
         { gitIntegrationChanged: jest.fn() } as any,
         integrationService as any,
+        licenseService as any,
     );
-    return { useCase, codeManagementService, integrationService };
+    return {
+        useCase,
+        codeManagementService,
+        integrationService,
+        licenseService,
+    };
 };
 
 describe('CreateIntegrationUseCase — connections', () => {
@@ -130,5 +151,77 @@ describe('CreateIntegrationUseCase — connections', () => {
         });
 
         expect(integrationService.update).not.toHaveBeenCalled();
+    });
+
+    describe('billing primary connection', () => {
+        it('binds the workspace connection that keeps the plan before another is added', async () => {
+            const { useCase, licenseService, codeManagementService } = build({
+                workspaceConnections: [
+                    { uuid: 'gl-b', createdAt: new Date('2026-03-01') },
+                    { uuid: 'gh-a', createdAt: new Date('2025-01-01') },
+                ],
+            });
+
+            await useCase.execute({
+                integrationType: 'forgejo',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(licenseService.bindPrimaryConnection).toHaveBeenCalledWith(
+                { organizationId: ORG, teamId: TEAM },
+                'gh-a',
+            );
+            expect(
+                licenseService.bindPrimaryConnection.mock.invocationCallOrder[0],
+            ).toBeLessThan(
+                codeManagementService.createAuthIntegration.mock
+                    .invocationCallOrder[0],
+            );
+        });
+
+        it('refuses to add a connection while billing cannot record which one keeps the plan', async () => {
+            const { useCase, codeManagementService } = build({
+                workspaceConnections: [{ uuid: 'gh-a' }],
+                bindPrimary: false,
+            });
+
+            await expect(
+                useCase.execute({
+                    integrationType: 'gitlab',
+                    newConnection: true,
+                    organizationAndTeamData: { teamId: TEAM },
+                }),
+            ).rejects.toBeInstanceOf(ServiceUnavailableException);
+            expect(
+                codeManagementService.createAuthIntegration,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('binds nothing for the first connection of a workspace or a reconnect', async () => {
+            const first = build();
+            await first.useCase.execute({
+                integrationType: 'github',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            const reconnect = build({
+                existingConnection: { uuid: 'gh-a' },
+                workspaceConnections: [{ uuid: 'gh-a' }],
+            });
+            await reconnect.useCase.execute({
+                integrationType: 'github',
+                connectionId: 'gh-a',
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(
+                first.licenseService.bindPrimaryConnection,
+            ).not.toHaveBeenCalled();
+            expect(
+                reconnect.licenseService.bindPrimaryConnection,
+            ).not.toHaveBeenCalled();
+        });
     });
 });

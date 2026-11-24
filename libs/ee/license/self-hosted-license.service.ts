@@ -30,7 +30,26 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 type AssignedUserEntry = {
     gitId: string;
     status: 'active' | 'inactive';
+    /** Absent on seats assigned before connections were recorded. */
+    provider?: string;
+    connectionId?: string;
 };
+
+/**
+ * Whether a seat belongs to the connection a call is routed to. Seats from
+ * before connections were recorded serve every connection of the org.
+ */
+const inConnection = (
+    entry: AssignedUserEntry,
+    organizationAndTeamData: OrganizationAndTeamData,
+) =>
+    !organizationAndTeamData.integrationId ||
+    !entry.connectionId ||
+    entry.connectionId === organizationAndTeamData.integrationId;
+
+/** One instance seat per person: the same id on two providers is two people. */
+const identityOf = (entry: AssignedUserEntry) =>
+    `${entry.provider ?? 'legacy'}|${entry.gitId}`;
 
 function isLegacyFormat(
     users: unknown,
@@ -130,7 +149,11 @@ export class SelfHostedLicenseService implements ILicenseService {
                 organizationAndTeamData,
             );
             return assignedUsers
-                .filter((u) => u.status === 'active')
+                .filter(
+                    (u) =>
+                        u.status === 'active' &&
+                        inConnection(u, organizationAndTeamData),
+                )
                 .map((u) => ({ git_id: u.gitId }));
         } catch (error) {
             this.logger.error({
@@ -149,10 +172,12 @@ export class SelfHostedLicenseService implements ILicenseService {
             const assignedUsers = await this.getAssignedUsers(
                 organizationAndTeamData,
             );
-            return assignedUsers.map((u) => ({
-                git_id: u.gitId,
-                status: u.status,
-            }));
+            return assignedUsers
+                .filter((u) => inConnection(u, organizationAndTeamData))
+                .map((u) => ({
+                    git_id: u.gitId,
+                    status: u.status,
+                }));
         } catch (error) {
             this.logger.error({
                 message: 'Error getting all users ever with license',
@@ -166,7 +191,7 @@ export class SelfHostedLicenseService implements ILicenseService {
     async assignLicense(
         organizationAndTeamData: OrganizationAndTeamData,
         userGitId: string,
-        _provider: string,
+        provider: string,
     ): Promise<boolean> {
         try {
             const validation = await this.validateOrganizationLicense(
@@ -181,7 +206,9 @@ export class SelfHostedLicenseService implements ILicenseService {
             );
 
             const existing = assignedUsers.find(
-                (u) => u.gitId === userGitId,
+                (u) =>
+                    u.gitId === userGitId &&
+                    inConnection(u, organizationAndTeamData),
             );
             if (existing) {
                 if (existing.status === 'active') {
@@ -234,7 +261,14 @@ export class SelfHostedLicenseService implements ILicenseService {
                 }
             }
 
-            assignedUsers.push({ gitId: userGitId, status: 'active' });
+            assignedUsers.push({
+                gitId: userGitId,
+                status: 'active',
+                ...(provider ? { provider: provider.toLowerCase() } : {}),
+                ...(organizationAndTeamData.integrationId
+                    ? { connectionId: organizationAndTeamData.integrationId }
+                    : {}),
+            });
             await this.saveAssignedUsers(
                 organizationAndTeamData,
                 assignedUsers,
@@ -279,14 +313,15 @@ export class SelfHostedLicenseService implements ILicenseService {
             const assignedUsers = await this.getAssignedUsers(
                 organizationAndTeamData,
             );
-            const byGitId = new Map(assignedUsers.map((u) => [u.gitId, u]));
+            const revoking = new Set(userGitIds);
 
-            for (const gitId of userGitIds) {
-                const existing = byGitId.get(gitId);
-
-                // Revoking a seat the user never held is a no-op, not a failure.
-                if (existing) {
-                    existing.status = 'inactive';
+            // Revoking a seat the user never held is a no-op, not a failure.
+            for (const entry of assignedUsers) {
+                if (
+                    revoking.has(entry.gitId) &&
+                    inConnection(entry, organizationAndTeamData)
+                ) {
+                    entry.status = 'inactive';
                 }
             }
 
@@ -319,6 +354,16 @@ export class SelfHostedLicenseService implements ILicenseService {
         _organizationAndTeamData: OrganizationAndTeamData,
         _byok: boolean,
     ): Promise<boolean> {
+        return false;
+    }
+
+    // Self-hosted seats are one instance-wide pool: there is no per
+    // connection licence to bind or release.
+    async bindPrimaryConnection(): Promise<boolean> {
+        return true;
+    }
+
+    async releaseConnection(): Promise<boolean> {
         return false;
     }
 
@@ -405,7 +450,7 @@ export class SelfHostedLicenseService implements ILicenseService {
                         : (raw as AssignedUserEntry[]);
                     for (const entry of entries) {
                         if (entry.status === 'active') {
-                            uniqueUsers.add(entry.gitId);
+                            uniqueUsers.add(identityOf(entry));
                         }
                     }
                 }

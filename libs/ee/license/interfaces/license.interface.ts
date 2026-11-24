@@ -224,6 +224,22 @@ export interface ILicenseService {
         byok: boolean,
     ): Promise<boolean>;
 
+    /**
+     * Name the workspace connection that keeps the workspace plan and seats.
+     * False when billing could not be asked: the caller must not add another
+     * connection then. Self-hosted has nothing to bind and answers true.
+     */
+    bindPrimaryConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connectionId: string,
+    ): Promise<boolean>;
+
+    /** A connection was removed from the workspace. Never throws. */
+    releaseConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connectionId: string,
+    ): Promise<boolean>;
+
     // ── Prepaid credits ("Kodus as the provider") ────────────────────────
 
     /** Balance + commercial parameters, or null when billing has no license /

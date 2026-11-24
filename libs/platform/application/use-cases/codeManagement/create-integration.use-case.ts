@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+    BadRequestException,
+    Inject,
+    Injectable,
+    Optional,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
@@ -19,6 +25,11 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import { createLogger } from '@libs/core/log/logger';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
+import { primaryConnectionOf } from '@libs/integrations/domain/integrations/utils/primary-connection';
 
 @Injectable()
 export class CreateIntegrationUseCase implements IUseCase {
@@ -47,6 +58,10 @@ export class CreateIntegrationUseCase implements IUseCase {
 
         @Inject(INTEGRATION_SERVICE_TOKEN)
         private readonly integrationService: IIntegrationService,
+
+        @Optional()
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService?: ILicenseService,
     ) {}
 
     public async execute(params: any): Promise<any> {
@@ -82,6 +97,9 @@ export class CreateIntegrationUseCase implements IUseCase {
             organizationAndTeamData.integrationId = connectionId;
         }
         const newConnection = !connectionId && params?.newConnection === true;
+        if (newConnection) {
+            await this.bindPrimaryConnection(organizationAndTeamData);
+        }
 
         const result = await this.codeManagementService.createAuthIntegration(
             {
@@ -195,5 +213,40 @@ export class CreateIntegrationUseCase implements IUseCase {
             });
 
         return result;
+    }
+
+    /**
+     * Billing bills every connection of a workspace on its own licence until
+     * it knows which one keeps the workspace plan. Name it before another
+     * connection exists, or the new one would share the workspace's seats.
+     */
+    private async bindPrimaryConnection(organizationAndTeamData: {
+        organizationId: string;
+        teamId: string;
+    }): Promise<void> {
+        if (!this.licenseService) return;
+
+        const existing =
+            (await this.integrationService.find({
+                organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
+                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+                status: true,
+            })) ?? [];
+        const primary = primaryConnectionOf(existing);
+        if (!primary) return;
+
+        const bound = await this.licenseService.bindPrimaryConnection(
+            {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+            },
+            primary.uuid,
+        );
+        if (!bound) {
+            throw new ServiceUnavailableException(
+                'Billing could not be reached to add this connection. Try again in a moment.',
+            );
+        }
     }
 }

@@ -13,6 +13,7 @@ export class IntegrationEntity implements IIntegration {
     private _status: boolean;
     private _name?: string | null;
     private _reviewEnabled?: boolean;
+    private _createdAt?: Date;
     private _organization?: Partial<IOrganization>;
     private _authIntegration?: Partial<IAuthIntegration>;
     private _integrationConfigs?: Partial<IIntegrationConfig>[];
@@ -24,6 +25,7 @@ export class IntegrationEntity implements IIntegration {
         this._status = integration.status;
         this._name = integration.name;
         this._reviewEnabled = integration.reviewEnabled;
+        this._createdAt = integration.createdAt;
         this._organization = integration.organization;
         this._authIntegration = integration.authIntegration;
         this._integrationConfigs = integration.integrationConfigs;
@@ -57,6 +59,10 @@ export class IntegrationEntity implements IIntegration {
 
     public get reviewEnabled() {
         return this._reviewEnabled;
+    }
+
+    public get createdAt() {
+        return this._createdAt;
     }
 
     public get organization() {

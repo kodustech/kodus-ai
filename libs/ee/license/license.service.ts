@@ -41,6 +41,12 @@ function isLicenseServiceUnreachable(error: unknown): boolean {
     );
 }
 
+/** The Git connection a licence call is for, when the caller is routed to one. */
+const connectionParams = (organizationAndTeamData: OrganizationAndTeamData) =>
+    organizationAndTeamData.integrationId
+        ? { connectionId: organizationAndTeamData.integrationId }
+        : {};
+
 /**
  * LicenseService handles organization and user license validation via billing service endpoints.
  */
@@ -67,6 +73,7 @@ export class LicenseService implements ILicenseService {
                     params: {
                         organizationId: organizationAndTeamData.organizationId,
                         teamId: organizationAndTeamData.teamId,
+                        ...connectionParams(organizationAndTeamData),
                     },
                 },
             );
@@ -210,6 +217,7 @@ export class LicenseService implements ILicenseService {
                 params: {
                     organizationId: organizationAndTeamData.organizationId,
                     teamId: organizationAndTeamData.teamId,
+                    ...connectionParams(organizationAndTeamData),
                 },
             });
         } catch (error) {
@@ -263,6 +271,7 @@ export class LicenseService implements ILicenseService {
             const result = await this.licenseRequest.post('assign-license', {
                 organizationId: organizationAndTeamData.organizationId,
                 teamId: organizationAndTeamData.teamId,
+                ...connectionParams(organizationAndTeamData),
                 users: [
                     {
                         gitId: userGitId,
@@ -316,6 +325,7 @@ export class LicenseService implements ILicenseService {
             const result = await this.licenseRequest.post('assign-license', {
                 organizationId: organizationAndTeamData.organizationId,
                 teamId: organizationAndTeamData.teamId,
+                ...connectionParams(organizationAndTeamData),
                 users: userGitIds.map((gitId) => ({
                     gitId,
                     // The billing service rejects the whole request with a 400
@@ -350,6 +360,75 @@ export class LicenseService implements ILicenseService {
                 },
             });
             return { revoked: [], failed: userGitIds };
+        }
+    }
+
+    /**
+     * Names the workspace connection whose plan and seats live on the
+     * workspace licence. Must hold before a second connection is added: until
+     * then billing treats every connection as the workspace's. A workspace
+     * billing has no licence for has nothing to bind.
+     */
+    async bindPrimaryConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connectionId: string,
+    ): Promise<boolean> {
+        try {
+            const result = await this.licenseRequest.post(
+                'connections/primary',
+                {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    connectionId,
+                },
+            );
+            this.logger.log({
+                message: 'license_primary_connection_bound',
+                context: LicenseService.name,
+                metadata: {
+                    ...organizationAndTeamData,
+                    connectionId,
+                    primaryConnectionId: result?.primaryConnectionId ?? null,
+                },
+            });
+            return true;
+        } catch (error) {
+            if ((error as AxiosError)?.response?.status === 404) {
+                return true;
+            }
+            this.logger.error({
+                message: 'license_primary_connection_bind_failed',
+                context: LicenseService.name,
+                error,
+                metadata: { ...organizationAndTeamData, connectionId },
+            });
+            return false;
+        }
+    }
+
+    /** A connection left the workspace; frees the primary slot if it held it. */
+    async releaseConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connectionId: string,
+    ): Promise<boolean> {
+        try {
+            const result = await this.licenseRequest.post(
+                'connections/release',
+                {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    connectionId,
+                },
+            );
+            return Boolean(result?.released);
+        } catch (error) {
+            this.logger.error({
+                message: 'license_connection_release_failed',
+                context: LicenseService.name,
+                error,
+                metadata: { ...organizationAndTeamData, connectionId },
+            });
+            return false;
         }
     }
 

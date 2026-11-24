@@ -1,3 +1,8 @@
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
+import { primaryConnectionOf } from '@libs/integrations/domain/integrations/utils/primary-connection';
 import { createLogger } from '@libs/core/log/logger';
 import {
     BadRequestException,
@@ -55,6 +60,9 @@ export class DeleteIntegrationUseCase {
         @Optional()
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService?: IParametersService,
+        @Optional()
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService?: ILicenseService,
     ) {}
 
     async execute(params: {
@@ -158,9 +166,10 @@ export class DeleteIntegrationUseCase {
             await this.integrationConfigService.delete(integrationConfig.uuid);
         }
 
-        const workspaceKeepsAConnection = (
+        const remainingInWorkspace = (
             (await this.integrationService.find(workspaceScope)) ?? []
-        ).some((connection) => connection.uuid !== integration.uuid);
+        ).filter((connection) => connection.uuid !== integration.uuid);
+        const workspaceKeepsAConnection = remainingInWorkspace.length > 0;
 
         if (
             !workspaceKeepsAConnection ||
@@ -202,6 +211,11 @@ export class DeleteIntegrationUseCase {
             integration.authIntegration.uuid,
         );
 
+        await this.handOverWorkspacePlan(
+            organizationAndTeamData,
+            remainingInWorkspace,
+        );
+
         this.logger.log({
             message: 'connection_reset',
             context: DeleteIntegrationUseCase.name,
@@ -212,6 +226,39 @@ export class DeleteIntegrationUseCase {
                 actorUserId: this.request?.user?.uuid,
             },
         });
+    }
+
+    /**
+     * Billing keeps the workspace plan and seats on one connection. When that
+     * one leaves, the oldest remaining connection takes them. Billing being
+     * down never blocks a reset: the next connection added binds again.
+     */
+    private async handOverWorkspacePlan(
+        organizationAndTeamData: {
+            organizationId: string;
+            teamId: string;
+            integrationId: string;
+        },
+        remaining: Array<{ uuid: string; createdAt?: Date }>,
+    ): Promise<void> {
+        if (!this.licenseService) return;
+        const workspace = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+        };
+
+        await this.licenseService.releaseConnection(
+            workspace,
+            organizationAndTeamData.integrationId,
+        );
+
+        const next = primaryConnectionOf(remaining);
+        if (next) {
+            await this.licenseService.bindPrimaryConnection(
+                workspace,
+                next.uuid,
+            );
+        }
     }
 
     /** Whether the workspace's centralized config repository is on this connection. */

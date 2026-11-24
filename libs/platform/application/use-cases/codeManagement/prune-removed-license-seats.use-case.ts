@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { createLogger } from '@libs/core/log/logger';
@@ -14,6 +14,12 @@ import { OrganizationParametersAutoAssignConfig } from '@libs/organization/domai
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationMemberListService } from '@libs/platform/application/services/organization-member-list.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
+import {
+    IIntegrationService,
+    INTEGRATION_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
+import { primaryConnectionOf } from '@libs/integrations/domain/integrations/utils/primary-connection';
 
 export type PruneRemovedLicenseSeatsResult = {
     status: 'ok' | 'members_unavailable';
@@ -43,9 +49,85 @@ export class PruneRemovedLicenseSeatsUseCase {
         private readonly licenseService: ILicenseService,
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private readonly organizationParametersService: IOrganizationParametersService,
+        @Optional()
+        @Inject(INTEGRATION_SERVICE_TOKEN)
+        private readonly integrationService?: IIntegrationService,
     ) {}
 
+    /**
+     * Each Git connection of a workspace has its own seats, checked against
+     * its own members. A workspace with one connection, or a call naming a
+     * connection, takes the single path.
+     */
     public async execute(
+        params: PruneRemovedLicenseSeatsParams,
+    ): Promise<PruneRemovedLicenseSeatsResult> {
+        const { organizationAndTeamData } = params;
+        const connections =
+            organizationAndTeamData.integrationId || !this.integrationService
+                ? []
+                : ((await this.integrationService.find({
+                      organization: {
+                          uuid: organizationAndTeamData.organizationId,
+                      },
+                      team: { uuid: organizationAndTeamData.teamId },
+                      integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+                      status: true,
+                  })) ?? []);
+
+        if (connections.length <= 1) {
+            return this.pruneSeatPool(params);
+        }
+
+        // Billing keeps the workspace seats on one connection and, until it
+        // knows which, answers every connection with them: pruning those
+        // against one connection's members would strip the others' seats.
+        const primary = primaryConnectionOf(connections);
+        const bound = await this.licenseService.bindPrimaryConnection(
+            {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+            },
+            primary.uuid,
+        );
+        if (!bound) {
+            this.logger.error({
+                message:
+                    'Skipping license seat prune: billing could not confirm the workspace primary connection',
+                context: PruneRemovedLicenseSeatsUseCase.name,
+                metadata: { ...organizationAndTeamData },
+            });
+            return {
+                status: 'members_unavailable',
+                candidates: [],
+                revoked: [],
+                failed: [],
+            };
+        }
+
+        const merged: PruneRemovedLicenseSeatsResult = {
+            status: 'ok',
+            candidates: [],
+            revoked: [],
+            failed: [],
+        };
+        for (const connection of connections) {
+            const result = await this.pruneSeatPool({
+                ...params,
+                organizationAndTeamData: {
+                    ...organizationAndTeamData,
+                    integrationId: connection.uuid,
+                },
+            });
+            if (result.status !== 'ok') merged.status = result.status;
+            merged.candidates.push(...result.candidates);
+            merged.revoked.push(...result.revoked);
+            merged.failed.push(...result.failed);
+        }
+        return merged;
+    }
+
+    private async pruneSeatPool(
         params: PruneRemovedLicenseSeatsParams,
     ): Promise<PruneRemovedLicenseSeatsResult> {
         const { organizationAndTeamData, dryRun, gitIds } = params;

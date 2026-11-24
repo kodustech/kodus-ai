@@ -1,0 +1,110 @@
+import { LicenseService } from './license.service';
+
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({ log: jest.fn(), warn: jest.fn(), error: jest.fn() }),
+}));
+
+describe('LicenseService per Git connection', () => {
+    const connection = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+        integrationId: 'gl-b',
+    };
+    const workspace = { organizationId: 'org-1', teamId: 'team-1' };
+
+    const makeService = () => {
+        const get = jest.fn().mockResolvedValue({ valid: true });
+        const post = jest.fn().mockResolvedValue({ successful: [], failed: [] });
+        const service = new LicenseService();
+        (service as any).licenseRequest = { get, post };
+        return { service, get, post };
+    };
+
+    it('validates the licence of the connection the call is routed to', async () => {
+        const { service, get } = makeService();
+
+        await service.validateOrganizationLicense(connection);
+
+        expect(get).toHaveBeenCalledWith('validate-org-license', {
+            params: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                connectionId: 'gl-b',
+            },
+        });
+    });
+
+    it('keeps the workspace call unchanged when no connection is named', async () => {
+        const { service, get } = makeService();
+
+        await service.validateOrganizationLicense(workspace);
+
+        expect(get).toHaveBeenCalledWith('validate-org-license', {
+            params: { organizationId: 'org-1', teamId: 'team-1' },
+        });
+    });
+
+    it('lists, assigns and releases the seats of the named connection', async () => {
+        const { service, get, post } = makeService();
+        get.mockResolvedValue([]);
+
+        await service.getAllUsersWithLicense(connection);
+        await service.assignLicense(connection, '42', 'gitlab');
+        await service.unassignLicenses(connection, ['42'], 'gitlab');
+
+        expect(get).toHaveBeenCalledWith('users-with-license', {
+            params: expect.objectContaining({ connectionId: 'gl-b' }),
+        });
+        expect(post).toHaveBeenNthCalledWith(
+            1,
+            'assign-license',
+            expect.objectContaining({ connectionId: 'gl-b' }),
+        );
+        expect(post).toHaveBeenNthCalledWith(
+            2,
+            'assign-license',
+            expect.objectContaining({ connectionId: 'gl-b' }),
+        );
+    });
+
+    it('binds the workspace primary connection', async () => {
+        const { service, post } = makeService();
+        post.mockResolvedValue({ found: true, primaryConnectionId: 'gh-a' });
+
+        await expect(
+            service.bindPrimaryConnection(workspace, 'gh-a'),
+        ).resolves.toBe(true);
+        expect(post).toHaveBeenCalledWith('connections/primary', {
+            organizationId: 'org-1',
+            teamId: 'team-1',
+            connectionId: 'gh-a',
+        });
+    });
+
+    it('reports a failed bind, so a second connection is not added on an unbound workspace', async () => {
+        const { service, post } = makeService();
+        post.mockRejectedValue(new Error('billing down'));
+
+        await expect(
+            service.bindPrimaryConnection(workspace, 'gh-a'),
+        ).resolves.toBe(false);
+    });
+
+    it('treats a workspace billing has no licence for as nothing to bind', async () => {
+        const { service, post } = makeService();
+        post.mockRejectedValue({ response: { status: 404 } });
+
+        await expect(
+            service.bindPrimaryConnection(workspace, 'gh-a'),
+        ).resolves.toBe(true);
+    });
+
+    it('releases a removed connection without throwing', async () => {
+        const { service, post } = makeService();
+        post.mockRejectedValue(new Error('billing down'));
+
+        await expect(
+            service.releaseConnection(workspace, 'gh-a'),
+        ).resolves.toBe(false);
+    });
+});

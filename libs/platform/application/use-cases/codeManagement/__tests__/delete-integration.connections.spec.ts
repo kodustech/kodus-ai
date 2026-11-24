@@ -17,7 +17,12 @@ import { DeleteIntegrationUseCase } from '../delete-integration.use-case';
 const ORG = 'org-1';
 const TEAM = 'team-1';
 
-type Conn = { uuid: string; team?: string; repos?: string[] };
+type Conn = {
+    uuid: string;
+    team?: string;
+    repos?: string[];
+    createdAt?: Date;
+};
 
 const build = (opts: {
     connections: Conn[];
@@ -25,6 +30,7 @@ const build = (opts: {
 }) => {
     const entity = (c: Conn) => ({
         uuid: c.uuid,
+        createdAt: c.createdAt,
         platform: 'GITHUB',
         authIntegration: { uuid: `auth-${c.uuid}`, authDetails: {} },
     });
@@ -71,6 +77,11 @@ const build = (opts: {
         ),
     };
 
+    const licenseService = {
+        releaseConnection: jest.fn(async () => true),
+        bindPrimaryConnection: jest.fn(async () => true),
+    };
+
     const useCase = new (DeleteIntegrationUseCase as any)(
         codeManagementService,
         integrationService,
@@ -81,6 +92,7 @@ const build = (opts: {
         mcpManagerService,
         { user: { uuid: 'user-1', email: 'owner@example.test' } },
         parametersService,
+        licenseService,
     ) as DeleteIntegrationUseCase;
 
     return {
@@ -89,6 +101,7 @@ const build = (opts: {
         codeManagementService,
         mcpManagerService,
         createOrUpdateParametersUseCase,
+        licenseService,
     };
 };
 
@@ -198,5 +211,59 @@ describe('DeleteIntegrationUseCase — one connection of several', () => {
             expect.objectContaining({ enabled: false }),
             { organizationId: ORG, teamId: TEAM },
         );
+    });
+});
+
+describe('DeleteIntegrationUseCase — billing', () => {
+    it('releases the removed connection and hands the workspace plan to the oldest one left', async () => {
+        const { useCase, licenseService } = build({
+            connections: [
+                { uuid: 'gh-a', createdAt: new Date('2025-01-01') },
+                { uuid: 'fj-c', createdAt: new Date('2026-05-01') },
+                { uuid: 'gl-b', createdAt: new Date('2026-02-01') },
+            ],
+        });
+
+        await useCase.execute({
+            organizationId: ORG,
+            teamId: TEAM,
+            connectionId: 'gh-a',
+        });
+
+        expect(licenseService.releaseConnection).toHaveBeenCalledWith(
+            { organizationId: ORG, teamId: TEAM },
+            'gh-a',
+        );
+        expect(licenseService.bindPrimaryConnection).toHaveBeenCalledWith(
+            { organizationId: ORG, teamId: TEAM },
+            'gl-b',
+        );
+    });
+
+    it('binds nothing when the workspace keeps no connection', async () => {
+        const { useCase, licenseService } = build({
+            connections: [{ uuid: 'gh-a' }],
+        });
+
+        await useCase.execute({ organizationId: ORG, teamId: TEAM });
+
+        expect(licenseService.releaseConnection).toHaveBeenCalled();
+        expect(licenseService.bindPrimaryConnection).not.toHaveBeenCalled();
+    });
+
+    it('finishes the reset when billing cannot be reached', async () => {
+        const { useCase, licenseService, integrationService } = build({
+            connections: [{ uuid: 'gh-a' }, { uuid: 'gl-b' }],
+        });
+        licenseService.releaseConnection.mockResolvedValue(false);
+        licenseService.bindPrimaryConnection.mockResolvedValue(false);
+
+        await useCase.execute({
+            organizationId: ORG,
+            teamId: TEAM,
+            connectionId: 'gh-a',
+        });
+
+        expect(integrationService.delete).toHaveBeenCalledWith('gh-a');
     });
 });
