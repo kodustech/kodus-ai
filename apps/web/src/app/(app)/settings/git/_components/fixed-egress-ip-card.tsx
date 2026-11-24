@@ -22,7 +22,6 @@ import {
 } from "@services/codeManagement/fixedEgressIp";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { ClipboardHelpers } from "src/core/utils/clipboard";
 import { isSelfHosted } from "src/core/utils/self-hosted";
 
@@ -39,31 +38,36 @@ const apiMessage = (error: unknown): string | undefined => {
  * (trial included); everyone else reaches Git from a shared network.
  */
 export const FixedEgressIpCard = ({
+    teamId,
     initialSetting,
     loadFailed = false,
 }: {
+    /** The team the page read the setting for; the switch writes the same. */
+    teamId: string;
     initialSetting: FixedEgressIp;
     /** The setting could not be read: say so instead of hiding the card. */
     loadFailed?: boolean;
 }) => {
     const router = useRouter();
-    const { teamId } = useSelectedTeamId();
     const canEdit = usePermission(Action.Create, ResourceType.GitSettings);
     const [setting, setSetting] = useState(initialSetting);
     const [seenInitial, setSeenInitial] = useState(initialSetting);
     const [saving, setSaving] = useState(false);
+    // A change saved here is the latest known state: a refresh that fails
+    // right after it does not replace the card with "could not load".
+    const [savedHere, setSavedHere] = useState(false);
 
     // A server refresh hands down a new setting; adopt it.
     if (seenInitial !== initialSetting) {
         setSeenInitial(initialSetting);
-        setSetting(initialSetting);
+        if (!loadFailed) setSetting(initialSetting);
     }
 
     // The feature does not exist on a self-hosted install (it reaches Git
     // from its own network), which the deployment itself says; that is not
     // a read result, so it comes before both the failed and the empty read.
     if (isSelfHosted) return null;
-    if (loadFailed) {
+    if (loadFailed && !savedHere) {
         return (
             <Card className="mb-4">
                 <CardHeader className="space-y-2">
@@ -80,16 +84,24 @@ export const FixedEgressIpCard = ({
     }
     if (!setting.available) return null;
 
+    // The team's stored choice: on also when its plan no longer uses it, so
+    // a downgraded team can see it and turn it off.
+    const on = setting.enabled || Boolean(setting.savedOn);
+    const unusedOnPlan = on && !setting.enabled;
+
     const onToggle = async (enabled: boolean) => {
         setSaving(true);
         try {
             setSetting(await setFixedEgressIp({ teamId, enabled }));
+            setSavedHere(true);
             toast({
                 variant: "success",
                 title: enabled
                     ? "Fixed outbound IP turned on"
                     : "Fixed outbound IP turned off",
-                description: "New reviews use it within about 10 minutes.",
+                description: enabled
+                    ? "New reviews use it within about 10 minutes."
+                    : "New reviews stop using it within about 10 minutes.",
             });
             router.refresh();
         } catch (error) {
@@ -130,7 +142,13 @@ export const FixedEgressIpCard = ({
                         your Git host from a shared network.
                     </CardDescription>
 
-                    {setting.planUnconfirmed && !setting.enabled ? (
+                    {unusedOnPlan ? (
+                        <p className="text-text-secondary text-sm">
+                            Your plan does not include the fixed outbound IP, so
+                            Kody reaches your Git host from the shared network
+                            even though this is on. Turn it off to clear it.
+                        </p>
+                    ) : setting.planUnconfirmed && !on ? (
                         <p className="text-text-secondary text-sm">
                             Kodus could not confirm your plan right now, so this
                             cannot be turned on yet. Try again in a few minutes.
@@ -169,16 +187,22 @@ export const FixedEgressIpCard = ({
                                 )}
                         </>
                     )}
+
+                    {!canEdit && (
+                        <p className="text-text-secondary text-sm">
+                            Only an organization owner can change this.
+                        </p>
+                    )}
                 </div>
 
                 <Switch
                     role="switch"
                     aria-label="Fixed outbound IP"
-                    checked={setting.enabled}
+                    checked={on}
                     disabled={
                         !canEdit ||
                         saving ||
-                        (!setting.enabled &&
+                        (!on &&
                             (!setting.allowedByPlan ||
                                 Boolean(setting.planUnconfirmed)))
                     }

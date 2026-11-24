@@ -13,6 +13,10 @@ export type FixedEgressIp = {
     planUnconfirmed?: boolean;
     /** The team's review sandboxes reach its Git host from the fixed IP. */
     enabled: boolean;
+    /** The team's stored choice is on, even when its plan does not use it. */
+    savedOn?: boolean;
+    /** Direct egress is rolled out to the organization. */
+    inRollout?: boolean;
     /** `clone_fallback` when Kodus turned it on after a refused clone. */
     source?: "manual" | "clone_fallback";
     reason?: "ip_allow_list" | "forbidden" | "unreachable" | "other";

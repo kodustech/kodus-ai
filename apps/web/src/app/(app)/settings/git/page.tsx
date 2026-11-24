@@ -194,6 +194,7 @@ export default async function GitSettings() {
                                     initialSelection={repositorySelection}
                                 />
                                 <FixedEgressIpCard
+                                    teamId={teamId}
                                     initialSetting={fixedEgressIp}
                                     loadFailed={fixedEgressIpUnavailable}
                                 />
