@@ -51,38 +51,44 @@ const FILE_HEADER = /^(?:=== FILE: (.+?) ===|diff --git a\/\S+ b\/(\S+))$/gm;
  * The diff the judge can read whole, and the files it had to leave out. Files
  * are kept in order; one that doesn't fit is skipped so smaller ones after it
  * still get in. A requirement that may live in a skipped file becomes CHECK
- * MANUALLY instead of MISSING (UC-32).
+ * MANUALLY instead of MISSING (UC-32). `cutByTokens`: the model's window, not
+ * the character cap, kept something out.
  */
 export function fitDiff(
     diff: string,
     budget: number | DiffBudget = DIFF_BUDGET_CHARS,
-): { diff: string; unseenFiles: string[] } {
+): { diff: string; unseenFiles: string[]; cutByTokens: boolean } {
     const { chars, tokens = Infinity } =
         typeof budget === 'number' ? { chars: budget } : budget;
     const tokensOf = (text: string) =>
         tokens === Infinity ? 0 : diffTokens(text);
 
     if (diff.length <= chars && tokensOf(diff) <= tokens) {
-        return { diff, unseenFiles: [] };
+        return { diff, unseenFiles: [], cutByTokens: false };
     }
     const chunks = fileChunks(diff);
     if (!chunks.length) {
+        const byChars = sliceWhole(diff, chars);
+        const cut = cutToTokens(byChars, tokens);
         return {
-            diff: cutToTokens(sliceWhole(diff, chars), tokens),
+            diff: cut,
             unseenFiles: ['(rest of the diff)'],
+            cutByTokens: cut !== byChars,
         };
     }
     const kept: string[] = [];
     const unseenFiles: string[] = [];
     let used = 0;
     let usedTokens = 0;
+    let cutByTokens = false;
     for (const chunk of chunks) {
         // The character check first: it is free, and it keeps a huge file
         // from being tokenized only to be left out.
         // Nor is a file tokenized once the tokens are spent: on a small
         // window an asset-heavy PR would tokenize every file it can't keep.
+        const withinChars = used + chunk.text.length <= chars;
         const room =
-            used + chunk.text.length <= chars &&
+            withinChars &&
             usedTokens < tokens &&
             !exceedsByPrefix(chunk.text, tokens - usedTokens);
         const count = room ? tokensOf(chunk.text) : 0;
@@ -92,9 +98,10 @@ export function fitDiff(
             usedTokens += count;
         } else {
             unseenFiles.push(chunk.file);
+            cutByTokens ||= withinChars;
         }
     }
-    return { diff: kept.join(''), unseenFiles };
+    return { diff: kept.join(''), unseenFiles, cutByTokens };
 }
 
 /**

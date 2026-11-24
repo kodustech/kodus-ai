@@ -1,6 +1,9 @@
 import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
-import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compression/token-estimator';
+import {
+    estimateOverheadTokens,
+    estimateValueTokens,
+} from '@libs/agent-harness/infrastructure/compression/token-estimator';
 import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
@@ -336,11 +339,16 @@ export function createGapCheck(
         ) {
             return undefined;
         }
-        // The compressor counts the first message the ordinary way; what that
-        // misses, and the answer, stay out of its budget.
+        // What the compressor misses of the first message stays out of its
+        // budget, with the answer. It counts the message serialized: as JSON
+        // a text's line breaks are escapes, not whitespace, so wrapped lines
+        // with no space (a pasted table, a key) join into one run it counts
+        // at 3 characters a token.
         const undercount = Math.max(
             0,
-            headTokens - estimateTextTokens(system) - estimateTextTokens(head),
+            headTokens -
+                estimateTextTokens(system) -
+                estimateValueTokens({ role: 'user', content: head }),
         );
         await run(
             {

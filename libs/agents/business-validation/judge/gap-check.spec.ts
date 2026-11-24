@@ -562,6 +562,77 @@ describe("createGapCheck within the model's window (#2233)", () => {
         expect(settled).toBeUndefined();
     });
 
+    it('keeps a task with a pasted table of numbers, the files read and the answer within the window', async () => {
+        // Wrapped lines with no space: serialized as JSON they read as one
+        // run the compressor counts at 3 characters a token; o200k makes
+        // about 1.2 of them.
+        let seed = 7;
+        const values = Array.from({ length: 14_000 }, () => {
+            seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+            return seed % 256;
+        });
+        const table = (values.join(',').match(/.{1,76}/g) ?? []).join('\n');
+        let spec: AgentSpec | undefined;
+        let head = '';
+        await createGapCheck(
+            async (s, prompt) => {
+                spec = s;
+                head = prompt;
+            },
+            { contextWindowTokens: 64_000, outputTokens: 12_000 },
+        )({
+            ...input,
+            taskText: `Load the gamma table below.\n${table}`,
+        });
+        expect(head).toContain(table.slice(0, 200));
+        const reads = Array.from({ length: 10 }, (_, i) => [
+            {
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: `c${i}`,
+                        toolName: 'read_file',
+                        input: { path: `src/f${i}.ts` },
+                    },
+                ],
+            },
+            {
+                role: 'tool',
+                content: [
+                    {
+                        type: 'tool-result',
+                        toolCallId: `c${i}`,
+                        toolName: 'read_file',
+                        output: {
+                            type: 'text',
+                            value: Array.from(
+                                { length: 200 },
+                                (_, line) =>
+                                    `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                            ).join('\n'),
+                        },
+                    },
+                ],
+            },
+        ]).flat();
+        const messages = [{ role: 'user', content: head }, ...reads];
+        const directives = (
+            await Promise.all(
+                spec!.policies.map((p) =>
+                    p.prepareStep?.({ messages, stepNumber: 10 } as any),
+                ),
+            )
+        ).find((d) => d?.messages);
+        const sent = directives?.messages ?? messages;
+        const overhead =
+            worst(spec!.systemPrompt ?? '') +
+            worst(JSON.stringify(spec!.tools.list()));
+        expect(worst(textOf(sent)) + overhead + 12_000).toBeLessThanOrEqual(
+            64_000,
+        );
+    });
+
     it('keeps the files read, the answer and the overhead within a 16k window once they outgrow it', async () => {
         let spec: AgentSpec | undefined;
         await createGapCheck(

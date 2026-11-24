@@ -902,7 +902,9 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
             kind: 'skipped',
             reason: 'too_large_for_model',
         });
-        expect(outcome.message).toContain('Lower the max output tokens');
+        expect(outcome.message).toContain(
+            "Lower that model's max output tokens",
+        );
     });
 
     it("fits the call with the slot's whole answer when that answer takes most of the window", async () => {
@@ -941,6 +943,103 @@ describe("BusinessValidationService · a judge call fits the model's window (#22
         expect(
             worst(calls[0].text) + analyzerOutputTokens(slot).reserved,
         ).toBeLessThanOrEqual(64_000);
+    });
+
+    // Numbers with no space between them: about 1.2 characters a token.
+    const numberTable = (chars: number) => {
+        let seed = 11;
+        let out = '+';
+        while (out.length < chars) {
+            seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+            out += `${seed % 256},`;
+        }
+        return out.slice(0, chars);
+    };
+
+    it('still asks the judge, naming the file, when the only change is over the cost cap on a large window', async () => {
+        const fixture = formatPullRequestDiff([
+            {
+                filename: 'test/fixtures/catalog.json',
+                patch: Array.from(
+                    { length: 6_000 },
+                    (_, line) => `+  "item-${line}": { "price": ${line} },`,
+                ).join('\n'),
+            },
+        ]);
+        expect(fixture.length).toBeGreaterThan(200_000);
+        const { outcome, calls } = await judgeCalls(
+            { model: 'big-window', maxInputTokens: 1_048_576 },
+            { diff: fixture },
+        );
+        expect(calls).toHaveLength(1);
+        expect(calls[0].diff).toBe('');
+        expect(outcome.kind).toBe('validated');
+        expect(outcome.unseenFiles).toContain('test/fixtures/catalog.json');
+    });
+
+    it('fits the call with the thinking budget Anthropic sends on top of the answer', async () => {
+        const icons = formatPullRequestDiff(
+            Array.from({ length: 40 }, (_, i) => ({
+                filename: `icons/icon-${i}.svg`,
+                patch: numberTable(4_750),
+            })),
+        );
+        expect(worst(icons)).toBeGreaterThan(150_000);
+        const { calls } = await judgeCalls(
+            {
+                provider: 'anthropic',
+                model: 'claude-sonnet-4-5',
+                maxInputTokens: 200_000,
+                reasoningEffort: 'high',
+            },
+            { diff: icons },
+        );
+        expect(calls[0].diff.length).toBeGreaterThan(0);
+        // max_tokens = the 20k answer + the 40k budget of effort high.
+        expect(worst(calls[0].text) + 60_000).toBeLessThanOrEqual(200_000);
+    });
+
+    it("reads the code on a small slot whose answer limit is below the judge's own", async () => {
+        const defaults = formatPullRequestDiff([
+            {
+                filename: 'src/defaults.ts',
+                patch: Array.from(
+                    { length: 1_000 },
+                    (_, line) => `+export const default${line} = ${line};`,
+                ).join('\n'),
+            },
+        ]);
+        const { outcome, calls } = await judgeCalls(
+            {
+                model: 'local-open-weights',
+                maxInputTokens: 16_000,
+                maxOutputTokens: 1_000,
+            },
+            { diff: defaults },
+        );
+        expect(outcome.kind).toBe('validated');
+        expect(calls[0].diff).toBe(defaults);
+        expect(worst(calls[0].text) + 1_000).toBeLessThanOrEqual(16_000);
+    });
+
+    it('blames the size of the code, not the answer limit, when the code would not fit beside any answer', async () => {
+        const generated = formatPullRequestDiff([
+            { filename: 'src/gamma.ts', patch: numberTable(150_000) },
+        ]);
+        const { outcome, calls } = await judgeCalls(
+            {
+                model: 'local-open-weights',
+                maxInputTokens: 128_000,
+                maxOutputTokens: 64_000,
+            },
+            { diff: generated },
+        );
+        expect(calls).toHaveLength(0);
+        expect(outcome).toMatchObject({
+            kind: 'skipped',
+            reason: 'too_large_for_model',
+        });
+        expect(outcome.message).toContain('Too large for the model');
     });
 
     it('says the task is too large for the model, and asks it nothing, when no file fits beside it', async () => {

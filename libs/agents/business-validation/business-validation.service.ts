@@ -13,6 +13,10 @@ import {
     ValidationErrorType,
 } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
+import {
+    envManagedReasoningDescriptor,
+    getModelId,
+} from '@libs/llm/managed-slot';
 import { overrideContext } from '@libs/llm/routing-strategy';
 import { estimateTextTokens } from '@libs/llm/token-estimate';
 import type { MCPServerConfig } from '@libs/mcp-server/mcp-adapter';
@@ -524,23 +528,35 @@ export class BusinessValidationService {
                     ),
                 ),
             );
-        const answerTokens = analyzerOutputTokens(slot).reserved;
-        const { diff, unseenFiles } = fitDiff(fullDiff, {
-            chars: DIFF_BUDGET_CHARS,
-            tokens: diffTokenBudget({
+        const answer = analyzerOutputTokens(slot);
+        const fitBeside = (outputTokens: number) => {
+            const tokens = diffTokenBudget({
                 contextWindowTokens,
                 promptTokens,
-                outputTokens: answerTokens,
-            }),
-        });
-        // No file fits beside the task and the answer: a judge that reads no
-        // code says nothing, and the provider may reject the call outright.
-        if (!diff.trim()) {
+                outputTokens,
+            });
+            return {
+                tokens,
+                ...fitDiff(fullDiff, { chars: DIFF_BUDGET_CHARS, tokens }),
+            };
+        };
+        const fitted = fitBeside(answer.reserved);
+        const { diff, unseenFiles } = fitted;
+        // The window, not the cost cap, left no code beside the task and the
+        // answer: a judge that reads none says nothing, and the provider may
+        // reject the call outright. Files over the cost cap alone still go to
+        // the judge by name, as CHECK MANUALLY.
+        if (!diff.trim() && (fitted.cutByTokens || fitted.tokens <= 0)) {
+            // The answer the slot declares is the cause only when the code
+            // would fit beside the answer the judge itself asks for.
+            const answerIsCause =
+                answer.reserved > answer.requested &&
+                !!fitBeside(answer.requested).diff.trim();
             return skip(
                 'too_large_for_model',
                 messages.tooLargeForModelMessage(
                     contextWindowTokens,
-                    answerTokens,
+                    answerIsCause ? answer.reserved : undefined,
                 ),
             );
         }
@@ -629,8 +645,11 @@ export class BusinessValidationService {
                         cause: verdict.missingInfo,
                         // Which model failed: the parse failures and
                         // timeouts are per model, and the log said nothing.
-                        provider: judging.modelSlot?.provider,
-                        model: judging.modelSlot?.model,
+                        // Without a slot, the env or managed model.
+                        provider:
+                            judging.modelSlot?.provider ??
+                            envManagedReasoningDescriptor()?.provider,
+                        model: getModelId(judging.modelSlot),
                     },
                 });
                 return undefined;

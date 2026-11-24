@@ -162,13 +162,16 @@ I found the task, but I couldn't load the pull request diff, so I can't compare 
 
 export function tooLargeForModelMessage(
     contextWindowTokens: number,
-    /** The answer the call declares: the slot's `maxOutputTokens`, when it sets one. */
-    answerTokens = 0,
+    /**
+     * Set when the answer the slot declares is what kept the code out: the
+     * code would fit beside the answer the judge itself asks for.
+     */
+    answerTokens?: number,
 ): string {
-    if (answerTokens * 2 >= contextWindowTokens) {
+    if (answerTokens !== undefined) {
         return `## 🤔 The model's answer limit leaves no room for the code
 
-The model that checks business logic may write up to ${answerTokens} tokens, and its input window is ${contextWindowTokens} tokens: the provider counts both against the window, so the task and this PR's changes don't fit beside the answer. Nothing was checked. Lower the max output tokens of that model in the Business Logic settings, or pick a model with a larger window.`;
+The model that checks business logic is set to write up to ${answerTokens} tokens (its max output tokens, plus its thinking budget on Anthropic and Bedrock), and its input window is ${contextWindowTokens} tokens: the provider counts both against the window, so this PR's changes don't fit beside the task and the answer. Nothing was checked. Lower that model's max output tokens or reasoning effort in the Business Logic settings, or pick a model with a larger window.`;
     }
     return `## 🤔 Too large for the model
 

@@ -27,7 +27,11 @@ describe('fitDiff (UC-32)', () => {
     ]);
 
     it('keeps a diff under budget whole', () => {
-        expect(fitDiff(diff, 10_000)).toEqual({ diff, unseenFiles: [] });
+        expect(fitDiff(diff, 10_000)).toEqual({
+            diff,
+            unseenFiles: [],
+            cutByTokens: false,
+        });
     });
 
     it('skips a file that does not fit and keeps the smaller ones after it', () => {
@@ -128,6 +132,7 @@ describe("fitDiff within the model's window (#2233)", () => {
         expect(fitDiff(diff, { chars: 200_000, tokens: 1_000_000 })).toEqual({
             diff,
             unseenFiles: [],
+            cutByTokens: false,
         });
     });
 });
@@ -214,6 +219,7 @@ describe('cuts that stay within the window and stay valid text', () => {
         expect(fitDiff(diff, { chars: 200_000, tokens: 0 })).toEqual({
             diff: '',
             unseenFiles: ['src/a.ts', 'src/b.ts'],
+            cutByTokens: true,
         });
         expect(diffFor(diff, {}, { chars: 24_000, tokens: 0 })).toBe('');
     });

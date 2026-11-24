@@ -35,6 +35,10 @@ import {
 import { getModelName, type ByokModelOptions } from '@libs/llm/byok-to-vercel';
 import { envManagedReasoningDescriptor } from '@libs/llm/managed-slot';
 import {
+    budgetAddedToAnswerCap,
+    optionsNamespace,
+} from '@libs/llm/answer-cap-budget';
+import {
     resolveSlotCallOptions,
     type SlotCallOptions,
 } from '@libs/llm/slot-call-options';
@@ -112,7 +116,9 @@ export function resolveModelConfig(
     // BYOK slot) and reuse it for both the model build and the reasoning default —
     // so a failing env-LLM (e.g. a suspended Moonshot/Kimi key) reports its REAL
     // provider in the byok-error notification instead of "unknown".
-    const envDescriptor = resolvedSlot ? undefined : envManagedReasoningDescriptor();
+    const envDescriptor = resolvedSlot
+        ? undefined
+        : envManagedReasoningDescriptor();
 
     const model = resolveAgentModel(resolvedSlot, {
         ...agentModelOptions,
@@ -123,14 +129,71 @@ export function resolveModelConfig(
         modelOptions,
     });
 
+    const { providerOptions } = resolveReasoningOptions(
+        resolvedSlot,
+        envDescriptor,
+        {
+            runName,
+            suppressReasoning,
+            reasoningEffortDefault,
+            telemetryMetadata,
+            openrouterProviderOrder,
+            openrouterAllowFallbacks,
+        },
+    );
+
+    return {
+        model,
+        // `defaultModelOverride` (in agentModelOptions) already reached the model
+        // build via resolveAgentModel; honor it here too so the env/managed-default
+        // NAME matches the model actually built (no slot → the override wins).
+        modelName: getModelName(
+            resolvedSlot,
+            agentModelOptions.defaultModelOverride,
+        ),
+        callOptions: resolveSlotCallOptions(resolvedSlot),
+        providerOptions,
+    };
+}
+
+/**
+ * The reasoning `providerOptions` a call on this slot carries: the slot's own
+ * effort or override, else the env's, else the family default, else the
+ * caller's. Pure (no model build), so a caller can learn what will be sent
+ * before sending it.
+ */
+function resolveReasoningOptions(
+    resolvedSlot: NormalizedModel | undefined,
+    envDescriptor: ReturnType<typeof envManagedReasoningDescriptor>,
+    opts: Pick<
+        ResolveModelInvocationOptions,
+        | 'runName'
+        | 'suppressReasoning'
+        | 'telemetryMetadata'
+        | 'openrouterProviderOrder'
+        | 'openrouterAllowFallbacks'
+    > & { reasoningEffortDefault: ReasoningEffort },
+): {
+    providerOptions: Record<string, any>;
+    reasoningSlot: { provider: string; model: string } | undefined;
+} {
+    const {
+        runName,
+        suppressReasoning,
+        reasoningEffortDefault,
+        telemetryMetadata,
+        openrouterProviderOrder,
+        openrouterAllowFallbacks,
+    } = opts;
     // The env/managed path routes an `undefined` slot (no BYOK), so its provider +
     // model live in the env config, NOT the slot. Recover them for the reasoning
     // computation ONLY — so an env-configured reasoner (Opus/Kimi/GLM) gets the
     // SAME family-default thinking a connected BYOK slot of that model would. The
-    // model BUILD still flows through resolveAgentModel above (it reads the env
+    // model BUILD flows through resolveAgentModel in resolveModelConfig (it reads the env
     // itself); this descriptor only feeds the reasoning-effort default and the
     // provider-options namespace. A real BYOK slot always wins over it.
-    const reasoningSlot: NormalizedModel | { provider: string; model: string } | undefined =
+    const reasoningSlot:
+        NormalizedModel | { provider: string; model: string } | undefined =
         resolvedSlot ?? envDescriptor;
 
     // `suppressReasoning` forces reasoning OFF (effort 'none', override dropped) —
@@ -165,16 +228,33 @@ export function resolveModelConfig(
         openrouterAllowFallbacks,
     });
 
-    return {
-        model,
-        // `defaultModelOverride` (in agentModelOptions) already reached the model
-        // build via resolveAgentModel; honor it here too so the env/managed-default
-        // NAME matches the model actually built (no slot → the override wins).
-        modelName: getModelName(
-            resolvedSlot,
-            agentModelOptions.defaultModelOverride,
-        ),
-        callOptions: resolveSlotCallOptions(resolvedSlot),
-        providerOptions,
-    };
+    return { providerOptions, reasoningSlot };
+}
+
+/**
+ * The reasoning budget an agent-loop call on this slot (or, without one, on
+ * the env-managed model) sends on top of its answer cap: Anthropic and
+ * Bedrock ask for `max_tokens = answer + thinking budget`, and the window
+ * must hold that too. Zero for an adapter that keeps reasoning inside the
+ * answer cap.
+ */
+export function reasoningBudgetAddedToAnswer(
+    slot: NormalizedModel | undefined,
+): number {
+    try {
+        const { providerOptions, reasoningSlot } = resolveReasoningOptions(
+            slot,
+            slot ? undefined : envManagedReasoningDescriptor(),
+            { runName: 'answerCapBudget', reasoningEffortDefault: 'low' },
+        );
+        return (
+            budgetAddedToAnswerCap(
+                providerOptions,
+                reasoningSlot,
+                optionsNamespace(reasoningSlot),
+            ) ?? 0
+        );
+    } catch {
+        return 0;
+    }
 }

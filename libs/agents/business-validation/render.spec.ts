@@ -320,4 +320,32 @@ describe('one criterion, however the model spells it', () => {
         expect(summary).toContain('save');
         expect(summary).toContain('cancel');
     });
+
+    it('names three met rows apart when two of them differ only late', () => {
+        const met = outcome({ passed: true });
+        met.passed = true;
+        const [first] = met.checks[0].verdict.requirements!;
+        const page =
+            'Given a signed-in user on the account settings page when they ';
+        const save = `${page}save their profile after validating the submitted fields then the `;
+        met.checks[0].verdict.requirements = [
+            `${save}display name is persisted`,
+            `${save}timezone is persisted`,
+            `${page}cancel the edit then no changes are persisted`,
+        ].map((requirement) => ({
+            ...first,
+            state: 'met' as const,
+            source: 'Parent',
+            requirement,
+        }));
+        met.checks[0].verdict.outOfScope = [];
+        const summary = renderComment(met)
+            .split('\n')
+            .find((line) => line.includes(' met: '))!;
+        const names = summary
+            .slice(summary.indexOf(' met: ') + 6)
+            .split(/, (?=…)/);
+        expect(names).toHaveLength(3);
+        expect(new Set(names).size).toBe(3);
+    });
 });

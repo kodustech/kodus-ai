@@ -407,7 +407,9 @@ function metLabel(
 /**
  * The met rows' names, each once: two requirements whose shortened words read
  * the same (BDD criteria share a long "Given …" prefix) are named from where
- * their words differ.
+ * their words differ. Each is shown from its furthest first difference with
+ * any twin, so it parts from all of them; a name still shared then gets its
+ * place among the twins.
  */
 function metNames(
     met: RequirementVerdict[],
@@ -418,7 +420,7 @@ function metNames(
     names.forEach((name, i) => {
         byName.set(name, [...(byName.get(name) ?? []), met[i]]);
     });
-    return names.map((name, i) => {
+    const shown = names.map((name, i) => {
         const twins = byName.get(name)!;
         if (twins.length < 2) {
             return name;
@@ -430,7 +432,7 @@ function metNames(
         if (!others.length) {
             return name;
         }
-        const differsAt = Math.min(
+        const differsAt = Math.max(
             ...others.map((other) => {
                 let at = 0;
                 while (at < text.length && text[at] === other[at]) at++;
@@ -444,5 +446,16 @@ function metNames(
         return `${from > 0 ? '…' : ''}${
             part.length > 57 ? `${sliceWhole(part, 57)}…` : part
         }`;
+    });
+    const times = new Map<string, number>();
+    shown.forEach((name) => times.set(name, (times.get(name) ?? 0) + 1));
+    const seen = new Map<string, number>();
+    return shown.map((name) => {
+        if (times.get(name)! < 2) {
+            return name;
+        }
+        const nth = (seen.get(name) ?? 0) + 1;
+        seen.set(name, nth);
+        return `${name} (${nth})`;
     });
 }
