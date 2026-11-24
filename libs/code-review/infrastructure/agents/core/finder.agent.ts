@@ -1013,6 +1013,30 @@ export async function runFinderWithVerify(
             },
             ctx,
         );
+        // A provider failure comes back as an error-status RunState, not a
+        // throw (#2453), so the catch below never sees it: the lenses kept
+        // running and verify spent tokens on findings the caller then threw
+        // away with the generalist's error. Stop them here and skip the
+        // passes whose output that error discards.
+        if (finderState.status === 'error') {
+            lensStop.abort();
+            return {
+                finderState,
+                baseStat: passStatOf(finderState, {
+                    label: 'generalist-base',
+                    added: 0,
+                    ms: Date.now() - baseT0,
+                    startMs: 0,
+                    startEpochMs: baseT0,
+                }),
+                recall: {
+                    findings: { reasoning: '', suggestions: [] },
+                    usage: ZERO_VERIFY_USAGE,
+                    passStats: [],
+                    states: [],
+                },
+            };
+        }
         // Main finder findings — with prose-recovery applied (the same wrapper the
         // recall passes use, so an omission in any pass is caught consistently).
         const baseMs = Date.now() - baseT0;
@@ -1057,7 +1081,8 @@ export async function runFinderWithVerify(
         );
         return { finderState, baseStat, recall };
     })().catch(stopLenses);
-    const lensResult = lenses ? await lenses : null;
+    // An aborted lens may reject; the abort is the expected path here.
+    const lensResult = lenses ? await lenses.catch(() => null) : null;
     const reasoning = recall.findings.reasoning;
     const suggestions = lensResult
         ? mergeSuggestions(recall.findings, {

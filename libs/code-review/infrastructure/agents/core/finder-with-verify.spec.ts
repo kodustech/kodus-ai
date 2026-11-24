@@ -783,3 +783,67 @@ describe('buildFinderAgentSpec — label enum', () => {
         expect(labelEnum(['custom_agent'])).toEqual(all);
     });
 });
+
+describe('runFinderWithVerify (generalist failed at the provider)', () => {
+    it('stops the lenses and skips verify when the runner returns an error state', async () => {
+        // The AI SDK runner reports a provider throw as `status: 'error'`
+        // instead of throwing, so the kind of failure #2453 describes never
+        // reached the catch that stops the lenses. They kept running, verify
+        // spent tokens on their findings, and the caller discarded both with
+        // the generalist's error.
+        let lensAborted = false;
+        let lensStarted = false;
+        const run = jest.fn().mockResolvedValue({
+            status: 'error',
+            steps: [],
+            toolCalls: [],
+            usage: {
+                inputTokens: 10,
+                outputTokens: 0,
+                reasoningTokens: 0,
+                cacheReadTokens: 0,
+            },
+            error: {
+                message: 'The provider refused the request for this model',
+            },
+        });
+
+        const r = await runFinderWithVerify(
+            {
+                runner: { run } as any,
+                finderSpec: {} as any,
+                modelId: 'mock',
+                tools: new InMemoryToolRegistry([]),
+                heavyLenses: (_params, lensCtx) => {
+                    lensStarted = true;
+                    return new Promise<any>((resolve) => {
+                        lensCtx.signal.addEventListener('abort', () => {
+                            lensAborted = true;
+                            resolve({
+                                suggestions: [],
+                                usage: {
+                                    inputTokens: 99,
+                                    outputTokens: 0,
+                                    reasoningTokens: 0,
+                                    cacheReadTokens: 0,
+                                },
+                                passStats: [],
+                                investigatedFiles: new Set<string>(),
+                                outcomes: [],
+                            });
+                        });
+                    });
+                },
+            },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(lensStarted).toBe(true);
+        expect(lensAborted).toBe(true);
+        expect(r.finderState.status).toBe('error');
+        expect(r.kept).toEqual([]);
+        // Only the generalist ran: no recall pass, no verify.
+        expect(run).toHaveBeenCalledTimes(1);
+    });
+});
