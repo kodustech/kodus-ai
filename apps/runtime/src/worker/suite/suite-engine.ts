@@ -32,11 +32,12 @@ import {
 } from '@libs/runtime/suite';
 
 import { collectCoverage, type CoverageMapRecord, coverageDirOf } from './coverage-collector';
-import { type DetachedOutcome, runDetached } from './detached-exec';
+import { type DetachedOutcome, runDetached, safeResultsGlob } from './detached-exec';
 import type { BaselineSpec, PgSuiteBaselines } from './pg-suite-baselines';
 import type { PgSuiteRuns, SuitePhase, SuiteRunState, SuiteSpecStatus } from './pg-suite-runs';
 import type { PgSuiteSpecStats } from './pg-suite-spec-stats';
 import type { SuiteArtifactKeeper } from './suite-artifacts';
+import { cleanSpecResult } from './result-hygiene';
 import { execInService } from './suite-environment';
 import type { Canary } from '../canary/canary';
 import type { SuiteShardHost } from '../../shared/persistence/suite-demand';
@@ -588,6 +589,8 @@ export class SuiteEngine {
 
     private async clearResults(ctx: RunCtx, claimId: string, key: string): Promise<void> {
         const { config } = ctx.inputs;
+        // The glob goes into a shell unquoted (it must expand): only a plain path pattern inside the cwd ever reaches it.
+        if (!safeResultsGlob(config.resultsGlob)) return;
         await this.execIn(config).exec(claimId, { stepId: `${key}:clear`, command: `rm -f -- ${config.resultsGlob}`, ...(config.cwd ? { cwd: config.cwd } : {}), timeoutMs: READ_TIMEOUT_MS });
     }
 
@@ -635,7 +638,9 @@ export class SuiteEngine {
                 const spec = plannedNameOf(p.spec, col.planned);
                 // A file of an earlier run in the same directory, or a spec this run was not asked for, is not this run's result.
                 if (!col.planned.has(spec) || col.done.has(spec)) continue;
-                const result = { ...p, spec };
+                // Titles and errors are the customer's code talking: redacted and bounded before anything stores them; a canary halts the suite.
+                const { result, leaked } = cleanSpecResult({ ...p, spec }, ctx.inputs.canaries ?? []);
+                if (leaked) ctx.leaked = true;
                 col.done.set(spec, result);
                 fresh.push(result);
                 if (this.failsFast(ctx, col)) ctx.finished.push({ spec, failed: result.status === 'failed' });

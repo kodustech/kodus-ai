@@ -78,6 +78,15 @@ describe('the artifacts of a suite run', () => {
         if (keeper.calls.length > 1) expect(remaining[1]).toBe(1000 - keeper.calls.filter((_, i) => i === 0).length * 600);
     });
 
+    it('a canary a test printed into its failure message halts the suite like one in an artifact, and is never stored', async () => {
+        const core = 'c0ffee5eed1234ab';
+        const keeper = new FakeKeeper(() => ({ leaked: false }));
+        const w = world({ specs: { ...oks, 'red.cy.ts': { pr: [{ fail: `token kdcanary-${core} rejected` }] } } }, keeper);
+        const out = await w.engine.run(pr, w.inputs({ canaries: [{ slot: 'npmrc', value: `kdcanary-${core}`, core }] }));
+        expect(out).toMatchObject({ state: 'failed', leaked: true });
+        expect(JSON.stringify(await w.runs.results(ORG, pr.suiteRunId))).not.toContain(core);
+    });
+
     it('a canary in an artifact halts the suite: no re-run, no main host, the run ends failed, and it says it leaked', async () => {
         const keeper = new FakeKeeper(() => ({ leaked: true }));
         const w = world({ specs: { ...oks, 'red.cy.ts': { pr: [{ fail: 'boom' }] } } }, keeper);

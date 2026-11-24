@@ -72,7 +72,13 @@ const KEY = /^[A-Za-z0-9._-]{1,128}$/;
 const SAFE_PATH = /^[A-Za-z0-9_.\/*?-]{1,256}$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 
-const safePath = (p: string) => SAFE_PATH.test(p) && !p.startsWith('/') && !p.split('/').includes('..');
+/**
+ * A results glob that stays inside the directory it starts in: no absolute path, no `..`, and no segment that starts with a
+ * dot and holds a wildcard (`.?` and `.*` expand to `..` in the shell).
+ */
+export const safeResultsGlob = (p: string): boolean =>
+    SAFE_PATH.test(p) && !p.startsWith('/') && p.split('/').every((seg) => seg !== '..' && !(seg.startsWith('.') && /[*?]/.test(seg)));
+const safePath = safeResultsGlob;
 const quote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 export async function runDetached(i: DetachedRunInput): Promise<DetachedOutcome> {

@@ -102,6 +102,17 @@ export class PgSuiteReader implements RuntimeSuiteReader {
         };
     }
 
+    async liveRunAfter(organizationId: string, environmentId: string, prNumber: number, after: string, withinMs: number): Promise<boolean> {
+        const r = await this.db.query(
+            `SELECT 1 FROM runtime.runtime_suite_runs
+              WHERE organization_id = $1 AND environment_id = $2 AND pr_number = $3 AND mode <> 'shadow'
+                AND requested_at > $4 AND requested_at > now() - make_interval(secs => $5::double precision / 1000) AND finished_at IS NULL
+              LIMIT 1`,
+            [organizationId, environmentId, prNumber, after, withinMs],
+        );
+        return r.rows.length > 0;
+    }
+
     async selectionState(organizationId: string, environmentId: string): Promise<StoredSelectionState> {
         const r = await this.db.query(`SELECT off, off_by, full_prs_left, reenabled_at FROM runtime.runtime_suite_selection_state WHERE organization_id = $1 AND environment_id = $2`, [organizationId, environmentId]);
         const x = r.rows[0];

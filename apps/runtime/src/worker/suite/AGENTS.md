@@ -48,7 +48,7 @@ The runtime-worker's side of running a repository's own e2e suite (docs/runtime/
 
 ## Module map
 
-Files (19, tests apart): `coverage-collector.ts`, `detached-exec.ts`, `pg-suite-baselines.ts`, `pg-suite-coverage-maps.ts`, `pg-suite-runs.ts`, `pg-suite-shadows.ts`, `pg-suite-spec-stats.ts`, `spec-lister.ts`, `suite-adapters.ts`, `suite-artifacts.ts`, `suite-canceller.ts`, `suite-config.ts`, `suite-engine.ts`, `suite-environment.ts`, `suite-publisher.ts`, `suite-service.ts`, `suite-stage.ts`, `suite-wiring.ts`, `testing.ts`
+Files (20, tests apart): `coverage-collector.ts`, `detached-exec.ts`, `pg-suite-baselines.ts`, `pg-suite-coverage-maps.ts`, `pg-suite-runs.ts`, `pg-suite-shadows.ts`, `pg-suite-spec-stats.ts`, `result-hygiene.ts`, `spec-lister.ts`, `suite-adapters.ts`, `suite-artifacts.ts`, `suite-canceller.ts`, `suite-config.ts`, `suite-engine.ts`, `suite-environment.ts`, `suite-publisher.ts`, `suite-service.ts`, `suite-stage.ts`, `suite-wiring.ts`, `testing.ts`
 
 Imports these Runtime modules:
 

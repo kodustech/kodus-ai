@@ -97,6 +97,21 @@ const at = (day: number, hour = 10) => new Date(Date.UTC(2026, 10, day, hour));
             ]);
         });
 
+        it('sees a later run of the same PR that has not ended, never a finished one, another PR\'s, a shadow or an old stuck one', async () => {
+            const recent = new Date(Date.now() - 60_000);
+            await run('sr-src', { requested: new Date(Date.now() - 600_000), finished: new Date(Date.now() - 300_000) });
+            const after = new Date(Date.now() - 300_000).toISOString();
+            await run('sr-done', { requested: recent, finished: new Date() });
+            await run('sr-other-pr', { requested: recent, finished: null, pr: 8 });
+            await run('sr-shadow', { requested: recent, finished: null, mode: 'shadow' });
+            expect(await reader.liveRunAfter('org-a', 'env-1', 7, after, 7_200_000)).toBe(false);
+            await run('sr-stuck', { requested: new Date(Date.now() - 3 * 3_600_000), finished: null });
+            expect(await reader.liveRunAfter('org-a', 'env-1', 7, new Date(Date.now() - 4 * 3_600_000).toISOString(), 7_200_000)).toBe(false);
+            await run('sr-live', { requested: recent, finished: null });
+            expect(await reader.liveRunAfter('org-a', 'env-1', 7, after, 7_200_000)).toBe(true);
+            expect(await reader.liveRunAfter('org-b', 'env-1', 7, after, 7_200_000)).toBe(false);
+        });
+
         it('says nothing of machine time for a run stored before it was measured', async () => {
             await run('sr-old');
             const got = await reader.get('org-a', 'sr-old');

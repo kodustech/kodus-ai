@@ -52,6 +52,9 @@ class FakeSuiteReader implements RuntimeSuiteReader {
     async selectionState() {
         return this.selection;
     }
+    async liveRunAfter(organizationId: string, environmentId: string, prNumber: number, after: string) {
+        return this.runs.some((r) => r.run.organizationId === organizationId && r.run.environmentId === environmentId && r.run.prNumber === prNumber && r.run.requestedAt > after && !r.run.finishedAt);
+    }
     async lastBaseline() {
         return { sha: MAIN, specs: 24, passed: 22, failed: 2, finishedAt: '2026-10-29T10:00:00.000Z' };
     }
@@ -136,6 +139,15 @@ describe('POST /runtime/runs/:id/suite/retry', () => {
         // The retry is a suite run of its own: its check is written under its id, to the PR of the Run.
         const target = await w.targets.get(out.suiteRunId);
         expect(target).toMatchObject({ pullRequestNumber: 7, repositoryId: REPO, headSha: HEAD });
+    });
+
+    it('refuses a re-run while an earlier re-run of the same suite still runs, before any token is minted', async () => {
+        const w = await world();
+        const source = w.reader.runs[0].run;
+        w.reader.runs.push({ ...stored(), run: { ...source, suiteRunId: 'retry-1', requestedAt: new Date(Date.parse(source.finishedAt!) + 60_000).toISOString(), finishedAt: undefined, state: 'running' } });
+        await expect(w.retry.execute({ user: owner, runId: RUN.runId })).rejects.toThrow('A re-run of this suite is still running');
+        expect(w.issued).toEqual([]);
+        expect(w.outbox.rows).toEqual([]);
     });
 
     it('asking twice in the same minute is one retry', async () => {

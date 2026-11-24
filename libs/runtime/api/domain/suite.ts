@@ -112,6 +112,11 @@ export interface StoredSuiteSavings {
 export interface RuntimeSuiteReader {
     /** A suite run with its plan and its stored results; null for an id the organization does not hold. */
     get(organizationId: string, suiteRunId: string): Promise<StoredSuiteRun | null>;
+    /**
+     * A suite run of the same environment and PR asked for after `after` that has not ended (a re-run of it, or a newer run),
+     * within the last `withinMs`: a row a crashed worker never finished does not block forever.
+     */
+    liveRunAfter(organizationId: string, environmentId: string, prNumber: number, after: string, withinMs: number): Promise<boolean>;
     selectionState(organizationId: string, environmentId: string): Promise<StoredSelectionState>;
     lastBaseline(organizationId: string, environmentId: string): Promise<StoredBaselineSummary | null>;
     /** The newest miss since selection was last turned on (`since`, when given). */

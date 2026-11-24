@@ -1,4 +1,4 @@
-import { POLL_TIMEOUT_MS, runDetached } from './detached-exec';
+import { POLL_TIMEOUT_MS, runDetached, safeResultsGlob } from './detached-exec';
 import { FakeSuiteEnvironment, SuiteClock } from './testing';
 
 // docs/runtime/e2e-suites.md section 4: exec caps timeoutMs at 600 s and a call returns 192 KiB, so a 10 to 25 minute
@@ -109,6 +109,14 @@ describe('a suite command run detached', () => {
         const env = { exec: async () => ({ code: 'cell_unavailable' as const, cellId: 'c' }) };
         const r = await runDetached({ env, claimId: 'c', key, command: 'true', resultsGlob: 'r/*.xml', timeoutMs: MIN, now: clock.now, sleep: clock.sleep });
         expect(r).toMatchObject({ outcome: 'infra', reason: 'start_failed' });
+    });
+
+    it('refuses a results glob whose dot-wildcard segments would expand to a parent directory', async () => {
+        for (const resultsGlob of ['.?/.?/etc/*.xml', 'r/.*/x.xml', '../x.xml', '/etc/*.xml']) {
+            const w = world({ runMs: MIN }, { resultsGlob });
+            expect(await w.go()).toMatchObject({ outcome: 'infra', reason: 'bad_results_glob' });
+        }
+        expect(['results/*.xml', 'cypress/results/**/*.xml', 'r/.reports/x.xml'].every(safeResultsGlob)).toBe(true);
     });
 
     it('refuses a results glob that is more than a path pattern, before running anything', async () => {

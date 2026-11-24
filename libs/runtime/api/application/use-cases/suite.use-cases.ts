@@ -56,6 +56,9 @@ export class GetRuntimeRunSuiteUseCase {
     }
 }
 
+/** How long an unfinished re-run blocks the next: past it, the row is taken to be one a crashed worker never ended. */
+const RETRY_LIVE_WINDOW_MS = 2 * 60 * 60_000;
+
 /**
  * POST /runtime/runs/:id/suite/retry — "Re-run failed": gated like "Run again" (it starts the repository's code again). A suite that still
  * runs, a run with nothing red and a recipe that no longer declares a suite are conflicts, answered before any token is minted.
@@ -73,6 +76,10 @@ export class RetryRuntimeRunSuiteUseCase {
         const stored = await suiteOf(this.reader, run);
         if (!stored.run.finishedAt) throw new ConflictException('The suite is still running');
         if (!stored.results.some((r) => r.phase === 'shard' && RED.has(r.status))) throw new ConflictException('No spec of this suite is left to run again');
+        // Each re-run mints tokens and starts hosts: one at a time per suite, so a person cannot stack them a minute apart.
+        if (stored.run.prNumber !== undefined && (await this.reader.liveRunAfter(stored.run.organizationId, stored.run.environmentId, stored.run.prNumber, stored.run.finishedAt, RETRY_LIVE_WINDOW_MS))) {
+            throw new ConflictException('A re-run of this suite is still running');
+        }
         const { suiteRunId } = await this.retrier.retryFailed({ user: input.user, run, suiteRunId: stored.run.suiteRunId, mainSha: stored.run.mainSha });
         return { suiteRunId, state: 'queued' };
     }
