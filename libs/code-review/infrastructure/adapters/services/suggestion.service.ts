@@ -59,7 +59,8 @@ import {
     resolvesSuggestionThread,
     statusesAtOrAbove,
 } from '@libs/platformData/domain/pullRequests/implementation-status';
-import { resolveContextWindow } from '@libs/llm/model-context-window';
+import { slotContextWindow } from '@libs/llm/slot-window';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import {
     prompt_checkSuggestionImplementation,
     type ImplementationCheckSuggestion,
@@ -299,11 +300,11 @@ export class SuggestionService implements ISuggestionService {
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
                 );
+            // The smaller of the slot's and its fallback's window (LLM.run
+            // re-sends the call to the fallback), else the env model's.
             const maxPromptTokens = Math.floor(
-                resolveContextWindow({
-                    byokMaxInputTokens: byokConfig?.maxInputTokens,
-                    modelName: byokConfig?.model || '',
-                }) * IMPLEMENTATION_CHECK_PROMPT_SHARE,
+                slotContextWindow(byokConfig ?? undefined) *
+                    IMPLEMENTATION_CHECK_PROMPT_SHARE,
             );
 
             const requests = [...byFile].map(([filename, asks]) => ({
@@ -316,9 +317,13 @@ export class SuggestionService implements ISuggestionService {
                     file,
                     suggestions: asked,
                 });
-                // ~3 characters per token: generous for code, so a prompt that
-                // fits here fits the model.
-                if (Math.ceil(prompt.length / 3) <= maxPromptTokens) {
+                // Counted at its worst: 3 characters a token let a dense
+                // patch (an SVG, a fixture: ~1.2 a token) through at less
+                // than half its size (#2233).
+                if (
+                    estimateTextTokens(prompt, { worstCase: true }) <=
+                    maxPromptTokens
+                ) {
                     return true;
                 }
                 for (const { id } of asked) {

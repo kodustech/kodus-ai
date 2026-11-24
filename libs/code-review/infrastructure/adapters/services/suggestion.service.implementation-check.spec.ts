@@ -424,6 +424,58 @@ describe('SuggestionService.checkImplementedSuggestions', () => {
         ]);
     });
 
+    it('counts a dense patch at its real tokens, not at 3 characters a token (#2233)', async () => {
+        permissionValidationService.resolveTaskSlot.mockResolvedValue({
+            provider: 'openai_compatible',
+            model: 'local-open-weights',
+            maxInputTokens: 16_000,
+        });
+        // Numbers with no space between them: about 1.2 characters a token.
+        let seed = 3;
+        let patch = '+';
+        while (patch.length < 20_000) {
+            seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+            patch += `${seed % 256},`;
+        }
+
+        const result = await check(
+            [sent('s-1', 'assets/table.csv')],
+            [{ filename: 'assets/table.csv', patch }],
+        );
+
+        expect(
+            aiAnalysisService.checkSuggestionImplementation,
+        ).not.toHaveBeenCalled();
+        expect(result.unmeasured).toEqual([
+            { id: 's-1', reason: 'diff_too_large' },
+        ]);
+    });
+
+    it("sizes the check by the fallback's window when it is the smaller one", async () => {
+        permissionValidationService.resolveTaskSlot.mockResolvedValue({
+            provider: 'openai',
+            model: 'gpt-x',
+            maxInputTokens: 1_000_000,
+            fallback: {
+                provider: 'openai_compatible',
+                model: 'local-open-weights',
+                maxInputTokens: 1_000,
+            },
+        });
+
+        const result = await check(
+            [sent('s-1', 'app/a.rb')],
+            [{ filename: 'app/a.rb', patch: 'x'.repeat(10_000) }],
+        );
+
+        expect(
+            aiAnalysisService.checkSuggestionImplementation,
+        ).not.toHaveBeenCalled();
+        expect(result.unmeasured).toEqual([
+            { id: 's-1', reason: 'diff_too_large' },
+        ]);
+    });
+
     it('counts what the prompt carries for each suggestion, not just the patch, against the context window', async () => {
         permissionValidationService.resolveTaskSlot.mockResolvedValue({
             provider: 'openai',

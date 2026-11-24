@@ -1,7 +1,6 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { getModelId } from '@libs/llm/managed-slot';
-import { resolveContextWindow } from '@libs/llm/model-context-window';
 import { declaredAnswerTokens } from '@libs/llm/model-invocation';
+import { slotContextWindow } from '@libs/llm/slot-window';
 
 /** The most the analyzer may write when the slot sets no limit of its own. */
 export const ANALYZER_MAX_OUTPUT_TOKENS = 20_000;
@@ -14,27 +13,12 @@ const ANALYZER_OUTPUT_WINDOW_SHARE = 0.25;
 
 type Slot = Omit<NormalizedModel, 'fallback'>;
 
-function windowOf(slot: Slot): number {
-    return resolveContextWindow({
-        byokMaxInputTokens: slot.maxInputTokens,
-        modelName: slot.model ?? '',
-    });
-}
-
 /**
  * The input window every call of the judge must fit: the smaller of the
- * slot's and its fallback's, since `LLM.run` sends the same request to the
- * fallback when the primary fails. Without a slot, the window of the model
- * that runs then: the env-configured one on a self-hosted install, else the
- * managed default.
+ * slot's and its fallback's; without a slot, the env or managed model's.
  */
 export function judgeWindow(model: NormalizedModel | undefined): number {
-    if (!model) {
-        return resolveContextWindow({ modelName: getModelId(undefined) });
-    }
-    return model.fallback
-        ? Math.min(windowOf(model), windowOf(model.fallback))
-        : windowOf(model);
+    return slotContextWindow(model);
 }
 
 /** The answer the analyzer asks for: 20k tokens, or a quarter of a smaller window. */

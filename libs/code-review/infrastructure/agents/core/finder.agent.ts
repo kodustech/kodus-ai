@@ -14,6 +14,7 @@ import type {
     AgentSpec,
 } from '@libs/agent-harness/domain/contracts/agent.contract';
 import type { Compressor } from '@libs/agent-harness/domain/contracts/compression.contract';
+import type { AgentPolicy } from '@libs/agent-harness/domain/contracts/policy.contract';
 import type { ProgressLedger } from '@libs/agent-harness/domain/contracts/progress.contract';
 import type {
     RunState,
@@ -1130,6 +1131,11 @@ export async function runFinderWithVerify(
     const hv2 = await verifyFindings(
         {
             ...params,
+            // The finder's own window guard: a verify run reads and re-sends
+            // files on up to ten steps (#2233).
+            compression: params.finderSpec.policies.find(
+                (p) => p.name === 'compression',
+            ),
             runner: verify.runner,
             modelId: verify.modelId,
             fallbackModelId: verify.fallbackModelId,
@@ -1275,7 +1281,10 @@ export async function verifyFindings(
         | 'repoInstructions'
         | 'checksInstructionCitations'
         | 'laneFocus'
-    >,
+    > & {
+        /** The finder's compression, for every verify run (#2233). */
+        compression?: AgentPolicy;
+    },
     suggestions: FinderSuggestion[],
     investigated: Set<string>,
     ctx: ToolContext,
@@ -1346,6 +1355,7 @@ export async function verifyFindings(
     // evidence gate below re-verifies at the full depth.
     const verifier = new LlmVerifier(params.runner, {
         modelId: params.modelId,
+        compression: params.compression,
         fallbackModelId: params.fallbackModelId,
         tools: params.tools,
         providerOptions: params.providerOptions,
@@ -1381,6 +1391,7 @@ export async function verifyFindings(
     if (unevidenced.length > 0) {
         const fullVerifier = new LlmVerifier(params.runner, {
             modelId: params.modelId,
+            compression: params.compression,
             fallbackModelId: params.fallbackModelId,
             tools: params.tools,
             forceFull: true,
