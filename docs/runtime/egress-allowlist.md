@@ -685,7 +685,7 @@ URL up to the id.
 |---|---|---|---|---|---|
 | `firebase-emulators` | `storage.googleapis.com` | `/firebase-preview-drop/emulator/` | `firebase-database-emulator-v<x.y.z>.jar`, `cloud-firestore-emulator-v<x.y.z>.jar`, `cloud-storage-rules-runtime-v<x.y.z>.jar`, `ui-v<x.y.z>.zip`, `pubsub-emulator-<x.y.z>.zip` | 256 MiB | firebase-tools (no mirror variable: see below) |
 | `firebase-dataconnect` | `storage.googleapis.com` | `/firemat-preview-drop/emulator/` | `dataconnect-emulator-linux[-amd64]-v<x.y.z>` | 256 MiB | firebase-tools (same) |
-| `prisma` | `binaries.prisma.sh` | `/all_commits/` | `<40 hex>/<linux target>/(libquery_engine.so.node\|query-engine\|schema-engine).gz`, plus `.gz.sha256` | 64 MiB | `PRISMA_ENGINES_MIRROR` |
+| `prisma` | `binaries.prisma.sh` | `/all_commits/` | `<40 hex>/<linux target>/(libquery_engine.so.node\|query-engine\|schema-engine).gz`, plus `.gz.sha256` and `.sha256` | 64 MiB | `PRISMA_ENGINES_MIRROR` |
 | `mongodb` | `fastdl.mongodb.org` | `/linux/` | `mongodb-linux-(x86_64\|aarch64)[-<distro>]-<x.y.z>[-rcN].tgz`, plus `.tgz.md5` | 512 MiB | `MONGOMS_DOWNLOAD_MIRROR` |
 | `cypress` | `cdn.cypress.io` | `/desktop/` | `<x.y.z>/linux-(x64\|arm64)/cypress.zip` | 512 MiB | `CYPRESS_DOWNLOAD_MIRROR` and `CYPRESS_DOWNLOAD_PATH_TEMPLATE` |
 
@@ -698,8 +698,10 @@ Verified shapes (read 2026-11-23 from the published npm packages, not run; sizes
   `${PRISMA_BINARIES_MIRROR || PRISMA_ENGINES_MIRROR || "https://binaries.prisma.sh"}/all_commits/<version>/<binaryTarget>/<binaryName>.gz`
   with `channel` fixed to `all_commits` by the caller; `binaryName` is `libquery_engine.so.node` (from
   `@prisma/get-platform` `getNodeAPIName`, 5.22.0 and 6.19.3), `query-engine` or `schema-engine` (`BinaryType`). The
-  checksum is `${url}.sha256`, that is `<file>.gz.sha256` (`downloadZip` `fetchChecksum`). A `.sig` exists upstream but
-  nothing requests it, and `.sha256` without `.gz` is not requested either, so neither is served. Target names come
+  checksums are `${url}.sha256` and the same with `.gz` dropped, that is `<file>.gz.sha256` and `<file>.sha256`:
+  `downloadZip` fetches both before the engine (`fetchChecksum(url)` and `fetchChecksum(url.slice(0, -3))`, 5.22.0), and
+  without the second every `prisma generate` stopped at a 404. A `.sig` exists upstream but nothing requests it, so it
+  is not served, nor is the engine unzipped. Target names come
   from `@prisma/get-platform`'s target list. Each Linux engine is about 8 MB (`schema-engine.gz` 8.06 MB for
   `debian-openssl-3.0.x`), so the cap went from 256 MiB to 64 MiB.
 - MongoDB: `mongodb-memory-server-core` 9.5.0 and 10.4.3, `MongoBinaryDownloadUrl.getDownloadUrl`:
@@ -746,7 +748,7 @@ names, and would not for an open path. The deny list still denies `storage.googl
 every claim for everything else (`cmd/egress` `TestTheArtifactHostsStayOnTheDenyListForEverythingElse`).
 
 Pinning. Not by checksum in the cell, deliberately. Each artifact is addressed by the version the tool asks for and
-the tool verifies it (Prisma downloads the `.gz.sha256` next to each engine, `mongodb-memory-server` checks `.md5`, firebase-tools compares each emulator with the hash of its release). A hash list in the cell would have to
+the tool verifies it (Prisma downloads the `.gz.sha256` and `.sha256` next to each engine, `mongodb-memory-server` checks `.md5`, firebase-tools compares each emulator with the hash of its release). A hash list in the cell would have to
 follow every release of three publishers and would fail a build the day one ships a version. What stays closed is the
 path, the method, the size and the source. A recipe that needs a hard pin pins it in its own Dockerfile (`sha256sum -c`).
 

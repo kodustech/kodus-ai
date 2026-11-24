@@ -37,8 +37,8 @@ func (e ArtifactEntry) matches(name string) bool { return e.Name.MatchString(nam
 // code owner approves (it is part of the egress list's change rule).
 //
 // None is pinned by checksum here: each is addressed by a version the tool
-// asks for, and the tool checks what it downloads (Prisma's .gz.sha256 next to
-// each engine, mongodb-memory-server's .md5, firebase-tools' own
+// asks for, and the tool checks what it downloads (Prisma's .gz.sha256 and .sha256
+// next to each engine, mongodb-memory-server's .md5, firebase-tools' own
 // expected hash per emulator version), as npm's client checks a lockfile's
 // integrity. A hash list here would have to follow every release of three
 // publishers and would break builds the day one ships. What the mirror keeps
@@ -71,13 +71,15 @@ func DefaultArtifacts() []ArtifactEntry {
 			Name: nameRE(`dataconnect-emulator-linux(?:-amd64)?-v[0-9]+\.[0-9]+\.[0-9]+`), MaxBytes: 256 << 20,
 		},
 		// Prisma's engines (@prisma/fetch-engine 5.22.0 and 6.19.3, getDownloadUrl):
-		// <PRISMA_ENGINES_MIRROR>/all_commits/<engines commit>/<binary target>/<engine>.gz
-		// and the `.gz.sha256` next to it; nothing else (the `.sig` the
-		// publisher also keeps is never requested). The three engine names
-		// are the BinaryType values; an engine is about 8 MB.
+		// <PRISMA_ENGINES_MIRROR>/all_commits/<engines commit>/<binary target>/<engine>.gz,
+		// plus both checksums downloadZip fetches before it: `<engine>.gz.sha256`
+		// (the zip) and `<engine>.sha256` (the engine unzipped). Nothing else:
+		// the `.sig` the publisher also keeps is never requested, nor is the
+		// engine unzipped. The three engine names are the BinaryType values; an
+		// engine is about 8 MB.
 		{
 			ID: "prisma", Upstream: mustURL("https://binaries.prisma.sh"), PathPrefix: "/all_commits/",
-			Name: nameRE(`[0-9a-f]{40}/(?:(?:debian|rhel)-openssl-[0-9]+\.[0-9]+\.x|linux-(?:musl-)?(?:arm64-)?openssl-[0-9]+\.[0-9]+\.x|linux-musl|linux-static-(?:x64|arm64))/(?:libquery_engine\.so\.node|query-engine|schema-engine)\.gz(?:\.sha256)?`), MaxBytes: 64 << 20,
+			Name: nameRE(`[0-9a-f]{40}/(?:(?:debian|rhel)-openssl-[0-9]+\.[0-9]+\.x|linux-(?:musl-)?(?:arm64-)?openssl-[0-9]+\.[0-9]+\.x|linux-musl|linux-static-(?:x64|arm64))/(?:libquery_engine\.so\.node|query-engine|schema-engine)(?:\.gz(?:\.sha256)?|\.sha256)`), MaxBytes: 64 << 20,
 		},
 		// The Cypress app (cypress 13.x and 14.x, lib/tasks/download.js): its
 		// npm package's postinstall downloads it, and `cypress run` needs it.

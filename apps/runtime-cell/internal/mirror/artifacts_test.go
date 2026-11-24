@@ -216,6 +216,9 @@ func TestTheFixedListSpellsWhatTheToolsReallyRequest(t *testing.T) {
 			commit + "/debian-openssl-1.1.x/query-engine.gz",
 			commit + "/debian-openssl-3.0.x/schema-engine.gz",
 			commit + "/debian-openssl-3.0.x/schema-engine.gz.sha256",
+			// downloadZip fetches the unzipped engine's checksum too (fetchChecksum(url without .gz)).
+			commit + "/debian-openssl-3.0.x/libquery_engine.so.node.sha256",
+			commit + "/linux-arm64-openssl-3.0.x/schema-engine.sha256",
 			commit + "/linux-musl-openssl-3.0.x/schema-engine.gz",
 			commit + "/linux-arm64-openssl-3.0.x/libquery_engine.so.node.gz",
 			commit + "/linux-musl-arm64-openssl-3.0.x/query-engine.gz",
@@ -239,7 +242,7 @@ func TestTheFixedListSpellsWhatTheToolsReallyRequest(t *testing.T) {
 		},
 		"firebase-dataconnect": {"dataconnect-emulator-macos-amd64-v2.17.3", "dataconnect-emulator-linux-arm64-v2.17.3", "dataconnect-emulator-linux-amd64-v2.17.3.exe", "dataconnect-emulator-linux-v1"},
 		"prisma": {
-			commit + "/debian-openssl-3.0.x/libquery_engine.so.node.gz.sig", commit + "/debian-openssl-3.0.x/libquery_engine.so.node.sha256",
+			commit + "/debian-openssl-3.0.x/libquery_engine.so.node.gz.sig", commit + "/debian-openssl-3.0.x/schema-engine.sha256.gz",
 			commit + "/debian-openssl-3.0.x/libquery_engine.so.node", commit + "/darwin-arm64/schema-engine.gz",
 			commit + "/windows/schema-engine.exe.gz", commit + "/debian-openssl-3.0.x/prisma-fmt.gz", "latest/debian-openssl-3.0.x/schema-engine.gz",
 			commit[:39] + "/debian-openssl-3.0.x/schema-engine.gz", commit + "/debian-openssl-3.0.x/schema-engine.gz/x",
