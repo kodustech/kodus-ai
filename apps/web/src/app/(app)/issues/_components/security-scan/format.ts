@@ -88,6 +88,7 @@ export const formatScanOutcome = (
         [outcome.resolved, "resolved"],
         [outcome.dismissed, "dismissed"],
         [outcome.refuted ?? 0, "refuted on verification"],
+        [outcome.consolidated ?? 0, "folded as duplicates"],
     ] as const;
 
     const nonZero = parts.filter(([count]) => count > 0);

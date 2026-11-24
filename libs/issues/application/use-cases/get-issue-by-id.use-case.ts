@@ -169,6 +169,8 @@ export class GetIssueByIdUseCase implements IUseCase {
                     endLine: issue.endLine,
                     evidence: issue.evidence,
                     lastSeenAt: issue.lastSeenAt,
+                    occurrences: issue.occurrences,
+                    duplicateOf: issue.duplicateOf,
                 },
                 owner: issue.owner,
             }),

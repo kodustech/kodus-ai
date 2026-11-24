@@ -25,6 +25,7 @@ export type FixPromptIssue = Pick<
     | 'endLine'
     | 'evidence'
     | 'contributingSuggestions'
+    | 'occurrences'
 >;
 
 const SEVERITY_RANK = new Map(
@@ -122,6 +123,21 @@ function section(issue: FixPromptIssue, n: number): string {
     if (issue.evidence?.assumption?.trim()) {
         out.push(
             `What the finding depends on (not visible in the code; check it):\n${data(issue.evidence.assumption.trim())}`,
+        );
+    }
+
+    const places = issue.occurrences ?? [];
+    if (places.length) {
+        out.push(
+            `The same root cause also shows at these places; one fix should close all of them:\n${data(
+                places
+                    .slice(0, 20)
+                    .map(
+                        (p) =>
+                            `- ${p.filePath}:${p.startLine}${p.endLine !== p.startLine ? `-${p.endLine}` : ''}${p.symbol ? ` in ${p.symbol}` : ''} ${p.title}`,
+                    )
+                    .join('\n'),
+            )}`,
         );
     }
 

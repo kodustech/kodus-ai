@@ -51,6 +51,8 @@ export type SecurityScan = {
         resolved: number;
         /** Findings the independent check refuted: never reported. */
         refuted?: number;
+        /** Open issues folded into another with the same root cause. */
+        consolidated?: number;
     };
     modelName?: string;
     error?: string;

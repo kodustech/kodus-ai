@@ -244,3 +244,24 @@ describe('buildFixPrompt: what the scan could not settle', () => {
         expect(prompt).toContain('Add or update a test');
     });
 });
+
+describe('buildFixPrompt: one root cause, several places', () => {
+    it('lists every place one fix should close', () => {
+        const prompt = buildFixPrompt([
+            {
+                ...scanFinding,
+                occurrences: [
+                    {
+                        fingerprint: 'fp-route',
+                        title: 'Route reaches the order with no owner check',
+                        filePath: 'src/orders/orders.routes.ts',
+                        startLine: 3,
+                        endLine: 3,
+                    },
+                ],
+            },
+        ]);
+        expect(prompt).toContain('one fix should close all of them');
+        expect(prompt).toContain('src/orders/orders.routes.ts:3 Route reaches the order');
+    });
+});
