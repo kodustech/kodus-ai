@@ -168,12 +168,28 @@ describe('estimateTextTokens worstCase', () => {
         enc.free();
     });
 
+    it('counts a long digit run exactly in both modes: o200k cuts it in threes', () => {
+        const enc = get_encoding('o200k_base');
+        for (const text of ['9'.repeat(2_000), '12'.repeat(400)]) {
+            const exact = enc.encode_ordinary(text).length;
+            expect(estimateTextTokens(text)).toBe(exact);
+            expect(estimateTextTokens(text, { worstCase: true })).toBe(exact);
+        }
+        enc.free();
+    });
+
     it('still estimates one long letter piece, accents mixed in, and answers fast', () => {
         const run = 'aé'.repeat(20_000);
         const started = Date.now();
-        const tokens = estimateTextTokens(run, { cache: false });
+        const worst = estimateTextTokens(run, {
+            cache: false,
+            worstCase: true,
+        });
         expect(Date.now() - started).toBeLessThan(200);
-        expect(tokens).toBeGreaterThan(0);
+        // Never under what o200k counts: it is the limit a window holds to.
+        const enc = get_encoding('o200k_base');
+        expect(worst).toBeGreaterThanOrEqual(enc.encode_ordinary(run).length);
+        enc.free();
     });
 
     it('never counts a run of emoji, CJK or wide spaces under what o200k counts', () => {

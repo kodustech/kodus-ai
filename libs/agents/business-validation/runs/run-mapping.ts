@@ -84,7 +84,13 @@ export function toRunTasks(result: BusinessValidationResult): RunTask[] {
 /** What `sameResult` compares. */
 type ResultFields = Pick<
     NewValidationRun,
-    'outcome' | 'skipReason' | 'passed' | 'tasks' | 'unseenFiles' | 'attempts'
+    | 'outcome'
+    | 'skipReason'
+    | 'passed'
+    | 'tasks'
+    | 'unseenFiles'
+    | 'attempts'
+    | 'references'
 >;
 
 /**
@@ -119,9 +125,19 @@ function outlineKey(run: ResultFields): string {
         run.outcome,
         run.skipReason ?? null,
         run.passed ?? null,
-        // What it looked up, not every mention the text has: a description
-        // that adds "SHA-256" or "#2410" changes nothing the author reads.
+        // A verdict is about its tasks (below): what it looked up, not every
+        // mention the text has, so a description that adds "SHA-256" or
+        // "#2410" changes nothing the author reads. Without a verdict the
+        // comment names the references (none could be read, none found), so
+        // they are the result; a stored run with no lookups still has them.
         [...new Set((run.attempts ?? []).map((a) => a.reference))].sort(),
+        run.outcome === 'validated'
+            ? []
+            : [
+                  ...new Set(
+                      (run.references ?? []).map((r) => `${r.kind}:${r.id}`),
+                  ),
+              ].sort(),
         (run.tasks ?? [])
             .map((t) =>
                 [t.tracker, t.id, t.passed, t.scopeMismatch ?? false].join('|'),

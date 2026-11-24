@@ -386,7 +386,9 @@ export async function runAgentLoopViaCore(
                       slot?.maxOutputTokens && slot.maxOutputTokens > 0
                           ? slot.maxOutputTokens
                           : undefined,
-                      { providerOptions: verifyOptionsFor(slot) },
+                      // The run is configured once: its fallback attempt
+                      // sends these same options (agent-loop-call.ts).
+                      { providerOptions: verifyOptionsFor(verifySlot) },
                   )) ?? 0,
           )
         : 0;

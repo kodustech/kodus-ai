@@ -238,4 +238,28 @@ describe('sameResult (#2423)', () => {
             sameResult(looked(['PAY-123']), looked(['PAY-123', 'SHA-256'])),
         ).toBe(true);
     });
+
+    it('reads two tasks no tracker could read as different, though nothing was looked up', () => {
+        const unreadable = (id: string, withAttempts = true) =>
+            ({
+                outcome: 'skipped',
+                skipReason: 'no_capable_tracker',
+                tasks: [],
+                unseenFiles: [],
+                ...(withAttempts ? { attempts: [] } : {}),
+                references: [
+                    {
+                        kind: 'work_item',
+                        id,
+                        raw: `AB#${id}`,
+                        source: 'title',
+                        intent: 'closes',
+                    },
+                ],
+            }) as any;
+        expect(sameResult(unreadable('8'), unreadable('9'))).toBe(false);
+        expect(sameResult(unreadable('8'), unreadable('8'))).toBe(true);
+        // A stored run without lookups compares by what it names.
+        expect(sameResult(unreadable('8', false), unreadable('9'))).toBe(false);
+    });
 });
