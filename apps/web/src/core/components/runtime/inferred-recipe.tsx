@@ -15,6 +15,7 @@ import { agentPrompt } from "@services/runtime/model/agent-prompt";
 import {
     ENVIRONMENT_SECTION,
     INFERRED_RECIPE_CLEAN_BOOTS,
+    inferredSuiteOrigin,
     isRecipeFailureBlocker,
     recipeReauthorWords,
 } from "@services/runtime/model/environment";
@@ -49,7 +50,9 @@ const AgentPromptPopover = ({
                 Show the prompt
             </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="flex w-[28rem] flex-col gap-3 p-4">
+        <PopoverContent
+            align="end"
+            className="flex w-[28rem] flex-col gap-3 p-4">
             <span className="text-text-secondary text-xs">
                 Paste it in a checkout of {name}. The agent writes{" "}
                 <code className="font-mono">.kodus/workspace.yaml</code>, boots
@@ -179,10 +182,7 @@ export const InferredRecipe = ({
                                 file and a pull request.
                             </span>
                         </span>
-                        <AgentPromptPopover
-                            name={name}
-                            onCopy={copyPrompt}
-                        />
+                        <AgentPromptPopover name={name} onCopy={copyPrompt} />
                     </li>
                     <li className="bg-card-lv2 flex flex-col gap-0.5 rounded-lg px-4 py-3">
                         <span className="text-text-primary text-sm font-medium">
@@ -222,6 +222,11 @@ export const InferredRecipe = ({
     const proven =
         (setup.state === "active" && boots >= INFERRED_RECIPE_CLEAN_BOOTS) ||
         !!learned;
+
+    // The e2e suite block the recipe author copied from the repository's CI, said so the team checks it before merging.
+    const suiteOrigin = authored
+        ? inferredSuiteOrigin(learned?.content ?? recipe.content)
+        : null;
 
     const open = () =>
         propose.mutate(env.environmentId, {
@@ -289,6 +294,21 @@ export const InferredRecipe = ({
                         Kody&apos;s notes:
                     </span>{" "}
                     {recipe.notes}
+                </p>
+            )}
+            {suiteOrigin && (
+                <p
+                    role="note"
+                    aria-label="E2e suite origin"
+                    className="text-text-secondary text-sm break-words">
+                    <span className="text-text-primary font-medium">
+                        E2e suite:
+                    </span>{" "}
+                    Kody copied the suite block from the CI workflow{" "}
+                    <code className="font-mono">{suiteOrigin.file}</code>, job{" "}
+                    <code className="font-mono">{suiteOrigin.job}</code>: the
+                    runner, command, specs and shards it runs there. Check them
+                    before you merge the setup file.
                 </p>
             )}
             <pre

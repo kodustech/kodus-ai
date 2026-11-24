@@ -186,7 +186,9 @@ describe("InferredRecipe", () => {
         ).toBeInTheDocument();
         expect(ways).toHaveTextContent("Hand it to your coding agent");
         // The prompt is shown before it is copied.
-        fireEvent.click(screen.getByRole("button", { name: "Show the prompt" }));
+        fireEvent.click(
+            screen.getByRole("button", { name: "Show the prompt" }),
+        );
         expect(screen.getByLabelText("Prompt")).toHaveTextContent(
             "Write .kodus/workspace.yaml for this repository",
         );
@@ -218,6 +220,31 @@ describe("InferredRecipe", () => {
             screen.getByRole("button", { name: /Open the setup file PR/ }),
         );
         expect(mutate).toHaveBeenCalledWith("env-1", expect.any(Object));
+    });
+
+    it("says which CI workflow and job Kody copied the e2e suite block from, so it is checked before merging", () => {
+        const content = `${CONTENT}\n# suite: origin inferred from .github/workflows/e2e.yml job cypress; keys: runner, command, specs, shards, results. Edit it freely; results.junit is the engine's default glob.\nsuite:\n  runner: cypress\n`;
+        render(
+            <InferredRecipe
+                env={env(setup({}, { origin: "authored", content }))}
+                canPropose
+            />,
+        );
+        const note = screen.getByLabelText("E2e suite origin");
+        expect(note).toHaveTextContent(".github/workflows/e2e.yml");
+        expect(note).toHaveTextContent("job cypress");
+    });
+
+    it("says nothing of the suite's origin when the setup file has no inferred suite block", () => {
+        render(
+            <InferredRecipe
+                env={env(setup({}, { origin: "authored" }))}
+                canPropose
+            />,
+        );
+        expect(
+            screen.queryByLabelText("E2e suite origin"),
+        ).not.toBeInTheDocument();
     });
 
     it("a recipe Kody wrote that booted once asks for a second setup", () => {

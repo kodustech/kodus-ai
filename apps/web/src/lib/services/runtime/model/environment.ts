@@ -176,17 +176,22 @@ export const plainBootFailure = (message: string | undefined) => {
  */
 const waitsForAnotherSetup = (
     env: EnvironmentLike & { environmentId?: string },
-    organization: ReadonlyArray<Pick<RuntimeEnvironment, "environmentId" | "state">>,
+    organization: ReadonlyArray<
+        Pick<RuntimeEnvironment, "environmentId" | "state">
+    >,
 ) =>
     env.state === "setup_requested" &&
     organization.some(
-        (e) => e.environmentId !== env.environmentId && e.state === "setting_up",
+        (e) =>
+            e.environmentId !== env.environmentId && e.state === "setting_up",
     );
 
 /** `organization`: the organization's environments, when the screen has them, to tell a setup waiting its turn. */
 export const environmentStatus = (
     env: (EnvironmentLike & { environmentId?: string }) | undefined,
-    organization: ReadonlyArray<Pick<RuntimeEnvironment, "environmentId" | "state">> = [],
+    organization: ReadonlyArray<
+        Pick<RuntimeEnvironment, "environmentId" | "state">
+    > = [],
 ): EnvironmentStatus => {
     if (!env) return { label: "No environment", tone: "neutral" };
     if (isRunOnlyEnvironment(env))
@@ -261,7 +266,11 @@ export const environmentStatus = (
                 };
             // Refused before any machine started (the product's own checks,
             // runtime-setup-requester.service.ts): nothing booted, so not a boot failure.
-            if (first && NOT_STARTED_KINDS.has(first.kind) && first.signature === `setup:${first.kind}`)
+            if (
+                first &&
+                NOT_STARTED_KINDS.has(first.kind) &&
+                first.signature === `setup:${first.kind}`
+            )
                 return {
                     label: "Not started",
                     tone: "warning",
@@ -672,3 +681,18 @@ export const environmentNextStep = (
         action: link("Simulate on past PRs", ENVIRONMENT_SECTION.simulation),
     };
 };
+
+/**
+ * Where the e2e suite block of a setup file Kody wrote came from: the comment
+ * the recipe author puts above it (libs/runtime/api/application/recipe-author/
+ * suite-block.ts), read from the file's text. Null when the block was not
+ * inferred from the repository's CI (the team wrote it, or there is none).
+ */
+export function inferredSuiteOrigin(
+    content: string | undefined,
+): { file: string; job: string } | null {
+    const m = content?.match(
+        /^# suite: origin inferred from (\S+) job (\S+?);/m,
+    );
+    return m ? { file: m[1], job: m[2] } : null;
+}
