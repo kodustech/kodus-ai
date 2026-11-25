@@ -32,6 +32,15 @@ export interface RecipeAuthorRevision {
 /** A recipe that names next/font/google in its text, its notes or its files (Kody says so in notes, by the rule). */
 const namesGoogleFonts = (r: RevisedRecipe) => [r.recipe, r.notes ?? '', ...(r.files ?? []).map((f) => f.content)].some((t) => t.includes('next/font/google'));
 
+/**
+ * A recipe that names Firebase and runs no emulator from a Dockerfile Kodus fetched them for (the fetch helper's path
+ * is in a Dockerfile of Kody's that has it, authored-dockerfile-firebase.ts): kr-mono's repair dropped the emulators.
+ */
+const firebaseWithoutMirror = (r: RevisedRecipe) => {
+    const texts = [r.recipe, r.notes ?? '', ...(r.files ?? []).map((f) => f.content)];
+    return texts.some((t) => /firebase/i.test(t)) && !texts.some((t) => t.includes('/tmp/kodus-fetch-firebase-emulators.cjs'));
+};
+
 export const RECIPE_AUTHOR_REVISIONS: readonly RecipeAuthorRevision[] = [
     { version: 1, reauthor: false, reason: 'the instructions before recipes recorded their version' },
     { version: 2, reauthor: true, reason: 'an app with pages starts on its production server (next start, not next dev)' },
@@ -40,6 +49,12 @@ export const RECIPE_AUTHOR_REVISIONS: readonly RecipeAuthorRevision[] = [
         reauthor: true,
         reason: 'Google Fonts is on the recommended egress list: a Next.js app that imports next/font/google builds for production',
         appliesTo: namesGoogleFonts,
+    },
+    {
+        version: 4,
+        reauthor: true,
+        reason: 'Firebase emulators the tests need stay in the recipe, run from a Dockerfile Kodus fetches them for from its mirror',
+        appliesTo: firebaseWithoutMirror,
     },
 ];
 

@@ -30,4 +30,16 @@ describe('the versions of the recipe author instructions', () => {
         expect(reauthorRevision(1, undefined, plain)?.version).toBe(2);
         expect(reauthorRevision(1, undefined, fonts)?.version).toBe(3);
     });
+    // kr-mono (2026-11-25): Kody's repair dropped the Firebase emulators, which every Cypress login goes through. v4 tells it
+    // to run them from a Dockerfile Kodus adds the mirror fetch to; only a recipe that names Firebase and has no such
+    // Dockerfile is written again.
+    it('v4 asks again only a recipe that names Firebase and runs no emulator from a Dockerfile with the mirror fetch', () => {
+        const dropped = { recipe: 'version: 1\n', notes: 'drops the firebase emulator service because its jar download is blocked' };
+        const fetched = { recipe: 'version: 1\n', notes: 'firebase emulators', files: [{ content: 'RUN echo x | base64 -d > /tmp/kodus-fetch-firebase-emulators.cjs && node /tmp/kodus-fetch-firebase-emulators.cjs firestore' }] };
+        const plain = { recipe: 'version: 1\n', notes: 'the compose file at the root' };
+        expect(recipeAuthorRevision(4)).toMatchObject({ reauthor: true });
+        expect(reauthorRevision(3, undefined, dropped)?.version).toBe(4);
+        expect(reauthorRevision(3, undefined, fetched)).toBeUndefined();
+        expect(reauthorRevision(3, undefined, plain)).toBeUndefined();
+    });
 });
