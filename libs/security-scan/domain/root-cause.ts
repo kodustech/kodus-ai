@@ -92,10 +92,11 @@ function moduleOf(filePath: string): string | undefined {
         /\.[cm]?[jt]sx?$|\.[a-z]+$/i,
         '',
     );
+    // `client.ts` names a layer; `client.repository.ts` names a feature.
+    if (ONLY_LAYER.test(stem.toLowerCase())) return undefined;
     for (let i = 0; i < 3 && LAYER.test(stem); i++) {
         stem = stem.replace(LAYER, '');
     }
-    if (ONLY_LAYER.test(stem.toLowerCase())) return undefined;
     const name = stem.toLowerCase().replace(/[^a-z0-9]/g, '');
     return name.length >= 5 && !GENERIC.has(name) ? name : undefined;
 }

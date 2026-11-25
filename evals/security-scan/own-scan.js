@@ -232,18 +232,13 @@ function missedPairs(dataset, result, root) {
             for (const b of members.slice(i + 1)) {
                 if (root(a.fingerprint) === root(b.fingerprint)) continue;
                 const seen = [...asked(a, b), ...asked(b, a)];
-                const proposed = rootCauseCandidates(a, pool).includes(b) || rootCauseCandidates(b, pool).includes(a);
+                const answers = seen.filter((d) => !d.failed).map((d) => d.answer);
+                const linked = () => rootCauseCandidates(a, pool).includes(b) || rootCauseCandidates(b, pool).includes(a);
                 pairs.push({
                     a: a.title,
                     b: b.title,
-                    outcome: seen.length
-                        ? seen.some((d) => d.failed)
-                            ? 'failed'
-                            : 'judged-different'
-                        : proposed
-                          ? 'not-asked'
-                          : 'not-proposed',
-                    answers: seen.filter((d) => !d.failed).map((d) => d.answer),
+                    outcome: answers.length ? 'judged-different' : seen.length ? 'failed' : linked() ? 'not-asked' : 'not-proposed',
+                    answers,
                 });
             }
         });

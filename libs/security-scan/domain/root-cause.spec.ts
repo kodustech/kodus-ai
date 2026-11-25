@@ -51,6 +51,10 @@ describe('rootCauseCandidates', () => {
         const clientA = { ...base, title: 'a', cwe: 'CWE-918', filePath: 'apps/x/client.ts' };
         const clientB = { ...base, title: 'b', cwe: 'CWE-918', filePath: 'apps/y/client.ts' };
         expect(rootCauseCandidates(clientA, [clientB])).toEqual([]);
+        // A feature spelled like a layer still is one across its layers.
+        const clientRepo = { ...base, title: 'a', cwe: 'CWE-918', filePath: 'libs/x/repositories/client.repository.ts' };
+        const clientService = { ...base, title: 'b', cwe: 'CWE-918', filePath: 'libs/x/services/client.service.ts' };
+        expect(rootCauseCandidates(clientService, [clientRepo])).toEqual([clientRepo]);
     });
 
     it('ties findings that start at the same route a few lines apart, or name the other file by its tail', () => {
