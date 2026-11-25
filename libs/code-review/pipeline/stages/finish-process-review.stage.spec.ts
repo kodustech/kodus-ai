@@ -810,21 +810,27 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             expect(ownChangeRequest.recordSummary).not.toHaveBeenCalled();
         });
 
-        it('takes the stored suggestion id when the posted one is empty', async () => {
+        it('records a finding with no suggestion id by its comment alone', async () => {
             await requestChanges([
                 {
                     comment: { suggestion: { id: '', severity: 'critical' } },
                     deliveryStatus: 'sent',
                     codeReviewFeedbackData: {
                         commentId: 101,
-                        suggestionId: 's-stored',
+                        suggestionId: '',
                     },
                 },
             ]);
 
             expect(ownChangeRequest.record).toHaveBeenCalledWith(
-                expect.objectContaining({ suggestionIds: ['s-stored'] }),
+                expect.objectContaining({
+                    suggestionIds: [],
+                    commentIds: ['101'],
+                }),
             );
+            expect(
+                codeManagement.requestChangesPullRequest,
+            ).toHaveBeenCalledTimes(1);
         });
 
         it('leaves out a critical finding that never reached the PR', async () => {
