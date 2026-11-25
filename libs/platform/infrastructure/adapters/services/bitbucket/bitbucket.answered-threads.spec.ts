@@ -112,4 +112,25 @@ describe('BitbucketDataCenterService.getAnsweredReviewThreadRootIds', () => {
             service.getAnsweredReviewThreadRootIds(params),
         ).resolves.toEqual(new Set(['21']));
     });
+
+    it('reads replies added as their own activities, by parent', async () => {
+        const added = (comment: object) => ({
+            action: 'COMMENTED',
+            commentAction: 'ADDED',
+            comment,
+        });
+        const service = build([
+            added({ id: 31 }),
+            added({ id: 32, text: 'why?', parent: { id: 31 } }),
+            added({ id: 41 }),
+            added({ id: 42, text: PROMPT, parent: { id: 41 } }),
+            added({ id: 51 }),
+            added({ id: 52, text: PROMPT, parent: { id: 51 } }),
+            added({ id: 53, text: 'done', parent: { id: 52 } }),
+        ]);
+
+        await expect(
+            service.getAnsweredReviewThreadRootIds(params),
+        ).resolves.toEqual(new Set(['31', '51']));
+    });
 });
