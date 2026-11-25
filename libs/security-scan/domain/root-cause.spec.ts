@@ -34,8 +34,9 @@ describe('rootCauseCandidates', () => {
     });
 
     it("ties one feature's layers and files side by side, when the weakness is the same kind", () => {
-        const repo = { ...base, title: 'Cross-tenant read by id', cwe: 'CWE-639', filePath: 'libs/ai/repositories/contextReference.repository.ts' };
-        const service = { ...base, title: 'Cross-tenant update by id', cwe: 'CWE-639', filePath: 'libs/ai/services/context/context-reference.service.ts' };
+        // Titles with no word in common: only the module link ties them.
+        const repo = { ...base, title: 'Lookup skips organization scoping', cwe: 'CWE-639', filePath: 'libs/ai/repositories/contextReference.repository.ts' };
+        const service = { ...base, title: 'Foreign rows overwritten through update', cwe: 'CWE-639', filePath: 'libs/ai/services/context/context-reference.service.ts' };
         const sibling = { ...base, title: 'DNS rebinding reaches internal hosts', cwe: 'CWE-918', filePath: 'libs/org/use-cases/test-byok-connection.use-case.ts' };
         const caller = { ...base, title: 'Org owner can SSRF via baseURL', cwe: 'CWE-918', filePath: 'libs/org/use-cases/get-models-by-provider.use-case.ts' };
         expect(rootCauseCandidates(service, [repo])).toEqual([repo]);
@@ -43,10 +44,13 @@ describe('rootCauseCandidates', () => {
         // Another kind of weakness in the same module is not linked by it.
         const injection = { ...repo, title: 'Mongo operator injection', cwe: 'CWE-943' };
         expect(rootCauseCandidates(service, [injection])).toEqual([]);
-        // A generic file name says nothing about the feature.
+        // A generic file name, or one that is only a layer, says nothing about the feature.
         const utilA = { ...base, title: 'a', cwe: 'CWE-918', filePath: 'apps/x/utils.ts' };
         const utilB = { ...base, title: 'b', cwe: 'CWE-918', filePath: 'apps/y/utils.ts' };
         expect(rootCauseCandidates(utilA, [utilB])).toEqual([]);
+        const clientA = { ...base, title: 'a', cwe: 'CWE-918', filePath: 'apps/x/client.ts' };
+        const clientB = { ...base, title: 'b', cwe: 'CWE-918', filePath: 'apps/y/client.ts' };
+        expect(rootCauseCandidates(clientA, [clientB])).toEqual([]);
     });
 
     it('ties findings that start at the same route a few lines apart, or name the other file by its tail', () => {

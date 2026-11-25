@@ -192,7 +192,7 @@ async function consolidateStage(dataset, route, pricing) {
     const decisions = [];
     const recorded = async (request) => {
         const answer = await call(request).catch((error) => {
-            decisions.push({ user: request.user, error: String(error?.message ?? error) });
+            decisions.push({ user: request.user, failed: true });
             throw error;
         });
         decisions.push({ user: request.user, answer });
@@ -207,9 +207,10 @@ async function consolidateStage(dataset, route, pricing) {
 }
 
 /**
- * Why each labelled duplicate pair stayed apart: never shown to the model
- * (rootCauseCandidates did not link them), shown and judged another problem
- * (with the model's reason), or its comparison failed.
+ * Why each labelled duplicate pair stayed apart: shown to the model and
+ * judged another problem (with its reason), its comparison failed, linked but
+ * never asked (one of them was folded elsewhere first), or never linked by
+ * rootCauseCandidates at all.
  */
 function missedPairs(dataset, result, root) {
     const { rootCauseCandidates } = lib('security-scan/domain/root-cause.ts');
@@ -225,19 +226,27 @@ function missedPairs(dataset, result, root) {
         const members = c.fingerprints.map((fp) => byFp.get(fp)).filter(Boolean);
         if (new Set(members.map((m) => root(m.fingerprint))).size === 1) continue;
         const pairs = [];
-        for (const a of members) {
-            for (const b of members) {
-                if (a === b || root(a.fingerprint) === root(b.fingerprint)) continue;
-                const proposed = rootCauseCandidates(a, pool).includes(b);
-                const seen = asked(a, b);
+        // One entry per pair left apart: what the model was asked, either way
+        // round, decides; the blocking only explains a pair never asked.
+        members.forEach((a, i) => {
+            for (const b of members.slice(i + 1)) {
+                if (root(a.fingerprint) === root(b.fingerprint)) continue;
+                const seen = [...asked(a, b), ...asked(b, a)];
+                const proposed = rootCauseCandidates(a, pool).includes(b) || rootCauseCandidates(b, pool).includes(a);
                 pairs.push({
-                    subject: a.title,
-                    other: b.title,
-                    outcome: !proposed ? 'not-proposed' : !seen.length ? 'not-asked' : seen.some((d) => d.error) ? 'failed' : 'judged-different',
-                    answers: seen.map((d) => d.answer ?? { error: d.error }),
+                    a: a.title,
+                    b: b.title,
+                    outcome: seen.length
+                        ? seen.some((d) => d.failed)
+                            ? 'failed'
+                            : 'judged-different'
+                        : proposed
+                          ? 'not-asked'
+                          : 'not-proposed',
+                    answers: seen.filter((d) => !d.failed).map((d) => d.answer),
                 });
             }
-        }
+        });
         out.push({ cluster: c.id, why: c.why, pairs });
     }
     return out;

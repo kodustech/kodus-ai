@@ -63,9 +63,12 @@ function linkRank(
     return null;
 }
 
+const LAYERS =
+    'repository|repo|service|controller|handler|use-?case|resolver|module|model|schema|router|routes?|dto|store|client|api|utils?|helpers?';
 /** Layer suffixes one feature's files carry: `orders.service.ts`, `orders.repository.ts`. */
-const LAYER =
-    /[.-](repository|repo|service|controller|handler|use-?case|resolver|module|model|schema|router|routes?|dto|store|client|api|utils?|helpers?)$/;
+const LAYER = new RegExp(`[.-](${LAYERS})$`);
+/** A file named only after its layer (`client.ts`) names no feature. */
+const ONLY_LAYER = new RegExp(`^(${LAYERS})$`);
 
 /** Names too generic to say two files are one feature. */
 const GENERIC = new Set([
@@ -92,6 +95,7 @@ function moduleOf(filePath: string): string | undefined {
     for (let i = 0; i < 3 && LAYER.test(stem); i++) {
         stem = stem.replace(LAYER, '');
     }
+    if (ONLY_LAYER.test(stem.toLowerCase())) return undefined;
     const name = stem.toLowerCase().replace(/[^a-z0-9]/g, '');
     return name.length >= 5 && !GENERIC.has(name) ? name : undefined;
 }
@@ -115,7 +119,14 @@ function onPath(a: ScanReportedFinding, b: ScanReportedFinding): boolean {
     return (a.attackPath ?? []).some((s) => sameFilePath(s.file, b.filePath));
 }
 
-/** Both start at the same entry point: one route, a few lines apart. */
+/** Entry lines apart that still read as one route: its decorator and its handler. */
+const SAME_ENTRY_LINES = 10;
+
+/**
+ * Both start in the same file within SAME_ENTRY_LINES: one route, named at
+ * its decorator by one finding and at its handler by the other. Two short
+ * routes side by side pass too; the judge tells them apart.
+ */
 function sameEntry(a: ScanReportedFinding, b: ScanReportedFinding): boolean {
     const ea = a.attackPath?.[0];
     const eb = b.attackPath?.[0];
@@ -123,7 +134,7 @@ function sameEntry(a: ScanReportedFinding, b: ScanReportedFinding): boolean {
         !!ea &&
         !!eb &&
         sameFilePath(ea.file, eb.file) &&
-        Math.abs(ea.line - eb.line) <= NEARBY_LINES
+        Math.abs(ea.line - eb.line) <= SAME_ENTRY_LINES
     );
 }
 
