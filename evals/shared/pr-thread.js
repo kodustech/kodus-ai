@@ -2,7 +2,8 @@
 // path for an organization with a connected GitHub: the thread context built by
 // the use case's own functions (reply-thread.ts) from GitHub-shaped comments,
 // production's local sandbox fetching the PR head from a git remote
-// (pr-remote.js), the org's Kodus MCP served by production's server over
+// (pr-remote.js), opened on the agent's first repository tool call as the chat
+// opens it (openOnFirstUse), the org's Kodus MCP served by production's server over
 // in-memory stores (kodus-mcp.js, github-rest.js), and
 // ConversationAgentProvider itself. Used by evals/conversation and
 // evals/thread-actions.
@@ -18,6 +19,7 @@ const { AsyncLocalStorage } = require('async_hooks');
 const { ConversationAgentProvider } = require('../../libs/agents/infrastructure/services/agents/conversation/conversationAgent.ts');
 const { readDecision } = require('../../libs/agents/infrastructure/services/agents/conversation/conversation-decision.ts');
 const { LocalSandboxService } = require('../../libs/sandbox/infrastructure/providers/local-sandbox.service.ts');
+const { openOnFirstUse } = require('../../libs/sandbox/domain/open-on-first-use.ts');
 const { AiSdkAgentRunner } = require('../../libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner.ts');
 const { GithubService } = require('../../libs/platform/infrastructure/adapters/services/github/github.service.ts');
 const { getTranslationsForLanguageByCategory, TranslationsCategory } = require('../../libs/common/utils/translations/translations.ts');
@@ -119,10 +121,12 @@ async function runThread(t, { index, kodus, id = `t${index}`, rules = [] }) {
         kodus.addOrganization({ organizationAndTeamData: org, language: t.language, github: { host: githubRest.host, owner: OWNER }, repository: REPOSITORY, pullRequest: pullRequestRecord(t, pr, suggestionId), rules });
         // The clone params the chat use case builds (buildSandboxCloneParams),
         // with the PR's remote as the clone URL and no token.
-        sandbox = await new LocalSandboxService(undefined).createSandboxWithRepo({ cloneUrl: pr.remote, branch: pr.head, baseBranch: pr.base, prNumber: pr.number, platform: PlatformType.GITHUB });
+        sandbox = openOnFirstUse(() => new LocalSandboxService(undefined).createSandboxWithRepo({ cloneUrl: pr.remote, branch: pr.head, baseBranch: pr.base, prNumber: pr.number, platform: PlatformType.GITHUB }));
         const agent = new ConversationAgentProvider(kodus.parametersService, kodus.permissionValidationService, kodus.mcpManagerService);
         const seen = [];
-        const reply = await runs.run(seen, () => agent.execute(t.reply, { organizationAndTeamData: org, prepareContext: threadContext(t, suggestionId), thread: { id: `eval-${id}` }, sandbox }));
+        const reply = await runs.run(seen, () => agent.execute(t.reply, { organizationAndTeamData: org, prepareContext: threadContext(t, suggestionId), thread: { id: `eval-${id}` }, openSandbox: sandbox.open }));
+        // A checkout that failed to open is the eval's failure, not the agent's.
+        await sandbox.settled();
         if (!String(reply || '').trim()) throw new Error('the agent returned no reply');
         // The agent proceeds without MCP when it cannot connect.
         if (!seen.length || !seen.every((r) => r.mcp)) throw new Error('the agent ran without the Kodus MCP tools');
@@ -134,7 +138,7 @@ async function runThread(t, { index, kodus, id = `t${index}`, rules = [] }) {
             org,
         };
     } finally {
-        await sandbox?.cleanup();
+        await (await sandbox?.settled().catch(() => undefined))?.cleanup();
         await githubRest?.close();
         pr.cleanup();
     }
