@@ -64,18 +64,18 @@ export const getTrialCardState = (params: {
 export const getTrialCreditBalance = (
     credits?: TrialReviewCredits,
 ): TrialCreditBalance => {
-    const hasLiveData =
-        typeof credits?.total === "number" ||
-        typeof credits?.used === "number" ||
-        typeof credits?.remaining === "number";
-
-    // Billing owns the allowance. Without its total, count what it did
-    // report; without any credit data the credit UI is not shown at all.
+    // Billing owns the allowance. Without its total it can only be rebuilt
+    // from used + remaining; anything less is not a balance, so the trial
+    // reads as having no credit data (as billing and the API treat it).
     const used = Math.max(0, credits?.used ?? 0);
-    const total = Math.max(
-        0,
-        credits?.total ?? used + Math.max(0, credits?.remaining ?? 0),
-    );
+    const reportedTotal =
+        typeof credits?.total === "number"
+            ? credits.total
+            : typeof credits?.remaining === "number"
+              ? used + credits.remaining
+              : undefined;
+    const hasLiveData = reportedTotal !== undefined;
+    const total = Math.max(0, reportedTotal ?? 0);
     const remaining = Math.max(
         0,
         credits?.remaining ?? Math.max(0, total - used),

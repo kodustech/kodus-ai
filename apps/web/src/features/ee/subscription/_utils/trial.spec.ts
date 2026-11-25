@@ -42,6 +42,15 @@ describe("trial subscription helpers", () => {
         });
     });
 
+    it("does not invent a balance from a used count alone", () => {
+        expect(getTrialCreditBalance({ used: 3 })).toMatchObject({
+            hasLiveData: false,
+            total: 0,
+            remaining: 0,
+            percentUsed: 0,
+        });
+    });
+
     it("derives the total from used + remaining when billing omits it", () => {
         expect(getTrialCreditBalance({ used: 2, remaining: 5 })).toMatchObject({
             total: 7,
