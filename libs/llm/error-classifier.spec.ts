@@ -1,4 +1,5 @@
 import {
+    isAbortOrHardTimeout,
     LlmErrorCategory,
     attachClassification,
     classifyLLMError,
@@ -1310,14 +1311,24 @@ describe('classifyLLMError: review on #2700', () => {
                     cause: new Error('schema'),
                 }),
         ],
-        ['JSONParseError', () => new JSONParseError({ text: modelSays, cause: new Error('parse') })],
+        [
+            'JSONParseError',
+            () =>
+                new JSONParseError({
+                    text: modelSays,
+                    cause: new Error('parse'),
+                }),
+        ],
         [
             'NoObjectGeneratedError',
             () =>
                 new NoObjectGeneratedError({
                     message: 'No object generated',
                     text: modelSays,
-                    cause: new TypeValidationError({ value: modelSays, cause: new Error('x') }),
+                    cause: new TypeValidationError({
+                        value: modelSays,
+                        cause: new Error('x'),
+                    }),
                     response: {} as any,
                     usage: {} as any,
                     finishReason: 'stop',
@@ -1333,13 +1344,17 @@ describe('classifyLLMError: review on #2700', () => {
 
     it('an unresolvable host is TRANSIENT and the message says why', () => {
         const cause = Object.assign(new TypeError('fetch failed'), {
-            cause: Object.assign(new Error('getaddrinfo ENOTFOUND api.deepseek.cm'), {
-                code: 'ENOTFOUND',
-                hostname: 'api.deepseek.cm',
-            }),
+            cause: Object.assign(
+                new Error('getaddrinfo ENOTFOUND api.deepseek.cm'),
+                {
+                    code: 'ENOTFOUND',
+                    hostname: 'api.deepseek.cm',
+                },
+            ),
         });
         const err = new APICallError({
-            message: 'Cannot connect to API: getaddrinfo ENOTFOUND api.deepseek.cm',
+            message:
+                'Cannot connect to API: getaddrinfo ENOTFOUND api.deepseek.cm',
             url: 'https://api.deepseek.cm/v1/chat/completions',
             requestBodyValues: {},
             cause,
@@ -1347,7 +1362,7 @@ describe('classifyLLMError: review on #2700', () => {
         });
         const info = classifyLLMError(err, 'openai_compatible');
         expect(info.category).toBe(LlmErrorCategory.TRANSIENT);
-        expect(info.friendlyMessage).toContain('getaddrinfo ENOTFOUND api.deepseek.cm');
+        expect(info.friendlyMessage).toContain('ENOTFOUND api.deepseek.cm');
         expect(info.friendlyMessage).toContain('check the base URL');
     });
 
@@ -1355,10 +1370,15 @@ describe('classifyLLMError: review on #2700', () => {
         'Insufficient balance or no resource package. Please recharge. Please retry in 10s.',
         'Key limit exceeded (monthly limit). Please retry in 30s',
         'You have reached your specified API usage limits. You will regain access on 2026-12-01. Please retry in 30s',
-    ])('a spent balance with a short retry delay stays QUOTA_EXCEEDED: %s', (message) => {
-        const err = Object.assign(new Error(message), { statusCode: 429 });
-        expect(classifyLLMError(err).category).toBe(LlmErrorCategory.QUOTA_EXCEEDED);
-    });
+    ])(
+        'a spent balance with a short retry delay stays QUOTA_EXCEEDED: %s',
+        (message) => {
+            const err = Object.assign(new Error(message), { statusCode: 429 });
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        },
+    );
 
     it('a link naming a daily window does not switch the per-minute delay rule off', () => {
         const err = Object.assign(
@@ -1367,14 +1387,64 @@ describe('classifyLLMError: review on #2700', () => {
             ),
             { statusCode: 429 },
         );
-        expect(classifyLLMError(err).category).toBe(LlmErrorCategory.RATE_LIMIT);
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.RATE_LIMIT,
+        );
     });
 
     it('a link naming a per-minute window does not make a spent balance a rate limit', () => {
         const err = Object.assign(
-            new Error('Insufficient balance. See https://docs.x.ai/limits#tokens-per-minute'),
+            new Error(
+                'Insufficient balance. See https://docs.x.ai/limits#tokens-per-minute',
+            ),
             { statusCode: 429 },
         );
-        expect(classifyLLMError(err).category).toBe(LlmErrorCategory.QUOTA_EXCEEDED);
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.QUOTA_EXCEEDED,
+        );
+    });
+});
+
+describe('classifyLLMError: Kody on #2700', () => {
+    it("an earlier attempt's timeout does not make a later 503 a hard timeout", () => {
+        const timeout = Object.assign(new Error('connect'), {
+            code: 'ETIMEDOUT',
+        });
+        const unavailable = Object.assign(new Error('Service Unavailable'), {
+            name: 'AI_APICallError',
+            statusCode: 503,
+        });
+        const retry = {
+            name: 'AI_RetryError',
+            message: 'Failed after 2 attempts.',
+            reason: 'maxRetriesExceeded',
+            errors: [timeout, unavailable],
+            lastError: unavailable,
+        };
+        expect(isAbortOrHardTimeout(retry)).toBe(false);
+    });
+
+    it('a connect failure publishes only the code and host, never the raw message', () => {
+        const socket = Object.assign(
+            new Error(
+                'getaddrinfo ENOTFOUND gw.example.test?key=AQ.secretsecretsecret',
+            ),
+            { code: 'ENOTFOUND', hostname: 'gw.example.test' },
+        );
+        const wrapper = Object.assign(new Error('wrapped ENOTFOUND outer'), {
+            code: 'ENOTFOUND',
+            cause: socket,
+        });
+        const err = new APICallError({
+            message: 'Cannot connect to API: x',
+            url: 'https://gw.example.test/v1',
+            requestBodyValues: {},
+            cause: wrapper,
+            isRetryable: true,
+        });
+        const info = classifyLLMError(err);
+        expect(info.friendlyMessage).toContain('ENOTFOUND gw.example.test');
+        expect(info.friendlyMessage).not.toContain('secret');
+        expect(info.friendlyMessage).not.toContain('outer');
     });
 });

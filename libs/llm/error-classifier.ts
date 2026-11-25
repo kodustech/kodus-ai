@@ -203,8 +203,10 @@ export function isAbortOrHardTimeout(err: unknown): boolean {
     }
     // A connect timeout can carry no word for it: Node's dual-stack connect
     // throws an `AggregateError` with an empty message and code `ETIMEDOUT`,
-    // which the AI SDK wraps as "Cannot connect to API: ".
-    return errorTree(err).some((e) => {
+    // which the AI SDK wraps as "Cannot connect to API: ". Only the final
+    // failure counts: a RetryError's earlier attempts are history, and a
+    // timeout there must not keep a later 503 from failing over.
+    return errorTree(err, 0, [], { attempts: false }).some((e) => {
         const code = String((e as { code?: unknown }).code ?? '');
         return code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT';
     });
@@ -509,16 +511,29 @@ const UNREACHABLE_CODES = new Set([
 
 /** The errors an error is made of: itself, its `cause`, the AI SDK's
  *  `RetryError` attempts, an `AggregateError`'s members (dual-stack connect). */
-function errorTree(err: unknown, depth = 0, out: object[] = []): object[] {
+function errorTree(
+    err: unknown,
+    depth = 0,
+    out: object[] = [],
+    opts: { attempts?: boolean } = {},
+): object[] {
     if (!err || typeof err !== 'object' || depth > 4 || out.includes(err)) {
         return out;
     }
     out.push(err);
-    const e = err as { cause?: unknown; lastError?: unknown; errors?: unknown };
-    errorTree(e.cause, depth + 1, out);
-    errorTree(e.lastError, depth + 1, out);
-    if (Array.isArray(e.errors)) {
-        for (const member of e.errors) errorTree(member, depth + 1, out);
+    const e = err as {
+        name?: unknown;
+        cause?: unknown;
+        lastError?: unknown;
+        errors?: unknown;
+    };
+    errorTree(e.cause, depth + 1, out, opts);
+    errorTree(e.lastError, depth + 1, out, opts);
+    // A RetryError's `errors` are its attempts; an AggregateError's are one
+    // failure's parts (a dual-stack connect), read always.
+    const attempts = e.name === 'AI_RetryError';
+    if (Array.isArray(e.errors) && (!attempts || opts.attempts !== false)) {
+        for (const member of e.errors) errorTree(member, depth + 1, out, opts);
     }
     return out;
 }
@@ -533,7 +548,8 @@ function errorTree(err: unknown, depth = 0, out: object[] = []): object[] {
  */
 function connectFailureOf(err: unknown): string | undefined {
     const tree = errorTree(err);
-    const coded = tree.find((e) =>
+    // The deepest error carrying the code: the socket's own, not a wrapper.
+    const coded = tree.findLast((e) =>
         UNREACHABLE_CODES.has(String((e as { code?: unknown }).code ?? '')),
     ) as { code?: string; message?: string } | undefined;
     const sdkConnect = tree.some(
@@ -544,8 +560,21 @@ function connectFailureOf(err: unknown): string | undefined {
             ),
     );
     if (!coded && !sdkConnect) return undefined;
-    const detail = coded?.message?.trim() || coded?.code;
-    return (detail || 'the connection failed').slice(0, 200);
+    // Published in a public comment: only the code and the host the org
+    // configured, never a raw message (it can carry a URL with a key in it).
+    if (!coded) return 'the connection failed';
+    const { hostname, address, port } = coded as {
+        hostname?: unknown;
+        address?: unknown;
+        port?: unknown;
+    };
+    const where =
+        typeof hostname === 'string'
+            ? hostname
+            : typeof address === 'string'
+              ? `${address}${typeof port === 'number' ? `:${port}` : ''}`
+              : '';
+    return `${coded.code}${where ? ` ${where}` : ''}`.slice(0, 200);
 }
 
 /** "key limit exceeded", "usage limit reached", "spending cap": a named cap. */

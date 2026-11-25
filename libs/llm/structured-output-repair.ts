@@ -20,6 +20,7 @@
  *     before we spend a model re-ask. It never fixes a SHAPE mismatch (valid JSON,
  *     wrong keys) — that needs the model.
  */
+import { isDeepStrictEqual } from 'node:util';
 import Ajv from 'ajv';
 import {
     asSchema,
@@ -824,7 +825,7 @@ async function firstValidatingObjectAfter<T = unknown>(
     if (!fromBefore) return fromAfter.value as T;
     // The same object on both sides (the answer restated after the quote) is
     // no ambiguity.
-    return JSON.stringify(fromBefore.value) === JSON.stringify(fromAfter.value)
+    return isDeepStrictEqual(fromBefore.value, fromAfter.value)
         ? (fromAfter.value as T)
         : undefined;
 }

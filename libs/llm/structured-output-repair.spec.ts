@@ -1809,25 +1809,38 @@ describe('repairAndValidate: review on #2700', () => {
 
     it('the same answer on both sides of a quote is no ambiguity', async () => {
         const text = `${answer}\n\`\`\`ts\nconst x = await fetchUser(id);\n\`\`\`\n${answer}`;
-        await expect(repairAndValidate(wire, text)).resolves.toEqual(JSON.parse(answer));
+        await expect(repairAndValidate(wire, text)).resolves.toEqual(
+            JSON.parse(answer),
+        );
+    });
+
+    it('the same answer restated with its keys reordered is no ambiguity either', async () => {
+        const reordered = '{"violations":[{"line":3,"ruleId":"r1"}]}';
+        const text = `${answer}\n\`\`\`ts\nconst x = await fetchUser(id);\n\`\`\`\n${reordered}`;
+        await expect(repairAndValidate(wire, text)).resolves.toEqual(
+            JSON.parse(answer),
+        );
     });
 
     it('an answer followed by a quote: re-asked when a re-ask is left, taken when none is', async () => {
         const text = `${answer}\n\`\`\`ts\nconst x = await fetchUser(id);\n\`\`\``;
         await expect(repairAndValidate(wire, text)).resolves.toBeUndefined();
-        await expect(repairAndValidate(wire, text, { lastChance: true })).resolves.toEqual(
-            JSON.parse(answer),
-        );
+        await expect(
+            repairAndValidate(wire, text, { lastChance: true }),
+        ).resolves.toEqual(JSON.parse(answer));
     });
 
     it('prose quoting many unclosed diff lines before a long reply still finds the answer', async () => {
         const quoted = Array.from(
             { length: 20 },
-            (_, i) => `- In \`export async function handler${i}(req) {\` the input is not validated.`,
+            (_, i) =>
+                `- In \`export async function handler${i}(req) {\` the input is not validated.`,
         ).join('\n');
         const text = `${quoted}\n${'x'.repeat(300_000)}\n${answer}`;
         const started = Date.now();
-        await expect(repairAndValidate(wire, text)).resolves.toEqual(JSON.parse(answer));
+        await expect(repairAndValidate(wire, text)).resolves.toEqual(
+            JSON.parse(answer),
+        );
         expect(Date.now() - started).toBeLessThan(2_000);
     });
 });

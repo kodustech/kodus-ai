@@ -91,7 +91,13 @@ __caller_legacy_wins() {
         __SET__*) case "$generic_snap" in __SET__*) ;; *) unset "$generic" ;; esac ;;
     esac
 }
-__caller_legacy_wins API_LLM_API_KEY  "$__snap_API_OPEN_AI_API_KEY"       "$__snap_API_LLM_API_KEY"
+# The key alone is ambiguous: API_OPEN_AI_API_KEY is also the embeddings key.
+# It stands for the LLM only beside the legacy base URL, or in a config that
+# names no provider (a pre-API_LLM_* one); otherwise the configured LLM key stays.
+case "$__snap_API_OPENAI_FORCE_BASE_URL" in
+    __SET__*) __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" ;;
+    *) [ -z "${API_LLM_PROVIDER:-}" ] && __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" ;;
+esac
 __caller_legacy_wins API_LLM_BASE_URL "$__snap_API_OPENAI_FORCE_BASE_URL" "$__snap_API_LLM_BASE_URL"
 
 unset __snap_DIGITALOCEAN_TOKEN __snap_HCLOUD_TOKEN __snap_SH_LICENSE_KEY \

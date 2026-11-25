@@ -478,7 +478,8 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
             API_LLM_PROVIDER: 'openai_compatible',
             API_OPEN_AI_API_KEY: 'fw-fake-e2e',
             API_OPENAI_FORCE_BASE_URL: 'https://api.fireworks.ai/inference/v1',
-            API_LLM_PROVIDER_MODEL: 'accounts/fireworks/models/deepseek-v4p1-flash',
+            API_LLM_PROVIDER_MODEL:
+                'accounts/fireworks/models/deepseek-v4p1-flash',
         });
 
         const declared = resolveDeclaredEnvProvider(vmEnv);
@@ -486,6 +487,25 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
         expect(declared.kind === 'declared' && declared.config).toMatchObject({
             apiKey: 'fw-fake-e2e',
             baseURL: 'https://api.fireworks.ai/inference/v1',
+        });
+    });
+
+    it('a caller that overrides only the embeddings key keeps the configured LLM key', () => {
+        // Kody on #2700: API_OPEN_AI_API_KEY alone is the embeddings key too.
+        const box = sandbox();
+        writeConfig(box, [
+            'API_LLM_PROVIDER=openai_compatible',
+            'API_LLM_PROVIDER_MODEL=kimi-k2.6',
+            'API_LLM_API_KEY=sk-fake-moonshot',
+            'API_LLM_BASE_URL=https://api.moonshot.ai/v1',
+        ]);
+        const vmEnv = vmLlmEnv(box, {
+            API_OPEN_AI_API_KEY: 'sk-proj-embeddings',
+        });
+        const declared = resolveDeclaredEnvProvider(vmEnv);
+        expect(declared.kind === 'declared' && declared.config).toMatchObject({
+            apiKey: 'sk-fake-moonshot',
+            baseURL: 'https://api.moonshot.ai/v1',
         });
     });
 
