@@ -212,7 +212,10 @@ function changesKodusRule(base: RiskRule, entry: Partial<RiskRule>): boolean {
 function storedRiskCriteria(value: unknown[], defaults: RiskRule[]) {
     const byId = new Map(defaults.map((rule) => [rule.id, rule]));
     return value.flatMap((item) => {
-        const entry = item as Record<string, unknown>;
+        const raw = item as Record<string, unknown>;
+        // As the API stores it: a padded id still names the Kodus rule.
+        const entry =
+            typeof raw.id === 'string' ? { ...raw, id: raw.id.trim() } : raw;
         const base = byId.get(entry.id as string);
         const kept = Object.fromEntries(
             Object.entries(entry).filter(([key, field]) => {

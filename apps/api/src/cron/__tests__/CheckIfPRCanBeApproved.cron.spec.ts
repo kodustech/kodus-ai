@@ -1525,6 +1525,31 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             }
         });
 
+        it('retries at once a rate limit the review itself stored', async () => {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getPullRequest.mockResolvedValue(live);
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                execution({
+                    status: 'unavailable',
+                    reason: 'Rate limited.',
+                    failure: {
+                        category: 'RATE_LIMIT',
+                        errorName: 'APICallError',
+                        httpStatus: 429,
+                    },
+                    snapshot: {
+                        ...snapshot,
+                        descriptionKey: prRiskDescriptionKey(live),
+                    },
+                }),
+            );
+            deps.prRiskAssessment.assess.mockResolvedValue({
+                assessment: fresh(false),
+            });
+            await run(cron);
+            expect(deps.prRiskAssessment.assess).toHaveBeenCalledTimes(1);
+        });
+
         it('does not retry a failure the same input repeats', async () => {
             const { cron, deps } = makeCron();
             deps.codeManagementService.getPullRequest.mockResolvedValue(live);
@@ -1569,6 +1594,7 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             held.dataExecution.approvalDecision = {
                 kind: 'hold',
                 reason: 'Risk was identified in this PR.',
+                heldBy: 'risk',
             } as any;
             held.dataExecution.approvalRisk = {
                 level: 'medium',
@@ -1652,6 +1678,26 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             expect(
                 deps.codeManagementService.checkIfPullRequestShouldBeApproved,
             ).not.toHaveBeenCalled();
+            const stored =
+                deps.automationExecutionService.update.mock.calls[0][1]
+                    .dataExecution;
+            expect(stored.riskAssessment.snapshot.descriptionKey).toBe(
+                prRiskDescriptionKey({ ...live, body: 'Edited once more.' }),
+            );
+
+            // Next pass, the head unchanged: it approves with what was stored.
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                { uuid: 'execution-1', dataExecution: stored },
+            );
+            deps.codeManagementService.getReviewStatusByPullRequest
+                .mockReset()
+                .mockResolvedValueOnce(PullRequestReviewState.NONE)
+                .mockResolvedValueOnce(PullRequestReviewState.APPROVED);
+            expect(await run(cron)).toBe(true);
+            expect(deps.prRiskAssessment.assess).toHaveBeenCalledTimes(1);
+            expect(
+                deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).toHaveBeenCalledTimes(1);
         });
 
         it('spends no reassessment on a PR the approval scope already holds', async () => {

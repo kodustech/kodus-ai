@@ -195,23 +195,25 @@ const isSettledFailure = (risk: RiskAssessmentResult) =>
     risk.failure?.code === 'diff_too_large' ||
     risk.failure?.category === 'CONTEXT_OVERFLOW';
 
+/** A model failure that may pass on its own, as the review stores it. */
+const isTransientModelFailure = (risk: RiskAssessmentResult) =>
+    risk.status === 'unavailable' &&
+    ['RATE_LIMIT', 'TRANSIENT', 'QUOTA_EXCEEDED'].includes(
+        risk.failure?.category ?? '',
+    );
+
 /**
- * The review held this head on risk (found, or not assessable), and the
- * cron's reassessment of the same commits now finds none: the hold's cause
- * is gone without another review.
+ * The review held this head on risk alone (the hold records it), and the
+ * same commits, assessed again, now show none: the hold's only cause is gone
+ * without another review.
  */
 const riskHoldCleared = (
-    data: { reviewedRiskAssessment?: RiskAssessmentResult } | undefined,
+    reviewedDecision: { heldBy?: string } | undefined,
     current: RiskAssessmentResult | undefined,
-) => {
-    const reviewed = data?.reviewedRiskAssessment;
-    return (
-        !!reviewed &&
-        !(reviewed.status === 'assessed' && !reviewed.riskIdentified) &&
-        current?.status === 'assessed' &&
-        !current.riskIdentified
-    );
-};
+) =>
+    reviewedDecision?.heldBy === 'risk' &&
+    current?.status === 'assessed' &&
+    !current.riskIdentified;
 
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
@@ -386,12 +388,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
             if (sameInput) {
                 if (stored?.status !== 'unavailable') return {};
                 // Same text and settings: an unavailable result stands and
-                // says why, until a failure that may pass is due a retry.
-                if (
-                    retryOfThisInput?.retryAfter === undefined ||
-                    Date.now() < retryOfThisInput.retryAfter
-                )
-                    return { risk: stored };
+                // says why, until a failure that may pass is due a retry. One
+                // the review stored has no attempts yet, so it is due now.
+                const due = retryOfThisInput
+                    ? retryOfThisInput.retryAfter !== undefined &&
+                      Date.now() >= retryOfThisInput.retryAfter
+                    : isTransientModelFailure(stored);
+                if (!due) return { risk: stored };
             }
             const orgId = input.organizationAndTeamData.organizationId;
             const orgCount = this.riskReassessments.byOrg.get(orgId) ?? 0;
@@ -445,10 +448,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
                           : {}),
                   };
             const approvalRisk = approvalRiskFromShared(result, live.head.sha);
-            // What the review decided with, kept once: the hold it caused can
-            // clear when this head is found low (riskHoldCleared).
-            const reviewedRiskAssessment =
-                data.reviewedRiskAssessment ?? stored;
             await this.automationExecutionService.update(
                 { uuid: input.execution.uuid },
                 {
@@ -456,7 +455,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         ...data,
                         riskAssessment: result,
                         approvalRisk,
-                        reviewedRiskAssessment,
                         riskRetry,
                     },
                 },
@@ -464,7 +462,6 @@ export class CheckIfPRCanBeApprovedCronProvider {
             // Later writes on this pass start from the same data.
             data.riskAssessment = result;
             data.approvalRisk = approvalRisk;
-            data.reviewedRiskAssessment = reviewedRiskAssessment;
             data.riskRetry = riskRetry;
             this.logger.log({
                 message: `Reassessed risk for PR#${input.prNumber} after its text or risk settings changed: ${result.status === 'assessed' ? (result.riskIdentified ? 'risk' : 'no risk') : 'unavailable'}`,
@@ -2041,7 +2038,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 if (
                     allowNoComments &&
                     reviewedDecision?.kind === 'hold' &&
-                    !riskHoldCleared(lastExecution.dataExecution, sharedRisk)
+                    !riskHoldCleared(reviewedDecision, sharedRisk)
                 ) {
                     return false;
                 }

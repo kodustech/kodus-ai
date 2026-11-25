@@ -1,4 +1,5 @@
 import { Transform, Type } from 'class-transformer';
+import { MAX_RISK_CRITERIA } from '@libs/core/infrastructure/config/types/general/risk-rule-ids';
 import {
     approvalPoliciesSchema,
     type NamedApprovalPolicy,
@@ -947,7 +948,7 @@ class CodeReviewConfigWithoutLLMProviderDto {
 
     @ValidateIf((_, value) => value !== undefined)
     @IsArray()
-    @ArrayMaxSize(50)
+    @ArrayMaxSize(MAX_RISK_CRITERIA)
     @Type(() => Object)
     // Stored as parsed (ids and names trimmed, unknown keys dropped), so a
     // reader of the raw config matches a default by its id.

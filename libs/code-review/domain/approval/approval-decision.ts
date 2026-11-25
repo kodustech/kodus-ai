@@ -26,6 +26,8 @@ export interface ApprovalDecision {
     reviewedHeadSha?: string;
     reviewedBaseSha?: string;
     reviewedMetadataKey?: string;
+    /** Only risk held it: every other condition would have approved. */
+    heldBy?: 'risk';
 }
 
 /**
@@ -208,12 +210,14 @@ export function evaluateApproval(input: {
         return {
             kind: 'hold',
             reason: 'Kody could not assess risk for the current PR head.',
+            heldBy: 'risk',
         };
     }
     if (input.risk.level !== 'low') {
         return {
             kind: 'hold',
             reason: input.risk.reason || 'The PR needs a human risk review.',
+            heldBy: 'risk',
         };
     }
     return {

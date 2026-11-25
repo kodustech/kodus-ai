@@ -9,6 +9,7 @@ import { Page } from "@components/ui/page";
 import { Spinner } from "@components/ui/spinner";
 import { Switch } from "@components/ui/switch";
 import { toast } from "@components/ui/toaster/use-toast";
+import { MAX_RISK_CRITERIA as MAX_STORED_RULES } from "@libs/core/infrastructure/config/types/general/risk-rule-ids";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { useDefaultRiskCriteria } from "@services/risk-assessment/hooks";
@@ -42,9 +43,6 @@ import {
     riskRuleRows,
     type RiskRuleRow,
 } from "./_utils/risk-rules";
-
-/** The stored list's cap: team rules and overrides of Kodus rules. */
-const MAX_STORED_RULES = 50;
 
 function RiskSettings() {
     const { teamId } = useSelectedTeamId();

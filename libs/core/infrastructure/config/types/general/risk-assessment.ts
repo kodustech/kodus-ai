@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { filePatternListSchema } from './file-pattern-schema';
 import {
     DEFAULT_RISK_CRITERION_PREFIX,
+    MAX_RISK_CRITERIA,
     isKnownKodusRiskRuleId,
 } from './risk-rule-ids';
 
@@ -45,7 +46,7 @@ export type RiskCriterion = z.infer<typeof riskCriterionSchema>;
 
 export const riskCriteriaSchema = z
     .array(riskCriterionSchema)
-    .max(50)
+    .max(MAX_RISK_CRITERIA)
     .refine(
         (criteria) =>
             new Set(criteria.map((criterion) => criterion.id)).size ===

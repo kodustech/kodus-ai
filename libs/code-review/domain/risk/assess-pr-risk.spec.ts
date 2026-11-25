@@ -233,7 +233,7 @@ it('sends the migrated free-text instruction as context, not as a rule whose mat
 });
 
 it.each([
-    ['turned off', { enabled: false }],
+    ['excluded the changed files from', { excludedFiles: ['**/*.ts'] }],
     [
         'scoped to files the PR does not change',
         { includedFiles: ['billing/**'] },

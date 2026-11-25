@@ -310,21 +310,33 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                       description: livePr,
                   })
                 : undefined;
+        const approvalInput = {
+            approvalActive: true,
+            policy,
+            author,
+            labels,
+            changedPaths: paths,
+            reviewClean:
+                (context.lineComments?.length ?? 0) === 0 &&
+                (context.prLevelCommentResults?.length ?? 0) === 0 &&
+                !hasBlockingFailure,
+            risk,
+            currentHeadSha: headSha,
+        };
+        // The cron may lift a hold that risk alone caused once the same head
+        // is assessed low, so the hold records that nothing else held it.
         const decision = sharedVeto
-            ? { kind: 'hold' as const, reason: sharedVeto }
-            : evaluateApproval({
-                  approvalActive: true,
-                  policy,
-                  author,
-                  labels,
-                  changedPaths: paths,
-                  reviewClean:
-                      (context.lineComments?.length ?? 0) === 0 &&
-                      (context.prLevelCommentResults?.length ?? 0) === 0 &&
-                      !hasBlockingFailure,
-                  risk,
-                  currentHeadSha: headSha,
-              });
+            ? {
+                  kind: 'hold' as const,
+                  reason: sharedVeto,
+                  ...(evaluateApproval({
+                      ...approvalInput,
+                      policy: policy && { ...policy, assessRisk: false },
+                  }).kind === 'approve'
+                      ? { heldBy: 'risk' as const }
+                      : {}),
+              }
+            : evaluateApproval(approvalInput);
         return this.updateContext(context, (draft) => {
             draft.approvalRisk = risk;
             draft.approvalDecision = {

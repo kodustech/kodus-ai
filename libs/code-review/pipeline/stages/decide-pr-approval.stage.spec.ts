@@ -454,6 +454,18 @@ it('judges the legacy approval path against the rules the team configured', asyn
     expect(ids).toContain('tenant');
 });
 
+it('records that risk alone held a PR, so the cron can lift it after a low reassessment', async () => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        matchedRules: ['kodus-security'],
+        reason: 'A person should review this change.',
+    });
+    const result = await stage.execute(context({ approvalRiskActive: true }));
+    expect(result.approvalDecision).toMatchObject({
+        kind: 'hold',
+        heldBy: 'risk',
+    });
+});
+
 it('vetoes a sensitive path before paying for a model call', async () => {
     const result = await stage.execute(
         context({

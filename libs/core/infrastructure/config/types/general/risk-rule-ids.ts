@@ -1,3 +1,6 @@
+/** Stored risk rules per scope, counting overrides of Kodus's rules. */
+export const MAX_RISK_CRITERIA = 50;
+
 /** Ids starting with this are reserved for the risk rules Kodus ships. */
 export const DEFAULT_RISK_CRITERION_PREFIX = 'kodus-';
 

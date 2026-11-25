@@ -982,6 +982,34 @@ describe('reviewSettingsService', () => {
             expect(result.value).toEqual(stored);
         });
 
+        it('matches a padded id to its Kodus rule before comparing', async () => {
+            configApi.getDefaultRiskCriteria.mockResolvedValueOnce({
+                criteria: KODUS_RULES,
+                retiredIds: [],
+            });
+            await reviewSettingsService.set(
+                { repository: 'global' },
+                'riskCriteria',
+                JSON.stringify([
+                    {
+                        ...KODUS_RULES[1],
+                        id: ` ${KODUS_RULES[1].id} `,
+                        enabled: false,
+                    },
+                ]),
+            );
+            expect(configApi.saveCodeReviewConfig).toHaveBeenCalledWith(
+                CTX.accessToken,
+                expect.objectContaining({
+                    configValue: {
+                        riskCriteria: [
+                            { id: KODUS_RULES[1].id, enabled: false },
+                        ],
+                    },
+                }),
+            );
+        });
+
         it('sets risk rules as given on an API without Kodus rules', async () => {
             configApi.getDefaultRiskCriteria.mockRejectedValueOnce(
                 new ApiError(404, 'Cannot GET'),
