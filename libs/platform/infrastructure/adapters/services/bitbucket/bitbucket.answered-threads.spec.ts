@@ -113,6 +113,48 @@ describe('BitbucketDataCenterService.getAnsweredReviewThreadRootIds', () => {
         ).resolves.toEqual(new Set(['21']));
     });
 
+    it('reads every page of activities', async () => {
+        const get = jest
+            .fn()
+            .mockResolvedValueOnce({
+                data: {
+                    values: [
+                        {
+                            action: 'COMMENTED',
+                            commentAction: 'ADDED',
+                            comment: { id: 61 },
+                        },
+                    ],
+                    isLastPage: false,
+                    nextPageStart: 1000,
+                },
+            })
+            .mockResolvedValueOnce({
+                data: {
+                    values: [
+                        {
+                            action: 'COMMENTED',
+                            commentAction: 'ADDED',
+                            comment: { id: 62, text: 'ok', parent: { id: 61 } },
+                        },
+                    ],
+                    isLastPage: true,
+                },
+            });
+        const service = make(BitbucketDataCenterService, {
+            getAuthDetails: jest.fn().mockResolvedValue({}),
+            getRepoConfig: jest
+                .fn()
+                .mockResolvedValue({ workspaceId: 'PRJ', name: 'api' }),
+            getAxiosInstance: () => ({ get }),
+        });
+
+        await expect(
+            service.getAnsweredReviewThreadRootIds(params),
+        ).resolves.toEqual(new Set(['61']));
+        expect(get.mock.calls[1][1].params.start).toBe(1000);
+    });
+
     it('reads replies added as their own activities, by parent', async () => {
         const added = (comment: object) => ({
             action: 'COMMENTED',

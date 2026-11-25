@@ -2750,9 +2750,11 @@ export class BitbucketDataCenterService implements Omit<
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
-            const response = await axiosClient.get(
+            // A partial read still marks what it saw: an answered mark is
+            // never wrong, and what it missed stays as loaded.
+            const { values } = await this.readAllPages(
+                axiosClient,
                 `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}/activities`,
-                { params: { limit: 1000 } },
             );
 
             // Data Center nests a thread's replies under the root comment, a
@@ -2763,7 +2765,7 @@ export class BitbucketDataCenterService implements Omit<
                     reply,
                     ...descendants(reply),
                 ]);
-            const added = (response?.data?.values ?? [])
+            const added = values
                 .filter(
                     (activity: any) =>
                         activity?.action === 'COMMENTED' &&
