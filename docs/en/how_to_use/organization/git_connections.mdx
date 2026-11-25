@@ -1,0 +1,53 @@
+---
+title: "Git Connections"
+description: "Connect several Git accounts, organizations or hosts to one workspace, and decide who reads each one."
+---
+
+A workspace can hold several Git connections: two GitHub organizations, GitHub beside GitLab, two GitLab hosts, Bitbucket Cloud beside Data Center, and so on. Every connection shares the workspace's review settings; repository and directory settings stay per repository.
+
+## Add a connection
+
+In **Settings → Git**, an owner clicks **Add connection** and connects the account the same way as the first one (OAuth, a token, or the GitHub App). Each connection gets a card where an owner can:
+
+- rename it,
+- turn its reviews on or off (in addition to the workspace's automated review setting),
+- choose its repositories,
+- update its token,
+- choose which members can read it,
+- reset it. Reset removes that connection only: its repositories, hooks and rules go, the others stay.
+
+A repository can belong to one connection only. Adding a repository another connection already lists is refused.
+
+## Who can read a connection
+
+Owners read every connection. A new connection starts with owners only; give members access from its card. A member granted only some connections sees just their repositories in pull requests, settings, Kody Rules, issues, CLI reviews and notifications. Cockpit opens for them one repository at a time, and token usage, which covers the whole workspace, stays with members who read every connection.
+
+Team CLI keys belong to the workspace and are created by owners, so a key reads every connection of its workspace.
+
+## PR author filters
+
+In **Settings → Git → PR author filters**, each connection has its own include and exclude lists: git ids differ per provider and host. Bots found when a connection is added go to that connection's lists.
+
+## Centralized config
+
+Each connection can have its own centralized config repository, covering that connection's repositories only. The config of the workspace's first connection keeps working as before, including its root `kodus-config.yml` for workspace defaults. Another connection's config repository holds per-repository and per-directory files and Kody Rules; its root `kodus-config.yml` is ignored, so it never changes the defaults the other connections share. Kody Rules record the config repository they were synced from, so one sync never removes another's rules.
+
+From the CLI, name the connection when the workspace has several:
+
+```bash
+kodus config centralized status
+kodus config centralized sync --connection <connection-id>
+```
+
+`status` without `--connection` lists every connection's config. `init` picks the connection that lists the chosen repository.
+
+## Billing
+
+<Tabs>
+  <Tab title="Cloud">
+    Each connection has its own plan and seats. The workspace keeps its trial and its credits, which every connection uses. A new connection starts on the free plan and is never subscribed automatically; choose its plan in **Settings → Subscription** with the connection picker.
+  </Tab>
+  <Tab title="Self-hosted">
+    The instance keeps one seat pool. A person counts once per provider, so the same id on GitHub and GitLab takes two seats.
+  </Tab>
+</Tabs>
