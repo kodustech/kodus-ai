@@ -12,6 +12,8 @@ const workspace = { organizationId: 'org-1', teamId: 'team-1' };
 
 const build = (opts: {
     connections: string[];
+    /** Creation time per connection; the oldest is the primary. */
+    createdAt?: Record<string, string>;
     seats: Record<string, string[]>;
     /** Seats from before connections were recorded: in every connection's pool. */
     shared?: string[];
@@ -52,7 +54,12 @@ const build = (opts: {
         ),
     };
     const integrationService = {
-        find: jest.fn(async () => opts.connections.map((uuid) => ({ uuid }))),
+        find: jest.fn(async () =>
+            opts.connections.map((uuid) => ({
+                uuid,
+                createdAt: opts.createdAt?.[uuid],
+            })),
+        ),
     };
     const useCase = new PruneRemovedLicenseSeatsUseCase(
         memberList as any,
@@ -134,7 +141,8 @@ describe('PruneRemovedLicenseSeatsUseCase per Git connection', () => {
             connections: ['gh-a', 'gl-b'],
             seats: { 'gh-a': [], 'gl-b': [] },
             shared: ['5', '6'],
-            members: { 'gh-a': ['6'], 'gl-b': [] },
+            // Seat 6's holder is only on the second connection.
+            members: { 'gh-a': [], 'gl-b': ['6'] },
         });
 
         const result = await useCase.execute({
@@ -148,6 +156,24 @@ describe('PruneRemovedLicenseSeatsUseCase per Git connection', () => {
             'github',
         );
         expect(result.revoked).toEqual(['5']);
+    });
+
+    it('revokes shared seats through the primary connection, whatever order connections come in', async () => {
+        const { useCase, licenseService } = build({
+            connections: ['gl-b', 'gh-a'],
+            createdAt: { 'gh-a': '2024-01-01', 'gl-b': '2026-01-01' },
+            seats: { 'gh-a': [], 'gl-b': [] },
+            shared: ['5'],
+            members: { 'gh-a': [], 'gl-b': [] },
+        });
+
+        await useCase.execute({ organizationAndTeamData: workspace });
+
+        expect(licenseService.unassignLicenses).toHaveBeenCalledWith(
+            { ...workspace, integrationId: 'gh-a' },
+            ['5'],
+            'github',
+        );
     });
 
     it('leaves shared seats while any connection cannot be read', async () => {

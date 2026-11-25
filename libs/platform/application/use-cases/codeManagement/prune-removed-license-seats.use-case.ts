@@ -142,9 +142,10 @@ export class PruneRemovedLicenseSeatsUseCase {
         }
 
         if (merged.status === 'ok') {
+            // Shared seats sit on the primary's pool, the workspace's own.
             const shared = await this.pruneSharedSeats(
                 params,
-                connections[0].uuid,
+                primary.uuid,
                 pools,
             );
             merged.candidates.push(...shared.candidates);

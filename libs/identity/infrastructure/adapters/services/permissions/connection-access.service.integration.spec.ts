@@ -44,10 +44,27 @@ const dataSource = () =>
 /** Postgres not running or not reachable: skip. Anything else must fail. */
 const UNREACHABLE = new Set([
     'ECONNREFUSED',
+    'ECONNRESET',
+    'EHOSTUNREACH',
     'ENOTFOUND',
     'EAI_AGAIN',
     'ETIMEDOUT',
 ]);
+
+const isUnreachable = (error: unknown): boolean => {
+    const { code, message, errors } = (error ?? {}) as {
+        code?: string;
+        message?: string;
+        errors?: unknown[];
+    };
+    if (code && UNREACHABLE.has(code)) return true;
+    // Node reports a refused dual-stack connect as an AggregateError.
+    if (Array.isArray(errors) && errors.some(isUnreachable)) return true;
+    // pg's own connect timeout and dropped-connection errors carry no code.
+    return (
+        !code && /timeout expired|Connection terminated/i.test(message ?? '')
+    );
+};
 
 const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
 
@@ -74,9 +91,8 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
             try {
                 await candidate.initialize();
             } catch (error) {
-                if (!UNREACHABLE.has((error as { code?: string })?.code)) {
-                    throw error;
-                }
+                await candidate.destroy().catch(() => undefined);
+                if (!isUnreachable(error)) throw error;
                 return;
             }
             // The rows reference throwaway users and connections.
