@@ -12,6 +12,7 @@ describe('CliCentralizedConfigController', () => {
     let controller: CliCentralizedConfigController;
     let teamCliKeyService: { validateKey: jest.Mock };
     let codeManagementService: { getTypeIntegration: jest.Mock };
+    let integrationService: { find: jest.Mock };
     let integrationConfigService: {
         findIntegrationConfigFormatted: jest.Mock;
         findAllOfTeamByConfigKey: jest.Mock;
@@ -65,6 +66,10 @@ describe('CliCentralizedConfigController', () => {
             findByKey: jest.fn().mockResolvedValue(null),
         };
 
+        integrationService = {
+            find: jest.fn().mockResolvedValue([{ uuid: 'gh-a' }]),
+        };
+
         createOrUpdateParametersUseCase = {
             execute: jest.fn().mockResolvedValue(true),
         };
@@ -97,6 +102,7 @@ describe('CliCentralizedConfigController', () => {
             centralizedConfigInitUseCase as any,
             centralizedConfigSyncUseCase as any,
             centralizedConfigDownloadZipUseCase as any,
+            integrationService as any,
         );
     });
 
@@ -295,6 +301,10 @@ describe('CliCentralizedConfigController', () => {
         const workspace = { organizationId: 'org-1', teamId: 'team-1' };
 
         beforeEach(() => {
+            integrationService.find.mockResolvedValue([
+                { uuid: 'gh-a' },
+                { uuid: 'gl-b' },
+            ]);
             integrationConfigService.findAllOfTeamByConfigKey.mockResolvedValue(
                 [
                     {
@@ -385,6 +395,24 @@ describe('CliCentralizedConfigController', () => {
             });
             expect(centralizedConfigSyncUseCase.execute).toHaveBeenCalled();
             expect(centralizedConfigInitUseCase.execute).toHaveBeenCalled();
+        });
+
+        it('asks which connection even when one has no repositories saved yet', async () => {
+            integrationConfigService.findAllOfTeamByConfigKey.mockResolvedValue(
+                [
+                    {
+                        integration: { uuid: 'gh-a' },
+                        configValue: [{ id: 'repo-1', selected: true }],
+                    },
+                ],
+            );
+
+            await expect(
+                controller.sync('kodus_test_key', undefined),
+            ).rejects.toThrow(BadRequestException);
+            await expect(
+                controller.sync('kodus_test_key', undefined, 'gl-b'),
+            ).resolves.toBeDefined();
         });
 
         it('refuses a connection that is not in the workspace', async () => {

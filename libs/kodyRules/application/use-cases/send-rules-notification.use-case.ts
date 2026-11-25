@@ -92,14 +92,20 @@ export class SendRulesNotificationUseCase {
                 string,
                 { titles: string[]; users: typeof users }
             >();
-            for (const user of users) {
-                const restriction = await this.connectionAccess?.restrictionFor(
-                    {
+            const scopes = await Promise.allSettled(
+                users.map((user) =>
+                    this.connectionAccess?.restrictionFor({
                         uuid: user.uuid,
                         role: user.role,
                         organization: { uuid: organizationId },
-                    },
-                );
+                    }),
+                ),
+            );
+            for (const [index, user] of users.entries()) {
+                const scope = scopes[index];
+                // A member whose access could not be read hears nothing.
+                if (scope.status === 'rejected') continue;
+                const restriction = scope.value;
                 const titles = entries
                     .filter(
                         (rule) =>

@@ -3,7 +3,6 @@ import {
     ExecutionContext,
     ForbiddenException,
     Injectable,
-    Optional,
 } from '@nestjs/common';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -19,10 +18,8 @@ import { ConnectionAccessService } from './connection-access.service';
 export class FullConnectionAccessGuard implements CanActivate {
     private readonly logger = createLogger(FullConnectionAccessGuard.name);
 
-    constructor(
-        @Optional()
-        private readonly connectionAccess?: ConnectionAccessService,
-    ) {}
+    // Required: without it the guard could not tell who is restricted.
+    constructor(private readonly connectionAccess: ConnectionAccessService) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const request = context.switchToHttp().getRequest<{
@@ -33,7 +30,7 @@ export class FullConnectionAccessGuard implements CanActivate {
             };
             route?: { path?: string };
         }>();
-        const restriction = await this.connectionAccess?.restrictionFor(
+        const restriction = await this.connectionAccess.restrictionFor(
             request.user ?? {},
         );
         if (!restriction) return true;

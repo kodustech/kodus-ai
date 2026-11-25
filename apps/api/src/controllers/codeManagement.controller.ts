@@ -366,23 +366,10 @@ export class CodeManagementController {
     public async getOrganizationMembers(
         @Query() query: { teamId: string; connectionId?: string },
     ) {
-        const restriction = await this.readRestriction();
-        assertConnectionReadable(restriction, query.connectionId);
-        let connectionId = query.connectionId || undefined;
-        // A member granted only some connections reads one at a time; with a
-        // single grant that one is implied.
-        if (restriction && !connectionId) {
-            if (restriction.connectionIds.size !== 1) {
-                throw new ForbiddenException(
-                    'Name one of your Git connections (connectionId).',
-                );
-            }
-            [connectionId] = [...restriction.connectionIds];
-        }
         return this.getCodeManagementMemberListUseCase.execute(
             query.teamId,
             {},
-            connectionId,
+            await this.memberListConnection(query.connectionId),
         );
     }
 
@@ -436,8 +423,27 @@ export class CodeManagementController {
     ) {
         return this.getCodeManagementMemberListUseCase.refreshMembers(
             query.teamId,
-            query.connectionId || undefined,
+            await this.memberListConnection(query.connectionId),
         );
+    }
+
+    /**
+     * The connection whose members a call reads. A member granted only some
+     * connections reads one at a time; with a single grant that one is implied.
+     */
+    private async memberListConnection(
+        requested?: string,
+    ): Promise<string | undefined> {
+        const restriction = await this.readRestriction();
+        assertConnectionReadable(restriction, requested);
+        if (requested) return requested;
+        if (!restriction) return undefined;
+        if (restriction.connectionIds.size !== 1) {
+            throw new ForbiddenException(
+                'Name one of your Git connections (connectionId).',
+            );
+        }
+        return [...restriction.connectionIds][0];
     }
 
     @Get('/get-prs')

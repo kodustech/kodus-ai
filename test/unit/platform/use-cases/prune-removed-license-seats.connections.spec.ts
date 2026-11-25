@@ -13,14 +13,22 @@ const workspace = { organizationId: 'org-1', teamId: 'team-1' };
 const build = (opts: {
     connections: string[];
     seats: Record<string, string[]>;
+    /** Seats from before connections were recorded: in every connection's pool. */
+    shared?: string[];
     members: Record<string, string[] | 'unavailable'>;
     bound?: boolean;
     autoAssign?: Record<string, unknown>;
 }) => {
     const licenseService = {
-        getAllUsersWithLicense: jest.fn(async (otd: any) =>
-            (opts.seats[otd.integrationId] ?? []).map((git_id) => ({ git_id })),
-        ),
+        getAllUsersWithLicense: jest.fn(async (otd: any) => [
+            ...(opts.seats[otd.integrationId] ?? []).map((git_id) => ({
+                git_id,
+            })),
+            ...(opts.shared ?? []).map((git_id) => ({
+                git_id,
+                sharedAcrossConnections: true,
+            })),
+        ]),
         bindPrimaryConnection: jest.fn(async () => opts.bound ?? true),
         unassignLicenses: jest.fn(async (_otd: any, gitIds: string[]) => ({
             revoked: gitIds,
@@ -103,6 +111,22 @@ describe('PruneRemovedLicenseSeatsUseCase per Git connection', () => {
         );
         expect(result.status).toBe('members_unavailable');
         expect(result.revoked).toEqual(['2']);
+    });
+
+    it("never revokes a seat shared by every connection from one connection's member list", async () => {
+        const { useCase, licenseService } = build({
+            connections: ['gh-a', 'gl-b'],
+            seats: { 'gh-a': ['1'], 'gl-b': [] },
+            shared: ['5'],
+            members: { 'gh-a': ['1', '5'], 'gl-b': [] },
+        });
+
+        const result = await useCase.execute({
+            organizationAndTeamData: workspace,
+        });
+
+        expect(licenseService.unassignLicenses).not.toHaveBeenCalled();
+        expect(result.candidates).toEqual([]);
     });
 
     it('keeps the single-connection path unchanged', async () => {

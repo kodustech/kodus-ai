@@ -135,6 +135,28 @@ describe('DeleteIntegrationAndRepositoriesUseCase — one connection of several'
         expect(deletedRepoIds()).toEqual(['1']);
     });
 
+    it("keeps the review settings of a repository another connection of the workspace still lists", async () => {
+        const { useCase, createOrUpdateParametersUseCase } = build([
+            { uuid: 'gh-a', repos: ['1', '5'] },
+            { uuid: 'fj-b', repos: ['5'] },
+        ]);
+
+        await useCase.execute({
+            organizationId: ORG,
+            teamId: TEAM,
+            connectionId: 'gh-a',
+        });
+
+        expect(createOrUpdateParametersUseCase.execute).toHaveBeenCalledWith(
+            ParametersKey.CODE_REVIEW_CONFIG,
+            {
+                configs: { keep: true },
+                repositories: [{ id: '5', name: 'r-5' }],
+            },
+            { organizationId: ORG, teamId: TEAM },
+        );
+    });
+
     it('asks which connection when the workspace has several and none is named, before touching anything', async () => {
         const { useCase, deleteIntegrationUseCase, deletedRepoIds } = build([
             { uuid: 'gh-a', repos: ['1'] },

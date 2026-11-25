@@ -135,7 +135,7 @@ export class DeleteIntegrationAndRepositoriesUseCase {
             await this.removeRepositoriesFromCodeReviewConfig(
                 teamId,
                 organizationId,
-                connectionRepositoryIds,
+                connectionRepositoryIds && new Set(repositoriesIds),
             );
 
             this.logger.log({

@@ -154,7 +154,14 @@ export class SelfHostedLicenseService implements ILicenseService {
                         u.status === 'active' &&
                         inConnection(u, organizationAndTeamData),
                 )
-                .map((u) => ({ git_id: u.gitId }));
+                .map((u) =>
+                    organizationAndTeamData.integrationId && !u.connectionId
+                        ? {
+                              git_id: u.gitId,
+                              sharedAcrossConnections: true as const,
+                          }
+                        : { git_id: u.gitId },
+                );
         } catch (error) {
             this.logger.error({
                 message: 'Error getting assigned users',

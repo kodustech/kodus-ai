@@ -105,6 +105,11 @@ export type CreditCheckoutResult = {
 export type UserWithLicense = {
     git_id: string;
     status?: 'active' | 'inactive';
+    /**
+     * A seat from before seats recorded their Git connection: it serves every
+     * connection of the workspace, so no single connection's members decide it.
+     */
+    sharedAcrossConnections?: true;
 };
 
 export type TrialUnlock = {

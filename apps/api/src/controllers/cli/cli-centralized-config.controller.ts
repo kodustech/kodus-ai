@@ -18,6 +18,11 @@ import {
     ApiOperation,
     ApiTags,
 } from '@nestjs/swagger';
+import {
+    IIntegrationService,
+    INTEGRATION_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
+import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { connectionDownloadScope } from '@libs/centralized-config/utils/connection-download-scope';
 import { Response } from 'express';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -66,6 +71,8 @@ export class CliCentralizedConfigController {
         private readonly centralizedConfigInitUseCase: CentralizedConfigInitUseCase,
         private readonly centralizedConfigSyncUseCase: CentralizedConfigSyncUseCase,
         private readonly centralizedConfigDownloadZipUseCase: CentralizedConfigDownloadZipUseCase,
+        @Inject(INTEGRATION_SERVICE_TOKEN)
+        private readonly integrationService: IIntegrationService,
     ) {}
 
     @Get('/status')
@@ -493,20 +500,34 @@ export class CliCentralizedConfigController {
     private async connectionsOf(
         context: OrganizationAndTeamData,
     ): Promise<Array<{ integrationId: string; repositoryIds: string[] }>> {
-        const configs =
-            (await this.integrationConfigService.findAllOfTeamByConfigKey(
+        // Every active connection counts, saved repositories or not.
+        const [connections, configs] = await Promise.all([
+            this.integrationService.find({
+                organization: { uuid: context.organizationId },
+                team: { uuid: context.teamId },
+                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+                status: true,
+            }),
+            this.integrationConfigService.findAllOfTeamByConfigKey(
                 IntegrationConfigKey.REPOSITORIES,
                 context,
-            )) ?? [];
-        return configs
-            .filter((config) => config?.integration?.uuid)
-            .map((config) => ({
-                integrationId: config.integration.uuid,
-                repositoryIds: (Array.isArray(config.configValue)
-                    ? (config.configValue as Repositories[])
-                    : []
-                ).map((repository) => String(repository.id)),
-            }));
+            ),
+        ]);
+        const repositoriesOf = new Map(
+            (configs ?? [])
+                .filter((config) => config?.integration?.uuid)
+                .map((config) => [
+                    config.integration.uuid,
+                    (Array.isArray(config.configValue)
+                        ? (config.configValue as Repositories[])
+                        : []
+                    ).map((repository) => String(repository.id)),
+                ]),
+        );
+        return (connections ?? []).map((connection) => ({
+            integrationId: connection.uuid,
+            repositoryIds: repositoriesOf.get(connection.uuid) ?? [],
+        }));
     }
 
     /**

@@ -229,10 +229,11 @@ export class IntegrationConfigService implements IIntegrationConfigService {
                         configKey,
                         organizationAndTeamData,
                     );
-                const repositories = rows.flatMap((row) =>
+                // No row at all is "no config"; saved empty lists are an empty list.
+                if (!rows?.length) return null;
+                return rows.flatMap((row) =>
                     Array.isArray(row?.configValue) ? row.configValue : [],
-                );
-                return repositories.length ? (repositories as T) : null;
+                ) as T;
             }
 
             const data = await this.findOneIntegrationConfigWithIntegrations(

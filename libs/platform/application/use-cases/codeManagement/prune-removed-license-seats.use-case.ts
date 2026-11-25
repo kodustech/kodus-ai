@@ -140,6 +140,15 @@ export class PruneRemovedLicenseSeatsUseCase {
             organizationAndTeamData,
         );
         const seatIds = (activeSeats ?? []).map((seat) => String(seat.git_id));
+        // Seats every connection shares: one connection's members cannot
+        // show their holder left, so a per-connection run leaves them.
+        const sharedIds = new Set(
+            organizationAndTeamData.integrationId
+                ? (activeSeats ?? [])
+                      .filter((seat) => seat.sharedAcrossConnections)
+                      .map((seat) => String(seat.git_id))
+                : [],
+        );
 
         const memberList = await this.organizationMemberListService.fetch(
             organizationAndTeamData,
@@ -184,7 +193,20 @@ export class PruneRemovedLicenseSeatsUseCase {
         const candidates = seatIds
             .filter((gitId) => !memberIds.has(gitId))
             .filter((gitId) => !protectedIds.has(gitId))
+            .filter((gitId) => !sharedIds.has(gitId))
             .filter((gitId) => !requested || requested.has(gitId));
+
+        if (sharedIds.size) {
+            this.logger.log({
+                message:
+                    'Left seats shared by every Git connection out of the prune',
+                context: PruneRemovedLicenseSeatsUseCase.name,
+                metadata: {
+                    ...organizationAndTeamData,
+                    sharedSeatCount: sharedIds.size,
+                },
+            });
+        }
 
         if (dryRun || candidates.length === 0) {
             return { status: 'ok', candidates, revoked: [], failed: [] };

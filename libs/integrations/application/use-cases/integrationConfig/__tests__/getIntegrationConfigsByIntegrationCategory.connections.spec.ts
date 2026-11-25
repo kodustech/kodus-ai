@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 
 import { GetIntegrationConfigsByIntegrationCategoryUseCase } from '../getIntegrationConfigsByIntegrationCategory.use-case';
@@ -73,5 +74,17 @@ describe('GetIntegrationConfigsByIntegrationCategoryUseCase — Git connections'
                 configValue: [{ id: '2', connectionId: 'gl-b' }],
             },
         ]);
+    });
+
+    it('refuses a named connection that is not in the workspace instead of answering it has nothing', async () => {
+        const { useCase } = build({ 'gh-a': [{ id: '1' }] });
+
+        await expect(
+            useCase.execute({
+                teamId: 'team-1',
+                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+                connectionId: 'removed',
+            }),
+        ).rejects.toBeInstanceOf(NotFoundException);
     });
 });

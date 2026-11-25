@@ -204,7 +204,11 @@ export const getConnectionAccess = async (
     }>(CODE_MANAGEMENT_API_PATHS.CONNECTION_ACCESS(connectionId), {
         params: { teamId },
     });
-    return data?.userIds ?? [];
+    // An unreadable answer is not "no one": callers must not save over it.
+    if (!Array.isArray(data?.userIds)) {
+        throw new Error("Could not read who reads this connection");
+    }
+    return data.userIds;
 };
 
 export const setConnectionAccess = (

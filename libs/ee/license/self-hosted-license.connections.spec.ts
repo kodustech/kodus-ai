@@ -71,6 +71,12 @@ describe('SelfHostedLicenseService per Git connection', () => {
         const seats = await service.getAllUsersWithLicense(gitlab);
 
         expect(seats.map((s) => s.git_id).sort()).toEqual(['2', '3']);
+        expect(seats.find((s) => s.git_id === '3')).toMatchObject({
+            sharedAcrossConnections: true,
+        });
+        expect(
+            seats.find((s) => s.git_id === '2')?.sharedAcrossConnections,
+        ).toBeUndefined();
     });
 
     it("releases a seat on the named connection only", async () => {

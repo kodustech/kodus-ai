@@ -289,8 +289,9 @@ export class ConnectionAccessService {
     }
 
     private forget(userIds: string[]): void {
+        const users = new Set(userIds);
         for (const key of this.scopes.keys()) {
-            if (userIds.some((userId) => key.endsWith(`:${userId}`))) {
+            if (users.has(key.slice(key.lastIndexOf(':') + 1))) {
                 this.scopes.delete(key);
             }
         }

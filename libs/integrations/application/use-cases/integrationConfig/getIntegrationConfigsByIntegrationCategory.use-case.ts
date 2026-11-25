@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Inject } from '@nestjs/common';
+import { Inject, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
 
@@ -104,13 +104,17 @@ export class GetIntegrationConfigsByIntegrationCategoryUseCase implements IUseCa
             integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
             status: true,
         };
-        const connections = connectionId
-            ? [
-                  await this.integrationService.findOne({
-                      ...scope,
-                      uuid: connectionId,
-                  }),
-              ]
+        const named = connectionId
+            ? await this.integrationService.findOne({
+                  ...scope,
+                  uuid: connectionId,
+              })
+            : undefined;
+        if (connectionId && !named) {
+            throw new NotFoundException('Git connection not found.');
+        }
+        const connections = named
+            ? [named]
             : ((await this.integrationService.find(scope)) ?? []);
 
         const readable = readableConnectionIds

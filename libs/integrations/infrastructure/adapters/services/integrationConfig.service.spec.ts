@@ -113,7 +113,20 @@ describe('IntegrationConfigService.findIntegrationConfigFormatted — connection
         expect(repository.findAllOfTeamByConfigKey).not.toHaveBeenCalled();
     });
 
-    it('returns null when no connection lists any repository', async () => {
+    it('answers an empty list, not "no config", when the saved lists are empty', async () => {
+        const service = new IntegrationConfigService(
+            repositoryWith([{ integrationId: 'gh', value: [] }]),
+        );
+
+        await expect(
+            service.findIntegrationConfigFormatted(
+                IntegrationConfigKey.REPOSITORIES,
+                orgTeam,
+            ),
+        ).resolves.toEqual([]);
+    });
+
+    it('returns null when no connection has a repositories config', async () => {
         const service = new IntegrationConfigService(repositoryWith([]));
 
         await expect(

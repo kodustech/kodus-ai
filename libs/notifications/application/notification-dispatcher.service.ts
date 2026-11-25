@@ -717,18 +717,31 @@ export class NotificationDispatcherService {
         if (!this.connectionAccess || (!repository?.id && !repository?.name)) {
             return members;
         }
-        const readers: ResolvedRecipient[] = [];
-        for (const member of members) {
-            const restriction = await this.connectionAccess.restrictionFor({
-                uuid: member.userId,
-                role: member.role,
-                organization: { uuid: organizationId },
+        const scopes = await Promise.allSettled(
+            members.map((member) =>
+                this.connectionAccess.restrictionFor({
+                    uuid: member.userId,
+                    role: member.role,
+                    organization: { uuid: organizationId },
+                }),
+            ),
+        );
+        // A member whose access could not be read is left out, never widened.
+        const unread = scopes.filter((s) => s.status === 'rejected').length;
+        if (unread) {
+            this.logger.warn({
+                message: 'notification_readers_unresolved',
+                context: NotificationDispatcherService.name,
+                metadata: { organizationId, unresolvedCount: unread },
             });
-            if (!restriction || restriction.allowsRepository(repository)) {
-                readers.push(member);
-            }
         }
-        return readers;
+        return members.filter((_member, index) => {
+            const scope = scopes[index];
+            return (
+                scope.status === 'fulfilled' &&
+                (!scope.value || scope.value.allowsRepository(repository))
+            );
+        });
     }
 
     private async resolveAllOrgMembers(

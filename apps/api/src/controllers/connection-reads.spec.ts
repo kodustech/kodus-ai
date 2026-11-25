@@ -115,6 +115,26 @@ describe('connection reads for a member granted some connections', () => {
         expect(execute).toHaveBeenCalledWith('t', {}, 'gh-a');
     });
 
+    it('refreshes the members of a granted connection only', async () => {
+        const refreshMembers = jest
+            .fn()
+            .mockResolvedValue({ status: 'ok', members: [] });
+        const controller = make(CodeManagementController, {
+            getCodeManagementMemberListUseCase: { refreshMembers },
+        });
+
+        await controller.refreshOrganizationMembers({ teamId: 't' });
+        await expect(
+            controller.refreshOrganizationMembers({
+                teamId: 't',
+                connectionId: 'gl-b',
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+
+        expect(refreshMembers).toHaveBeenCalledTimes(1);
+        expect(refreshMembers).toHaveBeenCalledWith('t', 'gh-a');
+    });
+
     it("answers a hook status for the caller's organization and readable repositories only", async () => {
         const execute = jest.fn().mockResolvedValue({ active: true });
         const controller = make(CodeManagementController, {
