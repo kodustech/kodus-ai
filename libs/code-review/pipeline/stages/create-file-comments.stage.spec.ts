@@ -254,6 +254,11 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
             'new-1',
             'kept',
         ]);
+        const posted =
+            mockCommentManagerService.createLineComments.mock.calls[0][3];
+        expect(
+            posted.map((c: { suggestion: { id: string } }) => c.suggestion.id),
+        ).toEqual(['new-1', 'kept']);
         const fallbacks =
             mockCommentManagerService.createLineComments.mock.calls[0][6];
         expect(fallbacks.low.map((s: { id: string }) => s.id)).toEqual([
