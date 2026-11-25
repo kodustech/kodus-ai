@@ -143,7 +143,9 @@ export function FileTreeGrouped({
                                     const file = resolveFile(path);
                                     if (!file) return null;
                                     const isActive = file.path === activePath;
-                                    const isViewed = !!viewed[file.path];
+                                    const isViewed =
+                                        Object.hasOwn(viewed, file.path) &&
+                                        !!viewed[file.path];
                                     const count =
                                         issueCount.get(file.path) ?? 0;
                                     return (

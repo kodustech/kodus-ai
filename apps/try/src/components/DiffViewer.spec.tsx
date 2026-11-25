@@ -193,12 +193,21 @@ describe("DiffViewer + FileTree + RightSidebar path identity", () => {
                 "src/deléted.txt",
                 "src/renamé.txt",
             ];
+            const patchMarkers: Record<string, string> = {
+                "dir b/plain.txt": "+more",
+                "src/app.ts": "+export const ok = 2;",
+                "src/café.txt": "+updated",
+                "src/deléted.txt": "-bye",
+                "src/renamé.txt": "rename from plain.txt",
+            };
             for (const p of expectedPaths) {
                 const article = document.getElementById(`file-${p}`);
                 expect(article).not.toBeNull();
-                expect(
-                    within(article as HTMLElement).getByTestId("patch-diff"),
-                ).toBeInTheDocument();
+                const panel = within(article as HTMLElement).getByTestId(
+                    "patch-diff",
+                );
+                expect(panel).toBeInTheDocument();
+                expect(panel.textContent ?? "").toContain(patchMarkers[p]);
             }
 
             // Preserve ordinary / deleted / renamed status badges.
@@ -326,7 +335,19 @@ describe("DiffViewer + FileTree + RightSidebar path identity", () => {
             const cafeBtn = within(nav)
                 .getByText("src/café.txt")
                 .closest("button");
+            const renameBtn = within(nav)
+                .getByText("src/renamé.txt")
+                .closest("button");
             expect(cafeBtn).not.toBeNull();
+            expect(renameBtn).not.toBeNull();
+            expect(cafeBtn).toHaveClass("bg-[var(--bg-input)]");
+            expect(within(nav).getByText("src/café.txt")).toHaveClass(
+                "line-through",
+            );
+            expect(renameBtn).not.toHaveClass("bg-[var(--bg-input)]");
+            expect(within(nav).getByText("src/renamé.txt")).not.toHaveClass(
+                "line-through",
+            );
             expect(within(cafeBtn!).getByText("1")).toBeInTheDocument();
 
             fireEvent.click(cafeBtn!);
@@ -416,6 +437,14 @@ describe("DiffViewer + FileTree + RightSidebar path identity", () => {
         expect(cafeArticle).not.toBeNull();
         expect(literalArticle).not.toBeNull();
         expect(cafeArticle).not.toBe(literalArticle);
+        expect(
+            within(cafeArticle as HTMLElement).getByTestId("patch-diff")
+                .textContent,
+        ).toContain('diff --git "a/src/caf\\303\\251.txt"');
+        expect(
+            within(literalArticle as HTMLElement).getByTestId("patch-diff")
+                .textContent,
+        ).toContain('diff --git "a/src/caf\\\\303\\\\251.txt"');
     });
 
     it("keeps distinct rows and jump targets when FileTreeGrouped receives canonical decoded paths", () => {
@@ -469,4 +498,90 @@ describe("DiffViewer + FileTree + RightSidebar path identity", () => {
             document.getElementById("file-src/caf\\303\\251.txt"),
         ).not.toBeNull();
     });
+
+    it.each<[string, Record<string, boolean>, boolean]>([
+        ["empty viewed map", {}, false],
+        [
+            "explicit own constructor entry",
+            Object.fromEntries([["constructor", true]]),
+            true,
+        ],
+    ])(
+        "treats prototype key 'constructor' as viewed only when present as an own property (%s)",
+        (_label, viewedMap, expectedViewed) => {
+            const rawDiff = [
+                "diff --git a/constructor b/constructor",
+                "@@ -1 +1 @@",
+                "-a",
+                "+b",
+            ].join("\n");
+            const files = parseUnifiedDiff(rawDiff);
+            render(
+                <div>
+                    <FileTree
+                        files={files}
+                        issues={[]}
+                        activePath={null}
+                        viewed={viewedMap}
+                        onPick={() => undefined}
+                    />
+                    <FileTreeGrouped
+                        groupings={[
+                            {
+                                title: "Root files",
+                                explanation: "Prototype key check",
+                                files: ["constructor"],
+                            },
+                        ]}
+                        files={files}
+                        rawDiff={rawDiff}
+                        issues={[]}
+                        activePath={null}
+                        viewed={viewedMap}
+                        onPick={() => undefined}
+                    />
+                    <DiffViewer
+                        files={files}
+                        issues={[]}
+                        rawDiff={rawDiff}
+                        viewed={viewedMap}
+                        onToggleViewed={() => undefined}
+                    />
+                </div>,
+            );
+
+            const treeNav = screen.getByRole("navigation", {
+                name: "Changed files",
+            });
+            const groupedNav = screen.getByRole("navigation", {
+                name: "Changed files (grouped)",
+            });
+            const article = document.getElementById("file-constructor");
+            expect(article).not.toBeNull();
+            const viewedBtn = within(article as HTMLElement).getByRole(
+                "button",
+                { name: "Viewed" },
+            );
+
+            if (expectedViewed) {
+                expect(within(treeNav).getByText("constructor")).toHaveClass(
+                    "line-through",
+                );
+                expect(within(groupedNav).getByText("constructor")).toHaveClass(
+                    "line-through",
+                );
+                expect(article).toHaveClass("opacity-70");
+                expect(viewedBtn).toHaveClass("text-[var(--green)]");
+            } else {
+                expect(
+                    within(treeNav).getByText("constructor"),
+                ).not.toHaveClass("line-through");
+                expect(
+                    within(groupedNav).getByText("constructor"),
+                ).not.toHaveClass("line-through");
+                expect(article).not.toHaveClass("opacity-70");
+                expect(viewedBtn).not.toHaveClass("text-[var(--green)]");
+            }
+        },
+    );
 });

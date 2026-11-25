@@ -85,7 +85,10 @@ export function DiffViewer({
                         issues={issuesByFile.get(file.path) ?? []}
                         pr={pr}
                         promptCtx={promptCtx}
-                        viewed={!!viewed[file.path]}
+                        viewed={
+                            Object.hasOwn(viewed, file.path) &&
+                            !!viewed[file.path]
+                        }
                         onToggleViewed={(v) =>
                             onToggleViewed(file.path, v)
                         }

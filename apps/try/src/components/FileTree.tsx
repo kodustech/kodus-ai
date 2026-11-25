@@ -209,7 +209,8 @@ function TreeRow({
 
     const file = node.file;
     const isActive = activePath === file.path;
-    const isViewed = !!viewed[file.path];
+    const isViewed =
+        Object.hasOwn(viewed, file.path) && !!viewed[file.path];
     const count = issueCount.get(file.path) ?? 0;
 
     return (
