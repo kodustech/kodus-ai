@@ -541,12 +541,14 @@ export const RegisterPageContent = () => {
     // When an on-screen keyboard opens, the focused field can end up behind
     // it. iOS Safari and Chrome for Android shrink only the visual viewport,
     // so scrollIntoView() sees nothing clipped; scroll the form's scroll
-    // column by however far the field hangs below the visible area instead.
+    // column by however far the field sits outside the visible area instead
+    // (below it, or above it when the browser's own reveal overshoots).
     // Only on a shrink, so a later URL-bar or rotation resize does not snap
     // the column back to a field that still has focus.
     useEffect(() => {
         const viewport = window.visualViewport;
         const target = viewport ?? window;
+        const visibleTop = () => (viewport ? viewport.offsetTop : 0);
         const visibleBottom = () =>
             viewport
                 ? viewport.offsetTop + viewport.height
@@ -562,8 +564,13 @@ export const RegisterPageContent = () => {
             const active = document.activeElement;
             if (!(active instanceof HTMLInputElement)) return;
 
-            const overflow = active.getBoundingClientRect().bottom - bottom;
-            if (overflow <= 0) return;
+            // Positive scrolls the column down, negative up; 16px of margin
+            // either way so the field is not flush with the edge.
+            const rect = active.getBoundingClientRect();
+            const below = rect.bottom - bottom;
+            const above = rect.top - visibleTop();
+            if (below <= 0 && above >= 0) return;
+            const delta = below > 0 ? below + 16 : above - 16;
 
             let scroller = active.parentElement;
             while (
@@ -575,7 +582,7 @@ export const RegisterPageContent = () => {
             ) {
                 scroller = scroller.parentElement;
             }
-            if (scroller) scroller.scrollTop += overflow + 16;
+            if (scroller) scroller.scrollTop += delta;
         };
 
         target.addEventListener("resize", onResize);
