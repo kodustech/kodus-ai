@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
     approvalPoliciesSchema,
     type NamedApprovalPolicy,
@@ -949,6 +949,12 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsArray()
     @ArrayMaxSize(50)
     @Type(() => Object)
+    // Stored as parsed (ids and names trimmed, unknown keys dropped), so a
+    // reader of the raw config matches a default by its id.
+    @Transform(({ value }) => {
+        const parsed = riskCriteriaInputSchema.safeParse(value);
+        return parsed.success ? parsed.data : value;
+    })
     @ValidateBy({
         name: 'riskCriteria',
         validator: {

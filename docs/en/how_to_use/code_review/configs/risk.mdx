@@ -45,7 +45,7 @@ An assessment covers one PR head, title and description. A new commit holds auto
 
 Kody finds risk when a PR falls under an enabled rule. Kodus ships these rules, all on:
 
-- `kodus-security` **Security and permissions:** authentication, authorization, permissions, tenant isolation, input validation, or any check that protects data or actions.
+- `kodus-security` **Security and permissions:** authentication, authorization, permissions, tenant isolation, input validation, or any check that protects data or actions, including a new endpoint, handler or job that reads or changes data without the guard its neighbours have.
 - `kodus-money` **Money, billing and licensing:** payments, prices, charges, credits, invoices, subscriptions or licensing.
 - `kodus-data` **Stored data and migrations:** data or schema migrations, deleting or rewriting stored data, or the shape of persisted data and the queries that read or write it.
 - `kodus-infrastructure` **Secrets and infrastructure:** secrets, credentials, infrastructure, networking or the runtime environment.
@@ -57,7 +57,9 @@ Kody finds risk when a PR falls under an enabled rule. Kodus ships these rules, 
 
 You can turn a Kodus rule off, or edit its name, instructions or file filters. Your edits replace Kodus's version until you click **Reset**; what you leave unchanged follows Kodus's updates. Add your own rules for team context, such as the consequences of changing account permissions or deleting customer data.
 
-A rule has a name, instructions, a switch and optional included/excluded file patterns. The settings keep up to 50 entries, counting your rules and the Kodus rules you changed. A name is up to 120 characters and instructions up to 4,000; in a file, each `id` must be unique. A rule with file filters applies only to the changes in matching files; Kody still assesses the rest of the PR against the other rules.
+A rule has a name, instructions, a switch and optional included/excluded file patterns. The settings keep up to 50 entries, counting your rules and the Kodus rules you changed. A name is up to 120 characters and instructions up to 4,000; in a file, each `id` must be unique. A rule with file filters applies only to the changes in matching files; Kody still assesses the rest of the PR against the other rules. When no enabled rule applies to the changed files, Kody finds no risk without calling the model, so a clean review can approve.
+
+Risk instructions saved before risk rules existed appear as **Team context**. Kody reads them as context rather than as a rule: they can say that a change needs a person or that it does not. When they ask for a person, the approval comment names **Team context**.
 
 The assessment reads the diff, the PR title and description, and the bug-fix history of the changed areas. Missing history is unknown information, not evidence of safety.
 
@@ -84,6 +86,6 @@ riskCriteria:
       - '**/*.test.ts'
 ```
 
-A Kodus rule is listed by its `id` with only what you change. An entry whose `id` matches no Kodus rule needs a name and instructions. `riskCriteria: []` applies Kodus's rules as shipped. `kodus config remote risk-rules .` lists the rules in effect, with their ids. To stop assessment, set `riskAssessmentActive: false`.
+A Kodus rule is listed by its `id` with only what you change. An entry whose `id` matches no Kodus rule needs a name and instructions. `riskCriteria: []` applies Kodus's rules as shipped. A repository or directory that sets `riskCriteria` replaces the list it inherits, so list there every change it needs, including the organization's own rules. `kodus config remote risk-rules .` lists the rules in effect, with their ids. To stop assessment, set `riskAssessmentActive: false`.
 
 A configuration that never set **Risk assessment** keeps its existing approval risk behavior until you change this setting. Turning automatic approval on or off does not change the **Risk assessment** switch.

@@ -1456,6 +1456,266 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             expect(deps.prRiskAssessment.assess).toHaveBeenCalledTimes(1);
         });
 
+        it('retries a failure that may pass after a backoff, and stops after the last attempt', async () => {
+            const { cron, deps } = makeCron();
+            const now = jest.spyOn(Date, 'now');
+            let clock = 1_000_000;
+            now.mockImplementation(() => clock);
+            deps.codeManagementService.getPullRequest.mockResolvedValue(live);
+            let current: any = execution({
+                status: 'assessed',
+                riskIdentified: false,
+                reason: 'No material risk.',
+                snapshot,
+            });
+            deps.automationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async () => current,
+            );
+            deps.automationExecutionService.update.mockImplementation(
+                async (_: unknown, { dataExecution }: any) => {
+                    current = { ...current, dataExecution };
+                },
+            );
+            deps.prRiskAssessment.assess.mockResolvedValue({
+                assessment: {
+                    status: 'unavailable',
+                    reason: 'Rate limited.',
+                    failure: {
+                        category: 'RATE_LIMIT',
+                        errorName: 'APICallError',
+                        httpStatus: 429,
+                    },
+                },
+            });
+            // Each pass is its own cron run, with its own reassessment budget.
+            const nextRun = () => {
+                (cron as any).riskReassessments = {
+                    total: 0,
+                    byOrg: new Map(),
+                };
+                return run(cron);
+            };
+            try {
+                await nextRun();
+                expect(current.dataExecution.riskRetry).toMatchObject({
+                    attempts: 1,
+                    retryAfter: clock + 2 * 60 * 1000,
+                });
+                // Before the backoff: the stored failure stands.
+                clock += 60 * 1000;
+                await nextRun();
+                expect(deps.prRiskAssessment.assess).toHaveBeenCalledTimes(1);
+                for (let attempt = 2; attempt <= 6; attempt++) {
+                    clock = current.dataExecution.riskRetry.retryAfter;
+                    await nextRun();
+                    expect(deps.prRiskAssessment.assess).toHaveBeenCalledTimes(
+                        attempt,
+                    );
+                }
+                expect(current.dataExecution.riskRetry).toEqual(
+                    expect.not.objectContaining({
+                        retryAfter: expect.anything(),
+                    }),
+                );
+                clock += 24 * 60 * 60 * 1000;
+                await nextRun();
+                expect(deps.prRiskAssessment.assess).toHaveBeenCalledTimes(6);
+            } finally {
+                now.mockRestore();
+            }
+        });
+
+        it('does not retry a failure the same input repeats', async () => {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getPullRequest.mockResolvedValue(live);
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                execution({
+                    status: 'assessed',
+                    riskIdentified: false,
+                    reason: 'No material risk.',
+                    snapshot,
+                }),
+            );
+            deps.prRiskAssessment.assess.mockResolvedValue({
+                assessment: {
+                    status: 'unavailable',
+                    reason: 'The diff is too large.',
+                    failure: {
+                        category: 'CONTEXT_OVERFLOW',
+                        errorName: 'RiskPromptTooLargeError',
+                        code: 'diff_too_large',
+                    },
+                },
+            });
+            await run(cron);
+            expect(
+                deps.automationExecutionService.update.mock.calls[0][1]
+                    .dataExecution.riskRetry,
+            ).toBeUndefined();
+        });
+
+        it('approves a zero-comment PR the review held on risk once this head is assessed low', async () => {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getReviewStatusByPullRequest
+                .mockResolvedValueOnce(PullRequestReviewState.NONE)
+                .mockResolvedValueOnce(PullRequestReviewState.APPROVED);
+            deps.codeManagementService.getPullRequest.mockResolvedValue(live);
+            const held = execution({
+                status: 'assessed',
+                riskIdentified: true,
+                reason: 'Changes billing.',
+                snapshot,
+            });
+            held.dataExecution.approvalDecision = {
+                kind: 'hold',
+                reason: 'Risk was identified in this PR.',
+            } as any;
+            held.dataExecution.approvalRisk = {
+                level: 'medium',
+                reviewedHeadSha: 'same-sha',
+                reason: 'Changes billing.',
+            };
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                held,
+            );
+            deps.prRiskAssessment.assess.mockResolvedValue({
+                assessment: fresh(false),
+            });
+
+            expect(await run(cron)).toBe(true);
+            expect(
+                deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).toHaveBeenCalledTimes(1);
+        });
+
+        it('still waits for a review when the review held a head whose risk was already low', async () => {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getPullRequest.mockResolvedValue(live);
+            const held = execution({
+                status: 'assessed',
+                riskIdentified: false,
+                reason: 'No material risk.',
+                snapshot,
+            });
+            held.dataExecution.approvalDecision = {
+                kind: 'hold',
+                reason: 'The PR changes a team-marked sensitive path: a.ts.',
+            } as any;
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                held,
+            );
+            deps.prRiskAssessment.assess.mockResolvedValue({
+                assessment: fresh(false),
+            });
+
+            expect(await run(cron)).toBe(false);
+            expect(
+                deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('stores an assessment the final check had to make and approves on a later pass', async () => {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getReviewStatusByPullRequest.mockResolvedValue(
+                PullRequestReviewState.NONE,
+            );
+            // Current when the pass starts; edited again before the final read.
+            deps.codeManagementService.getPullRequest
+                .mockResolvedValueOnce(live)
+                .mockResolvedValue({ ...live, body: 'Edited once more.' });
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                execution({
+                    status: 'assessed',
+                    riskIdentified: false,
+                    reason: 'No material risk.',
+                    snapshot: {
+                        ...snapshot,
+                        descriptionKey: prRiskDescriptionKey(live),
+                    },
+                }),
+            );
+            deps.prRiskAssessment.assess.mockResolvedValue({
+                assessment: {
+                    ...fresh(false),
+                    snapshot: {
+                        ...snapshot,
+                        descriptionKey: prRiskDescriptionKey({
+                            ...live,
+                            body: 'Edited once more.',
+                        }),
+                    },
+                },
+            });
+
+            expect(await run(cron)).toBe(false);
+            expect(deps.prRiskAssessment.assess).toHaveBeenCalledTimes(1);
+            expect(
+                deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('spends no reassessment on a PR the approval scope already holds', async () => {
+            const { cron, deps } = makeCron();
+            deps.codeManagementService.getPullRequest.mockResolvedValue({
+                ...live,
+                labels: [],
+            });
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                execution({
+                    status: 'assessed',
+                    riskIdentified: false,
+                    reason: 'No material risk.',
+                    snapshot,
+                }),
+            );
+
+            expect(
+                await (cron as any).shouldApprovePR({
+                    organizationAndTeamData: {
+                        organizationId: 'org-1',
+                        teamId: 'team-1',
+                    },
+                    pr: makeOpenPr(77, 'repo-b'),
+                    codeReviewConfig: {
+                        pullRequestApprovalActive: true,
+                        riskAssessmentActive: true,
+                        approvalLabels: ['ready'],
+                    },
+                    teamAutomationId: 'team-automation-1',
+                }),
+            ).toBe(false);
+            expect(deps.prRiskAssessment.assess).not.toHaveBeenCalled();
+        });
+
+        it('starts at most five reassessments per organization in one run', async () => {
+            const { cron, deps } = makeCron();
+            deps.prRiskAssessment.assess.mockResolvedValue({
+                assessment: fresh(false),
+            });
+            const lookups = [];
+            for (let i = 0; i < 6; i++)
+                lookups.push(
+                    await (cron as any).currentSharedRisk({
+                        organizationAndTeamData: {
+                            organizationId: 'org-1',
+                            teamId: 'team-1',
+                        },
+                        repository: { id: 'repo-b', name: 'repo-b' },
+                        prNumber: 77,
+                        pullRequest: live,
+                        config: { riskAssessmentActive: true },
+                        execution: execution({
+                            status: 'assessed',
+                            riskIdentified: false,
+                            reason: 'No material risk.',
+                            snapshot,
+                        }),
+                    }),
+                );
+            expect(deps.prRiskAssessment.assess).toHaveBeenCalledTimes(5);
+            expect(lookups.at(-1)).toEqual({ deferred: true });
+        });
+
         it('still waits for a review when the commits changed', async () => {
             const { cron, deps } = makeCron();
             deps.codeManagementService.getPullRequest.mockResolvedValue({
