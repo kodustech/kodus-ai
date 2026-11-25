@@ -10,11 +10,16 @@ import { MAX_DOCUMENTS, MAX_RELATED_CHARS } from './tracker';
  */
 export interface IssueArtifactContext {
     documents: NonNullable<TaskLinks['documents']>;
-    /** Present when some artifact was not read in full; names each one. */
-    incompleteNote?: string;
+    /**
+     * Present when some artifact was not read in full: plain sentences for
+     * `Task.coverageNotes`, never part of the description or its criteria.
+     */
+    coverageNotes?: string[];
 }
 
 const CUT = '… (cut)';
+/** Unread artifacts named in the note; the rest are counted. */
+const MAX_NAMED = 5;
 
 /** One line of untrusted text, safe to put in a label. */
 function inline(value: string): string {
@@ -68,17 +73,15 @@ export function artifactContext(
             typeof a.content !== 'string' ||
             !a.content.trim()
         ) {
-            unread.push(`${label} (not read: invalid or empty)`);
+            unread.push(`${label} (invalid or empty)`);
         } else if (documents.length >= MAX_DOCUMENTS) {
-            unread.push(
-                `${label} (not read: over the ${MAX_DOCUMENTS}-document limit)`,
-            );
+            unread.push(`${label} (over the ${MAX_DOCUMENTS}-document limit)`);
         } else {
             const text = delimited(a.content);
             documents.push({ id: label, title: label, content: text });
             if (text.endsWith(`${CUT}\n</artifact_data>`)) {
                 unread.push(
-                    `${label} (read only in part: cut at the size limit)`,
+                    `${label} (only read in part, cut at the size limit)`,
                 );
             }
         }
@@ -97,7 +100,7 @@ export function artifactContext(
         ]
             .filter(Boolean)
             .join(', ');
-        unread.push(`${labelOf(u.number, u.name)} (not read: ${reason})`);
+        unread.push(`${labelOf(u.number, u.name)} (${reason})`);
     }
 
     if (!documents.length && !unread.length) {
@@ -107,11 +110,9 @@ export function artifactContext(
         documents,
         ...(unread.length
             ? {
-                  incompleteNote: [
-                      '## Coverage incomplete: GitHub issue artifacts',
-                      'Some artifacts of this issue were not read in full, so Business Logic coverage is incomplete. What they contain is unknown: do not assume it.',
-                      ...unread.map((line) => `- ${line}`),
-                  ].join('\n'),
+                  coverageNotes: [
+                      `Coverage incomplete: not every artifact of this issue was read (${unread.slice(0, MAX_NAMED).join('; ')}${unread.length > MAX_NAMED ? `; and ${unread.length - MAX_NAMED} more` : ''}). What they contain is unknown, so do not assume it.`,
+                  ],
               }
             : {}),
     };

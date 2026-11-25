@@ -1,5 +1,9 @@
 import { buildBusinessRulesAnalysisPrompt } from '../judge/analysis-prompt.builder';
-import { formatTaskForJudge } from '../task-quality';
+import {
+    applyCriteriaLocation,
+    formatTaskForJudge,
+    gradeTask,
+} from '../task-quality';
 import { extractTaskReferences } from '../task-references';
 import { GitIssuesTracker } from './git-issues.tracker';
 import type { McpToolSession } from './mcp-tool-session';
@@ -233,5 +237,64 @@ describe('GitIssuesTracker: GitHub issue artifacts', () => {
         expect(
             prompt.match(/^INSTRUCTIONS:$/gm)?.length ?? 0,
         ).toBeLessThanOrEqual(1);
+    });
+});
+
+describe('GitIssuesTracker: the coverage note never grades the task', () => {
+    const criteria = { location: 'auto' } as const;
+    const unreadTwo = [
+        { number: 4, name: 'd.md', reason: 'forbidden', status: 403 },
+        { number: 5, name: 'e.md', reason: 'forbidden', status: 403 },
+    ];
+
+    it('leaves criteria and grade as they are without the note', async () => {
+        const body = '- An empty form returns 422\n- A valid form returns 201';
+        const baseline = applyCriteriaLocation(
+            (await read(issue({ body }))).task,
+            criteria,
+        );
+        const withNote = applyCriteriaLocation(
+            (await read(issue({ body, unreadArtifacts: unreadTwo }))).task,
+            criteria,
+        );
+        expect(baseline.acceptanceCriteria).toEqual([
+            'An empty form returns 422',
+            'A valid form returns 201',
+        ]);
+        expect(withNote.acceptanceCriteria).toEqual(
+            baseline.acceptanceCriteria,
+        );
+        expect(withNote.description).toBe(baseline.description);
+        expect(gradeTask(withNote)).toBe(gradeTask(baseline));
+        expect(withNote.coverageNotes?.join(' ')).toMatch(
+            /coverage incomplete/i,
+        );
+    });
+
+    it('keeps an empty-body issue MINIMAL when the artifact list was refused', async () => {
+        const { task, taskText } = await read(
+            issue({
+                body: '',
+                unreadArtifacts: [{ reason: 'list_failed', status: 403 }],
+            }),
+        );
+        const graded = applyCriteriaLocation(task, criteria);
+        expect(graded.acceptanceCriteria).toBeUndefined();
+        expect(gradeTask(graded)).toBe('MINIMAL');
+        expect(taskText).toMatch(/coverage incomplete/i);
+    });
+
+    it('names at most five unread artifacts, then counts the rest', async () => {
+        const unreadArtifacts = Array.from({ length: 8 }, (_, i) => ({
+            number: i + 1,
+            name: `n${i + 1}.md`,
+            reason: 'invalid_payload',
+        }));
+        const { task } = await read(issue({ unreadArtifacts }));
+        const note = task.coverageNotes?.join(' ') ?? '';
+        expect(note).toContain('artifact #5 n5.md');
+        expect(note).not.toContain('artifact #6 n6.md');
+        expect(note).toContain('and 3 more');
+        expect(note).not.toMatch(/^\s*[-*#]/m);
     });
 });

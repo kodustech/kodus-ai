@@ -102,12 +102,11 @@ export class GitIssuesTracker extends McpTaskTracker {
                         : `#${reference.id}`,
                 title:
                     typeof issue.title === 'string' ? issue.title : undefined,
-                description: artifacts?.incompleteNote
-                    ? [body, artifacts.incompleteNote]
-                          .filter(Boolean)
-                          .join('\n\n')
-                    : body,
+                description: body,
                 url: typeof issue.url === 'string' ? issue.url : undefined,
+                ...(artifacts?.coverageNotes
+                    ? { coverageNotes: artifacts.coverageNotes }
+                    : {}),
                 links: artifacts?.documents.length
                     ? { ...links, documents: artifacts.documents }
                     : links,

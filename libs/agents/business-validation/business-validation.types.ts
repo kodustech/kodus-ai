@@ -110,6 +110,12 @@ export interface Task {
      * that found it (`McpTaskTracker.relate`). Never reaches the judge.
      */
     links?: TaskLinks;
+    /**
+     * What the tracker could not read of the task (an artifact it could not
+     * fetch), as plain sentences for the judge. Never part of the description,
+     * so it can't count as criteria or lift the task's grade.
+     */
+    coverageNotes?: string[];
 }
 
 /** Another work item a task points at: its parent or one of its sub-tasks. */

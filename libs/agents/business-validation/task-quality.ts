@@ -228,6 +228,9 @@ export function formatTaskForJudge(task: Task): string {
     if (task.url) {
         sections.push(`Links:\n- ${task.url}`);
     }
+    if (task.coverageNotes?.length) {
+        sections.push(`Coverage notes:\n${task.coverageNotes.join('\n')}`);
+    }
     return sections.join('\n\n');
 }
 
