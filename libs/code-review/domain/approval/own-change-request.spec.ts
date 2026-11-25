@@ -206,6 +206,17 @@ describe('hasOpenChangeRequestFinding', () => {
         ).toBe(false);
     });
 
+    it('skips an empty comment id, which no thread could ever match', () => {
+        expect(
+            hasOpenChangeRequestFinding(
+                { commentIds: [''], suggestionIds: ['a'] },
+                [{ suggestionId: 'a', implementationStatus: 'implemented' }],
+                [],
+                github,
+            ),
+        ).toBe(false);
+    });
+
     it('judges a request recorded before its suggestions by its comments', () => {
         expect(
             hasOpenChangeRequestFinding(

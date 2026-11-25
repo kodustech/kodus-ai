@@ -95,7 +95,7 @@ export function hasOpenChangeRequestFinding(
             .map((finding) => String(finding.commentId)),
     );
     const commentOnly = (changeRequest.commentIds ?? []).filter(
-        (id) => !covered.has(String(id)),
+        (id) => String(id ?? '') !== '' && !covered.has(String(id)),
     );
     if (
         commentOnly.length &&

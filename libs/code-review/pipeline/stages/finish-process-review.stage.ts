@@ -370,7 +370,8 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
                 commentIds: criticalComments
                     .map((comment) => comment.codeReviewFeedbackData?.commentId)
                     .filter((id) => id !== undefined && id !== null)
-                    .map(String),
+                    .map(String)
+                    .filter((id) => id !== ''),
             });
             if (!requestedAt) {
                 this.logger.warn({

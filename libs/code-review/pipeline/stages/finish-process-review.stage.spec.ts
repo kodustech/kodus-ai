@@ -795,11 +795,12 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
                 finding('critical', 101),
                 finding('critical', undefined, 's-a'),
                 finding('critical', null, 's-b'),
+                finding('critical', '' as never, 's-c'),
             ]);
 
             expect(ownChangeRequest.record).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    suggestionIds: ['s-101', 's-a', 's-b'],
+                    suggestionIds: ['s-101', 's-a', 's-b', 's-c'],
                     commentIds: ['101'],
                 }),
             );
