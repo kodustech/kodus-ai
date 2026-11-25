@@ -116,6 +116,12 @@ export interface Task {
      * so it can't count as criteria or lift the task's grade.
      */
     coverageNotes?: string[];
+    /**
+     * Raw text of documents read with the task (GitHub issue artifacts), by
+     * label, so acceptance criteria can be detected in them. Never shown to
+     * the judge as such: `description` already carries them, quoted.
+     */
+    sourceTexts?: Array<{ label: string; text: string }>;
 }
 
 /** Another work item a task points at: its parent or one of its sub-tasks. */

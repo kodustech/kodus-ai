@@ -107,6 +107,9 @@ export class GitIssuesTracker extends McpTaskTracker {
                     typeof issue.title === 'string' ? issue.title : undefined,
                 description: body,
                 url: typeof issue.url === 'string' ? issue.url : undefined,
+                ...(artifacts?.sourceTexts.length
+                    ? { sourceTexts: artifacts.sourceTexts }
+                    : {}),
                 ...(artifacts?.coverageNotes
                     ? { coverageNotes: artifacts.coverageNotes }
                     : {}),

@@ -358,3 +358,127 @@ describe('GitIssuesTracker: the coverage note never grades the task', () => {
         expect(note).not.toMatch(/^\s*[-*#]/m);
     });
 });
+
+describe('GitIssuesTracker: acceptance criteria and artifacts', () => {
+    const own = 'https://github.com/acme/web/issues/1/artifacts';
+    const other = 'https://github.com/acme/web/issues/2/artifacts';
+
+    async function criteria(data: Record<string, unknown>) {
+        const { task } = await read(data);
+        const graded = applyCriteriaLocation(task, { location: 'auto' });
+        const prompt = buildBusinessRulesAnalysisPrompt({
+            task: graded,
+            taskText: formatTaskForJudge(graded),
+            taskQuality: gradeTask(graded),
+            diff: '+return 422;',
+        });
+        const block = prompt.slice(
+            prompt.indexOf('ACCEPTANCE_CRITERIA:'),
+            prompt.indexOf('FULL_TASK_CONTEXT:'),
+        );
+        return { graded, block, grade: gradeTask(graded) };
+    }
+
+    const body = (links: string) =>
+        [
+            '## Contract',
+            '- Source: artifacts',
+            '- Delivery: several PRs',
+            '',
+            '## References',
+            links,
+        ].join('\n');
+    const ownRefs = [
+        `- \`product.md\`: [artifact #1 v1](${own}/1) · sha256 \`aaa\``,
+        `- \`qa.md\`: [artifact #2 v3](${own}/2) · sha256 \`bbb\``,
+    ].join('\n');
+    const qa = artifact(
+        2,
+        'qa.md',
+        [
+            '# QA',
+            '- AC1: When the form is empty, the API returns 422.',
+            '- AC2: When the email is taken, the API returns 409.',
+            '- Note: run against staging.',
+        ].join('\n'),
+    );
+
+    it('takes the criteria from the artifact, not the contract or reference lines', async () => {
+        const { graded, block } = await criteria(
+            issue({ body: body(ownRefs), artifacts: [qa] }),
+        );
+        expect(graded.acceptanceCriteria).toEqual([
+            '[artifact #2 qa.md] AC1: When the form is empty, the API returns 422.',
+            '[artifact #2 qa.md] AC2: When the email is taken, the API returns 409.',
+        ]);
+        expect(block).toContain('AC1: When the form is empty');
+        expect(block).toContain('AC2: When the email is taken');
+        expect(block).not.toMatch(
+            /Source: artifacts|Delivery|sha256|product\.md/,
+        );
+    });
+
+    it('never lists a link to an artifact of its own issue as a criterion', async () => {
+        const { graded } = await criteria(
+            issue({
+                body: body(`${ownRefs}\n- Keep the form accessible`),
+            }),
+        );
+        expect(graded.acceptanceCriteria).toEqual([
+            'Source: artifacts',
+            'Delivery: several PRs',
+            'Keep the form accessible',
+        ]);
+    });
+
+    it('does not filter a reference to the artifact of another issue', async () => {
+        const { graded } = await criteria(
+            issue({
+                body: body(
+                    `- Spec of the sibling: [artifact #1](${other}/1)\n- Keep the form accessible`,
+                ),
+            }),
+        );
+        expect(graded.acceptanceCriteria).toContain(
+            `Spec of the sibling: [artifact #1](${other}/1)`,
+        );
+    });
+
+    it('leaves an issue without artifacts and with a criteria heading as it is', async () => {
+        const { graded } = await criteria(
+            issue({
+                body: '## Acceptance criteria\n- The form returns 422 when empty\n- The form returns 409 on a taken email\n\n## Notes\n- Not a criterion at all',
+            }),
+        );
+        expect(graded.acceptanceCriteria).toEqual([
+            'The form returns 422 when empty',
+            'The form returns 409 on a taken email',
+        ]);
+    });
+
+    it('keeps explicit criteria from the body and from artifacts, deduplicated', async () => {
+        const { graded } = await criteria(
+            issue({
+                body: '## Acceptance criteria\n- The API returns 422 on an empty form\n- The API logs the rejection',
+                artifacts: [
+                    artifact(
+                        2,
+                        'qa.md',
+                        '- AC1: The API returns 422 on an empty form\n- AC2: The API returns 409 on a taken email',
+                    ),
+                    artifact(
+                        3,
+                        'eng.md',
+                        '## Acceptance criteria\n- The API logs the rejection\n- Validation runs on the server',
+                    ),
+                ],
+            }),
+        );
+        expect(graded.acceptanceCriteria).toEqual([
+            'The API returns 422 on an empty form',
+            'The API logs the rejection',
+            '[artifact #2 qa.md] AC2: The API returns 409 on a taken email',
+            '[artifact #3 eng.md] Validation runs on the server',
+        ]);
+    });
+});

@@ -15,6 +15,8 @@ export interface IssueArtifactContext {
      * `Task.coverageNotes`, never part of the description or its criteria.
      */
     coverageNotes?: string[];
+    /** Raw text of each document folded in, for criteria detection. */
+    sourceTexts: Array<{ label: string; text: string }>;
 }
 
 const CUT = '… (cut)';
@@ -53,6 +55,7 @@ export function artifactContext(
 ): IssueArtifactContext | undefined {
     const unread: string[] = [];
     const documents: IssueArtifactContext['documents'] = [];
+    const sourceTexts: IssueArtifactContext['sourceTexts'] = [];
     const labelOf = (number: unknown, name: unknown) =>
         [
             typeof number === 'number' ? `artifact #${number}` : 'an artifact',
@@ -79,6 +82,10 @@ export function artifactContext(
         } else {
             const text = delimited(a.content);
             documents.push({ id: label, title: label, content: text });
+            sourceTexts.push({
+                label,
+                text: a.content.slice(0, MAX_RELATED_CHARS),
+            });
             if (text.endsWith(`${CUT}\n</artifact_data>`)) {
                 unread.push(
                     `${label} (only read in part, cut at the size limit)`,
@@ -108,6 +115,7 @@ export function artifactContext(
     }
     return {
         documents,
+        sourceTexts,
         ...(unread.length
             ? {
                   coverageNotes: [

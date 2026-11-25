@@ -36,7 +36,10 @@ function gradeOwn(task: Task): TaskQuality {
     if (!title && !description && !criteria.length) {
         return 'EMPTY';
     }
-    if (criteria.length || countListItems(description) >= 2) {
+    if (
+        criteria.length ||
+        countListItems(withoutOwnArtifactLinks(task, description)) >= 2
+    ) {
         return 'COMPLETE';
     }
     // "Improve tickets" / "Make tickets better." says no more than a bare
@@ -139,15 +142,73 @@ function detectCriteria(task: Task): Task {
         return { ...task, acceptanceCriteria: criteriaIn(field[1]) };
     }
     const description = task.description ?? '';
-    for (const heading of CRITERIA_HEADINGS) {
-        const section = sectionUnder(description, heading);
-        const items = section ? listItems(section) : [];
-        if (items.length) {
-            return { ...task, acceptanceCriteria: items };
+    const ownArtifact = ownArtifactLink(task);
+    const kept = (items: string[]) =>
+        items.filter((item) => !ownArtifact.test(item));
+
+    // Explicit criteria, wherever they are: a criteria heading in the
+    // description, or in a document read with it, and, when documents were
+    // read, AC-labelled items (`AC1: ...`). They beat the implicit list of
+    // the description's bullets. All places are kept, deduplicated; those
+    // from a document say which.
+    const explicit: string[] = [];
+    const seen = new Set<string>();
+    const add = (items: string[], label?: string) => {
+        for (const item of kept(items)) {
+            const key = normalize(item.replace(CRITERION_LABEL, ''));
+            if (key && !seen.has(key)) {
+                seen.add(key);
+                explicit.push(label ? `[${label}] ${item}` : item);
+            }
         }
+    };
+    const explicitIn = (text: string, withLabels: boolean): string[] => {
+        for (const heading of CRITERIA_HEADINGS) {
+            const section = sectionUnder(text, heading);
+            const items = section ? kept(listItems(section)) : [];
+            if (items.length) {
+                return items;
+            }
+        }
+        return withLabels
+            ? kept(listItems(text)).filter(isLabelledCriterion)
+            : [];
+    };
+    const documents = task.sourceTexts ?? [];
+    add(explicitIn(description, documents.length > 0));
+    for (const document of documents) {
+        add(explicitIn(document.text, true), document.label);
     }
-    const items = listItems(description);
+    if (explicit.length) {
+        return { ...task, acceptanceCriteria: explicit };
+    }
+    const items = kept(listItems(description));
     return items.length >= 2 ? { ...task, acceptanceCriteria: items } : task;
+}
+
+/** `AC1: ...`, `AC #2 - ...`, `CA-3) ...`: an item that labels itself a criterion. */
+function isLabelledCriterion(item: string): boolean {
+    return CRITERION_LABEL.test(item);
+}
+
+const CRITERION_LABEL = /^[*_`\s]*(?:AC|CA)[\s#-]*\d+[*_`\s]*[:.)\-–—]\s*/i;
+
+/**
+ * A link to an artifact of this very issue (`.../issues/310/artifacts/2`),
+ * whatever its label or hash: a reference to where the spec lives, never a
+ * requirement. Artifacts of another issue are not matched.
+ */
+function ownArtifactLink(task: Task): RegExp {
+    const escape = (text: string) =>
+        text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const url = task.url?.trim().replace(/\/+$/, '');
+    if (url && /\/issues\/\d+$/.test(url)) {
+        return new RegExp(`${escape(url)}/artifacts/\\d+`, 'i');
+    }
+    const number = /#(\d+)$/.exec(task.id)?.[1];
+    return number
+        ? new RegExp(`/issues/${number}/artifacts/\\d+`, 'i')
+        : /(?!)/;
 }
 
 function sectionUnder(
@@ -232,6 +293,14 @@ export function formatTaskForJudge(task: Task): string {
         sections.push(`Coverage notes:\n${task.coverageNotes.join('\n')}`);
     }
     return sections.join('\n\n');
+}
+
+function withoutOwnArtifactLinks(task: Task, text: string): string {
+    const own = ownArtifactLink(task);
+    return text
+        .split('\n')
+        .filter((line) => !own.test(line))
+        .join('\n');
 }
 
 function countListItems(text: string): number {
