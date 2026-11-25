@@ -29,10 +29,13 @@ export const belowErrorLevel = (text: string): boolean => {
     return m !== null && BELOW_ERROR_LEVELS.has(m[1].toLowerCase());
 };
 
+/** apt's package configuration talking ("debconf: (TERM is not set, so the dialog frontend is not usable)"): never a cause. */
+const DEBCONF = /\bdebconf: /;
+
 const first = (lines: Line[], rule: LineRule) => {
     // The newest line is the closest to the failure: read from the end.
     for (let i = lines.length - 1; i >= 0; i -= 1) {
-        if (belowErrorLevel(lines[i].text)) continue;
+        if (belowErrorLevel(lines[i].text) || DEBCONF.test(lines[i].text)) continue;
         const hit = rule(lines[i]);
         if (hit) return { hit, line: lines[i] };
     }
