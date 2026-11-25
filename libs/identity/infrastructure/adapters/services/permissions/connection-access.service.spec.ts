@@ -69,6 +69,7 @@ describe('ConnectionAccessService.readScopeFor', () => {
             kind: 'connections',
             connectionIds: ['gh-a'],
             repositoryIds: ['1', '2'],
+            repositoryNames: [],
         });
     });
 
@@ -82,6 +83,7 @@ describe('ConnectionAccessService.readScopeFor', () => {
             kind: 'connections',
             connectionIds: [],
             repositoryIds: [],
+            repositoryNames: [],
         });
     });
 
@@ -96,5 +98,57 @@ describe('ConnectionAccessService.readScopeFor', () => {
         await service.readScopeFor(user);
 
         expect(query.mock.calls.length).toBe(calls);
+    });
+});
+
+describe('ConnectionAccessService.restrictionFor', () => {
+    it('restricts nothing for an owner or a member granted every connection', async () => {
+        const { service } = build({
+            connections: ['gh-a', 'gl-b'],
+            granted: ['gh-a'],
+        });
+
+        await expect(
+            service.restrictionFor({ ...user, role: 'owner' }),
+        ).resolves.toBeNull();
+
+        const full = build({
+            connections: ['gh-a'],
+            granted: ['gh-a'],
+        });
+        await expect(
+            full.service.restrictionFor({ ...user, role: 'contributor' }),
+        ).resolves.toBeNull();
+    });
+
+    it("limits a partially granted member to the granted connections' repositories, by id and by name", async () => {
+        const { service } = build({
+            connections: ['gh-a', 'gl-b'],
+            granted: ['gh-a'],
+            reposByConnection: {
+                'gh-a': [
+                    {
+                        id: 7,
+                        name: 'api',
+                        full_name: 'Acme/API',
+                        organizationName: 'acme',
+                    } as any,
+                ],
+            },
+        });
+
+        const restriction = await service.restrictionFor({
+            ...user,
+            role: 'contributor',
+        });
+
+        expect(restriction?.allowsRepository({ id: '7' })).toBe(true);
+        expect(restriction?.allowsRepository({ name: 'acme/api' })).toBe(true);
+        expect(restriction?.allowsRepository({ name: 'Acme/API' })).toBe(true);
+        expect(restriction?.allowsRepository({ id: '8' })).toBe(false);
+        expect(restriction?.allowsRepository({ name: 'group/other' })).toBe(
+            false,
+        );
+        expect(restriction?.allowsRepository({})).toBe(false);
     });
 });

@@ -78,6 +78,7 @@ import { OrganizationParametersController } from './controllers/organizationPara
 import { ParametersController } from './controllers/parameters.controller';
 import { PermissionsController } from './controllers/permissions.controller';
 import {
+    CockpitAccessController,
     CockpitCodeHealthController,
     CockpitController,
     CockpitProductivityController,
@@ -213,6 +214,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         SSOConfigController,
         LicenseController,
         CockpitController,
+        CockpitAccessController,
         CockpitCodeHealthController,
         CockpitProductivityController,
         CockpitReviewAnalyticsController,

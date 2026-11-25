@@ -101,6 +101,12 @@ import {
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
+import {
+    IIntegrationConfigService,
+    INTEGRATION_CONFIG_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
+import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
+import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { PullRequestSuggestionsResponseDto } from '../dtos/pull-request-suggestions-response.dto';
 import {
     PullRequestBackfillResponseDto,
@@ -140,8 +146,27 @@ export class PullRequestController implements OnApplicationShutdown {
         private readonly configService: ConfigService,
         private readonly eventEmitter: EventEmitter2,
         private readonly authorizationService: AuthorizationService,
+        @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
+        private readonly integrationConfigService: IIntegrationConfigService,
     ) {
         this.jwtConfig = this.configService.get<JWT>('jwtConfig');
+    }
+
+    /** Whether a team key's workspace lists the repository, across its Git connections. */
+    private async keyWorkspaceListsRepository(
+        organizationId: string,
+        teamId: string | undefined,
+        repositoryId: unknown,
+    ): Promise<boolean> {
+        if (!teamId || repositoryId == null) return false;
+        const repositories =
+            (await this.integrationConfigService.findIntegrationConfigFormatted<
+                Repositories[]
+            >(IntegrationConfigKey.REPOSITORIES, { organizationId, teamId })) ??
+            [];
+        return repositories.some(
+            (repository) => String(repository.id) === String(repositoryId),
+        );
     }
 
     onApplicationShutdown() {
@@ -525,6 +550,8 @@ export class PullRequestController implements OnApplicationShutdown {
         let organizationId: string | undefined;
         // Set on the JWT route only: a team CLI key is team-wide.
         let jwtUser: Partial<IUser> | undefined;
+        // Set on the team-key route: the key reads its own workspace only.
+        let keyTeamId: string | undefined;
 
         // Route 1: Team CLI key (via x-team-key or Bearer kodus_...)
         if (teamKey || bearerToken?.startsWith('kodus_')) {
@@ -536,6 +563,7 @@ export class PullRequestController implements OnApplicationShutdown {
                 );
             }
             organizationId = teamData.organization.uuid;
+            keyTeamId = teamData.team?.uuid;
         }
         // Route 2: JWT Bearer token
         else if (bearerToken) {
@@ -600,6 +628,17 @@ export class PullRequestController implements OnApplicationShutdown {
         }
 
         const pr = prEntity.toObject();
+
+        if (
+            !jwtUser &&
+            !(await this.keyWorkspaceListsRepository(
+                organizationId,
+                keyTeamId,
+                pr.repository?.id,
+            ))
+        ) {
+            throw new NotFoundException('Pull request not found');
+        }
 
         if (jwtUser) {
             await this.authorizationService.ensure({

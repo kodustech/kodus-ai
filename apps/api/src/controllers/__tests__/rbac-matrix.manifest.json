@@ -110,6 +110,17 @@
     }
   },
   {
+    "key": "cockpit.controller.ts#access",
+    "httpMethod": "GET",
+    "urlPath": "/cockpit/access",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "cockpit.controller.ts#bugRatioChart",
     "httpMethod": "GET",
     "urlPath": "/code-health/charts/bug-ratio",

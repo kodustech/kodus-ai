@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
+import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { createLogger } from '@libs/core/log/logger';
 import { UserConnectionAccessModel } from '@libs/identity/infrastructure/adapters/repositories/schemas/userConnectionAccess.model';
 
@@ -16,9 +17,25 @@ export type ConnectionReadScope =
           kind: 'connections';
           connectionIds: string[];
           repositoryIds: string[];
+          /** Lower-cased names the repositories go by: full name, owner/name and name. */
+          repositoryNames: string[];
       };
 
-type ScopeUser = { uuid?: string; organization?: { uuid?: string } };
+type ScopeUser = {
+    uuid?: string;
+    role?: string;
+    organization?: { uuid?: string };
+};
+
+/**
+ * What a member who is not granted every Git connection may read. Absent
+ * (`null`) for owners and members granted every connection.
+ */
+export type ConnectionRestriction = {
+    connectionIds: ReadonlySet<string>;
+    repositoryIds: ReadonlySet<string>;
+    allowsRepository(repository: { id?: unknown; name?: unknown }): boolean;
+};
 
 /** Grants change rarely; a short memory spares a query on every check. */
 const SCOPE_TTL_MS = 15_000;
@@ -44,6 +61,7 @@ export class ConnectionAccessService {
                 kind: 'connections',
                 connectionIds: [],
                 repositoryIds: [],
+                repositoryNames: [],
             };
         }
 
@@ -102,19 +120,62 @@ export class ConnectionAccessService {
               )) as Array<{ configValue: unknown }>)
             : [];
 
+        type StoredRepository = {
+            id?: unknown;
+            name?: string;
+            full_name?: string;
+            organizationName?: string;
+        };
+        const repositories = configs.flatMap((config) =>
+            Array.isArray(config.configValue)
+                ? (config.configValue as StoredRepository[])
+                : [],
+        );
         const repositoryIds = [
             ...new Set(
-                configs.flatMap((config) =>
-                    Array.isArray(config.configValue)
-                        ? (config.configValue as Array<{ id?: unknown }>).map(
-                              (repository) => String(repository?.id),
-                          )
-                        : [],
+                repositories.map((repository) => String(repository?.id)),
+            ),
+        ];
+        const repositoryNames = [
+            ...new Set(
+                repositories.flatMap((repository) =>
+                    [
+                        repository?.full_name,
+                        repository?.organizationName && repository?.name
+                            ? `${repository.organizationName}/${repository.name}`
+                            : undefined,
+                        repository?.name,
+                    ]
+                        .filter((name): name is string => Boolean(name))
+                        .map((name) => name.toLowerCase()),
                 ),
             ),
         ];
 
-        return { kind: 'connections', connectionIds, repositoryIds };
+        return {
+            kind: 'connections',
+            connectionIds,
+            repositoryIds,
+            repositoryNames,
+        };
+    }
+
+    async restrictionFor(
+        user: ScopeUser,
+    ): Promise<ConnectionRestriction | null> {
+        if (user?.role === Role.OWNER) return null;
+        const scope = await this.readScopeFor(user);
+        if (scope.kind === 'all') return null;
+        const repositoryIds = new Set(scope.repositoryIds);
+        const repositoryNames = new Set(scope.repositoryNames);
+        return {
+            connectionIds: new Set(scope.connectionIds),
+            repositoryIds,
+            allowsRepository: ({ id, name }) =>
+                (id != null && repositoryIds.has(String(id))) ||
+                (typeof name === 'string' &&
+                    repositoryNames.has(name.toLowerCase())),
+        };
     }
 
     async connectionInWorkspace(

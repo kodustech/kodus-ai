@@ -25,6 +25,10 @@ import {
 } from '@libs/cockpit';
 import { GetKodyRulesHealthUseCase } from '@libs/cockpit/application/use-cases/get-kody-rules-health.use-case';
 import { CockpitTierGuard } from '@libs/cockpit/infrastructure/guards/cockpit-tier.guard';
+import {
+    CockpitConnectionScopeGuard,
+    CockpitOrganizationWide,
+} from '@libs/cockpit/infrastructure/guards/cockpit-connection-scope.guard';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import {
     Action,
@@ -127,13 +131,34 @@ export class CockpitController {
     }
 }
 
+/**
+ * Answers whether the caller may read Cockpit for the given repository (or
+ * the whole organization). The web asks before it reads the legacy analytics
+ * service, which is called with a shared secret and cannot check access
+ * itself. No tier guard: the legacy route serves the tiers it refuses.
+ */
+@ApiTags('Cockpit')
+@ApiBearerAuth('jwt')
+@UseGuards(PolicyGuard, CockpitConnectionScopeGuard)
+@CheckPolicies(canReadCockpit)
+@Controller('cockpit/access')
+export class CockpitAccessController {
+    @Get()
+    @ApiOperation({
+        summary: 'Whether the caller may read Cockpit for a repository',
+    })
+    access() {
+        return { allowed: true };
+    }
+}
+
 // -------------------------------------------------------------------------
 // /code-health/*
 // -------------------------------------------------------------------------
 
 @ApiTags('Cockpit · Code Health')
 @ApiBearerAuth('jwt')
-@UseGuards(PolicyGuard, CockpitTierGuard)
+@UseGuards(PolicyGuard, CockpitTierGuard, CockpitConnectionScopeGuard)
 @CheckPolicies(canReadCockpit)
 @Controller('code-health')
 export class CockpitCodeHealthController {
@@ -191,7 +216,7 @@ export class CockpitCodeHealthController {
 
 @ApiTags('Cockpit · Review Analytics')
 @ApiBearerAuth('jwt')
-@UseGuards(PolicyGuard, CockpitTierGuard)
+@UseGuards(PolicyGuard, CockpitTierGuard, CockpitConnectionScopeGuard)
 @CheckPolicies(canReadCockpit)
 @Controller('review-analytics')
 export class CockpitReviewAnalyticsController {
@@ -287,6 +312,7 @@ export class CockpitReviewAnalyticsController {
     }
 
     @Get('/tables/kody-rules-health')
+    @CockpitOrganizationWide()
     @ApiOperation({
         summary:
             'Per-rule health: triggers, implementation rate and state (healthy/ignored/stale)',
@@ -320,7 +346,7 @@ export class CockpitReviewAnalyticsController {
 
 @ApiTags('Cockpit · Productivity')
 @ApiBearerAuth('jwt')
-@UseGuards(PolicyGuard, CockpitTierGuard)
+@UseGuards(PolicyGuard, CockpitTierGuard, CockpitConnectionScopeGuard)
 @CheckPolicies(canReadCockpit)
 @Controller('productivity')
 export class CockpitProductivityController {

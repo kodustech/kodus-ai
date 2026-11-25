@@ -317,3 +317,73 @@ describe('repository scope — CLI suggestions with a user JWT', () => {
         expect(execute).not.toHaveBeenCalled();
     });
 });
+
+describe('workspace scope — suggestions with a team CLI key', () => {
+    const teamKeyController = (teamRepositoryIds: string[]) => {
+        const execute = jest.fn().mockResolvedValue({
+            response: {},
+            suggestionsCount: 0,
+        });
+        const controller = make(PullRequestController, {
+            teamCliKeyService: {
+                validateKey: jest.fn().mockResolvedValue({
+                    organization: { uuid: 'org-1' },
+                    team: { uuid: 'team-1' },
+                }),
+            },
+            integrationConfigService: {
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue(
+                        teamRepositoryIds.map((id) => ({ id, name: id })),
+                    ),
+            },
+            pullRequestsService: {
+                findOne: jest.fn().mockResolvedValue({
+                    toObject: () => ({
+                        number: 1,
+                        repository: { id: OTHER, fullName: 'acme/other' },
+                    }),
+                }),
+            },
+            getPullRequestSuggestionsUseCase: { execute },
+            eventEmitter: { emit: jest.fn() },
+        });
+        return { controller, execute };
+    };
+
+    it("refuses a pull request of a repository outside the key's workspace", async () => {
+        const { controller, execute } = teamKeyController([ALLOWED]);
+
+        await expect(
+            controller.getSuggestionsByPullRequest(
+                undefined,
+                OTHER,
+                '1',
+                'json',
+                undefined,
+                undefined,
+                'kodus_key',
+            ),
+        ).rejects.toThrow('Pull request not found');
+        expect(execute).not.toHaveBeenCalled();
+    });
+
+    it("serves a pull request of a repository of the key's workspace", async () => {
+        const { controller, execute } = teamKeyController([OTHER]);
+
+        await controller
+            .getSuggestionsByPullRequest(
+                undefined,
+                OTHER,
+                '1',
+                'json',
+                undefined,
+                undefined,
+                'kodus_key',
+            )
+            .catch(() => undefined);
+
+        expect(execute).toHaveBeenCalled();
+    });
+});

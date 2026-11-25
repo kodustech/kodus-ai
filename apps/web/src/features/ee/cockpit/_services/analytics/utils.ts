@@ -96,6 +96,18 @@ export const analyticsFetch = async <Data>(
     // Legacy path — kodus-service-analytics on BigQuery. Kept verbatim
     // for the rollout window; will be removed once the PostHog flag
     // hits 100% and the legacy stack is decommissioned.
+    //
+    // It is called with a shared secret, so the API decides first whether
+    // the member may read this repository (or the whole organization): a
+    // member granted only some Git connections reads only theirs.
+    try {
+        await authorizedFetch(pathToApiUrl('/cockpit/access'), {
+            params: selectedRepository ? { repository: selectedRepository } : {},
+        });
+    } catch {
+        return null as Data;
+    }
+
     if (!process.env.WEB_ANALYTICS_SECRET) {
         console.warn(
             'WEB_ANALYTICS_SECRET is not configured. Analytics requests will be skipped.',
