@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/buildstate"
 	"os"
 	"path/filepath"
 	"strings"
@@ -805,5 +806,50 @@ func TestAHostMadeFromATemplateStopsWaitingForImagesThatNeverCome(t *testing.T) 
 	}
 	if waited := time.Since(start); waited > 2*time.Second {
 		t.Fatalf("waited %s for images that never came", waited)
+	}
+}
+
+// A Run host made from a template builds on the build cache and state its
+// template's setup left on the copied disk. It used to key them by its own new
+// cell id, found nothing and built every step cold.
+func TestAHostMadeFromATemplateReadsTheTemplatesBuildCache(t *testing.T) {
+	d, docker := bakeDriver(t)
+	ctx := context.Background()
+	setup := bakeWithData(t, d, docker, "claim-setup", "seed")
+	if _, err := d.Bake(ctx, bakeSpec(setup)); err != nil {
+		t.Fatal(err)
+	}
+	templateCache := d.envCacheDir(bakeOrg, bakeEnv, "api")
+	templateKey := d.envKey(bakeOrg, bakeEnv)
+	if err := d.Destroy(ctx, setup); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := d.cfg
+	cfg.CellID, cfg.BakeAdoptOrg = "cell-2", bakeOrg
+	host, err := New(ctx, docker, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer host.Close()
+	if got := host.envCacheDir(bakeOrg, bakeEnv, "api"); got != templateCache {
+		t.Fatalf("build cache of the host: %s, the template's: %s", got, templateCache)
+	}
+	if got := host.envKey(bakeOrg, bakeEnv); got != templateKey {
+		t.Fatalf("environment key of the host: %s, the template's: %s", got, templateKey)
+	}
+	// Another org on the same host never shares a key with the template's.
+	if host.envKey("other-org", bakeEnv) == templateKey {
+		t.Fatal("another org got the template's key")
+	}
+}
+
+// A host that adopts nothing keeps its own id.
+func TestAHostThatAdoptsNothingKeysItsCacheByItsOwnCell(t *testing.T) {
+	d, _ := bakeDriver(t)
+	if got, want := d.envKey(bakeOrg, bakeEnv), buildstate.EnvKey(d.cfg.CellID, bakeOrg, bakeEnv); got != want {
+		t.Fatalf("key %s, want %s", got, want)
 	}
 }

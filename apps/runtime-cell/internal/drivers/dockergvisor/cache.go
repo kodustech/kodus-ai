@@ -1,6 +1,7 @@
 package dockergvisor
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,9 +16,27 @@ import (
 // it the environment's. A PR build reads the default branch's layers and
 // can never put one of its own where a later setup or bake would take it.
 
+// envCell is the cell id an environment's build cache, state and registry seed
+// are keyed by: the cell that made them. A host made from a template adopts the
+// template's bake catalog, whose owner is the template's cell, so the cache the
+// template's setup left on the copied disk is found under that id, not under
+// this host's own. Only an adopted catalog changes it, and the org is the one
+// the hub bound the host to (BakeAdoptOrg); every key also carries the org.
+func (d *Driver) envCell() string {
+	if d.cfg.BakeAdoptOrg != "" {
+		_, _ = d.catalogFor(context.Background())
+	}
+	return d.bakeCell()
+}
+
+// envKey names an environment's directories under the cache, state and registry roots.
+func (d *Driver) envKey(org, env string) string {
+	return buildstate.EnvKey(d.envCell(), org, env)
+}
+
 // envCacheDir is where an environment keeps the build cache of a service.
 func (d *Driver) envCacheDir(org, env, service string) string {
-	return filepath.Join(d.workDir(), "cache", "env", buildstate.EnvKey(d.cfg.CellID, org, env), service)
+	return filepath.Join(d.workDir(), "cache", "env", d.envKey(org, env), service)
 }
 
 // machineCacheDir is where a setup machine's build of a service writes its cache.

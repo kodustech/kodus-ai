@@ -106,7 +106,7 @@ func (s *Store) loadEvicted() {
 		p := filepath.Join(s.evictedDir(), e.Name())
 		b, err := os.ReadFile(p) //nolint:gosec // G304: an entry of the cell's own eviction ledger
 		var en evictedEntry
-		if err != nil || json.Unmarshal(b, &en) != nil || en.Org == "" || en.Env == "" || e.Name() != EnvKey(s.cellID, en.Org, en.Env) {
+		if err != nil || json.Unmarshal(b, &en) != nil || en.Org == "" || en.Env == "" || e.Name() != EnvKey(s.cell(), en.Org, en.Env) {
 			_ = os.Remove(p)
 			continue
 		}
@@ -123,7 +123,7 @@ func (s *Store) loadEvicted() {
 // and floor that removed it, and keeps the newest
 // maxEvicted. The caller holds no lock.
 func (s *Store) recordEvicted(owner ownerMark, at time.Time, rebuild time.Duration, free, floor int64) {
-	key := EnvKey(s.cellID, owner.Org, owner.Env)
+	key := EnvKey(s.cell(), owner.Org, owner.Env)
 	en := evictedEntry{Org: owner.Org, Env: owner.Env, At: at.UTC(), RebuildSeconds: int64(rebuild / time.Second), FreeBytes: max(free, 0), FloorBytes: floor}
 	if b, err := json.Marshal(en); err == nil {
 		if err := os.MkdirAll(s.evictedDir(), 0o700); err == nil {
@@ -183,6 +183,6 @@ func (s *Store) Evicted() []Evicted {
 func (s *Store) EvictedAt(org, env string) (time.Time, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	e, ok := s.evicted[EnvKey(s.cellID, org, env)]
+	e, ok := s.evicted[EnvKey(s.cell(), org, env)]
 	return e.At, ok
 }

@@ -81,8 +81,9 @@ type Mounter interface {
 // environment's, machine/<machine>/<service> a build's overlay, and trash
 // what eviction took out of env before its bytes go.
 type Store struct {
-	root   string
-	cellID string
+	root string
+	// cell is the cell id the environments' directories are keyed by.
+	cell func() string
 	// minFree is the disk floor Evict keeps; zero: no eviction.
 	minFree int64
 	// builderDir makes a directory only the builder can use.
@@ -158,7 +159,10 @@ const defaultSeedWait = 5 * time.Minute
 // Config is what New needs; Clock nil is the wall clock.
 type Config struct {
 	Root, CellID string
-	MinFree      int64
+	// Cell, when set, gives the id the directories are keyed by, read at each
+	// use; a host made from a template keys them by the template's cell.
+	Cell    func() string
+	MinFree int64
 	// BuilderDir makes p a directory only the builder (and root) can use.
 	BuilderDir func(p string) error
 	Mounter    Mounter
@@ -179,8 +183,13 @@ func New(c Config) (*Store, error) {
 	if c.SeedWait <= 0 {
 		c.SeedWait = defaultSeedWait
 	}
+	cell := c.Cell
+	if cell == nil {
+		id := c.CellID
+		cell = func() string { return id }
+	}
 	s := &Store{
-		root: c.Root, cellID: c.CellID, minFree: c.MinFree, builderDir: c.BuilderDir, mounter: c.Mounter, freeBytes: c.FreeBytes,
+		root: c.Root, cell: cell, minFree: c.MinFree, builderDir: c.BuilderDir, mounter: c.Mounter, freeBytes: c.FreeBytes,
 		clock: clock.Or(c.Clock), log: c.Log, seedWait: c.SeedWait, holds: map[string]*stateHold{},
 		removing: map[string]bool{}, removeAll: os.RemoveAll,
 		spareViews: c.SpareViews, gen: map[string]uint64{}, spares: map[string]spareView{}, making: map[string]bool{},
@@ -207,7 +216,7 @@ func EnvKey(cell, org, env string) string {
 }
 
 func (s *Store) EnvDir(org, env string) string {
-	return filepath.Join(s.root, "env", EnvKey(s.cellID, org, env))
+	return filepath.Join(s.root, "env", EnvKey(s.cell(), org, env))
 }
 
 func (s *Store) Acquire(ctx context.Context, req Request) (State, bool) {

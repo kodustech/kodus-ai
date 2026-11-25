@@ -567,7 +567,7 @@ func New(ctx context.Context, d Docker, cfg Config) (*Driver, error) {
 		mounter, view := buildstate.MounterFor(root)
 		dr.log().Info("build.state.store", "root", root, "view", view)
 		if dr.states, err = buildstate.New(buildstate.Config{
-			Root: root, CellID: cfg.CellID, MinFree: cfg.BuildStateMinFreeBytes,
+			Root: root, CellID: cfg.CellID, Cell: dr.envCell, MinFree: cfg.BuildStateMinFreeBytes,
 			BuilderDir: dr.dirs.builderDir, Mounter: mounter, FreeBytes: buildstate.FreeBytes, Clock: clk, Log: dr.log(),
 			// A clone is a plain directory: the next build's view can be made
 			// ahead of it (buildstate/spare.go). A kernel overlay is made at once.

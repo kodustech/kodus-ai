@@ -10,7 +10,6 @@ import (
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
-	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/buildstate"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/drivers/dockergvisor/registry"
 )
 
@@ -56,7 +55,7 @@ func (d *Driver) newRegistries() *registry.Registries {
 	return registry.New(registry.Config{
 		CellID: d.cfg.CellID, Image: d.cfg.RegistryImage, Runtime: d.cfg.Runtime,
 		Root: d.registryRoot(), KeepBytes: d.registryKeep(),
-		EnvKey: func(org, env string) string { return buildstate.EnvKey(d.cfg.CellID, org, env) },
+		EnvKey: d.envKey,
 		Docker: d.d, Dirs: registryDirs{d},
 		Network: func(ctx context.Context) (string, error) { return d.ensureHostOnlyNetwork(ctx, d.registryNetwork()) },
 		Parent:  d.parentFor,

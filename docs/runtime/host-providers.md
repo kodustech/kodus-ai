@@ -654,6 +654,12 @@ host usable and starts the cell while it still loads the disk's docker images on
 51 s after the cell started. Without the wait the bake was retired and removed and the Run built its environment again. New
 bakes on that host keep the owner's names, so the catalog stays one lineage.
 
+The environment's build cache (`cache/env/<key>`), its build state and its registry seed are keyed by the same owner
+id (`Driver.envCell`), not by the host's own. They are on the copied disk under the template cell's id, so a key made
+from the host's new id found nothing and the PR side built every step cold, `apt-get` included. Only an adopted catalog
+changes the id, and every key also carries the org, which is the one the host is bound to. A template with no bake
+catalog leaves the host nothing to learn the id from, and it builds cold.
+
 Left over: artifacts a quarantined catalog named (its own cell's or a foreign one's) stay on the disk, because no
 reaper rule lists a bake; the disk is deleted with the Run host. The microVM driver has its own checks (its owner and
 snapshot ids) and does not adopt yet.
