@@ -9,6 +9,7 @@ import { Link } from "@components/ui/link";
 import { MultiStep, useMultiStep } from "@components/ui/multi-step";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useDebouncedCallback } from "@hooks/use-debounced-callback";
+import { isAxiosError } from "axios";
 import {
     ArrowLeft,
     ArrowRight,
@@ -17,7 +18,6 @@ import {
     EyeClosed,
     LogInIcon,
 } from "lucide-react";
-import { isAxiosError } from "axios";
 import { signIn } from "next-auth/react";
 import {
     Controller,
@@ -538,16 +538,46 @@ export const RegisterPageContent = () => {
         },
     });
 
-    // When an on-screen keyboard shrinks the viewport, the focused field can
-    // end up below it inside the form's scroll column. Bring it back into view.
+    // When an on-screen keyboard opens, the focused field can end up behind
+    // it. iOS Safari and Chrome for Android shrink only the visual viewport,
+    // so scrollIntoView() sees nothing clipped; scroll the form's scroll
+    // column by however far the field hangs below the visible area instead.
+    // Only on a shrink, so a later URL-bar or rotation resize does not snap
+    // the column back to a field that still has focus.
     useEffect(() => {
-        const target = window.visualViewport ?? window;
+        const viewport = window.visualViewport;
+        const target = viewport ?? window;
+        const visibleBottom = () =>
+            viewport
+                ? viewport.offsetTop + viewport.height
+                : window.innerHeight;
+        let previousBottom = visibleBottom();
+
         const onResize = () => {
+            const bottom = visibleBottom();
+            const shrank = bottom < previousBottom;
+            previousBottom = bottom;
+            if (!shrank) return;
+
             const active = document.activeElement;
-            if (active instanceof HTMLInputElement) {
-                active.scrollIntoView({ block: "nearest" });
+            if (!(active instanceof HTMLInputElement)) return;
+
+            const overflow = active.getBoundingClientRect().bottom - bottom;
+            if (overflow <= 0) return;
+
+            let scroller = active.parentElement;
+            while (
+                scroller &&
+                !(
+                    /auto|scroll/.test(getComputedStyle(scroller).overflowY) &&
+                    scroller.scrollHeight > scroller.clientHeight
+                )
+            ) {
+                scroller = scroller.parentElement;
             }
+            if (scroller) scroller.scrollTop += overflow + 16;
         };
+
         target.addEventListener("resize", onResize);
         return () => target.removeEventListener("resize", onResize);
     }, []);
