@@ -5,6 +5,7 @@
  * dimensions the Langfuse UI filters and groups BY.
  */
 const propagated: { params: any[] } = { params: [] };
+const updates: unknown[] = [];
 jest.mock('@langfuse/tracing', () => ({
     propagateAttributes: (params: any, fn: () => unknown) => {
         propagated.params.push(params);
@@ -13,7 +14,8 @@ jest.mock('@langfuse/tracing', () => ({
     getActiveTraceId: () => 'trace-1',
     startActiveObservation: (_name: string, cb: (o: any) => unknown) =>
         cb({
-            update: () => {
+            update: (arg: unknown) => {
+                updates.push(arg);
                 throw new Error('langfuse export failed');
             },
         }),
@@ -42,6 +44,43 @@ describe('withLangfuseObservation', () => {
         ).resolves.toBe('ok');
         expect(fn).toHaveBeenCalledTimes(1);
         expect(fn).toHaveBeenCalledWith('trace-1');
+    });
+
+    it('records what output makes of the result, and still returns it when the update throws', async () => {
+        process.env.LANGFUSE_TRACING = 'true';
+        process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
+        process.env.LANGFUSE_SECRET_KEY = 'sk-test';
+        updates.length = 0;
+
+        await expect(
+            withLangfuseObservation(
+                'open',
+                async () => ({ wasCreated: true, secret: 'x' }),
+                undefined,
+                (r) => ({ wasCreated: r.wasCreated }),
+            ),
+        ).resolves.toEqual({ wasCreated: true, secret: 'x' });
+        expect(updates).toEqual([{ output: { wasCreated: true } }]);
+    });
+
+    it('returns the result when building the output throws', async () => {
+        process.env.LANGFUSE_TRACING = 'true';
+        process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
+        process.env.LANGFUSE_SECRET_KEY = 'sk-test';
+        const buildOutput = jest.fn((): never => {
+            throw new Error('bad output');
+        });
+
+        await expect(
+            withLangfuseObservation(
+                'open',
+                async () => 'lease',
+                undefined,
+                buildOutput,
+            ),
+        ).resolves.toBe('lease');
+        // The output was built, and its failure did not reach the caller.
+        expect(buildOutput).toHaveBeenCalledTimes(1);
     });
 });
 
