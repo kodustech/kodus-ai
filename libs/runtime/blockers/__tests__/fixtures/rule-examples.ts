@@ -253,6 +253,34 @@ export const RULE_EXAMPLES: RuleExample[] = [
         },
     },
     {
+        rule: 'log:firebase_emulator_download',
+        behavior: "reads an emulator firebase-tools downloads at start as a recipe that runs the emulators outside a Dockerfile Kody writes",
+        card: { kind: 'toolchain', signature: 'toolchain:firebase_emulator_download', fixes: ['fix_recipe'] },
+        input: {
+            kind: 'toolchain',
+            signature: 'compose_up',
+            message: 'compose up: exit 1',
+            bundle: {
+                services: [
+                    {
+                        name: 'firebase',
+                        state: 'Exited (1) Less than a second ago',
+                        logTail: [
+                            'i  firestore: downloading cloud-firestore-emulator-v1.19.8.jar...',
+                            'Error: Failed to make request to https://storage.googleapis.com/firebase-preview-drop/emulator/cloud-firestore-emulator-v1.19.8.jar',
+                        ],
+                    },
+                ],
+                ports: [],
+                disk: [],
+                deniedEgress: [],
+                redactions: 0,
+                truncated: false,
+                collectedAt: '2026-11-25T00:30:00Z',
+            },
+        },
+    },
+    {
         rule: 'log:ca_untrusted',
         behavior: "reads a build tool that does not trust the cell's certificate as a fix in the Dockerfile, never a retry",
         card: { kind: 'toolchain', signature: 'toolchain:ca_untrusted:bun', fixes: ['trust_cell_ca'] },

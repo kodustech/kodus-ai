@@ -330,6 +330,30 @@ const mirrorArtifactMissing: LineRule = ({ text }) => {
     };
 };
 
+/**
+ * firebase-tools downloading an emulator when the emulators start: it has no
+ * download-URL setting and goes to storage.googleapis.com, which no machine
+ * reaches. The cell's mirror serves the emulators, fetched into the tool's
+ * cache before it starts (docs/runtime/egress-allowlist.md, Firebase): Kodus
+ * adds that step to the Dockerfiles Kody writes, so the emulators run from
+ * one. Kody's recipe for a monorepo dropped the emulators instead, and every
+ * Cypress login, which goes through the Auth emulator, would have failed.
+ */
+const firebaseEmulatorDownload: LineRule = ({ text }) => {
+    const m = /storage\.googleapis\.com\/firebase-preview-drop\/emulator\/([A-Za-z0-9._-]{1,120})/.exec(text);
+    if (!m) return null;
+    return {
+        kind: 'toolchain',
+        signature: 'toolchain:firebase_emulator_download',
+        title: `firebase-tools downloads ${m[1]} from storage.googleapis.com when the emulators start; machines get the emulators only from the Kodus mirror, fetched by a Dockerfile under .kodus/`,
+        fixes: [
+            fixRecipe(
+                'Keep the emulators the tests need and run them from a Dockerfile under .kodus/ (the stage of your Dockerfile that installs firebase-tools and Java): Kodus adds the step that fetches each emulator from its mirror before they start. A Dockerfile of your own needs the same step, described in the Kody Runtime egress documentation (Firebase).',
+            ),
+        ],
+    };
+};
+
 // A cell inspects outbound TLS and hands every build step and machine its CA
 // in SSL_CERT_FILE and NODE_EXTRA_CA_CERTS (machinetrust, the builder's
 // execCABundle). A tool with a trust store of its own ignores both, and its
@@ -402,6 +426,7 @@ const LOG_RULES: ReadonlyArray<readonly [id: string, rule: LineRule]> = [
     ['go_module_not_pinned', goModuleNotPinned],
     ['go_checksum_db', goChecksumDb],
     ['mirror_artifact_missing', mirrorArtifactMissing],
+    ['firebase_emulator_download', firebaseEmulatorDownload],
     ['ca_untrusted', caUntrusted],
     ['missing_env', missingEnv],
     ['invalid_env', invalidEnv],
