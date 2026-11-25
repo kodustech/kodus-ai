@@ -4,6 +4,7 @@ import 'source-map-support/register';
 import { initPyroscope } from '@libs/core/infrastructure/config/profiling/pyroscope';
 import { reportExceptionToSentry } from '@libs/core/infrastructure/config/log/sentry';
 import { configureLongFetchTimeouts } from '@libs/core/infrastructure/http/fetch-timeouts';
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
 
 // Bump undici HTTP timeouts for any outgoing fetch() — webhooks itself
 // doesn't make long LLM calls today, but keeping the dispatcher aligned
@@ -41,8 +42,7 @@ async function bootstrap() {
     process.env.COMPONENT_TYPE = 'webhook';
     const app = await NestFactory.create<NestExpressApplication>(
         WebhookHandlerModule,
-        // See apps/api/src/main.ts: one instance per identical dynamic module.
-        { snapshot: true, moduleIdGeneratorAlgorithm: 'deep-hash' },
+        { ...NEST_APP_OPTIONS },
     );
 
     const logger = app.get(LoggerWrapperService);
