@@ -206,8 +206,8 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
         const store = new InMemoryEnvironmentSetupStore();
         const { env, calls } = fakeEnv({ first: BUILD_FAILED, second: 'ok' });
         // Written under the current instructions, so no revision asks for it again.
-        const a = author(store, { ...submitted(SECOND), authorVersion: RECIPE_AUTHOR_VERSION });
-        const inferred = { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST, origin: 'inferred' as const };
+        const a = author(store, { ...submitted(SECOND), authorVersion: RECIPE_AUTHOR_VERSION } as RecipeAuthorOutcome);
+        const inferred = { path: '.kodus/workspace.yaml' as const, sha: SHA, content: FIRST, origin: 'inferred' as const };
         await service(store, env, { author: a.client }).run(cmd({ recipe: inferred }));
         calls.length = 0;
 
@@ -229,7 +229,7 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
 
         const KEY2 = 'env-1:2026-11-11T13:00:00.000Z';
         const rec = await service(store, env, { author: a.client }).run(
-            cmd({ key: KEY2, requestedAt: '2026-11-11T13:00:00.000Z', llmToken: sealSecret('kst1.setup-token', devSealKey(), KEY2), recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: THIRD, origin: 'inferred' } }),
+            cmd({ key: KEY2, requestedAt: '2026-11-11T13:00:00.000Z', llmToken: sealSecret('kst1.setup-token', devSealKey(), KEY2), recipe: { path: '.kodus/workspace.yaml' as const, sha: SHA, content: THIRD, origin: 'inferred' as const } }),
         );
 
         expect(rec.recipe).toMatchObject({ origin: 'inferred', content: THIRD });

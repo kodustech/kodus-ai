@@ -702,7 +702,7 @@ export class SuiteEngine {
         for (const shard of shards) {
             if (shard.missing.size === 0) continue;
             // The runner's own words are the customer's code talking: redacted and bounded like a failure message (result-hygiene).
-            const cause = shard.cause ? cleanSpecResult({ spec: '', status: 'infra', durationMs: 0, tests: [], errorSignature: shard.cause }, ctx.inputs.canaries ?? []).result.errorSignature : undefined;
+            const cause = shard.cause ? cleanSpecResult({ spec: '', status: 'failed', durationMs: 0, tests: [], errorSignature: shard.cause }, ctx.inputs.canaries ?? []).result.errorSignature : undefined;
             await this.d.runs.recordResults(
                 ctx.req.organizationId,
                 ctx.req.suiteRunId,
