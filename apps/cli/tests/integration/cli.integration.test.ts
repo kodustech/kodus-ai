@@ -447,26 +447,6 @@ describe('review integration', () => {
             );
             const rootSha = shaOut.trim();
 
-            const { stdout, stderr, exitCode } = await runCli(
-                ['review', '--commit', rootSha, '--format', 'json'],
-                { cwd: rootRepo },
-            );
-            expect(exitCode, stderr).toBe(0);
-
-            const json = parseFirstJsonObject(stdout);
-            expect(json).toHaveProperty('summary');
-
-            const req = mockServer.requests.find(
-                (r) => r.url === '/cli/review',
-            );
-            expect(req).toBeDefined();
-            expect(req!.body.commitSha).toBe(rootSha);
-            expect(req!.body.diff.startsWith('diff --git ')).toBe(true);
-            expect(req!.body.diff).toContain('init.ts');
-            expect(req!.body.diff).toContain('export const initial = true;');
-            expect(req!.body.diff).toContain('nested/helper.ts');
-
-            mockServer.reset();
             await fs.writeFile(
                 path.join(rootRepo, 'init.ts'),
                 'export const initial = false;\n',
@@ -481,6 +461,29 @@ describe('review integration', () => {
                 { cwd: rootRepo },
             );
             const secondSha = secondOut.trim();
+
+            const { stdout, stderr, exitCode } = await runCli(
+                ['review', '--commit', rootSha, '--format', 'json'],
+                { cwd: rootRepo },
+            );
+            expect(exitCode, stderr).toBe(0);
+
+            const json = parseFirstJsonObject(stdout);
+            expect(json).toHaveProperty('summary');
+
+            const req = mockServer.requests.find(
+                (r) => r.url === '/cli/review',
+            );
+            expect(req).toBeDefined();
+            expect(req!.body.diff.startsWith('diff --git ')).toBe(true);
+            expect(req!.body.diff).toContain('init.ts');
+            expect(req!.body.diff).toContain('+export const initial = true;');
+            expect(req!.body.diff).not.toContain(
+                '+export const initial = false;',
+            );
+            expect(req!.body.diff).toContain('nested/helper.ts');
+
+            mockServer.reset();
 
             const secondRun = await runCli(
                 ['review', '--commit', secondSha, '--format', 'json'],
