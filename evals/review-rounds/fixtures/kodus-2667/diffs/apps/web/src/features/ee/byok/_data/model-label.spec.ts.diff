@@ -1,0 +1,20 @@
+diff --git a/apps/web/src/features/ee/byok/_data/model-label.spec.ts b/apps/web/src/features/ee/byok/_data/model-label.spec.ts
+index 945ba651e..6310085b4 100644
+--- a/apps/web/src/features/ee/byok/_data/model-label.spec.ts
++++ b/apps/web/src/features/ee/byok/_data/model-label.spec.ts
+@@ -40,4 +40,15 @@ describe("modelLabeler across connections", () => {
+         );
+         expect(label("azure/gpt-4o", "gateway")).toBe("GPT 4o (azure/gpt-4o)");
+     });
++
++    it("names every entry under a label once any of them needs its id", () => {
++        const label = modelLabeler([
++            { id: "gpt-4o", connection: "a" },
++            { id: "gpt-4o", connection: "b" },
++            { id: "azure/gpt-4o", connection: "a" },
++        ]);
++        expect(label("gpt-4o", "a")).toBe("GPT 4o (gpt-4o)");
++        expect(label("gpt-4o", "b")).toBe("GPT 4o (gpt-4o)");
++        expect(label("azure/gpt-4o", "a")).toBe("GPT 4o (azure/gpt-4o)");
++    });
+ });
