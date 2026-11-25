@@ -38,6 +38,9 @@ type memDocker struct {
 	// duringBuild, when set, runs inside every RunBuild, as if while the
 	// builder runs.
 	duringBuild func(dockercli.BuildRun)
+	// stallBuild, when set, makes every RunBuild print its output and then
+	// hang until its context ends, as a builder whose disk stalled.
+	stallBuild bool
 	mu          sync.Mutex
 	seq         int
 	containers  map[string]dockercli.Container // by name
@@ -474,6 +477,12 @@ func (m *memDocker) RunBuild(ctx context.Context, b dockercli.BuildRun) error {
 	}
 	if m.duringBuild != nil {
 		m.duringBuild(b)
+	}
+	if m.stallBuild {
+		m.mu.Unlock()
+		<-ctx.Done()
+		m.mu.Lock()
+		return ctx.Err()
 	}
 	if m.buildErr != nil {
 		return m.buildErr

@@ -82,6 +82,8 @@ type Tracker struct {
 	// times is when each step was seen (Phases); now is the clock.
 	times map[int]*stepTime
 	now   func() time.Time
+	// last is when the builder printed its last line, a step's or not.
+	last time.Time
 }
 
 // stepOutput is what a step printed, bounded: its first error lines, its
@@ -131,6 +133,9 @@ var (
 // Line reads one line of the build's progress output.
 func (t *Tracker) Line(line string) {
 	line = strings.TrimRight(line, "\r")
+	t.mu.Lock()
+	t.last = t.now()
+	t.mu.Unlock()
 	m := stepLine.FindStringSubmatch(line)
 	if m == nil {
 		if strings.Contains(line, "failed to solve") {
@@ -178,6 +183,31 @@ func (t *Tracker) Line(line string) {
 	default:
 		t.status(id, rest, now)
 	}
+}
+
+// projectStep is the name BuildKit gives a step of the Dockerfile itself
+// ("[deps 2/15] RUN ...", "[api 1/1] COPY ..."); its own steps are named
+// otherwise ("[internal] load metadata ...", "docker-image://...").
+var projectStep = regexp.MustCompile(`^\[[^\]\s]+ \d+/\d+\] `)
+
+// LastLine is when the builder printed its last line; zero before the first.
+func (t *Tracker) LastLine() time.Time {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.last
+}
+
+// ProjectStepRunning says whether a step of the Dockerfile is running: named,
+// and not yet done, cached, failed or canceled.
+func (t *Tracker) ProjectStepRunning() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, s := range t.steps {
+		if !s.done && !s.Cached && !s.Errored && !s.Canceled && projectStep.MatchString(s.Name) {
+			return true
+		}
+	}
+	return false
 }
 
 // parseSecs is BuildKit's "12.345" seconds, in ms.

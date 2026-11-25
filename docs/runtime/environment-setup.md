@@ -244,6 +244,10 @@ anything (`environment-setup.service.ts:981-1004`).
 - `classifyBlocker` turns it into a card with title, evidence and fixes (`libs/runtime/blockers/catalog.ts:579`).
   Cards added in this round: `environment_not_prepared`, `builder_failed`, `image_load` (platform, retry),
   `image_too_large` (resources), `compose_refused` (toolchain).
+- A builder that prints nothing for 5 minutes while no step of the Dockerfile runs (`[stage N/M] RUN|COPY|...`) is
+  stopped by the cell as `builder_failed` (`dockergvisor/build.go` `watchBuildStall`): a builder that hangs between
+  BuildKit's own steps is the platform's, and before this it waited out the worker's boot limit, which read as the
+  PR's `boot_timeout` and a regression. Silence inside a project step stays the project's.
 - How a denied host is read as the cause (`deniedHosts`, `catalog.ts:561-577`):
   - reverse-DNS names (`*.in-addr.arpa`, `*.ip6.arpa`) are dropped (`:540`);
   - phone-home hosts (telemetry, `checkpoint.prisma.io`, opencollective) count only when the log names them (`:537`);

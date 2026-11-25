@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The plain progress of a one-line Go change on a warm state: the build
@@ -222,5 +223,43 @@ func TestErrorLinesAreTheOnesThatSayWhy(t *testing.T) {
 		if errorLine.MatchString(l) {
 			t.Errorf("an error line: %q", l)
 		}
+	}
+}
+
+// A builder that stops printing between steps hangs on the cell's side (a
+// host disk that stalled under it, on dev): no step of the project is
+// running. One that goes quiet inside a project step (a RUN, a COPY) is the
+// project's build.
+func TestATrackerSaysWhenAProjectStepIsRunning(t *testing.T) {
+	now := time.Date(2026, 11, 25, 19, 37, 38, 0, time.UTC)
+	tr := NewAt(func() time.Time { return now })
+	if !tr.LastLine().IsZero() || tr.ProjectStepRunning() {
+		t.Fatal("a tracker that read nothing has a last line or a running step")
+	}
+	for _, l := range []string{
+		"#1 [internal] load build definition from Dockerfile",
+		"#1 DONE 0.0s",
+		"#3 docker-image://docker.io/docker/dockerfile:1@sha256:572cebbc",
+		"#3 CACHED",
+	} {
+		tr.Line(l)
+	}
+	if tr.ProjectStepRunning() || !tr.LastLine().Equal(now) {
+		t.Fatalf("between steps: running=%v last=%v", tr.ProjectStepRunning(), tr.LastLine())
+	}
+	now = now.Add(time.Minute)
+	tr.Line("#4 [internal] load metadata for docker.io/library/node:22-bookworm-slim")
+	if tr.ProjectStepRunning() {
+		t.Fatal("BuildKit's own step read as the project's")
+	}
+	tr.Line("#4 DONE 0.4s")
+	tr.Line("#8 [deps 2/15] RUN apt-get update && apt-get install -y openssl ca-certificates")
+	if !tr.ProjectStepRunning() || !tr.LastLine().Equal(now) {
+		t.Fatal("a running RUN of the project is not read as one")
+	}
+	tr.Line("#8 7.075 Setting up openssl (3.0.22-1~deb12u2) ...")
+	tr.Line("#8 ERROR: process did not complete successfully: exit code: 100")
+	if tr.ProjectStepRunning() {
+		t.Fatal("a failed step still reads as running")
 	}
 }

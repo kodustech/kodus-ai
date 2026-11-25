@@ -364,6 +364,11 @@ type testHooks struct {
 	// freeBytes measures the free space evictCaches keeps above the floor;
 	// nil: buildstate.FreeBytes.
 	freeBytes func(path string) (int64, error)
+	// buildStallAfter and buildStallEvery replace how long a builder may print
+	// nothing outside the project's steps and how often that is looked at
+	// (watchBuildStall); zero: the defaults.
+	buildStallAfter time.Duration
+	buildStallEvery time.Duration
 	// adoptPollEvery and adoptWait replace how often and how long an adopted
 	// catalog's images are waited for (awaitAdoptedImages); zero: the defaults.
 	adoptPollEvery time.Duration

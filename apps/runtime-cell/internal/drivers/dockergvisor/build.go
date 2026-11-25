@@ -580,7 +580,7 @@ func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sa
 		// What it pushed is the bound's: never sealed into the seed.
 		reg.Discard()
 	}
-	if err != nil && !a.oom && !a.overDisk && ctx.Err() == nil {
+	if err != nil && !a.oom && !a.overDisk && !a.stalled && ctx.Err() == nil {
 		err = buildFailure(a.steps, err)
 		// BuildKit named no step: what is left to say why is buildkitd's own log.
 		if errors.Is(err, driver.ErrBuilderFailed) && len(a.daemon.Tail) > 0 {
@@ -712,6 +712,9 @@ type buildAttempt struct {
 	err      error
 	oom      bool
 	overDisk bool
+	// stalled: the cell stopped the builder for printing nothing outside the
+	// project's steps (watchBuildStall); err then says so.
+	stalled bool
 	// daemon is what buildkitd's own log said of the attempt.
 	daemon dockercli.BuilderLogSummary
 }
@@ -753,12 +756,17 @@ func (d *Driver) buildOnce(ctx context.Context, ref driver.MachineRef, b sandbox
 	a.started = d.clock.Now()
 	a.steps = buildprogress.New()
 	bctx, unwatch := d.watchBuildDisk(ctx, out, reg, a.run.StateDir)
+	bctx, unstall := d.watchBuildStall(bctx, a.steps)
 	// The builder's container and buildkitd start before BuildKit prints a
 	// line: the time to the first one is the builder's start.
 	var firstLine atomic.Int64
 	bootAt := d.clock.Now()
 	mark := func(string) { firstLine.CompareAndSwap(0, d.clock.Now().UnixNano()) }
 	a.err = d.d.RunBuild(dockercli.WithOutput(bctx, alsoTo(alsoTo(dockercli.OutputFrom(ctx), a.steps.Line), mark)), a.run)
+	if stall := unstall(); stall != nil && a.err != nil {
+		a.err, a.stalled = stall, true
+		d.log().Warn("build.stalled", "machine", ref.MachineID, "service", b.Service, "err", stall)
+	}
 	if over := unwatch(); over != nil {
 		a.err, a.overDisk = over, true
 		d.log().Warn("build.disk.stopped", "machine", ref.MachineID, "service", b.Service, "err", over)
@@ -772,6 +780,68 @@ func (d *Driver) buildOnce(ctx context.Context, ref driver.MachineRef, b sandbox
 	a.daemon = d.logBuilderLog(ref.MachineID, b.Service, out, a.err)
 	a.oom = a.err != nil && !a.overDisk && ctx.Err() == nil && killedAtMemoryLimit(a.err)
 	return a, nil
+}
+
+// defaultBuildStallAfter is how long a builder may print nothing while no
+// step of the project runs, and defaultBuildStallEvery how often that is
+// looked at (watchBuildStall). BuildKit's own steps (loading the Dockerfile
+// and the base image's metadata, resolving the frontend) print within seconds.
+const (
+	defaultBuildStallAfter = 5 * time.Minute
+	defaultBuildStallEvery = 15 * time.Second
+)
+
+// watchBuildStall stops a build whose builder printed nothing for the stall
+// limit while no step of the project was running: a builder that hangs
+// between BuildKit's own steps (on dev, a host disk restored lazily stalled
+// under it for over ten minutes) is the cell's, and without this it waited
+// out the worker's boot limit, which reads as the pull request's boot_timeout.
+// Silence inside a project step (a RUN, a COPY) is the project's and never
+// stops it. The returned func ends the watch and says why it stopped the
+// build: driver.ErrBuilderFailed, the platform's (builder_failed); nil when
+// it did not.
+func (d *Driver) watchBuildStall(ctx context.Context, steps *buildprogress.Tracker) (context.Context, func() error) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	after, every := defaultBuildStallAfter, defaultBuildStallEvery
+	if d.hooks != nil && d.hooks.buildStallAfter > 0 {
+		after = d.hooks.buildStallAfter
+	}
+	if d.hooks != nil && d.hooks.buildStallEvery > 0 {
+		every = d.hooks.buildStallEvery
+	}
+	// The wall clock, as the tracker's lines are stamped (buildprogress.New).
+	started := time.Now()
+	done, finished := make(chan struct{}), make(chan struct{})
+	var stalled error
+	go func() {
+		defer close(finished)
+		tick := time.NewTicker(every)
+		defer tick.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+			}
+			last := steps.LastLine()
+			if last.IsZero() {
+				last = started
+			}
+			if quiet := time.Since(last); quiet >= after && !steps.ProjectStepRunning() {
+				stalled = fmt.Errorf("%w: the builder printed nothing for %s outside the project's steps", driver.ErrBuilderFailed, quiet.Round(time.Second))
+				cancel(stalled)
+				return
+			}
+		}
+	}()
+	return ctx, func() error {
+		close(done)
+		<-finished
+		cancel(nil)
+		return stalled
+	}
 }
 
 // defaultBuildDiskEvery is how often watchBuildDisk measures a running build.
