@@ -14,4 +14,6 @@ export enum OrganizationParametersKey {
     SPEND_LIMIT_CONFIG = 'spend_limit_config',
     GLOBAL_RULES_SOURCE_REPOSITORIES = 'global_rules_source_repositories',
     REVIEW_COMMAND_MODES_CONFIG = 'review_command_modes_config',
+    /** Whether the organization's sandboxes reach Git from Kodus's fixed IP. */
+    EGRESS_FIXED_IP = 'egress_fixed_ip',
 }
