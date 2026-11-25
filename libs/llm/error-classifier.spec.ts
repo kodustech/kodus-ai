@@ -1015,6 +1015,18 @@ describe('classifyLLMError: the address guard refusal is read from the error, no
         expect(classifyLLMError(err).category).toBe(LlmErrorCategory.UNKNOWN);
     });
 
+    it("a provider's 400 whose own message quotes the refusal sentence keeps its status category", () => {
+        const err = Object.assign(
+            new Error(
+                'Invalid prompt: BYOK base URL host "x" resolves to a private or reserved address; the call was not sent.',
+            ),
+            { name: 'AI_APICallError', statusCode: 400 },
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.REQUEST_REJECTED,
+        );
+    });
+
     it('a refusal carried under a status is still CONFIG_INVALID (never retried)', () => {
         const refusal = Object.assign(new Error('refused'), {
             name: 'GatewayAddressRefusedError',
