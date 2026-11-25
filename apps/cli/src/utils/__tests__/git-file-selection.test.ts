@@ -26,6 +26,32 @@ describe('createFileSelectionFromNameStatus', () => {
             ['src/new.ts', 'renamed'],
         ]);
     });
+
+    it('parses NUL-separated -z name-status output with non-ASCII and special characters', () => {
+        const result = createFileSelectionFromNameStatus(
+            [
+                'M',
+                'src/ação.ts',
+                'R100',
+                'src/old.ts',
+                'src/a "quoted"\tname.ts',
+                'A',
+                'src/plain.ts',
+                '',
+            ].join('\0'),
+        );
+
+        expect(result.filesToRead).toEqual([
+            'src/ação.ts',
+            'src/a "quoted"\tname.ts',
+            'src/plain.ts',
+        ]);
+        expect(Array.from(result.fileStatusMap.entries())).toEqual([
+            ['src/ação.ts', 'modified'],
+            ['src/a "quoted"\tname.ts', 'renamed'],
+            ['src/plain.ts', 'added'],
+        ]);
+    });
 });
 
 describe('createFileSelectionFromModifiedFiles', () => {

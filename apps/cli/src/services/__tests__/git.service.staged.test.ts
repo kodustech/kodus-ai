@@ -176,4 +176,38 @@ describe('gitService staged-only scope', () => {
         expect(explicit[0].content).toContain('STAGED_MOD');
         expect(explicit[0].content).not.toContain('UNSTAGED_MOD');
     });
+
+    it('keeps staged non-ASCII filenames when core.quotePath is enabled', async () => {
+        const dir = createRepo();
+        tempDirs.push(dir);
+
+        git(dir, ['config', 'core.quotePath', 'true']);
+        fs.writeFileSync(
+            path.join(dir, 'ação.ts'),
+            'const STAGED_UNICODE = true;\n',
+        );
+        git(dir, ['add', 'ação.ts']);
+        fs.writeFileSync(
+            path.join(dir, 'ação.ts'),
+            'const STAGED_UNICODE = true;\nconst UNSTAGED_UNICODE = true;\n',
+        );
+
+        const gitService = await freshGitService(dir);
+        process.chdir(dir);
+
+        const contents = await gitService.getFullFileContents(undefined, {
+            staged: true,
+        });
+        expect(contents.map((file) => file.path)).toEqual(['ação.ts']);
+        expect(contents[0].status).toBe('added');
+        expect(contents[0].content).toContain('STAGED_UNICODE');
+        expect(contents[0].content).not.toContain('UNSTAGED_UNICODE');
+
+        const explicit = await gitService.getFullFileContents(['ação.ts'], {
+            staged: true,
+        });
+        expect(explicit.map((file) => file.path)).toEqual(['ação.ts']);
+        expect(explicit[0].content).toContain('STAGED_UNICODE');
+        expect(explicit[0].content).not.toContain('UNSTAGED_UNICODE');
+    });
 });

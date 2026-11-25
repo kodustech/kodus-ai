@@ -19,6 +19,27 @@ export function parseGitNameStatusOutput(
 ): Array<{ file: string; status: FileDiff['status'] }> {
     const files: Array<{ file: string; status: FileDiff['status'] }> = [];
 
+    if (nameStatus.includes('\0')) {
+        const tokens = nameStatus.split('\0');
+        for (let i = 0; i < tokens.length;) {
+            const statusChar = tokens[i++];
+            if (!statusChar) {
+                continue;
+            }
+            const isRenameOrCopy =
+                statusChar.startsWith('R') || statusChar.startsWith('C');
+            const fileName = isRenameOrCopy ? (i++, tokens[i++]) : tokens[i++];
+            if (!fileName) {
+                continue;
+            }
+            files.push({
+                file: fileName,
+                status: parseGitStatus(statusChar),
+            });
+        }
+        return files;
+    }
+
     for (const line of nameStatus.split('\n')) {
         const trimmed = line.trim();
         if (!trimmed) {

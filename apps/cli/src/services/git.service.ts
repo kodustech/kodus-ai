@@ -344,7 +344,7 @@ class GitService {
             ]);
             selection = createFileSelectionFromNameStatus(nameStatus);
         } else if (options?.staged) {
-            const nameStatusArgs = ['--cached', '--name-status'];
+            const nameStatusArgs = ['--cached', '--name-status', '-z'];
             if (explicitFiles && explicitFiles.length > 0) {
                 nameStatusArgs.push('--', ...explicitFiles);
             }
