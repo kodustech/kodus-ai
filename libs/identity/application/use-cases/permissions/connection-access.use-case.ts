@@ -37,21 +37,16 @@ export class ConnectionAccessUseCase {
     }): Promise<{ userIds: string[] }> {
         const organizationId = await this.assertInWorkspace(params);
 
-        const wanted = new Set(
-            await this.connectionAccessService.membersOfOrganization(
-                organizationId,
-                [...new Set(params.userIds ?? [])],
-            ),
-        );
-        const current = new Set(
-            await this.connectionAccessService.listGrants(params.connectionId),
+        const wanted = await this.connectionAccessService.membersOfOrganization(
+            organizationId,
+            [...new Set(params.userIds ?? [])],
         );
 
-        const added = [...wanted].filter((id) => !current.has(id));
-        const removed = [...current].filter((id) => !wanted.has(id));
-
-        await this.connectionAccessService.grant(params.connectionId, added);
-        await this.connectionAccessService.revoke(params.connectionId, removed);
+        const { granted: added, revoked: removed } =
+            await this.connectionAccessService.replaceGrants(
+                params.connectionId,
+                wanted,
+            );
 
         this.logger.log({
             message: 'connection_access_changed',
@@ -66,7 +61,7 @@ export class ConnectionAccessUseCase {
             },
         });
 
-        return { userIds: [...wanted] };
+        return { userIds: wanted };
     }
 
     private async assertInWorkspace(params: {

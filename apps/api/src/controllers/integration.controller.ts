@@ -48,6 +48,7 @@ import {
     ApiStringResponseDto,
 } from '../dtos/api-response.dto';
 import { IntegrationCloneResponseDto } from '../dtos/integration-response.dto';
+import { SetConnectionAccessDto } from '../dtos/connection-access.dto';
 
 @ApiTags('Integration')
 @ApiBearerAuth('jwt')
@@ -278,12 +279,12 @@ export class IntegrationController {
     public async setConnectionAccess(
         @Param('connectionId') connectionId: string,
         @Query() query: TeamQueryDto,
-        @Body() body: { userIds: string[] },
+        @Body() body: SetConnectionAccessDto,
     ) {
         return this.connectionAccessUseCase.replace({
             teamId: query.teamId,
             connectionId,
-            userIds: Array.isArray(body?.userIds) ? body.userIds : [],
+            userIds: body.userIds,
         });
     }
 }

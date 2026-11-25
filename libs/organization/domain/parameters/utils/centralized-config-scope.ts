@@ -26,6 +26,15 @@ const strip = (
     return rest;
 };
 
+/** A connection's own entry, never an inherited member of the record. */
+const ownEntry = <V>(
+    connections: Record<string, V> | undefined,
+    integrationId: string,
+): V | undefined =>
+    connections && Object.hasOwn(connections, integrationId)
+        ? connections[integrationId]
+        : undefined;
+
 export const centralizedConfigFor = (
     stored: StoredCentralizedConfig | null | undefined,
     integrationId?: string,
@@ -33,7 +42,7 @@ export const centralizedConfigFor = (
     if (!stored) return stored;
     const { connections, ...workspace } = stored;
     if (!integrationId) return workspace;
-    const own = connections?.[integrationId];
+    const own = ownEntry(connections, integrationId);
     if (own) return { ...own, connectionScoped: true };
     if (!workspace.integrationId || workspace.integrationId === integrationId) {
         return workspace;
@@ -54,7 +63,7 @@ export const withCentralizedConfigFor = (
     const keep = connections ? { connections } : {};
     const writesWorkspace =
         !integrationId ||
-        (!connections?.[integrationId] &&
+        (!ownEntry(connections, integrationId) &&
             (!workspace.integrationId ||
                 workspace.integrationId === integrationId));
     // A cleared config belongs to no connection: the next one to set it up

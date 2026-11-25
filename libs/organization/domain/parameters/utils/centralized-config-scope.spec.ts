@@ -174,4 +174,13 @@ describe('centralized config per Git connection', () => {
             ).toEqual({ ...github, integrationId: 'gh-a', connections: {} });
         });
     });
+
+    it('never reads an inherited member as a connection entry', () => {
+        const stored = { ...github, integrationId: 'gh-a', connections: {} };
+
+        expect(centralizedConfigFor(stored, 'constructor')).toMatchObject({
+            connectionScoped: true,
+            enabled: false,
+        });
+    });
 });

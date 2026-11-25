@@ -228,13 +228,9 @@ export class CreateIntegrationUseCase implements IUseCase {
     }
 
     /**
-     * Billing bills every connection of a workspace on its own licence until
-     * it knows which one keeps the workspace plan. Name it before another
-     * connection exists, or the new one would share the workspace's seats.
-     */
-    /**
      * Before a connection is added beside others, billing records which one
-     * keeps the workspace plan. Answers whether the workspace already had a
+     * keeps the workspace plan; otherwise the new one would share the
+     * workspace's seats. Answers whether the workspace already had a
      * connection.
      */
     private async bindPrimaryConnection(organizationAndTeamData: {

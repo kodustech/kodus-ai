@@ -146,7 +146,11 @@ export class ConnectionAccessService {
                             : undefined,
                         repository?.name,
                     ]
-                        .filter((name): name is string => Boolean(name))
+                        // Only owner/name forms: a bare name is not unique.
+                        .filter(
+                            (name): name is string =>
+                                typeof name === 'string' && name.includes('/'),
+                        )
                         .map((name) => name.toLowerCase()),
                 ),
             ),
@@ -216,6 +220,50 @@ export class ConnectionAccessService {
             [integrationId],
         )) as Array<{ user_id: string }>;
         return rows.map((row) => row.user_id);
+    }
+
+    /**
+     * Sets exactly who reads the connection. Concurrent replaces of one
+     * connection run one after the other, each against what the last wrote.
+     */
+    async replaceGrants(
+        integrationId: string,
+        userIds: string[],
+    ): Promise<{ granted: string[]; revoked: string[] }> {
+        const diff = await this.repository.manager.transaction(async (tx) => {
+            await tx.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+                `user_connection_access:${integrationId}`,
+            ]);
+            const rows = (await tx.query(
+                `SELECT a."user_id" FROM "user_connection_access" a
+                  WHERE a."integration_id" = $1`,
+                [integrationId],
+            )) as Array<{ user_id: string }>;
+            const current = new Set(rows.map((row) => row.user_id));
+            const wanted = new Set(userIds);
+            const granted = [...wanted].filter((id) => !current.has(id));
+            const revoked = [...current].filter((id) => !wanted.has(id));
+
+            if (granted.length) {
+                await tx.query(
+                    `INSERT INTO "user_connection_access" ("user_id", "integration_id")
+                     SELECT u, $1::uuid FROM unnest($2::uuid[]) AS u
+                     ON CONFLICT ("user_id", "integration_id") DO NOTHING`,
+                    [integrationId, granted],
+                );
+            }
+            if (revoked.length) {
+                await tx.query(
+                    `DELETE FROM "user_connection_access"
+                      WHERE "integration_id" = $1 AND "user_id" = ANY($2::uuid[])`,
+                    [integrationId, revoked],
+                );
+            }
+            return { granted, revoked };
+        });
+
+        this.forget([...diff.granted, ...diff.revoked]);
+        return diff;
     }
 
     /** Grants each user read access to the connection; existing grants stay. */

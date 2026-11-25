@@ -105,3 +105,35 @@ export const compileAuthorPolicyByConnection = (
                 : undefined,
         );
 };
+
+/**
+ * Repository id -> the Git connection that lists it. An id more than one
+ * connection lists (ids repeat across hosts) maps to none.
+ */
+export const repositoryConnectionMap = (
+    configs: ReadonlyArray<{
+        integration?: { uuid?: string };
+        configValue?: unknown;
+    }>,
+): Map<string, string> => {
+    const map = new Map<string, string>();
+    const shared = new Set<string>();
+    for (const config of configs) {
+        const integrationId = config?.integration?.uuid;
+        if (!integrationId || !Array.isArray(config.configValue)) continue;
+        for (const repository of config.configValue as Array<{
+            id?: unknown;
+        }>) {
+            if (repository?.id == null || repository.id === '') continue;
+            const id = String(repository.id);
+            const owner = map.get(id);
+            if (shared.has(id) || (owner && owner !== integrationId)) {
+                shared.add(id);
+                map.delete(id);
+                continue;
+            }
+            map.set(id, integrationId);
+        }
+    }
+    return map;
+};

@@ -1,6 +1,7 @@
 import {
     compileAuthorPolicyByConnection,
     compileAuthorPolicyConfig,
+    repositoryConnectionMap,
     shouldIncludeAuthorByPolicy,
 } from './author-policy-filter.util';
 
@@ -141,5 +142,30 @@ describe('author policy per Git connection', () => {
 
         expect(forRepository('unknown').ignoredUsers).toEqual(new Set(['7']));
         expect(forRepository(undefined).ignoredUsers).toEqual(new Set(['7']));
+    });
+});
+
+describe('repositoryConnectionMap', () => {
+    it('maps each saved repository to the connection that lists it', () => {
+        const map = repositoryConnectionMap([
+            { integration: { uuid: 'gh-a' }, configValue: [{ id: 1 }, { id: 2 }] },
+            { integration: { uuid: 'gl-b' }, configValue: [{ id: 3 }] },
+        ]);
+
+        expect([...map.entries()]).toEqual([
+            ['1', 'gh-a'],
+            ['2', 'gh-a'],
+            ['3', 'gl-b'],
+        ]);
+    });
+
+    it('leaves an id two connections list unmapped, so neither connection claims it', () => {
+        const map = repositoryConnectionMap([
+            { integration: { uuid: 'gh-a' }, configValue: [{ id: 7 }] },
+            { integration: { uuid: 'gl-b' }, configValue: [{ id: '7' }] },
+            { integration: { uuid: 'fj-c' }, configValue: [{ id: 7 }] },
+        ]);
+
+        expect(map.has('7')).toBe(false);
     });
 });

@@ -14,12 +14,12 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { ruleAppliesToConnection } from '@libs/kodyRules/domain/utils/centralized-rule-source';
 import { Injectable } from '@nestjs/common';
 
 /**
  * Service for validating and ordering Kody Rules in cloud mode
  */
-import { ruleAppliesToConnection } from '@libs/kodyRules/domain/utils/centralized-rule-source';
 @Injectable()
 export class KodyRulesValidationService {
     public readonly MAX_KODY_RULES = 10;

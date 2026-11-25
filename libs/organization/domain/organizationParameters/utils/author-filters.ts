@@ -17,9 +17,11 @@ export const authorFiltersFor = (
     config: Partial<OrganizationParametersAutoAssignConfig> | null | undefined,
     integrationId?: string,
 ): AuthorFilters => {
-    const own = integrationId
-        ? config?.connections?.[integrationId]
-        : undefined;
+    const connections = config?.connections;
+    const own =
+        integrationId && connections && Object.hasOwn(connections, integrationId)
+            ? connections[integrationId]
+            : undefined;
     const source = own ?? config;
     return {
         ignoredUsers: list(source?.ignoredUsers),

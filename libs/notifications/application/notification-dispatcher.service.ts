@@ -75,14 +75,6 @@ interface ResolvedRecipient {
     directed?: boolean;
 }
 
-/**
- * Worker-side fanout logic.
- *
- * 1. Resolve target users from payload context
- * 2. For each user: resolve routing rule → determine channels
- * 3. For each channel: create delivery record → call adapter → update status
- */
-
 /** The repository an event payload names, under the fields emitters use. */
 const repositoryOfPayload = (
     payload: Record<string, unknown>,
@@ -95,6 +87,14 @@ const repositoryOfPayload = (
         ...(typeof name === 'string' && name ? { name } : {}),
     };
 };
+
+/**
+ * Worker-side fanout logic.
+ *
+ * 1. Resolve target users from payload context
+ * 2. For each user: resolve routing rule → determine channels
+ * 3. For each channel: create delivery record → call adapter → update status
+ */
 @Injectable()
 export class NotificationDispatcherService {
     private readonly logger = createLogger(

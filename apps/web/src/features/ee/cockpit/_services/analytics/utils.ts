@@ -1,5 +1,7 @@
 import { authorizedFetch, typedFetch } from '@services/fetch';
 import { getOrganizationId } from '@services/organizations/fetch';
+// eslint-disable-next-line camelcase -- Next.js's own export name
+import { unstable_rethrow } from 'next/navigation';
 import { createUrl, pathToApiUrl } from 'src/core/utils/helpers';
 import { isServerSide } from 'src/core/utils/server-side';
 
@@ -104,7 +106,9 @@ export const analyticsFetch = async <Data>(
         await authorizedFetch(pathToApiUrl('/cockpit/access'), {
             params: selectedRepository ? { repository: selectedRepository } : {},
         });
-    } catch {
+    } catch (error) {
+        // An expired session redirects to sign-out; only a refusal reads nothing.
+        unstable_rethrow(error);
         return null as Data;
     }
 

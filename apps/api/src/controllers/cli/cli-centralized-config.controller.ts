@@ -18,6 +18,7 @@ import {
     ApiOperation,
     ApiTags,
 } from '@nestjs/swagger';
+import { connectionDownloadScope } from '@libs/centralized-config/utils/connection-download-scope';
 import { Response } from 'express';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { finished } from 'stream/promises';
@@ -194,7 +195,6 @@ export class CliCentralizedConfigController {
         this.ensureRepositoryConfigCapability(authContext);
 
         const workspace = this.toOrganizationAndTeamData(authContext);
-        await this.ensureCodeManagementIntegration(workspace);
 
         if (!body?.repositoryId) {
             throw new BadRequestException('repositoryId is required');
@@ -207,6 +207,7 @@ export class CliCentralizedConfigController {
             body.connectionId ??
                 this.connectionListing(connections, body.repositoryId),
         );
+        await this.ensureCodeManagementIntegration(context);
 
         const repository = await this.getSelectedRepository(
             context,
@@ -269,12 +270,12 @@ export class CliCentralizedConfigController {
         this.ensureRepositoryConfigCapability(authContext);
 
         const workspace = this.toOrganizationAndTeamData(authContext);
-        await this.ensureCodeManagementIntegration(workspace);
         const context = this.scopeTo(
             workspace,
             await this.connectionsOf(workspace),
             connectionId,
         );
+        await this.ensureCodeManagementIntegration(context);
 
         return this.centralizedConfigSyncUseCase.execute({
             organizationAndTeamData: context,
@@ -449,10 +450,9 @@ export class CliCentralizedConfigController {
         };
     }
 
-    private async ensureCodeManagementIntegration(context: {
-        organizationId: string;
-        teamId: string;
-    }) {
+    private async ensureCodeManagementIntegration(
+        context: OrganizationAndTeamData,
+    ) {
         const integrationType =
             await this.codeManagementService.getTypeIntegration(context);
 
@@ -564,13 +564,12 @@ export class CliCentralizedConfigController {
             ParametersKey.CENTRALIZED_CONFIG,
             context,
         );
-        return {
-            repositoryIds:
-                connections.find(
-                    (c) => c.integrationId === context.integrationId,
-                )?.repositoryIds ?? [],
-            includeWorkspaceDefaults: !parameter?.configValue?.connectionScoped,
-        };
+        return connectionDownloadScope(
+            context.integrationId,
+            connections.find((c) => c.integrationId === context.integrationId)
+                ?.repositoryIds ?? [],
+            parameter?.configValue,
+        );
     }
 
     private buildCliUser(context: {

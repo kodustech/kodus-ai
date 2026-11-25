@@ -34,6 +34,8 @@ export const ConnectionAccessModal = (props: {
 }) => {
     const [members, setMembers] = useState<Member[]>();
     const [granted, setGranted] = useState<Set<string>>(new Set());
+    // Saving after a failed load would revoke everyone it could not show.
+    const [loadFailed, setLoadFailed] = useState(false);
 
     useEffect(() => {
         let alive = true;
@@ -64,6 +66,7 @@ export const ConnectionAccessModal = (props: {
             .catch(() => {
                 if (!alive) return;
                 setMembers([]);
+                setLoadFailed(true);
                 toast({
                     variant: "warning",
                     title: "Could not load who reads this connection",
@@ -156,7 +159,7 @@ export const ConnectionAccessModal = (props: {
                         size="md"
                         variant="primary"
                         loading={loading}
-                        disabled={!members}
+                        disabled={!members || loadFailed}
                         onClick={save}>
                         Save
                     </Button>

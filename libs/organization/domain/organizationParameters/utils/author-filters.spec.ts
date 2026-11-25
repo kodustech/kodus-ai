@@ -69,4 +69,12 @@ describe('author filters per Git connection', () => {
         expect(next.ignoredUsers).toEqual([]);
         expect(next.connections).toEqual(config.connections);
     });
+
+    it("reads the organization's lists for an id that names an inherited member", () => {
+        const config = { ignoredUsers: ['org-bot'], connections: {} };
+
+        expect(authorFiltersFor(config, 'toString').ignoredUsers).toEqual([
+            'org-bot',
+        ]);
+    });
 });

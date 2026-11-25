@@ -298,6 +298,9 @@ export class CreateRepositoriesUseCase implements IUseCase {
             ),
         ]);
 
+        const connectionById = new Map(
+            (connections ?? []).map((c) => [c.uuid, c]),
+        );
         const serverOf = new Map(
             (connections ?? []).map((c) => [
                 c.uuid,
@@ -326,7 +329,7 @@ export class CreateRepositoriesUseCase implements IUseCase {
             );
             if (!clash.length) continue;
 
-            const other = (connections ?? []).find((c) => c.uuid === otherId);
+            const other = connectionById.get(otherId);
             const sameWorkspace =
                 (config as { team?: { uuid?: string } })?.team?.uuid ===
                 organizationAndTeamData.teamId;

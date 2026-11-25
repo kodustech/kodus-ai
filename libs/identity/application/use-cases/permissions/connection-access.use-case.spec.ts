@@ -18,8 +18,10 @@ const build = (opts: { inWorkspace?: boolean; granted?: string[] } = {}) => {
             ids.filter((id) => id !== 'stranger'),
         ),
         listGrants: jest.fn().mockResolvedValue(opts.granted ?? []),
-        grant: jest.fn(),
-        revoke: jest.fn(),
+        replaceGrants: jest.fn(async (_id: string, ids: string[]) => ({
+            granted: ids.filter((id) => !(opts.granted ?? []).includes(id)),
+            revoked: (opts.granted ?? []).filter((id) => !ids.includes(id)),
+        })),
     };
     const useCase = new ConnectionAccessUseCase(
         service as any,
@@ -46,8 +48,10 @@ describe('ConnectionAccessUseCase', () => {
             userIds: ['u2', 'u3'],
         });
 
-        expect(service.grant).toHaveBeenCalledWith('conn-1', ['u3']);
-        expect(service.revoke).toHaveBeenCalledWith('conn-1', ['u1']);
+        expect(service.replaceGrants).toHaveBeenCalledWith('conn-1', [
+            'u2',
+            'u3',
+        ]);
     });
 
     it('ignores users from outside the organization', async () => {
@@ -59,7 +63,7 @@ describe('ConnectionAccessUseCase', () => {
             userIds: ['u3', 'stranger'],
         });
 
-        expect(service.grant).toHaveBeenCalledWith('conn-1', ['u3']);
+        expect(service.replaceGrants).toHaveBeenCalledWith('conn-1', ['u3']);
     });
 
     it('refuses a connection outside the caller’s workspace', async () => {
@@ -72,6 +76,6 @@ describe('ConnectionAccessUseCase', () => {
                 userIds: ['u1'],
             }),
         ).rejects.toThrow(NotFoundException);
-        expect(service.grant).not.toHaveBeenCalled();
+        expect(service.replaceGrants).not.toHaveBeenCalled();
     });
 });

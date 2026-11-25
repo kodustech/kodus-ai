@@ -69,13 +69,9 @@ export class CodeManagementService implements ICodeManagementService {
     ) {}
 
     /**
-     * The platform of the team's active code connection, or null when it has
-     * none or several on different platforms. A failed lookup throws, so a
-     * caller can tell it from an absence.
-     */
-    /**
      * The platform of the workspace's Git connection; with several, the one
-     * listing the given repository.
+     * listing the given repository, else null. A failed lookup throws, so a
+     * caller can tell it from an absence.
      */
     async findTypeIntegration(
         organizationAndTeamData: OrganizationAndTeamData,

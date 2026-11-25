@@ -145,10 +145,71 @@ describe('ConnectionAccessService.restrictionFor', () => {
         expect(restriction?.allowsRepository({ id: '7' })).toBe(true);
         expect(restriction?.allowsRepository({ name: 'acme/api' })).toBe(true);
         expect(restriction?.allowsRepository({ name: 'Acme/API' })).toBe(true);
+        // A bare name could be another connection's repository of the same name.
+        expect(restriction?.allowsRepository({ name: 'api' })).toBe(false);
         expect(restriction?.allowsRepository({ id: '8' })).toBe(false);
         expect(restriction?.allowsRepository({ name: 'group/other' })).toBe(
             false,
         );
         expect(restriction?.allowsRepository({})).toBe(false);
+    });
+});
+
+describe('ConnectionAccessService.replaceGrants', () => {
+    const buildTx = (current: string[]) => {
+        const calls: string[] = [];
+        const tx = {
+            query: jest.fn(async (sql: string) => {
+                calls.push(sql);
+                if (sql.includes('pg_advisory_xact_lock')) return [];
+                if (sql.startsWith('SELECT')) {
+                    return current.map((user_id) => ({ user_id }));
+                }
+                return [];
+            }),
+        };
+        const repository = {
+            manager: {
+                query: jest.fn(),
+                transaction: jest.fn(async (work: (m: unknown) => unknown) =>
+                    work(tx),
+                ),
+            },
+        };
+        return {
+            service: new ConnectionAccessService(repository as any),
+            tx,
+            calls,
+            repository,
+        };
+    };
+
+    it('applies the target set in one transaction, locked per connection before reading', async () => {
+        const { service, tx, calls, repository } = buildTx(['u1', 'u2']);
+
+        const diff = await service.replaceGrants('conn-1', ['u2', 'u3']);
+
+        expect(repository.manager.transaction).toHaveBeenCalledTimes(1);
+        expect(calls[0]).toContain('pg_advisory_xact_lock');
+        expect(calls[1]).toMatch(/^SELECT/);
+        expect(diff).toEqual({ granted: ['u3'], revoked: ['u1'] });
+        expect(tx.query).toHaveBeenCalledWith(
+            expect.stringContaining('INSERT INTO "user_connection_access"'),
+            ['conn-1', ['u3']],
+        );
+        expect(tx.query).toHaveBeenCalledWith(
+            expect.stringContaining('DELETE FROM "user_connection_access"'),
+            ['conn-1', ['u1']],
+        );
+    });
+
+    it('writes nothing when the set is unchanged', async () => {
+        const { service, tx } = buildTx(['u1']);
+
+        await expect(service.replaceGrants('conn-1', ['u1'])).resolves.toEqual({
+            granted: [],
+            revoked: [],
+        });
+        expect(tx.query).toHaveBeenCalledTimes(2);
     });
 });

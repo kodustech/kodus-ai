@@ -362,6 +362,31 @@ describe('CliCentralizedConfigController', () => {
             );
         });
 
+        it('checks the integration on the chosen connection, not the whole workspace', async () => {
+            // Connections on different platforms leave the workspace with no single platform.
+            codeManagementService.getTypeIntegration.mockImplementation(
+                async (context: { integrationId?: string }) =>
+                    context.integrationId ? 'gitlab' : null,
+            );
+            integrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [{ id: 'repo-9', name: 'group/config', selected: true }],
+            );
+
+            await controller.sync('kodus_test_key', undefined, 'gl-b');
+            await controller.initialize(
+                { repositoryId: 'repo-9', syncOption: 'manual' },
+                'kodus_test_key',
+                undefined,
+            );
+
+            expect(codeManagementService.getTypeIntegration).toHaveBeenCalledWith({
+                ...workspace,
+                integrationId: 'gl-b',
+            });
+            expect(centralizedConfigSyncUseCase.execute).toHaveBeenCalled();
+            expect(centralizedConfigInitUseCase.execute).toHaveBeenCalled();
+        });
+
         it('refuses a connection that is not in the workspace', async () => {
             await expect(
                 controller.sync('kodus_test_key', undefined, 'other'),

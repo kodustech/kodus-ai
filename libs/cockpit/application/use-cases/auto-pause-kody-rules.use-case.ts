@@ -48,6 +48,7 @@ import {
 import { isCockpitTierAllowed } from '../../domain/tier-policy';
 import { KodyRuleUsageRow } from '../../domain/types';
 import { CockpitHealthService } from '../../infrastructure/services/cockpit-health.service';
+import { StoredCentralizedConfig } from '@libs/organization/domain/parameters/utils/centralized-config-scope';
 
 /** Same staleness bar as the self-hosted doctor's analytics check. */
 const MAX_INGESTION_LAG_HOURS = 26;
@@ -87,7 +88,6 @@ export interface AutoPauseRunResult {
  * Without fresh warehouse data nothing is judged: self-hosted installs without
  * the analytics worker skip the whole run.
  */
-import { StoredCentralizedConfig } from '@libs/organization/domain/parameters/utils/centralized-config-scope';
 @Injectable()
 export class AutoPauseKodyRulesUseCase {
     private readonly logger = createLogger(AutoPauseKodyRulesUseCase.name);

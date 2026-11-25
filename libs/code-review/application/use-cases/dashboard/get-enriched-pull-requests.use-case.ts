@@ -67,6 +67,7 @@ import { PullRequestAuthorPolicy } from '@libs/code-review/dtos/dashboard/pull-r
 import {
     CompiledAuthorPolicyConfig,
     compileAuthorPolicyByConnection,
+    repositoryConnectionMap,
     compileAuthorPolicyConfig,
     shouldIncludeAuthorByPolicy,
 } from './utils/author-policy-filter.util';
@@ -1227,16 +1228,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 IntegrationConfigKey.REPOSITORIES,
                 organizationAndTeamData,
             )) ?? [];
-        const map = new Map<string, string>();
-        for (const config of configs) {
-            const integrationId = config?.integration?.uuid;
-            if (!integrationId || !Array.isArray(config.configValue)) continue;
-            for (const repository of config.configValue as Repositories[]) {
-                if (repository?.id)
-                    map.set(String(repository.id), integrationId);
-            }
-        }
-        return map;
+        return repositoryConnectionMap(configs);
     }
 
     private async resolveRepositoryIdsByName(params: {

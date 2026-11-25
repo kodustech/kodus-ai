@@ -1,3 +1,4 @@
+import { connectionDownloadScope } from '@libs/centralized-config/utils/connection-download-scope';
 import { createLogger } from '@libs/core/log/logger';
 import { ParametersKey } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -247,13 +248,13 @@ export class CentralizedConfigInitUseCase implements IUseCase {
             ParametersKey.CENTRALIZED_CONFIG,
             organizationAndTeamData,
         );
-        return {
-            repositoryIds:
-                await this.centralizedConfigPrService.repositoryIdsOf(
-                    organizationAndTeamData,
-                ),
-            includeWorkspaceDefaults: !current?.configValue?.connectionScoped,
-        };
+        return connectionDownloadScope(
+            organizationAndTeamData.integrationId,
+            await this.centralizedConfigPrService.repositoryIdsOf(
+                organizationAndTeamData,
+            ),
+            current?.configValue,
+        );
     }
 
     private async checkIfCentralizedConfigEnabled(
