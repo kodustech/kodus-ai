@@ -421,6 +421,144 @@ describe('review integration', () => {
         expect(stdout).toContain('Found 2 issues');
     });
 
+    async function createNestedModifiedRepo(): Promise<{
+        repoDir: string;
+        subdir: string;
+    }> {
+        const repoDir = await createTempGitRepo();
+        const subdir = path.join(repoDir, 'src');
+        await fs.mkdir(subdir, { recursive: true });
+        await fs.writeFile(path.join(subdir, 'nested.txt'), 'line 1\nline 2\n');
+        await execFileAsync('git', ['add', '.'], { cwd: repoDir });
+        await execFileAsync('git', ['commit', '-m', 'add nested file'], {
+            cwd: repoDir,
+        });
+        await fs.writeFile(
+            path.join(subdir, 'nested.txt'),
+            'line 1\nline 2\nline 3\n',
+        );
+        return { repoDir, subdir };
+    }
+
+    it('sends matching diff and inlined file context when run from a repository subdirectory', async () => {
+        const { repoDir: nestedRepo, subdir } =
+            await createNestedModifiedRepo();
+
+        try {
+            const rootRun = await runCli(['review', '--format', 'json'], {
+                cwd: nestedRepo,
+            });
+            expect(rootRun.exitCode).toBe(0);
+
+            const subdirRun = await runCli(['review', '--format', 'json'], {
+                cwd: subdir,
+            });
+            expect(subdirRun.exitCode).toBe(0);
+
+            const reviewRequests = mockServer.requests.filter(
+                (r) => r.url === '/cli/review',
+            );
+            expect(reviewRequests).toHaveLength(2);
+
+            const [rootReq, subdirReq] = reviewRequests;
+            expect(subdirReq.body.diff).toBe(rootReq.body.diff);
+            expect(subdirReq.body.diff).toContain('src/nested.txt');
+            expect(subdirReq.body.config.files).toEqual(
+                rootReq.body.config.files,
+            );
+            expect(subdirReq.body.config.files).toEqual([
+                {
+                    path: 'src/nested.txt',
+                    content: 'line 1\nline 2\nline 3\n',
+                    status: 'modified',
+                    diff: expect.stringContaining('+line 3'),
+                },
+            ]);
+        } finally {
+            await fs.rm(nestedRepo, { recursive: true, force: true });
+        }
+    });
+
+    it('preserves cwd-relative semantics for explicit file arguments from a subdirectory', async () => {
+        const { repoDir: nestedRepo, subdir } =
+            await createNestedModifiedRepo();
+
+        try {
+            const { exitCode } = await runCli(
+                ['review', 'nested.txt', '--format', 'json'],
+                { cwd: subdir },
+            );
+            expect(exitCode).toBe(0);
+
+            const req = mockServer.requests.find(
+                (r) => r.url === '/cli/review',
+            );
+            expect(req).toBeDefined();
+            expect(req!.body.diff).toContain('diff --git a/src/nested.txt');
+            expect(req!.body.diff).toContain('+line 3');
+            expect(req!.body.config.files).toEqual([
+                {
+                    path: 'nested.txt',
+                    content: 'line 1\nline 2\nline 3\n',
+                    status: 'modified',
+                    diff: expect.stringContaining('+line 3'),
+                },
+            ]);
+        } finally {
+            await fs.rm(nestedRepo, { recursive: true, force: true });
+        }
+    });
+
+    it('preserves diff.relative=true subdirectory scope and omits outside worktree files', async () => {
+        const repoDir = await createTempGitRepo();
+        const subdir = path.join(repoDir, 'src');
+        await fs.mkdir(subdir, { recursive: true });
+        await fs.writeFile(path.join(repoDir, 'outside.txt'), 'outside v1\n');
+        await fs.writeFile(path.join(subdir, 'inside.txt'), 'inside v1\n');
+        await execFileAsync('git', ['add', '.'], { cwd: repoDir });
+        await execFileAsync('git', ['commit', '-m', 'init'], { cwd: repoDir });
+        await execFileAsync('git', ['config', 'diff.relative', 'true'], {
+            cwd: repoDir,
+        });
+        await fs.writeFile(
+            path.join(repoDir, 'outside.txt'),
+            'outside v1\noutside secret\n',
+        );
+        await fs.writeFile(
+            path.join(subdir, 'inside.txt'),
+            'inside v1\ninside v2\n',
+        );
+
+        try {
+            const { exitCode } = await runCli(['review', '--format', 'json'], {
+                cwd: subdir,
+            });
+            expect(exitCode).toBe(0);
+
+            const req = mockServer.requests.find(
+                (r) => r.url === '/cli/review',
+            );
+            expect(req).toBeDefined();
+            expect(req!.body.diff).toContain('diff --git a/inside.txt');
+            expect(req!.body.diff).not.toContain('outside.txt');
+            expect(req!.body.diff).not.toContain('outside secret');
+            expect(req!.body.config.files).toEqual([
+                {
+                    path: 'inside.txt',
+                    content: 'inside v1\ninside v2\n',
+                    status: 'modified',
+                    diff: expect.stringContaining('+inside v2'),
+                },
+            ]);
+            expect(req!.body.config.files[0].diff).toContain(
+                'diff --git a/inside.txt',
+            );
+            expect(JSON.stringify(req!.body)).not.toContain('outside secret');
+        } finally {
+            await fs.rm(repoDir, { recursive: true, force: true });
+        }
+    });
+
     it('suppresses spinner output for pr suggestions when quiet mode is enabled', async () => {
         const { stdout, stderr, exitCode } = await runCli([
             '--quiet',

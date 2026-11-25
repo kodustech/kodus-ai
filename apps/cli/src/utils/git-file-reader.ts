@@ -1,8 +1,33 @@
+import path from 'node:path';
+
 export type GitFileReadOptions = {
     staged?: boolean;
     commit?: string;
     branch?: string;
+    repoRoot?: string;
+    relativePrefix?: string;
 };
+
+function resolveTargetPath(
+    filePath: string,
+    options?: Pick<GitFileReadOptions, 'repoRoot' | 'relativePrefix'>,
+): string {
+    if (!options?.repoRoot) {
+        return filePath;
+    }
+    return options.relativePrefix
+        ? path.resolve(options.repoRoot, options.relativePrefix, filePath)
+        : path.resolve(options.repoRoot, filePath);
+}
+
+function resolveGitObjectPath(
+    filePath: string,
+    options?: Pick<GitFileReadOptions, 'relativePrefix'>,
+): string {
+    return options?.relativePrefix
+        ? `${options.relativePrefix}${filePath}`
+        : filePath;
+}
 
 export function buildFileDiffReadPlan(
     filePath: string,
@@ -14,31 +39,33 @@ export function buildFileDiffReadPlan(
           stagedArgs: string[];
           unstagedArgs: string[];
       } {
+    const targetPath = resolveTargetPath(filePath, options);
+
     if (options?.branch) {
         return {
             mode: 'single-diff',
-            args: [`${options.branch}...HEAD`, '--', filePath],
+            args: [`${options.branch}...HEAD`, '--', targetPath],
         };
     }
 
     if (options?.commit) {
         return {
             mode: 'single-diff',
-            args: [`${options.commit}^`, options.commit, '--', filePath],
+            args: [`${options.commit}^`, options.commit, '--', targetPath],
         };
     }
 
     if (options?.staged) {
         return {
             mode: 'single-diff',
-            args: ['--cached', '--', filePath],
+            args: ['--cached', '--', targetPath],
         };
     }
 
     return {
         mode: 'working-tree-diff',
-        stagedArgs: ['--cached', '--', filePath],
-        unstagedArgs: ['--', filePath],
+        stagedArgs: ['--cached', '--', targetPath],
+        unstagedArgs: ['--', targetPath],
     };
 }
 
@@ -51,20 +78,22 @@ export function buildFileContentReadPlan(
     if (options?.commit) {
         return {
             mode: 'git-show',
-            args: [`${options.commit}:${filePath}`],
+            args: [
+                `${options.commit}:${resolveGitObjectPath(filePath, options)}`,
+            ],
         };
     }
 
     if (options?.branch) {
         return {
             mode: 'git-show',
-            args: [`HEAD:${filePath}`],
+            args: [`HEAD:${resolveGitObjectPath(filePath, options)}`],
         };
     }
 
     return {
         mode: 'fs',
-        path: filePath,
+        path: resolveTargetPath(filePath, options),
         encoding: 'utf-8',
     };
 }
