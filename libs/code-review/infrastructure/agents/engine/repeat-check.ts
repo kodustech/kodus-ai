@@ -223,14 +223,21 @@ const languageOf = (file?: string) =>
 const codeIdentifiers = (code?: string, file?: string) =>
     identifiers(code ? withoutCommentsOrStrings(code, languageOf(file)) : '');
 
+// Read once per record: every finding of the round is compared with it.
+const introducedByRecord = new WeakMap<PrDecisionRecord, string[]>();
+
 /** What an applied suggestion added: its code's identifiers that the code it
  *  pointed at did not have. */
 function introducedIdentifiers(earlier: PrDecisionRecord): string[] {
     if (!applied(earlier) || !earlier.improvedCode) return [];
+    const cached = introducedByRecord.get(earlier);
+    if (cached) return cached;
     const before = codeIdentifiers(earlier.existingCode, earlier.relevantFile);
-    return [
+    const added = [
         ...codeIdentifiers(earlier.improvedCode, earlier.relevantFile),
     ].filter((name) => !before.has(name) && !COMMON_IDENTIFIERS.has(name));
+    introducedByRecord.set(earlier, added);
+    return added;
 }
 
 /** A finding on the code an applied suggestion added, wherever the finding
