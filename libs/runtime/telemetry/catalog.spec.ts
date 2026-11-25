@@ -97,6 +97,7 @@ describe('the telemetry taxonomy', () => {
         expect(blockerSignatureClass('resources:memory:worker')).toBe('resources:memory');
         expect(blockerSignatureClass('setup:not_ready:web:3000/health')).toBe('setup:not_ready');
         expect(blockerSignatureClass('recipe_migrate')).toBe('recipe_migrate');
+        expect(blockerSignatureClass('platform:mirror_artifact_missing:prisma')).toBe('platform:mirror_artifact_missing');
         expect(blockerSignatureClass('a host.example.com')).toBe(OTHER);
     });
 
