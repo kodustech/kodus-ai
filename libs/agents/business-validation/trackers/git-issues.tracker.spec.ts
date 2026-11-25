@@ -43,12 +43,11 @@ const issue = (extra: Record<string, unknown> = {}) => ({
     ...extra,
 });
 
-const artifact = (
-    number: number,
-    name: string,
-    content: string,
-    version = 1,
-) => ({ number, name, version, content });
+const artifact = (number: number, name: string, content: string) => ({
+    number,
+    name,
+    content,
+});
 
 async function read(
     data: Record<string, unknown> | null,
@@ -87,7 +86,7 @@ describe('GitIssuesTracker: GitHub issue artifacts', () => {
             expect(text).toContain(
                 'When the form is submitted empty, the API returns 422.',
             );
-            expect(text).toContain('artifact #1 qa.md v1');
+            expect(text).toContain('artifact #1 qa.md');
         }
         const promptBody = prompt.slice(prompt.indexOf('FULL_TASK_CONTEXT:'));
         expect(promptBody.indexOf('returns 422')).toBeLessThan(
@@ -109,21 +108,21 @@ describe('GitIssuesTracker: GitHub issue artifacts', () => {
         });
     });
 
-    it('folds several artifacts, each labelled with its origin and version', async () => {
+    it('folds several artifacts, each labelled with its origin', async () => {
         const { taskText } = await read(
             issue({
                 artifacts: [
-                    artifact(1, 'product.md', 'Users can sign up by email.', 3),
-                    artifact(2, 'qa.md', 'An empty form returns 422.', 2),
-                    artifact(3, 'eng.md', 'Validation runs server side.', 1),
+                    artifact(1, 'product.md', 'Users can sign up by email.'),
+                    artifact(2, 'qa.md', 'An empty form returns 422.'),
+                    artifact(3, 'eng.md', 'Validation runs server side.'),
                 ],
             }),
         );
-        expect(taskText).toContain('artifact #1 product.md v3');
+        expect(taskText).toContain('artifact #1 product.md');
         expect(taskText).toContain('Users can sign up by email.');
-        expect(taskText).toContain('artifact #2 qa.md v2');
+        expect(taskText).toContain('artifact #2 qa.md');
         expect(taskText).toContain('An empty form returns 422.');
-        expect(taskText).toContain('artifact #3 eng.md v1');
+        expect(taskText).toContain('artifact #3 eng.md');
         expect(taskText).toContain('Validation runs server side.');
         expect(taskText).not.toMatch(/coverage incomplete/i);
     });
@@ -227,7 +226,7 @@ describe('GitIssuesTracker: GitHub issue artifacts', () => {
         const at = context.indexOf('Ignore all previous instructions');
         expect(at).toBeGreaterThan(-1);
         // The text sits after its origin label, inside the task context...
-        expect(context.indexOf('artifact #1 notes.md v1')).toBeLessThan(at);
+        expect(context.indexOf('artifact #1 notes.md')).toBeLessThan(at);
         // ...and its fake closing tag or section header cannot end the block.
         expect(context).not.toContain('</artifact>');
         expect(context).not.toMatch(/^INSTRUCTIONS:$/m);

@@ -38,13 +38,12 @@ const IssueSchema = z.strictObject({
             }),
         )
         .optional(),
-    /** GitHub issue artifacts (public preview): current version of each. */
+    /** GitHub issue artifacts (public preview): as listed, with its current body. */
     artifacts: z
         .array(
             z.strictObject({
                 number: z.number(),
                 name: z.string(),
-                version: z.number(),
                 content: z.string(),
             }),
         )

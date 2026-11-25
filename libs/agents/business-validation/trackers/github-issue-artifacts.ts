@@ -48,11 +48,10 @@ export function artifactContext(
 ): IssueArtifactContext | undefined {
     const unread: string[] = [];
     const documents: IssueArtifactContext['documents'] = [];
-    const labelOf = (number: unknown, name: unknown, version?: unknown) =>
+    const labelOf = (number: unknown, name: unknown) =>
         [
             typeof number === 'number' ? `artifact #${number}` : 'an artifact',
             typeof name === 'string' && name.trim() ? inline(name) : undefined,
-            typeof version === 'number' ? `v${version}` : undefined,
         ]
             .filter(Boolean)
             .join(' ');
@@ -62,11 +61,10 @@ export function artifactContext(
     }
     for (const entry of Array.isArray(issue.artifacts) ? issue.artifacts : []) {
         const a = asRecord(entry);
-        const label = labelOf(a.number, a.name, a.version);
+        const label = labelOf(a.number, a.name);
         if (
             typeof a.number !== 'number' ||
             typeof a.name !== 'string' ||
-            typeof a.version !== 'number' ||
             typeof a.content !== 'string' ||
             !a.content.trim()
         ) {
@@ -89,6 +87,10 @@ export function artifactContext(
         ? issue.unreadArtifacts
         : []) {
         const u = asRecord(entry);
+        if (u.reason === 'may_have_more') {
+            unread.push('more artifacts may exist beyond the first 100 listed');
+            continue;
+        }
         const reason = [
             typeof u.reason === 'string' ? inline(u.reason) : 'unknown',
             typeof u.status === 'number' ? `HTTP ${u.status}` : undefined,

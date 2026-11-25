@@ -22,12 +22,11 @@ describe('GithubService.getIssue: issue artifacts', () => {
         updated_at: '2026-10-15T00:00:00Z',
         ...extra,
     });
-    const listItem = (number: number, name: string) => ({ number, name });
-    const detail = (number: number, name: string, body: string, v = 1) => ({
-        artifact: { number, name },
-        versions: [{ version: v, name, body }],
-        has_next_page: false,
-        total_count: 1,
+    const item = (number: number, name: string, body: string) => ({
+        number,
+        name,
+        body,
+        updated_at: '2026-11-25T00:00:00Z',
     });
     const httpError = (status: number) =>
         Object.assign(new Error(`HTTP ${status}`), { status });
@@ -57,84 +56,46 @@ describe('GithubService.getIssue: issue artifacts', () => {
 
     const isList = (route: string) =>
         /issues\/\{issue_number\}\/artifacts$/.test(route);
-    const isDetail = (route: string) =>
-        /issues\/\{issue_number\}\/artifacts\/\{[a-z_]+\}$/.test(route);
 
     const artifactsOf = (result: unknown) =>
         (result as { artifacts?: any[] } | null)?.artifacts;
     const unreadOf = (result: unknown) =>
         (result as { unreadArtifacts?: any[] } | null)?.unreadArtifacts;
 
-    it('lists the artifacts of the issue and reads the current version of each', async () => {
-        const { service, request } = serviceWith(issue(), (route, params) => {
-            if (isList(route)) {
-                return [listItem(1, 'qa.md'), listItem(2, 'product.md')];
-            }
-            if (Object.values(params).includes(1)) {
-                return {
-                    artifact: { number: 1, name: 'qa.md' },
-                    versions: [
-                        {
-                            version: 3,
-                            name: 'qa.md',
-                            body: 'Returns 422 (v3).',
-                        },
-                        {
-                            version: 2,
-                            name: 'qa.md',
-                            body: 'Returns 400 (v2).',
-                        },
-                    ],
-                    has_next_page: false,
-                    total_count: 2,
-                };
-            }
-            return detail(2, 'product.md', 'Sign up by email.');
-        });
+    it('reads the artifacts of the issue from the list endpoint alone', async () => {
+        const { service, request } = serviceWith(issue(), () => [
+            item(1, 'qa.md', 'Returns 422.'),
+            item(2, 'product.md', 'Sign up by email.'),
+        ]);
         const result = await get(service);
         expect(artifactsOf(result)).toEqual([
-            expect.objectContaining({ number: 1, name: 'qa.md', version: 3 }),
-            expect.objectContaining({
-                number: 2,
-                name: 'product.md',
-                version: 1,
-            }),
+            { number: 1, name: 'qa.md', content: 'Returns 422.' },
+            { number: 2, name: 'product.md', content: 'Sign up by email.' },
         ]);
-        expect(JSON.stringify(artifactsOf(result))).toContain(
-            'Returns 422 (v3).',
-        );
-        expect(JSON.stringify(artifactsOf(result))).not.toContain(
-            'Returns 400 (v2).',
-        );
         expect(unreadOf(result) ?? []).toEqual([]);
+        expect(request).toHaveBeenCalledTimes(1);
         expect(request).toHaveBeenCalledWith(
-            expect.stringMatching(
-                /^GET \/repos\/\{owner\}\/\{repo\}\/issues\/\{issue_number\}\/artifacts$/,
-            ),
+            'GET /repos/{owner}/{repo}/issues/{issue_number}/artifacts',
             expect.objectContaining({
                 owner: 'acme',
                 repo: 'web',
                 issue_number: 12,
+                per_page: 100,
             }),
         );
     });
 
-    it('sends the preview API version only on the artifact calls', async () => {
-        const { service, request } = serviceWith(issue(), (route) =>
-            isList(route)
-                ? [listItem(1, 'qa.md')]
-                : detail(1, 'qa.md', 'Returns 422.'),
-        );
+    it('sends the preview API version and a timeout only on the artifact call', async () => {
+        const { service, request } = serviceWith(issue(), () => [
+            item(1, 'qa.md', 'Returns 422.'),
+        ]);
         await get(service);
-        const artifactCalls = request.mock.calls.filter(
-            ([route]) => isList(route) || isDetail(route),
-        );
-        expect(artifactCalls.length).toBeGreaterThanOrEqual(2);
-        for (const [, params] of artifactCalls) {
-            expect(params.headers).toMatchObject({
-                'X-GitHub-Api-Version': API_VERSION,
-            });
-        }
+        expect(request).toHaveBeenCalledTimes(1);
+        const [, params] = request.mock.calls[0];
+        expect(params.headers).toMatchObject({
+            'X-GitHub-Api-Version': API_VERSION,
+        });
+        expect(params.request.signal).toBeInstanceOf(AbortSignal);
     });
 
     it('does not call the artifacts API for any repository but the issue own', async () => {
@@ -145,7 +106,7 @@ describe('GithubService.getIssue: issue artifacts', () => {
                     'and https://example.com/spec.md',
                 ].join('\n'),
             }),
-            (route) => (isList(route) ? [] : null),
+            () => [],
         );
         const fetchSpy = jest.spyOn(globalThis, 'fetch' as any);
         try {
@@ -154,45 +115,44 @@ describe('GithubService.getIssue: issue artifacts', () => {
         } finally {
             fetchSpy.mockRestore();
         }
-        const artifactCalls = request.mock.calls.filter(
-            ([route]) => isList(route) || isDetail(route),
-        );
-        expect(artifactCalls.length).toBeGreaterThanOrEqual(1);
-        for (const [, params] of artifactCalls) {
-            expect(params).toMatchObject({ owner: 'acme', repo: 'web' });
-            expect(JSON.stringify(params)).not.toContain('other');
-        }
+        expect(request).toHaveBeenCalledTimes(1);
+        const [route, params] = request.mock.calls[0];
+        expect(isList(route)).toBe(true);
+        expect(params).toMatchObject({ owner: 'acme', repo: 'web' });
+        expect(JSON.stringify(params)).not.toContain('other');
     });
 
-    it.each([403, 404, 500])(
-        'still returns the issue, naming the artifact it could not read, on a %s',
+    it.each([403, 500])(
+        'still returns the issue and flags the list as unread on a %s',
         async (status) => {
-            const { service } = serviceWith(issue(), (route, params) => {
-                if (isList(route)) {
-                    return [listItem(1, 'product.md'), listItem(2, 'qa.md')];
-                }
-                if (Object.values(params).includes(2)) {
-                    throw httpError(status);
-                }
-                return detail(1, 'product.md', 'Sign up by email.');
+            const { service } = serviceWith(issue(), () => {
+                throw httpError(status);
             });
             const result = await get(service);
             expect(result?.number).toBe(12);
-            expect(artifactsOf(result)).toEqual([
-                expect.objectContaining({ number: 1, name: 'product.md' }),
-            ]);
+            expect(artifactsOf(result) ?? []).toEqual([]);
             expect(unreadOf(result)).toEqual([
-                expect.objectContaining({ number: 2, name: 'qa.md' }),
+                expect.objectContaining({ reason: 'list_failed', status }),
             ]);
         },
     );
 
+    it('flags the list as unread when the request times out', async () => {
+        const { service } = serviceWith(issue(), () => {
+            throw Object.assign(new Error('The operation timed out'), {
+                name: 'TimeoutError',
+            });
+        });
+        const result = await get(service);
+        expect(result?.number).toBe(12);
+        expect(unreadOf(result)).toEqual([
+            expect.objectContaining({ reason: 'list_failed' }),
+        ]);
+    });
+
     it('treats a 404 on the artifact list as no artifacts: no note', async () => {
-        const { service } = serviceWith(issue(), (route) => {
-            if (isList(route)) {
-                throw httpError(404);
-            }
-            return null;
+        const { service } = serviceWith(issue(), () => {
+            throw httpError(404);
         });
         const result = await get(service);
         expect(result?.number).toBe(12);
@@ -200,41 +160,49 @@ describe('GithubService.getIssue: issue artifacts', () => {
         expect(unreadOf(result) ?? []).toEqual([]);
     });
 
-    it.each([403, 500])(
-        'still returns the issue when listing the artifacts fails with %s',
-        async (status) => {
-            const { service } = serviceWith(issue(), (route) => {
-                if (isList(route)) {
-                    throw httpError(status);
-                }
-                return null;
-            });
-            const result = await get(service);
-            expect(result?.number).toBe(12);
-            expect(artifactsOf(result) ?? []).toEqual([]);
-            expect((unreadOf(result) ?? []).length).toBeGreaterThanOrEqual(1);
-        },
-    );
-
-    it('treats an invalid artifact payload as unread, never as content', async () => {
-        const { service } = serviceWith(issue(), (route) => {
-            if (isList(route)) {
-                return [listItem(1, 'qa.md')];
-            }
-            return { unexpected: 'shape' };
-        });
+    it('treats a list that is not an array as unread', async () => {
+        const { service } = serviceWith(issue(), () => ({
+            unexpected: 'shape',
+        }));
         const result = await get(service);
-        expect(result?.number).toBe(12);
-        expect(artifactsOf(result) ?? []).toEqual([]);
         expect(unreadOf(result)).toEqual([
-            expect.objectContaining({ number: 1 }),
+            expect.objectContaining({ reason: 'invalid_payload' }),
+        ]);
+    });
+
+    it('names an invalid or empty item as unread and keeps the valid ones', async () => {
+        const { service } = serviceWith(issue(), () => [
+            item(1, 'qa.md', 'Returns 422.'),
+            item(2, 'empty.md', '   '),
+            { number: 'three', name: 'bad.md', body: 'x' },
+            { number: 4, name: 'nobody.md' },
+        ]);
+        const result = await get(service);
+        expect(artifactsOf(result)).toEqual([
+            { number: 1, name: 'qa.md', content: 'Returns 422.' },
+        ]);
+        expect(unreadOf(result)).toEqual([
+            expect.objectContaining({ number: 2, name: 'empty.md' }),
+            expect.objectContaining({ name: 'bad.md' }),
+            expect.objectContaining({ number: 4, name: 'nobody.md' }),
+        ]);
+    });
+
+    it('says there may be more artifacts when the page is full', async () => {
+        const { service } = serviceWith(issue(), () =>
+            Array.from({ length: 100 }, (_, i) =>
+                item(i + 1, `a${i + 1}.md`, `Rule ${i + 1}.`),
+            ),
+        );
+        const result = await get(service);
+        expect(artifactsOf(result)).toHaveLength(100);
+        expect(unreadOf(result)).toEqual([
+            expect.objectContaining({ reason: 'may_have_more' }),
         ]);
     });
 
     it('leaves an issue without artifacts as it is', async () => {
-        const { service } = serviceWith(issue(), (route) =>
-            isList(route) ? [] : null,
-        );
+        const { service } = serviceWith(issue(), () => []);
         const result = await get(service);
         expect(result?.number).toBe(12);
         expect(artifactsOf(result) ?? []).toEqual([]);

@@ -121,7 +121,6 @@ describe('KodusIssuesTools', () => {
                         {
                             number: 1,
                             name: 'qa.md',
-                            version: 2,
                             content: '- An empty form returns 422.',
                         },
                     ],
@@ -136,7 +135,6 @@ describe('KodusIssuesTools', () => {
                 {
                     number: 1,
                     name: 'qa.md',
-                    version: 2,
                     content: 'Returns 422.',
                 },
             ];
