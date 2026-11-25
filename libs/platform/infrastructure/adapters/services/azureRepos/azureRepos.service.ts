@@ -3097,9 +3097,10 @@ export class AzureReposService implements Omit<
 
     async createAuthIntegration(params: any): Promise<any> {
         try {
-            const res: {
+            let res: {
                 success: boolean;
                 status?: CreateAuthIntegrationStatus;
+                integrationId?: string;
             } = { success: true, status: CreateAuthIntegrationStatus.SUCCESS };
             if (params && params?.authMode === AuthMode.OAUTH) {
                 throw new Error(
@@ -3110,11 +3111,12 @@ export class AzureReposService implements Omit<
                 params?.authMode === AuthMode.TOKEN &&
                 params.token
             ) {
-                const res = await this.authenticateWithToken({
+                res = await this.authenticateWithToken({
                     organizationAndTeamData: params.organizationAndTeamData,
                     token: params.token,
                     orgUrl: params.orgUrl,
                     orgName: params.orgName,
+                    newConnection: params.newConnection,
                 });
 
                 if (!res.success) {

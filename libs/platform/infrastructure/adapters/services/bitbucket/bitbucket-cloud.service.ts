@@ -3351,6 +3351,7 @@ export class BitbucketCloudService implements Omit<
         username?: string;
         email?: string;
         host?: string;
+        newConnection?: boolean;
     }): Promise<CreateAuthIntegrationResult> {
         try {
             let res: {
@@ -3372,6 +3373,7 @@ export class BitbucketCloudService implements Omit<
                     username: params.username,
                     email: params.email,
                     host: params.host,
+                    newConnection: params.newConnection,
                 });
             } else if (params && params?.authMode === AuthMode.BASIC) {
                 // Basic is how a Data Center host authenticates (#2570): there

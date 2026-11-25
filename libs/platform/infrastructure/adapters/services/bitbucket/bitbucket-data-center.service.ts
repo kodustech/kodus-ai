@@ -3370,6 +3370,7 @@ export class BitbucketDataCenterService implements Omit<
                 email: params.email,
                 host: params.host,
                 authMode: resolvedAuthMode,
+                newConnection: params.newConnection,
             });
 
             // Trigger background syncs if MCP is configured
