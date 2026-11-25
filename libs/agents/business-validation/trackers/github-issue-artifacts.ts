@@ -41,7 +41,7 @@ function delimited(content: string): string {
     const close = '\n</artifact_data>';
     const quoted = content
         .replace(/<\s*\/\s*/g, '&lt;/')
-        .split(/\r?\n/)
+        .split(/\r\n|[\r\n\u0085\u2028\u2029]/)
         .map((line) => `> ${line}`)
         .join('\n');
     const room = MAX_RELATED_CHARS - open.length - close.length - CUT.length;
