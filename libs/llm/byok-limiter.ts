@@ -33,6 +33,17 @@ type QueuedTask<T> = {
 
 const DEFAULT_LIMITER_QUEUE_TIMEOUT_MS = 0;
 
+/** Signals whose call was aborted while it still waited for a slot: no request
+ *  left for that call, so a span must not report one in flight (#2389). */
+const abortedBeforeSlot = new WeakSet<AbortSignal>();
+
+/** True when `signal` aborted a call this limiter had not started yet. */
+export function wasAbortedBeforeSlot(
+    signal: AbortSignal | undefined,
+): boolean {
+    return !!signal && abortedBeforeSlot.has(signal);
+}
+
 // O3: lightweight, low-cardinality observability for the reliability limiter so
 // throttle/cooldown/queue-timeout are visible (not silently indistinguishable
 // from latency). Uses the repo's canonical createLogger — NO dependency on
@@ -306,6 +317,7 @@ export class BYOKConcurrencyLimiter {
             const abortQueuedTask = () => {
                 if (task.started || task.cancelled) return;
                 task.cancelled = true;
+                if (abortSignal) abortedBeforeSlot.add(abortSignal);
                 if (task.timer) clearTimeout(task.timer);
                 const index = this.queue.findIndex(
                     (item) => item.id === task.id,

@@ -357,6 +357,253 @@ describe('#2171 — finder run that ends without a submitted result', () => {
         // Says it never submitted, so a custom agent can read it as stopped.
         expect(out.submittedResult).toBe(false);
     });
+
+    // QA PR kodus-e2e/tiny-url-app#677: the finder wrote its whole result as a
+    // fenced JSON answer instead of calling submitResult, and the review was
+    // recorded as stopped without a result.
+    const finalText = (text: string) => ({
+        content: [{ type: 'text', text }],
+        finishReason: { unified: 'stop', raw: 'stop' },
+        usage,
+        warnings: [],
+    });
+
+    it('a whole result written as the final answer is a submitted result', async () => {
+        useModel(async () =>
+            finalText(
+                'The only change is a markdown note.\n\n```json\n' +
+                    JSON.stringify({
+                        reasoning: 'No findings to report.',
+                        suggestions: [],
+                    }) +
+                    '\n```',
+            ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBeUndefined();
+        expect(out.submittedResult).toBe(true);
+    });
+
+    it('findings written as the final answer are a submitted result', async () => {
+        useModel(async (opts) =>
+            isVerifierCall(opts)
+                ? toolCall(
+                      'submitVerdict',
+                      { keep: true, rationale: 'ok' },
+                      SAFE,
+                  )
+                : finalText('```json\n' + JSON.stringify(findings) + '\n```'),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.submittedResult).toBe(true);
+        expect(
+            out.findings.suggestions.map((s: any) => s.relevantFile),
+        ).toEqual(['a.ts', 'b.ts']);
+    });
+
+    it('a text result that lost its findings to the schema is not a submitted result', async () => {
+        useModel(async () =>
+            finalText(
+                '```json\n' +
+                    JSON.stringify({
+                        reasoning: 'one finding',
+                        // No suggestionContent / existingCode / improvedCode:
+                        // the schema drops the item.
+                        suggestions: [{ relevantFile: 'a.ts' }],
+                    }) +
+                    '\n```',
+            ),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.findings.suggestions).toEqual([]);
+        expect(out.submittedResult).toBe(false);
+    });
+
+    it('a cut turn stays truncated even when its text holds a whole result', async () => {
+        useModel(async () => ({
+            content: [
+                {
+                    type: 'text',
+                    text:
+                        '```json\n' +
+                        JSON.stringify({
+                            reasoning: 'draft',
+                            suggestions: [],
+                        }) +
+                        '\n```',
+                },
+                {
+                    type: 'tool-call',
+                    toolCallId: 'read-cut',
+                    toolName: 'readFile',
+                    input: JSON.stringify({ path: 'a.ts' }),
+                },
+            ],
+            finishReason: { unified: 'length', raw: 'max_tokens' },
+            usage,
+            warnings: [],
+        }));
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.incompleteReason).toBe('truncated');
+    });
+
+    it('a text-only final answer the provider cut is not a submitted result', async () => {
+        // No tool call, so nothing is skipped: only the turn's finish reason
+        // says the answer was cut after a JSON block that parses whole.
+        useModel(async () => ({
+            content: [
+                {
+                    type: 'text',
+                    text:
+                        '```json\n' +
+                        JSON.stringify({
+                            reasoning: 'draft',
+                            suggestions: [],
+                        }) +
+                        '\n```\nNext I will check b.ts for',
+                },
+            ],
+            finishReason: { unified: 'length', raw: 'max_tokens' },
+            usage,
+            warnings: [],
+        }));
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.submittedResult).toBe(false);
+    });
+
+    it('JSON from an earlier step is not the result when the final answer is prose', async () => {
+        let call = 0;
+        useModel(async () =>
+            call++ === 0
+                ? {
+                      content: [
+                          {
+                              type: 'text',
+                              text:
+                                  '```json\n' +
+                                  JSON.stringify({
+                                      reasoning: 'draft',
+                                      suggestions: [],
+                                  }) +
+                                  '\n```',
+                          },
+                          {
+                              type: 'tool-call',
+                              toolCallId: 'read-1',
+                              toolName: 'readFile',
+                              input: JSON.stringify({ path: 'a.ts' }),
+                          },
+                      ],
+                      finishReason: SAFE,
+                      usage,
+                      warnings: [],
+                  }
+                : finalText('Still checking how a.ts is used.'),
+        );
+
+        const out = await runAgentLoopViaCore(makeInput(), secrets);
+
+        expect(out.submittedResult).toBe(false);
+    });
+});
+
+/**
+ * #2384 — a custom agent read as "ended without submitting a result" when it
+ * had. The shapes are the ones production runs showed (Kimi K2.7 Code, DeepSeek
+ * V4.1 Flash, GLM 5.3): the first pass submits only its reasoning, with no
+ * findings list, and the synthesis rescue then submits a whole, empty result.
+ * Reading only the first pass made the review partial and the agent's health
+ * "failing" for a run that finished with nothing to report.
+ */
+describe('#2384 — the result can come from the synthesis rescue', () => {
+    const NOTHING =
+        'Checked each changed unit against my focus; nothing applies.';
+    const isRescue = (opts: any) =>
+        JSON.stringify(opts?.prompt ?? '').includes('<CurrentFindings>');
+    const text = (body: string) => ({
+        content: [{ type: 'text', text: body }],
+        finishReason: { unified: 'stop', raw: 'stop' },
+        usage,
+        warnings: [],
+    });
+    const full = makeInput({ reviewMode: 'normal' });
+
+    it('counts a whole result the rescue submitted after a first pass with no findings list', async () => {
+        useModel(async (opts) =>
+            isRescue(opts)
+                ? toolCall(
+                      'submitResult',
+                      { reasoning: NOTHING, suggestions: [] },
+                      SAFE,
+                  )
+                : toolCall('submitResult', { reasoning: NOTHING }, SAFE),
+        );
+
+        const out = await runAgentLoopViaCore(full, secrets);
+
+        expect(out.incompleteReason).toBeUndefined();
+        expect(out.submittedResult).toBe(true);
+    });
+
+    it('counts a whole result the rescue wrote as its final answer', async () => {
+        useModel(async (opts) =>
+            isRescue(opts)
+                ? text(
+                      '```json\n' +
+                          JSON.stringify({
+                              reasoning: NOTHING,
+                              suggestions: [],
+                          }) +
+                          '\n```',
+                  )
+                : text(
+                      '```json\n' +
+                          JSON.stringify({ reasoning: NOTHING }) +
+                          '\n```',
+                  ),
+        );
+
+        const out = await runAgentLoopViaCore(full, secrets);
+
+        expect(out.incompleteReason).toBeUndefined();
+        expect(out.submittedResult).toBe(true);
+    });
+
+    it('still reads no result when no pass submitted a whole one', async () => {
+        useModel(async () =>
+            toolCall('submitResult', { reasoning: NOTHING }, SAFE),
+        );
+
+        const out = await runAgentLoopViaCore(full, secrets);
+
+        expect(out.submittedResult).toBe(false);
+    });
+
+    it('a first pass that ran out of steps stays incomplete, whatever the rescue submits', async () => {
+        useModel(async (opts) =>
+            isRescue(opts)
+                ? toolCall(
+                      'submitResult',
+                      { reasoning: NOTHING, suggestions: [] },
+                      SAFE,
+                  )
+                : toolCall('readFile', { path: 'a.ts' }, SAFE),
+        );
+
+        const out = await runAgentLoopViaCore(full, secrets);
+
+        expect(out.incompleteReason).toBe('budget-exhausted');
+    });
 });
 
 describe('#2171 — verify call that fails', () => {

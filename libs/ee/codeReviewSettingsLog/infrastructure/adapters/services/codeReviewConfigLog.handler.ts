@@ -34,6 +34,9 @@ const PROPERTY_CONFIGS: Record<string, PropertyConfig> = {
     'isRequestChangesActive': {
         actionDescription: 'Request Changes',
     },
+    'reviewMode': {
+        actionDescription: 'Review Mode',
+    },
 
     //Review Options (only active categories)
     'reviewOptions.bug': {

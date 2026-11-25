@@ -18,6 +18,7 @@ import {
     checkedCommits,
     type CommitInfo,
     detectAuthor,
+    sameResult,
 } from '@libs/agents/business-validation/runs/run-mapping';
 import type { RunComment } from '@libs/agents/business-validation/runs/validation-run.model';
 import {
@@ -101,6 +102,11 @@ export interface PublishResult {
     outcome: BusinessValidationOutcome;
     runId?: string;
     comment: 'created' | 'updated' | 'none';
+    /**
+     * On an edited comment: whether the result differs from the run that
+     * wrote it. Undefined when no earlier run is known to compare with.
+     */
+    changed?: boolean;
 }
 
 /**
@@ -367,14 +373,15 @@ export class BusinessLogicPublisher {
             }
         }
 
+        const run = buildRun(request, result, {
+            trigger: input.trigger,
+            headSha: input.headSha,
+            author: detectAuthor(input.commits, input.authorLogin),
+            pendingSince: input.pendingSince,
+            previewId: input.previewId,
+        });
         const runId = await this.runs.create({
-            ...buildRun(request, result, {
-                trigger: input.trigger,
-                headSha: input.headSha,
-                author: detectAuthor(input.commits, input.authorLogin),
-                pendingSince: input.pendingSince,
-                previewId: input.previewId,
-            }),
+            ...run,
             ...(comment ? { comment } : {}),
         });
         if (
@@ -387,7 +394,14 @@ export class BusinessLogicPublisher {
             // An earlier run waiting on the tracker is answered by this one.
             await this.runs.clearPendingRecheck(scope);
         }
-        return { outcome, runId, comment: action };
+        return {
+            outcome,
+            runId,
+            comment: action,
+            ...(action === 'updated' && previousComment
+                ? { changed: !sameResult(previousComment, run) }
+                : {}),
+        };
     }
 
     /**
@@ -506,6 +520,7 @@ export class BusinessLogicPublisher {
         await this.pullRequestsService
             .addPrLevelSuggestions(
                 request.pullRequest.number,
+                String(request.repository.id),
                 request.repository.name,
                 [
                     {

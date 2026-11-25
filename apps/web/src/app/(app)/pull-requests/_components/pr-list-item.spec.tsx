@@ -1,8 +1,9 @@
 /** @jest-environment jsdom */
 // @ts-nocheck
 import "@testing-library/jest-dom";
-import { render, screen } from "@testing-library/react";
+
 import { TooltipProvider } from "@components/ui/tooltip";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 import { PrListItem, ReviewNotices } from "./pr-list-item";
 
@@ -92,6 +93,39 @@ describe("PrListItem — suggestion count link", () => {
     });
 });
 
+describe("PrListItem — conditional approval notice", () => {
+    it("keeps an actionable unverified note visible after the review succeeds and the PR merges", async () => {
+        renderRow(
+            execution({
+                merged: true,
+                automationExecution: { status: "success" },
+                approvalReasonDeliveryFailure: {
+                    decision: "hold",
+                    reason: "A person must approve this path.",
+                    occurredAt: "2026-10-24T00:00:00.000Z",
+                },
+            }),
+        );
+
+        expect(
+            screen.getByText("Approval note unverified"),
+        ).toBeInTheDocument();
+        expect(screen.getByText("Merged")).toBeInTheDocument();
+        fireEvent.focus(screen.getByText("Approval note unverified"));
+        expect(await screen.findByRole("tooltip")).toHaveTextContent(
+            "A person must approve this path.",
+        );
+    });
+
+    it("does not show the notice when the PR has no delivery failure", () => {
+        renderRow(execution({ approvalReasonDeliveryFailure: null }));
+
+        expect(
+            screen.queryByText("Approval note unverified"),
+        ).not.toBeInTheDocument();
+    });
+});
+
 const warning = (overrides = {}) => ({
     kind: "PROMPT_COMPACTED",
     reason: "small_context_window",
@@ -156,5 +190,70 @@ describe("ReviewNotices — each loss under its own cause", () => {
                 "Kody Rules not evaluated (repository context unavailable)",
             ),
         ).toBeInTheDocument();
+    });
+});
+
+const multiRow = (executions) =>
+    render(
+        <TooltipProvider>
+            <PrListItem
+                group={{
+                    prId: executions[0].prId,
+                    latest: executions[0],
+                    executions,
+                    reviewCount: executions.length,
+                }}
+            />
+        </TooltipProvider>,
+    );
+
+/** #2578: the review mode is a tag on the PR, never a second status. */
+describe("PrListItem — review mode", () => {
+    it("shows a skipped run's status alone and the mode of the last run that reviewed", () => {
+        multiRow([
+            execution({ automationExecution: { status: "skipped" } }),
+            execution({
+                automationExecution: { status: "success" },
+                reviewMode: "heavy",
+            }),
+        ]);
+
+        const skipped = screen.getByText("Skipped");
+        expect(skipped.parentElement).not.toHaveTextContent("Heavy");
+        expect(screen.getByText("Heavy")).toBeInTheDocument();
+    });
+
+    it("shows the newest reviewing run's mode over an older one", () => {
+        multiRow([
+            execution({
+                automationExecution: { status: "success" },
+                reviewMode: "balanced",
+            }),
+            execution({
+                automationExecution: { status: "success" },
+                reviewMode: "heavy",
+            }),
+        ]);
+
+        expect(screen.getByText("Balanced")).toBeInTheDocument();
+        expect(screen.queryByText("Heavy")).not.toBeInTheDocument();
+    });
+
+    it("tags a balanced review as Balanced", () => {
+        renderRow(
+            execution({
+                automationExecution: { status: "success" },
+                reviewMode: "balanced",
+            }),
+        );
+
+        expect(screen.getByText("Balanced")).toBeInTheDocument();
+    });
+
+    it("shows no mode when no run reviewed", () => {
+        renderRow(execution({ automationExecution: { status: "skipped" } }));
+
+        expect(screen.queryByText("Balanced")).not.toBeInTheDocument();
+        expect(screen.queryByText("Heavy")).not.toBeInTheDocument();
     });
 });

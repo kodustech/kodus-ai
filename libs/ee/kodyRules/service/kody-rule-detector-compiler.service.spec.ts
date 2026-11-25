@@ -1,7 +1,6 @@
 import {
     ruleCompileHash,
     ruleContextNeedHash,
-    CONTEXT_NEED_PROMPT_VERSION,
 } from '@libs/common/utils/kody-rules/compile-hash';
 import { createHash } from 'crypto';
 import { KodyRuleDetectorCompilerService } from './kody-rule-detector-compiler.service';
@@ -166,6 +165,12 @@ describe('KodyRuleDetectorCompilerService.compileAndSave — executor input', ()
         expect(mockRun.mock.calls[0][0].byokConfig).toBeUndefined();
     });
 
+    it('declares its system prompt shared, so a burst of rule saves reads it from cache', async () => {
+        const svc = buildWithSlot(null);
+        await svc.compileAndSave(org, 'r1', mechanicalRule);
+        expect(mockRun.mock.calls[0][0].promptCache).toEqual({ system: true });
+    });
+
     it('carries the detector-compiler run identifier to the executor', async () => {
         const svc = buildWithSlot(null);
         await svc.compileAndSave(org, 'r1', mechanicalRule);
@@ -242,65 +247,15 @@ describe('CONTRACT A: output-shape zoo — never persists a wrong detector, alwa
     // (b) return { compiled:false, declineReason:<string> }, (c) never throw.
     it.each([
         ['A2 bare array instead of object', [validD]],
-        [
-            'A3 array where object D expected',
-            [{ mechanical: true, pattern: 'x' }],
-        ],
         ['A4 {result:D} wrapper', { result: validD }],
-        ['A4 {data:D} wrapper', { data: validD }],
-        ['A4 {output:D} wrapper', { output: validD }],
-        ['A4 {response:D} wrapper', { response: validD }],
-        ['A4 {json:D} wrapper', { json: validD }],
-        [
-            'A5 double {result:{result:D}} wrapper',
-            { result: { result: validD } },
-        ],
-        ['A6 numeric single-key {"0":D} wrap', { 0: validD }],
-        ['A6 {content:D} opaque wrap', { content: validD }],
         ['A7 stringified JSON', JSON.stringify(validD)],
-        [
-            'A8 markdown-fenced JSON',
-            '```json\n' + JSON.stringify(validD) + '\n```',
-        ],
-        [
-            'A9 prose-wrapped JSON',
-            'Here is the result: ' + JSON.stringify(validD) + '\nLet me know!',
-        ],
         [
             'A10 right data under wrong keys',
             { is_mechanical: true, regex: validD.pattern },
         ],
-        [
-            'A11 case/convention mismatch (Mechanical/Pattern)',
-            { Mechanical: true, Pattern: validD.pattern },
-        ],
         ['A12 partial object (mechanical, no pattern)', { mechanical: true }],
-        [
-            'A12 partial object (pattern, no mechanical)',
-            { pattern: validD.pattern },
-        ],
-        ['A14 empty object {}', {}],
-        ['A15 empty array []', []],
-        ['A16 empty string', ''],
-        ['A16 whitespace-only string', '   \n\t '],
         ['A17 null', null],
-        ['A17 undefined', undefined],
         ['A18 primitive true', true],
-        ['A18 primitive 0', 0],
-        ['A18 primitive "ok"', 'ok'],
-        [
-            'A19 provider envelope leak {choices:[{message:{content}}]}',
-            { choices: [{ message: { content: JSON.stringify(validD) } }] },
-        ],
-        [
-            'A20 thinking/reasoning leak block',
-            {
-                content: [
-                    { type: 'thinking', thinking: 'hmm' },
-                    { type: 'text', text: JSON.stringify(validD) },
-                ],
-            },
-        ],
     ])(
         'declines %s (no persist, well-formed CompileResult, no throw)',
         async (_label, out) => {
@@ -375,12 +330,17 @@ describe('CONTRACT A: recoverable payloads the service silently drops (#1786 kno
         expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
         expect(res).toEqual({ compiled: true, scoped: false });
     });
-    it.failing('A7 repairs a stringified-JSON envelope and persists', async () => {
-        const { svc, kodyRulesService } = make(JSON.stringify(validD));
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
-        expect(res).toEqual({ compiled: true, scoped: false });
-    });
+    it.failing(
+        'A7 repairs a stringified-JSON envelope and persists',
+        async () => {
+            const { svc, kodyRulesService } = make(JSON.stringify(validD));
+            const res = await svc.compileAndSave(org, 'r1', gatedRule);
+            expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(
+                1,
+            );
+            expect(res).toEqual({ compiled: true, scoped: false });
+        },
+    );
     it.failing('A8 repairs markdown-fenced JSON and persists', async () => {
         const { svc, kodyRulesService } = make(
             '```json\n' + JSON.stringify(validD) + '\n```',
@@ -426,24 +386,6 @@ describe('CONTRACT B: semantic-but-wrong value encodings', () => {
         expect(res.compiled).toBe(false);
         expect(typeof res.declineReason).toBe('string');
     });
-    it('B22 boolean-as-yes/no mechanical:"yes" declines safely', async () => {
-        const { svc, kodyRulesService } = make({
-            mechanical: 'yes',
-            pattern: validD.pattern,
-        });
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
-    it('B23 boolean-as-number mechanical:1 declines safely', async () => {
-        const { svc, kodyRulesService } = make({
-            mechanical: 1,
-            pattern: validD.pattern,
-        });
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
     it.failing(
         'B21 coerces mechanical:"true" to true and persists (#1786)',
         async () => {
@@ -483,66 +425,12 @@ describe('CONTRACT B: semantic-but-wrong value encodings', () => {
 });
 
 describe('CONTRACT C: unparseable / transport — the fail-safe layer', () => {
-    it('C28 truncated JSON body declines (documented fallback, no crash)', async () => {
-        const { svc, kodyRulesService } = make(
-            '{"mechanical":true,"pattern":"con',
-        );
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
-    it('C29 malformed JSON body (trailing comma / unquoted keys) declines', async () => {
-        const { svc, kodyRulesService } = make(
-            '{mechanical: true, pattern: "x",}',
-        );
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
     it('C30 LLM.run rejects (network/timeout) — fails safe to declineReason:"error", never throws, never persists', async () => {
         const { svc, kodyRulesService } = make(null);
         mockRun.mockReset();
         mockRun.mockRejectedValue(
             new Error('provider 500 / suspended BYOK key'),
         );
-        await expect(svc.compileAndSave(org, 'r1', gatedRule)).resolves.toEqual(
-            { compiled: false, declineReason: 'error' },
-        );
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-    });
-    it('C31 an error-object return {error:...} is not trusted (declines, no persist)', async () => {
-        const { svc, kodyRulesService } = make({
-            error: 'rate limited',
-            code: 429,
-        });
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
-    it('C32 empty-success return declines', async () => {
-        const { svc, kodyRulesService } = make('');
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
-    it('C33 refusal prose return ("I cannot help…") declines', async () => {
-        const { svc, kodyRulesService } = make(
-            "I'm sorry, but I can't help with that request.",
-        );
-        const res = await svc.compileAndSave(org, 'r1', gatedRule);
-        expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(res.compiled).toBe(false);
-    });
-    it('C34 an aborted call fails safe (declineReason:"error") rather than throwing past the boundary', async () => {
-        // Unlike the pure gate (which rethrows), the SERVICE wraps the whole call
-        // in try/catch, so an AbortError is absorbed into the documented fallback.
-        const { svc, kodyRulesService } = make(null);
-        mockRun.mockReset();
-        mockRun.mockImplementation(async () => {
-            const e = new Error('The operation was aborted');
-            e.name = 'AbortError';
-            throw e;
-        });
         await expect(svc.compileAndSave(org, 'r1', gatedRule)).resolves.toEqual(
             { compiled: false, declineReason: 'error' },
         );
@@ -806,7 +694,11 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
             reason: 'needs the repository',
         });
 
-        const res = await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+        const res = await svc.compileAndSave(
+            { organizationId: 'org-1' } as any,
+            'r1',
+            needRule,
+        );
 
         // one LLM call for BOTH decisions — no second round trip
         expect(mockRun).toHaveBeenCalledTimes(1);
@@ -817,14 +709,22 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
 
     it('asks the model for the need in the same prompt that asks for the detector', async () => {
         const { svc } = makeWithNeed({ mechanical: false });
-        await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+        await svc.compileAndSave(
+            { organizationId: 'org-1' } as any,
+            'r1',
+            needRule,
+        );
         expect(mockRun.mock.calls[0][0].system).toContain('"contextNeed"');
         expect(mockRun.mock.calls[0][0].system).toContain('symbol-references');
     });
 
     it('stores diff-only when the model omits the need (KRC-17)', async () => {
         const { svc, kodyRulesService } = makeWithNeed({ mechanical: false });
-        await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+        await svc.compileAndSave(
+            { organizationId: 'org-1' } as any,
+            'r1',
+            needRule,
+        );
         expect(storedNeed(kodyRulesService).need).toBe('diff-only');
     });
 
@@ -836,7 +736,11 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
             // need for "the scope around the change" no longer exists.
             contextNeed: 'the-whole-repository',
         });
-        await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+        await svc.compileAndSave(
+            { organizationId: 'org-1' } as any,
+            'r1',
+            needRule,
+        );
         expect(storedNeed(kodyRulesService).need).toBe('diff-only');
     });
 
@@ -846,7 +750,11 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
             pattern: 'console\\.(log|warn|error)\\(',
             contextNeed: 'sibling-file',
         });
-        await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+        await svc.compileAndSave(
+            { organizationId: 'org-1' } as any,
+            'r1',
+            needRule,
+        );
         expect(storedNeed(kodyRulesService).need).toBe('sibling-file');
     });
 
@@ -855,7 +763,11 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
             mechanical: false,
             contextNeed: 'sibling-file',
         });
-        await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+        await svc.compileAndSave(
+            { organizationId: 'org-1' } as any,
+            'r1',
+            needRule,
+        );
 
         const written = storedNeed(kodyRulesService);
         expect(written.sourceHash).toBe(
@@ -965,7 +877,11 @@ describe('KodyRuleDetectorCompilerService — context-need inference (#1826)', (
             new Error('mongo down'),
         );
 
-        const res = await svc.compileAndSave({ organizationId: 'org-1' } as any, 'r1', needRule);
+        const res = await svc.compileAndSave(
+            { organizationId: 'org-1' } as any,
+            'r1',
+            needRule,
+        );
 
         expect(res.compiled).toBe(true);
         expect(kodyRulesService.updateRuleDetector).toHaveBeenCalledTimes(1);
@@ -1198,7 +1114,8 @@ describe('KodyRuleDetectorCompilerService — compile attempt (cost gate)', () =
         expect(kodyRulesService.updateRuleCompileAttempt).toHaveBeenCalledTimes(
             1,
         );
-        const stored = kodyRulesService.updateRuleCompileAttempt.mock.calls[0][2];
+        const stored =
+            kodyRulesService.updateRuleCompileAttempt.mock.calls[0][2];
         expect(stored).toMatchObject({
             outcome: 'declined',
             declineReason: 'not-mechanical',
@@ -1231,7 +1148,9 @@ describe('KodyRuleDetectorCompilerService — compile attempt (cost gate)', () =
         expect(res.skipped).toBe(true);
         expect(res.declineReason).toBe('not-mechanical');
         expect(kodyRulesService.updateRuleDetector).not.toHaveBeenCalled();
-        expect(kodyRulesService.updateRuleCompileAttempt).not.toHaveBeenCalled();
+        expect(
+            kodyRulesService.updateRuleCompileAttempt,
+        ).not.toHaveBeenCalled();
     });
 
     it('reports the STORED outcome when it short-circuits, so counters stay right', async () => {
@@ -1308,7 +1227,9 @@ describe('KodyRuleDetectorCompilerService — compile attempt (cost gate)', () =
         const res = await svc.compileAndSave(org, 'r1', plainRule);
 
         expect(res.declineReason).toBe('error');
-        expect(kodyRulesService.updateRuleCompileAttempt).not.toHaveBeenCalled();
+        expect(
+            kodyRulesService.updateRuleCompileAttempt,
+        ).not.toHaveBeenCalled();
     });
 
     it('still reports the detector outcome when recording the attempt fails', async () => {

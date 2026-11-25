@@ -1,0 +1,113 @@
+---
+title: "Auto-approve"
+description: "Approve clean PRs with named policies and a recorded decision."
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="all-plans" detail="Basic automatic PR approval is available on every plan.">
+    <Badge icon="layer-group" stroke>All plans</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="policies" detail="Approval policies and Human approval are in beta on Kodus Cloud for Teams and Enterprise, including the trial. The workspace must have beta access.">
+    <Badge icon="flask" color="orange" stroke>Approval policies · Beta</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Approval policies and Human approval require an Enterprise license and BETA_FEATURES=true.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+</div>
+
+When a review is clean, Kody submits a review approval to your Git provider. It never merges the PR.
+
+## Enable automatic approval
+
+Open **Code review → General**, turn on **Automatic PR approval** and click **Save settings**. On workspaces with approval policies, approval also requires an enabled policy that matches the PR.
+
+## Approval policies
+
+Each policy has a name, a switch and optional conditions. All conditions within a policy must match. Any enabled policy can authorize approval; the first match in the saved order is recorded on the PR.
+
+New policies start **off**. A policy without conditions covers **All clean PRs**, shown in both the editor and the list. Adding or editing a policy does not turn on automatic approval.
+
+Policies support Global, Repository and Directory scope. They apply to the complete PR, including files skipped by incremental review or ignored for review comments.
+
+### Approve documentation-only PRs
+
+Use this example when you want Kody to approve clean PRs that only change files under `docs/`.
+
+1. In **Code review → General**, go to **Approval policies** and click **Add policy**.
+2. Name it `Documentation only`. In **Add condition**, choose **Changed files**. Under **Included files**, click **Add files**, type `docs/**` and press Enter.
+3. Click **Apply**, then turn on the new policy. Turn on **Automatic PR approval** and click **Save settings**.
+
+A clean PR that changes only files under `docs/` can match this policy. A PR that also changes application code needs a different matching policy.
+
+### Policy conditions
+
+| Condition | Requirement |
+| --- | --- |
+| PR labels | At least one listed label must match. Label conditions are unavailable on Bitbucket and Azure Repos. |
+| PR author | The PR opener must be a listed username or bot, or a verified member of a listed provider team. This does not check every commit author. |
+| Included files | Every changed path must match an included pattern. Empty means all files. |
+| Excluded files | Any matching path skips the policy. |
+| Changed lines | Additions plus deletions must stay within the limit. Chosen files, such as `yarn.lock`, can be excluded from this count. |
+| Eligibility instruction | Kody must confirm that the PR satisfies the instruction. It runs after the other conditions, using the review model. |
+
+Usernames and labels are compared without case. Team membership is checked again on each evaluation. GitHub teams, GitLab groups and Azure DevOps teams are supported; unavailable membership never counts as a match. Unsupported team selectors are rejected when saving.
+
+A renamed file counts under both its old and new path. Unknown or binary line counts cannot satisfy a line limit unless the file is explicitly excluded from that count. Use the file-pattern editor to validate glob syntax and test a sample path.
+
+If an eligibility instruction fails, times out or lacks evidence, that policy cannot approve. Another enabled policy may still match.
+
+## Requirements that apply to every policy
+
+- The review must finish without blocking failures or unresolved findings. A failed PR-summary narrative alone does not invalidate a delivered clean review.
+- If [risk assessment](/en/how_to_use/code_review/configs/risk) is on, risk found or an unavailable assessment blocks every policy.
+- Files listed under **Human approval** always block automatic approval, whatever the policies say.
+- The PR head and base must still match the reviewed snapshot. A newer failed or incomplete review prevents reuse of an older clean result.
+
+When risk assessment is off, the clean-review and policy requirements still apply. There is no per-policy risk bypass.
+
+Kody can reconsider a reviewed PR when a label changes or delivered line comments are resolved. PR-level findings require a new clean review. A custom-agent-only run never approves the whole PR.
+
+## Decision comment
+
+When Kody approves under a policy, or holds approval, it posts a decision comment on the PR and keeps it up to date. The comment names the matching policy or explains the failed conditions. Private eligibility instructions and free-form model reasoning are not published.
+
+If Kody cannot confirm the comment appeared on the PR, the PR in the [Pull requests](/en/how_to_use/reviews/pull_requests) list shows **Approval note unverified**, and its tooltip gives the reason Kody tried to post. Check the PR's comments and the repository integration permissions.
+
+Changing or disabling a policy does not withdraw an approval already on the provider. A later review that holds approval, for example because it is no longer clean or risk was found, dismisses Kody's earlier approval and says why.
+
+## YAML
+
+Turn on **Prefer kodus-config.yml settings** in **Code review → General** (repository scope) before using repository configuration files.
+
+```yaml
+pullRequestApprovalActive: true
+approvalSensitivePaths:
+  - 'src/payments/**'
+approvalPolicies:
+  - id: docs
+    name: Documentation
+    enabled: true
+    includedFiles:
+      - 'docs/**'
+  - id: dependency-updates
+    name: Dependency updates
+    enabled: false
+    authors:
+      - 'dependabot[bot]'
+    authorTeams:
+      - 'platform'
+    includedFiles:
+      - 'package.json'
+      - 'yarn.lock'
+    maxChangedLines: 150
+    lineCountExcludedFiles:
+      - 'yarn.lock'
+    instruction: 'Only dependency updates that keep the same major version.'
+```
+
+`approvalSensitivePaths` is the **Human approval** list. `authors` takes usernames and bots, `authorTeams` takes provider teams, and `labels` takes PR labels. Keep policy IDs stable and names distinct. You can have up to 50 policies, and an eligibility instruction is up to 4,000 characters. An explicit empty list disables all policies. Existing unrestricted approval resolves to one enabled **Existing approval policy**, preserving the master switch.
+
+Legacy `approvalLabels` and `approvalAuthors` still scope that migrated policy. If a higher-priority file uses legacy filters with a new policy list that has no migrated policy, update the file to `approvalPolicies`; Kody rejects the ambiguous configuration rather than ignoring a restriction.

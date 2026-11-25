@@ -11,27 +11,34 @@
 // via resolveModelConfig — mock it to inject the scripted MockLanguageModelV3.
 jest.mock('@libs/llm/model-invocation', () => ({
     resolveModelConfig: jest.fn(),
+    // The check slot's answer, as its adapter would declare it.
+    declaredAnswerTokens: jest.fn(
+        async (_slot: unknown, answer?: number) => answer,
+    ),
 }));
 
 import { MockLanguageModelV3 } from 'ai/test';
-import { resolveModelConfig } from '@libs/llm/model-invocation';
-
-import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
-// The DETERMINISTIC parse layer the adapter's LLM.run boundary delegates to:
-// the finder done-tool payload (D = {reasoning, suggestions}) and the verifier
-// done-tool payload (D = {keep, rationale}). These are where off-schema model
-// output is recovered, degraded, or signalled — so the I/O contract matrix
-// (A output-shape zoo / B semantic-but-wrong / C fail-safe) is asserted here,
-// at the exact layer the boundary uses, alongside the end-to-end wiring tests.
-import { sanitizeFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
+import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
+import { buildProviderOptions } from '@libs/llm/reasoning-options';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import {
-    extractFindings,
-    extractFindingsWithRecovery,
-    recoverFindingsFromProse,
-} from '@libs/code-review/infrastructure/agents/core/finder.agent';
+    declaredAnswerTokens,
+    resolveModelConfig,
+} from '@libs/llm/model-invocation';
+
+import {
+    finderRunEnvironment,
+    runAgentLoopViaCore,
+} from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
+// The finder findings parse (sanitizeFindingsResult / extractFindings) has its
+// own matrix in finder.agent.spec.ts and findings-schema.spec.ts; this file
+// keeps the verifier verdict seam and the end-to-end adapter path.
 import { extractVerdict } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
-import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
-import { LLM } from '@libs/llm/llm';
+import {
+    HEAVY_LENSES,
+    HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT,
+    HEAVY_LENS_SYSTEM_PROMPT,
+} from '@libs/ee/heavy-mode/heavy-lenses';
 
 const mockResolve = resolveModelConfig as jest.Mock;
 
@@ -163,6 +170,253 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
         expect(slotsCalled).toContain('check-model');
     });
 
+    it("keeps the check model's declared answer out of what each verify run re-sends (#2233)", async () => {
+        const { model } = makeModel();
+        const run = jest.spyOn(AiSdkAgentRunner.prototype, 'run');
+        try {
+            await runAgentLoopViaCore(makeInput(model), {
+                ...secrets,
+                byokConfig: { provider: 'openai', model: 'run-model' },
+                verifyByokConfig: {
+                    provider: 'anthropic',
+                    model: 'check-model',
+                    maxInputTokens: 32_000,
+                    maxOutputTokens: 16_000,
+                },
+            });
+            const verifyRuns = run.mock.calls.filter(
+                ([spec]) => spec.phase === 'verify',
+            );
+            expect(verifyRuns.length).toBeGreaterThan(0);
+            // Under the soft threshold (70% of 32k), so only the answer the
+            // check model declares can make the history too long.
+            const messages = [
+                { role: 'user', content: 'verify the finding' },
+                ...Array.from({ length: 8 }, (_, i) => [
+                    {
+                        role: 'assistant',
+                        content: [
+                            {
+                                type: 'tool-call',
+                                toolCallId: `r${i}`,
+                                toolName: 'readFile',
+                                input: { path: `src/f${i}.ts` },
+                            },
+                        ],
+                    },
+                    {
+                        role: 'tool',
+                        content: [
+                            {
+                                type: 'tool-result',
+                                toolCallId: `r${i}`,
+                                toolName: 'readFile',
+                                output: {
+                                    type: 'text',
+                                    value: Array.from(
+                                        { length: 160 },
+                                        (_, line) =>
+                                            `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                                    ).join('\n'),
+                                },
+                            },
+                        ],
+                    },
+                ]).flat(),
+            ];
+            const before = estimateTextTokens(JSON.stringify(messages));
+            expect(before).toBeLessThan(32_000 * 0.7);
+            expect(before + 16_000).toBeGreaterThan(32_000);
+            for (const [spec] of verifyRuns) {
+                const compression = spec.policies.find(
+                    (p) => p.name === 'compression',
+                );
+                const sent =
+                    (
+                        await compression?.prepareStep?.({
+                            messages,
+                            stepNumber: 8,
+                        } as any)
+                    )?.messages ?? messages;
+                // Cut, not emptied: the request and a read still go.
+                const text = JSON.stringify(sent);
+                expect(text).toContain('verify the finding');
+                expect(text).toContain('"type":"tool-result"');
+                expect(estimateTextTokens(text) + 16_000).toBeLessThanOrEqual(
+                    32_000,
+                );
+            }
+        } finally {
+            run.mockRestore();
+        }
+    });
+
+    it('keeps the larger answer of the check model and its fallback out of what each verify run re-sends', async () => {
+        const { model } = makeModel();
+        const run = jest.spyOn(AiSdkAgentRunner.prototype, 'run');
+        try {
+            await runAgentLoopViaCore(makeInput(model), {
+                ...secrets,
+                byokConfig: { provider: 'openai', model: 'run-model' },
+                verifyByokConfig: {
+                    provider: 'anthropic',
+                    model: 'check-model',
+                    maxInputTokens: 32_000,
+                    maxOutputTokens: 4_000,
+                    // LLM.run re-sends to it with its own, larger answer.
+                    fallback: {
+                        provider: 'anthropic',
+                        model: 'check-fallback',
+                        maxInputTokens: 32_000,
+                        maxOutputTokens: 16_000,
+                    },
+                },
+            });
+            const verifyRuns = run.mock.calls.filter(
+                ([spec]) => spec.phase === 'verify',
+            );
+            expect(verifyRuns.length).toBeGreaterThan(0);
+            // Under the soft threshold (70% of 32k), so only the answer the
+            // check model declares can make the history too long.
+            const messages = [
+                { role: 'user', content: 'verify the finding' },
+                ...Array.from({ length: 8 }, (_, i) => [
+                    {
+                        role: 'assistant',
+                        content: [
+                            {
+                                type: 'tool-call',
+                                toolCallId: `r${i}`,
+                                toolName: 'readFile',
+                                input: { path: `src/f${i}.ts` },
+                            },
+                        ],
+                    },
+                    {
+                        role: 'tool',
+                        content: [
+                            {
+                                type: 'tool-result',
+                                toolCallId: `r${i}`,
+                                toolName: 'readFile',
+                                output: {
+                                    type: 'text',
+                                    value: Array.from(
+                                        { length: 160 },
+                                        (_, line) =>
+                                            `${line + 1}: export const v${line} = load('${i}-${line}');`,
+                                    ).join('\n'),
+                                },
+                            },
+                        ],
+                    },
+                ]).flat(),
+            ];
+            const before = estimateTextTokens(JSON.stringify(messages));
+            expect(before).toBeLessThan(32_000 * 0.7);
+            expect(before + 16_000).toBeGreaterThan(32_000);
+            for (const [spec] of verifyRuns) {
+                const compression = spec.policies.find(
+                    (p) => p.name === 'compression',
+                );
+                const sent =
+                    (
+                        await compression?.prepareStep?.({
+                            messages,
+                            stepNumber: 8,
+                        } as any)
+                    )?.messages ?? messages;
+                // Cut, not emptied: the request and a read still go.
+                const text = JSON.stringify(sent);
+                expect(text).toContain('verify the finding');
+                expect(text).toContain('"type":"tool-result"');
+                expect(estimateTextTokens(text) + 16_000).toBeLessThanOrEqual(
+                    32_000,
+                );
+            }
+        } finally {
+            run.mockRestore();
+        }
+    });
+
+    it("sizes each verify run to the tightest attempt when the check slot's answer outgrows its fallback's window", async () => {
+        const { model } = makeModel();
+        const run = jest.spyOn(AiSdkAgentRunner.prototype, 'run');
+        try {
+            await runAgentLoopViaCore(makeInput(model), {
+                ...secrets,
+                byokConfig: { provider: 'openai', model: 'run-model' },
+                verifyByokConfig: {
+                    provider: 'anthropic',
+                    model: 'claude-sonnet-4-5',
+                    maxInputTokens: 200_000,
+                    maxOutputTokens: 64_000,
+                    reasoningEffort: 'high',
+                    fallback: {
+                        provider: 'openai_compatible',
+                        model: 'small-fallback',
+                        maxInputTokens: 32_000,
+                        maxOutputTokens: 1_000,
+                    },
+                },
+            });
+            // Reserved with the options the verify run sends, the check
+            // slot's own effort with no default added, on both attempts: the
+            // run is configured once and its fallback sends them too.
+            const sentOptions = buildProviderOptions('x', undefined, {
+                reasoningEffort: 'high',
+                byokProvider: 'anthropic',
+                modelName: 'claude-sonnet-4-5',
+            });
+            expect(sentOptions).not.toEqual({});
+            for (const slotModel of ['claude-sonnet-4-5', 'small-fallback']) {
+                expect(declaredAnswerTokens).toHaveBeenCalledWith(
+                    expect.objectContaining({ model: slotModel }),
+                    expect.any(Number),
+                    { providerOptions: sentOptions },
+                );
+            }
+            const verifyRuns = run.mock.calls.filter(
+                ([spec]) => spec.phase === 'verify',
+            );
+            expect(verifyRuns.length).toBeGreaterThan(0);
+            // The finding's evidence, as the verify prompt carries it: the
+            // soft pass trims tool results, not this.
+            const evidence = Array.from(
+                { length: 2_600 },
+                (_, line) =>
+                    `${line + 1}: export const v${line} = load('${line}');`,
+            ).join('\n');
+            const messages = [
+                { role: 'user', content: `verify the finding\n${evidence}` },
+            ];
+            // Over what the 32k fallback can take beside its 1k answer.
+            expect(
+                estimateTextTokens(JSON.stringify(messages)) + 1_000,
+            ).toBeGreaterThan(32_000);
+            for (const [spec] of verifyRuns) {
+                const compression = spec.policies.find(
+                    (p) => p.name === 'compression',
+                );
+                const sent =
+                    (
+                        await compression?.prepareStep?.({
+                            messages,
+                            stepNumber: 8,
+                        } as any)
+                    )?.messages ?? messages;
+                const text = JSON.stringify(sent);
+                expect(text).toContain('verify the finding');
+                // Fits the fallback beside its answer, and the slot beside its.
+                expect(estimateTextTokens(text) + 1_000).toBeLessThanOrEqual(
+                    32_000,
+                );
+            }
+        } finally {
+            run.mockRestore();
+        }
+    });
+
     it('keeps verify on the run slot when the check slot is the same model', async () => {
         const { model } = makeModel();
         const input = makeInput(model);
@@ -193,6 +447,19 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
         expect(out.verification?.beforeCount).toBe(2);
         expect(out.verification?.afterCount).toBe(1);
         expect(out.verification?.droppedByVerifier).toBe(1);
+        expect(typeof out.verification?.verifyMs).toBe('number');
+
+        // A dropped finding keeps its text in the trace so it can be judged
+        // later; a kept one travels on as a finding and carries none.
+        const decisions = out.verification?.decisions ?? [];
+        const drop = decisions.find((d) => d.action === 'drop');
+        expect(drop?.relevantFile).toBe('b.ts');
+        expect(drop?.droppedFinding).toMatchObject({
+            suggestionContent: expect.any(String),
+        });
+        expect(
+            decisions.find((d) => d.action === 'keep')?.droppedFinding,
+        ).toBeUndefined();
 
         // mapping basics (usage is summed fu+vu+ru; exact token counts depend on
         // real model usage — the mock doesn't propagate it, so assert the shape)
@@ -218,7 +485,7 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
 
         const normal = makeModel();
         await runAgentLoopViaCore(
-            makeInput(normal.model, { reviewMode: 'normal' }),
+            makeInput(normal.model, { reviewMode: 'balanced' }),
             secrets,
         );
 
@@ -226,14 +493,55 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
         expect(normal.calls.count).toBeGreaterThan(fast.calls.count);
     });
 
-    it('self-contained (no remoteCommands) still produces output', async () => {
-        const { model } = makeModel();
-        const out = await runAgentLoopViaCore(makeInput(model), {
-            ...secrets,
-            remoteCommands: undefined,
-        });
-        expect(out.findings).toBeDefined();
-        expect(out.usage).toBeDefined();
+    it('runs the lenses of the categories on only in heavy mode, with or without a sandbox', async () => {
+        const lensRuns = (heavy: boolean, sandbox = true) => {
+            const roles: string[] = [];
+            const lensSystem = sandbox
+                ? HEAVY_LENS_SYSTEM_PROMPT
+                : HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT;
+            const doGenerate = (async (opts: any) => {
+                const text = JSON.stringify(opts?.prompt ?? '');
+                const role =
+                    /ONE assignment on this pull request: ([^.]+)\./.exec(text);
+                if (role && text.includes(lensSystem)) {
+                    roles.push(role[1]);
+                }
+                const verifier = !role && text.includes('verdict');
+                return {
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: 't',
+                            toolName: verifier
+                                ? 'submitVerdict'
+                                : 'submitResult',
+                            input: JSON.stringify(
+                                verifier
+                                    ? { keep: true, rationale: 'ok' }
+                                    : { reasoning: 'none', suggestions: [] },
+                            ),
+                        },
+                    ],
+                    finishReason: 'tool-calls',
+                    usage: { inputTokens: 5, outputTokens: 5 },
+                    warnings: [],
+                };
+            }) as any;
+            return runAgentLoopViaCore(
+                makeInput(new MockLanguageModelV3({ doGenerate }), {
+                    heavy,
+                    allowedLabels: ['security'],
+                }),
+                sandbox ? secrets : { ...secrets, remoteCommands: undefined },
+            ).then(() => roles.sort());
+        };
+        const security = HEAVY_LENSES.filter((l) => l.label === 'security')
+            .map((l) => l.assignment)
+            .sort();
+
+        expect(await lensRuns(false)).toEqual([]);
+        expect(await lensRuns(true)).toEqual(security);
+        expect(await lensRuns(true, false)).toEqual(security);
     });
 
     it('reports coverage from the ledger mutated during the run', async () => {
@@ -319,16 +627,8 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-//  LLM.run I/O CONTRACT MATRIX — the deterministic parse + fail-safe + return-
-//  shape layers the adapter boundary depends on. See llm-io-contract-matrix.md.
-//
-//  The adapter delegates the model call to the harness runner; the payload it
-//  gets back is the done-tool argument object, parsed at TWO seams:
-//    - finder findings  D = {reasoning, suggestions}  via sanitizeFindingsResult
-//      / extractFindings (+ prose-recovery fallback)
-//    - verifier verdict D = {keep, rationale}          via extractVerdict
-//  Every applicable matrix row is asserted against those seams (and the
-//  end-to-end adapter path where the wiring/fail-safe matters). Rows that
+//  LLM.run I/O CONTRACT MATRIX — the verifier verdict seam (extractVerdict) and
+//  the fail-safe / return-shape layers of the adapter boundary. Rows that
 //  silently degrade in production today (the #1786 class) are pinned as
 //  it.failing on the CORRECT behavior — green now, red when the seam is fixed.
 // ════════════════════════════════════════════════════════════════════════════
@@ -355,14 +655,6 @@ function mkState(over: Partial<Record<string, unknown>> = {}): any {
         ...over,
     };
 }
-const stepText = (content: string) => ({
-    index: 0,
-    message: { role: 'assistant', content },
-});
-const finderArtifact = (payload: unknown) => ({
-    type: 'submitResult',
-    payload,
-});
 const verdictArtifact = (payload: unknown) => ({
     type: 'submitVerdict',
     payload,
@@ -443,300 +735,6 @@ function assertAgentLoopOutputShape(out: any) {
     expect(out.verificationUsage).toBeDefined();
 }
 
-describe('contract matrix — A. output-shape zoo (finder findings seam)', () => {
-    // Row 1 — Exact D: happy path recovers the payload untouched.
-    it('row 1 — exact D returns the payload', () => {
-        const r = sanitizeFindingsResult({
-            reasoning: 'two candidates',
-            suggestions: [validItem()],
-        } as any);
-        expect(r).not.toBeNull();
-        expect(r!.reasoning).toBe('two candidates');
-        expect(r!.suggestions).toHaveLength(1);
-        expect(r!.suggestions[0].relevantFile).toBe('a.ts');
-    });
-
-    // Row 2 — Bare array of inner items where D is an object.
-    // PROD: sanitizeFindingsResult only checks `raw.suggestions` (undefined on an
-    // array) → returns null → findings SILENTLY DROPPED (findings-schema.ts:63).
-    it('row 2 — bare array of findings must be recovered, not silently dropped', () => {
-        const r = sanitizeFindingsResult([validItem()] as any);
-        expect(r).not.toBeNull();
-        expect(r!.suggestions).toHaveLength(1); // fails today (null)
-    });
-
-    // Row 3 — Single object where D expects an array (suggestions as one object).
-    // PROD: Array.isArray(raw.suggestions) === false → null → silent drop.
-    it.failing(
-        'row 3 — single suggestion object must be wrapped, not silently dropped',
-        () => {
-            const r = sanitizeFindingsResult({
-                reasoning: 'r',
-                suggestions: validItem(),
-            } as any);
-            expect(r).not.toBeNull();
-            expect(r!.suggestions).toHaveLength(1); // fails today (null)
-        },
-    );
-
-    // Row 4 — Wrapper key {result: D} / {data: D} / {output: D} / {json: D}.
-    // PROD: top-level lacks reasoning+suggestions → null → silent drop.
-    it('row 4 — a {result:D} wrapper must be unwrapped, not silently dropped', () => {
-        const r = sanitizeFindingsResult({
-            result: { reasoning: 'r', suggestions: [validItem()] },
-        } as any);
-        expect(r).not.toBeNull();
-        expect(r!.suggestions).toHaveLength(1); // fails today (null)
-    });
-
-    // Row 5 — Double wrapper {result:{result:D}}.
-    it('row 5 — a double {result:{result:D}} wrapper must be unwrapped', () => {
-        const r = sanitizeFindingsResult({
-            result: { result: { reasoning: 'r', suggestions: [validItem()] } },
-        } as any);
-        expect(r).not.toBeNull();
-        expect(r!.suggestions).toHaveLength(1); // fails today (null)
-    });
-
-    // Row 6 — Numeric/opaque single-key wrap {"0":D} / {content:D}.
-    it('row 6 — an opaque single-key wrap ({content:D}) must be unwrapped', () => {
-        const r = sanitizeFindingsResult({
-            content: { reasoning: 'r', suggestions: [validItem()] },
-        } as any);
-        expect(r).not.toBeNull();
-        expect(r!.suggestions).toHaveLength(1); // fails today (null)
-    });
-
-    // Row 7 — Stringified JSON: the whole D as a JSON string.
-    // PROD: sanitize sees a string, safeParse fails → null → silent drop.
-    it('row 7 — stringified-JSON findings must be parsed, not silently dropped', () => {
-        const r = sanitizeFindingsResult(
-            JSON.stringify({
-                reasoning: 'r',
-                suggestions: [validItem()],
-            }) as any,
-        );
-        expect(r).not.toBeNull();
-        expect(r!.suggestions).toHaveLength(1); // fails today (null)
-    });
-
-    // Row 8 — Markdown-fenced: RECOVERED at the text seam (extractFindings /
-    // extractJsonFromText strips the ```json fence).
-    it('row 8 — markdown-fenced JSON is recovered from the final text', () => {
-        const state = mkState({
-            steps: [
-                stepText(
-                    '```json\n{"reasoning":"r","suggestions":[' +
-                        JSON.stringify(validItem()) +
-                        ']}\n```',
-                ),
-            ],
-        });
-        const out = extractFindings(state);
-        expect(out.suggestions).toHaveLength(1);
-        expect(out.suggestions[0].relevantFile).toBe('a.ts');
-    });
-
-    // Row 9 — Prose-wrapped JSON: RECOVERED (prose before/after is dropped).
-    it('row 9 — prose-wrapped JSON is recovered from the final text', () => {
-        const state = mkState({
-            steps: [
-                stepText(
-                    'Here is the result: {"reasoning":"r","suggestions":[' +
-                        JSON.stringify(validItem()) +
-                        ']}\n\nLet me know if you need more.',
-                ),
-            ],
-        });
-        const out = extractFindings(state);
-        expect(out.suggestions).toHaveLength(1);
-    });
-
-    // Row 10 — Right data, wrong keys.
-    // (a) item-level rename (relevantFile → file): the DOCUMENTED partial-recovery
-    //     contract drops the invalid item (logged) and keeps the valid ones.
-    it('row 10a — a renamed-key item is dropped by partial recovery, valid kept', () => {
-        const r = sanitizeFindingsResult({
-            reasoning: 'r',
-            suggestions: [
-                validItem(), // valid → kept
-                { file: 'b.ts', suggestionContent: 'x' }, // renamed keys → dropped
-            ],
-        } as any);
-        expect(r).not.toBeNull();
-        expect(r!.suggestions).toHaveLength(1);
-        expect(r!.suggestions[0].relevantFile).toBe('a.ts');
-    });
-    // (b) top-level rename (suggestions → findings): the whole payload is lost.
-    it('row 10b — a top-level renamed key (findings→suggestions) must be aliased', () => {
-        const r = sanitizeFindingsResult({
-            reasoning: 'r',
-            findings: [validItem()],
-        } as any);
-        expect(r).not.toBeNull();
-        expect(r!.suggestions).toHaveLength(1); // fails today (null)
-    });
-
-    // Row 11 — Case/convention mismatch on the top-level keys ({Reasoning,
-    // Suggestions}). PROD: schema fails, suggestions missing → null → silent drop.
-    it('row 11 — case-mismatched top-level keys must be normalized, not dropped', () => {
-        const r = sanitizeFindingsResult({
-            Reasoning: 'r',
-            Suggestions: [validItem()],
-        } as any);
-        expect(r).not.toBeNull();
-        expect(r!.suggestions).toHaveLength(1); // fails today (null)
-    });
-
-    // Row 12 — Partial object.
-    it('row 12 — missing OPTIONAL reasoning is recovered (defaults to empty)', () => {
-        const r = sanitizeFindingsResult({
-            suggestions: [validItem()],
-        } as any);
-        expect(r).not.toBeNull();
-        expect(r!.reasoning).toBe('');
-        expect(r!.suggestions).toHaveLength(1);
-    });
-    it('row 12 — an item missing a REQUIRED field is dropped, no crash', () => {
-        const r = sanitizeFindingsResult({
-            reasoning: 'r',
-            suggestions: [
-                validItem(),
-                {
-                    relevantFile: 'b.ts',
-                    existingCode: 'y',
-                    improvedCode: 'z',
-                }, // no suggestionContent
-            ],
-        } as any);
-        expect(r).not.toBeNull();
-        expect(r!.suggestions).toHaveLength(1);
-        expect(r!.suggestions[0].relevantFile).toBe('a.ts');
-    });
-    // #2112 FPARSE-11: the fix is optional — a finding without it is kept and
-    // the #1833 gate publishes it as a plain comment.
-    it('row 12b — an item missing only its fix is kept with empty code', () => {
-        const r = sanitizeFindingsResult({
-            reasoning: 'r',
-            suggestions: [
-                {
-                    relevantFile: 'b.ts',
-                    suggestionContent: 'x',
-                    existingCode: 'y',
-                },
-            ],
-        } as any);
-        expect(r!.suggestions).toHaveLength(1);
-        expect(r!.suggestions[0].improvedCode).toBe('');
-        expect(r!.suggestions[0].existingCode).toBe('y');
-    });
-
-    // Row 13 — Extra unknown keys are tolerated (stripped), never a crash.
-    it('row 13 — extra unknown keys are tolerated at both levels', () => {
-        const r = sanitizeFindingsResult({
-            reasoning: 'r',
-            suggestions: [validItem({ weird: 'x', nested: { a: 1 } })],
-            topLevelExtra: 'ignored',
-        } as any);
-        expect(r).not.toBeNull();
-        expect(r!.suggestions).toHaveLength(1);
-        expect(r!.suggestions[0].relevantFile).toBe('a.ts');
-    });
-
-    // Row 14 — Empty object {}: typed-empty WITH an explicit signal
-    // (__findingsOutcome = 'artifact-unusable') — not a silent default.
-    it('row 14 — empty-object submitResult yields typed-empty + explicit signal', () => {
-        expect(sanitizeFindingsResult({} as any)).toBeNull();
-        const state = mkState({ artifacts: [finderArtifact({})] });
-        const out = extractFindings(state);
-        expect(out).toEqual({ reasoning: '', suggestions: [] });
-        expect((state as any).__findingsOutcome).toBe('artifact-unusable');
-    });
-
-    // Row 15 — Empty array: a legitimate "reviewed, found nothing".
-    it('row 15 — empty suggestions array is preserved as a clean empty result', () => {
-        const r = sanitizeFindingsResult({
-            reasoning: 'clean',
-            suggestions: [],
-        });
-        expect(r).toEqual({ reasoning: 'clean', suggestions: [] });
-        const state = mkState({
-            artifacts: [
-                finderArtifact({ reasoning: 'clean', suggestions: [] }),
-            ],
-        });
-        expect((state && extractFindings(state)).suggestions).toEqual([]);
-        expect((state as any).__findingsOutcome).toBe('structured');
-    });
-
-    // Row 16 — Empty / whitespace-only string.
-    it('row 16 — empty and whitespace-only payloads return null / typed-empty', () => {
-        expect(sanitizeFindingsResult('' as any)).toBeNull();
-        expect(sanitizeFindingsResult('   \n\t ' as any)).toBeNull();
-        const state = mkState({ steps: [stepText('   \n  ')] });
-        expect(extractFindings(state)).toEqual({
-            reasoning: '',
-            suggestions: [],
-        });
-    });
-
-    // Row 17 — null / undefined.
-    it('row 17 — null/undefined return null (never a crash)', () => {
-        expect(sanitizeFindingsResult(null)).toBeNull();
-        expect(sanitizeFindingsResult(undefined as any)).toBeNull();
-        const state = mkState({ artifacts: [finderArtifact(null)] });
-        expect(extractFindings(state)).toEqual({
-            reasoning: '',
-            suggestions: [],
-        });
-    });
-
-    // Row 18 — Primitive where an object is expected.
-    it('row 18 — primitive payloads return null explicitly, no crash', () => {
-        expect(sanitizeFindingsResult(true as any)).toBeNull();
-        expect(sanitizeFindingsResult(0 as any)).toBeNull();
-        expect(sanitizeFindingsResult('ok' as any)).toBeNull();
-    });
-
-    // Row 20 — Reasoning/thinking leak: findings written as PROSE in `reasoning`
-    // with `suggestions` omitted (the Anthropic omission mode). RECOVERED via the
-    // injected prose-recoverer wired by the adapter.
-    it('row 20 — prose-only findings are recovered via the prose recoverer', async () => {
-        const state = mkState({
-            artifacts: [
-                finderArtifact({
-                    reasoning:
-                        'There is a null-pointer bug in a.ts:10 that should be fixed.',
-                    suggestions: [],
-                }),
-            ],
-        });
-        const recover = jest.fn(async () => [validItem()]);
-        const out = await extractFindingsWithRecovery(state, recover as any);
-        expect(recover).toHaveBeenCalledTimes(1);
-        expect(out.suggestions).toHaveLength(1);
-    });
-
-    // The finder findings seam ALWAYS returns the declared {reasoning, suggestions}
-    // type — never undefined — across every layer.
-    it('always returns the declared {reasoning, suggestions} type', () => {
-        for (const payload of [
-            null,
-            {},
-            true,
-            [validItem()],
-            { reasoning: 'r', suggestions: [validItem()] },
-            'garbage',
-        ]) {
-            const out = extractFindings(
-                mkState({ artifacts: [finderArtifact(payload)] }),
-            );
-            expect(typeof out.reasoning).toBe('string');
-            expect(Array.isArray(out.suggestions)).toBe(true);
-        }
-    });
-});
-
 describe('contract matrix — B. semantic-but-wrong', () => {
     // Rows 21-23 apply to the VERIFIER verdict seam (D = {keep, rationale}); the
     // findings schema has no boolean field. extractVerdict requires a STRICT
@@ -745,52 +743,19 @@ describe('contract matrix — B. semantic-but-wrong', () => {
     // KEPT (verifier.agent.ts:143) — the #1786 class for the verify gate.
 
     // Row 21 — boolean as string ("false").
-    it.failing(
-        'row 21 — keep:"false" (string) must drop, not silently default to keep',
-        () => {
-            const v = extractVerdict(
-                mkState({
-                    artifacts: [
-                        verdictArtifact({
-                            keep: 'false',
-                            rationale: 'refuted',
-                        }),
-                    ],
-                }),
-            );
-            expect(v.keep).toBe(false); // fails today (defaults to true)
-        },
-    );
-
-    // Row 22 — boolean as yes/no.
-    it.failing(
-        'row 22 — keep:"no" must drop, not silently default to keep',
-        () => {
-            const v = extractVerdict(
-                mkState({
-                    artifacts: [
-                        verdictArtifact({ keep: 'no', rationale: 'refuted' }),
-                    ],
-                }),
-            );
-            expect(v.keep).toBe(false); // fails today (defaults to true)
-        },
-    );
-
-    // Row 23 — boolean as number (0).
-    it.failing(
-        'row 23 — keep:0 must drop, not silently default to keep',
-        () => {
-            const v = extractVerdict(
-                mkState({
-                    artifacts: [
-                        verdictArtifact({ keep: 0, rationale: 'refuted' }),
-                    ],
-                }),
-            );
-            expect(v.keep).toBe(false); // fails today (defaults to true)
-        },
-    );
+    it('row 21 — keep:"false" (string) must drop, not silently default to keep', () => {
+        const v = extractVerdict(
+            mkState({
+                artifacts: [
+                    verdictArtifact({
+                        keep: 'false',
+                        rationale: 'refuted',
+                    }),
+                ],
+            }),
+        );
+        expect(v.keep).toBe(false); // fails today (defaults to true)
+    });
 
     // A genuine boolean verdict is honored both ways (the happy semantic path).
     it('row 21-23 baseline — a real boolean keep:false is honored', () => {
@@ -803,118 +768,9 @@ describe('contract matrix — B. semantic-but-wrong', () => {
         );
         expect(v.keep).toBe(false);
     });
-
-    // Row 24 — enum out of the allowed set (severity:"URGENT"). Losing a real
-    // finding over a label typo is a silent degradation → keep it with the
-    // field cleared (#2112 FPARSE-13).
-    it('row 24 — an out-of-set severity must not drop the whole finding', () => {
-        const r = sanitizeFindingsResult({
-            reasoning: 'r',
-            suggestions: [validItem({ severity: 'URGENT' })],
-        } as any);
-        expect(r).not.toBeNull();
-        expect(r!.suggestions).toHaveLength(1);
-        expect(r!.suggestions[0].severity).toBeUndefined();
-    });
-
-    // Row 26 — duplicate keys in the JSON object: JSON.parse is last-wins; the
-    // text seam handles it without crashing.
-    it('row 26 — duplicate JSON keys resolve last-wins, no crash', () => {
-        const state = mkState({
-            steps: [
-                stepText(
-                    '{"reasoning":"first","reasoning":"second","suggestions":[]}',
-                ),
-            ],
-        });
-        const out = extractFindings(state);
-        expect(out.reasoning).toBe('second');
-        expect(out.suggestions).toEqual([]);
-    });
-
-    // Row 27 — unicode / escaped newlines / emoji inside string fields survive.
-    it('row 27 — unicode/emoji/newlines in string fields are preserved', () => {
-        const content = 'race 🚀 在 handler\nwith escaped\ttabs — 你好';
-        const r = sanitizeFindingsResult({
-            reasoning: 'r 🚀',
-            suggestions: [validItem({ suggestionContent: content })],
-        } as any);
-        expect(r).not.toBeNull();
-        expect(r!.suggestions[0].suggestionContent).toBe(content);
-        expect(r!.reasoning).toBe('r 🚀');
-    });
 });
 
 describe('contract matrix — C. unparseable / transport (fail-safe)', () => {
-    // Row 28 — truncated JSON (max_tokens mid-object): degrades to typed-empty,
-    // never throws past the seam.
-    it('row 28 — truncated JSON degrades to typed-empty, no throw', () => {
-        const state = mkState({
-            steps: [
-                stepText(
-                    '{"reasoning":"r","suggestions":[{"relevantFile":"a.ts",',
-                ),
-            ],
-        });
-        expect(() => extractFindings(state)).not.toThrow();
-        expect(extractFindings(state)).toEqual({
-            reasoning: '',
-            suggestions: [],
-        });
-    });
-
-    // Row 29 — malformed JSON.
-    it('row 29 — trailing-comma JSON is repaired; single-quote JSON degrades', () => {
-        // Trailing comma → deterministic repair recovers it.
-        const ok = extractFindings(
-            mkState({
-                steps: [
-                    stepText(
-                        '{"reasoning":"r","suggestions":[' +
-                            JSON.stringify(validItem()) +
-                            ',]}',
-                    ),
-                ],
-            }),
-        );
-        expect(ok.suggestions).toHaveLength(1);
-        // Single quotes / unquoted keys are not JSON → typed-empty, no throw.
-        const bad = mkState({
-            steps: [stepText("{reasoning: 'r', suggestions: []}")],
-        });
-        expect(() => extractFindings(bad)).not.toThrow();
-        expect(extractFindings(bad)).toEqual({
-            reasoning: '',
-            suggestions: [],
-        });
-    });
-
-    // Row 30 — LLM.run throws.
-    // (a) The prose-recovery LLM.run is wrapped: a throw yields [] (never breaks
-    //     the review) and the byokConfig is threaded to it.
-    it('row 30a — recoverFindingsFromProse fails safe when LLM.run throws', async () => {
-        const spy = jest
-            .spyOn(LLM, 'run')
-            .mockRejectedValue(new Error('network boom'));
-        const prose =
-            'There is a null-pointer bug in a.ts:10 that should be fixed ' +
-            'because the value can be undefined and would crash the handler.';
-        const byokConfig: any = {
-            model: 'kimi-k2',
-            main: { model: 'kimi-k2' },
-        };
-        const out = await recoverFindingsFromProse(
-            prose,
-            byokConfig,
-            'org',
-            'rn',
-        );
-        expect(out).toEqual([]);
-        expect(spy).toHaveBeenCalledWith(
-            expect.objectContaining({ byokConfig }),
-        );
-        spy.mockRestore();
-    });
     // (b) End-to-end: a model throw becomes an error-status result, surfaced as
     //     errorMessage — the boundary resolves, never throws past itself.
     it('row 30b — a model throw resolves to an error-flagged output, no throw', async () => {
@@ -929,18 +785,6 @@ describe('contract matrix — C. unparseable / transport (fail-safe)', () => {
         expect(out.errorMessage).toContain('network boom');
         expect(out.source).toBe('empty');
         expect(out.findings.suggestions).toEqual([]);
-    });
-
-    // Row 31 — an {error:...} object returned instead of a throw.
-    it('row 31 — an {error} payload degrades to typed-empty + explicit signal', () => {
-        const state = mkState({
-            artifacts: [finderArtifact({ error: 'quota exceeded' })],
-        });
-        expect(extractFindings(state)).toEqual({
-            reasoning: '',
-            suggestions: [],
-        });
-        expect((state as any).__findingsOutcome).toBe('artifact-unusable');
     });
 
     // Row 32 — empty success (content:'' / finish_reason:'length').
@@ -960,27 +804,6 @@ describe('contract matrix — C. unparseable / transport (fail-safe)', () => {
         assertAgentLoopOutputShape(out);
         expect(out.source).toBe('empty');
         expect(out.findings.suggestions).toEqual([]);
-    });
-
-    // Row 33 — refusal ("I cannot help…"): the prose-recovery gate rejects it
-    // (no LLM spend) and the text seam finds no JSON → typed-empty.
-    it('row 33 — a refusal is not mistaken for findings and degrades to empty', async () => {
-        const spy = jest.spyOn(LLM, 'run');
-        const out = await recoverFindingsFromProse(
-            'I cannot help with that request.',
-            undefined,
-            'org',
-        );
-        expect(out).toEqual([]);
-        expect(spy).not.toHaveBeenCalled(); // gate skipped the LLM entirely
-        spy.mockRestore();
-        const state = mkState({
-            steps: [stepText('I cannot help with that request.')],
-        });
-        expect(extractFindings(state)).toEqual({
-            reasoning: '',
-            suggestions: [],
-        });
     });
 
     // Row 34 — abort signal fired: the boundary resolves with a valid output
@@ -1006,20 +829,6 @@ describe('contract matrix — D. input variants (invariant + return-shape)', () 
         assertAgentLoopOutputShape(out);
         expect(out.coverage.totalTargets).toBe(0);
         expect(out.findings.suggestions).toEqual([]);
-    });
-
-    // Row 36 — single item.
-    it('row 36 — a single changed file is handled', async () => {
-        const out = await runAgentLoopViaCore(
-            makeInput(happyEmptyModel(), {
-                changedFiles: [
-                    { filename: 'only.ts', patch: '@@ -1 +1 @@\n+x' },
-                ],
-            }),
-            secrets,
-        );
-        assertAgentLoopOutputShape(out);
-        expect(out.coverage.totalTargets).toBe(1);
     });
 
     // Row 37 — large input crossing the compression/window boundary.
@@ -1122,49 +931,7 @@ describe('contract matrix — D. input variants (invariant + return-shape)', () 
     });
 });
 
-describe('contract matrix — E. N-model policy (strict json_schema vs fallback)', () => {
-    // The adapter's model-policy seam is supportsStrictToolsForRun, derived from
-    // the resolved slot's model id (specModelId = byokConfig?.model ?? 'resolved')
-    // and its failover target. On the strict branch the done-tool is grammar-
-    // constrained so the model cannot emit off-schema; on the fallback branch the
-    // full A/B/C zoo is in scope and the parse layer above must not degrade.
-
-    // Strict branch — Gemini activates VALIDATED strict tool use (the only family
-    // this adapter enables; see model-strictness.ts).
-    it('row E-strict — Gemini gets strict tool use (trusts clean D at the source)', () => {
-        expect(supportsStrictToolsForRun('gemini-2.5-pro')).toBe(true);
-        expect(supportsStrictToolsForRun('gemini-3.1-pro')).toBe(true);
-    });
-
-    // json_object fallback branch — every other provider (incl. the gate's
-    // strict-json_schema list openai/anthropic/moonshotai, which this adapter still
-    // runs best-effort for tools) is NOT strict → the parse-layer zoo stays in scope.
-    it('row E-fallback — non-Gemini models run best-effort (full zoo in scope)', () => {
-        for (const id of [
-            'openai:gpt-4o',
-            'anthropic:claude-sonnet-4',
-            'moonshotai/kimi-k2',
-            'kimi-k2',
-            'glm-4.6',
-            'deepseek-chat',
-            'z-ai/glm-4.6',
-            'resolved',
-        ]) {
-            expect(supportsStrictToolsForRun(id)).toBe(false);
-        }
-    });
-
-    // Failover swap: strict is dropped if the fallback target can't honor it
-    // (a strict tool built for Gemini would be rejected by an OpenAI fallback).
-    it('row E-failover — Gemini primary + OpenAI fallback disables strict', () => {
-        expect(
-            supportsStrictToolsForRun('gemini-2.5-pro', 'openai:gpt-4o'),
-        ).toBe(false);
-        expect(
-            supportsStrictToolsForRun('gemini-2.5-pro', 'gemini-3.1-pro'),
-        ).toBe(true);
-    });
-
+describe('runAgentLoopViaCore — model policy and threaded review context', () => {
     // The parse layer is MODEL-INDEPENDENT: the same off-schema wrapper degrades
     // identically whether the slot is a strict (Gemini) or a fallback (Kimi) model
     // — the boundary never blind-trusts clean D based on the model id. Proven
@@ -1196,13 +963,6 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
         assertAgentLoopOutputShape(geminiOut);
         assertAgentLoopOutputShape(kimiOut);
     });
-
-    // Request assembly / threading: the adapter forwards secrets.byokConfig into
-    // the prose-recovery boundary. That boundary's byokConfig threading is proven
-    // directly by row 30a (recoverFindingsFromProse called with byokConfig) — the
-    // e2e cannot spy LLM.run here without breaking the finder's own model calls
-    // (the runner uses the SAME LLM.run door), so the contract is pinned at the
-    // recovery unit above rather than duplicated as a flaky e2e assertion.
 
     // Team systems (#2172): AgentLoopInput.teamSystemTools reaches the
     // synthesis rescue, which asks about requirements a consulted system states.
@@ -1419,9 +1179,9 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
         );
 
         expect(out.droppedByVerify).toHaveLength(0);
-        expect(out.findings.suggestions.map((s: any) => s.relevantFile)).toEqual([
-            'a.ts',
-        ]);
+        expect(
+            out.findings.suggestions.map((s: any) => s.relevantFile),
+        ).toEqual(['a.ts']);
     });
 
     describe('readRepoInstruction', () => {
@@ -1528,13 +1288,13 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
         it('keeps a review without a sandbox off the heavy passes', async () => {
             const plain = makeModel();
             await runAgentLoopViaCore(
-                makeInput(plain.model, { reviewMode: 'normal' }),
+                makeInput(plain.model, { reviewMode: 'balanced' }),
                 { ...secrets, remoteCommands: undefined },
             );
             const listed = makeModel();
             await runAgentLoopViaCore(
                 makeInput(listed.model, {
-                    reviewMode: 'normal',
+                    reviewMode: 'balanced',
                     repoInstructions,
                     listsRepoInstructions: true,
                 }),
@@ -1718,15 +1478,116 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
             'a.ts',
         ]);
     });
+});
 
-    it('omitting previousDecisions keeps current behavior unchanged (backward compatible)', async () => {
-        const { model } = makeModel();
-        const out = await runAgentLoopViaCore(makeInput(model), secrets);
-
-        // Same assertion as the baseline e2e test above — proves the new field
-        // is purely additive when absent.
+// Custom agents can link the same files as guides; their findings take the
+// convention check, not the instruction-citation check.
+describe('finderRunEnvironment — instruction citations', () => {
+    it('checks them for built-in agents and not for custom agents', () => {
+        const model = new MockLanguageModelV3({});
         expect(
-            out.findings.suggestions.map((s: any) => s.relevantFile),
-        ).toEqual(['a.ts']);
+            finderRunEnvironment(makeInput(model), secrets).verifyParams
+                .checksInstructionCitations,
+        ).toBe(true);
+        expect(
+            finderRunEnvironment(
+                makeInput(model, { conventionGuides: [] }),
+                secrets,
+            ).verifyParams.checksInstructionCitations,
+        ).toBe(false);
+    });
+});
+
+describe('finderRunEnvironment — overhead', () => {
+    it("counts Claude's writing policy in the fixed overhead", () => {
+        const model = new MockLanguageModelV3({});
+        // A category prompt sentence the Claude writing policy rewrites.
+        const systemPrompt =
+            'Each finding must be technical, direct, and verifiable. Structure every suggestionContent as:';
+        const env = (over: Record<string, unknown>) =>
+            finderRunEnvironment(
+                makeInput(model, { systemPrompt, ...over }),
+                secrets,
+            );
+        const other = env({ byokProvider: 'openai' });
+        const claude = env({ byokProvider: 'anthropic' });
+        expect(claude.finderSystemPrompt.length).toBeGreaterThan(
+            other.finderSystemPrompt.length,
+        );
+        expect(claude.overheadTokens).toBeGreaterThan(other.overheadTokens);
+    });
+
+    it('follows the primary model, not a Claude fallback', () => {
+        const model = new MockLanguageModelV3({});
+        const systemPrompt =
+            'Each finding must be technical, direct, and verifiable. Structure every suggestionContent as:';
+        const withSlot = (byokConfig: Record<string, unknown>) =>
+            finderRunEnvironment(makeInput(model, { systemPrompt }), {
+                ...secrets,
+                byokConfig,
+            }).finderSystemPrompt;
+        expect(
+            withSlot({
+                model: 'gpt-6.1-sol',
+                fallback: { model: 'claude-sonnet-5-5' },
+            }),
+        ).toBe(systemPrompt);
+        expect(withSlot({ model: 'claude-sonnet-5-5' })).not.toBe(systemPrompt);
+    });
+});
+
+describe('runAgentLoopViaCore — finder labels', () => {
+    const labelsOffered = async (over: Record<string, unknown>) => {
+        let enumOffered: string[] | undefined;
+        const doGenerate = (async (opts: any) => {
+            const submit = (opts?.tools ?? []).find(
+                (t: any) => t.name === 'submitResult',
+            );
+            if (submit && !enumOffered) {
+                const schema = submit.inputSchema ?? submit.parameters;
+                enumOffered =
+                    schema?.properties?.suggestions?.items?.properties?.label
+                        ?.enum;
+            }
+            return {
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: 'f',
+                        toolName: 'submitResult',
+                        input: JSON.stringify({
+                            reasoning: 'r',
+                            suggestions: [],
+                        }),
+                    },
+                ],
+                finishReason: 'tool-calls',
+                usage: { inputTokens: 5, outputTokens: 5 },
+                warnings: [],
+            };
+        }) as any;
+        await runAgentLoopViaCore(
+            makeInput(new MockLanguageModelV3({ doGenerate }), over),
+            secrets,
+        );
+        return enumOffered;
+    };
+
+    it('offers only the labels the agent may report', async () => {
+        expect(
+            await labelsOffered({
+                allowedLabels: ['bug', 'security', 'performance'],
+            }),
+        ).toEqual(['bug', 'security', 'performance']);
+        expect(
+            await labelsOffered({
+                allowedLabels: [
+                    'bug',
+                    'security',
+                    'performance',
+                    'repo_instruction',
+                ],
+            }),
+        ).toContain('repo_instruction');
     });
 });

@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { sealInvitation } from '@libs/identity/domain/user/invitation-token';
 import { randomBytes } from 'crypto';
 
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
@@ -514,12 +515,31 @@ export class TeamMemberService implements ITeamMemberService {
                 continue;
             }
 
-            const inviteLink = `${process.env.API_USER_INVITE_BASE_URL}/invite/${user.uuid}`;
+            // The link carries a sealed invitation, never the user id alone
+            // (see invitation-token).
+            const inviteLink = `${process.env.API_USER_INVITE_BASE_URL}/invite/${sealInvitation({ userId: user.uuid, email: user.email })}`;
 
             await this.notificationService.emit({
                 event: NotificationEvent.TEAM_MEMBER_INVITED,
                 payload: {
-                    user,
+                    // Only what the email shows: the payload is stored with
+                    // the outbox message and the delivery record, and the
+                    // entity carries the password hash.
+                    user: {
+                        email: user.email,
+                        organization: { name: user.organization?.name },
+                        // The membership of the team inviting, not another one.
+                        teamMember: (user.teamMember ?? [])
+                            .filter(
+                                (member) =>
+                                    member.team?.uuid ===
+                                    organizationAndTeamData.teamId,
+                            )
+                            .map((member) => ({
+                                name: member.name,
+                                team: { name: member.team?.name },
+                            })),
+                    },
                     inviterEmail: senderEmail,
                     inviteLink,
                 },

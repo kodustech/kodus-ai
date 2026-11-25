@@ -32,6 +32,10 @@ import {
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { ruleAppliesToFile } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
 import { extensionScopeAppliesToFile } from '@libs/common/utils/kody-rules/file-patterns';
+import { reviewUnitKey } from '@libs/common/utils/kody-rules/review-unit';
+import { createLogger } from '@libs/core/log/logger';
+
+const detectorLogger = createLogger('KodyRulesDetector');
 
 // ── the LLM side of the compiler (runs once at authoring) ────────────────────
 
@@ -439,6 +443,32 @@ export interface DetectorHit {
 }
 
 /**
+ * CPU a single detector may spend on one review. A compiled detector is an
+ * LLM-written regex that runs synchronously on the worker's event loop, on
+ * every added line; the compile-time guard only rejects nested quantifiers, so
+ * a polynomial shape (`.*X[^/]*Y`, unanchored) still ships and costs ~1s per
+ * 2000-char line (MAX_MATCH_LINE_LEN bounds one line, not their number).
+ *
+ * Past this budget the detector stops for the review and the lines it did not
+ * reach are NOT checked: a mechanical rule reaches the judge only for files
+ * where its detector fired, so in this review the rule stays silent on them.
+ * The warning names the pattern so the rule can be recompiled.
+ */
+export const DETECTOR_REVIEW_BUDGET_MS = 250;
+
+export interface RunDetectorOptions {
+    budgetMs?: number;
+    /** Clock, injectable in tests. */
+    now?: () => number;
+    /** Called once when the budget runs out (which lines were left out). */
+    onBudgetExceeded?: (info: {
+        elapsedMs: number;
+        linesChecked: number;
+        filesLeft: number;
+    }) => void;
+}
+
+/**
  * REVIEW-TIME execution: run a compiled detector over the ADDED lines of the
  * changed files. Pure code, no LLM. The hits are candidates — a cheap
  * confirm-on-hits LLM pass filters false positives and writes the comment.
@@ -450,6 +480,7 @@ export function runDetector(
         patchWithLinesStr?: string;
         patch?: string;
     }>,
+    opts: RunDetectorOptions = {},
 ): DetectorHit[] {
     let rx: RegExp;
     try {
@@ -457,8 +488,13 @@ export function runDetector(
     } catch {
         return [];
     }
+    const budgetMs = opts.budgetMs ?? DETECTOR_REVIEW_BUDGET_MS;
+    const now = opts.now ?? Date.now;
+    const started = now();
+    let linesChecked = 0;
     const hits: DetectorHit[] = [];
-    for (const f of changedFiles) {
+    for (let fi = 0; fi < changedFiles.length; fi++) {
+        const f = changedFiles[fi];
         const diff = f.patchWithLinesStr ?? f.patch ?? '';
         for (const raw of diff.split('\n')) {
             const m = raw.match(/^\s*(\d+)\s*\+(.*)$/);
@@ -473,17 +509,30 @@ export function runDetector(
             if (Number.isFinite(line) && rx.test(code)) {
                 hits.push({ filename: f.filename, line, code });
             }
+            linesChecked++;
+            const elapsedMs = now() - started;
+            if (elapsedMs > budgetMs) {
+                opts.onBudgetExceeded?.({
+                    elapsedMs,
+                    linesChecked,
+                    filesLeft: changedFiles.length - fi - 1,
+                });
+                return hits;
+            }
         }
     }
     return hits;
 }
 
 /**
- * Where a compiled detector fired: ruleUuid → filename → ascending line numbers.
- * This is the whole T0 review-time output now (issue #1831). It answers both
- * questions the judge needs: which files a mechanical rule must be judged on
- * (only the ones its regex fired in — everything else stays free), and which
+ * Where a compiled detector fired: review unit key → filename → ascending line
+ * numbers. This is the whole T0 review-time output now (issue #1831). It answers
+ * both questions the judge needs: which files a mechanical rule must be judged
+ * on (only the ones its regex fired in — everything else stays free), and which
  * lines to put in front of the model as candidates.
+ *
+ * Keyed by `reviewUnitKey`, not by `uuid`: a long rule reaches review as one
+ * unit per atom, all carrying the parent's `uuid` (#2509).
  */
 export type DetectorHitIndex = Map<string, Map<string, number[]>>;
 
@@ -538,15 +587,31 @@ export function buildDetectorCandidates(
 ): DetectorHitIndex {
     const index: DetectorHitIndex = new Map();
     for (const rule of rules) {
-        if (!rule.detector || !rule.uuid) continue;
+        if (!rule.detector) continue;
+        const key = reviewUnitKey(rule);
+        if (!key) continue;
         const files = changedFiles.filter(
             (f) =>
                 ruleAppliesToFile(f.filename, rule.path) &&
                 detectorAppliesToFile(f.filename, rule.detector!),
         );
-        for (const h of runDetector(rule.detector, files)) {
-            let perFile = index.get(rule.uuid);
-            if (!perFile) index.set(rule.uuid, (perFile = new Map()));
+        const hits = runDetector(rule.detector, files, {
+            onBudgetExceeded: (info) =>
+                detectorLogger.warn({
+                    message: `Kody rule detector ${key} exceeded its ${DETECTOR_REVIEW_BUDGET_MS}ms review budget; stopped early (the regex backtracks: recompile it)`,
+                    context: 'KodyRulesDetector',
+                    metadata: {
+                        ruleUuid: rule.uuid,
+                        reviewUnitKey: key,
+                        pattern: rule.detector!.pattern,
+                        flags: rule.detector!.flags,
+                        ...info,
+                    },
+                }),
+        });
+        for (const h of hits) {
+            let perFile = index.get(key);
+            if (!perFile) index.set(key, (perFile = new Map()));
             const lines = perFile.get(h.filename);
             if (lines) lines.push(h.line);
             else perFile.set(h.filename, [h.line]);

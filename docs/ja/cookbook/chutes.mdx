@@ -1,0 +1,106 @@
+---
+title: "Chutes — オープンソースモデル向けサーバーレス推論"
+description: "DeepSeek、Kimi、GLM、Qwen などを提供する Chutes AI を Kodus に接続する方法を説明します。"
+icon: "cloud-bolt"
+---
+
+## Chutes の仕組み
+
+Chutes AI は、オープンソースモデル向けの分散型サーバーレスコンピュートプラットフォームです。**OpenAI 互換**の推論エンドポイント `https://llm.chutes.ai/v1` を公開しており、利用料金はアカウント残高からトークン単位で課金されます。
+
+Kodus は他のプロバイダーと同じ OpenAI 互換アダプターを通じて Chutes と通信するため、コードの変更は不要で、必要なのは BYOK の認証情報だけです。
+
+<Info>
+  料金や課金条件は変更されます。アカウントにチャージする前に、必ず [chutes.ai/pricing](https://chutes.ai/pricing) で最新の情報を確認してください。
+</Info>
+
+### 推奨モデル
+
+Chutes は HuggingFace 形式の `org/model` 識別子を使用します。末尾が `-TEE` のモデルも多くありますが、モデルが信頼実行環境（TEE）で動作するかどうかは、名前ではなくカタログの `confidential_compute` フラグで判断します。次のモデルは、カタログ上でツール呼び出しと構造化出力に対応しています。
+
+| モデル ID | コンテキストウィンドウ |
+| -------- | -------------- |
+| `moonshotai/Kimi-K2.7-Code` | 約262k トークン |
+| `deepseek-ai/DeepSeek-V4-Pro-0813` | 約1M トークン |
+| `zai-org/GLM-5.3` | 約1M トークン |
+| `Qwen/Qwen3.5-397B-A17B-TEE` | 約262k トークン |
+
+カタログは頻繁に更新されます。最新の一覧は [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models) で確認できます。このページは公開されており、各モデルの価格、コンテキスト長、対応機能が表示されます。
+
+## APIキーの作成
+
+<Warning>チャージ済みの残高がある Chutes アカウントが必要です。</Warning>
+
+1. [chutes.ai/auth/signup](https://chutes.ai/auth/signup) でアカウントを作成します。Google、GitHub、またはユーザー名で登録できます。
+2. Chutes アプリで残高をチャージします。課金は従量制で最低利用額はなく、支払い方法は [chutes.ai/pricing](https://chutes.ai/pricing) に記載されています。
+3. Chutes アプリで APIキーを作成します。キーは `cpk_` で始まります。パスワードと同様に厳重に保管してください。
+
+## Kodus で Chutes を設定する
+
+### オプション1 — AI providers ページ（推奨）
+
+[プロバイダーを接続する](/ja/how_to_use/byok#プロバイダーを接続する)の手順に従い、**Custom → OpenAI-compatible** を選びます。フォームには次の値を指定します。
+
+| フィールド | 値 |
+| --- | --- |
+| **Key**（**API key** カード内） | Chutes の APIキー |
+| **Base URL** | `https://llm.chutes.ai/v1` |
+| **Model** | 一覧から選択するか、`zai-org/GLM-5.3` などの ID を入力 |
+| **Max concurrent requests** | 任意。**Advanced (optional)** → **Advanced settings** 内にあります。空欄のままにするか、Chutes がレート制限エラーを返す場合は上限を設定します |
+
+**Test & save** をクリックし、[Routing](/ja/how_to_use/code_review/configs/routing) でデフォルトモデルとフォールバックモデルを選びます。
+
+<Note>
+  Chutes がエラーを返した場合や残高が尽きた場合でもレビューを継続できるよう、他のプロバイダーのモデルを **Fallback model** に設定してください。
+</Note>
+
+### オプション2 — セルフホスト（環境変数）
+
+セルフホスト環境で `.env` から 1 つのモデルを指定するには、次のように設定します。
+
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="zai-org/GLM-5.3"
+API_LLM_BASE_URL="https://llm.chutes.ai/v1"
+API_LLM_API_KEY="your-chutes-api-key"
+```
+
+インストールガイドに従って[モデルの変更を反映してください](/ja/how_to_deploy/deploy_kodus/generic_vm#モデルの変更を反映する)。
+
+## Chutes を選ぶ場合
+
+- **オープンソースモデルを 1 つのエンドポイントで利用したい場合**：DeepSeek、Kimi、GLM、Qwen などを利用できます。
+- **機密コンピュートを重視する場合**：カタログで `confidential_compute: true` と示されたモデルは信頼実行環境内で動作します。コンプライアンス要件で必要な場合に有用です。
+
+定額のサブスクリプションを希望する場合は Synthetic を、特に GLM ファミリーを使いたい場合は Z.AI を選択してください。
+
+## トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="401 / 認証エラー">
+    - Chutes ダッシュボードでキーが有効であり、アカウントに残高があることを確認します。
+    - `.env` の値に末尾のスペースや引用符が含まれていないことを確認します。
+  </Accordion>
+
+  <Accordion title="モデルが見つからない">
+    - Chutes は `org/model` 形式を使用し、一部のバリアントは末尾が `-TEE` です。[llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models) から、大文字小文字を含めて ID を正確にコピーしてください。
+    - モデルは随時追加・終了されます。以前は使えていたモデル ID が一覧から消えることがあります。
+  </Accordion>
+
+  <Accordion title="応答が遅い、またはレート制限エラーが発生する">
+    - **Code review → Routing** で、他のプロバイダーのモデルを **Fallback model** に設定します。
+    - **Advanced (optional)** → **Advanced settings** の **Max concurrent requests** を下げます。
+  </Accordion>
+
+  <Accordion title="接続エラー">
+    - サーバーから `llm.chutes.ai` に到達できることを確認します。
+    - API とワーカーのログで、上流の正確なエラーを確認します。
+  </Accordion>
+</AccordionGroup>
+
+## 関連リンク
+
+- [Chutes の料金](https://chutes.ai/pricing)
+- [Chutes API リファレンス](https://chutes.ai/docs/api-reference/overview)
+- [ライブモデルカタログ](https://llm.chutes.ai/v1/models)
+- [BYOK の概要](/ja/how_to_use/byok)

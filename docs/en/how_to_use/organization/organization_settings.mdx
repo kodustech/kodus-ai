@@ -1,0 +1,48 @@
+---
+title: "Organization Settings"
+description: "Where to manage your organization: general settings, CLI keys, and the other pages under Organization in the sidebar."
+---
+
+The **Organization** group in the sidebar holds everything that applies to the whole organization. What you see depends on your role; see [Workspace Roles](/en/how_to_use/workspace_roles).
+
+| Page | What it is for |
+| --- | --- |
+| **General** | Timezone and auto join. See below. |
+| **SSO** | SAML single sign-on. See [Single Sign-On](/en/how_to_use/security/sso). |
+| **Cockpit visibility** | Hide Cockpit tabs and metrics for everyone. See [Cockpit Configuration](/en/how_to_use/cockpit/configuration). |
+| **CLI keys** | Team keys for the Kodus CLI. See below. |
+| **Notifications** | Email and in-app notifications per event and role. See [Notifications](/en/how_to_use/organization/notifications). |
+| **Subscription** | Your plan, developer licenses, and workspace members. See [Plans and Licenses](/en/how_to_use/pricing) and [Workspace Roles](/en/how_to_use/workspace_roles). |
+| **Activity logs** | Who changed what. See [Activity Logs](/en/how_to_use/organization/activity_logs). |
+| **Token usage** | Tokens and estimated cost. See [Token Usage](/en/how_to_use/organization/token_usage). |
+
+General, SSO, Cockpit visibility, CLI keys, and Notifications are for Owners.
+
+## General settings
+
+Open **Organization → General** (**General settings**).
+
+- **Timezone**: **New York** or **São Paulo**. It sets the timezone of the exact date and time shown on the **Pull Requests** page, in the tooltip on a relative time ("opened 2 hours ago") and in the **Started** time of each review stage. Opening **General** for the first time stores New York; until then those times show in UTC. Nothing else reads it: scheduled jobs, notifications, email reports, Cockpit date ranges and Token usage use fixed time zones.
+- **Auto Join**: turn on **Enable Auto Join** and list your email domains, separated by commas, so people who sign up with one of them can join the organization. Public domains such as gmail.com are not allowed, and you can only add your own domain. Joiners enter as **Contributor**; see [Workspace Roles](/en/how_to_use/workspace_roles#auto-join-for-workspace-members).
+
+Click **Save settings** to apply.
+
+## CLI keys
+
+A CLI key lets the [Kodus CLI](/en/how_to_use/cli/introduction) act for a workspace without an interactive login, which suits CI pipelines and AI coding agents. Open **Organization → CLI keys**. The keys listed belong to the selected workspace, and only Owners can create, configure, or revoke them.
+
+<Steps>
+  <Step title="Generate a key">
+    Enter a **Key name** that says where the key will be used, such as `CI pipeline deploy key`, and click **Generate key**.
+  </Step>
+
+  <Step title="Copy it">
+    In **CLI key created**, copy the key. It is shown only once. The dialog also gives an install command to share with your team.
+  </Step>
+
+  <Step title="Choose what it can do">
+    Click **Configure** on the key. **Allow repository configuration via CLI** enables `kodus config remote` (also called `kodus config repo`) and `kodus config centralized` for the key. **Allow Kody Rules management via CLI** enables `kodus rules view`, `create`, and `update`. Both are off by default. Click **Save changes**. A key still can't run `kodus rules pause`, `resume`, or `delete`, and it sets only six settings of one repository; those need a login. See [Authentication Modes](/en/how_to_use/cli/concepts#authentication-modes).
+  </Step>
+</Steps>
+
+**Existing CLI keys** lists each key's **Name**, **Status** (**Active** or **Revoked**), **Last used**, **Created at**, and **Created by**. **Revoke** disables a key immediately and can't be undone. Key creations and revocations show up in [Activity Logs](/en/how_to_use/organization/activity_logs).

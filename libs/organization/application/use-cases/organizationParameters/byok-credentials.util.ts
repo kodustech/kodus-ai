@@ -47,11 +47,17 @@ function safeDecrypt(value?: string): string | undefined {
  * secret access key, session token) are stored encrypted (see `encryptSlot` /
  * `encryptCredentialSecrets` in create-or-update.use-case.ts); the rest are
  * plaintext. Never log a decrypted value — this is a server-only path.
+ *
+ * `credentialId` names one credential when the org holds several of the same
+ * provider (two OpenAI-compatible gateways). An id that is not saved, is
+ * managed, or belongs to another provider resolves to null rather than to the
+ * provider's first credential, so a probe never reaches the wrong gateway.
  */
 export async function resolveByokSlot(
     organizationParametersService: IOrganizationParametersService,
     provider: string,
     organizationAndTeamData?: OrganizationAndTeamData,
+    credentialId?: string,
 ): Promise<DecryptedByokSlot | null> {
     if (!organizationAndTeamData?.organizationId) {
         return null;
@@ -74,7 +80,11 @@ export async function resolveByokSlot(
     // client). A managed credential is never probed. RESEARCH §13.2 / Pattern 3.
     if (isByokConfig(config)) {
         const cred = (config.credentials ?? []).find(
-            (c) => c && c.provider === provider && !c.managed,
+            (c) =>
+                c &&
+                c.provider === provider &&
+                !c.managed &&
+                (!credentialId || c.id === credentialId),
         );
         if (!cred) {
             return null;

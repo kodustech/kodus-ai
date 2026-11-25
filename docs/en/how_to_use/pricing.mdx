@@ -1,164 +1,88 @@
 ---
-title: "Pricing Deep Dive"
-description: "How Kodus pricing works — Community, Teams, and Enterprise, what the free trial includes, and why reviews are unlimited on every plan."
+title: "Plans and Licenses"
+description: "The Free, Teams, and Enterprise plans, what the free trial includes, what each plan unlocks, and how developer licenses work."
 ---
 
-Everything you need to choose the right plan. For live pricing, see [kodus.io/pricing](https://kodus.io/pricing).
+Plans differ by features, not by how many pull requests Kody can review. For prices and commercial terms, see [kodus.io/pricing](https://kodus.io/pricing).
 
 <Note>
-  **Reviews are unlimited on every plan** — they run on your own AI key (BYOK).
-  Plans differ by **features**, not by how many PRs Kody can review. Every plan
-  includes unlimited users and unlimited pull requests, with no per-seat minimum.
+  **PR reviews and workspace members are unlimited on every plan.** On a paid plan, developer licenses decide whose pull requests are reviewed. On Free and Teams, reviews run on your own AI key (BYOK). Kody skips a review when it has more than **2,000 reviewable files**, including any files that only a custom agent reviews.
 </Note>
 
-## Plans at a glance
+## Plans
 
 <CardGroup cols={3}>
-  <Card title="Community" icon="github">
-    **Free, forever.** BYOK. Self-hosted or cloud.
-
-    For indie devs, students, OSS maintainers, and small teams.
+  <Card title="Free" icon="github">
+    Cloud. Reviews run on your own AI key, and none is connected until you add one.
   </Card>
   <Card title="Teams" icon="users">
-    **$10/dev/month** + token costs (BYOK). Cloud only.
-
-    14-day free trial, no credit card. 20% off annually.
+    Cloud. Per-developer licenses, with the Team features unlocked. Reviews run on your own AI key.
   </Card>
   <Card title="Enterprise" icon="building">
-    **Custom pricing.** Self-hosted or cloud.
-
-    Hardened security, governance, and hands-on onboarding.
+    Cloud, or self-hosted with a license key. Adds SSO and activity logs.
   </Card>
 </CardGroup>
 
-Self-hosted Community, including code review and BYOK, can be used internally in production within the limits the software enforces (the Kody Rules and plugin limits below). The Enterprise Code included for Community features is covered by the [Kodus Enterprise Code License](https://github.com/kodustech/kodus-ai/blob/main/license_ee.md): Community users may run that code as supplied, but may not modify it or use Enterprise-only features.
+A self-hosted instance without a license key runs **Community Edition**, which has the same limits as Free. Teams is a cloud plan. To unlock Enterprise on a self-hosted instance, paste the key you received from Kodus under **Subscription → Activate a license key**. When the key expires, the Enterprise features turn off until you paste a renewed one.
 
-## The free trial (Teams)
+Under **Subscription**, **Choose a plan** (**Upgrade** on the Free plan) opens the plan chooser. On a paid plan, **Manage billing** opens Stripe, where you change developer licenses and payment details.
 
-A Teams trial runs on **two separate, independent clocks** — the 14 days govern Team **features**, never your ability to review PRs:
+## The free trial
+
+A new Kodus Cloud workspace starts a **14-day trial**. Access to features and the number of reviews Kodus pays for are tracked separately.
 
 <CardGroup cols={2}>
-  <Card title="14 days of Team features" icon="calendar">
-    Cockpit, unlimited Kody Rules and plugins, priority queue, and more.
+  <Card title="14 days of access" icon="calendar">
+    The trial includes Teams features and access to Enterprise SSO and activity logs. Global Rule Sources can import up to five rules total during the trial.
   </Card>
   <Card title="Your first 5 PR reviews on us" icon="gift">
-    We cover the AI tokens, so you can try Kody with **zero setup — no API key
-    needed.** (Earn a few more by completing onboarding steps.)
+    Kodus covers the AI tokens, so you can try Kody with no API key. Trial reviews run on efficient models Kodus provides. Connect your own key to use larger ones.
   </Card>
 </CardGroup>
 
-**To keep reviewing past the 5 trial reviews — or to go unlimited right away — [connect your AI key](/en/how_to_use/byok).** Reviews then run on your key: unlimited, on any plan, even after the 14 days end. Trial reviews run on a model Kodus picks for you; with your own key you can run frontier models for the best quality.
+**Subscription** shows how to earn more trial reviews: sign up with a company email, invite teammates, or connect a Git organization with 10 or more developers. **Request review** asks Kodus to look at your trial and extend it.
 
-If trial reviews run out before you connect a key, Kody pauses reviews and posts a comment with a one-click link to add your key.
+To keep reviewing past the trial reviews, connect your AI key under [**AI providers**](/en/how_to_use/byok). Reviews then run on your key with no review limit, on any plan, even after the 14 days end. When the trial reviews run out before you connect a key, Kody pauses reviews and, with **Show status feedback** on, posts a comment on the pull request with a link to add one. When the trial ends, choose a plan under **Subscription** to keep the Team features.
 
-## What's included
+On a self-hosted instance without a key, **Request a trial** on **Subscription** asks Kodus for a license key to try.
 
-| Feature | Community | Teams | Enterprise |
+## What each plan unlocks
+
+| Feature | Free / Community | Teams | Enterprise |
 | --- | --- | --- | --- |
-| **Price** | Free | $10/dev/mo | Custom |
-| **Deployment** | Self-hosted or cloud | Cloud | Self-hosted or cloud |
-| **Code reviews** | Unlimited | Unlimited | Unlimited |
-| **Users** | Unlimited | Unlimited | Unlimited |
-| **Kody Rules** | Up to 10 | Unlimited | Unlimited |
-| **Plugins / MCPs** | Up to 3 | Unlimited | Unlimited |
-| **Quality Radar issues** | Unlimited | Unlimited | Unlimited |
-| **Kody Memory** | ✓ | ✓ | ✓ |
-| **Priority queue** | — | ✓ | ✓ |
-| **Kodus Cockpit (metrics)** | — | ✓ | ✓ |
-| **SSO / SAML** | — | — | ✓ |
-| **RBAC + audit logs** | — | — | ✓ |
-| **SOC 2 compliant** | — | — | ✓ |
-| **Dedicated instance & SLAs** | — | — | ✓ |
-| **Support** | Discord | Email + Discord | Private Discord + up to 5h/mo dedicated |
+| **PR reviews and workspace members** | Unlimited | Unlimited | Unlimited |
+| **[Kody Rules](/en/how_to_use/code_review/configs/kody_rules)** | Up to 10 active | No cap | No cap |
+| **[Global Rule Sources](/en/how_to_use/code_review/configs/global_rule_sources)** | No | No cap | No cap |
+| **[Plugins](/en/how_to_use/code_review/plugins)** | Up to 3 run at a time | No cap | No cap |
+| **[Heavy review mode (beta)](/en/how_to_use/code_review/review_directive#heavy-mode)** | No | Yes | Yes |
+| **[Automatic approval without conditions](/en/how_to_use/code_review/configs/auto_approve)** | Yes | Yes | Yes |
+| **[Conditional approval (beta)](/en/how_to_use/code_review/configs/auto_approve)** | No | Yes | Yes |
+| **[Risk assessment (beta)](/en/how_to_use/code_review/configs/risk)** | No | Yes | Yes |
+| **[Custom agents](/en/how_to_use/code_review/custom_agents)** | No | Yes | Yes |
+| **[Linked repositories](/en/how_to_use/code_review/configs/linked_repositories)** | No | Yes | Yes |
+| **[Cockpit](/en/how_to_use/cockpit/overview)** | No | Yes | Yes |
+| **[Code hotspots (beta)](/en/how_to_use/cockpit/code_hotspots)** | No | Yes | Yes |
+| **[Kody Issues](/en/how_to_use/issues/overview)** | Yes | Yes | Yes |
+| **[SSO (SAML)](/en/how_to_use/security/sso)** | No | No | Yes |
+| **[Activity logs](/en/how_to_use/organization/activity_logs)** | No | No | Yes |
 
-## How pricing works
+Rules above the cap appear as **Locked** and are skipped during reviews. They become active again when you move to a plan with no rule cap. Plugins above the cap are also skipped. Canceled, expired and payment-failed Cloud subscriptions have the Free resource caps. Each linked guide lists its self-hosted requirements. To opt in to beta features on self-hosted, see [Docker Compose](/en/how_to_deploy/deploy_kodus/generic_vm#beta) or [Helm](/en/how_to_deploy/deploy_kodus/kubernetes#beta).
 
-<CardGroup cols={2}>
-  <Card title="Pay per active developer" icon="user-check">
-    Only developers who open PRs count toward a seat. No minimums, no seat
-    lock-in.
-  </Card>
-  <Card title="Adjust anytime" icon="sliders">
-    Change your active-developer count from **Organization → Subscription**
-    (**Manage billing**) whenever your team changes.
-  </Card>
-</CardGroup>
+## Developer licenses
 
-## BYOK: the default across all plans
+On a paid plan with seats, a developer's pull requests are reviewed when they hold a license. Licenses count developers from your Git organization. Workspace members, the people who configure Kodus, are separate and unlimited.
 
-Kodus does **not** sell LLM tokens by default. Community, Teams, and Enterprise all run on **Bring Your Own Key** — you connect your own provider (OpenAI, Anthropic, Gemini, or any OpenAI-compatible), and tokens are billed directly by that provider. Kodus never marks up tokens.
+- Owners assign or release licenses on the **PR licenses** tab of **Subscription**.
+- With **Auto-assign licenses** on, a developer's first PR is reviewed without a seat, and a seat is assigned when they open another one, if one is free. See [Auto License Assignment](/en/how_to_use/auto_license_assignment).
+- The Free plan and the trial have no per-developer licenses.
 
-| Plan | What you pay Kodus | Tokens |
-| --- | --- | --- |
-| **Community** | $0 | You pay your provider (BYOK) |
-| **Teams** | $10/active dev/mo | You pay your provider (BYOK) |
-| **Enterprise** | Custom | You pay your provider (BYOK) |
+## BYOK on every plan
 
-See the [BYOK overview](/en/how_to_use/byok) for supported providers and setup.
+You connect your own provider, and the provider bills you for tokens. On Enterprise, Kodus can instead run the models under your agreement. See [BYOK](/en/how_to_use/byok) for providers and setup, and [Monthly Spend Limit](/en/how_to_use/spend-limit) for spend alerts.
 
-## Teams pricing — $10/active dev/month
+## Payments
 
-In addition to your provider's token cost (no Kodus markup).
-
-<CardGroup cols={2}>
-  <Card title="What the $10/dev covers" icon="box">
-    - Managed cloud hosting + automatic updates
-    - Priority queue for Kody Agents
-    - Kodus Cockpit (engineering metrics)
-    - Unlimited Kody Rules & plugins/MCPs
-    - Email + Discord support
-  </Card>
-  <Card title="What tokens cover" icon="coins">
-    - Every LLM call Kody makes during a review
-    - Billed by your provider; switch anytime
-    - You pick the model — cost-effective (Gemini Flash, GPT-5-mini) or frontier (Claude 4.5 Sonnet, GPT-5)
-  </Card>
-</CardGroup>
-
-**Billing:** monthly, or **20% off** annually · 14-day free trial, no card · cancel anytime (effective end of cycle).
-
-## Enterprise pricing
-
-Custom-priced via contract. Like every plan, Enterprise is **BYOK** — Kodus bills only the per-seat fee and you pay your LLM provider directly.
-
-Enterprise adds SSO / SAML, RBAC with audit logs and analytics, a dedicated instance, custom SLAs, up to **5 hours/month** of dedicated support, and a private Discord channel. Kodus is **SOC 2 compliant**.
-
-[Contact sales](https://kodus.io/pricing) for a quote tailored to your organization.
-
-## Unlimited pull requests
-
-No PR limit on any plan. The only hard limit: we don't review PRs with more than **2,000 changed files**. Git-provider-side rate limits may also apply.
-
-## Kody Pilot Program
-
-We subsidize Kodus with **30–100% discounts** for teams that move the industry forward or couldn't otherwise afford it:
-
-- Early-stage startups
-- Open-source projects with active development
-- Teams in economically disadvantaged regions
-- Non-profit organizations
-
-<Steps>
-  <Step title="Join our Discord">
-    Hop into the [community](https://discord.gg/TFZBRk9fT6).
-  </Step>
-  <Step title="Tell us about you">
-    Share your org name, website, and a brief description of your work.
-  </Step>
-  <Step title="Show eligibility">
-    Startup stage/funding, OSS repo links, region context, or proof of
-    non-profit status.
-  </Step>
-  <Step title="Hear back in 3 business days">
-    We review your application and follow up.
-  </Step>
-</Steps>
-
-## Payments & billing
-
-- **Powered by Stripe** — secure, globally trusted payment processing.
-- **Cancel anytime** — changes take effect at the end of your billing cycle.
-- **Invoices & Nota Fiscal** — for Brazilian customers 🇧🇷, we provide invoices and issue a Nota Fiscal for every transaction.
+Paid plans are billed through Stripe. **Manage billing** on **Subscription** opens the Stripe page for payment methods and invoices, and is available to Owners and Billing Managers. If a payment fails, reviews pause until billing is updated. A canceled or expired subscription also pauses reviews until you subscribe again.
 
 ---
 

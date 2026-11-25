@@ -35,6 +35,10 @@ export function isRetryableForReissue(err: unknown, provider?: string): boolean 
 export const RETRY_BASE_DELAY_MS = 500;
 export const RETRY_MAX_DELAY_MS = 10_000;
 
+/** Wait before the one same-model re-issue of a 429: long enough for a
+ *  per-minute window to move, short enough not to stall the review. */
+export const RATE_LIMIT_RETRY_DELAY_MS = 4_000;
+
 /**
  * Exponential backoff with FULL jitter, capped. `attempt` is 1-based. The delay
  * is a uniform random in `[0.5, 1] × min(cap, base·2^(attempt-1))` — enough

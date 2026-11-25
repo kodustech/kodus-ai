@@ -1,27 +1,26 @@
 ---
 title: "如何在 GitLab 上设置 AI 代码审查"
-description: "为 GitLab 项目安装和配置 Kodus 以在每个合并请求上获得自动 AI 代码审查。"
+description: "将 GitLab 连接到 Kodus，并选择要自动审查的仓库。"
 ---
 
-Kodus 通过 OAuth 和 webhooks 与 GitLab 集成。配置完成后，合并请求会自动审查。
+Kodus 使用 OAuth 或访问令牌连接到 GitLab,并通过 webhooks 接收合并请求事件。
+
+GitLab 没有需要安装的应用:**Install Gitlab app** 是一次 OAuth 登录。审查会以通过 OAuth 连接的用户或令牌所有者的身份发布。
 
 ## 步骤
 
-1. **创建帐户** — 在 [kodus.io](https://kodus.io) 或[自托管 Kodus](/zh/how_to_deploy/deploy_kodus/generic_vm)
-2. **连接 GitLab** — 在入门引导的 **Connect your Git tool** 步骤中，点击 **Install Gitlab app** 通过 OAuth 授权，或选择 **Connect via token**（之后也可以从侧边栏的 **Repositories** 进行连接）
-3. **选择项目** — 选择 Kodus 应审查的 GitLab 项目
-4. **Webhooks** — 保存选择时，Kodus 会自动注册合并请求 webhook。如果没有注册（例如在某些自托管安装中），请按照 [GitLab Webhooks](/zh/how_to_deploy/platforms/gitlab/gitlab_webhook) 指南手动添加
-5. **打开合并请求** — Kodus 自动审查
-
-## 您获得什么
-
-- 每个 MR 自动审查
-- 直接在合并请求中发布的评论
-- 可自定义的规则、审查类别和最低严重性阈值
-- 根据关联任务的业务逻辑验证
+1. **创建账户** — 在 [kodus.io](https://kodus.io) 或[自托管 Kodus](/zh/how_to_deploy/deploy_kodus/generic_vm)
+2. **连接 GitLab** — 在入门引导的 **Connect your Git tool** 步骤中,点击 **Install Gitlab app** 通过 OAuth 授权,或选择 **Connect via token**(之后也可以从侧边栏的 **Repositories** 进行连接:在 **Connect a provider** 下点击 **Gitlab**,然后使用 **OAuth** 或 **Token** 选项卡)。对于使用令牌的自管理 GitLab,请开启 **Self-hosted** 并输入 **Gitlab URL**
+3. **选择项目** — 选择 Kodus 应审查的 GitLab 项目,或在 **Repositories** 上开启[审查所有代码库](/zh/how_to_use/code_review/configs/review_all_repositories)
+4. **Webhooks** — 保存选择时,Kodus 会自动注册合并请求 webhook。这需要在每个项目上拥有 **Maintainer** 或 **Owner** 角色。如果没有注册,**Repositories** 会列出该项目及原因;请按照 [GitLab Webhooks](/zh/how_to_deploy/platforms/gitlab/gitlab_webhook) 指南手动添加 webhook
+5. 在已选项目中打开一个合并请求。[查看 Kody 会发布什么以及如何确认审查状态](/zh/how_to_use/code_review/flow)。
 
 ## 自定义配置
 
-在代码库根目录放置 `kodus-config.yml` 以自定义每个项目的行为。该文件会在该项目开启 **kodus Config File Overrides Web Preferences**（**Code review → General**）后覆盖 Web 设置。
+通过 [kodus-config.yml](/zh/how_to_use/code_review/configs/general#kodus-config-yml) 自定义各仓库的审查配置。
 
-完整设置指南，请参阅 [GitLab OAuth](/zh/how_to_deploy/platforms/gitlab/gitlab_oauth) 和 [GitLab Webhooks](/zh/how_to_deploy/platforms/gitlab/gitlab_webhook)。
+## 自托管
+
+**Install Gitlab app** 和 **Sign in with Gitlab** 需要一个 GitLab OAuth 应用,并在您的 `.env` 中配置其凭据:参见 [GitLab OAuth](/zh/how_to_deploy/platforms/gitlab/gitlab_oauth)。令牌连接则不需要这些;请按照 [GitLab PAT](/zh/how_to_use/code_review/general_config/gitlab_pat) 中的说明生成令牌。
+
+完整设置指南,请参阅 [GitLab OAuth](/zh/how_to_deploy/platforms/gitlab/gitlab_oauth) 和 [GitLab Webhooks](/zh/how_to_deploy/platforms/gitlab/gitlab_webhook)。

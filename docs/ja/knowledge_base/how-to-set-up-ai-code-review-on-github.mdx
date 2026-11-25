@@ -1,30 +1,25 @@
 ---
-title: "GitHubでAIコードレビューをセットアップする方法"
-description: "GitHubリポジトリにKodusをインストールして設定し、すべてのプルリクエストで自動AIコードレビューを受けます。"
+title: "GitHub で AI コードレビューをセットアップする方法"
+description: "GitHub を Kodus に接続し、自動レビューの対象となるリポジトリを選びます。"
 ---
-
-GitHubにKodusをセットアップするには数分かかります。接続されると、すべてのプルリクエストが自動的にレビューされます。
 
 ## 手順
 
-1. [kodus.io](https://kodus.io)で**アカウントを作成**するか、[Kodusをセルフホスト](/ja/how_to_deploy/deploy_kodus/generic_vm)します
-2. **GitHubに接続** — オンボーディングの **Connect your Git tool** ステップで **Install Github app** をクリックします（後からサイドバーの **Repositories** から接続することもできます）
-3. **リポジトリを選択** — Kodusがレビューすべきリポジトリを選択します
-4. **PRをオープン** — Kodusが自動的にレビューしてコメントを投稿します
-
-## 得られるもの
-
-- すべてのPRでの自動レビュー（またはオンデマンドで `@kody start-review`）
-- コード提案付きでPR内に直接投稿されるコメント
-- カスタマイズ可能なルール、レビューカテゴリ、最小重要度のしきい値
-- リンクされたタスクに対するビジネスロジック検証
+1. [kodus.io](https://kodus.io) で**アカウントを作成**するか、[Kodus をセルフホスト](/ja/how_to_deploy/deploy_kodus/generic_vm)します
+2. **GitHub に接続** — オンボーディングの **Connect your Git tool** ステップで **Install Github app** をクリックします（後からサイドバーの **Repositories** で、**Connect a provider** の下の **Github** をクリックし、**OAuth** タブの **Go to OAuth** をクリックして接続することもできます）
+3. **リポジトリを選択** — Kodus がレビューするリポジトリを選択するか、**Repositories** で [Review every repository](/ja/how_to_use/code_review/configs/review_all_repositories) をオンにします
+4. 選択したリポジトリでプルリクエストを開きます。[Kody が投稿する内容とステータスの確認方法](/ja/how_to_use/code_review/flow)を参照してください。
 
 ## カスタム設定
 
-リポジトリごとの動作をカスタマイズするには、リポジトリルートに `kodus-config.yml` を配置します。そのリポジトリで **kodus Config File Overrides Web Preferences** がオンになっている場合（**Code review → General**）、ファイルはウェブ設定をオーバーライドします。
+リポジトリごとのレビュー設定は [kodus-config.yml](/ja/how_to_use/code_review/configs/general#kodus-config-yml) でカスタマイズできます。
 
-## 個人アクセストークンの使用
+## Personal Access Token の使用
 
-プライベートリポジトリやより厳格な権限を持つ組織では、GitHub個人アクセストークン（PAT）を設定する必要がある場合があります。オンボーディングで **Connect via token** を選択します（または **Repositories** でGitHubを接続する際の **Token** タブ）。この場合、レビューはトークン所有者のアカウントから投稿され、GitHub Checks/PRステータスは利用できません。
+GitHub App をインストールできない場合は、代わりに GitHub の Personal Access Token（PAT）で接続します。オンボーディングで **Connect via token** を選択します（**Repositories** で GitHub を接続する場合は **Token** タブ）。この場合、レビューはトークン所有者のアカウントから投稿され、GitHub Checks/PR ステータスは利用できません。Kodus は選択した各リポジトリに Webhook を作成します。失敗した場合は、[Webhook の作成](/ja/how_to_deploy/platforms/github/github_webhook)を参照してください。
 
-完全なセットアップガイドについては、[クイックスタート](/ja/how_to_use/quickstart)と[GitHub Appセットアップ](/ja/how_to_deploy/platforms/github/github_app)を参照してください。
+## セルフホスト
+
+セルフホストの Kodus は、自分で作成した GitHub App、またはトークンで接続します。**Install Github app** には、`.env` に App の認証情報が必要です。[GitHub App のセットアップ](/ja/how_to_deploy/platforms/github/github_app)を参照してください。ユーザーが GitHub でサインインできるようにするには、[GitHub OAuth App](/ja/how_to_deploy/platforms/github/github_oauth) を参照してください。
+
+完全なセットアップガイドについては、[クイックスタート](/ja/how_to_use/quickstart)を参照してください。

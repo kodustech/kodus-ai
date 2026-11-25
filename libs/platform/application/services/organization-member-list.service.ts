@@ -1,8 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { CacheService } from '@libs/core/cache/cache.service';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { createLogger } from '@libs/core/log/logger';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
 export type OrganizationMemberSummary = {
@@ -15,9 +19,20 @@ export type OrganizationMemberSummary = {
  * An `unavailable` result means we could not confirm who belongs to the git
  * organization. Callers must never read it as "the organization is empty" —
  * seat revocation in particular has to be skipped entirely in that case.
+ *
+ * `complete` is true only when both the member list and the PR authors were
+ * read in full. A partial list is still worth showing, but somebody missing
+ * from it has not necessarily left the organization.
  */
 export type OrganizationMemberListResult =
-    | { status: 'ok'; members: OrganizationMemberSummary[] }
+    | {
+          status: 'ok';
+          complete: boolean;
+          members: OrganizationMemberSummary[];
+          // Seat holders checked with the provider and not found. Absent when
+          // the provider cannot check, so every unlisted seat is unconfirmed.
+          absentSeatHolderIds?: string[];
+      }
     | { status: 'unavailable'; members: [] };
 
 type RawMember = {
@@ -49,6 +64,8 @@ export class OrganizationMemberListService {
     constructor(
         private readonly codeManagementService: CodeManagementService,
         private readonly cacheService: CacheService,
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService: ILicenseService,
     ) {}
 
     /**
@@ -65,12 +82,19 @@ export class OrganizationMemberListService {
      */
     public async fetch(
         organizationAndTeamData: OrganizationAndTeamData,
-        options: { skipCache?: boolean } = {},
+        options: {
+            skipCache?: boolean;
+            requireAuthors?: boolean;
+            // The seats the caller will act on. A caller that revokes passes
+            // them so the ids checked here are the ids it revokes from.
+            seatHolderIds?: string[];
+        } = {},
     ): Promise<OrganizationMemberListResult> {
         const [memberResult, authorResult] = await Promise.allSettled([
             this.codeManagementService.getListMembers({
                 organizationAndTeamData,
                 determineBots: true,
+                requireComplete: true,
             }),
             this.fetchPullRequestAuthors(organizationAndTeamData, options),
         ]);
@@ -92,6 +116,17 @@ export class OrganizationMemberListService {
         if (
             memberResult.status === 'rejected' &&
             authorResult.status === 'rejected'
+        ) {
+            return unavailable();
+        }
+
+        // A caller that revokes access on absence cannot read a missing
+        // author list as "nobody opened a PR", nor a missing member list as
+        // "left the workspace".
+        if (
+            options.requireAuthors &&
+            (authorResult.status === 'rejected' ||
+                memberResult.status === 'rejected')
         ) {
             return unavailable();
         }
@@ -122,7 +157,106 @@ export class OrganizationMemberListService {
             return unavailable();
         }
 
-        return { status: 'ok', members: normalized };
+        if (
+            memberResult.status !== 'fulfilled' ||
+            authorResult.status !== 'fulfilled'
+        ) {
+            return { status: 'ok', complete: false, members: normalized };
+        }
+
+        const confirmed = await this.confirmUnlistedSeatHolders(
+            organizationAndTeamData,
+            normalized,
+            options.seatHolderIds,
+        );
+
+        if (confirmed === null) {
+            return options.requireAuthors
+                ? unavailable()
+                : { status: 'ok', complete: false, members: normalized };
+        }
+
+        return {
+            status: 'ok',
+            complete: true,
+            members: this.normalize([...normalized, ...confirmed.found]),
+            ...(confirmed.absent && {
+                absentSeatHolderIds: confirmed.absent,
+            }),
+        };
+    }
+
+    /**
+     * Stored PR authors can miss somebody (the backfill keeps only the most
+     * recent PRs of each repository), so a seat holder missing from the list
+     * is checked with the provider before the list calls them gone. Answers
+     * the seat holders found to be recent authors and the ones confirmed
+     * absent (none listed when the provider cannot check), or `null` when the
+     * check failed.
+     */
+    private async confirmUnlistedSeatHolders(
+        organizationAndTeamData: OrganizationAndTeamData,
+        members: OrganizationMemberSummary[],
+        seatHolderIds?: string[],
+    ): Promise<{ found: RawMember[]; absent?: string[] } | null> {
+        const listedIds = new Set(members.map((member) => String(member.id)));
+
+        try {
+            if (
+                !(await this.codeManagementService.canFindRecentPullRequestAuthors(
+                    organizationAndTeamData,
+                ))
+            ) {
+                return { found: [] };
+            }
+
+            const seatIds =
+                seatHolderIds ??
+                (
+                    (await this.licenseService.getAllUsersWithLicense(
+                        organizationAndTeamData,
+                    )) ?? []
+                ).map((seat) => String(seat.git_id));
+
+            const unlistedIds = seatIds
+                .map(String)
+                .filter((gitId) => gitId && !listedIds.has(gitId));
+
+            if (unlistedIds.length === 0) {
+                return { found: [], absent: [] };
+            }
+
+            const found =
+                await this.codeManagementService.findRecentPullRequestAuthors({
+                    organizationAndTeamData,
+                    authorIds: unlistedIds,
+                });
+
+            // null: the provider cannot answer after all.
+            if (!found) {
+                return null;
+            }
+
+            const foundIds = new Set(found.map((author) => String(author.id)));
+
+            return {
+                found,
+                absent: unlistedIds.filter((gitId) => !foundIds.has(gitId)),
+            };
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not confirm unlisted seat holders with the code integration; treating the member list as incomplete',
+                context: OrganizationMemberListService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                },
+                error,
+            });
+
+            return null;
+        }
     }
 
     /**
@@ -133,11 +267,16 @@ export class OrganizationMemberListService {
      */
     private async fetchPullRequestAuthors(
         organizationAndTeamData: OrganizationAndTeamData,
-        options: { skipCache?: boolean },
+        options: { skipCache?: boolean; requireAuthors?: boolean },
     ): Promise<RawMember[]> {
-        const cacheKey = `org_member_pr_authors_${organizationAndTeamData.organizationId}_${organizationAndTeamData.teamId}`;
+        // v2: entries written before the adapters read strictly may be partial.
+        const cacheKey = `org_member_pr_authors_v2_${organizationAndTeamData.organizationId}_${organizationAndTeamData.teamId}`;
 
-        if (!options.skipCache) {
+        if (options.skipCache) {
+            // A refresh that fails must not leave the previous authors for
+            // the next read to report as a complete list.
+            await this.cacheService.removeFromCache(cacheKey).catch(() => {});
+        } else {
             try {
                 const cached =
                     await this.cacheService.getFromCache<RawMember[]>(cacheKey);
@@ -159,6 +298,7 @@ export class OrganizationMemberListService {
         const authors = await this.codeManagementService.getPullRequestAuthors({
             organizationAndTeamData,
             determineBots: true,
+            requireLoaded: true,
         });
 
         if (authors?.length) {

@@ -1,0 +1,48 @@
+{
+ "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "items": [
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#04",
+   "defectStatement": "The sibling-host branch in website_name removes the first label and compares the remainder without recognizing public suffixes. Unrelated hosts such as forum.co.uk and evil.co.uk therefore match, incorrectly causing the website path to be displayed.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Return only the website host when the hosts share a public suffix but have different registrable domains, including github.io tenants.",
+    "Preserve path display for valid sibling hosts such as www.example.com and forum.example.com.",
+    "Preserve existing exact-host and valid parent-host matches."
+   ],
+   "exampleFix": null,
+   "notes": "No public-suffix resolver or dependency exists in the repository; adding one requires changes outside the anchor. Merely referencing PublicSuffix would fail. Label-count thresholds or hardcoded suffix exceptions are incomplete; deleting the branch loses valid sibling matches."
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#05",
+   "defectStatement": "The fallback in website_name checks only whether the website host is a parent of the instance host. A website on a subdomain of the instance, such as forum.example.com/user for instance example.com, consequently loses its path.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Include the path when the website host is a subdomain of the instance host, including nested subdomains.",
+    "Preserve path display when the website host is a parent of the instance host.",
+    "Require a dot boundary for suffix matches and return only the host for unrelated domains."
+   ],
+   "exampleFix": "    else\n      same_domain = discourse_host.end_with?(\".\" + website_host) || website_host.end_with?(\".\" + discourse_host)\n      same_domain ? website_host + URI(website.to_s).path : website_host\n    end",
+   "notes": "Seven domain/path cases passed in an isolated Ruby harness. The separate public-suffix defect in the preceding branch remains outside this item's scope."
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07",
+   "defectStatement": "include_website_name lacks the question-mark suffix required for the serializer inclusion hook, so its presence check is ignored. Because website_name also lacks the restriction applied to website, restricted profiles can expose their website host or path through this attribute.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Define the recognized include_website_name? hook.",
+    "Omit website_name when the website is blank.",
+    "Omit website_name whenever scope.restrict_user_fields?(object) is true.",
+    "Allow website_name for a present website when profile fields are unrestricted."
+   ],
+   "exampleFix": "  def include_website_name?\n    website.present? && !scope.restrict_user_fields?(object)\n  end",
+   "notes": "Renaming alone leaves the disclosure defect. The finding supplies the restriction API needed for this local fix. Eight presence/restriction cases passed in an isolated Ruby harness."
+  }
+ ]
+}

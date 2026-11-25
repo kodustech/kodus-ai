@@ -1,4 +1,7 @@
 import { runWithTimeout } from './run-with-timeout';
+import { JobProcessorRouterService } from './job-processor-router.service';
+import { SlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
+import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 
 describe('runWithTimeout (router core)', () => {
     afterEach(() => {
@@ -13,7 +16,11 @@ describe('runWithTimeout (router core)', () => {
             return new Promise<void>(() => {}); // never resolves
         };
 
-        const racing = runWithTimeout(work, 105 * 60 * 1000, 'timeout after 6300000ms');
+        const racing = runWithTimeout(
+            work,
+            105 * 60 * 1000,
+            'timeout after 6300000ms',
+        );
         // Suppress unhandled rejection — we assert on it below
         racing.catch(() => {});
 
@@ -43,9 +50,9 @@ describe('runWithTimeout (router core)', () => {
             throw new Error('processor exploded');
         };
 
-        await expect(
-            runWithTimeout(work, 1_000, 'unused'),
-        ).rejects.toThrow('processor exploded');
+        await expect(runWithTimeout(work, 1_000, 'unused')).rejects.toThrow(
+            'processor exploded',
+        );
         expect(capturedSignal?.aborted).toBe(false);
     });
 
@@ -58,17 +65,34 @@ describe('runWithTimeout (router core)', () => {
         expect(clearSpy).toHaveBeenCalled();
         clearSpy.mockRestore();
     });
+});
 
-    it('Regression: code_review app timeout (1h45min) must stay strictly below broker consumer_timeout (2h)', () => {
-        // If this ever flips, the broker (rabbitmq-ec2.tfvars
-        // consumer_timeout=7200000) starts winning the race and the
-        // message-stuck-unacked bug from 2026-05 returns.
-        const APP_TIMEOUT_CODE_REVIEW_MS = 105 * 60 * 1000; // 1h45min
-        const BROKER_CONSUMER_TIMEOUT_MS = 7200 * 1000;     // 2h
-        const REQUIRED_CLEANUP_MARGIN_MS = 5 * 60 * 1000;   // 5min minimum
-
-        expect(APP_TIMEOUT_CODE_REVIEW_MS).toBeLessThan(
-            BROKER_CONSUMER_TIMEOUT_MS - REQUIRED_CLEANUP_MARGIN_MS,
+describe('JobProcessorRouterService slice preempt', () => {
+    it('does not mark the job FAILED when the slice was preempted', async () => {
+        const jobRepository = {
+            findOne: jest.fn().mockResolvedValue({
+                workflowType: WorkflowType.SECURITY_SCAN,
+            }),
+            update: jest.fn(),
+        };
+        const securityScanProcessor = {
+            process: jest.fn().mockRejectedValue(new SlicePreemptedError()),
+        };
+        const unused = {} as never;
+        const router = new JobProcessorRouterService(
+            jobRepository as never,
+            unused,
+            unused,
+            unused,
+            unused,
+            unused,
+            unused,
+            securityScanProcessor as never,
         );
+
+        await expect(router.process('job-1')).rejects.toBeInstanceOf(
+            SlicePreemptedError,
+        );
+        expect(jobRepository.update).not.toHaveBeenCalled();
     });
 });

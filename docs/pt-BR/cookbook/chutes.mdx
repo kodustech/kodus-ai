@@ -1,0 +1,108 @@
+---
+title: "Chutes — Inferência Serverless para Modelos Open-Source"
+description: "Aprenda como conectar o Chutes AI — cobrindo DeepSeek, Kimi, GLM, Qwen e mais — à Kodus."
+icon: "cloud-bolt"
+---
+
+## Como o Chutes funciona
+
+O Chutes AI é uma plataforma de computação serverless descentralizada para modelos open-source. Ele expõe um endpoint de inferência **compatível com OpenAI** em `https://llm.chutes.ai/v1`. O uso é cobrado por token, a partir do saldo da sua conta.
+
+A Kodus se comunica com o Chutes pelo mesmo adaptador compatível com OpenAI que usa para tudo mais, então não há alterações de código — apenas credenciais BYOK.
+
+<Info>
+  Preços e regras de cobrança mudam. Sempre confirme em [chutes.ai/pricing](https://chutes.ai/pricing) antes de adicionar saldo à conta.
+</Info>
+
+### Modelos recomendados
+
+O Chutes usa identificadores no estilo HuggingFace `org/model`. Muitos terminam em `-TEE`, mas quem diz se um modelo roda em um ambiente de execução confiável (TEE) é a flag `confidential_compute` do catálogo, não o nome. Estes modelos listam tool calling e saídas estruturadas no catálogo:
+
+| ID do modelo | Janela de contexto |
+| ------------ | ------------------ |
+| `moonshotai/Kimi-K2.7-Code` | ~262k tokens |
+| `deepseek-ai/DeepSeek-V4-Pro-0813` | ~1M tokens |
+| `zai-org/GLM-5.3` | ~1M tokens |
+| `Qwen/Qwen3.5-397B-A17B-TEE` | ~262k tokens |
+
+O catálogo muda com frequência. Veja a lista ao vivo em [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models), que é pública e mostra o preço, o tamanho de contexto e os recursos suportados de cada modelo.
+
+## Criando uma Chave de API
+
+<Warning>Uma conta Chutes com saldo é necessária.</Warning>
+
+1. Crie uma conta em [chutes.ai/auth/signup](https://chutes.ai/auth/signup). Você pode se cadastrar com Google, GitHub ou um nome de usuário.
+2. Adicione saldo no app do Chutes. A cobrança é pay-as-you-go, sem compromisso mínimo, e as formas de pagamento estão listadas em [chutes.ai/pricing](https://chutes.ai/pricing).
+3. No app do Chutes, crie uma chave de API. As chaves começam com `cpk_`. Guarde-a como uma senha.
+
+<span id="configurar-o-chutes-no-kodus" aria-hidden="true" />
+
+## Configurar o Chutes na Kodus
+
+### Opção 1 — Página AI providers (recomendado)
+
+Siga [Conectar um provedor](/pt-BR/how_to_use/byok#conectar-um-provedor) e escolha **Custom → OpenAI-compatible**. Preencha o formulário com estes valores.
+
+| Campo | Valor |
+| --- | --- |
+| **Key** (no card **API key**) | sua chave de API do Chutes |
+| **Base URL** | `https://llm.chutes.ai/v1` |
+| **Model** | escolha na lista, ou digite um ID como `zai-org/GLM-5.3` |
+| **Max concurrent requests** | opcional; em **Advanced (optional)** → **Advanced settings**. Deixe vazio, ou defina um limite se o Chutes retornar erros de rate limit |
+
+Clique em **Test & save** e escolha os modelos padrão e de fallback em [Modos e modelos de revisão](/pt-BR/how_to_use/code_review/configs/routing).
+
+<Note>
+  Defina um modelo de outro provedor como **Fallback model**, para que as revisões continuem funcionando se o Chutes retornar erros ou o seu saldo acabar.
+</Note>
+
+### Opção 2 — Self-hosted (variáveis de ambiente)
+
+Para dar a uma instância self-hosted um modelo via `.env`:
+
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="zai-org/GLM-5.3"
+API_LLM_BASE_URL="https://llm.chutes.ai/v1"
+API_LLM_API_KEY="your-chutes-api-key"
+```
+
+Siga o guia de instalação para [aplicar a mudança de modelo](/pt-BR/how_to_deploy/deploy_kodus/generic_vm#aplicar-mudanças-no-modelo).
+
+## Quando escolher o Chutes
+
+- **Você quer modelos open-source atrás de um único endpoint**, incluindo DeepSeek, Kimi, GLM e Qwen.
+- **Você se preocupa com computação confidencial.** Modelos marcados com `confidential_compute: true` no catálogo rodam dentro de ambientes de execução confiável, útil se sua postura de conformidade exigir isso.
+
+Escolha o Synthetic se preferir uma assinatura fixa, ou o Z.AI se seu modelo preferido for especificamente a família GLM.
+
+## Solução de problemas
+
+<AccordionGroup>
+  <Accordion title="Erros 401 / autenticação">
+    - Confirme que a chave está ativa no painel do Chutes e que a conta tem saldo.
+    - Certifique-se de que não há espaços em excesso ou aspas no valor do `.env`.
+  </Accordion>
+
+  <Accordion title="Modelo não encontrado">
+    - O Chutes usa o formato `org/model`, com algumas variantes terminando em `-TEE`. Copie o ID exato, com a mesma capitalização, de [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models).
+    - Modelos são adicionados e aposentados com o tempo. Um ID de modelo que funcionava antes pode sumir da lista.
+  </Accordion>
+
+  <Accordion title="Respostas lentas ou erros de rate limit">
+    - Defina um modelo de outro provedor como **Fallback model** em **Code review → Routing**.
+    - Diminua **Max concurrent requests** em **Advanced (optional)** → **Advanced settings**.
+  </Accordion>
+
+  <Accordion title="Erros de conexão">
+    - Confirme que seu servidor pode alcançar `llm.chutes.ai`.
+    - Revise os logs da API e do worker para o erro upstream exato.
+  </Accordion>
+</AccordionGroup>
+
+## Relacionados
+
+- [Preços do Chutes](https://chutes.ai/pricing)
+- [Referência da API do Chutes](https://chutes.ai/docs/api-reference/overview)
+- [Catálogo de modelos ao vivo](https://llm.chutes.ai/v1/models)
+- [Visão geral do BYOK](/pt-BR/how_to_use/byok)

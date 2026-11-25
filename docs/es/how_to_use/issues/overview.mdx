@@ -1,122 +1,67 @@
 ---
-title: "Descripción General"
+title: "Kody Issues"
 description: "Rastrea y gestiona las sugerencias no implementadas con la función Kody Issues."
 ---
 
-## Resumen Rápido
+**Kody Issues** mantiene una lista en vivo de las sugerencias que Kody hizo y que **no se implementaron** cuando se cerró su pull request, y las cierra a medida que el código cambia. Funciona por sí solo; desactívalo con el interruptor **Auto-create issues**.
 
-- **Seguimiento automático**: Captura automáticamente las sugerencias no implementadas de los PRs cerrados
-- **Resolución inteligente**: Se resuelve automáticamente cuando las sugerencias se implementan en futuros PRs
-- **Filtrado avanzado**: Filtra por estado, severidad, categoría y más, y guarda tus filtros predeterminados
-- **Sin configuración**: Funciona automáticamente con tu flujo de trabajo de revisión de código existente (desactívalo con el interruptor **Auto-create issues**)
+En cualquier plan, incluidas las instalaciones autoalojadas sin licencia, los Owners, Repo Admins y Contributors pueden abrir **Issues** desde la paleta de comandos ⌘K. La entrada abre la lista incluso si muestra un candado y una etiqueta **Teams**.
 
-## Qué es
+Con [acceso a Cockpit](/es/how_to_use/cockpit/overview), abre la pestaña **Issues** para ver la lista y el número de issues abiertos.
 
-La función **Kody Issues** rastrea automáticamente todas las sugerencias generadas por Kody que **no se implementaron** en tus pull requests (PRs). Actúa como un sonar, proporcionando una lista en vivo de mejoras pendientes para asegurarte de que nunca pierdas de vista la retroalimentación crítica.
-
-Issues no es un elemento de la barra lateral: ábrelo desde la pestaña **Issues** en el [Cockpit](/es/how_to_use/cockpit/overview) (muestra el número de issues abiertos), o busca **Issues** en la paleta de comandos ⌘K (el camino de entrada cuando tu plan no incluye el Cockpit). La lista muestra **Status**, **Severity**, **Category**, **Title**, **Repository**, **File**, **Age** y **#PR(s)**, filtrada por defecto a los issues abiertos. Haz clic en una fila para abrir el panel de detalle del issue, donde puedes cambiar su estado y severidad, recorrer los issues con **J** / **K**, compartir un enlace con **Share** y ver **Team feedback from PR reactions**.
-
-El interruptor **Auto-create issues** en la parte superior derecha de la página activa o desactiva la creación automática de issues para el workspace (activado por defecto).
+La lista muestra **Status**, **Severity**, **Category**, **Title**, **Repository**, **File**, **Age** y **#PR(s)**. Por defecto, muestra los issues abiertos.
 
 <Frame caption="Panel de Kody Issues que muestra las sugerencias rastreadas con filtros y gestión de estado">
   <img src="/images/issues.png" alt="Panel de Kody Issues" />
 </Frame>
 
-## Beneficios Principales
+Los Owners, Repo Admins y Contributors pueden leer los issues de todos los repositorios; los Billing Managers no. Los Owners pueden modificar cualquier issue, los Repo Admins solo los de sus repositorios asignados y los Contributors ninguno.
 
-<CardGroup cols={2}>
-  <Card title="Visibilidad Continua" icon="eye">
-    Mantente siempre al tanto de las mejoras pendientes sin seguimiento manual
-  </Card>
-  <Card title="Seguimiento de Calidad" icon="chart-line">
-    Prioriza y aborda las correcciones críticas de manera eficiente con niveles de severidad
-  </Card>
-  <Card title="Prevención de Errores" icon="shield-check">
-    Asegúrate de que las sugerencias vitales no se pierdan durante el desarrollo
-  </Card>
-  <Card title="Flexibilidad del Equipo" icon="users">
-    Personaliza los estados y severidades para adaptarse perfectamente a tu flujo de trabajo
-  </Card>
-</CardGroup>
+Para consultar los issues en la terminal, revisa la disponibilidad y los filtros de [`kodus issues`](/es/how_to_use/cli/commands#kodus-issues).
 
-## Cómo Funciona
-
-### 1. Creación de Issues
+## Cómo se crean los issues
 
 <Note>
-  Los issues solo se crean cuando los PRs son **cerrados** — no cuando se abren ni durante la revisión.
+  Los issues solo se crean cuando los PRs se **cierran**, no cuando se abren ni
+  durante la revisión. En GitLab y Azure Repos, solo cuenta un PR mergeado.
 </Note>
 
-<Warning>
-  Las reglas de Kody de tipo **PR** no generan issues. Solo las sugerencias a nivel de archivo y de código específico crean issues rastreables.
-</Warning>
-
-- Cuando un PR es **cerrado**, Kody compila todas las sugerencias realizadas en ese PR que **no se aplicaron**
-- Para cada sugerencia no implementada, Kody crea automáticamente un **Issue** vinculado al repositorio
-- Cada issue incluye el contexto de la sugerencia original, la ubicación del archivo y el nivel de severidad
-
-### 2. Resolución Automática
-
-- Si un desarrollador implementa el cambio sugerido en un **PR posterior**, Kody marca el Issue asociado como **Resuelto**
-- Kody empareja inteligentemente los cambios implementados con los issues existentes usando análisis de código
-- La resolución ocurre automáticamente sin intervención manual
-
-### 3. Gestión Manual
-
-#### Control de Estado
-
-- **Abierto**: Nuevos issues que requieren atención
-- **Resuelto**: Marcado automáticamente cuando se implementan las sugerencias
-- **Descartado**: Marcado manualmente cuando las sugerencias no son relevantes para tu equipo
-
-#### Ajuste de Severidad
-
-- Cada Issue tiene un nivel de severidad (`Critical`, `High`, `Medium`, `Low`)
-- Puedes actualizar los niveles de severidad en cualquier momento para reflejar las prioridades de tu equipo
-- Usa la severidad para centrarte en las mejoras de mayor impacto primero
-
-### 4. Filtrado Avanzado
+- Cuando se cierra un PR, Kody toma las sugerencias que hizo en ese PR y que no se implementaron, y crea un **Issue** por cada una, vinculado al repositorio. Cada issue conserva la explicación original, el archivo, y la severidad y la categoría.
+- Si un issue abierto en el mismo archivo ya cubre el mismo problema, Kody le agrega la nueva sugerencia en lugar de crear un duplicado. **#PR(s)** lista todos los PRs que contribuyeron.
+- Esto incluye las sugerencias que Kody no publicó porque estaban por debajo de la severidad mínima o por encima de un límite de comentarios. Las sugerencias que Kody descartó por incorrectas, por repetidas o porque su categoría está desactivada no se convierten en issues.
 
 <Warning>
-  Los filtros son herramientas poderosas: guárdalos como predeterminados para acceder rápidamente a los issues que más importan a tu flujo de trabajo.
+  Las Kody Rules de tipo **Per PR** no generan issues. Solo las sugerencias a nivel de archivo crean issues rastreables.
 </Warning>
 
-Abre **Filters** en la parte superior de la lista (el botón muestra cuántos están activos):
+## Cómo se resuelven los issues
 
-- **Filtros de estado**: Abierto, Resuelto, Descartado
-- **Filtros de severidad**: Critical, High, Medium, Low
-- **Filtros de categoría**: Seguridad, Rendimiento, Estilo de Código, etc.
-- **Filtros de repositorio**: Enfócate en proyectos específicos
-- **Título, ruta de archivo y números de PR**: Acota a issues específicos
-- **Set as default filters**: Aplica automáticamente tus filtros preferidos cada vez que abres Issues en este navegador (**Reset to default filters** los restablece)
+Cada vez que se cierra un PR, Kody compara con el código actual los issues abiertos de los archivos que ese PR modificó:
 
-## Por qué es Importante
+- Si el código ya no tiene el problema, el issue pasa a **Resolved**.
+- Si el archivo fue eliminado, el issue pasa a **Dismissed**.
 
-### Para los Equipos de Desarrollo
+Esto también se ejecuta con **Auto-create issues** desactivado, así que los issues existentes siguen cerrándose.
 
-- **Nunca pierdas el rastro** de mejoras de código importantes
-- **Prioriza el trabajo** basándote en el impacto real y la severidad
-- **Aprende patrones** de las sugerencias comúnmente descartadas versus implementadas
+## Trabajar con los issues
 
-### Para los Gerentes de Ingeniería
+Haz clic en una fila para abrir el panel de detalle del issue, con los enlaces al repositorio, al PR y al archivo, la descripción y **Team feedback from PR reactions** (el conteo de 👍 / 👎). Recorre los issues con **J** / **K**, y **Share** copia un enlace al issue.
 
-- **Rastrea la calidad del código** tendencias en los repositorios
-- **Identifica cuellos de botella** en la implementación de sugerencias
-- **Mide la mejora** en el seguimiento de las revisiones de código
+### Status
 
-## Mejores Prácticas
+- **Open**: requiere atención.
+- **Resolved**: lo define Kody cuando el problema ya no está en el código.
+- **Dismissed**: no es relevante. Defínelo a mano cuando una sugerencia no aplica a tu equipo; Kody también lo define cuando el archivo se elimina.
 
-<CardGroup cols={1}>
-  <Card title="Sesiones de Revisión Regulares" icon="calendar">
-    Programa revisiones semanales del equipo de los issues abiertos para mantener el impulso en la calidad del código
-  </Card>
-  <Card title="Pautas de Severidad" icon="triangle-exclamation">
-    Establece estándares del equipo para cuándo ajustar los niveles de severidad de los issues
-  </Card>
-  <Card title="Criterios de Descarte" icon="circle-xmark">
-    Crea pautas claras para cuándo los issues deben descartarse versus implementarse
-  </Card>
-</CardGroup>
+Cambia el estado desde el selector en la parte superior del panel de detalle.
+
+### Severity
+
+Cada issue tiene una severidad (`Critical`, `High`, `Medium`, `Low`) que parte de la de la sugerencia. Cámbiala desde el panel de detalle para que coincida con las prioridades de tu equipo.
+
+### Filters
+
+Abre **Filters** en la parte superior de la lista (el botón muestra cuántos están activos) para filtrar por **Status**, **Severity**, **Category**, **Title**, **Repository**, **File path** y **PR numbers**. **Set as default filters** aplica tus filtros cada vez que abres Issues en este navegador; **Reset to default filters** los restablece.
 
 ## Próximos Pasos
 
@@ -133,6 +78,6 @@ Abre **Filters** en la parte superior de la lista (el botón muestra cuántos es
     icon="graduation-cap"
     href="/es/how_to_use/code_review/learning/kody_learning"
   >
-    Descubre qué registra la retroalimentación y cómo configurar futuras revisiones.
+    Descubre qué registra el feedback y cómo configurar futuras revisiones.
   </Card>
 </CardGroup>

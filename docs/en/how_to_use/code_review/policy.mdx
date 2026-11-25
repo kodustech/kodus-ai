@@ -1,34 +1,35 @@
 ---
 title: "Review Policy"
-description: "How to read Kody's feedback and how it interacts with your merge policies — what blocks a PR, what doesn't, and who decides."
+description: "How to read Kody's feedback and how it interacts with your merge policies: what blocks a PR, what doesn't, and who decides."
 ---
 
-## Purpose
+## Suggestions vs. blocking
 
-Clarify how to interpret Kody's feedback and how it interacts with your repository's merge policies.
-
-## Suggestions vs. Blocking
-
-- Suggestions: By default, Kody posts non-blocking comments for you to evaluate.
-- Request Changes (optional): If enabled, Kody can mark a review as "changes requested" for critical issues.
-- Auto-approve (optional): If enabled, Kody approves PRs when no issues are found.
+- **Suggestions:** by default Kody posts comments that do not block the PR. You decide which to apply.
+- **Request changes on critical issues (optional):** when Kody finds a critical issue, it sets its review on the PR to Request Changes. Only critical findings do this. Kody takes the request back once those findings are resolved, even on a PR it does not approve. This setting is in **Code review → General → Review feedback**. It is not available when GitLab is your only connected provider.
+- **Automatic PR approval (optional):** when a review is clean, Kody approves the PR. It never merges. With approval policies, only PRs that match a policy are approved. See [Auto-approve](/en/how_to_use/code_review/configs/auto_approve).
 
 <Note>
-  Enable blocking behaviors only when your team agrees on the thresholds and has strong CI in place.
+  Turn on blocking behavior only when your team agrees on the thresholds and has strong CI in place.
 </Note>
 
-## When to Enable Request Changes
+## What does not block
+
+- **The Kody Code Review check** (GitHub App and Forgejo) reports that a review ran. It passes with open suggestions and fails only when the review itself could not run. A required check guarantees a review happened; it does not block a merge on Kody's findings.
+- **Business Logic** posts a comment and no check or status. See [Business Logic Validation](/en/how_to_use/code_review/business_logic_validation).
+- **Risk assessment** and **routing** change how Kody reviews, and whether it may approve. They do not block a merge. See [Risk assessment](/en/how_to_use/code_review/configs/risk) and [Routing](/en/how_to_use/code_review/configs/routing).
+
+## When to turn on Request changes
 
 - Security-sensitive areas where critical issues must never ship.
 - Performance hotspots where regressions are costly.
 - Repositories with clear coding standards and stable review rules.
 
-## When to Use Auto-approve
+## When to turn on automatic approval
 
-- Small, low-risk changes (docs/tests).
+- Small, low-risk changes such as docs or tests. Add approval policies when only some PRs should be eligible.
 - Teams with high test coverage and reliable CI.
 
-## Human Decision Always Matters
+## Human decision always matters
 
-Kody accelerates feedback but does not replace human judgment. Your team decides which suggestions to adopt and when to merge.
-
+Kody speeds up feedback but does not replace human judgment. Your team decides which suggestions to adopt and when to merge.

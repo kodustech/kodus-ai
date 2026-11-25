@@ -262,6 +262,17 @@ describe('TokenChunkingService', () => {
             expect(res.modelUsed).toBe('google:gemini-2.5-pro');
         });
 
+        it('falls back to defaultMaxTokens for a model with no managed window', () => {
+            // floor(30000 * 90 / 100) = 27000.
+            const res = svc.chunkDataByTokens({
+                data: [strOf(4)],
+                model: 'unknown-model-xyz',
+                defaultMaxTokens: 30000,
+                usagePercentage: 90,
+            });
+            expect(res.tokenLimit).toBe(27000);
+        });
+
         it('lets overrideMaxTokens take priority over the model window', () => {
             // floor(1000 * 50 / 100) = 500.
             const res = svc.chunkDataByTokens({
@@ -278,6 +289,16 @@ describe('TokenChunkingService', () => {
             const res = svc.chunkDataByTokens({
                 data: [strOf(4)],
                 overrideMaxTokens: 0,
+                defaultMaxTokens: 200,
+                usagePercentage: 100,
+            });
+            expect(res.tokenLimit).toBe(200);
+        });
+
+        it('ignores a negative overrideMaxTokens (guard is > 0, not truthiness)', () => {
+            const res = svc.chunkDataByTokens({
+                data: [strOf(4)],
+                overrideMaxTokens: -100,
                 defaultMaxTokens: 200,
                 usagePercentage: 100,
             });

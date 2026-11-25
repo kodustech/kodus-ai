@@ -3,11 +3,16 @@ import {
     getActiveTraceId,
     propagateAttributes,
     startActiveObservation,
+    type LangfuseSpan,
+    type LangfuseSpanAttributes,
 } from '@langfuse/tracing';
 import { LangfuseVercelAiSdkIntegration } from '@langfuse/vercel-ai-sdk';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import type { AttributeValue } from '@opentelemetry/api';
 import { registerTelemetry, type TelemetryOptions } from 'ai';
+import { createLogger } from '@libs/core/log/logger';
+
+const langfuseLogger = createLogger('Langfuse');
 
 let spanProcessor: LangfuseSpanProcessor | null = null;
 let ownTracerProvider: NodeTracerProvider | null = null;
@@ -218,6 +223,8 @@ export function withLangfuseObservation<T>(
     /** Searchable in Langfuse (e.g. the correlationId a log line carries).
      *  Absent values are dropped; Langfuse keeps string values. */
     metadata?: Record<string, string | number | undefined>,
+    /** What of `fn`'s result the observation records as its output. */
+    output?: (result: T) => Record<string, unknown>,
 ): Promise<T> {
     if (!shouldTrace()) {
         return fn(undefined);
@@ -227,12 +234,38 @@ export function withLangfuseObservation<T>(
             .filter(([, v]) => v !== undefined && v !== '')
             .map(([k, v]) => [k, String(v)]),
     );
-    return startActiveObservation(name, (observation) => {
+    return startActiveObservation(name, async (observation) => {
         if (Object.keys(tags).length > 0) {
-            observation.update({ metadata: tags });
+            updateObservation(observation, name, () => ({ metadata: tags }));
         }
-        return fn(getActiveTraceId());
+        const result = await fn(getActiveTraceId());
+        if (output) {
+            updateObservation(observation, name, () => ({
+                output: output(result),
+            }));
+        }
+        return result;
     });
+}
+
+/**
+ * Observability never breaks the call it observes: an update that fails,
+ * building its attributes included, is logged.
+ */
+function updateObservation(
+    observation: LangfuseSpan,
+    name: string,
+    attributes: () => LangfuseSpanAttributes,
+): void {
+    try {
+        observation.update(attributes());
+    } catch (error) {
+        langfuseLogger.warn({
+            message: `Langfuse observation update failed for ${name}; the call runs without it`,
+            error,
+            context: 'Langfuse',
+        });
+    }
 }
 
 export interface LangfuseTelemetryMetadata {
@@ -265,7 +298,8 @@ export function buildLangfuseTelemetry(
     metadata?: LangfuseTelemetryMetadata,
 ): LangfuseTelemetryConfig {
     const attrs: Record<string, AttributeValue> = {};
-    if (metadata?.organizationId) attrs.organizationId = metadata.organizationId;
+    if (metadata?.organizationId)
+        attrs.organizationId = metadata.organizationId;
     if (metadata?.teamId) attrs.teamId = metadata.teamId;
     if (metadata?.pullRequestId !== undefined)
         attrs.pullRequestId = metadata.pullRequestId;

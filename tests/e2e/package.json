@@ -20,7 +20,7 @@
     "history:backfill": "bash provisioning/history-backfill.sh"
   },
   "dependencies": {
-    "playwright": "^1.48.0",
+    "playwright": "^1.65.0",
     "undici": "^8.7.0",
     "yaml": "^2.6.0",
     "zod": "^4.6.6"

@@ -5,6 +5,17 @@ import { z } from 'zod';
 // carrier's `.main` slot at its boundary, so the fallback slot is never handed
 // to the builder — tests assert the single `main` model is used everywhere and
 // that a 2nd (fallback) slot is NEVER built.
+const mockLoggerLog = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    ...jest.requireActual('@libs/core/log/logger'),
+    createLogger: () => ({
+        log: (...args: unknown[]) => mockLoggerLog(...args),
+        warn: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
+        verbose: jest.fn(),
+    }),
+}));
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     buildModelFromSlot: jest.fn(() => ({ __model: 'main' })),
     getModelName: jest.fn(() => 'test-model'),
@@ -30,6 +41,11 @@ jest.mock('@libs/core/log/langfuse', () => ({
         telemetry: { isEnabled: false },
     })),
 }));
+// The 429 re-issue waits seconds; resolve the wait at once and assert on it.
+jest.mock('@libs/llm/retry-policy', () => ({
+    ...jest.requireActual('@libs/llm/retry-policy'),
+    sleep: jest.fn(() => Promise.resolve()),
+}));
 jest.mock('@libs/llm/reasoning-options', () => ({
     buildProviderOptions: jest.fn(() => ({ __providerOptions: 'reasoning' })),
     defaultReasoningEffortFor: () => undefined,
@@ -48,6 +64,9 @@ import {
 import { tracedGenerateText, timeoutSignal } from '@libs/llm/llm-call';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { setLlmObservability } from '@libs/llm/llm-observability';
+import { retriesWereExhausted } from '@libs/llm/error-classifier';
+import { sleep } from '@libs/llm/retry-policy';
+import { runWithUsageMeter } from '@libs/llm/usage-meter';
 import {
     buildModelFromSlot,
     getLimiterForSlot,
@@ -1130,36 +1149,99 @@ describe('runStructuredReviewCall — single retry owner (maxRetries:0 + cooldow
         assertNoSecondModelBuilt();
     });
 
-    it('RATE_LIMIT (429) failure → NO immediate re-fire, THROWS (backs off via cooldown)', async () => {
-        // Slot in cooldown (arm-then-honor): a 429 never immediately re-issues.
+    it('RATE_LIMIT (429) while IN COOLDOWN → no re-issue, throws marked exhausted', async () => {
+        // Slot in cooldown (arm-then-honor): a 429 never re-fires into it, and
+        // the error is left eligible for the fallback.
         mockGetLimiter.mockReturnValue({ isInCooldown: () => true });
         const rateErr: any = new Error('rate limit exceeded');
         rateErr.status = 429;
         mockGenerate.mockRejectedValueOnce(rateErr);
 
-        await expect(
-            runStructuredReviewCall({
-                ...base,
-                byokConfig: { main: { provider: 'openai' } } as any,
-            }),
-        ).rejects.toThrow('rate limit');
+        const thrown = await runStructuredReviewCall({
+            ...base,
+            byokConfig: { main: { provider: 'openai' } } as any,
+        }).catch((e) => e);
 
+        expect(thrown).toBe(rateErr);
+        expect(retriesWereExhausted(thrown)).toBe(true);
         expect(mockGenerate).toHaveBeenCalledTimes(1);
         assertNoSecondModelBuilt();
     });
 
-    it('RATE_LIMIT (429) with NO cooldown armed → still NO immediate re-fire, THROWS', async () => {
-        // Even without a cooldown, a 429 is not hammered with an instant retry.
+    it('RATE_LIMIT (429) with NO cooldown → one re-issue after a seconds-long wait', async () => {
         mockGetLimiter.mockReturnValue(null);
         const rateErr: any = new Error('too many requests');
         rateErr.status = 429;
-        mockGenerate.mockRejectedValueOnce(rateErr);
+        mockGenerate
+            .mockRejectedValueOnce(rateErr)
+            .mockResolvedValueOnce(ok({ violations: ['reissued'] }));
 
-        await expect(runStructuredReviewCall({ ...base })).rejects.toThrow(
-            'too many requests',
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: ['reissued'] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        const waitMs = (sleep as jest.Mock).mock.calls.at(-1)[0];
+        expect(waitMs).toBeGreaterThanOrEqual(2_000);
+        assertNoSecondModelBuilt();
+    });
+
+    it('RATE_LIMIT (429) twice → throws the second 429 marked exhausted', async () => {
+        // A spent plan window (e.g. a 5-hour usage cap) answers 429 again.
+        mockGetLimiter.mockReturnValue(null);
+        const first: any = new Error('Usage limit reached for 5 hour.');
+        first.status = 429;
+        const second: any = new Error('Usage limit reached for 5 hour.');
+        second.status = 429;
+        mockGenerate.mockRejectedValueOnce(first).mockRejectedValueOnce(second);
+
+        const thrown = await runStructuredReviewCall({ ...base }).catch(
+            (e) => e,
         );
 
-        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        expect(thrown).toBe(second);
+        expect(retriesWereExhausted(thrown)).toBe(true);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        assertNoSecondModelBuilt();
+    });
+
+    it('RATE_LIMIT (429) then a non-429 failure → throws it unmarked', async () => {
+        mockGetLimiter.mockReturnValue(null);
+        const rateErr: any = new Error('too many requests');
+        rateErr.status = 429;
+        const badRequest: any = new Error('invalid request body');
+        badRequest.status = 400;
+        mockGenerate
+            .mockRejectedValueOnce(rateErr)
+            .mockRejectedValueOnce(badRequest);
+
+        const thrown = await runStructuredReviewCall({ ...base }).catch(
+            (e) => e,
+        );
+
+        expect(thrown).toBe(badRequest);
+        expect(retriesWereExhausted(thrown)).toBe(false);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('transient failure then a 429 on the re-issue → throws the 429 marked exhausted', async () => {
+        // A 503 takes the one transient re-issue; when that re-issue meets the
+        // plan's 429, the fallback must still be allowed to take the call.
+        mockGetLimiter.mockReturnValue(null);
+        const unavailable: any = new Error('Service Unavailable');
+        unavailable.status = 503;
+        const rateErr: any = new Error('Usage limit reached for 5 hour.');
+        rateErr.status = 429;
+        mockGenerate
+            .mockRejectedValueOnce(unavailable)
+            .mockRejectedValueOnce(rateErr);
+
+        const thrown = await runStructuredReviewCall({ ...base }).catch(
+            (e) => e,
+        );
+
+        expect(thrown).toBe(rateErr);
+        expect(retriesWereExhausted(thrown)).toBe(true);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
         assertNoSecondModelBuilt();
     });
 
@@ -1226,12 +1308,12 @@ describe('runStructuredReviewCall — per-model tuning (RFC §4.1 model limits)'
 });
 
 // ---------------------------------------------------------------------------
-// FULL I/O CONTRACT MATRIX (llm-io-contract-matrix.md).
+// I/O CONTRACT. The text extraction/validation itself is specced in
+// structured-output-repair.spec.ts; here, one case per branch of this boundary.
 //
 // The DETERMINISTIC parse layers this boundary owns are (a) the reroute-json
-// path — plain generateText + `repairAndValidate(validatingSchema, r.text)`, the
-// json_object-equivalent branch where the FULL A/B/C output-shape zoo is in
-// scope — and (b) the salvage/reissue path after Output.object throws
+// path — plain generateText + `repairAndValidate(validatingSchema, r.text)` —
+// and (b) the salvage/reissue path after Output.object throws
 // NoObjectGeneratedError on the strict json_schema branch. Model decision
 // QUALITY (whether a finding is correct) is the separate eval track and is NOT
 // asserted here.
@@ -1240,16 +1322,13 @@ describe('runStructuredReviewCall — per-model tuning (RFC §4.1 model limits)'
 // real payload OR SIGNAL explicitly (throw / re-ask) — NEVER silently keep-all /
 // drop / default. This boundary honours it on every applicable row (reroute
 // throws `produced no valid object` when repair returns undefined; the strict
-// path re-asks the model in json_object mode with the schema in the prompt), so
-// every row below is a normal `it` — there is NO silent-degradation `it.failing`
-// for this boundary (knownDegradations is empty).
+// path re-asks the model in json_object mode with the schema in the prompt).
 // ---------------------------------------------------------------------------
 
 // A moonshot:kimi-k2.7-code slot is always-thinking → planStructuredCall resolves
 // to 'reroute-json' (REGISTRY is REAL here): plain generateText, then the boundary
 // PARSES + VALIDATES r.text against the caller's schema. This IS the json_object
-// fallback branch of the E-matrix (kimi/glm/deepseek/z-ai) where the whole zoo is
-// in scope.
+// fallback branch (kimi/glm/deepseek/z-ai).
 const zooKimiSlot = {
     provider: 'moonshot',
     model: 'kimi-k2.7-code',
@@ -1259,88 +1338,16 @@ const keepSchema = z.object({ keep: z.boolean() });
 /** Feed one raw text back on the reroute path and run the parse layer. */
 const parseReroute = <S extends z.ZodType>(schema: S, text: string) => {
     mockGenerate.mockResolvedValueOnce({ text, usage: {} });
-    return runStructuredReviewCall({ ...base, schema, byokConfig: zooKimiSlot });
+    return runStructuredReviewCall({
+        ...base,
+        schema,
+        byokConfig: zooKimiSlot,
+    });
 };
 
 describe('MATRIX A — output-shape zoo (E: json_object/reroute branch, full zoo in scope)', () => {
-    it('row 1 — exact D parses and returns verbatim (happy path)', async () => {
-        await expect(parseReroute(keepSchema, '{"keep":true}')).resolves.toEqual(
-            { keep: true },
-        );
-        // Reroute took the plain-generateText channel (NO Output.object).
-        expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty('output');
-    });
-
-    it('row 2 — bare array when D is an object → SIGNALS (throws, never keep-all)', async () => {
-        await expect(
-            parseReroute(keepSchema, '[{"keep":true}]'),
-        ).rejects.toThrow('produced no valid object');
-    });
-
-    it('row 3 — single value where D expects an array → SIGNALS', async () => {
-        const arrSchema = z.object({ items: z.array(z.number()) });
-        await expect(
-            parseReroute(arrSchema, '{"items":5}'),
-        ).rejects.toThrow('produced no valid object');
-    });
-
-    it('row 4 — wrapper key {result:D} is NOT silently unwrapped → SIGNALS', async () => {
-        await expect(
-            parseReroute(keepSchema, '{"result":{"keep":true}}'),
-        ).rejects.toThrow('produced no valid object');
-    });
-
-    it('row 5 — double wrapper {result:{result:D}} → SIGNALS', async () => {
-        await expect(
-            parseReroute(keepSchema, '{"result":{"result":{"keep":true}}}'),
-        ).rejects.toThrow('produced no valid object');
-    });
-
-    it('row 6 — numeric/opaque single-key wrap {"0":D} / {content:D} → SIGNALS', async () => {
-        await expect(
-            parseReroute(keepSchema, '{"0":{"keep":true}}'),
-        ).rejects.toThrow('produced no valid object');
-        await expect(
-            parseReroute(keepSchema, '{"content":{"keep":true}}'),
-        ).rejects.toThrow('produced no valid object');
-    });
-
-    it('row 7 — whole D as a stringified JSON string is NOT double-parsed → SIGNALS', async () => {
-        await expect(
-            parseReroute(keepSchema, '"{\\"keep\\":true}"'),
-        ).rejects.toThrow('produced no valid object');
-    });
-
-    it('row 8 — markdown-fenced JSON is RECOVERED', async () => {
-        await expect(
-            parseReroute(keepSchema, '```json\n{"keep":true}\n```'),
-        ).resolves.toEqual({ keep: true });
-    });
-
-    it('row 9 — prose-wrapped JSON (no fence) is RECOVERED', async () => {
-        await expect(
-            parseReroute(
-                keepSchema,
-                'Sure — here is the result: {"keep":true}\n\nLet me know if…',
-            ),
-        ).resolves.toEqual({ keep: true });
-    });
-
     it('row 10 — right data / WRONG (renamed) keys → SIGNALS (the #1786 class, no keep-all)', async () => {
         await expect(parseReroute(keepSchema, '{"kept":true}')).rejects.toThrow(
-            'produced no valid object',
-        );
-    });
-
-    it('row 11 — case/convention mismatch ({"Keep":true}) → SIGNALS', async () => {
-        await expect(parseReroute(keepSchema, '{"Keep":true}')).rejects.toThrow(
-            'produced no valid object',
-        );
-    });
-
-    it('row 12 — partial object (a required key missing) → SIGNALS', async () => {
-        const twoKey = z.object({ keep: z.boolean(), reason: z.string() });
-        await expect(parseReroute(twoKey, '{"keep":true}')).rejects.toThrow(
             'produced no valid object',
         );
     });
@@ -1349,24 +1356,6 @@ describe('MATRIX A — output-shape zoo (E: json_object/reroute branch, full zoo
         await expect(
             parseReroute(keepSchema, '{"keep":true,"debug":"x","extra":99}'),
         ).resolves.toEqual({ keep: true });
-    });
-
-    it('row 14 — empty object {} against a required schema → SIGNALS', async () => {
-        await expect(parseReroute(keepSchema, '{}')).rejects.toThrow(
-            'produced no valid object',
-        );
-    });
-
-    it('row 15 — empty array [] against an object schema → SIGNALS', async () => {
-        await expect(parseReroute(keepSchema, '[]')).rejects.toThrow(
-            'produced no valid object',
-        );
-    });
-
-    it('row 16 — empty / whitespace-only text → SIGNALS (no JSON to parse)', async () => {
-        await expect(parseReroute(keepSchema, '   \n\t ')).rejects.toThrow(
-            'produced no valid object',
-        );
     });
 
     it('row 17 — null/undefined text (no r.text) → SIGNALS', async () => {
@@ -1379,99 +1368,9 @@ describe('MATRIX A — output-shape zoo (E: json_object/reroute branch, full zoo
             }),
         ).rejects.toThrow('produced no valid object');
     });
-
-    it('row 18 — primitive where an object is expected (true / "ok") → SIGNALS', async () => {
-        await expect(parseReroute(keepSchema, 'true')).rejects.toThrow(
-            'produced no valid object',
-        );
-        await expect(parseReroute(keepSchema, '"ok"')).rejects.toThrow(
-            'produced no valid object',
-        );
-    });
-
-    it('row 19 — provider envelope leak {choices:[{message:{content}}]} → SIGNALS', async () => {
-        await expect(
-            parseReroute(
-                keepSchema,
-                '{"choices":[{"message":{"content":"{\\"keep\\":true}"}}]}',
-            ),
-        ).rejects.toThrow('produced no valid object');
-    });
-
-    it('row 20 — reasoning/thinking prefix before the JSON is stripped and the payload RECOVERED', async () => {
-        await expect(
-            parseReroute(
-                keepSchema,
-                '<thinking>let me decide…</thinking>\n{"keep":true}',
-            ),
-        ).resolves.toEqual({ keep: true });
-    });
-});
-
-describe('MATRIX B — semantic-but-wrong value encodings (reroute parse layer)', () => {
-    it('row 21 — boolean as string ("true") is NOT coerced → SIGNALS', async () => {
-        await expect(
-            parseReroute(keepSchema, '{"keep":"true"}'),
-        ).rejects.toThrow('produced no valid object');
-    });
-
-    it('row 22 — boolean as yes/no ("yes") → SIGNALS', async () => {
-        await expect(parseReroute(keepSchema, '{"keep":"yes"}')).rejects.toThrow(
-            'produced no valid object',
-        );
-    });
-
-    it('row 23 — boolean as number (1) → SIGNALS', async () => {
-        await expect(parseReroute(keepSchema, '{"keep":1}')).rejects.toThrow(
-            'produced no valid object',
-        );
-    });
-
-    it('row 24 — enum value outside the allowed set → SIGNALS', async () => {
-        const sevSchema = z.object({
-            severity: z.enum(['low', 'medium', 'high']),
-        });
-        await expect(
-            parseReroute(sevSchema, '{"severity":"URGENT"}'),
-        ).rejects.toThrow('produced no valid object');
-    });
-
-    it('row 26 — duplicate keys in the JSON object resolve LAST-WINS', async () => {
-        await expect(
-            parseReroute(keepSchema, '{"keep":false,"keep":true}'),
-        ).resolves.toEqual({ keep: true });
-    });
-
-    it('row 27 — unicode / escaped-newline / emoji inside string fields survive (string-aware slice)', async () => {
-        const noteSchema = z.object({ keep: z.boolean(), note: z.string() });
-        await expect(
-            parseReroute(
-                noteSchema,
-                '{"keep":true,"note":"h\\u00e9llo \\n 🎉 {not:a:real:brace}"}',
-            ),
-        ).resolves.toEqual({ keep: true, note: 'héllo \n 🎉 {not:a:real:brace}' });
-    });
 });
 
 describe('MATRIX C — unparseable / transport (the fail-safe layer)', () => {
-    it('row 28 — truncated JSON (max_tokens mid-object) → SIGNALS, never partial keep', async () => {
-        await expect(parseReroute(keepSchema, '{"keep":tr')).rejects.toThrow(
-            'produced no valid object',
-        );
-    });
-
-    it('row 29 — malformed JSON: trailing comma is REPAIRED; single-quote / unquoted-key SIGNAL', async () => {
-        await expect(
-            parseReroute(keepSchema, '{"keep":true,}'),
-        ).resolves.toEqual({ keep: true });
-        await expect(parseReroute(keepSchema, "{'keep':true}")).rejects.toThrow(
-            'produced no valid object',
-        );
-        await expect(parseReroute(keepSchema, '{keep:true}')).rejects.toThrow(
-            'produced no valid object',
-        );
-    });
-
     it('row 30 — LLM.run throws on the reroute path → propagates (no silent swallow, no 2nd model)', async () => {
         mockGenerate.mockRejectedValueOnce(new Error('network reset'));
         await expect(
@@ -1485,48 +1384,69 @@ describe('MATRIX C — unparseable / transport (the fail-safe layer)', () => {
         expect(mockGenerate).toHaveBeenCalledTimes(1);
         assertNoSecondModelBuilt();
     });
+});
 
-    it('row 31 — model returned an {error:…} object instead of D → SIGNALS', async () => {
-        await expect(
-            parseReroute(keepSchema, '{"error":"rate limited, try later"}'),
-        ).rejects.toThrow('produced no valid object');
-    });
+describe('reroute-json — a 429 is re-issued once, then handed to the fallback', () => {
+    const rerouteSlot = {
+        provider: 'moonshot',
+        model: 'kimi-k2.7-code',
+        apiKey: 'enc',
+    } as any;
+    const rateLimited = (message: string) => {
+        const e: any = new Error(message);
+        e.status = 429;
+        return e;
+    };
 
-    it('row 32 — empty success (content:"") on the structured path → SIGNALS; the TEXT path degrades to ""', async () => {
-        await expect(parseReroute(keepSchema, '')).rejects.toThrow(
-            'produced no valid object',
-        );
-        // The text half of the same executor never throws on empty content.
-        mockGenerate.mockResolvedValueOnce({ text: '', usage: {} });
-        await expect(
-            runTextReviewCall({ system: 's', user: 'u', runName: 'r' }),
-        ).resolves.toBe('');
-    });
+    it('429 then an answer → the re-issue answers', async () => {
+        mockGenerate
+            .mockRejectedValueOnce(rateLimited('too many requests'))
+            .mockResolvedValueOnce({ text: '{"keep":true}', usage: {} });
 
-    it('row 33 — refusal prose ("I cannot help…") → structured SIGNALS; text returns it verbatim', async () => {
-        await expect(
-            parseReroute(keepSchema, 'I cannot help with that request.'),
-        ).rejects.toThrow('produced no valid object');
-        mockGenerate.mockResolvedValueOnce({
-            text: 'I cannot help with that request.',
-            usage: {},
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: rerouteSlot,
         });
-        await expect(
-            runTextReviewCall({ system: 's', user: 'u', runName: 'r' }),
-        ).resolves.toBe('I cannot help with that request.');
+
+        expect(out).toEqual({ keep: true });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(mockGenerate.mock.calls[1][0]).not.toHaveProperty('output');
+        assertNoSecondModelBuilt();
     });
 
-    it('row 34 — abort/hard-timeout is NEVER re-issued (covered on the as-is path too)', async () => {
-        const abortErr: any = new Error('The operation was aborted');
-        abortErr.name = 'AbortError';
-        mockGenerate.mockRejectedValueOnce(abortErr);
-        await expect(
-            runStructuredReviewCall({
-                ...base,
-                schema: keepSchema,
-                byokConfig: zooKimiSlot,
-            }),
-        ).rejects.toThrow('The operation was aborted');
+    it('429 twice → throws the second 429 marked exhausted', async () => {
+        const second = rateLimited('Usage limit reached for 5 hour.');
+        mockGenerate
+            .mockRejectedValueOnce(
+                rateLimited('Usage limit reached for 5 hour.'),
+            )
+            .mockRejectedValueOnce(second);
+
+        const thrown = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: rerouteSlot,
+        }).catch((e) => e);
+
+        expect(thrown).toBe(second);
+        expect(retriesWereExhausted(thrown)).toBe(true);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('429 while the slot is in cooldown → no re-issue, marked exhausted', async () => {
+        mockGetLimiter.mockReturnValue({ isInCooldown: () => true });
+        const rateErr = rateLimited('too many requests');
+        mockGenerate.mockRejectedValueOnce(rateErr);
+
+        const thrown = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: rerouteSlot,
+        }).catch((e) => e);
+
+        expect(thrown).toBe(rateErr);
+        expect(retriesWereExhausted(thrown)).toBe(true);
         expect(mockGenerate).toHaveBeenCalledTimes(1);
     });
 });
@@ -1552,42 +1472,6 @@ describe('MATRIX E — strict json_schema branch (openai/anthropic/google/moonsh
         // json_object recovery only).
         expect(mockGenerate.mock.calls[0][0].system).toBe('sys');
     });
-
-    it('strict branch off-schema: Output.object throws → ONE json_object re-ask with schema in prompt', async () => {
-        const typeErr = new TypeValidationError({
-            value: { kept: true },
-            cause: new Error('renamed key'),
-        });
-        mockGenerate
-            .mockRejectedValueOnce(
-                new NoObjectGeneratedError({
-                    message: 'No object generated (test)',
-                    cause: typeErr,
-                    text: '{"kept":true}',
-                    response: {} as any,
-                    usage: {} as any,
-                    finishReason: 'stop',
-                }),
-            )
-            .mockResolvedValueOnce(ok({ keep: true }));
-
-        const out = await runStructuredReviewCall({
-            ...base,
-            schema: keepSchema,
-            byokConfig: openaiSlot,
-        });
-
-        expect(out).toEqual({ keep: true });
-        expect(mockGenerate).toHaveBeenCalledTimes(2);
-        // The recovery is OBSERVABLE (schema written into the re-ask prompt) —
-        // the #1786 root cause was the missing prompt contract in json_object mode.
-        expect(mockGenerate.mock.calls[1][0].system).toContain(
-            'Return ONLY a JSON object',
-        );
-        // NOT a slot-level fault: the provider honoured json_schema, the model
-        // flubbed the shape → the slot is never cached unsupported.
-        expect(markJsonSchemaUnsupported).not.toHaveBeenCalled();
-    });
 });
 
 describe('MATRIX E/#1786 — a raw jsonSchema() caller (no validate fn) is STILL protected', () => {
@@ -1603,19 +1487,11 @@ describe('MATRIX E/#1786 — a raw jsonSchema() caller (no validate fn) is STILL
         additionalProperties: false,
     } as any);
 
-    it('clean D validates and returns', async () => {
-        mockGenerate.mockResolvedValueOnce({ text: '{"keep":true}', usage: {} });
-        await expect(
-            runStructuredReviewCall({
-                ...base,
-                schema: rawSchema,
-                byokConfig: zooKimiSlot,
-            }),
-        ).resolves.toEqual({ keep: true });
-    });
-
     it('renamed keys are REJECTED (ensureValidatingSchema compiled an ajv validator) → SIGNALS', async () => {
-        mockGenerate.mockResolvedValueOnce({ text: '{"kept":true}', usage: {} });
+        mockGenerate.mockResolvedValueOnce({
+            text: '{"kept":true}',
+            usage: {},
+        });
         await expect(
             runStructuredReviewCall({
                 ...base,
@@ -1627,64 +1503,6 @@ describe('MATRIX E/#1786 — a raw jsonSchema() caller (no validate fn) is STILL
 });
 
 describe('MATRIX D — input variants (request assembly threading, happy LLM.run)', () => {
-    it('row 35 — empty user prompt threads through verbatim (no substitution)', async () => {
-        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
-        await runStructuredReviewCall({ ...base, schema: keepSchema, user: '' });
-        expect(mockGenerate.mock.calls[0][0].prompt).toBe('');
-    });
-
-    it('row 36 — a single normal call assembles exactly one generateText with system+prompt', async () => {
-        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
-        await runStructuredReviewCall({
-            ...base,
-            schema: keepSchema,
-            system: 'the-system',
-            user: 'the-user',
-        });
-        expect(mockGenerate).toHaveBeenCalledTimes(1);
-        expect(mockGenerate.mock.calls[0][0]).toEqual(
-            expect.objectContaining({
-                system: 'the-system',
-                prompt: 'the-user',
-                maxRetries: 0,
-            }),
-        );
-    });
-
-    it('row 37 — a large user prompt crossing any chunk size threads through unchanged (no truncation)', async () => {
-        const huge = 'diff-line\n'.repeat(50_000);
-        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
-        await runStructuredReviewCall({
-            ...base,
-            schema: keepSchema,
-            user: huge,
-        });
-        expect(mockGenerate.mock.calls[0][0].prompt).toBe(huge);
-        expect(mockGenerate.mock.calls[0][0].prompt.length).toBe(huge.length);
-    });
-
-    it('row 39 — an omitted (null-ish) system field is passed as undefined, not fabricated', async () => {
-        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
-        await runStructuredReviewCall({
-            byokConfig: undefined,
-            schema: keepSchema,
-            user: 'only-user',
-            runName: 'no.system',
-        } as any);
-        expect(mockGenerate.mock.calls[0][0].system).toBeUndefined();
-    });
-
-    it('row 40 — special chars / emoji / whitespace-only diff thread through verbatim', async () => {
-        const weird = '\t\n  🚀 <script> [31m ```` "quotes" \\n  ';
-        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
-        await runStructuredReviewCall({
-            ...base,
-            schema: keepSchema,
-            user: weird,
-        });
-        expect(mockGenerate.mock.calls[0][0].prompt).toBe(weird);
-    });
-
     it('threading — the resolved byokConfig slot is handed to the model builder (not a copy/2nd slot)', async () => {
         const slot = {
             provider: 'openai',
@@ -1701,42 +1519,325 @@ describe('MATRIX D — input variants (request assembly threading, happy LLM.run
     });
 });
 
-describe('MATRIX — guaranteed return shape across every layer', () => {
-    it('structured happy / repair / reissue all return the DECLARED object shape', async () => {
-        // happy
-        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
-        expect(
-            await runStructuredReviewCall({ ...base, schema: keepSchema }),
-        ).toEqual({ keep: true });
+describe('promptCache — a one-shot call that shares a prefix with sibling calls', () => {
+    const claude = {
+        provider: 'anthropic',
+        apiKey: 'enc',
+        model: 'claude-sonnet-5-5',
+    } as any;
+    const claudeOnBedrock = {
+        provider: 'amazon_bedrock',
+        model: 'eu.anthropic.claude-sonnet-5-5',
+    } as any;
+    const gpt = {
+        provider: 'openai',
+        apiKey: 'enc',
+        model: 'gpt-6.1-sol',
+    } as any;
+    const gemini = {
+        provider: 'google_gemini',
+        apiKey: 'enc',
+        model: 'gemini-3.8-flash',
+    } as any;
+    const head = '<Rules>\n[1] no console\n</Rules>\n';
+    const user = `${head}<File path="a.ts">\n+console.log(1)\n</File>`;
+    const sent = (i = 0) => mockGenerate.mock.calls[i][0];
+    // Structured answer for both channels: Output.object and the reroute-json
+    // text path Claude 5.5 takes (always thinking, no forced tool_choice).
+    const answer = {
+        experimental_output: { ok: true },
+        text: '{"ok":true}',
+        usage: {},
+    };
+    const spanAttrs = (i = 0) =>
+        observabilityService.runAiSdkLLMInSpan.mock.calls[i][0].attrs;
 
-        // deterministic repair (fence) — still the declared shape, no re-ask
-        mockGenerate.mockReset();
-        mockGenerate.mockRejectedValueOnce(
-            new NoObjectGeneratedError({
-                message: 'x',
-                cause: new JSONParseError({
-                    text: '```json\n{"keep":true}\n```',
-                    cause: new Error('fence'),
-                }),
-                text: '```json\n{"keep":true}\n```',
-                response: {} as any,
-                usage: {} as any,
-                finishReason: 'stop',
-            }),
-        );
-        expect(
-            await runStructuredReviewCall({ ...base, schema: keepSchema }),
-        ).toEqual({ keep: true });
+    it('sends today’s request when the call declares nothing', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({ ...base, user, byokConfig: claude });
+        expect(sent().prompt).toBe(user);
+        expect(sent().messages).toBeUndefined();
+        expect(typeof sent().system).toBe('string');
+        expect(spanAttrs().promptCacheMarked).toBeUndefined();
     });
 
-    it('the TEXT half always returns a string (never undefined), even on empty content', async () => {
-        mockGenerate.mockResolvedValueOnce({ usage: {} }); // no .text
-        const out = await runTextReviewCall({
-            system: 's',
-            user: 'u',
-            runName: 'r',
+    it('marks the shared head of the user turn on native Claude', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
         });
-        expect(typeof out).toBe('string');
-        expect(out).toBe('');
+        expect(sent().prompt).toBeUndefined();
+        expect(sent().messages).toEqual([
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'text',
+                        text: head,
+                        providerOptions: {
+                            anthropic: { cacheControl: { type: 'ephemeral' } },
+                        },
+                    },
+                    { type: 'text', text: user.slice(head.length) },
+                ],
+            },
+        ]);
+        expect(spanAttrs().promptCacheMarked).toBe('userPrefix');
+    });
+
+    it('marks it with a cachePoint on Claude on Bedrock', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claudeOnBedrock,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().messages[0].content[0].providerOptions).toEqual({
+            bedrock: { cachePoint: { type: 'default' } },
+        });
+    });
+
+    it('marks it on OpenAI gpt-5.6+ and puts the request in explicit mode', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: gpt,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().messages[0].content[0].providerOptions).toEqual({
+            openai: { promptCacheBreakpoint: { mode: 'explicit' } },
+        });
+        expect(sent().providerOptions).toEqual({
+            __providerOptions: 'reasoning',
+            openai: { promptCacheOptions: { mode: 'explicit' } },
+        });
+    });
+
+    it('leaves a provider that takes no marker on today’s request', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: gemini,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().prompt).toBe(user);
+        expect(sent().messages).toBeUndefined();
+    });
+
+    it('marks the system prompt when the call declares it shared', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { system: true },
+        });
+        expect(sent().system).toEqual({
+            role: 'system',
+            content: expect.stringMatching(/^sys/),
+            providerOptions: {
+                anthropic: { cacheControl: { type: 'ephemeral' } },
+            },
+        });
+        expect(sent().prompt).toBe(user);
+    });
+
+    it('marks the head and keeps the JSON hint in the tail when the re-ask appends it', async () => {
+        const parseFail = new NoObjectGeneratedError({
+            message: 'No object generated: could not parse the response',
+            text: 'not json at all',
+            cause: new JSONParseError({ text: 'not json at all', cause: null }),
+            usage: undefined,
+            finishReason: 'stop',
+            response: undefined,
+        } as any);
+        mockGenerate
+            .mockRejectedValueOnce(parseFail)
+            .mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            schema: z.object({ ok: z.boolean() }),
+            user,
+            byokConfig: gpt,
+            promptCache: { userPrefix: head },
+        });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        const [headPart, tailPart] = sent(1).messages[0].content;
+        expect(headPart.text).toBe(head);
+        expect(headPart.providerOptions).toEqual({
+            openai: { promptCacheBreakpoint: { mode: 'explicit' } },
+        });
+        expect(tailPart.text.startsWith(user.slice(head.length))).toBe(true);
+        expect(tailPart.text.toLowerCase()).toContain('json');
+    });
+
+    it('leaves the turn whole, JSON hint included, on a provider that takes no marker', async () => {
+        const glm = {
+            provider: 'open_router',
+            model: 'z-ai/glm-5.3',
+            apiKey: 'enc',
+        } as any;
+        mockGenerate.mockResolvedValueOnce(answer);
+        // open_router takes no marker: the split must not happen, and the hint must survive.
+        await runStructuredReviewCall({
+            ...base,
+            schema: z.object({ ok: z.boolean() }),
+            user,
+            byokConfig: glm,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().prompt.startsWith(user)).toBe(true);
+        expect(sent().prompt.toLowerCase()).toContain('json');
+    });
+
+    it('keeps the marker on a re-issue after a rate limit', async () => {
+        const rateLimited = Object.assign(new Error('429 Too Many Requests'), {
+            statusCode: 429,
+        });
+        mockGenerate
+            .mockRejectedValueOnce(rateLimited)
+            .mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+        });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(sent(1).messages[0].content[0].text).toBe(head);
+    });
+
+    it('drops an automatic Anthropic cacheControl from caller options on a marked call', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+            providerOptions: {
+                anthropic: {
+                    cacheControl: { type: 'ephemeral' },
+                    effort: 'low',
+                },
+            },
+        });
+        expect(sent().providerOptions).toEqual({
+            anthropic: { effort: 'low' },
+        });
+        expect(spanAttrs().promptCacheAutoDropped).toBe(true);
+    });
+
+    it('logs the dropped automatic cacheControl with the caller’s PR context', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            runName: 'drop-log-context-run',
+            organizationId: 'org-log-context',
+            attrs: {
+                prNumber: 42,
+                teamId: 'team-1',
+                note: 'free text from the caller',
+            },
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+            providerOptions: {
+                anthropic: { cacheControl: { type: 'ephemeral' } },
+            },
+        });
+        const logged = mockLoggerLog.mock.calls
+            .map(([entry]) => entry)
+            .find((e: any) =>
+                String(e?.message).includes('drop-log-context-run'),
+            );
+        expect(logged?.metadata).toMatchObject({
+            runName: 'drop-log-context-run',
+            organizationId: 'org-log-context',
+            prNumber: 42,
+            teamId: 'team-1',
+        });
+        expect(logged?.metadata).not.toHaveProperty('note');
+    });
+
+    it('records a declared head the turn does not start with', async () => {
+        mockGenerate.mockResolvedValueOnce(answer);
+        await runStructuredReviewCall({
+            ...base,
+            user,
+            byokConfig: claude,
+            promptCache: { userPrefix: 'something else' },
+        });
+        expect(sent().prompt).toBe(user);
+        expect(spanAttrs().promptCacheSkipped).toBe('prefix-mismatch');
+    });
+
+    it('applies to plain-text calls too', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: 'ok', usage: {} });
+        await runTextReviewCall({
+            system: 'sys',
+            user,
+            runName: 'text.run',
+            byokConfig: claude,
+            promptCache: { userPrefix: head },
+        });
+        expect(sent().messages[0].content[0].text).toBe(head);
+    });
+});
+
+describe('runStructuredReviewCall — usage meter', () => {
+    it('reports a call that succeeds', async () => {
+        const record = jest.fn();
+        mockGenerate.mockResolvedValueOnce({
+            experimental_output: { violations: [] },
+            usage: { inputTokens: 900, outputTokens: 80 },
+        });
+
+        await runWithUsageMeter({ record }, () =>
+            runStructuredReviewCall({ ...base }),
+        );
+
+        expect(record).toHaveBeenCalledWith(
+            expect.objectContaining({
+                usage: expect.objectContaining({
+                    inputTokens: 900,
+                    outputTokens: 80,
+                }),
+                runName: 'test.run',
+            }),
+        );
+    });
+
+    it('reports a call whose answer did not parse: it was still billed', async () => {
+        const record = jest.fn();
+        const unparsed = new NoObjectGeneratedError({
+            message: 'No object generated: could not parse the response.',
+            text: 'not json',
+            response: {} as any,
+            usage: { inputTokens: 700, outputTokens: 60 } as any,
+            finishReason: 'stop',
+        });
+        mockGenerate
+            .mockRejectedValueOnce(unparsed)
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        await runWithUsageMeter({ record }, () =>
+            runStructuredReviewCall({ ...base }),
+        );
+
+        expect(record).toHaveBeenCalledWith(
+            expect.objectContaining({
+                usage: expect.objectContaining({
+                    inputTokens: 700,
+                    outputTokens: 60,
+                }),
+                runName: expect.stringContaining('test.run'),
+            }),
+        );
     });
 });

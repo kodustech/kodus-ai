@@ -13,6 +13,12 @@ import {
     ValidationErrorType,
 } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
+import {
+    envManagedReasoningDescriptor,
+    getModelId,
+} from '@libs/llm/managed-slot';
+import { overrideContext } from '@libs/llm/routing-strategy';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import type { MCPServerConfig } from '@libs/mcp-server/mcp-adapter';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
@@ -39,12 +45,22 @@ import type {
 import { taskPasses } from './check-policy';
 import { IntentJudge, JudgePolicy } from './judge/intent-judge';
 import {
+    analyzerOutputTokens,
+    judgeWindow,
+    reservedOutputTokens,
+} from './judge/model-window';
+import { buildBusinessRulesAnalysisPrompt } from './judge/analysis-prompt.builder';
+import {
     classifyReply,
     type OpenFinding,
     type ReplyIntent,
 } from './judge/reply-classifier';
 import { settleVerdict } from './judge/settle-verdict';
-import { createGapCheck, type GapCheck } from './judge/gap-check';
+import {
+    createGapCheck,
+    GAP_CHECK_ANSWER,
+    type GapCheck,
+} from './judge/gap-check';
 import { deriveStatus } from './judge/validation-verdict';
 import type {
     RequirementVerdict,
@@ -57,7 +73,12 @@ import {
     type RenderContext,
     renderComment,
 } from './render';
-import { fitDiff } from './pull-request-diff';
+import {
+    changedFileNames,
+    DIFF_BUDGET_CHARS,
+    diffTokenBudget,
+    fitDiff,
+} from './pull-request-diff';
 import {
     AUTO_TASK_SOURCE,
     type BusinessLogicSettings,
@@ -437,12 +458,15 @@ export class BusinessValidationService {
                     };
                 }
                 // `UTF-8` in a title names no task: a team that requires one
-                // still has none.
+                // still has none. The message names what was looked for, so a
+                // real key its tracker can't see (#2422) isn't told it is absent.
                 if (askForTask) {
                     return {
                         kind: 'task_required',
                         message: await translate(
-                            messages.taskRequiredMessage(),
+                            messages.taskRequiredNotFoundMessage(
+                                resolution.attempts,
+                            ),
                         ),
                     };
                 }
@@ -479,7 +503,63 @@ export class BusinessValidationService {
         if (!fullDiff.trim()) {
             return skip('diff_unavailable', messages.diffUnavailableMessage());
         }
-        const { diff, unseenFiles } = fitDiff(fullDiff);
+        const slot = (await judge()).modelSlot;
+        const contextWindowTokens = judgeWindow(slot);
+        // Everything that is not the diff, counted at its worst like the diff:
+        // a PR description or a task can carry a base64 image or a log too.
+        const promptTokens =
+            estimateTextTokens(this.instructions(request), {
+                worstCase: true,
+            }) +
+            Math.max(
+                ...judgeable.map((f) =>
+                    estimateTextTokens(
+                        buildBusinessRulesAnalysisPrompt({
+                            task: f.task,
+                            taskText: formatTaskForJudge(f.task),
+                            taskQuality: gradeTask(f.task),
+                            diff: '',
+                            unseenFiles: changedFileNames(fullDiff),
+                            pullRequestBody: request.pullRequest?.body,
+                            userLanguage: language,
+                            teamGuidance: settings.teamGuidance,
+                        }),
+                        { worstCase: true },
+                    ),
+                ),
+            );
+        const answer = await analyzerOutputTokens(slot);
+        const fitBeside = (outputTokens: number) => {
+            const tokens = diffTokenBudget({
+                contextWindowTokens,
+                promptTokens,
+                outputTokens,
+            });
+            return {
+                tokens,
+                ...fitDiff(fullDiff, { chars: DIFF_BUDGET_CHARS, tokens }),
+            };
+        };
+        const fitted = fitBeside(answer.reserved);
+        const { diff, unseenFiles } = fitted;
+        // The window, not the cost cap, left no code beside the task and the
+        // answer: a judge that reads none says nothing, and the provider may
+        // reject the call outright. Files over the cost cap alone still go to
+        // the judge by name, as CHECK MANUALLY.
+        if (!diff.trim() && (fitted.cutByTokens || fitted.tokens <= 0)) {
+            // The answer the slot declares is the cause only when the code
+            // would fit beside the answer the judge itself asks for.
+            const answerIsCause =
+                answer.reserved > answer.requested &&
+                !!fitBeside(answer.requested).diff.trim();
+            return skip(
+                'too_large_for_model',
+                messages.tooLargeForModelMessage(
+                    contextWindowTokens,
+                    answerIsCause ? answer.reserved : undefined,
+                ),
+            );
+        }
 
         const judged = await Promise.all(
             judgeable.map((f) =>
@@ -536,9 +616,8 @@ export class BusinessValidationService {
         judge: () => Promise<IntentJudge>,
     ): Promise<TaskCheck | { thin: Task } | undefined> {
         const readAt = new Date().toISOString();
-        const verdict = await (
-            await judge()
-        ).judge({
+        const judging = await judge();
+        const verdict = await judging.judge({
             instructions: this.instructions(request),
             task: found.task,
             taskText: formatTaskForJudge(found.task),
@@ -564,6 +643,13 @@ export class BusinessValidationService {
                         pullRequest: request.pullRequest?.number,
                         tracker: found.task.tracker,
                         cause: verdict.missingInfo,
+                        // Which model failed: the parse failures and
+                        // timeouts are per model, and the log said nothing.
+                        // Without a slot, the env or managed model.
+                        provider:
+                            judging.modelSlot?.provider ??
+                            envManagedReasoningDescriptor()?.provider,
+                        model: getModelId(judging.modelSlot),
                     },
                 });
                 return undefined;
@@ -626,7 +712,12 @@ export class BusinessValidationService {
         if (!reader || !open.length || request.signal?.aborted) {
             return verdict;
         }
-        const check = this.gapCheck((await judge()).modelSlot, request);
+        const slot = (await judge()).modelSlot;
+        const check = this.gapCheck(
+            slot,
+            request,
+            await reservedOutputTokens(slot, GAP_CHECK_ANSWER),
+        );
         const results = await Promise.all(
             open.map(({ requirement }) =>
                 check({
@@ -700,6 +791,8 @@ export class BusinessValidationService {
     protected gapCheck(
         model: NormalizedModel | undefined,
         request: BusinessValidationRequest,
+        /** The answer its calls declare: `reservedOutputTokens`. */
+        outputTokens?: number,
     ): GapCheck {
         return createGapCheck(
             aiSdkAgentRun(
@@ -711,6 +804,10 @@ export class BusinessValidationService {
                 },
                 request.signal,
             ),
+            {
+                contextWindowTokens: judgeWindow(model),
+                outputTokens,
+            },
         );
     }
 
@@ -1077,16 +1174,15 @@ export class BusinessValidationService {
     private async judge(
         request: BusinessValidationRequest,
     ): Promise<IntentJudge> {
-        const overrideRef =
-            request.byokModelId?.trim() || request.byokModel?.trim();
         const model =
             (await this.permissionValidationService.resolveTaskSlot(
                 request.organizationAndTeamData,
                 LLM_TASK.businessValidation,
                 {
-                    ctx: overrideRef
-                        ? { override: { modelId: overrideRef } }
-                        : {},
+                    ctx: overrideContext(
+                        request.byokModelId,
+                        request.byokModel,
+                    ),
                 },
             )) ?? undefined;
 
@@ -1299,7 +1395,8 @@ export function legacyOutcomeLabels(outcome: BusinessValidationOutcome): {
                 mode: 'limitation_response',
                 taskContextStatus:
                     outcome.reason === 'diff_unavailable' ||
-                    outcome.reason === 'judge_failed'
+                    outcome.reason === 'judge_failed' ||
+                    outcome.reason === 'too_large_for_model'
                         ? 'unknown'
                         : 'missing',
                 prDiffStatus:

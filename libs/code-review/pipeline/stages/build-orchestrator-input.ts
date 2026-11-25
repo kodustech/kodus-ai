@@ -1,5 +1,6 @@
 import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import type { OrchestratorInput } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
+import { agentReviewMode } from '@libs/code-review/domain/review-mode';
 import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import { createLogger } from '@libs/core/log/logger';
 import { trialDefaultModel } from '@libs/llm/byok-to-vercel';
@@ -86,6 +87,10 @@ export function buildOrchestratorInput(
     return {
         organizationAndTeamData: context.organizationAndTeamData,
         changedFiles: computed.changedFiles,
+        incrementalDiff:
+            !context.pipelineMetadata?.forceFullRerun &&
+            !!context.lastExecution?.lastAnalyzedCommit,
+        prFilePaths: context.prFilePaths,
         // remoteCommands is undefined when no sandbox is available (e.g. trial
         // mode). The agent loop detects the empty-tools case and switches to a
         // self-contained analysis variant.
@@ -116,6 +121,7 @@ export function buildOrchestratorInput(
         commits,
         // Free-text steering directive from `@kody review <directive>`.
         reviewDirective: context.reviewDirective,
+        riskAssessment: context.riskAssessment,
         ciEvidence: context.ciEvidence,
         analyzerFindings: context.analyzerFindings,
         kodyRules: computed.kodyRules ?? context.codeReviewConfig?.kodyRules,
@@ -130,7 +136,12 @@ export function buildOrchestratorInput(
             context.repository?.defaultBranch,
         callGraph: computed.callGraph,
         callGraphJson: context.callGraphJson,
-        reviewMode: context.codeReviewConfig?.reviewMode || 'normal',
+        // The agents' step budget and verify policy: a heavy review runs them
+        // as a balanced one (its lenses come from `heavy` below).
+        reviewMode: agentReviewMode(context.codeReviewConfig?.reviewMode),
+        // Heavy mode (`@kody review --heavy` / CLI `--heavy`): the M3 lenses
+        // run next to the generalist. Any org, no gate.
+        heavy: context.heavy || undefined,
         // Trial-only forced model (ignored when a BYOK config is present — the
         // resolver prefers BYOK). Both the subscription trial and the anonymous
         // public demo (try.kodus.io) → DeepSeek V4 Flash on Fireworks. The

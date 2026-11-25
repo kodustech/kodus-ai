@@ -42,6 +42,7 @@ export class GraphContextService {
         sandbox: SandboxInstance,
         changedFiles: FileChange[],
         repoId: string,
+        baseBranch?: string,
     ): Promise<string> {
         if (!sandbox?.run) {
             this.logger.warn({
@@ -88,7 +89,11 @@ export class GraphContextService {
                     message: `[KODUS-GRAPH] Step 3/4: repo not found by UUID ${repoId}, falling back to legacy`,
                     context: GraphContextService.name,
                 });
-                return this.generateContextLegacy(sandbox, changedFiles);
+                return this.generateContextLegacy(
+                    sandbox,
+                    changedFiles,
+                    baseBranch,
+                );
             }
             await this.writeBaseGraphToSandbox(
                 sandbox,
@@ -129,7 +134,11 @@ export class GraphContextService {
                 error,
                 metadata: { repoId, fileCount: filePaths.length },
             });
-            return this.generateContextLegacy(sandbox, changedFiles);
+            return this.generateContextLegacy(
+                sandbox,
+                changedFiles,
+                baseBranch,
+            );
         }
     }
 
@@ -253,11 +262,13 @@ export class GraphContextService {
             return prompt;
         } catch (error) {
             this.logger.warn({
-                message: `[KODUS-GRAPH] Failed to generate context, proceeding without it`,
+                message: `[KODUS-GRAPH] Failed to generate context`,
                 context: GraphContextService.name,
                 error,
             });
-            return '';
+            // Rethrow so the review stage records CALLGRAPH_FAILED; the stage
+            // proceeds without the graph either way.
+            throw error;
         }
     }
 
@@ -470,17 +481,19 @@ export class GraphContextService {
             diffPath: options.diffPath,
         });
 
+        // `kodus-graph context` writes --out on every run that exits 0, even
+        // when the analysis is empty, so a read that fails here lost the graph:
+        // throw for the caller to fall back or record CALLGRAPH_FAILED (#2207).
         try {
             return await sandbox.readFile(
                 `${sandbox.repoDir}/${CONTEXT_OUTPUT_PATH}`,
                 { timeoutMs: 10_000 },
             );
-        } catch {
-            this.logger.warn({
-                message: `[KODUS-GRAPH] prompt file is empty (context command succeeded but produced no output)`,
-                context: GraphContextService.name,
-            });
-            return '';
+        } catch (error) {
+            throw new Error(
+                `kodus-graph context exited 0 but ${CONTEXT_OUTPUT_PATH} could not be read: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
+            );
         }
     }
 }

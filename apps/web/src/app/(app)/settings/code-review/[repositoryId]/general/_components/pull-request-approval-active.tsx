@@ -1,15 +1,16 @@
 "use client";
 
-import { Button } from "@components/ui/button";
-import { CardHeader } from "@components/ui/card";
-import { Heading } from "@components/ui/heading";
-import { Switch } from "@components/ui/switch";
+import { Badge } from "@components/ui/badge";
 import { Controller, useFormContext } from "react-hook-form";
-import { OverrideIndicatorForm } from "src/app/(app)/settings/code-review/_components/override";
 
 import type { CodeReviewFormType } from "../../../_types";
+import { SettingToggleRow } from "./setting-toggle-row";
 
-export const PullRequestApprovalActive = () => {
+export const PullRequestApprovalActive = ({
+    conditionalApprovalEnabled,
+}: {
+    conditionalApprovalEnabled: boolean;
+}) => {
     const form = useFormContext<CodeReviewFormType>();
 
     return (
@@ -17,32 +18,35 @@ export const PullRequestApprovalActive = () => {
             name="pullRequestApprovalActive.value"
             control={form.control}
             render={({ field }) => (
-                <Button
-                    size="sm"
-                    variant="helper"
-                    disabled={field.disabled}
-                    onClick={() => field.onChange(!field.value)}
-                    className="w-full">
-                    <CardHeader className="flex flex-row items-center justify-between gap-6">
-                        <div className="flex flex-col gap-1">
-                            <div className="flex flex-row items-center gap-2">
-                                <Heading variant="h3">
-                                    Enable Pull Request Approval
-                                </Heading>
-
-                                <OverrideIndicatorForm fieldName="pullRequestApprovalActive" />
-                            </div>
-
-                            <p className="text-text-secondary text-sm">
-                                When Kody completes an automated code review and
-                                finds no issues, it will automatically approve
-                                the Pull Request.
-                            </p>
-                        </div>
-
-                        <Switch decorative checked={field.value} />
-                    </CardHeader>
-                </Button>
+                <div className="border-card-lv3/60 border-b">
+                    <SettingToggleRow
+                        id={field.name}
+                        title="Automatic PR approval"
+                        fieldName="pullRequestApprovalActive"
+                        badge={
+                            conditionalApprovalEnabled ? (
+                                <Badge>Beta</Badge>
+                            ) : (
+                                <Badge
+                                    variant={
+                                        field.value ? "primary-dark" : "helper"
+                                    }>
+                                    {field.value ? "On" : "Off"}
+                                </Badge>
+                            )
+                        }
+                        description={
+                            !field.value
+                                ? "No PRs will be approved automatically."
+                                : conditionalApprovalEnabled
+                                  ? "Approve clean PRs that match a policy."
+                                  : "Approve PRs after a clean review."
+                        }
+                        checked={field.value ?? false}
+                        disabled={field.disabled}
+                        onCheckedChange={field.onChange}
+                    />
+                </div>
             )}
         />
     );

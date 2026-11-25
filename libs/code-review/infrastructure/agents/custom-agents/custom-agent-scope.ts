@@ -6,6 +6,11 @@ import {
     customAgentSlug,
     type CustomAgentConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { SECRET_FILE_GLOBS } from '@libs/code-review/infrastructure/agents/engine/secret-files';
+import {
+    hasConfirmedRisk,
+    type RiskAssessmentResult,
+} from '@libs/code-review/domain/risk/risk-assessment';
 
 export { customAgentSlug };
 
@@ -61,23 +66,6 @@ export function ignoredFilesInAgentScope<T extends { filename: string }>(
     );
 }
 
-// Ignored files no glob hands to an agent: their diff would carry credentials
-// to the model provider. The secret files of the default ignore list, plus
-// the private keys and keystores it does not name.
-const SECRET_FILE_GLOBS = [
-    '**/.env*',
-    '**/*.pem',
-    '**/*.key',
-    '**/*.p12',
-    '**/*.pfx',
-    '**/*.jks',
-    '**/*.keystore',
-    '**/id_rsa*',
-    '**/id_dsa*',
-    '**/id_ecdsa*',
-    '**/id_ed25519*',
-];
-
 /**
  * The ignored files a review hands to its custom agents: those at least one
  * agent selectCustomAgents dispatches reviews by ignoredFilesInAgentScope,
@@ -90,12 +78,14 @@ export function ignoredFilesForCustomAgents<
     review: {
         codeReviewConfig?: { customAgents?: CustomAgentConfig[] };
         onlyCustomAgent?: string;
+        riskAssessment?: RiskAssessmentResult;
     },
     ignoredFiles: readonly T[] | undefined,
 ): T[] {
     const agents = selectCustomAgents(
         review.codeReviewConfig?.customAgents,
         review.onlyCustomAgent,
+        review.riskAssessment,
     );
     const existing = (ignoredFiles ?? []).filter(
         (file) => file?.filename && file.status !== 'removed',
@@ -121,6 +111,7 @@ export function ignoredFilesForCustomAgents<
 export function reviewsOnlyIgnoredFiles(review: {
     codeReviewConfig?: { customAgents?: CustomAgentConfig[] };
     onlyCustomAgent?: string;
+    riskAssessment?: RiskAssessmentResult;
     changedFiles?: readonly unknown[];
     ignoredFileChanges?: ReadonlyArray<{ filename: string; status?: string }>;
 }): boolean {
@@ -247,6 +238,17 @@ export function scopeCallGraph(
 export function selectCustomAgents(
     agents: readonly CustomAgentConfig[] | undefined,
     onlySlug?: string,
+    risk?: RiskAssessmentResult,
+): CustomAgentConfig[] {
+    return customAgentCandidates(agents, onlySlug).filter(
+        (agent) => !customAgentRiskSkipReason(agent, risk, onlySlug),
+    );
+}
+
+/** Candidates before the risk condition, retained for explicit skip reporting. */
+export function customAgentCandidates(
+    agents: readonly CustomAgentConfig[] | undefined,
+    onlySlug?: string,
 ): CustomAgentConfig[] {
     if (!agents?.length) {
         return [];
@@ -266,6 +268,17 @@ export function selectCustomAgents(
         seen.add(slug);
         return true;
     });
+}
+
+export function customAgentRiskSkipReason(
+    agent: Pick<CustomAgentConfig, 'runWhen'>,
+    risk: RiskAssessmentResult | undefined,
+    onlySlug?: string,
+): 'risk-not-found' | 'risk-disabled' | 'risk-unavailable' | undefined {
+    if (onlySlug || agent.runWhen !== 'risk-found' || hasConfirmedRisk(risk))
+        return undefined;
+    if (risk?.status === 'assessed') return 'risk-not-found';
+    return risk?.status === 'disabled' ? 'risk-disabled' : 'risk-unavailable';
 }
 
 /**

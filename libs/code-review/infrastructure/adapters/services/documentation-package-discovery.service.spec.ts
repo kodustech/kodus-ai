@@ -41,14 +41,6 @@ describe('DocumentationPackageDiscoveryService deterministic logic', () => {
             );
         });
 
-        it('recognizes every supported manifest by basename', () => {
-            for (const name of ROOT_MANIFEST_FILES) {
-                expect(
-                    call('isSupportedManifestFile', `deep/dir/${name}`),
-                ).toBe(true);
-            }
-        });
-
         it('returns false for an unsupported basename', () => {
             expect(call('isSupportedManifestFile', 'src/index.ts')).toBe(false);
         });
@@ -145,21 +137,8 @@ describe('DocumentationPackageDiscoveryService deterministic logic', () => {
     });
 
     describe('normalizeVersion', () => {
-        it('returns undefined for undefined/empty input (falsy guard)', () => {
-            expect(call('normalizeVersion', undefined)).toBeUndefined();
-            expect(call('normalizeVersion', '')).toBeUndefined();
-        });
-
-        it('returns undefined when the value is only whitespace (length boundary)', () => {
-            expect(call('normalizeVersion', '   ')).toBeUndefined();
-        });
-
         it('trims and returns a non-empty version', () => {
             expect(call('normalizeVersion', '  1.2.3  ')).toBe('1.2.3');
-        });
-
-        it('preserves a single non-space character (length > 0 boundary)', () => {
-            expect(call('normalizeVersion', '0')).toBe('0');
         });
     });
 

@@ -1,0 +1,48 @@
+---
+title: "Organization Settings"
+description: "Onde gerenciar a sua organização: configurações gerais, CLI keys e as outras páginas em Organization na barra lateral."
+---
+
+O grupo **Organization** na barra lateral reúne tudo o que se aplica à organização inteira. O que você vê depende da sua função; veja [Funções do Workspace](/pt-BR/how_to_use/workspace_roles).
+
+| Página | Para que serve |
+| --- | --- |
+| **General** | Fuso horário e auto join. Veja abaixo. |
+| **SSO** | Single sign-on SAML. Veja [Single Sign-On](/pt-BR/how_to_use/security/sso). |
+| **Cockpit visibility** | Oculte abas e métricas do Cockpit para todos. Veja [Configuração do Cockpit](/pt-BR/how_to_use/cockpit/configuration). |
+| **CLI keys** | Team keys para a CLI da Kodus. Veja abaixo. |
+| **Notifications** | Notificações por e-mail e no app por evento e função. Veja [Notifications](/pt-BR/how_to_use/organization/notifications). |
+| **Subscription** | Seu plano, licenças de desenvolvedor e membros do workspace. Veja [Planos e Licenças](/pt-BR/how_to_use/pricing) e [Funções do Workspace](/pt-BR/how_to_use/workspace_roles). |
+| **Activity logs** | Quem alterou o quê. Veja [Activity Logs](/pt-BR/how_to_use/organization/activity_logs). |
+| **Token usage** | Tokens e custo estimado. Veja [Token Usage](/pt-BR/how_to_use/organization/token_usage). |
+
+General, SSO, Cockpit visibility, CLI keys e Notifications são para os Owners.
+
+## Configurações gerais
+
+Abra **Organization → General** (**General settings**).
+
+- **Timezone**: **New York** ou **São Paulo**. Define o fuso horário da data e hora exatas mostradas na página **Pull Requests**, no tooltip de um horário relativo ("opened 2 hours ago") e no horário **Started** de cada etapa do review. Abrir **General** pela primeira vez grava New York; até então esses horários aparecem em UTC. Nada mais o lê: jobs agendados, notificações, relatórios por e-mail, intervalos de datas do Cockpit e o Token usage usam fusos fixos.
+- **Auto Join**: ative **Enable Auto Join** e liste os seus domínios de e-mail, separados por vírgulas, para que as pessoas que se cadastrarem com um deles possam entrar na organização. Domínios públicos como gmail.com não são permitidos, e você só pode adicionar o seu próprio domínio. Quem entra assim começa como **Contributor**; veja [Funções do Workspace](/pt-BR/how_to_use/workspace_roles#auto-join-para-membros-do-workspace).
+
+Clique em **Save settings** para aplicar.
+
+## CLI keys
+
+Uma CLI key permite que a [CLI da Kodus](/pt-BR/how_to_use/cli/introduction) aja por um workspace sem login interativo, o que serve para pipelines de CI e agentes de código de IA. Abra **Organization → CLI keys**. As keys listadas pertencem ao workspace selecionado, e apenas os Owners podem criar, configurar ou revogar.
+
+<Steps>
+  <Step title="Gere uma key">
+    Informe um **Key name** que diga onde a key será usada, como `CI pipeline deploy key`, e clique em **Generate key**.
+  </Step>
+
+  <Step title="Copie">
+    Em **CLI key created**, copie a key. Ela é mostrada apenas uma vez. O diálogo também traz um comando de instalação para compartilhar com o seu time.
+  </Step>
+
+  <Step title="Escolha o que ela pode fazer">
+    Clique em **Configure** na key. **Allow repository configuration via CLI** habilita `kodus config remote` (também chamado de `kodus config repo`) e `kodus config centralized` para a key. **Allow Kody Rules management via CLI** habilita `kodus rules view`, `create` e `update`. Os dois vêm desativados por padrão. Clique em **Save changes**. Uma key ainda não consegue rodar `kodus rules pause`, `resume` ou `delete`, e define apenas seis configurações de um repositório; esses casos exigem um login. Veja [Modos de Autenticação](/pt-BR/how_to_use/cli/concepts#modos-de-autenticação).
+  </Step>
+</Steps>
+
+**Existing CLI keys** lista o **Name**, o **Status** (**Active** ou **Revoked**), o **Last used**, o **Created at** e o **Created by** de cada key. **Revoke** desabilita uma key imediatamente e não pode ser desfeito. As criações e revogações de keys aparecem nos [Activity Logs](/pt-BR/how_to_use/organization/activity_logs).

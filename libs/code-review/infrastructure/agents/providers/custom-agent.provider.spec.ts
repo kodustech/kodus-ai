@@ -19,6 +19,11 @@ jest.mock(
     }),
 );
 
+import { execSync } from 'child_process';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+
 import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
 import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -33,6 +38,30 @@ import {
 } from './custom-agent.provider';
 
 const resolveModelMock = resolveReviewAgentModel as jest.Mock;
+
+/**
+ * A real repository whose `origin/main` holds the rule file the team merged
+ * and whose working tree (the PR head) holds another version of it.
+ */
+function targetBranchCheckout(rules: {
+    onTarget: string;
+    inCheckout: string;
+}): string {
+    const dir = mkdtempSync(join(tmpdir(), 'kody-ast-grep-rules-'));
+    const git = (args: string) =>
+        execSync(`git -c user.email=t@example.test -c user.name=t ${args}`, {
+            cwd: dir,
+            stdio: 'ignore',
+        });
+    git('init -q -b main');
+    mkdirSync(join(dir, 'rules'));
+    writeFileSync(join(dir, 'rules/no-console.yml'), rules.onTarget);
+    git('add rules');
+    git('commit -q -m rules');
+    git('update-ref refs/remotes/origin/main HEAD');
+    writeFileSync(join(dir, 'rules/no-console.yml'), rules.inCheckout);
+    return dir;
+}
 const runLoopMock = runAgentLoopViaCore as jest.Mock;
 
 const RUN_SLOT = { provider: 'openai', model: 'run-model' };
@@ -130,11 +159,6 @@ beforeEach(() => {
 });
 
 describe('CustomAgentProvider', () => {
-    it('builds one provider per config from the factory', () => {
-        expect(provider()).toBeInstanceOf(CustomAgentProvider);
-        expect(provider().config.id).toBe('agent-ledger');
-    });
-
     it("puts the team's instructions in the prompt and keeps them inside their block", async () => {
         await provider().execute(input());
 
@@ -253,7 +277,10 @@ describe('CustomAgentProvider', () => {
         const runCall = resolveModelMock.mock.calls.find(
             ([, , task]) => task === LLM_TASK.customAgent,
         );
-        expect(runCall[0].byokModelId).toBe('byok-model-run');
+        // The pin goes alongside the repository override, which stays as the
+        // fallback for a pin whose model was deleted.
+        expect(runCall[3]).toBe('byok-model-run');
+        expect(runCall[0].byokModelId).toBe('repo-override');
     });
 });
 
@@ -453,29 +480,130 @@ describe('CustomAgentProvider — knowledge and tools', () => {
         );
     });
 
-    it('reads a rule file path from the target branch, never the checkout', async () => {
-        const exec = jest.fn(async (command: string) =>
-            command === 'ast-grep --version'
-                ? { stdout: 'ast-grep 0.45.3', stderr: '', exitCode: 0 }
-                : command.startsWith('git show')
-                  ? {
-                        stdout: 'id: no-console\nlanguage: TypeScript\nrule:\n  pattern: console.log($A)',
+    // The checkout is the PR head: a pull request must not swap the rules
+    // the team merged. The local sandbox (self-hosted, no E2B key) refuses
+    // git on its command channel, so the read must not depend on it.
+    it.each([
+        ['allows git (E2B)', true],
+        ['refuses git (local sandbox)', false],
+    ])(
+        'reads a rule file path from the target branch, never the checkout, on a sandbox whose command channel %s',
+        async (_label, execAllowsGit) => {
+            const repoDir = targetBranchCheckout({
+                onTarget:
+                    'id: no-console\nlanguage: TypeScript\nrule:\n  pattern: console.log($A)\n',
+                inCheckout:
+                    'id: anything-goes\nlanguage: TypeScript\nrule:\n  pattern: $NEVER\n',
+            });
+            const shell = (command: string) => {
+                try {
+                    const stdout = execSync(command, {
+                        cwd: repoDir,
+                        encoding: 'utf8',
+                        stdio: ['ignore', 'pipe', 'pipe'],
+                    });
+                    return { stdout, stderr: '', exitCode: 0 };
+                } catch (error: any) {
+                    return {
+                        stdout: String(error.stdout ?? ''),
+                        stderr: String(error.stderr ?? ''),
+                        exitCode: error.status ?? 1,
+                    };
+                }
+            };
+            const exec = jest.fn(async (command: string) => {
+                if (command === 'ast-grep --version')
+                    return {
+                        stdout: 'ast-grep 0.45.3',
                         stderr: '',
                         exitCode: 0,
-                    }
-                  : { stdout: '', stderr: '', exitCode: 1 },
-        );
+                    };
+                if (command.startsWith('git ') && execAllowsGit)
+                    return shell(command);
+                return {
+                    stdout: `Program "${command.split(' ')[0]}" is not allowed in local sandbox. Allowed: sg, ast-grep, cat, wc, head, tail, file, fd, find, grep`,
+                    stderr: '',
+                    exitCode: 1,
+                };
+            });
+            const sandbox = {
+                type: execAllowsGit ? 'e2b' : 'local',
+                run: jest.fn(async (command: string) => shell(command)),
+                repoDir,
+                writeFile: jest.fn(async () => {}),
+                remoteCommands: { exec },
+            };
+
+            await provider(
+                config({ tools: { astGrepConfig: 'rules/no-console.yml' } }),
+            ).execute(
+                input({
+                    baseBranch: 'main',
+                    remoteCommands: sandbox.remoteCommands,
+                    customAgentTooling: { sandbox },
+                }),
+            );
+
+            const [, secrets] = runLoopMock.mock.calls[0];
+            const astGrep = secrets.extraTools.find(
+                (t: any) => t.name === 'astGrep',
+            );
+            await astGrep.execute({ useRules: true }, { runId: 'r' });
+
+            expect(sandbox.writeFile).toHaveBeenCalledWith(
+                expect.stringMatching(/rules\.yml$/),
+                expect.stringContaining('id: no-console'),
+            );
+            expect(sandbox.writeFile).not.toHaveBeenCalledWith(
+                expect.anything(),
+                expect.stringContaining('anything-goes'),
+            );
+            // Its temp directory does not stay in the checkout.
+            expect(sandbox.run).toHaveBeenCalledWith(
+                expect.stringMatching(
+                    /^rm -rf -- '.+\/\.kody-ast-grep-[a-z0-9-]+'$/,
+                ),
+            );
+        },
+    );
+
+    // A convention citing a code file is checked against that file on the
+    // target branch; with no skill or doc linked there is no knowledge
+    // reader, and the local sandbox refuses git on its command channel.
+    it('gives the convention check a target-branch reader when no knowledge is linked', async () => {
+        const repoDir = targetBranchCheckout({
+            onTarget: 'rule: merged\n',
+            inCheckout: 'rule: from the pull request\n',
+        });
         const sandbox = {
-            type: 'e2b',
-            run: jest.fn(async () => ({ stdout: '', exitCode: 0 })),
-            repoDir: '/home/user/repo',
-            writeFile: jest.fn(async () => {}),
-            remoteCommands: { exec },
+            type: 'local',
+            run: jest.fn(async (command: string) => {
+                try {
+                    const stdout = execSync(command, {
+                        cwd: repoDir,
+                        encoding: 'utf8',
+                        stdio: ['ignore', 'pipe', 'pipe'],
+                    });
+                    return { stdout, stderr: '', exitCode: 0 };
+                } catch (error: any) {
+                    return {
+                        stdout: String(error.stdout ?? ''),
+                        stderr: '',
+                        exitCode: error.status ?? 1,
+                    };
+                }
+            }),
+            repoDir,
+            remoteCommands: {
+                exec: async () => ({
+                    stdout: 'Program "git" is not allowed in local sandbox.',
+                    stderr: '',
+                    exitCode: 1,
+                }),
+            },
         };
 
-        await provider(
-            config({ tools: { astGrepConfig: 'rules/no-console.yml' } }),
-        ).execute(
+        await provider().execute(
             input({
                 baseBranch: 'main',
                 remoteCommands: sandbox.remoteCommands,
@@ -483,25 +611,10 @@ describe('CustomAgentProvider — knowledge and tools', () => {
             }),
         );
 
-        const [, secrets] = runLoopMock.mock.calls[0];
-        const astGrep = secrets.extraTools.find(
-            (t: any) => t.name === 'astGrep',
-        );
-        await astGrep.execute({ useRules: true }, { runId: 'r' });
-
-        expect(exec).toHaveBeenCalledWith(
-            "git show 'refs/remotes/origin/main:rules/no-console.yml'",
-        );
-        expect(sandbox.writeFile).toHaveBeenCalledWith(
-            expect.stringMatching(/rules\.yml$/),
-            expect.stringContaining('id: no-console'),
-        );
-        // Its temp directory does not stay in the checkout.
-        expect(sandbox.run).toHaveBeenCalledWith(
-            expect.stringMatching(
-                /^rm -rf -- '\/home\/user\/repo\/\.kody-ast-grep-[a-z0-9-]+'$/,
-            ),
-        );
+        const [loopParams] = runLoopMock.mock.calls[0];
+        await expect(
+            loopParams.conventionGuideReader.readFile('rules/no-console.yml'),
+        ).resolves.toEqual({ status: 'ok', content: 'rule: merged\n' });
     });
 
     it('runs an MCP call once per review and agent, and again in another review', async () => {
@@ -670,12 +783,6 @@ describe('buildCustomAgentPrompt', () => {
             }),
         );
         expect(withPlugins).toContain('<TeamSystems>');
-        expect(withPlugins).toMatch(/ticket|issue|work item/);
-        // A requirement the change breaks is reported even when the code
-        // never mentions the record: the record is the evidence.
-        expect(withPlugins).toContain(
-            'is a finding even when the code never mentions it',
-        );
 
         expect(buildCustomAgentPrompt(config())).not.toContain('<TeamSystems>');
         expect(
@@ -683,6 +790,20 @@ describe('buildCustomAgentPrompt', () => {
                 config({ tools: { mcp: [{ integrationId: 'x', tools: [] }] } }),
             ),
         ).not.toContain('<TeamSystems>');
+    });
+});
+
+describe('buildCustomAgentPrompt — no sandbox', () => {
+    it('does not ask an agent without the repository to investigate it', () => {
+        expect(buildCustomAgentPrompt(config())).toContain(
+            'Investigate the codebase before reporting',
+        );
+        const prompt = buildCustomAgentPrompt(config(), undefined, {
+            readsRepository: false,
+        });
+        expect(prompt).not.toContain('Investigate the codebase');
+        expect(prompt).toContain('evidence visible in the diff');
+        expect(prompt).toContain('returned by the tools you are given');
     });
 });
 

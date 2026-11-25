@@ -1,0 +1,49 @@
+---
+title: "Routing"
+description: "Choose review depth and see which models apply."
+---
+
+Open **Code review → Routing** at Global, Repository or Directory scope. **General** shows the resolved modes and models so you can check them without opening Routing.
+
+Balanced is available on every plan. See [Heavy mode](/en/how_to_use/code_review/review_directive#heavy-mode) for the plans and licenses that support Heavy. Only Owners can change global model routing.
+
+## Review mode
+
+- **Balanced:** the standard review.
+- **Heavy (beta):** a deeper review with specialist reviewers. Available on Teams and Enterprise, including trials. On other plans, the Heavy option is disabled. An explicit `--heavy` request runs Balanced and reports that Heavy requires Teams or Enterprise.
+
+With [risk assessment](/en/how_to_use/code_review/configs/risk) on, **No risk found** defaults to Balanced and **Risk found** defaults to Heavy where the plan includes it. **Risk assessment unavailable** uses the default review mode, `reviewMode` in YAML. This starts at Balanced. You can choose Heavy as the fallback if your plan includes it.
+
+With risk assessment off, one mode applies to **All PRs**. There is always a default.
+
+Explicit `--heavy` and `--balanced` review commands override routing. Plan restrictions still apply. The review command does not bypass risk checks for automatic approval.
+
+## Models
+
+At Global scope, the **Models** card sets the organization's defaults:
+
+- **Default model** and **Fallback model** (used when a model fails).
+- **Risk assessment model**, **Balanced model** and **Heavy model**. Heavy is available on Teams and Enterprise.
+- **Other task models** sets the model for **Kody Rules**, **PR Summary**, **Conversation**, **Business Rules** and **Custom Agents**.
+
+A model you do not set uses the default model. Editing models needs organization permission. At Repository and Directory scope the card is read-only, with a link to organization routing. Connect providers under **AI providers**.
+
+At Global scope, **Repository overrides** lists the models already set for repositories, folders and custom agents. It is read-only.
+
+**Code review model override** (Repository and Directory scope) sets one model for both Balanced and Heavy reviews in that scope. It does not change the risk assessment model. Choose **Use routing models**, or the inherited model, to clear it.
+
+## YAML
+
+Turn on **Prefer kodus-config.yml settings** in **Code review → General** (repository scope) before using repository configuration files.
+
+```yaml
+riskAssessmentActive: true
+reviewMode: balanced
+riskReviewRouting:
+  noRisk: balanced
+  riskFound: heavy
+```
+
+`reviewMode` is used when risk assessment is off or unavailable. Scoped routing can override one outcome while inheriting the other.
+
+The CLI keeps its separate review pipeline; this PR-risk routing applies to provider PR reviews, including custom-agent runs.

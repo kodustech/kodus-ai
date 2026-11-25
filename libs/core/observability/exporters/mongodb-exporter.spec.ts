@@ -1,3 +1,17 @@
+// The global setup stub silences the logger with `createLogger` alone, which
+// leaves `deepSanitize` undefined. These cases drive `_pushLog`, so this file
+// keeps the real sanitizer and only replaces the logger itself.
+jest.mock('@libs/core/log/logger', () => ({
+    ...jest.requireActual('@libs/core/log/logger'),
+    createLogger: () => ({
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        info: jest.fn(),
+    }),
+}));
+
 import { MongoDBExporter } from './mongodb-exporter';
 
 function buildLog(message: string, payloadSize = 0): any {
@@ -37,11 +51,13 @@ describe('MongoDBExporter (log flush resilience)', () => {
             batchSize: 500,
             flushIntervalMs: 60_000,
         });
-        const insertMany = jest.fn().mockRejectedValue(
-            new Error(
-                'BSONObj size: 34233013 (0x20A5AB5) is invalid. Size must be between 0 and 16793600(16MB)',
-            ),
-        );
+        const insertMany = jest
+            .fn()
+            .mockRejectedValue(
+                new Error(
+                    'BSONObj size: 34233013 (0x20A5AB5) is invalid. Size must be between 0 and 16793600(16MB)',
+                ),
+            );
 
         (exporter as any).collections = {
             logs: { insertMany },
@@ -167,12 +183,191 @@ describe('MongoDBExporter (log flush resilience)', () => {
             enableObservability: false,
         });
 
-        await exporter.exportLog(
-            'error',
-            'should-not-buffer',
-            { component: 'test-component' } as any,
-        );
+        await exporter.exportLog('error', 'should-not-buffer', {
+            component: 'test-component',
+        } as any);
 
         expect((exporter as any).logBuffer).toHaveLength(0);
+    });
+
+    it('waits for a flush already writing, then writes what arrived meanwhile, before dispose goes on', async () => {
+        const exporter = new MongoDBExporter({
+            batchSize: 500,
+            flushIntervalMs: 60_000,
+        });
+        let releaseFirst!: () => void;
+        const insertMany = jest
+            .fn()
+            .mockImplementationOnce(
+                () =>
+                    new Promise<void>((resolve) => {
+                        releaseFirst = resolve;
+                    }),
+            )
+            .mockResolvedValue(undefined);
+        (exporter as any).collections = {
+            logs: { insertMany },
+            telemetry: { insertMany: jest.fn() },
+        };
+        (exporter as any).logBuffer = [buildLog('first')];
+
+        const running = (exporter as any).flushLogs();
+        (exporter as any).logBuffer.push(buildLog('arrived during write'));
+        let flushed = false;
+        const flushing = exporter.flush().then(() => (flushed = true));
+
+        await new Promise((r) => setTimeout(r, 20));
+        expect(flushed).toBe(false);
+
+        releaseFirst();
+        await running;
+        await flushing;
+
+        expect(insertMany).toHaveBeenCalledTimes(2);
+        expect((exporter as any).logBuffer).toHaveLength(0);
+    });
+
+    it('keeps the running flush when a flush is asked for from inside its own start', async () => {
+        const exporter = new MongoDBExporter({
+            batchSize: 500,
+            flushIntervalMs: 60_000,
+        });
+        let release!: () => void;
+        let nested: Promise<void> | undefined;
+        let calls = 0;
+        (exporter as any).writeLogs = jest.fn(() => {
+            calls += 1;
+            if (calls === 1) {
+                // A log written while the flush starts asks for a flush.
+                nested = (exporter as any).flushLogs();
+                return new Promise<void>((resolve) => (release = resolve));
+            }
+            return Promise.resolve();
+        });
+
+        const running = (exporter as any).flushLogs();
+        await nested;
+        let settled = false;
+        void (exporter as any).flushLogs().then(() => (settled = true));
+        await new Promise((r) => setTimeout(r, 10));
+
+        expect(settled).toBe(false);
+        release();
+        await running;
+    });
+});
+
+describe('MongoDBExporter indexes', () => {
+    it('indexes telemetry by correlationId only, the key the per-execution lookups read', async () => {
+        const exporter = new MongoDBExporter({
+            batchSize: 500,
+            flushIntervalMs: 60_000,
+        });
+        const telemetry = { createIndex: jest.fn().mockResolvedValue('ok') };
+        (exporter as any).collections = {
+            logs: { createIndex: jest.fn().mockResolvedValue('ok') },
+            telemetry,
+        };
+
+        await (exporter as any).createIndexes();
+
+        expect(telemetry.createIndex.mock.calls).toEqual([
+            [{ correlationId: 1 }],
+        ]);
+    });
+});
+
+/**
+ * #2639: 61% of error rows stored `metadata.organizationId: "unknown"`, and
+ * ~28,600 of them carried the organization one level deeper, inside the
+ * `params` the code-management services log. `SimpleLogger` flattens that
+ * `metadata` into the processor context, so the exporter receives `{ params }`.
+ */
+describe('MongoDBExporter organization attribution', () => {
+    const originalLogLevel = process.env.API_LOG_LEVEL;
+
+    beforeEach(() => {
+        process.env.API_LOG_LEVEL = 'info';
+    });
+
+    afterAll(() => {
+        process.env.API_LOG_LEVEL = originalLogLevel;
+    });
+
+    const logged = (context: Record<string, any>) => {
+        const exporter = new MongoDBExporter({
+            batchSize: 500,
+            flushIntervalMs: 60_000,
+            bucketKeys: ['organizationId', 'teamId', 'tenantId'],
+        });
+
+        (exporter as any)._pushLog(
+            'error',
+            'Error to get default branch',
+            'BitbucketCloudService',
+            context,
+        );
+
+        return (exporter as any).logBuffer[0];
+    };
+
+    it('reads the pair from the params a service logs', () => {
+        // The shape `SimpleLogger` produces for
+        // `logger.error({ metadata: { params } })`: metadata is flattened.
+        const entry = logged({
+            component: 'BitbucketCloudService',
+            params: {
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+            },
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-1');
+        expect(entry.metadata.teamId).toBe('team-1');
+        expect(entry.metadata.tenantId).toBe('org-1');
+    });
+
+    it('reads a pair set at the top level', () => {
+        const entry = logged({
+            component: 'AzureReposService',
+            organizationAndTeamData: {
+                organizationId: 'org-2',
+                teamId: 'team-2',
+            },
+        });
+
+        expect(entry.metadata.organizationId).toBe('org-2');
+        expect(entry.metadata.teamId).toBe('team-2');
+    });
+
+    it('still says unknown when no shape carries the pair', () => {
+        const entry = logged({
+            component: 'BitbucketCloudService',
+            params: { repository: { id: 'repo-1' } },
+        });
+
+        expect(entry.metadata.organizationId).toBe('unknown');
+        expect(entry.metadata.teamId).toBe('unknown');
+    });
+
+    it('still redacts credentials on the way to the buffer', () => {
+        // The real `deepSanitize` runs here; the logger mock only silences
+        // `createLogger`, so a redaction regression cannot hide behind it.
+        const entry = logged({
+            component: 'BitbucketCloudService',
+            params: {
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                password: 'hunter2',
+                token: 'pat-secret',
+            },
+        });
+
+        expect(JSON.stringify(entry.attributes)).not.toContain('hunter2');
+        expect(JSON.stringify(entry.attributes)).not.toContain('pat-secret');
     });
 });

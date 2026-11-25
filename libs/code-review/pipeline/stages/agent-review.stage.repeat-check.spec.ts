@@ -109,13 +109,16 @@ const makeStage = (wholeHistory: PrDecisionRecord[]) => {
     return { stage, reviewOrchestrator, historyUseCase };
 };
 
-const makeContext = (previousDecisions: PrDecisionRecord[]) =>
+const makeContext = (
+    previousDecisions: PrDecisionRecord[],
+    changedFiles: any[] = [{ filename: 'src/user.ts' }],
+) =>
     frozenContext({
         organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
         repository: { id: 'repo-1', name: 'repo-1', fullName: 'acme/repo-1' },
         pullRequest: { number: 7 },
         platformType: 'GITHUB',
-        changedFiles: [{ filename: 'src/user.ts' }],
+        changedFiles,
         codeReviewConfig: {
             reviewOptions: {},
             resolvedModelSlot: { provider: 'openai', model: 'gpt-4o-mini' },
@@ -144,12 +147,17 @@ const published = (result: any) =>
 
 let runSpy: jest.SpyInstance;
 let repeatAnswer: unknown;
+let repeatTimeout: boolean;
 beforeEach(() => {
+    repeatTimeout = false;
     repeatAnswer = { verdicts: [] };
-    runSpy = jest.spyOn(LLM, 'run').mockImplementation((async (req: any) =>
-        req.spanName === 'code-review::repeat-check'
-            ? repeatAnswer
-            : { groups: [], unique: [0, 1, 2, 3] }) as any);
+    runSpy = jest.spyOn(LLM, 'run').mockImplementation((async (req: any) => {
+        if (req.spanName !== 'code-review::repeat-check') {
+            return { groups: [], unique: [0, 1, 2, 3] };
+        }
+        if (repeatTimeout) throw new DOMException('timed out', 'TimeoutError');
+        return repeatAnswer;
+    }) as any);
 });
 afterEach(() => {
     runSpy.mockRestore();
@@ -157,9 +165,54 @@ afterEach(() => {
 });
 
 describe('AgentReviewStage — repeat check (#2097)', () => {
-    it('reads the whole history and keeps a rule repeat older than the prompts\' history out of the review', async () => {
+    it('keeps a timed-out PR-level comparison off the PR while delivering a new problem of the same rule', async () => {
+        repeatTimeout = true;
+        const old = earlier({
+            label: 'kody_rules',
+            relevantFile: undefined,
+            brokenKodyRulesIds: ['rule-logger'],
+            suggestionContent:
+                'The CSV export has no regression test.',
+        });
+        const repeat = {
+            label: 'kody_rules',
+            severity: 'high',
+            brokenKodyRulesIds: ['rule-logger'],
+            oneSentenceSummary: 'Missing export coverage',
+            suggestionContent:
+                'The CSV export has no regression test.',
+        };
+        const newFinding = {
+            ...repeat,
+            oneSentenceSummary: 'Missing export coverage',
+            suggestionContent:
+                'The PDF export has no regression test.',
+        };
+        const { stage, reviewOrchestrator } = makeStage([old]);
+        reviewOrchestrator.execute.mockResolvedValue(
+            envelope([repeat, newFinding]),
+        );
+
+        const result = await run(stage, makeContext([old]));
+        expect(result.discardedSuggestions).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    suggestionContent: repeat.suggestionContent,
+                    priorityStatus: PriorityStatus.WITHHELD_BY_REPEAT_CHECK,
+                }),
+            ]),
+        );
+        expect(result.validSuggestionsByPR).toHaveLength(1);
+        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
+            newFinding.suggestionContent,
+        );
+    });
+    it("reads the whole history and keeps a rule repeat older than the prompts' history out of the review", async () => {
         const recent = Array.from({ length: 3 }, (_, i) =>
-            earlier({ suggestionId: `recent-${i}`, relevantFile: 'src/other.ts' }),
+            earlier({
+                suggestionId: `recent-${i}`,
+                relevantFile: 'src/other.ts',
+            }),
         );
         const { stage, reviewOrchestrator, historyUseCase } = makeStage([
             ...recent,
@@ -234,7 +287,15 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         });
         const { stage, reviewOrchestrator } = makeStage([applied]);
         reviewOrchestrator.execute.mockResolvedValue(envelope([bugFinding]));
-        repeatAnswer = { verdicts: [{ finding: 0, verdict: 'same_occurrence', earlierId: 'old-bug' }] };
+        repeatAnswer = {
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'same_occurrence',
+                    earlierId: 'old-bug',
+                },
+            ],
+        };
 
         const result = await run(stage, makeContext([applied]));
 
@@ -245,6 +306,107 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
                 priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
             }),
         ]);
+    });
+
+    it('matches a finder finding to an earlier comment on the same code in another file, by its cited lines', async () => {
+        const moved = earlier({
+            suggestionId: 'old-moved',
+            relevantFile: 'src/user.ts',
+            existingCode: 'const total = items.reduce((a, b) => a + b.price);',
+            suggestionContent: 'The reduce has no initial value.',
+        });
+        const { stage, reviewOrchestrator } = makeStage([moved]);
+        // The finder's lean finding: lines and text, no code.
+        reviewOrchestrator.execute.mockResolvedValue(
+            envelope([
+                {
+                    relevantFile: 'src/cart.ts',
+                    relevantLinesStart: 2,
+                    relevantLinesEnd: 2,
+                    label: 'bug',
+                    suggestionContent: 'Empty carts throw a TypeError.',
+                },
+            ]),
+        );
+        const ctx = makeContext(
+            [moved],
+            [
+                {
+                    filename: 'src/cart.ts',
+                    fileContent:
+                        'export function total(items) {\nconst total = items.reduce((a, b) => a + b.price);\nreturn total;\n}\n',
+                },
+            ],
+        );
+
+        await run(stage, ctx);
+
+        const repeatCall = runSpy.mock.calls.find(
+            ([req]: any) => req.spanName === 'code-review::repeat-check',
+        );
+        expect(repeatCall).toBeDefined();
+        expect(JSON.stringify(repeatCall![0])).toContain('old-moved');
+    });
+
+    it("logs a finding on a file the PR does not change with the review's ids", async () => {
+        const { stage, reviewOrchestrator } = makeStage([]);
+        reviewOrchestrator.execute.mockResolvedValue(
+            envelope([{ ...bugFinding, relevantFile: 'src/other.ts' }]),
+        );
+        const logSpy = jest.spyOn((stage as any).logger, 'log');
+
+        await run(stage, makeContext([]));
+
+        expect(logSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining(
+                    'the file is not changed by this PR',
+                ),
+                metadata: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                    prNumber: 7,
+                    relevantFile: 'src/other.ts',
+                },
+            }),
+        );
+    });
+
+    it('reads the cited code from the diff when the review has no file content (CLI)', async () => {
+        const moved = earlier({
+            suggestionId: 'old-moved',
+            relevantFile: 'src/user.ts',
+            existingCode: 'const total = items.reduce((a, b) => a + b.price);',
+            suggestionContent: 'The reduce has no initial value.',
+        });
+        const { stage, reviewOrchestrator } = makeStage([moved]);
+        reviewOrchestrator.execute.mockResolvedValue(
+            envelope([
+                {
+                    relevantFile: 'src/cart.ts',
+                    relevantLinesStart: 2,
+                    relevantLinesEnd: 2,
+                    label: 'bug',
+                    suggestionContent: 'Empty carts throw a TypeError.',
+                },
+            ]),
+        );
+        const ctx = makeContext(
+            [moved],
+            [
+                {
+                    filename: 'src/cart.ts',
+                    patch: '@@ -1,2 +1,3 @@\n export function total(items) {\n+const total = items.reduce((a, b) => a + b.price);\n }',
+                },
+            ],
+        );
+
+        await run(stage, ctx);
+
+        const repeatCall = runSpy.mock.calls.find(
+            ([req]: any) => req.spanName === 'code-review::repeat-check',
+        );
+        expect(JSON.stringify(repeatCall?.[0])).toContain('old-moved');
     });
 
     it('posts a bug the check does not match, with the revision link its finder chose', async () => {
@@ -266,6 +428,86 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         );
     });
 
+    it('links a kept finding when the repeat check identifies the earlier suggestion', async () => {
+        const applied = earlier({
+            suggestionId: 'old-bug',
+            outcome: 'implemented',
+            suggestionContent: 'Return early when user is missing.',
+        });
+        const { stage, reviewOrchestrator } = makeStage([applied]);
+        reviewOrchestrator.execute.mockResolvedValue(envelope([bugFinding]));
+        repeatAnswer = {
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'caused_by_earlier',
+                    earlierId: 'old-bug',
+                },
+            ],
+        };
+
+        const result = await run(stage, makeContext([applied]));
+
+        const [comment] = published(result);
+        expect(comment.revisesSuggestionId).toBe('old-bug');
+        expect(comment.suggestionContent).toMatch(
+            /^\*\*Revises an earlier Kody suggestion\*\* on `src\/user\.ts:10`/,
+        );
+    });
+
+    it('links a lean finder finding, whose cited code the check read on a copy', async () => {
+        const applied = earlier({
+            suggestionId: 'old-bug',
+            outcome: 'implemented',
+            suggestionContent: 'Return early when user is missing.',
+        });
+        const { stage, reviewOrchestrator } = makeStage([applied]);
+        const { existingCode, improvedCode, oneSentenceSummary, ...lean } =
+            bugFinding;
+        reviewOrchestrator.execute.mockResolvedValue(envelope([lean]));
+        repeatAnswer = {
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'caused_by_earlier',
+                    earlierId: 'old-bug',
+                },
+            ],
+        };
+        const lines = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`);
+        lines[19] = 'const name = user.name;';
+
+        const result = await run(
+            stage,
+            makeContext(
+                [applied],
+                [{ filename: 'src/user.ts', fileContent: lines.join('\n') }],
+            ),
+        );
+
+        const [comment] = published(result);
+        expect(comment.revisesSuggestionId).toBe('old-bug');
+    });
+
+    it('leaves an unrelated finding unlinked', async () => {
+        const applied = earlier({ suggestionId: 'old-bug' });
+        const { stage, reviewOrchestrator } = makeStage([applied]);
+        reviewOrchestrator.execute.mockResolvedValue(envelope([bugFinding]));
+        repeatAnswer = {
+            verdicts: [
+                { finding: 0, verdict: 'different_problem', earlierId: null },
+            ],
+        };
+
+        const result = await run(stage, makeContext([applied]));
+
+        const [comment] = published(result);
+        expect(comment.revisesSuggestionId).toBeUndefined();
+        expect(comment.suggestionContent).not.toContain(
+            'Revises an earlier Kody suggestion',
+        );
+    });
+
     it('a PR without history is not checked', async () => {
         const { stage, reviewOrchestrator, historyUseCase } = makeStage([
             ruleComment,
@@ -278,7 +520,7 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         expect(published(result)).toHaveLength(1);
     });
 
-    it('falls back to the prompts\' history when the whole history cannot be read', async () => {
+    it("falls back to the prompts' history when the whole history cannot be read", async () => {
         const { stage, reviewOrchestrator, historyUseCase } = makeStage([]);
         historyUseCase.execute.mockRejectedValue(new Error('Mongo down'));
         reviewOrchestrator.execute.mockResolvedValue(envelope([ruleFinding]));

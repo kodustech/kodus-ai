@@ -150,6 +150,38 @@ describe('ForgejoService — countReactions aligns with the shared reaction cont
         });
     });
 
+    it('counts the other comments when one comment has no reactions', async () => {
+        // Forgejo answers a comment without reactions with a `null` body, which
+        // the SDK hands back as `data: {}` (reproduced against Forgejo 11).
+        // That is not iterable, and the throw used to discard the reactions
+        // already counted for every other comment of the PR.
+        const service = makeService();
+        const twoComments = {
+            ...params(),
+            comments: [
+                { id: 2, pull_request_review_id: 9 },
+                { id: 5, pull_request_review_id: 9 },
+            ],
+        };
+
+        issueGetCommentReactions
+            .mockResolvedValueOnce({ data: [{ content: '+1' }] })
+            .mockResolvedValueOnce({ data: {} });
+
+        const out = await service.countReactions(twoComments);
+
+        expect(out).toEqual([
+            expect.objectContaining({
+                reactions: { thumbsUp: 1, thumbsDown: 0 },
+                comment: { id: 2, pull_request_review_id: 9 },
+            }),
+        ]);
+        expect(
+            (service as unknown as { logger: { error: jest.Mock } }).logger
+                .error,
+        ).not.toHaveBeenCalled();
+    });
+
     it('caps per-comment reaction requests to the concurrency bound', async () => {
         // The use-case runs many PRs concurrently, so an unbounded burst of
         // per-comment calls would hammer a self-hosted Forgejo. GitLab caps

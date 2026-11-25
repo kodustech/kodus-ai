@@ -129,6 +129,49 @@ function sliceBalancedJson(s: string): string | null {
 }
 
 /**
+ * The text with the reasoning blocks written ahead of the answer removed, or
+ * null when the text opens a block that never closes (no answer at all).
+ */
+export function stripReasoningBlocks(text: string): string | null {
+    const s = text.trim();
+    // Skip reasoning written into the answer. Some models (MiniMax-M3 in
+    // production) put <think>…</think> before the JSON, and the reasoning
+    // quotes code, so the first balanced {…} would be a quote, not the
+    // answer.
+    //
+    // Only a block that opens BEFORE the JSON starts is reasoning: past that
+    // point a <think> or </think> is text inside the answer (a finding about a
+    // prompt file quotes both), and each block ends at its FIRST closing tag so
+    // an answer that quotes the tag, or is followed by another block, survives.
+    // One left-to-right pass, so the cost grows with the length of the text and
+    // not with its length times the number of blocks.
+    // `<thinking>` is the same block under the other name models use.
+    let kept = '';
+    let pos = 0;
+    const openTag = /<(think|thinking)>/g;
+    for (;;) {
+        openTag.lastIndex = pos;
+        const m = openTag.exec(s);
+        if (!m) break;
+        const open = m.index;
+        const gap = s.slice(pos, open);
+        if (/[{[]/.test(gap)) break;
+        const closeTag = `</${m[1]}>`;
+        const close = s.indexOf(closeTag, open);
+        if (close < 0) {
+            // A block that never closes and is the first thing in the response
+            // carries no answer at all. Anywhere else, including right after a
+            // block that did close, the caller may still find one.
+            if (pos === 0 && !gap.trim()) return null;
+            break;
+        }
+        kept += gap;
+        pos = close + closeTag.length;
+    }
+    return (kept + s.slice(pos)).trim();
+}
+
+/**
  * Pull the JSON value out of free-form LLM text: unwrap a ```json fence, drop any
  * prose before/after the outermost balanced `{…}`/`[…]` (string-aware), and strip
  * trailing commas. Returns the JSON substring — even when the input was ALREADY
@@ -141,38 +184,9 @@ export function extractJsonFromText(text: string): string | null {
     if (typeof text !== 'string' || text.trim() === '') {
         return null;
     }
-    let s = text.trim();
-
-    // 0. Skip reasoning written into the answer. Some models (MiniMax-M3 in
-    // production) put <think>…</think> before the JSON, and the reasoning
-    // quotes code, so the first balanced {…} below would be a quote, not the
-    // answer.
-    //
-    // Only a block that opens BEFORE the JSON starts is reasoning: past that
-    // point a <think> or </think> is text inside the answer (a finding about a
-    // prompt file quotes both), and each block ends at its FIRST closing tag so
-    // an answer that quotes the tag, or is followed by another block, survives.
-    // One left-to-right pass, so the cost grows with the length of the text and
-    // not with its length times the number of blocks.
-    let kept = '';
-    let pos = 0;
-    for (;;) {
-        const open = s.indexOf('<think>', pos);
-        if (open < 0) break;
-        const gap = s.slice(pos, open);
-        if (/[{[]/.test(gap)) break;
-        const close = s.indexOf('</think>', open);
-        if (close < 0) {
-            // A block that never closes and is the first thing in the response
-            // carries no answer at all. Anywhere else, including right after a
-            // block that did close, the scan below may still find one.
-            if (pos === 0 && !gap.trim()) return null;
-            break;
-        }
-        kept += gap;
-        pos = close + '</think>'.length;
-    }
-    s = (kept + s.slice(pos)).trim();
+    const stripped = stripReasoningBlocks(text);
+    if (stripped === null) return null;
+    let s = stripped;
 
     // 1. Unwrap a markdown code fence.
     const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -200,18 +214,58 @@ export function extractJsonFromText(text: string): string | null {
  * parse fails. This walks to the end instead, so the answer wins over anything
  * quoted on the way there. Key matching is convention-insensitive
  * (`shouldKeep` ≡ `should_keep`) — the same rule {@link normalizeEnvelope} uses.
+ * A match `accept` rejects (the prompt's own example, restated after the
+ * answer) is skipped, so the answer before it still wins.
  */
 export function extractLastJsonObjectWith(
     text: string,
     keys: readonly string[],
+    accept: (obj: Record<string, unknown>) => boolean = () => true,
 ): Record<string, unknown> | null {
     if (typeof text !== 'string' || text.trim() === '' || keys.length === 0) {
         return null;
     }
+    return scanLastJson(text, keys, accept, false) as Record<
+        string,
+        unknown
+    > | null;
+}
+
+/**
+ * The answer at the end of a reply that may carry reasoning ahead of it: the
+ * reasoning blocks are removed first ({@link stripReasoningBlocks}; a block
+ * that never closes means no answer, null), then the LAST balanced value that
+ * is either an object carrying one of `keys` or a bare array (empty, or of
+ * objects) is returned. For a reply whose answer is a list: a draft the
+ * reasoning quoted never wins over the final `[]`.
+ */
+export function extractLastJsonAnswer(
+    text: string,
+    keys: readonly string[],
+): Record<string, unknown> | unknown[] | null {
+    if (typeof text !== 'string' || text.trim() === '' || keys.length === 0) {
+        return null;
+    }
+    const stripped = stripReasoningBlocks(text);
+    if (stripped === null) return null;
+    return scanLastJson(stripped, keys, () => true, true);
+}
+
+function scanLastJson(
+    text: string,
+    keys: readonly string[],
+    accept: (obj: Record<string, unknown>) => boolean,
+    arrays: boolean,
+): Record<string, unknown> | unknown[] | null {
     const wanted = new Set(keys.map(normalizeKeyName));
-    let found: Record<string, unknown> | null = null;
+    let found: Record<string, unknown> | unknown[] | null = null;
+    // End of the last JSON object passed over without a wanted key: an array
+    // inside it (a provider envelope's `choices`) is that object's data, not
+    // the answer, while an object carrying a key inside it still is.
+    let insideUntil = -1;
     for (let i = 0; i < text.length; i++) {
-        if (text[i] !== '{') continue;
+        const ch = text[i];
+        if (ch !== '{' && !(arrays && ch === '[')) continue;
         const slice = sliceBalancedJson(text.slice(i));
         // Unbalanced from HERE says nothing about a later `{` — keep scanning.
         if (!slice) continue;
@@ -221,14 +275,29 @@ export function extractLastJsonObjectWith(
         } catch {
             continue; // prose/code, not JSON — keep scanning (incl. nested).
         }
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        if (Array.isArray(parsed)) {
+            // A list answer: top level, and empty or every entry an object.
+            if (
+                i < insideUntil ||
+                !parsed.every(
+                    (e) => !!e && typeof e === 'object' && !Array.isArray(e),
+                )
+            ) {
+                continue;
+            }
+            found = parsed;
+            i += slice.length - 1;
+            continue;
+        }
+        if (!parsed || typeof parsed !== 'object') {
             continue;
         }
         const obj = parsed as Record<string, unknown>;
         if (!Object.keys(obj).some((k) => wanted.has(normalizeKeyName(k)))) {
+            insideUntil = Math.max(insideUntil, i + slice.length);
             continue; // maybe a wrapper — let the scan reach the inner object.
         }
-        found = obj;
+        if (accept(obj)) found = obj;
         i += slice.length - 1; // don't re-match objects nested inside the hit.
     }
     return found;
@@ -412,11 +481,221 @@ export function salvageJsonText(
     };
 }
 
+/** Parse a JSON slice, retrying once with legalised string literals (#2259):
+ *  code quoted in a payload often carries invalid escapes (regex `\d`, Swift
+ *  `\(title)`), so the strict parse fails on an otherwise-complete object. */
+function parseLenient(slice: string): unknown | undefined {
+    try {
+        return JSON.parse(slice);
+    } catch {
+        const escaped = escapeStringLiterals(slice);
+        if (escaped === slice) {
+            return undefined;
+        }
+        const retried = tryParse(escaped);
+        return retried.ok ? retried.value : undefined;
+    }
+}
+
+/** The offset an oversized scan starts at so no top-level span is cut in
+ *  half: `o` (text.length - SALVAGE_MAX_CHARS) when o falls BETWEEN
+ *  top-level spans; otherwise the first position at/after o where the span
+ *  o cuts into has closed. One linear string/escape-aware depth pass over
+ *  the text — O(N) time, O(1) space, no per-char regex or allocations; a
+ *  `{` inside a string literal never counts. Depth at the cut is only
+ *  knowable from index 0, so the pass cannot start later; an early span
+ *  that never closes extends the same single pass to the text's end (the
+ *  window is then empty and nothing is recovered). The expensive part —
+ *  sliceBalancedJson and a parse per delimiter — stays capped at
+ *  SALVAGE_MAX_CHARS by the caller. A raw cut would sever a container's
+ *  opener and promote its nested spans to candidates — a payload fragment
+ *  shipped as the answer. */
+function windowStartAfterCutSpans(text: string): number {
+    const o = text.length - SALVAGE_MAX_CHARS;
+    let depth = 0;
+    let inStr = false;
+    for (let i = 0; i < text.length; i++) {
+        if (i >= o && depth === 0 && !inStr) {
+            return i;
+        }
+        const ch = text[i];
+        if (inStr) {
+            if (ch === '\\') {
+                i++;
+            } else if (ch === '"') {
+                inStr = false;
+            }
+        } else if (ch === '"') {
+            inStr = true;
+        } else if (ch === '{' || ch === '[') {
+            depth++;
+        } else if (ch === '}' || ch === ']') {
+            if (depth > 0) {
+                depth--;
+            }
+        }
+    }
+    return text.length;
+}
+
+/** The end offset of the PRIMARY candidate's span in `text` (already
+ *  reasoning-stripped), mirroring {@link extractJsonFromText}'s selection —
+ *  steps 1 and 2 only, PRE-normalisation: trailing-comma stripping and
+ *  escape legalisation never move span boundaries, so the span end is
+ *  normalization-independent. An indexOf of the NORMALISED candidate is not
+ *  (`{,}` normalises to `{}`, whose first occurrence can sit INSIDE the real
+ *  answer and exclude it — the 410b3f931 floor bug). Null when no span can
+ *  be established (no fence, no balanced slice from the first delimiter) —
+ *  the conservative no-floor. */
+function primarySpanEnd(text: string): number | null {
+    const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence?.[1]) {
+        return (fence.index ?? 0) + fence[0].length;
+    }
+    const start = text.search(/[{[]/);
+    if (start < 0) {
+        return null;
+    }
+    const slice = sliceBalancedJson(text.slice(start));
+    return slice ? start + slice.length : null;
+}
+
+/**
+ * The FIRST top-level balanced JSON object that parses, starts AFTER the
+ * primary candidate's span, and (when the wire schema carries a validate fn)
+ * clears it. {@link extractJsonFromText} takes the FIRST fence / outermost
+ * value, which is the wrong end of the text when the model QUOTES code or an
+ * example object before its real answer (#2255): the quote is what it returns
+ * and the answer behind it is lost. The walk goes FORWARD from the primary
+ * candidate — deliberately NOT end-favoring like {@link scanLastJson}:
+ * review 5939864639 ruled that text AFTER the real answer (a restated
+ * example, or the "Empty would be {…}" sentence our own prompts invite,
+ * kody-rules-agent.provider.ts) must not win over it — walking from the end
+ * shipped an EMPTY review where real findings existed. Only TOP-LEVEL
+ * objects compete: a PARSEABLE container is atomic — an object competes as a
+ * whole and its nested children or array members never stand in for the
+ * answer (those stay undefined, exactly as before this fallback existed) —
+ * while a balanced span that is NOT JSON (quoted code, prose with an
+ * unmatched brace) is scanned within, since the answer can sit inside it.
+ * The one sanctioned nesting is the wrapper envelope: a top-level object
+ * that fails validation is retried through its ENVELOPE_WRAPPER_KEYS child,
+ * mirroring the rule {@link normalizeEnvelope} applies. Each candidate takes
+ * the same escape-legalising retry as the primary path (#2259); without a
+ * validate fn (raw jsonSchema, no validator) parse success accepts, matching
+ * the primary path. An oversized text (> SALVAGE_MAX_CHARS) walks only its
+ * last SALVAGE_MAX_CHARS chars, from an enclosure-aware cut that never
+ * starts inside a top-level span (one linear string-aware pass over the
+ * full input places it; a severed container cannot promote its nested
+ * spans) — the per-delimiter character work stays bounded at the #2112
+ * limit while the forward walk keeps the #2255 answer, which trails the
+ * quote, inside the window. The accepted residual, flipped with the rule
+ * (review 5939864639): a schema-valid example quoted after the primary but
+ * BEFORE the answer wins over that answer — schema alone cannot tell them
+ * apart; judged cheaper than the silent empty-review loss end-favoring
+ * caused.
+ */
+async function firstValidatingObjectAfter<T = unknown>(
+    text: string,
+    validate:
+        | ((
+              value: unknown,
+          ) =>
+              | ValidationResult<unknown>
+              | PromiseLike<ValidationResult<unknown>>)
+        | null,
+    /** Candidates must start at/after the primary candidate's span end, in
+     *  the coordinates of `text` as passed in (the window mapping below
+     *  adjusts it); null when there was no primary candidate — everything
+     *  competes. */
+    floor: number | null,
+): Promise<T | undefined> {
+    // Same #2112 bound as salvageJsonText for the EXPENSIVE part: the
+    // candidate walk (sliceBalancedJson + a parse per delimiter) scans at
+    // most the last SALVAGE_MAX_CHARS chars, and the forward walk keeps the
+    // #2255 answer — which trails the quote — inside it. The cut itself is
+    // enclosure-aware — one linear, allocation-free, string/escape-aware
+    // pass over the whole input (O(N) time, O(1) space) places it so a
+    // severed container cannot promote its nested spans to candidates. The
+    // floor maps with the cut: a primary that ended before the window
+    // constrains nothing.
+    if (text.length > SALVAGE_MAX_CHARS) {
+        const windowStart = windowStartAfterCutSpans(text);
+        text = text.slice(windowStart);
+        floor = floor === null ? null : Math.max(0, floor - windowStart);
+    }
+    const candidates: { value: unknown; start: number }[] = [];
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch !== '{' && ch !== '[') continue;
+        const slice = sliceBalancedJson(text.slice(i));
+        // Unbalanced from HERE says nothing about a later `{` — keep scanning.
+        if (!slice) continue;
+        // String-aware (tryParseLenient's rule): a comma inside a literal
+        // (`f(a, }` in improvedCode) is payload content and stays; only
+        // commas OUTSIDE string literals are stripped. The string
+        // alternative swallows the whole literal, so its commas are never
+        // visited — a bare comma pattern reintroduces the corruption.
+        const parsed = parseLenient(
+            slice.replace(/("(?:[^"\\]|\\[\s\S])*")|,(\s*[}\]])/g, '$1$2'),
+        );
+        // A PARSEABLE container is atomic: an object competes as a whole and
+        // its children — nested or array members — never stand in for the
+        // answer.
+        if (parsed !== undefined) {
+            if (
+                parsed &&
+                typeof parsed === 'object' &&
+                !Array.isArray(parsed)
+            ) {
+                candidates.push({ value: parsed, start: i });
+            }
+            i += slice.length - 1;
+            continue;
+        }
+        // Not JSON — a quoted code span or prose. The answer can sit inside
+        // it (an unmatched brace before the answer, its closer after), so
+        // keep scanning within instead of skipping the span whole.
+    }
+    for (const { value, start } of candidates) {
+        if (floor !== null && start < floor) {
+            // Inside/at the primary candidate's span — the fallback only
+            // takes objects that come AFTER it (review 5939864639).
+            continue;
+        }
+        if (!validate) {
+            return value as T;
+        }
+        const r = await validate(value);
+        if (r.success) {
+            return r.value as T;
+        }
+        // The envelope models wrap around the payload (normalizeEnvelope's
+        // keys): retry the wrapper's child before giving up on this candidate.
+        if (!Array.isArray(value)) {
+            for (const key of ENVELOPE_WRAPPER_KEYS) {
+                const child = (value as Record<string, unknown>)[key];
+                if (
+                    !child ||
+                    typeof child !== 'object' ||
+                    Array.isArray(child)
+                ) {
+                    continue;
+                }
+                const rc = await validate(child);
+                if (rc.success) {
+                    return rc.value as T;
+                }
+            }
+        }
+    }
+    return undefined;
+}
+
 /**
  * Extract the JSON out of `rawText` (clean, fenced, or prose-wrapped), then
  * validate it against `wire` (the same schema `Output.object` used). Returns the
- * parsed+validated value, or undefined when no JSON is present, it doesn't parse,
- * or it fails the shape (→ caller escalates to a model re-ask). Reuses the wire
+ * parsed+validated value, or undefined when no JSON is present, nothing parses,
+ * or nothing validates (→ caller escalates to a model re-ask). Reuses the wire
  * schema's own validate fn so the object is held to the exact contract.
  *
  * Uses {@link extractJsonFromText}, NOT {@link repairJsonText}: this is a PRIMARY
@@ -425,27 +704,54 @@ export function salvageJsonText(
  * `{"…":…}` with no fence/whitespace must validate. `repairJsonText` nulls
  * unchanged input by design (its "nothing to repair" signal for the salvage-after-
  * SDK-failure path), which would reject exactly that clean output.
+ *
+ * When the primary candidate is absent — the first fence quoted bracketless
+ * code, so nothing JSON-shaped surfaced — or it does not parse or validate (the
+ * model quoted a code block or an example object AHEAD of its real answer,
+ * #2255, so the first-fence extractor returned the quote), the FIRST top-level
+ * object AFTER the primary candidate that clears the schema wins instead
+ * ({@link firstValidatingObjectAfter}, forward per review 5939864639).
  */
 export async function repairAndValidate<T = unknown>(
     wire: unknown,
     rawText: string,
 ): Promise<T | undefined> {
-    const candidate = extractJsonFromText(rawText);
-    if (candidate == null) {
-        return undefined;
-    }
-    let value: unknown;
-    try {
-        value = JSON.parse(candidate);
-    } catch {
+    // A reasoning block that opens first and never closes carries no answer at
+    // all — no primary candidate, and no fallback either: the reasoning quotes
+    // objects, and they are not the answer.
+    const stripped = stripReasoningBlocks(rawText);
+    if (stripped === null) {
         return undefined;
     }
     const schema = asSchema(wire as any);
-    if (typeof schema.validate !== 'function') {
-        return value as T;
+    const validate =
+        typeof schema.validate === 'function' ? schema.validate : null;
+    const candidate = extractJsonFromText(rawText);
+    if (candidate != null) {
+        const value = parseLenient(candidate);
+        if (value !== undefined) {
+            if (!validate) {
+                return value as T;
+            }
+            const r = await validate(value);
+            if (r.success) {
+                return r.value as T;
+            }
+        }
     }
-    const r = await schema.validate(value);
-    return r.success ? (r.value as T) : undefined;
+    // The fallback walks FORWARD from the primary candidate (review
+    // 5939864639): only objects that start after its SPAN compete. The span
+    // comes from primarySpanEnd — pre-normalisation, because an indexOf of
+    // the normalised candidate (`{,}` → `{}`) can land INSIDE the real
+    // answer and exclude it — and it is computed only now that the primary
+    // has FAILED: the success path, the common case, never pays the span
+    // scan. No primary candidate, or a span that cannot be established,
+    // → no floor — conservative, more candidates never fewer.
+    return firstValidatingObjectAfter<T>(
+        stripped,
+        validate,
+        candidate != null ? primarySpanEnd(stripped) : null,
+    );
 }
 
 /**

@@ -1,0 +1,123 @@
+---
+title: "Synthetic — Flat-Rate Subscription for Open-Source Coding Models"
+description: "Learn how to connect Synthetic.new's subscription-based API — bundling Kimi, DeepSeek, Qwen, GLM and more — to Kodus."
+icon: "infinity"
+---
+
+## How Synthetic works
+
+Synthetic is a subscription service that serves open-source LLMs over an **OpenAI-compatible** (and Anthropic-compatible) API. Instead of paying per token, you pay a **flat monthly price** and draw from a weekly credit limit that covers every model on the platform.
+
+Kodus reaches Synthetic through the OpenAI-compatible endpoint, so there are no adapter changes — just BYOK credentials.
+
+## Plans at a glance
+
+<Info>
+  Pricing and limits change. Confirm them at [synthetic.new/pricing](https://synthetic.new/pricing) and [synthetic.new/rate-limits](https://synthetic.new/rate-limits) before choosing a plan.
+</Info>
+
+### Subscription (recommended for code review)
+
+| Plan | Price |
+| ---- | ----- |
+| **Go** | $9/mo |
+| **Standard** | $30/mo |
+| **Big** | $90/mo |
+
+- Plan usage is a weekly credit limit, not a per-token bill. Credits regenerate gradually over the week instead of resetting on a fixed day, and larger plans have higher limits. The numbers are on the [rate limits page](https://synthetic.new/rate-limits).
+- One subscription covers every model. Models draw different amounts of credits, so cheaper models stretch the limit further. Pick one by changing the `model` field.
+
+### Recommended models
+
+Synthetic exposes models using a HuggingFace-style prefix (`hf:org/model`). These are always-on models, included in every subscription, and the catalog lists tool calling and structured outputs for each:
+
+| Model id | Context window |
+| -------- | -------------- |
+| `hf:zai-org/GLM-5.3` | 512k tokens |
+| `hf:moonshotai/Kimi-K3.1-Pro` | 512k tokens |
+| `hf:deepseek-ai/DeepSeek-V4.1-Flash-1017` | 512k tokens |
+| `hf:Qwen/Qwen3.8-27B` | 256k tokens |
+| `hf:openai/gpt-oss-120b` | 128k tokens |
+
+The catalog changes often. The live list at [api.synthetic.new/openai/v1/models](https://api.synthetic.new/openai/v1/models) is public.
+
+## Creating an API Key
+
+1. Go to [synthetic.new](https://synthetic.new) and sign up or log in.
+2. Subscribe to a plan at [synthetic.new/pricing](https://synthetic.new/pricing).
+3. Copy your API key. Synthetic shows it in its [API docs](https://dev.synthetic.new/docs/api/getting-started) while you are logged in.
+
+## Configure Synthetic in Kodus
+
+### Option 1 — AI providers page (recommended)
+
+Follow [Connect a provider](/en/how_to_use/byok#connect-a-provider) and choose **Custom → OpenAI-compatible**. Use these values in the form.
+
+| Field | Value |
+| --- | --- |
+| **Base URL** | `https://api.synthetic.new/openai/v1` |
+| **Model** | e.g. `hf:zai-org/GLM-5.3` (use the `hf:` prefix and the full HuggingFace path) |
+| **Key** (in the **API key** card) | your Synthetic API key |
+
+Click **Test & save**, then choose the default and fallback under [Routing](/en/how_to_use/code_review/configs/routing).
+
+<Tip>
+  Synthetic only uses weekly credit limits, with no separate 5-hour or monthly limits. Leave **Max concurrent requests** (under **Advanced (optional)** → **Advanced settings**) empty, and set it only if you see 429s.
+</Tip>
+
+<Note>
+  On **Code review → Routing** (the **Configure routing** button on **AI providers**), set Synthetic as the **Default model** and an OpenAI or Anthropic model as the **Fallback model**. When Synthetic fails, for example when your credits run out, Kodus re-runs the call on the fallback.
+</Note>
+
+### Option 2 — Self-hosted (environment variables)
+
+To give a self-hosted instance one model through `.env`:
+
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="hf:zai-org/GLM-5.3"
+API_LLM_BASE_URL="https://api.synthetic.new/openai/v1"
+API_LLM_API_KEY="your-synthetic-api-key"
+```
+
+Follow the installation guide to [apply the model change](/en/how_to_deploy/deploy_kodus/generic_vm#apply-a-model-change).
+
+## When to pick Synthetic
+
+- **Your primary model is open-source** (Kimi, DeepSeek, Qwen, GLM) and you want a flat monthly bill instead of juggling per-provider token spend.
+- **Your traffic is bursty.** Synthetic has no penalty for burst usage: you can spend the weekly limit in one session and credits regenerate afterwards.
+
+Pick pay-per-token (Moonshot, Fireworks, Together, Groq) instead if you want to pay only for the tokens you use, or a different subscription (Z.AI GLM Coding Plan) if you specifically want the GLM family.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="429 Too Many Requests">
+    - Your weekly credits may be used up. Check your usage on your [Synthetic billing page](https://synthetic.new/billing) and the [rate limits](https://synthetic.new/rate-limits).
+    - Credits regenerate gradually, so wait a while, lower **Max concurrent requests** on the model (**AI providers** → **Edit model**), or move to a larger plan.
+    - Set a **Fallback model** on **Code review → Routing** so reviews keep running while you're rate-limited.
+  </Accordion>
+
+  <Accordion title="401 / authentication errors">
+    - Confirm the key is active and the subscription is current in the Synthetic dashboard.
+    - Make sure there are no trailing spaces or quotes in the `.env` value.
+  </Accordion>
+
+  <Accordion title="Model not found">
+    - Synthetic uses the `hf:org/model` format, and the `hf:` prefix is required.
+    - Cross-check against [api.synthetic.new/openai/v1/models](https://api.synthetic.new/openai/v1/models). Synthetic rotates older models out, so a pinned id can start returning 404.
+  </Accordion>
+
+  <Accordion title="Connection errors">
+    - Confirm your server can reach `api.synthetic.new`.
+    - Review API and worker logs for the exact upstream error.
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+- [Synthetic pricing](https://synthetic.new/pricing)
+- [Synthetic rate limits](https://synthetic.new/rate-limits)
+- [Synthetic API docs](https://dev.synthetic.new/docs/api/getting-started)
+- [Synthetic model catalog](https://dev.synthetic.new/docs/openai/models)
+- [BYOK overview](/en/how_to_use/byok)

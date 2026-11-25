@@ -215,6 +215,22 @@ describe('reasoning written before the answer', () => {
         expect(extractJsonFromText(`${reasoning}${answer}`)).toBe(answer);
     });
 
+    it('extracts the answer after a <thinking> block too', () => {
+        expect(
+            extractJsonFromText(
+                '<thinking>compare items [0] and [1]</thinking>\n' + answer,
+            ),
+        ).toBe(answer);
+    });
+
+    it('does not end a <thinking> block at a </think> inside it', () => {
+        expect(
+            extractJsonFromText(
+                `<thinking>the tag </think> is quoted [x]</thinking>${answer}`,
+            ),
+        ).toBe(answer);
+    });
+
     it('repairs it too, so a failed structured call is salvaged', () => {
         expect(repairJsonText(`${reasoning}\n\n${answer}`)).toBe(answer);
     });
@@ -405,6 +421,449 @@ describe('repairAndValidate', () => {
         // Kimi returned on PR#152. It must parse, never degrade the shard to error.
         expect(await repairAndValidate(listWire, '{"violations":[]}')).toEqual({
             violations: [],
+        });
+    });
+
+    describe('#2259 an invalid escape inside a string literal', () => {
+        const issuesWire = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    violations: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: { body: { type: 'string' } },
+                            required: ['body'],
+                            additionalProperties: false,
+                        },
+                    },
+                },
+                required: ['violations'],
+                additionalProperties: false,
+            } as any),
+        );
+
+        it('keeps a violation whose suggested fix carries a raw backslash', async () => {
+            // The model quotes code in its suggestion: Swift interpolation
+            // ("\(title)") or a regex ("\d") arrives with a SINGLE backslash, so
+            // JSON.parse rejects the whole payload and the shard degrades to zero
+            // findings for that file.
+            const raw = '{"violations":[{"body":"Rename to \\(title)"}]}';
+
+            expect(await repairAndValidate(issuesWire, raw)).toEqual({
+                violations: [{ body: 'Rename to \\(title)' }],
+            });
+        });
+
+        it('leaves VALID escapes alone', async () => {
+            const raw =
+                '{"violations":[{"body":"line\\nbreak\\tand \\u0041"}]}';
+
+            expect(await repairAndValidate(issuesWire, raw)).toEqual({
+                violations: [{ body: 'line\nbreak\tand A' }],
+            });
+        });
+
+        it('still rejects a payload that is cut short', async () => {
+            // Escape repair is the ONLY extra step: a truncated payload must keep
+            // failing so the caller escalates instead of judging a partial list.
+            const raw = '{"violations":[{"body":"cut here';
+
+            expect(await repairAndValidate(issuesWire, raw)).toBeUndefined();
+        });
+    });
+
+    describe('#2255 a code block quoted before the answer', () => {
+        const codeWire = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    improvedCode: { type: 'string' },
+                    fixStatus: { type: 'string', enum: ['fixed'] },
+                },
+                required: ['improvedCode', 'fixStatus'],
+                additionalProperties: false,
+            } as any),
+        );
+        const answer = (code: string) =>
+            `{"improvedCode":${JSON.stringify(code)},"fixStatus":"fixed"}`;
+        const violationsWire = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    violations: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                body: { type: 'string' },
+                                line: { type: 'number' },
+                            },
+                            required: ['body', 'line'],
+                            additionalProperties: false,
+                        },
+                    },
+                },
+                required: ['violations'],
+                additionalProperties: false,
+            } as any),
+        );
+        const findings = '{"violations":[{"body":"bug","line":12}]}';
+
+        it('recovers the answer after a fenced code block in another language', async () => {
+            // The extractor unwraps the FIRST fence whatever its language, so
+            // the primary candidate is the quoted Ruby, not the JSON behind it.
+            const text =
+                'The header is built like this:\n' +
+                '```ruby\nheader = [process.env.X || "y"]\n```\n' +
+                'Fixed version:\n' +
+                answer('const y = 2;');
+
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const y = 2;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('recovers the answer after an unlabeled fence holding a bare {}', async () => {
+            // The fence content parses but fails the schema → the primary path
+            // used to stop there; the fallback walks on to the real answer.
+            const text =
+                'Example shape:\n```\n{}\n```\nAnswer:\n' + answer('{}');
+
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: '{}',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('keeps the PRIMARY result for bare clean JSON (fallback must not hijack)', async () => {
+            // Both objects validate; the first — the primary's — must win,
+            // proving the fallback never runs on the success path.
+            const text =
+                answer('const a = 1;') +
+                '\nrestated: ' +
+                answer('const b = 2;');
+
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('keeps the PRIMARY result for fenced clean JSON (fallback must not hijack)', async () => {
+            const text =
+                '```json\n' +
+                answer('const a = 1;') +
+                '\n```\nrestated: ' +
+                answer('const b = 2;');
+
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('still returns undefined when NO object anywhere validates', async () => {
+            expect(
+                await repairAndValidate(
+                    codeWire,
+                    '```json\n{"nope":7}\n```\nalso {"nope":8}',
+                ),
+            ).toBeUndefined();
+            // A quoted code block with no answer behind it at all.
+            expect(
+                await repairAndValidate(codeWire, '```ruby\n[x || "y"]\n```'),
+            ).toBeUndefined();
+        });
+
+        it('accepts the first PARSED object after the primary (no validate fn)', async () => {
+            // Same rule as the primary path: a raw jsonSchema without a
+            // validator accepts on parse-success alone — and the walk is
+            // FORWARD, so the object right after the quote wins, not the
+            // trailing restatement.
+            const raw = jsonSchema({ type: 'object' } as any);
+            const text =
+                '```ruby\n[x || "y"]\n```\n' +
+                answer('const a = 1;') +
+                '\nrestated: ' +
+                answer('const b = 2;');
+            expect(await repairAndValidate(raw, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('recovers the answer after a bracketless quoted code block', async () => {
+            // The first fence held no `{`/`[` at all, so the extractor surfaced
+            // NO candidate — the fallback must still walk the text.
+            const text =
+                'The fix:\n```ruby\nheader = fetch_header\n```\n' +
+                answer("header = ENV['X']");
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: "header = ENV['X']",
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('retries fallback candidates with legalised escapes (#2259 composed)', async () => {
+            // A quoted code block is one failure class, the invalid `\d`
+            // escape inside the answer another — both must clear together.
+            const text =
+                '```ruby\n[x || "y"]\n```\n' +
+                '{"improvedCode":"const r = /\\d+/;","fixStatus":"fixed"}';
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const r = /\\d+/;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('keeps a comma that is payload content inside a string literal', async () => {
+            // `f(a, }` — the comma before the `}` is INSIDE the answer
+            // string. The lenient trailing-comma strip is string-aware
+            // (tryParseLenient's rule), so the caller receives the code the
+            // model wrote, not `f(a }`.
+            const text =
+                '```ruby\n[x || "y"]\n```\n' +
+                '{"improvedCode":"f(a, }","fixStatus":"fixed"}';
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'f(a, }',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('takes the FIRST schema-valid object after the primary (forward rule)', async () => {
+            // Flipped residual, per review 5939864639: a schema-valid example
+            // quoted after the primary but BEFORE the answer now wins over
+            // that answer — end-favoring returned the answer here, but it
+            // also shipped EMPTY reviews for real findings (see the review
+            // shapes below), so forward is the ruled rule. This pin kills a
+            // revert to the end-favoring walk.
+            const text =
+                '```ruby\nheader = fetch\n```\n' +
+                'Example given:\n```json\n' +
+                answer('const example = 0;') +
+                '\n```\nAnswer:\n' +
+                answer('const real = 1;');
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const example = 0;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('review shape 1: the real answer beats a trailing format example', async () => {
+            // Maintainer review 5939864639, shape 1: end-favoring returned
+            // the "..." example quoted AFTER the real answer.
+            const text =
+                '```ruby\n[x]\n```\n' +
+                answer('const real = 1;') +
+                '\nthe expected format is\n' +
+                '```json\n{"improvedCode":"...","fixStatus":"fixed"}\n```';
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const real = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('review shape 2: real findings beat the "Empty would be" sentence', async () => {
+            // Maintainer review 5939864639, shape 2 — the worst one: the
+            // trailing empty example is invited by our own prompts
+            // (kody-rules-agent.provider.ts), and end-favoring turned REAL
+            // findings into an empty review.
+            const text =
+                '```ts\nconst a = 1;\n```\n' +
+                findings +
+                '\nEmpty would be {"violations":[]}';
+            expect(await repairAndValidate(violationsWire, text)).toEqual({
+                violations: [{ body: 'bug', line: 12 }],
+            });
+        });
+
+        it('normalisation of the primary never excludes the answer', async () => {
+            // The 410b3f931 floor bug: the primary candidate `{,}`
+            // normalises to `{}`, and an indexOf of THAT found the first
+            // `{}` inside the real answer's string value — placing the floor
+            // inside the answer and excluding it (undefined on 410b3f931;
+            // the end-favoring parent recovered). The floor is the primary's
+            // SPAN, pre-normalisation: the first fence, behind which the
+            // answer still competes.
+            const text =
+                '```json\n{,}\n```\n' +
+                '{"improvedCode":"{}","fixStatus":"fixed"}';
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: '{}',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('review shape 3: a prose empty example before an invalid fence re-asks', async () => {
+            // Maintainer review 5939864639, shape 3: the fenced answer fails
+            // the schema ("line" is a string), and the prose empty example
+            // sits BEFORE the primary — nothing after it competes, so the
+            // caller re-asks instead of shipping an empty review.
+            const text =
+                'If nothing is wrong I would return {"violations":[]}.\n' +
+                '```json\n{"violations":[{"body":"bug","line":"12"}]}\n```';
+            expect(
+                await repairAndValidate(violationsWire, text),
+            ).toBeUndefined();
+        });
+
+        it('does NOT let a nested child stand in for the answer', async () => {
+            // Top-level-only: the array-member and wrapper-nested `keep`
+            // objects stay undefined (→ the caller re-asks), as before the
+            // fallback existed.
+            const wireKeep = ensureValidatingSchema(
+                jsonSchema({
+                    type: 'object',
+                    properties: { keep: { type: 'number' } },
+                    required: ['keep'],
+                    additionalProperties: false,
+                } as any),
+            );
+            expect(
+                await repairAndValidate(wireKeep, '```json\n[{"keep":7}]\n```'),
+            ).toBeUndefined();
+            expect(
+                await repairAndValidate(
+                    wireKeep,
+                    '```json\n{"wrapper":{"keep":7}}\n```',
+                ),
+            ).toBeUndefined();
+        });
+
+        it('does NOT let a nested child stand in above the cap either', async () => {
+            // A raw tail cut severed the array's `[` and promoted its member
+            // to a top-level candidate (red on 0b2035f30, which returned
+            // {keep:7}): the cut is enclosure-aware — the window starts only
+            // after the cut container has closed.
+            const wireKeep = ensureValidatingSchema(
+                jsonSchema({
+                    type: 'object',
+                    properties: { keep: { type: 'number' } },
+                    required: ['keep'],
+                    additionalProperties: false,
+                } as any),
+            );
+            expect(
+                await repairAndValidate(
+                    wireKeep,
+                    '[{"keep":7}]' + 'y'.repeat(999_989),
+                ),
+            ).toBeUndefined();
+        });
+
+        it('recovers a trailing answer when the cut lands inside a leading container', async () => {
+            // The huge leading array is atomic (top-level-only rule); the
+            // enclosure-aware cut starts the window after it CLOSES, so the
+            // trailing top-level answer behind it still recovers.
+            const text =
+                '[' +
+                '{"pad":1},'.repeat(100_000) +
+                '{"pad":2}]\n' +
+                answer('const a = 1;');
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('recovers the trailing answer when a junk container precedes the cut', async () => {
+            // The cut falls in the padding AFTER the junk container: its
+            // member is outside the window entirely, and the trailing
+            // TOP-LEVEL answer recovers — red on origin/main (no fallback
+            // at all) and on 7fcaa58eb (which declined all oversized texts).
+            const text =
+                '[{"keep":7}]' + 'y'.repeat(999_989) + answer('const a = 1;');
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('keeps a brace inside a string literal from opening a span at the cut', async () => {
+            // The in-string `{` never counts as an opener: the container
+            // closes before the cut, the window starts in the padding, and
+            // nothing is promoted — deterministic, not luck.
+            expect(
+                await repairAndValidate(
+                    codeWire,
+                    '{"s":"a{b"}' + 'y'.repeat(999_990),
+                ),
+            ).toBeUndefined();
+        });
+
+        it('unwraps a known envelope around the answer behind a quote', async () => {
+            // `result`/`data`/… are the wrappers models put around the payload
+            // (normalizeEnvelope's keys); an envelope-wrapped answer behind a
+            // quoted block still recovers through its wrapper child.
+            const text =
+                '```ruby\n[x || "y"]\n```\n' +
+                `{"result":${answer('const a = 1;')}}`;
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('finds the answer inside a balanced NON-JSON span', async () => {
+            // An unmatched brace before the answer — its closer after it —
+            // makes the region look balanced; only PARSEABLE containers are
+            // skipped whole, so the span is scanned within and the answer
+            // survives.
+            const text =
+                '```json\n{}\n```\n' +
+                'Broken: { unmatched\n' +
+                answer('const y = 2;') +
+                '\n}';
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const y = 2;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('still returns undefined for an unclosed leading reasoning block', async () => {
+            // No answer at all — the fallback must not fish objects out of the
+            // reasoning itself.
+            expect(
+                await repairAndValidate(
+                    codeWire,
+                    '<think>draft {"improvedCode":"x","fixStatus":"fixed"} never closes',
+                ),
+            ).toBeUndefined();
+        });
+
+        it('recovers the answer in an oversized text from its tail window', async () => {
+            // > SALVAGE_MAX_CHARS: the walk stays bounded by scanning only
+            // the last 1M chars (#2112 limit). The #2255 shape has the
+            // answer at the END, behind the quote, so it stays inside the
+            // window. Red on 7fcaa58eb, which declined the whole text —
+            // and on origin/main, which had no fallback at all; f295240d
+            // also recovered it, uncapped, at unbounded scan cost.
+            const text =
+                '```ruby\n[x]\n```\n' +
+                'x'.repeat(1_000_000) +
+                '\n' +
+                answer('const a = 1;');
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
+        it('scans a text of EXACTLY the limit whole (boundary: >, not >=)', async () => {
+            // At SALVAGE_MAX_CHARS the text scans in full — the window
+            // opens only strictly above it.
+            const head = '```ruby\n[x]\n```\n';
+            const tail = '\n' + answer('const a = 1;');
+            const text =
+                head + 'x'.repeat(1_000_000 - head.length - tail.length) + tail;
+            expect(text.length).toBe(1_000_000);
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const a = 1;',
+                fixStatus: 'fixed',
+            });
         });
     });
 

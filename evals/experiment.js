@@ -84,12 +84,12 @@ const MAX_RUNS = 10;
 // the comparison reads: per PR, its known bugs shipped (hits of total) and the
 // findings that match none (fpFindings), the cases evals/stage-signals.js
 // reads for the panel.
-function finderResult(raw) {
+function finderResult(raw, id = 'finder-recall') {
     if (!raw || !Array.isArray(raw.rows) || !raw.rows.length) return null;
     // eslint-disable-next-line global-require
     const { finderCases } = require('./stage-signals');
     return {
-        eval: 'finder-recall',
+        eval: id,
         metric: { name: 'of known bugs shipped', value: raw.metrics?.recall_mean ?? null },
         cases: finderCases(raw.rows),
         metrics: raw.metrics || {},
@@ -99,6 +99,10 @@ function finderResult(raw) {
     };
 }
 
+// A Kody Rules case whose quality judge graded every finding: one that erred
+// would compare a side on fewer findings with nothing flagging it.
+const judgedAll = (c) => !!c.quality && !c.quality.judgeErrors;
+
 // The evals an experiment on a step runs: the one that answers whether the
 // change is better, and the ones that must not get worse. `smoke`: the wiring
 // smoke steps that load the step's production path; a PR that changes one of
@@ -106,6 +110,16 @@ function finderResult(raw) {
 // turns its own result into the shared shape, `sets` is the folder of its sets
 // of its own (--set), and `teamConfig` says it takes --team-config.
 const STEP_EVALS = {
+    verify: {
+        smoke: ['funnel-verify'],
+        primary: {
+            id: 'funnel-verify',
+            label: 'Known bugs kept',
+            run: ['evals/funnel/verify/run.js'],
+            question: 'Of the known bugs reaching the verify in a real review, how many does it keep, and does it drop what matches no known bug?',
+        },
+        guards: [],
+    },
     dedup: {
         smoke: ['funnel-dedup'],
         primary: {
@@ -119,6 +133,45 @@ const STEP_EVALS = {
             derived: [{ id: 'pair-precision', label: 'Merges that were right', question: 'Of the pairs the dedup merged, how many does the gold put in one group?', hits: (c) => c.merged - c.falseMerges, total: (c) => c.merged }],
         },
         guards: [{ id: 'funnel-dedup', label: 'Known bugs kept', run: ['evals/funnel/dedup/run.js', '--set=full'], embedder: true, question: 'Of the known bugs reaching the dedup in a real review, how many does it keep?' }],
+    },
+    'implementation-check': {
+        smoke: ['implementation-check'],
+        primary: {
+            id: 'implementation-check',
+            label: 'Verdicts right',
+            run: ['evals/implementation-check/run.js', '--repeats=1'],
+            question: 'After a push, does the check record whether the developer made the change each suggestion asked for?',
+            // Read from the same cases: marking everything applied would raise
+            // recall, so what it marked applied must stay right too.
+            derived: [
+                { id: 'applied-precision', label: 'Applied marks that were right', question: 'Of the suggestions the check marked applied, how many were?', hits: (c) => c.markedAppliedRight, total: (c) => c.markedApplied },
+                { id: 'applied-recall', label: 'Real fixes caught', question: 'Of the suggestions the developer applied, how many did the check mark applied?', hits: (c) => c.truthAppliedFound, total: (c) => c.truthApplied },
+            ],
+        },
+        guards: [],
+    },
+    severity: {
+        // On demand only, never a PR's check: its files include the review stage,
+        // which nearly every engine change touches.
+        smoke: [],
+        primary: {
+            id: 'severity-levels',
+            label: 'Suggestions at their level',
+            run: ['evals/severity-levels/run.js'],
+            question: 'Does the severity step rate each suggestion at the level its text defines?',
+        },
+        guards: [{ id: 'funnel-severity', label: 'Known bugs kept', run: ['evals/funnel/severity/run.js', '--set=full'], question: 'Of the known bugs reaching the severity step in a real review, how many does it keep above the threshold?' }],
+    },
+    enrichment: {
+        // On demand only: each case is a model call plus a judge call.
+        smoke: [],
+        primary: {
+            id: 'suggestion-enrichment',
+            label: 'Fixes the judge passes',
+            run: ['evals/suggestion-enrichment/run.js'],
+            question: 'Does the enrichment write a fix that the judge passes, no code where none fits, and a title that names the problem?',
+        },
+        guards: [],
     },
     finder: {
         // On demand only, never a PR's check: every case is a full review, so the
@@ -137,6 +190,50 @@ const STEP_EVALS = {
             // bugs, so what it ships must stay right too. Not worse beyond its
             // interval. A real bug the dataset does not list counts against it.
             derived: [{ id: 'finder-precision', label: 'Comments that were known bugs', question: 'Of the comments the review shipped, how many match a known bug?', hits: (c) => c.hits, total: (c) => (Number.isInteger(c.fpFindings) ? c.hits + c.fpFindings : NaN) }],
+        },
+        guards: [],
+    },
+    'kody-rules': {
+        // On demand only, never a PR's check: every case is a real review on a
+        // real model, and with --quality a judge call per finding on a site.
+        smoke: [],
+        primary: {
+            id: 'kody-rules',
+            label: 'Rule violations flagged',
+            run: ['evals/kody-rules/real-agent.js', '--runs=1', '--quality'],
+            question: 'Of the lines that break a team rule, how many does the Kody Rules agent flag?',
+            // Read from the same cases: flagging more lines would raise recall, so
+            // what it flags, where it stays quiet and what it says must hold too.
+            derived: [
+                { id: 'kody-line-precision', label: 'Flags on a real violation', question: 'Of the lines the agent flagged, how many break the rule?', hits: (c) => c.flagged - c.offSite, total: (c) => (Number.isInteger(c.flagged) && Number.isInteger(c.offSite) ? c.flagged : NaN) },
+                { id: 'kody-specificity', label: 'Clean files left alone', question: 'Of the files that break no rule, how many did the agent leave alone?', hits: (c) => c.cleanFiles - c.falseAlarms, total: (c) => (Number.isInteger(c.cleanFiles) && Number.isInteger(c.falseAlarms) ? c.cleanFiles : NaN) },
+                { id: 'kody-title-quality', label: 'Titles that name the problem', question: 'Of the findings on a real violation, how many have a title in the expected format that the judge says names the problem?', hits: (c) => c.quality?.titleOk, total: (c) => (judgedAll(c) ? c.quality.graded : NaN) },
+                { id: 'kody-fix-quality', label: 'Fixes the judge passes', question: 'Of the findings on a real violation, how many carry a fix the judge passes?', hits: (c) => c.quality?.fixPass, total: (c) => (judgedAll(c) ? c.quality.fixGraded : NaN) },
+            ],
+        },
+        guards: [
+            {
+                id: 'kody-rules-polyglot',
+                label: "Files outside the rule's language left alone",
+                run: ['evals/kody-rules/real-agent.js', '--runs=1', '--dataset=polyglot-cases'],
+                question: 'With a Ruby-only rule over Ruby, JavaScript and template PRs, how many files outside Ruby does the agent leave alone?',
+                read: (raw) => ({ ...raw, cases: (raw.cases || []).filter((c) => Number.isInteger(c.cleanFiles) && Number.isInteger(c.falseAlarms)).map((c) => ({ id: c.id, checks: 'Leaves every file outside the rule alone', hits: c.cleanFiles - c.falseAlarms, total: c.cleanFiles })) }),
+            },
+        ],
+    },
+    heavy: {
+        // On demand only, never a PR's check: every case is a full heavy review
+        // (the generalist and nine lenses), about twice a normal review.
+        smoke: [],
+        primary: {
+            id: 'heavy-recall',
+            label: 'Known bugs shipped in heavy mode',
+            run: ['evals/heavy-recall/run.js', '--concurrency=6'],
+            question: 'Of the known bugs in a PR, how many does a heavy review ship?',
+            read: (raw) => finderResult(raw, 'heavy-recall'),
+            // The lenses add comments, so what a heavy review ships must stay
+            // right too: not worse beyond its interval.
+            derived: [{ id: 'heavy-precision', label: 'Comments that were known bugs', question: 'Of the comments a heavy review shipped, how many match a known bug?', hits: (c) => c.hits, total: (c) => (Number.isInteger(c.fpFindings) ? c.hits + c.fpFindings : NaN) }],
         },
         guards: [],
     },

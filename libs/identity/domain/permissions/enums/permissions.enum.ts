@@ -29,4 +29,5 @@ export enum ResourceType {
     KodyRules = 'kody_rules',
     TokenUsage = 'token_usage',
     CliReview = 'cli_review',
+    SecurityScan = 'security_scan',
 }

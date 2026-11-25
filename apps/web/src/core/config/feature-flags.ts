@@ -14,6 +14,10 @@ export const FEATURE_FLAGS = {
      *  settings section; the pipeline gates the feature itself and fails
      *  closed, so without this the toggles save but nothing would run. */
     deterministicEvidence: "deterministic-evidence",
+    conditionalPrApproval: "conditional-pr-approval",
+    /** Deep scan — private alpha. Gates the menu entry, the page and its
+     *  routing card; the API refuses the scans themselves. */
+    deepScan: "deep-scan",
 } as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[keyof typeof FEATURE_FLAGS];

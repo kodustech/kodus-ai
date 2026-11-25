@@ -296,6 +296,9 @@ export class FakeMcpHost {
                 );
             }
 
+            if (tracker.errorAsText !== undefined) {
+                return this.toolText(tracker.errorAsText);
+            }
             const requested = String(args[tool.idArg ?? 'id'] ?? '').trim();
             const task = tracker.tasks.find((t) =>
                 sameTask(tracker, t, requested),

@@ -10,6 +10,8 @@ import { CockpitModule } from '@libs/cockpit/modules/cockpit.module';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { CliReviewModule } from '@libs/cli-review/cli-review.module';
 import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-review-configuration.module';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import { CodeReviewDashboardModule } from '@libs/code-review/modules/code-review-dashboard.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.module';
@@ -17,7 +19,6 @@ import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequest
 import { GlobalCacheModule } from '@libs/core/cache/cache.module';
 import { HealthModule } from '@libs/core/health/health.module';
 import { IncidentModule } from '@libs/core/infrastructure/incident/incident.module';
-import { MetricsController } from '@libs/core/infrastructure/metrics/metrics.controller';
 import { MetricsModule } from '@libs/core/infrastructure/metrics/metrics.module';
 import { RabbitMQWrapperModule } from '@libs/core/infrastructure/queue/rabbitmq.module';
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
@@ -32,6 +33,7 @@ import { UserModule } from '@libs/identity/modules/user.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 import { IntegrationModule } from '@libs/integrations/modules/integrations.module';
 import { IssuesModule } from '@libs/issues/issues.module';
+import { SecurityScanModule } from '@libs/security-scan/security-scan.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { KodusIssuesMcpModule } from '@libs/mcp-server/kodus-issues-mcp.module';
 import { McpModule } from '@libs/mcp-server/mcp.module';
@@ -42,6 +44,7 @@ import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { TeamModule } from '@libs/organization/modules/team.module';
 import { TeamMembersModule } from '@libs/organization/modules/teamMembers.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
 import { SharedPostgresModule } from '@libs/shared/database/shared-postgres.module';
 import { SharedConfigModule } from '@libs/shared/infrastructure/shared-config.module';
@@ -60,11 +63,13 @@ import { CliReviewController } from './controllers/cli/cli-review.controller';
 import { CliReviewsController } from './controllers/cli-reviews.controller';
 import { CodeBaseController } from './controllers/codeBase.controller';
 import { CodeManagementController } from './controllers/codeManagement.controller';
+import { GetAreaRiskMapUseCase } from './use-cases/get-area-risk-map.use-case';
 import { CodeReviewSettingLogController } from './controllers/codeReviewSettingLog.controller';
 import { GithubController } from './controllers/github.controller';
 import { IntegrationController } from './controllers/integration.controller';
 import { IntegrationConfigController } from './controllers/integrationConfig.controller';
 import { IssuesController } from './controllers/issues.controller';
+import { SecurityScansController } from './controllers/securityScans.controller';
 import { KodyRulesController } from './controllers/kodyRules.controller';
 import { LicenseController } from './controllers/license.controller';
 import { OrganizationController } from './controllers/organization.controller';
@@ -83,6 +88,7 @@ import { PullRequestMessagesController } from './controllers/pullRequestMessages
 import { RuleLikeController } from './controllers/ruleLike.controller';
 import { BusinessLogicController } from './controllers/businessLogic.controller';
 import { CustomAgentsController } from './controllers/customAgents.controller';
+import { RiskAssessmentController } from './controllers/riskAssessment.controller';
 import { SkillsController } from './controllers/skills.controller';
 import { SSOConfigController } from './controllers/ssoConfig.controller';
 import { TeamCliKeyController } from './controllers/team-cli-key.controller';
@@ -126,6 +132,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         PermissionsModule,
         KodyRulesModule,
         IssuesModule,
+        SecurityScanModule,
         OrganizationModule,
         TeamModule,
         TeamMembersModule,
@@ -133,6 +140,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         ParametersModule,
         WorkflowModule.register({ type: 'api' }),
         PlatformModule,
+        PlatformDataModule,
         AIEngineModule,
         AgentsModule,
         CodebaseModule,
@@ -171,6 +179,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         PullRequestMessagesController,
         CodeBaseController,
         IssuesController,
+        SecurityScansController,
         KodyRulesController,
         RuleLikeController,
         OrganizationController,
@@ -179,6 +188,7 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         SkillsController,
         BusinessLogicController,
         CustomAgentsController,
+        RiskAssessmentController,
         TeamController,
         TeamCliKeyController,
         TeamMembersController,
@@ -202,13 +212,20 @@ import { SelfHostedDoctorModule } from './doctor/self-hosted-doctor.module';
         CliKodyRulesController,
         SSOConfigController,
         LicenseController,
-        MetricsController,
         CockpitController,
         CockpitCodeHealthController,
         CockpitProductivityController,
         CockpitReviewAnalyticsController,
         NotificationController,
     ],
-    providers: [LangfuseShutdownProvider, TrialExtensionNotifierService],
+    providers: [
+        LangfuseShutdownProvider,
+        TrialExtensionNotifierService,
+        {
+            provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+            useClass: ConditionalApprovalAccessService,
+        },
+        GetAreaRiskMapUseCase,
+    ],
 })
 export class ApiModule {}

@@ -1,9 +1,11 @@
 import { cache } from "react";
+import { isOnAlphaAllowList } from "@libs/feature-gate/domain/alpha-allow-list";
 import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
 import { getOrganizationName } from "@services/organizations/fetch";
 import { getOrganizationReleaseTrack } from "@services/organizations/release-track";
 import { getPermissions } from "@services/permissions/fetch";
 import { getTeams } from "@services/teams/fetch";
+import { auth } from "src/core/config/auth";
 import { FEATURE_FLAGS } from "src/core/config/feature-flags";
 import { isFeatureEnabled } from "src/core/feature-gate/resolver";
 import {
@@ -29,6 +31,8 @@ export const getLayoutData = cache(async (teamId: string) => {
         githubEnterpriseServerPatFeatureFlag,
         kodusProviderFeatureFlag,
         deterministicEvidenceFeatureFlag,
+        conditionalPrApprovalFeatureFlag,
+        deepScanFeatureFlag,
     ] = await Promise.all([
         getPermissions().catch(() => ({})),
         getOrganizationName().catch(() => ""),
@@ -63,6 +67,16 @@ export const getLayoutData = cache(async (teamId: string) => {
                 }),
             )
             .catch(() => false),
+        releaseTrackPromise
+            .then((releaseTrack) =>
+                isFeatureEnabled({
+                    feature: FEATURE_FLAGS.conditionalPrApproval,
+                    identifier: "organization",
+                    releaseTrack,
+                }),
+            )
+            .catch(() => false),
+        isDeepScanEnabled().catch(() => false),
     ]);
 
     return {
@@ -75,8 +89,37 @@ export const getLayoutData = cache(async (teamId: string) => {
             githubEnterpriseServerPat: githubEnterpriseServerPatFeatureFlag,
             kodusProvider: kodusProviderFeatureFlag,
             deterministicEvidence: deterministicEvidenceFeatureFlag,
+            conditionalPrApproval: conditionalPrApprovalFeatureFlag,
+            deepScan: deepScanFeatureFlag,
         },
     };
+});
+
+/**
+ * Whether the organization is in the deep scan's private alpha. Like the
+ * API's gate, closed outside cloud mode before anything else; then the same
+ * env allow-list (`*` or comma-separated organization ids) opens it, on dev
+ * VMs and previews, so the page and the API agree.
+ */
+export const isDeepScanEnabled = cache(async () => {
+    // The API reads cloud mode the same way: on unless set to anything but "true".
+    const cloudMode =
+        (process.env.API_CLOUD_MODE || "true").toLowerCase() === "true";
+    if (!cloudMode || process.env.WEB_NODE_ENV === "self-hosted") {
+        return false;
+    }
+    const allow = process.env.API_DEEP_SCAN_ALPHA_ORGS;
+    if (
+        allow?.trim() &&
+        isOnAlphaAllowList(allow, (await auth())?.user?.organizationId)
+    ) {
+        return true;
+    }
+    return isFeatureEnabled({
+        feature: FEATURE_FLAGS.deepScan,
+        identifier: "organization",
+        releaseTrack: await getOrganizationReleaseTrack(),
+    });
 });
 
 /**

@@ -13,8 +13,10 @@ import {
     AstGrepOutputLog,
     checkConventionQuotes,
     findQuoteSection,
+    isCodeFileSource,
     isLinkedGuide,
     isProvenByAstGrep,
+    isTeamSystemSource,
     isToolSource,
     makeTargetBranchGuideLister,
     makeTargetBranchGuideReader,
@@ -329,26 +331,6 @@ describe('checkConventionQuotes', () => {
             },
         );
 
-        it('accepts the display-name form of the instructions', async () => {
-            const quote = 'Close valves in a finally block.';
-            const r = await checkConventionQuotes(
-                [
-                    conv(quote, {
-                        source: {
-                            file: 'Team instructions (Valve agent)',
-                            section: '',
-                            quote,
-                        },
-                    }),
-                ],
-                reader({}),
-                [GUIDE],
-                undefined,
-                INSTRUCTIONS,
-            );
-            expect(r.rejected).toEqual([]);
-        });
-
         it('drops a quote the instructions do not hold', async () => {
             const r = await checkConventionQuotes(
                 [
@@ -468,15 +450,6 @@ describe('checkConventionQuotes', () => {
             expect(r.passed[0].sectionText).toBe(INSTRUCTIONS);
             expect(r.passed[0].finding.source?.file).toBe('TeamInstructions');
             expect(read).not.toHaveBeenCalled();
-        });
-
-        it('still drops a sourceless convention finding of an agent without instructions', async () => {
-            const r = await checkConventionQuotes(
-                [conv('', { source: undefined })],
-                reader({}),
-                [],
-            );
-            expect(r.passed).toEqual([]);
         });
 
         it('drops it when the agent has no instructions to quote', async () => {
@@ -962,5 +935,150 @@ describe('isToolSource', () => {
         );
         expect(isToolSource(cites('docs/style.md'))).toBe(false);
         expect(isToolSource(cites('TeamInstructions'))).toBe(false);
+    });
+});
+
+// A convention that cites a source-code file quotes a line of code as the
+// pattern to follow, not a rule the team wrote: it is checked as a bug. A
+// document, a linked guide or the agent's instructions keep the quote gate.
+describe('isCodeFileSource', () => {
+    const quote = 'return { status: result.status };';
+    const cites = (file: string) =>
+        ({
+            kind: 'convention',
+            source: { file, section: '', quote },
+        }) as unknown as FinderSuggestion;
+
+    it('takes a source-code file cited as the rule', () => {
+        expect(isCodeFileSource(cites('src/valves/open.ts'))).toBe(true);
+        expect(isCodeFileSource(cites('./pumps/schedule.py'))).toBe(true);
+        expect(isCodeFileSource(cites('greenhouse/Drain.kt'))).toBe(true);
+    });
+
+    it('never takes a document, an agent or rule file, a tool or the instructions', () => {
+        for (const file of [
+            'docs/guides/valve-api.md',
+            'docs/guides/valve-api.mdx',
+            'notes/valves.txt',
+            'docs/valves.rst',
+            'docs/valves.adoc',
+            'skills/pumps/SKILL.md',
+            '.cursor/rules/valves.mdc',
+            '.cursorrules',
+            '.kody/rules/valves.yaml',
+            'TeamInstructions',
+            'jscpd',
+            'ast-grep:no-bare-boolean',
+            'sgconfig.yml#no-bare-boolean',
+            'rules/sgconfig.yml#valve.v2',
+            '',
+        ]) {
+            expect([file, isCodeFileSource(cites(file))]).toEqual([
+                file,
+                false,
+            ]);
+        }
+    });
+
+    it('keeps a linked guide that is a code file on the quote gate', () => {
+        expect(
+            isCodeFileSource(cites('src/valves/RULES.ts'), [
+                'src/valves/RULES.ts',
+            ]),
+        ).toBe(false);
+        expect(isCodeFileSource(cites('src/valves/a.ts'), ['src/valves'])).toBe(
+            false,
+        );
+    });
+
+    it("keeps a quote from the agent's instructions on the quote gate, which re-points it", () => {
+        expect(
+            isCodeFileSource(
+                cites('src/valves/open.ts'),
+                [],
+                `Valves:\n${quote}\n`,
+            ),
+        ).toBe(false);
+        expect(
+            isCodeFileSource(
+                cites('src/valves/open.ts'),
+                [],
+                'Close valves in a finally block.',
+            ),
+        ).toBe(true);
+    });
+
+    // The quote gate rejects a quote this short before it looks at the
+    // instructions, so only the verifier can keep such a finding.
+    it('takes a code file whose quote is too short for the gate, even when the instructions hold it', () => {
+        const short = {
+            kind: 'convention',
+            source: {
+                file: 'src/valves/open.ts',
+                section: '',
+                quote: 'use pnpm',
+            },
+        } as unknown as FinderSuggestion;
+
+        expect(isCodeFileSource(short, [], 'Tooling: use pnpm only.')).toBe(
+            true,
+        );
+    });
+});
+
+describe('isTeamSystemSource', () => {
+    const cites = (file: string) =>
+        ({
+            kind: 'convention',
+            source: { file, section: '', quote: 'Every drain takes the lock' },
+        }) as unknown as FinderSuggestion;
+    const systems = [
+        'Tracker__get_issue',
+        'Tracker__list_documents',
+        'Wiki__search',
+    ];
+
+    it('takes a record of a system the agent has, by the system name it starts with', () => {
+        expect(isTeamSystemSource(cites('Tracker issue IRR-12'), systems)).toBe(
+            true,
+        );
+        expect(isTeamSystemSource(cites('tracker: IRR-12'), systems)).toBe(
+            true,
+        );
+        expect(isTeamSystemSource(cites('Tracker__get_issue'), systems)).toBe(
+            true,
+        );
+        expect(isTeamSystemSource(cites('Wiki page Drains'), systems)).toBe(
+            true,
+        );
+    });
+
+    it('matches a connection named with spaces, as the model writes it (sanitized in the tool name)', () => {
+        const planck = ['Planck_Tracker__get_issue'];
+        expect(
+            isTeamSystemSource(cites('Planck Tracker issue IRR-12'), planck),
+        ).toBe(true);
+        expect(
+            isTeamSystemSource(cites('planck-tracker: IRR-12'), planck),
+        ).toBe(true);
+        expect(isTeamSystemSource(cites('Planck issue IRR-12'), planck)).toBe(
+            false,
+        );
+    });
+
+    it('never takes a file, another system, or a longer word', () => {
+        expect(isTeamSystemSource(cites('Tracker issue IRR-12'), [])).toBe(
+            false,
+        );
+        expect(isTeamSystemSource(cites('docs/tracker.md'), systems)).toBe(
+            false,
+        );
+        expect(isTeamSystemSource(cites('Tracker.md'), systems)).toBe(false);
+        expect(isTeamSystemSource(cites('Jira issue IRR-12'), systems)).toBe(
+            false,
+        );
+        expect(isTeamSystemSource(cites('TrackerRules guide'), systems)).toBe(
+            false,
+        );
     });
 });

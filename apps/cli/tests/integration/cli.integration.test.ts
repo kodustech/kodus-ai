@@ -924,4 +924,20 @@ describe('review --fail-on integration', () => {
         ]);
         expect(exitCode).toBe(0);
     });
+
+    it('keeps stdout valid JSON when the gate fires', async () => {
+        const { stdout, stderr, exitCode } = await runCli([
+            'review',
+            '--fast',
+            '--format',
+            'json',
+            '--fail-on',
+            'warning',
+        ]);
+
+        expect(exitCode).toBe(1);
+        expect(() => JSON.parse(stdout)).not.toThrow();
+        expect(stdout).not.toContain('--fail-on');
+        expect(stderr).toContain('Exiting with code 1');
+    });
 });

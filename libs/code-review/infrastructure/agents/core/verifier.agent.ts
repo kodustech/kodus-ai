@@ -11,6 +11,7 @@ import type {
     AgentSpec,
 } from '@libs/agent-harness/domain/contracts/agent.contract';
 import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
+import type { AgentPolicy } from '@libs/agent-harness/domain/contracts/policy.contract';
 import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 import type {
     ToolContext,
@@ -91,8 +92,9 @@ export interface BuildVerifierSpecParams {
     /** System prompt override — the convention verifier passes its own. The
      *  HV2 prompt when absent. */
     systemPrompt?: string;
-    /** Provider options attached to the system message (e.g. Anthropic prompt
-     *  caching) so the verifier's system prompt is cached across steps. */
+    /** The finder's compression, so the files a verify run reads and re-sends
+     *  on every step stay within the model's window (#2233). */
+    compression?: AgentPolicy;
 }
 
 export function buildVerifierAgentSpec(
@@ -102,7 +104,37 @@ export function buildVerifierAgentSpec(
     // run prompt), so we build it once with a placeholder bundle.
     const system = params.systemPrompt ?? buildVerifierPrompt('', 0).system;
     const tools = new InMemoryToolRegistry([
-        ...params.tools.list(),
+        ...params.tools.list().map((tool) => {
+            if (tool.name !== 'readFile') return tool;
+            return {
+                ...tool,
+                name: tool.name,
+                description: tool.description,
+                inputSchema: tool.inputSchema,
+                // A targeted range alone can start in the middle of a guard.
+                // Include its surroundings even when the model asks for the
+                // lines the finder cited exactly.
+                execute: (input: unknown, ctx: ToolContext) => {
+                    const args = input as Record<string, unknown> | undefined;
+                    const start = Number(args?.startLine ?? args?.start_line);
+                    const end = Number(args?.endLine ?? args?.end_line);
+                    return tool.execute(
+                        Number.isSafeInteger(start) &&
+                            start > 0 &&
+                            Number.isSafeInteger(end) &&
+                            end >= start &&
+                            end - start < 20
+                            ? {
+                                  ...args,
+                                  startLine: Math.max(1, start - 20),
+                                  endLine: end + 10,
+                              }
+                            : input,
+                        ctx,
+                    );
+                },
+            };
+        }),
         // Strict/structured done-tool for strict-capable models (Gemini
         // VALIDATED mode) so the verdict can't be omitted or emitted as prose.
         {
@@ -137,6 +169,7 @@ export function buildVerifierAgentSpec(
                 // discards; on the last step they can only answer.
                 noToolsOnLastStep: true,
             }),
+            ...(params.compression ? [params.compression] : []),
         ],
         maxSteps: params.maxSteps ?? 6,
         // CAPTURE: the runner materializes submitVerdict's payload into
@@ -158,30 +191,25 @@ function repoInstructionEvidence(
     return `Label: repo_instruction\n${VERIFIER_REPO_INSTRUCTION_RULE}\n${block}`;
 }
 
-/** Format a finding into the verifier's per-run task prompt (HV2 evidence).
+/** The evidence bundle: the finding's fields the verifier receives.
  *  `previousDecisions` (issue #1313) is the PR's history, not filtered by
- *  file — see LlmVerifier.verify(). `laneFocus` (a custom agent kept to its
- *  lane, #2172) adds the out-of-focus drop criterion; absent, the prompt is
- *  unchanged. `repoInstructions` is read only for a `repo_instruction`
- *  candidate. */
-export function verifierPromptFor(
+ *  file — see LlmVerifier.verify() (#2020). `laneFocus` (a custom agent kept
+ *  to its lane, #2172) adds the out-of-focus drop criterion; absent, the
+ *  prompt is unchanged. `repoInstructions` is read only for a
+ *  `repo_instruction` candidate. */
+export function bundleFor(
     finding: FinderSuggestion,
     previousDecisions?: readonly PrDecisionRecord[],
-    options: {
-        laneFocus?: string;
-        repoInstructions?: RepoInstructionsContext;
-    } = {},
+    options: VerifierPromptOptions = {},
 ): string {
     const laneFocus =
         typeof options?.laneFocus === 'string' ? options.laneFocus : '';
-    const bundle = [
+    return [
         `File: ${finding.relevantFile}`,
         finding.relevantLinesStart != null
             ? `Lines: ${finding.relevantLinesStart}-${finding.relevantLinesEnd ?? finding.relevantLinesStart}`
             : '',
-        `Severity: ${finding.severity ?? 'unknown'}`,
         `Claim: ${finding.suggestionContent}`,
-        finding.existingCode ? `Code:\n${finding.existingCode}` : '',
         repoInstructionEvidence(finding, options?.repoInstructions),
         formatPreviousDecisions(previousDecisions),
         previousDecisions?.length ? VERIFIER_REPEAT_RULE : '',
@@ -189,7 +217,26 @@ export function verifierPromptFor(
     ]
         .filter(Boolean)
         .join('\n');
-    return buildVerifierPrompt(bundle, 0).prompt;
+}
+
+export type VerifierPromptOptions = {
+    /** A custom agent kept to its lane (#2172) adds the out-of-focus drop
+     *  criterion; absent, the prompt is unchanged. */
+    laneFocus?: string;
+    /** Read only for a `repo_instruction` candidate. */
+    repoInstructions?: RepoInstructionsContext;
+};
+
+/** Format a finding into the verifier's per-run task prompt (HV2 evidence). */
+export function verifierPromptFor(
+    finding: FinderSuggestion,
+    previousDecisions?: readonly PrDecisionRecord[],
+    options: VerifierPromptOptions = {},
+): string {
+    return buildVerifierPrompt(
+        bundleFor(finding, previousDecisions, options),
+        0,
+    ).prompt;
 }
 
 /** Extract the verdict from a verifier run: the run's materialized artifacts
@@ -248,12 +295,14 @@ export function extractVerdict(
     for (let i = state.artifacts.length - 1; i >= 0; i--) {
         const artifact = state.artifacts[i];
         if (artifact.type !== VERIFY_DONE_TOOL) continue;
-        const fromTool = recoverVerdictObject(artifact.payload, onRecover);
+        const fromTool = recoverVerdictObject(artifact.payload, onRecover, {
+            coerceKeep: true,
+        });
         if (fromTool) {
             return { ...fromTool, toolCalls, parseMode: 'tool' };
         }
     }
-    const fromText = verdictFromText(state, onRecover);
+    const fromText = verdictFromText(state, onRecover, { coerceKeep: true });
     if (fromText) {
         logger.log({
             message: `verifier verdict recovered from text (keep=${fromText.keep})`,
@@ -282,6 +331,17 @@ export function extractVerdict(
             parseMode: 'verify-error',
         };
     }
+    logger.warn({
+        message: `${LLM_ENVELOPE_TAG} verifier completed without a readable verdict, finding kept by default`,
+        context: 'VerifierAgent',
+        metadata: {
+            parseMode: 'default-keep',
+            verdictArtifacts: state.artifacts.filter(
+                (a) => a.type === VERIFY_DONE_TOOL,
+            ).length,
+            ...telemetry,
+        },
+    });
     return {
         keep: true,
         rationale: 'no parseable verdict — kept by default',
@@ -316,17 +376,19 @@ function collectVerifierToolCalls(state: RunState): Verdict['toolCalls'] {
 
 export interface LlmVerifierParams {
     modelId: string;
+    /** The finder's compression policy (see BuildVerifierSpecParams). */
+    compression?: AgentPolicy;
     /** Failover target model id — threaded to the verifier spec so strict tool
      *  use accounts for it (a Gemini→OpenAI failover must not send strict). */
     fallbackModelId?: string;
     tools: ToolRegistry;
-    /** Depth for high-confidence findings (light verify). Default 7: six
-     *  tool steps to reach where the finding's facts are decided, and the verdict. */
+    /** Depth of every verify (light). Default 7: six tool steps to reach where
+     *  the finding's facts are decided, and the verdict. */
     lightMaxSteps?: number;
-    /** Depth for low-confidence findings (full verify). Default 10. */
+    /** Depth of the full verify. Default 10. */
     fullMaxSteps?: number;
-    /** When true, ALWAYS use full depth regardless of confidence. Used by the
-     *  evidence-gate re-verify, which forces a thorough second look. */
+    /** When true, use the full depth. Used by the evidence-gate re-verify,
+     *  which forces a thorough second look. */
     forceFull?: boolean;
     /** Provider options (reasoning/thinking config) forwarded to the model. */
     providerOptions?: Readonly<Record<string, unknown>>;
@@ -357,10 +419,9 @@ export interface LlmVerifierParams {
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
  *  the shared runner. ONE implementation of the Verifier port.
  *
- *  CONFIDENCE SPLIT (ported from the legacy loop): confidence decides DEPTH, not
- *  whether to run — high-confidence (>= 5) findings get a LIGHT verify (fewer
- *  steps), low-confidence get a FULL verify (more steps). `forceFull` overrides
- *  to full (the evidence-gate uses it).
+ *  Every finding gets the LIGHT verify; `forceFull` gives the FULL one (the
+ *  evidence gate uses it). The lean finder output (#1821) carries no
+ *  confidence, so depth no longer reads it.
  *
  *  It accumulates token usage across every verify() call so the caller can
  *  report the verify sub-step's cost. */
@@ -395,6 +456,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             tools: params.tools,
             maxSteps: params.lightMaxSteps ?? 7,
             providerOptions: params.providerOptions,
+            compression: params.compression,
         });
         this.fullSpec = buildVerifierAgentSpec({
             modelId: params.modelId,
@@ -404,6 +466,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             tools: params.tools,
             maxSteps: params.fullMaxSteps ?? 10,
             providerOptions: params.providerOptions,
+            compression: params.compression,
         });
     }
 
@@ -416,10 +479,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         candidate: FinderSuggestion,
         ctx: ToolContext,
     ): Promise<Verdict> {
-        // Confidence decides DEPTH (legacy rule): >= 5 → light, < 5 → full.
-        const useFull =
-            this.params.forceFull || (candidate.confidence ?? 5) < 5;
-        const spec = useFull ? this.fullSpec : this.lightSpec;
+        const spec = this.params.forceFull ? this.fullSpec : this.lightSpec;
 
         // Per-finding observation name so the trace shows which finding each
         // verdict judged (e.g. "finder/verify:src/x.ts#42").

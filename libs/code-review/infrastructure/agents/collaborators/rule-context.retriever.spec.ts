@@ -183,17 +183,75 @@ describe('retrieveForShard — symbol-references (KRC-14)', () => {
         expect(result.unmet).toEqual([]);
     });
 
-    it('reports the rule unmet when the hunk defines no symbol to search on', async () => {
-        const rules = [rule('symbol-references')];
+    it('judges the rule on the diff when the hunk defines no symbol to search on', async () => {
+        // Nothing was asked of the repository, so nothing failed: in prod
+        // (16-17/11) treating this as unmet skipped 3,422 rule judgments in
+        // 51 organisations with a working sandbox.
+        const grep = jest.fn(async () => '');
+        const warn = jest.fn();
 
         const result = await retrieveForShard({
             file: file(),
-            rules,
-            lookup: lookup(),
+            rules: [rule('symbol-references')],
+            lookup: lookup({ grep }),
+            logger: { warn },
         });
 
+        expect(result.unmet).toEqual([]);
         expect(result.slices).toEqual([]);
-        expect(result.unmet).toEqual(rules);
+        expect(grep).not.toHaveBeenCalled();
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['an async function', '+export async function charge(amount) {'],
+        ['an arrow function', '+const charge = async (amount) => {'],
+        ['a method with no modifier', '+  charge(amount: number): void {'],
+        ['a Rust function', '+pub fn charge(amount: u64) {'],
+        [
+            'a method with a throws clause',
+            '+  public void x() throws IOException {',
+        ],
+        ['a signature split across lines', '+  charge('],
+        ['a C# property', '+  public int X { get; set; }'],
+    ])(
+        'reports the rule unmet when the hunk adds %s the extractor cannot name',
+        async (_label, added) => {
+            const rules = [rule('symbol-references')];
+            const grep = jest.fn(async () => '');
+
+            const result = await retrieveForShard({
+                file: {
+                    ...file(),
+                    patch: ['@@ -10,2 +10,3 @@', ' const a = 1;', added].join(
+                        '\n',
+                    ),
+                },
+                rules,
+                lookup: lookup({ grep }),
+            });
+
+            expect(result.unmet).toEqual(rules);
+            expect(grep).not.toHaveBeenCalled();
+        },
+    );
+
+    it('judges on the diff a hunk whose added lines are only statements', async () => {
+        const result = await retrieveForShard({
+            file: {
+                ...file(),
+                patch: [
+                    '@@ -10,2 +10,4 @@',
+                    ' const a = 1;',
+                    '+  if (a > 0) {',
+                    '+    total += charge(a);',
+                ].join('\n'),
+            },
+            rules: [rule('symbol-references')],
+            lookup: lookup({ grep: jest.fn(async () => '') }),
+        });
+
+        expect(result.unmet).toEqual([]);
     });
 
     it('reports the rule unmet when the repository cannot be grepped', async () => {
@@ -252,6 +310,26 @@ describe('retrieveForShard — sibling-file (KRC-26)', () => {
         expect(repo.exists).not.toHaveBeenCalled();
     });
 
+    // Azure Repos names changed files with a leading "/". The companions keep
+    // the PR's own form so they read like the filenames the model sees.
+    it('builds companions in the form the PR names its files', async () => {
+        const exists = jest.fn(
+            async (path: string) => path === '/src/invoice.spec.ts',
+        );
+
+        const result = await retrieveForShard({
+            file: file({ filename: '/src/invoice.ts' }),
+            rules: [rule('sibling-file')],
+            lookup: lookup({ exists }),
+            changedFilenames: ['/src/invoice.ts'],
+        });
+
+        expect(result.unmet).toEqual([]);
+        expect(result.slices[0].content).toContain(
+            '- /src/invoice.spec.ts: exists',
+        );
+    });
+
     it('reports the rule unmet when existence cannot be checked', async () => {
         const rules = [rule('sibling-file')];
 
@@ -272,14 +350,24 @@ describe('retrieveForShard — mixed needs in one shard', () => {
         const symbolRule = rule('symbol-references', { uuid: 'symbol' });
 
         const result = await retrieveForShard({
-            file: file(),
+            file: file({
+                patch: [
+                    '@@ -1,1 +1,2 @@',
+                    '+export function renderInvoice(order) {}',
+                ].join('\n'),
+            }),
             rules: [siblingRule, symbolRule],
-            lookup: lookup({ exists: jest.fn(async () => false) }),
+            lookup: lookup({
+                exists: jest.fn(async () => false),
+                grep: jest.fn(async () => {
+                    throw new Error('grep failed');
+                }),
+            }),
         });
 
-        // The hunk defines no symbol, so only the symbol rule is unmet; the
-        // sibling slice is still built and the shard keeps its widest
-        // satisfiable need.
+        // The grep fails, so only the symbol rule is unmet; the sibling
+        // slice is still built and the shard keeps its widest satisfiable
+        // need.
         expect(result.unmet).toEqual([symbolRule]);
         expect(result.slices.map((s) => s.kind)).toEqual(['sibling-file']);
         expect(resolveShardNeed([siblingRule, symbolRule])).toBe(
@@ -289,10 +377,6 @@ describe('retrieveForShard — mixed needs in one shard', () => {
 });
 
 describe('retrieveForShard — budget (KRC-28, KRC-29)', () => {
-    it('defaults to a 6000-character per-shard budget', () => {
-        expect(SHARD_CONTEXT_BUDGET_CHARS).toBe(6000);
-    });
-
     // The second half of KRC-28 — "prefer retrieved slices over whole-file
     // content" — held only because no code path happened to read a whole file,
     // which nothing asserted (Verifier round 2, gap 6). This pins it: every
@@ -455,8 +539,13 @@ describe('#1826 — a failed retrieval must not take a working rule out of enfor
     });
 
     it('still SKIPS a symbol-references rule — judging it blind is the bug', async () => {
+        // The hunk must define a symbol, or nothing is ever grepped and the
+        // broken lookup is never exercised.
         const res = await retrieveForShard({
-            file,
+            file: {
+                ...file,
+                patch: '@@ -1,2 +1,3 @@\n context\n+export function buildReport(rows) {}\n',
+            },
             rules: [ruleNeeding('symbol-references')],
             lookup: brokenLookup(),
             changedFilenames: [file.filename],
@@ -478,7 +567,10 @@ describe('#1826 — a failed retrieval must not take a working rule out of enfor
 
     it('skips only the rule that reaches outside, not its full-file neighbour', async () => {
         const res = await retrieveForShard({
-            file,
+            file: {
+                ...file,
+                patch: '@@ -1,2 +1,3 @@\n context\n+export function buildReport(rows) {}\n',
+            },
             rules: [ruleNeeding('full-file'), ruleNeeding('symbol-references')],
             lookup: brokenLookup(),
             changedFilenames: [file.filename],

@@ -1,26 +1,26 @@
 ---
 title: "リバースプロキシ"
-description: "Kodus用のリバースプロキシを設定する。"
+description: "Kodus 用のリバースプロキシを設定します。"
 icon: "server" 
 tags: ["reverse-proxy", "nginx"]
 ---
 
 <Info>
-オプションのステップ：ロードバランサーやプロキシサーバーを使用しない場合のみ必要です。
+ロードバランサーなどの別のプロキシがすでに Kodus へのトラフィックをルーティングしている場合は、このページをスキップしてください。
 </Info>
 
-Kodusインスタンスを外部システムからアクセス可能にするには（コードレビューのWebhookとパブリックアクセスに必要）、Nginxでリバースプロキシを設定する必要があります。
+Kodus インスタンスを外部のシステムからアクセス可能にするには（コードレビューの webhook とパブリックアクセスに必要です）、Nginx でリバースプロキシを設定する必要があります。ルーティングするサービスは 3 つで、Web アプリ（ポート 3000）、API（ポート 3001）、webhooks サービス（ポート 3332）です。インストーラーは 3 つすべてをホスト上に公開します。
 
-2つのサブドメイン用のNginx設定サンプルを以下に示します：
+2 つのサブドメインを使う場合の Nginx 設定のサンプルです。
 
 ```nginx
-# Kodus Webアプリケーション用のサーバーブロック
+# Server block for the Kodus Web Application
 server {
     listen 80;
-    server_name kodus-web.yourdomain.com; # 実際のWebアプリドメインに置き換えてください
+    server_name kodus-web.yourdomain.com; # Replace with your actual web app domain
 
     location / {
-        proxy_pass http://localhost:3000; # Kodus WebアプリコンテナへのURL
+        proxy_pass http://localhost:3000; # Points to the Kodus Web App container
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -35,13 +35,15 @@ server {
     }
 }
 
-# Kodus API用のサーバーブロック
+# Server block for the Kodus API
 server {
     listen 80;
-    server_name kodus-api.yourdomain.com; # 実際のAPIドメインに置き換えてください
+    server_name kodus-api.yourdomain.com; # Replace with your actual API domain
 
-    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
-        proxy_pass http://localhost:3332; # Kodus WebhooksサービスへのURL
+    client_max_body_size 50m;
+
+    location ~ ^/(github|gitlab|bitbucket|azure-repos|forgejo)/webhook {
+        proxy_pass http://localhost:3332; # Points to the Kodus Webhooks service
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -53,7 +55,7 @@ server {
     }
 
     location / {
-        proxy_pass http://localhost:3001; # Kodus APIサービスへのURL
+        proxy_pass http://localhost:3001; # Points to the Kodus API service
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -67,12 +69,12 @@ server {
 ```
 
 <Note>
-  WebhooksはWebhooksサービス（ポート3332）が処理します。WebhookのURLにAPIドメインを使用する場合は、`location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook`ブロックが必要です。
+  Webhook は別のサービス（ポート 3332）が処理します。webhook URL に API のドメインを使う場合は、`location ~ ^/(github|gitlab|bitbucket|azure-repos|forgejo)/webhook` ブロックが必須です。`API_MCP_SERVER_ENABLED=true` の場合、同じ API ドメインが `/mcp` も提供します。
 </Note>
 
-### オプション：専用WebhooksサブドメインR
+### 任意：専用の Webhooks サブドメイン
 
-Webhooks専用のドメイン（例：`kodus-webhooks.yourdomain.com`）を使用する場合は、Webhooksサービスを指すサーバーブロックを追加します：
+webhook 用に別のドメイン（例：`kodus-webhooks.yourdomain.com`）を使いたい場合は、webhooks サービスを指す server ブロックを追加します。
 
 ```nginx
 server {
@@ -80,7 +82,7 @@ server {
     server_name kodus-webhooks.yourdomain.com;
 
     location / {
-        proxy_pass http://localhost:3332; # Webhooksサービス
+        proxy_pass http://localhost:3332; # Webhooks service
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -93,36 +95,37 @@ server {
 }
 ```
 
-この設定を`/etc/nginx/sites-available/kodus`（または任意の名前、例えば`kodus-web`と`kodus-api`を別ファイルとして使用）に保存し、有効化するためのシンボリックリンクを作成します：
+この設定を `/etc/nginx/sites-available/kodus` に保存し（任意の名前でも構いません。たとえば、必要なら `kodus-web` と `kodus-api` を別々のファイルにします）、シンボリックリンクを作成して有効にします。
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/kodus /etc/nginx/sites-enabled/
-sudo nginx -t  # 設定をテスト
-sudo systemctl reload nginx  # 変更を適用
+sudo nginx -t  # Test the configuration
+sudo systemctl reload nginx  # Apply the changes
 ```
 
 <Info>
-  **リバースプロキシの重要な設定更新：**
+  **`.env` をパブリック URL に合わせてください。** プロキシが起動したら、`.env` に次を設定し、`./scripts/install.sh` をもう一度実行してコンテナを再作成します。
 
-  `kodus-web.yourdomain.com`と`kodus-api.yourdomain.com`（または選択したサブドメイン）でリバースプロキシを設定した後、`.env`ファイルがこれらのパブリックURLを正しく反映していることを**必ず**確認してください。具体的には以下を確認してください：
-  - `WEB_HOSTNAME_API`：プロトコル（`http://`または`https://`）なしで、パブリックAPIの**ホスト名のみ**に設定する必要があります（例：`kodus-api.yourdomain.com`）。
-  - `WEB_PORT_API`：APIがアクセス可能なパブリックポートに対応する必要があります（通常はHTTPSの場合`443`、HTTPの場合`80`）。フロントエンドがAPIを呼び出すために使用するスキーム（http/https）は、このポートから推論されるか、フロントエンドのロジックでHTTPSを使用するようにハードコードされることが多いです。
-  - WebhookのURL（例：`API_GITHUB_CODE_MANAGEMENT_WEBHOOK`）：これらが**Webhooksサービス**に解決されることを確認してください。`/.../webhook`がポート`3332`にルーティングされる場合のみAPIドメインを使用できます。または専用のWebhooksドメイン（例：`https://kodus-webhooks.yourdomain.com/github/webhook`）を使用してください。
+  - `NEXTAUTH_URL`、`API_FRONTEND_URL`、`API_USER_INVITE_BASE_URL`：Web アプリのパブリックな `https://` URL。
+  - webhook URL（たとえば `API_GITHUB_CODE_MANAGEMENT_WEBHOOK`）：**webhooks サービス**に到達する `https://` URL。API のドメインを使うのは、`/.../webhook` がポート `3332` にルーティングされる場合だけです。それ以外は、`https://kodus-webhooks.yourdomain.com/github/webhook` のような専用の webhooks ドメインを使います。
+  - `API_URL`（SSO を使う場合のみ）：`https://kodus-api.yourdomain.com` などのパブリックな API URL。
 
-  これらを正しく更新しないと、認証の問題、WebアプリケーションがAPIに接続できない、またはWebhookが正常に機能しない可能性があります。
+  `WEB_HOSTNAME_API` と `WEB_PORT_API` は、プロキシを指しません。Web アプリのサーバーは Docker ネットワーク経由で API を呼び出すため、デフォルト（`localhost` と `3001`）のままにしてください。`WEB_PORT_API` を設定すると、Web アプリは `http://<WEB_HOSTNAME_API>:<WEB_PORT_API>` を呼び出すため、ポート `443` のパブリックな HTTPS ホストは失敗します。
+
+  webhook URL が間違っていてもエラーは発生しません。リポジトリは接続されますが、レビューは開始されません。
 </Info>
 
-### SSLの有効化（推奨）
+### SSL の有効化（推奨）
 
-本番環境のデプロイメントでは、Let's EncryptによるSSLのセットアップを強く推奨します：
+本番環境のデプロイでは、Let's Encrypt による SSL の設定を強くお勧めします。
 
 ```bash
-# Let's Encrypt用のCertbotをインストール
+# Install Certbot for Let's Encrypt
 sudo apt-get update
 sudo apt-get install certbot python3-certbot-nginx
 
-# 両方のドメインの証明書を取得してインストール
-sudo certbot --nginx -d kodus-web.yourdomain.com -d kodus-api.yourdomain.com # 実際のドメインに置き換えてください
+# Obtain and install certificates (add -d for the webhooks domain if you use one)
+sudo certbot --nginx -d kodus-web.yourdomain.com -d kodus-api.yourdomain.com # Replace with your actual domains
 ```
 
-これにより、Nginxの設定が自動的にHTTPSを使用するように設定され、両方のサブドメインのHTTPトラフィックがリダイレクトされます。
+これにより、Nginx の設定が自動的に HTTPS を使うように構成され、それらのドメインの HTTP トラフィックがリダイレクトされます。

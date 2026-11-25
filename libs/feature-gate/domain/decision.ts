@@ -11,14 +11,31 @@ import type { FeatureAudience, SnapshotFeature } from './snapshot.types';
  *
  *   `deny`        — the catalog explicitly blocks the feature for this
  *                   audience / track combination. Adapter returns false.
- *   `pass`        — catalog allows. Cloud adapter should consult PostHog
- *                   for operational fine-tuning; self-hosted returns true.
+ *   `pass`        — catalog allows. Cloud beta needs no further flag;
+ *                   other cloud stages may consult PostHog.
  *   `compat-pass` — feature is missing from the catalog (legacy / in-flight
  *                   feature without an entry yet). Cloud should still hit
  *                   PostHog; self-hosted returns true. On PostHog error,
  *                   cloud falls back to true (legacy permissive behavior).
  */
 export type GateDecision = 'deny' | 'pass' | 'compat-pass';
+
+/**
+ * Reads the `BETA_FEATURES` env var: the self-hosted opt-in for `beta`-stage
+ * features (cloud uses the per-org release track instead).
+ *
+ * Every reader goes through this one parser - the NestJS service, the Next.js
+ * resolver and `scripts/feature-gate/check-gate.ts` - so the operator-facing
+ * report cannot print a decision the runtime never takes (#2425). `true` is
+ * the documented encoding (`.env.schema`, `release/README.md`) and `1` is
+ * accepted because the checker has always taken it; case and surrounding
+ * whitespace are ignored, the way `libs/ee/configs/environment` parses its
+ * own booleans. Anything else keeps betas off.
+ */
+export function isBetaFeaturesEnabled(value?: string | null): boolean {
+    const normalised = (value ?? '').trim().toLowerCase();
+    return normalised === 'true' || normalised === '1';
+}
 
 export interface GateInputs {
     entry: SnapshotFeature | undefined;
@@ -68,8 +85,8 @@ export function evaluateCatalogGate(inputs: GateInputs): GateDecision {
 
 /**
  * Cloud fallback when PostHog is unreachable. Mirrors the historical
- * permissive behavior: features missing from the catalog default to on,
- * GA features stay on, anything else is denied.
+ * permissive behavior for stages that still consult PostHog: features
+ * missing from the catalog default to on, GA stays on, alpha is denied.
  */
 export function cloudFallbackOnPosthogError(
     decision: GateDecision,

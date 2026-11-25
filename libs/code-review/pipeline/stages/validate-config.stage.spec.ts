@@ -1,91 +1,28 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ValidateConfigStage } from './validate-config.stage';
+import { prRiskDescriptionKey } from '@libs/code-review/domain/risk/risk-configuration';
 import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { ORGANIZATION_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
-import { CUSTOM_AGENTS_PLAN_REQUIRED } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import {
+    CUSTOM_AGENTS_BETA_REQUIRED,
+    CUSTOM_AGENTS_PLAN_REQUIRED,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import { environment } from '@libs/ee/configs/environment';
 import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
-describe('ValidateConfigStage — no BYOK config', () => {
-    let stage: ValidateConfigStage;
-    let mockAutomationExecutionService: any;
-    let mockOrganizationParametersService: any;
-    let mockCodeManagementService: any;
-    let context: CodeReviewPipelineContext;
-
-    const buildContext = (
-        byokModel: string | undefined,
-    ): CodeReviewPipelineContext =>
-        ({
-            origin: 'command',
-            platformType: 'github',
-            teamAutomationId: 'team-automation-id',
-            organizationAndTeamData: {
-                organizationId: 'org-1',
-                teamId: 'team-1',
-            },
-            repository: { id: 'repo-1', name: 'repo' },
-            pullRequest: {
-                number: 1,
-                title: 'feat: something',
-                isDraft: false,
-                base: { ref: 'main' },
-                head: { ref: 'feature' },
-            },
-            codeReviewConfig: {
-                automatedReviewActive: true,
-                ignoredTitleKeywords: [],
-                baseBranches: [],
-                runOnDraft: true,
-                byokModel,
-            },
-        }) as unknown as CodeReviewPipelineContext;
-
-    beforeEach(async () => {
-        mockAutomationExecutionService = {
-            findLatestExecutionByFilters: jest.fn().mockResolvedValue(null),
-        };
-
-        mockOrganizationParametersService = {
-            findByKey: jest.fn(),
-        };
-
-        mockCodeManagementService = {
-            createSingleIssueComment: jest.fn(),
-        };
-
-        const module: TestingModule = await Test.createTestingModule({
-            providers: [
-                ValidateConfigStage,
-                {
-                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
-                    useValue: mockAutomationExecutionService,
-                },
-                {
-                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
-                    useValue: mockOrganizationParametersService,
-                },
-                {
-                    provide: CodeManagementService,
-                    useValue: mockCodeManagementService,
-                },
-            ],
-        }).compile();
-
-        stage = module.get<ValidateConfigStage>(ValidateConfigStage);
-    });
-
-    it('does not crash when there is no BYOK config', async () => {
-        mockOrganizationParametersService.findByKey.mockResolvedValue(null);
-
-        context = buildContext('gpt-5-mini');
-
-        const result = await stage.execute(context);
-
-        expect(result.codeReviewConfig.byokConfig).toBeUndefined();
-    });
+// Custom agents read the install's mode. Pinned to Cloud here, as CI runs;
+// the self-hosted cases below switch it.
+jest.mock('@libs/ee/configs/environment', () => {
+    const actual = jest.requireActual('@libs/ee/configs/environment');
+    return {
+        ...actual,
+        environment: { ...actual.environment, API_CLOUD_MODE: true },
+    };
 });
 
 describe('ValidateConfigStage — v2 routing', () => {
@@ -93,6 +30,18 @@ describe('ValidateConfigStage — v2 routing', () => {
     let mockAutomationExecutionService: any;
     let mockOrganizationParametersService: any;
     let mockCodeManagementService: any;
+    let validateOrganizationLicense: jest.Mock;
+
+    const TEAMS = {
+        valid: true,
+        subscriptionStatus: 'active',
+        planType: 'teams_byok_monthly',
+    };
+    const FREE_BYOK = {
+        valid: true,
+        subscriptionStatus: 'active',
+        planType: 'free_byok',
+    };
 
     const buildContext = (
         byokModel: string | undefined,
@@ -102,6 +51,8 @@ describe('ValidateConfigStage — v2 routing', () => {
             origin: 'command',
             platformType: 'github',
             teamAutomationId: 'team-automation-id',
+            // Whoever asks by command here can write; the refusals set it.
+            requestedReviewModeAccess: 'write',
             organizationAndTeamData: {
                 organizationId: 'org-1',
                 teamId: 'team-1',
@@ -144,12 +95,21 @@ describe('ValidateConfigStage — v2 routing', () => {
         };
         mockOrganizationParametersService = { findByKey: jest.fn() };
         mockCodeManagementService = {
-            createSingleIssueComment: jest.fn(),
+            // The platform returns the comment it posted.
+            createSingleIssueComment: jest
+                .fn()
+                .mockResolvedValue({ id: 'comment-1' }),
+            createIssueComment: jest.fn().mockResolvedValue({}),
         };
+        validateOrganizationLicense = jest.fn().mockResolvedValue(TEAMS);
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ValidateConfigStage,
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: { validateOrganizationLicense },
+                },
                 {
                     provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
                     useValue: mockAutomationExecutionService,
@@ -157,6 +117,14 @@ describe('ValidateConfigStage — v2 routing', () => {
                 {
                     provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
                     useValue: mockOrganizationParametersService,
+                },
+                {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        gateKodusCreditsForSlot: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
                 },
                 {
                     provide: CodeManagementService,
@@ -178,28 +146,635 @@ describe('ValidateConfigStage — v2 routing', () => {
 
         const result = await stage.execute(buildContext(undefined));
 
-        expect(result.codeReviewConfig.byokConfig?.model).toBe(
-            'gpt-5-mini',
-        );
-        expect(result.codeReviewConfig.byokConfig?.provider).toBe(
-            'openai',
-        );
+        expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-5-mini');
+        expect(result.codeReviewConfig.byokConfig?.provider).toBe('openai');
         // Slot carries ciphertext verbatim — the resolver never decrypts.
         expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
-    it('routes the codeReview task to the byokModelId id-override (top of precedence)', async () => {
+    it.each([
+        [true, undefined, true, 'gpt-5-mini'],
+        [false, undefined, false, 'gpt-4o'],
+        [true, 'balanced', false, 'gpt-4o'],
+        [false, 'heavy', true, 'gpt-5-mini'],
+    ] as const)(
+        'routes shared risk=%s with requested=%s to the effective mode and model',
+        async (riskIdentified, requestedReviewMode, heavy, model) => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: v2({
+                    taskOverrides: { codeReviewHeavy: 'm-B' },
+                    defaultModelId: 'm-A',
+                }),
+            });
+            const ctx = buildContext(undefined);
+            ctx.codeReviewConfig.riskAssessmentActive = true;
+            ctx.pullRequest.head.sha = 'head';
+            ctx.pullRequest.base.sha = 'base';
+            const early = await stage.execute(ctx);
+            expect(early.codeReviewConfig.resolvedModelSlot).toBeUndefined();
+            const result = await stage.resolveReviewRouting({
+                ...early,
+                requestedReviewMode,
+                riskAssessment: {
+                    status: 'assessed',
+                    riskIdentified,
+                    reason: 'Evidence.',
+                    snapshot: {
+                        organizationId: 'org-1',
+                        repositoryId: 'repo-1',
+                        prNumber: 1,
+                        baseSha: 'base',
+                        headSha: ctx.pullRequest.head.sha,
+                        assessmentKey: 'key',
+                        descriptionKey: prRiskDescriptionKey(ctx.pullRequest),
+                    },
+                },
+            });
+            expect(result.heavy).toBe(heavy);
+            expect(result.reviewRoutingReason).toBe(
+                requestedReviewMode
+                    ? 'requested'
+                    : riskIdentified
+                      ? 'risk-found'
+                      : 'no-risk-found',
+            );
+            expect(result.codeReviewConfig.resolvedModelSlot?.model).toBe(
+                model,
+            );
+            if (riskIdentified && !requestedReviewMode) {
+                const stale = await stage.resolveReviewRouting({
+                    ...result,
+                    pullRequest: {
+                        ...result.pullRequest,
+                        base: { ...result.pullRequest.base, sha: 'new-base' },
+                    },
+                });
+                expect(stale.heavy).toBe(false);
+                expect(stale.reviewRoutingReason).toBe('risk-unavailable');
+            }
+        },
+    );
+
+    it('runs heavy on the Heavy model when the repository is set to Heavy, unless --balanced asks otherwise', async () => {
+        mockOrganizationParametersService.findByKey.mockResolvedValue({
+            configValue: v2({
+                taskOverrides: { codeReviewHeavy: 'm-B' },
+                defaultModelId: 'm-A',
+            }),
+        });
+        const setToHeavy = (requestedReviewMode?: 'balanced' | 'heavy') => {
+            const context = buildContext(undefined);
+            (context.codeReviewConfig as any).reviewMode = 'heavy';
+            return { ...context, requestedReviewMode };
+        };
+
+        const heavy = await stage.execute(setToHeavy());
+        expect(heavy.heavy).toBe(true);
+        expect(heavy.codeReviewConfig.byokConfig?.model).toBe('gpt-5-mini');
+
+        const balanced = await stage.execute(setToHeavy('balanced'));
+        expect(balanced.heavy).toBe(false);
+        expect(balanced.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
+    });
+
+    it('runs heavy when --heavy asks for it on a Balanced repository', async () => {
         mockOrganizationParametersService.findByKey.mockResolvedValue({
             configValue: v2({ defaultModelId: 'm-A' }),
         });
 
-        // byokModelId 'm-B' is a models[] id → routes straight to that model.
-        const result = await stage.execute(buildContext(undefined, 'm-B'));
+        const result = await stage.execute({
+            ...buildContext(undefined),
+            requestedReviewMode: 'heavy',
+        });
 
-        expect(result.codeReviewConfig.byokConfig?.model).toBe(
-            'gpt-5-mini',
+        expect(result.heavy).toBe(true);
+    });
+
+    describe('heavy mode on a plan that is not Teams or Enterprise', () => {
+        beforeEach(() => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: v2({
+                    taskOverrides: { codeReviewHeavy: 'm-B' },
+                    defaultModelId: 'm-A',
+                }),
+            });
+        });
+
+        it('runs Balanced on the Balanced model when --heavy asks, and says why on the PR', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+
+            const result = await stage.execute({
+                ...buildContext(undefined),
+                requestedReviewMode: 'heavy',
+            });
+
+            expect(result.heavy).toBe(false);
+            expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
+            expect(result.statusInfo?.status).not.toBe('skipped');
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    prNumber: 1,
+                    body: expect.stringContaining(
+                        'Heavy mode is available on the Teams and Enterprise plans',
+                    ),
+                }),
+            );
+        });
+
+        it('runs Balanced without a comment when the settings ask for heavy', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            const context = buildContext(undefined);
+            (context.codeReviewConfig as any).reviewMode = 'heavy';
+
+            const result = await stage.execute(context);
+
+            expect(result.heavy).toBe(false);
+            expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('runs Balanced when the plan cannot be read', async () => {
+            validateOrganizationLicense.mockRejectedValue(
+                new Error('billing down'),
+            );
+
+            const result = await stage.execute({
+                ...buildContext(undefined),
+                requestedReviewMode: 'heavy',
+            });
+
+            expect(result.heavy).toBe(false);
+        });
+
+        it('does not read the plan for a Balanced review', async () => {
+            await stage.execute(buildContext(undefined));
+
+            expect(validateOrganizationLicense).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('ultra', () => {
+        const trioConfig = (ultraModelIds = ['m-C', 'm-A', 'm-B']) =>
+            v2(
+                {
+                    defaultModelId: 'm-A',
+                    fallbackModelId: 'm-D',
+                    ultraModelIds,
+                },
+                [
+                    { id: 'm-A', credentialId: 'c-oa', model: 'gpt-4o' },
+                    { id: 'm-B', credentialId: 'c-oa', model: 'gpt-5-mini' },
+                    { id: 'm-C', credentialId: 'c-oa', model: 'gpt-6.1-sol' },
+                    { id: 'm-D', credentialId: 'c-oa', model: 'gpt-6-luna' },
+                ],
+            );
+        const ultraContext = (
+            requestedReviewMode?: 'ultra',
+            extra: Record<string, unknown> = {},
+        ) => {
+            const context = buildContext(undefined);
+            if (!requestedReviewMode) {
+                (context.codeReviewConfig as any).reviewMode = 'ultra';
+                // A push: the settings ask for Ultra, no command does.
+                (context as any).origin = 'github';
+            }
+            return { ...context, requestedReviewMode, ...extra } as any;
+        };
+        const comment = () =>
+            mockCodeManagementService.createSingleIssueComment.mock
+                .calls[0]?.[0]?.body as string | undefined;
+
+        it('runs Ultra on the three models in order, each without a per-call fallback, and the review slot on the codeReview model', async () => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).not.toBe('skipped');
+            expect(result.heavy).toBe(false);
+            expect(
+                result.ultra?.models.map((m) => [m.position, m.slot.model]),
+            ).toEqual([
+                [1, 'gpt-6.1-sol'],
+                [2, 'gpt-4o'],
+                [3, 'gpt-5-mini'],
+            ]);
+            expect(result.ultra?.models.every((m) => !m.slot.fallback)).toBe(
+                true,
+            );
+            expect(result.ultra?.fallback?.slot.model).toBe('gpt-6-luna');
+            expect(result.ultra?.mergeModel.slot.model).toBe('gpt-6.1-sol');
+            expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
+            expect(comment()).toBeUndefined();
+        });
+
+        it.each([
+            ['--ultra', 'ultra' as const, 'requested'],
+            ['the settings', undefined, 'default'],
+        ])(
+            'an Ultra review asked by %s records why it routed there',
+            async (_, requested, reason) => {
+                mockOrganizationParametersService.findByKey.mockResolvedValue({
+                    configValue: trioConfig(),
+                });
+
+                const result = await stage.execute(ultraContext(requested));
+
+                expect(result.ultra).toBeDefined();
+                expect(result.reviewRoutingReason).toBe(reason);
+            },
         );
-        expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
+
+        it("runs Ultra on a trial with three of the team's own models", async () => {
+            validateOrganizationLicense.mockResolvedValue({
+                valid: true,
+                subscriptionStatus: 'trial',
+                planType: 'teams_managed',
+            });
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            const result = await stage.execute(ultraContext('ultra'));
+            expect(result.ultra?.models).toHaveLength(3);
+        });
+
+        it('on free, runs no review for --ultra and says why on the PR', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.ultra).toBeUndefined();
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(comment()).toContain(
+                'Ultra review is available on the Teams and Enterprise plans',
+            );
+            expect(comment()).toContain('was not reviewed');
+        });
+
+        it.each([
+            [
+                'the license service is unreachable',
+                { valid: false, unavailable: true },
+            ],
+            ['the plan read throws', new Error('billing down')],
+        ])(
+            'when %s, runs no review for --ultra and says the plan could not be read, not that it lacks Ultra',
+            async (_, outcome) => {
+                if (outcome instanceof Error)
+                    validateOrganizationLicense.mockRejectedValue(outcome);
+                else validateOrganizationLicense.mockResolvedValue(outcome);
+                mockOrganizationParametersService.findByKey.mockResolvedValue({
+                    configValue: trioConfig(),
+                });
+
+                const result = await stage.execute(ultraContext('ultra'));
+
+                expect(result.ultra).toBeUndefined();
+                expect(result.statusInfo?.status).toBe('skipped');
+                expect(comment()).toContain(
+                    "Kody could not read this organization's plan just now",
+                );
+                expect(comment()).not.toContain('is not on one');
+            },
+        );
+
+        it('a trio still set after the trial ended runs nothing; the PR is told once, on the first review skipped for it', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            // Production always carries the CURRENT execution here; it says
+            // nothing about earlier reviews of the PR.
+            const current = {
+                pipelineMetadata: { lastExecution: { uuid: 'now' } },
+            };
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
+
+            const first = await stage.execute(ultraContext(undefined, current));
+            expect(first.statusInfo?.status).toBe('skipped');
+            expect(comment()).toContain('Ultra review is available');
+            expect(
+                mockAutomationExecutionService.findLatestExecutionByFilters,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    status: 'skipped',
+                    errorMessage: first.statusInfo?.message,
+                    pullRequestNumber: 1,
+                }),
+                { rethrow: true },
+            );
+
+            mockCodeManagementService.createSingleIssueComment.mockClear();
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters: any) =>
+                    filters?.errorMessage ? { uuid: 'earlier-skip' } : null,
+            );
+            const later = await stage.execute(ultraContext(undefined, current));
+            expect(later.statusInfo?.status).toBe('skipped');
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).not.toHaveBeenCalled();
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
+        });
+
+        it('--ultra is always answered, even after an earlier skip for the same reason', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                { uuid: 'earlier-skip' },
+            );
+            await stage.execute(ultraContext('ultra'));
+            expect(comment()).toContain('Ultra review is available');
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
+        });
+
+        it('with fewer than three own models, runs no review and says how many there are', async () => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: v2({ defaultModelId: 'm-A' }),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(comment()).toContain('this organization has 2 configured');
+        });
+
+        it('a model on Kodus credits with none left counts as unavailable, so the fallback takes its place', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockImplementation(async (slot: any) =>
+                slot?.model === 'gpt-5-mini' ? { allowed: false } : null,
+            );
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.ultra?.models.map((m) => m.slot.model)).toEqual([
+                'gpt-6.1-sol',
+                'gpt-4o',
+            ]);
+            expect(result.ultra?.unavailable).toEqual([
+                expect.objectContaining({
+                    position: 3,
+                    reason: 'Its Kodus credits are exhausted.',
+                }),
+            ]);
+            gate.mockResolvedValue(null);
+        });
+
+        it('settings asking for it on a draft skip as any draft does, and the PR is told once it is ready', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            // Nothing was recorded as told: the draft skip carried its own reason.
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
+            const cadence = jest
+                .spyOn(stage as any, 'evaluateReviewCadence')
+                .mockResolvedValueOnce({
+                    shouldProcess: false,
+                    reason: 'Pull request is a draft',
+                    shouldSaveSkipped: false,
+                });
+
+            const draft = await stage.execute(ultraContext());
+            expect(draft.statusInfo).toMatchObject({
+                status: 'skipped',
+                message: 'Pull request is a draft',
+            });
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).not.toHaveBeenCalled();
+
+            const ready = await stage.execute(ultraContext());
+            expect(ready.statusInfo?.message).toContain(
+                'Ultra review is available',
+            );
+            expect(comment()).toContain('Ultra review is available');
+            cadence.mockRestore();
+        });
+
+        it('an unreadable record of earlier skips posts nothing: the review skips on the config error', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockRejectedValueOnce(
+                new Error('connection reset'),
+            );
+
+            const result = await stage.execute(ultraContext());
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.statusInfo?.message).not.toContain('Ultra review');
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('the earlier-skips read asks the store to throw, not to read a failure as none', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            await stage.execute(ultraContext());
+            expect(
+                mockAutomationExecutionService.findLatestExecutionByFilters,
+            ).toHaveBeenCalledWith(expect.anything(), { rethrow: true });
+        });
+
+        it('a refusal the platform did not take is not recorded as told: the next review tries again', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockCodeManagementService.createSingleIssueComment.mockResolvedValueOnce(
+                null,
+            );
+
+            const result = await stage.execute(ultraContext());
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.statusInfo?.message).toContain('could not post why');
+        });
+
+        it('a command refusal the platform did not take is not recorded as told either', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockCodeManagementService.createSingleIssueComment.mockResolvedValueOnce(
+                null,
+            );
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.message).toContain('could not post why');
+            // The usual skip reaction still shows on the PR.
+            expect(result.pipelineMetadata?.notificationHandled).toBe(false);
+        });
+
+        it('a plain start-review on settings that ask for Ultra is always answered', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                { uuid: 'earlier-skip' },
+            );
+
+            await stage.execute(ultraContext(undefined, { origin: 'command' }));
+
+            expect(comment()).toContain('Ultra review is available');
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                null,
+            );
+        });
+
+        it('a fallback on Kodus credits with none left is not used', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockImplementation(async (slot: any) =>
+                slot?.model === 'gpt-6-luna' ? { allowed: false } : null,
+            );
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.ultra?.models).toHaveLength(3);
+            expect(result.ultra?.fallback).toBeUndefined();
+            gate.mockResolvedValue(null);
+        });
+
+        it('with the three and the fallback out of credits, skips as Balanced does, with the credits comment', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockResolvedValue({ allowed: false });
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.ultra).toBeUndefined();
+            expect(
+                mockCodeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringMatching(/credit/i),
+                }),
+            );
+            gate.mockResolvedValue(null);
+        });
+
+        it('a credits comment the platform refused leaves the notification to the usual skip', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockResolvedValue({ allowed: false });
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockCodeManagementService.createIssueComment.mockResolvedValueOnce(
+                null,
+            );
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.pipelineMetadata?.notificationHandled).toBeFalsy();
+            gate.mockResolvedValue(null);
+        });
+
+        it('a credits comment that threw leaves the notification to the usual skip', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockResolvedValue({ allowed: false });
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            mockCodeManagementService.createIssueComment.mockRejectedValueOnce({
+                status: 404,
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.pipelineMetadata?.notificationHandled).toBeFalsy();
+            gate.mockResolvedValue(null);
+        });
+
+        it('with the three out of credits, the merge runs on the fallback', async () => {
+            const gate = (stage as any).permissionValidationService
+                .gateKodusCreditsForSlot as jest.Mock;
+            gate.mockImplementation(async (slot: any) =>
+                slot?.model === 'gpt-6-luna' ? null : { allowed: false },
+            );
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+
+            const result = await stage.execute(ultraContext('ultra'));
+
+            expect(result.ultra?.models).toEqual([]);
+            expect(result.ultra?.mergeModel.slot.model).toBe('gpt-6-luna');
+            gate.mockResolvedValue(null);
+        });
+
+        it("Kody Rules and the summary run on the org's default model, not a repository's override", async () => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            const context = ultraContext('ultra');
+            context.codeReviewConfig.byokModelId = 'm-B';
+
+            const result = await stage.execute(context);
+
+            expect(result.codeReviewConfig.resolvedModelSlot?.model).toBe(
+                'gpt-4o',
+            );
+        });
+
+        it('@kody -v runs its one custom agent, not Ultra', async () => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: trioConfig(),
+            });
+            const result = await stage.resolveReviewRouting(
+                ultraContext(undefined, { onlyCustomAgent: 'audit' }),
+            );
+            expect(result.ultra).toBeUndefined();
+        });
+    });
+
+    it('does not crash when there is no BYOK config', async () => {
+        mockOrganizationParametersService.findByKey.mockResolvedValue(null);
+
+        const result = await stage.execute(buildContext('gpt-5-mini'));
+
+        expect(result.codeReviewConfig.byokConfig).toBeUndefined();
+        expect(result.statusInfo?.status).not.toBe('skipped');
     });
 
     it('lets byokModelId (id) win over the legacy byokModel NAME', async () => {
@@ -210,9 +785,8 @@ describe('ValidateConfigStage — v2 routing', () => {
         // id 'm-B' (→ gpt-5-mini) wins over the NAME 'gpt-4o'.
         const result = await stage.execute(buildContext('gpt-4o', 'm-B'));
 
-        expect(result.codeReviewConfig.byokConfig?.model).toBe(
-            'gpt-5-mini',
-        );
+        expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-5-mini');
+        expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
     it('W1: a legacy byokModel NAME override still resolves on a config', async () => {
@@ -224,9 +798,7 @@ describe('ValidateConfigStage — v2 routing', () => {
         // chosen slot (default m-A, openai credential).
         const result = await stage.execute(buildContext('gpt-5-mini'));
 
-        expect(result.codeReviewConfig.byokConfig?.model).toBe(
-            'gpt-5-mini',
-        );
+        expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-5-mini');
         expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
@@ -262,13 +834,176 @@ describe('ValidateConfigStage — v2 routing', () => {
             configValue: v2(
                 { defaultModelId: 'm-X' },
                 [{ id: 'm-X', credentialId: 'c-x', model: 'some-model' }],
-                [{ id: 'c-x', provider: 'not_a_real_provider', apiKey: 'enc-x' }],
+                [
+                    {
+                        id: 'c-x',
+                        provider: 'not_a_real_provider',
+                        apiKey: 'enc-x',
+                    },
+                ],
             ),
         });
 
         const result = await stage.execute(buildContext(undefined));
 
         expect(result.codeReviewConfig.byokConfig).toBeUndefined();
+    });
+
+    describe('review modes turned off for commands', () => {
+        const byKey = (commandModes: unknown) =>
+            mockOrganizationParametersService.findByKey.mockImplementation(
+                async (key: string) =>
+                    key === 'review_command_modes_config'
+                        ? commandModes === undefined
+                            ? null
+                            : { configValue: commandModes }
+                        : {
+                              configValue: v2(
+                                  {
+                                      defaultModelId: 'm-A',
+                                      ultraModelIds: ['m-A', 'm-B', 'm-C'],
+                                  },
+                                  [
+                                      {
+                                          id: 'm-A',
+                                          credentialId: 'c-oa',
+                                          model: 'gpt-4o',
+                                      },
+                                      {
+                                          id: 'm-B',
+                                          credentialId: 'c-oa',
+                                          model: 'gpt-5-mini',
+                                      },
+                                      {
+                                          id: 'm-C',
+                                          credentialId: 'c-oa',
+                                          model: 'gpt-6.1-sol',
+                                      },
+                                  ],
+                              ),
+                          },
+            );
+        const run = (
+            requestedReviewMode?: 'heavy' | 'ultra' | 'balanced',
+            reviewMode?: string,
+            // null: not read, as from a job enqueued before the check.
+            requestedReviewModeAccess:
+                'write' | 'none' | 'unknown' | null = 'write',
+        ) => {
+            const context = buildContext(undefined) as any;
+            if (reviewMode) context.codeReviewConfig.reviewMode = reviewMode;
+            if (!requestedReviewMode) context.origin = 'github';
+            return stage.execute({
+                ...context,
+                requestedReviewMode,
+                requestedReviewModeAccess:
+                    requestedReviewModeAccess ?? undefined,
+            });
+        };
+        const comment = () =>
+            mockCodeManagementService.createSingleIssueComment.mock
+                .calls[0]?.[0]?.body as string | undefined;
+
+        it.each([
+            ['heavy', { heavyBlocked: true }, 'Heavy review by command'],
+            ['ultra', { ultraBlocked: true }, 'Ultra review by command'],
+        ] as const)(
+            '--%s turned off runs no review and tells the PR who can turn it on',
+            async (mode, config, text) => {
+                byKey(config);
+
+                const result = await run(mode);
+
+                expect(result.statusInfo?.status).toBe('skipped');
+                expect(result.heavy).toBeFalsy();
+                expect(result.ultra).toBeUndefined();
+                expect(comment()).toContain(text);
+                expect(comment()).toContain('organization owner');
+                expect(result.statusInfo?.message).toBe(comment());
+                expect(result.pipelineMetadata?.notificationHandled).toBe(true);
+            },
+        );
+
+        it.each([
+            ['heavy', 'none', 'Someone with write access can ask for it.'],
+            ['ultra', 'none', 'Someone with write access can ask for it.'],
+            ['ultra', 'unknown', 'Kody could not check yours'],
+            ['heavy', null, 'Kody could not check yours'],
+            ['ultra', null, 'Kody could not check yours'],
+        ] as const)(
+            '--%s from someone whose write access is %s runs no review and says why',
+            async (mode, access, text) => {
+                byKey(undefined);
+
+                const result = await run(mode, undefined, access);
+
+                expect(result.statusInfo?.status).toBe('skipped');
+                expect(result.heavy).toBeFalsy();
+                expect(result.ultra).toBeUndefined();
+                expect(comment()).toContain('needs write access');
+                expect(comment()).toContain(text);
+                expect(result.statusInfo?.message).toBe(comment());
+            },
+        );
+
+        it.each([
+            ['with write access', 'heavy', 'write'],
+            ['--balanced, which needs none', 'balanced', 'none'],
+        ] as const)('a command %s runs the review', async (_, mode, access) => {
+            byKey(undefined);
+
+            const result = await run(mode, undefined, access);
+
+            expect(result.statusInfo?.status).not.toBe('skipped');
+            expect(comment()).toBeUndefined();
+        });
+
+        it('a reply the platform refused leaves the usual skip notification', async () => {
+            byKey({ heavyBlocked: true });
+            mockCodeManagementService.createSingleIssueComment.mockResolvedValue(
+                null,
+            );
+
+            const result = await run('heavy');
+
+            expect(result.statusInfo?.status).toBe('skipped');
+            expect(result.pipelineMetadata?.notificationHandled).toBe(false);
+        });
+
+        it.each([
+            ['--heavy with only Ultra off', 'heavy', { ultraBlocked: true }],
+            ['--ultra with only Heavy off', 'ultra', { heavyBlocked: true }],
+            ['--heavy with nothing stored', 'heavy', undefined],
+            [
+                '--balanced with both off',
+                'balanced',
+                { heavyBlocked: true, ultraBlocked: true },
+            ],
+        ] as const)('%s runs the review', async (_, mode, config) => {
+            byKey(config);
+
+            const result = await run(mode);
+
+            expect(result.statusInfo?.status).not.toBe('skipped');
+            expect(comment()).toBeUndefined();
+        });
+
+        it.each([
+            ['heavy', { heavyBlocked: true }],
+            ['ultra', { ultraBlocked: true }],
+        ] as const)(
+            'settings routing to %s still run it with the command off',
+            async (mode, config) => {
+                byKey(config);
+
+                const result = await run(undefined, mode);
+
+                expect(result.statusInfo?.status).not.toBe('skipped');
+                expect(
+                    mode === 'heavy' ? result.heavy : result.ultra,
+                ).toBeTruthy();
+            },
+        );
     });
 });
 
@@ -305,6 +1040,14 @@ describe('ValidateConfigStage — base branch scope', () => {
                     useValue: { findByKey: jest.fn() },
                 },
                 {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        gateKodusCreditsForSlot: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
                     provide: CodeManagementService,
                     useValue: { createSingleIssueComment: jest.fn() },
                 },
@@ -316,7 +1059,9 @@ describe('ValidateConfigStage — base branch scope', () => {
 
     describe('missing config (undefined / not an array)', () => {
         it('does not block when baseBranches is undefined', () => {
-            expect(validate(undefined, 'main', 'develop').canProceed).toBe(true);
+            expect(validate(undefined, 'main', 'develop').canProceed).toBe(
+                true,
+            );
         });
 
         it('does not block when baseBranches is corrupt', () => {
@@ -440,6 +1185,14 @@ describe('ValidateConfigStage — @kody -v naming no agent', () => {
                     useValue: { findByKey: jest.fn().mockResolvedValue(null) },
                 },
                 {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        gateKodusCreditsForSlot: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
                     provide: CodeManagementService,
                     useValue: { createSingleIssueComment },
                 },
@@ -499,12 +1252,6 @@ describe('ValidateConfigStage — @kody -v naming no agent', () => {
 
         expect(createSingleIssueComment).not.toHaveBeenCalled();
         expect(result.statusInfo?.status).not.toBe('skipped');
-    });
-
-    it('leaves a review without -v alone', async () => {
-        await stage.execute(buildContext(undefined, []));
-
-        expect(createSingleIssueComment).not.toHaveBeenCalled();
     });
 });
 
@@ -596,6 +1343,14 @@ describe('ValidateConfigStage — custom agents plan gate', () => {
                     useValue: { findByKey: jest.fn().mockResolvedValue(null) },
                 },
                 {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        gateKodusCreditsForSlot: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
                     provide: CodeManagementService,
                     useValue: { createSingleIssueComment },
                 },
@@ -676,5 +1431,271 @@ describe('ValidateConfigStage — custom agents plan gate', () => {
         await stage.execute(context);
 
         expect(validateOrganizationLicense).not.toHaveBeenCalled();
+        expect(createSingleIssueComment).not.toHaveBeenCalled();
+    });
+
+    // Custom agents are a beta feature: a self-hosted install runs them only
+    // with BETA_FEATURES=true, whatever its plan (#2425).
+    describe('on a self-hosted install', () => {
+        const betaFeatures = process.env.BETA_FEATURES;
+
+        beforeEach(() => {
+            environment.API_CLOUD_MODE = false;
+            delete process.env.BETA_FEATURES;
+            validateOrganizationLicense.mockResolvedValue(TEAMS);
+        });
+
+        afterEach(() => {
+            environment.API_CLOUD_MODE = true;
+            if (betaFeatures === undefined) {
+                delete process.env.BETA_FEATURES;
+            } else {
+                process.env.BETA_FEATURES = betaFeatures;
+            }
+        });
+
+        it.each([
+            ['unset', undefined],
+            ['false', 'false'],
+        ])(
+            'with BETA_FEATURES %s, reviews without the custom agents and their skills and docs',
+            async (_name, value) => {
+                if (value !== undefined) process.env.BETA_FEATURES = value;
+
+                const result = await stage.execute(buildContext());
+
+                expect(result.codeReviewConfig.customAgents).toEqual([]);
+                expect(result.codeReviewConfig.knowledge).toEqual([]);
+                expect(result.statusInfo?.status).not.toBe('skipped');
+                expect(createSingleIssueComment).not.toHaveBeenCalled();
+            },
+        );
+
+        it('with BETA_FEATURES off, answers @kody -v with the reason and skips the review', async () => {
+            const result = await stage.execute(buildContext('ledger-rules'));
+
+            expect(createSingleIssueComment).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    prNumber: 7,
+                    body: `\`@kody -v ledger-rules\` did not run. ${CUSTOM_AGENTS_BETA_REQUIRED}`,
+                }),
+            );
+            expect(result.statusInfo).toEqual({
+                status: 'skipped',
+                message:
+                    'Custom agents are in beta and BETA_FEATURES is off on this install.',
+            });
+        });
+    });
+});
+
+describe('ValidateConfigStage — Kodus credits on the routed model', () => {
+    let stage: ValidateConfigStage;
+    let createIssueComment: jest.Mock;
+    let gateKodusCreditsForSlot: jest.Mock;
+
+    const kodusModel =
+        'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731';
+    // m-A, m-B: the org's own OpenAI key; m-K: routed by Kodus.
+    const config = (routing: any) => ({
+        version: 2,
+        credentials: [
+            { id: 'c-oa', provider: 'openai', apiKey: 'enc-oa' },
+            { id: 'c-kd', provider: 'kodus' },
+        ],
+        models: [
+            { id: 'm-A', credentialId: 'c-oa', model: 'gpt-4o' },
+            { id: 'm-B', credentialId: 'c-oa', model: 'gpt-5-mini' },
+            { id: 'm-K', credentialId: 'c-kd', model: kodusModel },
+        ],
+        routing,
+    });
+
+    const buildContext = (
+        reviewMode: 'balanced' | 'heavy',
+        showStatusFeedback = true,
+    ): CodeReviewPipelineContext =>
+        ({
+            origin: 'command',
+            platformType: 'github',
+            teamAutomationId: 'team-automation-id',
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'repo-1', name: 'repo' },
+            pullRequest: {
+                number: 3,
+                title: 'feat: something',
+                isDraft: false,
+                base: { ref: 'main' },
+                head: { ref: 'feature' },
+            },
+            pipelineMetadata: { showStatusFeedback },
+            codeReviewConfig: {
+                automatedReviewActive: true,
+                ignoredTitleKeywords: [],
+                baseBranches: [],
+                runOnDraft: true,
+                reviewMode,
+            },
+        }) as unknown as CodeReviewPipelineContext;
+
+    const setup = async (routing: any) => {
+        createIssueComment = jest.fn().mockResolvedValue({});
+        gateKodusCreditsForSlot = jest.fn().mockResolvedValue({
+            allowed: false,
+            errorType: 'CREDITS_EXHAUSTED',
+        });
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                ValidateConfigStage,
+                {
+                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+                    useValue: {
+                        findLatestExecutionByFilters: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
+                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+                    useValue: {
+                        findByKey: jest.fn().mockResolvedValue({
+                            configValue: config(routing),
+                        }),
+                    },
+                },
+                {
+                    provide: CodeManagementService,
+                    useValue: { createIssueComment },
+                },
+                {
+                    provide: PermissionValidationService,
+                    useValue: { gateKodusCreditsForSlot },
+                },
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: {
+                        validateOrganizationLicense: jest
+                            .fn()
+                            .mockResolvedValue({
+                                valid: true,
+                                subscriptionStatus: 'active',
+                                planType: 'teams_byok_monthly',
+                            }),
+                    },
+                },
+            ],
+        }).compile();
+        stage = module.get<ValidateConfigStage>(ValidateConfigStage);
+    };
+
+    it('skips a heavy review on a Kodus model the Balanced model did not gate, with the credits comment', async () => {
+        await setup({
+            defaultModelId: 'm-A',
+            taskOverrides: { codeReviewHeavy: 'm-K' },
+        });
+
+        const result = await stage.execute(buildContext('heavy'));
+
+        expect(gateKodusCreditsForSlot).toHaveBeenCalledWith(
+            expect.objectContaining({ provider: 'kodus', model: kodusModel }),
+            { organizationId: 'org-1', teamId: 'team-1' },
+            'ValidateConfigStage',
+        );
+        expect(result.statusInfo?.status).toBe('skipped');
+        expect(result.pipelineMetadata?.notificationHandled).toBe(true);
+        expect(createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prNumber: 3,
+                body: KODUS_CREDITS_EXHAUSTED_COMMENT,
+            }),
+        );
+    });
+
+    it('posts no comment when status feedback is off', async () => {
+        await setup({
+            defaultModelId: 'm-A',
+            taskOverrides: { codeReviewHeavy: 'm-K' },
+        });
+
+        const result = await stage.execute(buildContext('heavy', false));
+
+        expect(result.statusInfo?.status).toBe('skipped');
+        expect(createIssueComment).not.toHaveBeenCalled();
+    });
+
+    it('reviews when the Kodus credits cover the heavy review', async () => {
+        await setup({
+            defaultModelId: 'm-A',
+            taskOverrides: { codeReviewHeavy: 'm-K' },
+        });
+        gateKodusCreditsForSlot.mockResolvedValue(null);
+
+        const result = await stage.execute(buildContext('heavy'));
+
+        expect(result.heavy).toBe(true);
+        expect(result.statusInfo?.status).not.toBe('skipped');
+        expect(result.codeReviewConfig.byokConfig?.provider).toBe('kodus');
+    });
+
+    it('checks the credits when a repository override routes a Balanced review to Kodus', async () => {
+        await setup({ defaultModelId: 'm-A' });
+        const context = buildContext('balanced');
+        (context.codeReviewConfig as any).byokModelId = 'm-K';
+
+        const result = await stage.execute(context);
+
+        expect(gateKodusCreditsForSlot).toHaveBeenCalledWith(
+            expect.objectContaining({ provider: 'kodus' }),
+            { organizationId: 'org-1', teamId: 'team-1' },
+            'ValidateConfigStage',
+        );
+        expect(result.statusInfo?.status).toBe('skipped');
+    });
+
+    it('does not read the credits when a repository override routes to the org key', async () => {
+        await setup({ defaultModelId: 'm-A' });
+        const context = buildContext('balanced');
+        (context.codeReviewConfig as any).byokModelId = 'm-B';
+
+        const result = await stage.execute(context);
+
+        expect(gateKodusCreditsForSlot).not.toHaveBeenCalled();
+        expect(result.statusInfo?.status).not.toBe('skipped');
+        expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-5-mini');
+    });
+
+    it.each([
+        [
+            'a Balanced review',
+            'balanced',
+            {
+                defaultModelId: 'm-A',
+                taskOverrides: { codeReviewHeavy: 'm-K' },
+            },
+        ],
+        [
+            'a heavy review on the org key',
+            'heavy',
+            {
+                defaultModelId: 'm-K',
+                taskOverrides: { codeReviewHeavy: 'm-A' },
+            },
+        ],
+        // The prerequisites already gated the Balanced model's Kodus credits.
+        [
+            'a heavy review when both models are Kodus',
+            'heavy',
+            { defaultModelId: 'm-K' },
+        ],
+    ])('does not read the credits again for %s', async (_, mode, routing) => {
+        await setup(routing);
+
+        const result = await stage.execute(buildContext(mode as any));
+
+        expect(gateKodusCreditsForSlot).not.toHaveBeenCalled();
+        expect(result.statusInfo?.status).not.toBe('skipped');
     });
 });

@@ -1,3 +1,7 @@
+import type {
+    UpdateSuggestionOptions,
+    KodyChangeRequestRecord,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
     BulkApplyResult,
     FileBulkOp,
@@ -7,12 +11,15 @@ import {
 import { IPullRequestsService } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import {
+    IApprovalReasonDeliveryFailure,
+    ApprovalReasonDeliveryGuard,
     ICommit,
     IFile,
     IPullRequests,
     IPullRequestUser,
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
+    IPullRequestWithKodyChangeRequest,
     ISuggestion,
     ISuggestionByPR,
     SuggestionCountsBySeverity,
@@ -32,6 +39,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { createLogger } from '@libs/core/log/logger';
 
+import type { CustomAgentFindingsScope } from '@libs/platformData/domain/pullRequests/interfaces/custom-agent-findings.interface';
 @Injectable()
 export class PullRequestsService implements IPullRequestsService {
     private readonly logger = createLogger(PullRequestsService.name);
@@ -57,6 +65,26 @@ export class PullRequestsService implements IPullRequestsService {
      * lets the failure return.
      */
     private static readonly MAX_FILES_PER_SAVE = 5000;
+
+    /**
+     * What the save reads of the stored PR: everything but the suggestions,
+     * the PR-level suggestions and the commits. It adds suggestions with
+     * `$push` and writes commits wholesale, so it never reads them back, and
+     * they are most of what a document weighs besides the patches (which the
+     * diff budget does need).
+     */
+    private static readonly SAVE_LOOKUP_PROJECTION = {
+        'files.suggestions': 0,
+        'prLevelSuggestions': 0,
+        'commits': 0,
+    } as const;
+
+    /** An event that changes no file reads none of them either. */
+    private static readonly LIFECYCLE_LOOKUP_PROJECTION = {
+        files: 0,
+        prLevelSuggestions: 0,
+        commits: 0,
+    } as const;
 
     private static readonly BINARY_PATCH_EXT =
         /\.(png|jpe?g|gif|svg|webp|ico|bmp|tiff?|pdf|zip|tar|gz|tgz|bz2|7z|rar|woff2?|ttf|otf|eot|mp4|mov|webm|mp3|wav|flac|ogg|psd|ai|sketch|fig|class|jar|exe|dll|so|dylib|wasm)$/i;
@@ -101,8 +129,80 @@ export class PullRequestsService implements IPullRequestsService {
         });
     }
 
-    getNativeCollection() {
-        throw new Error('Method not implemented.');
+    findCustomAgentSuggestionRows(scope: CustomAgentFindingsScope) {
+        return this.pullRequestsRepository.findCustomAgentSuggestionRows(scope);
+    }
+
+    findUnfollowedCustomAgentCitations(scope: CustomAgentFindingsScope) {
+        return this.pullRequestsRepository.findUnfollowedCustomAgentCitations(
+            scope,
+        );
+    }
+
+    setApprovalReasonDeliveryFailure(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        failure: IApprovalReasonDeliveryFailure | null,
+        guard?: ApprovalReasonDeliveryGuard,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.setApprovalReasonDeliveryFailure(
+            organizationId,
+            repositoryId,
+            prNumber,
+            failure,
+            guard,
+        );
+    }
+
+    recordKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        request: KodyChangeRequestRecord,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.recordKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            request,
+        );
+    }
+
+    clearKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.clearKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            requestedAt,
+        );
+    }
+
+    hasOpenKodyChangeRequest(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.hasOpenKodyChangeRequest(
+            organizationId,
+            repositoryId,
+            prNumber,
+            requestedAt,
+        );
+    }
+
+    findOpenPullRequestsWithKodyChangeRequest(
+        organizationId: string,
+    ): Promise<IPullRequestWithKodyChangeRequest[]> {
+        return this.pullRequestsRepository.findOpenPullRequestsWithKodyChangeRequest(
+            organizationId,
+        );
     }
 
     //#region Create
@@ -120,8 +220,9 @@ export class PullRequestsService implements IPullRequestsService {
 
     async findOne(
         filter?: Partial<IPullRequests>,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null> {
-        return this.pullRequestsRepository.findOne(filter);
+        return this.pullRequestsRepository.findOne(filter, projection);
     }
 
     async find(filter?: Partial<IPullRequests>): Promise<PullRequestsEntity[]> {
@@ -240,6 +341,53 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    findPullRequestAuthorsOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>> {
+        return this.pullRequestsRepository.findPullRequestAuthorsOpenedSince(
+            since,
+            organizationId,
+            repositoryIds,
+        );
+    }
+
+    findPullRequestAuthorLabelsByIds(
+        organizationId: string,
+        userIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>> {
+        return this.pullRequestsRepository.findPullRequestAuthorLabelsByIds(
+            organizationId,
+            userIds,
+        );
+    }
+
+    hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.hasStoredPullRequests(
+            organizationId,
+            repositoryIds,
+        );
+    }
+
+    findOpenPullRequestKeys(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: { unresolvedOnly?: boolean; limit: number },
+    ): Promise<{
+        keys: Array<{ number: number; repositoryId: string }>;
+        truncated: boolean;
+    }> {
+        return this.pullRequestsRepository.findOpenPullRequestKeys(
+            organizationId,
+            repositoryIds,
+            opts,
+        );
+    }
+
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,
         repositoryIds: string[] | undefined,
@@ -275,6 +423,18 @@ export class PullRequestsService implements IPullRequestsService {
             organizationId,
             repositoryIds,
             opts,
+        );
+    }
+
+    countByAuthor(
+        organizationId: string,
+        authorId: string,
+        limit: number,
+    ): Promise<number> {
+        return this.pullRequestsRepository.countByAuthor(
+            organizationId,
+            authorId,
+            limit,
         );
     }
 
@@ -365,11 +525,25 @@ export class PullRequestsService implements IPullRequestsService {
     async findPullRequestsWithDeliveredSuggestions(
         organizationId: string,
         prNumbers: number[],
-        status: string,
+        status: string | string[],
+        pullRequestRefs?: Array<{ repositoryId: string; number: number }>,
     ): Promise<IPullRequestWithDeliveredSuggestions[]> {
         return this.pullRequestsRepository.findPullRequestsWithDeliveredSuggestions(
             organizationId,
             prNumbers,
+            status,
+            pullRequestRefs,
+        );
+    }
+
+    async findPullRequestsWithoutDeliveredSuggestionsForApproval(
+        organizationId: string,
+        prRefs: Array<{ repositoryId: string; pullRequestNumber: number }>,
+        status: string,
+    ): Promise<IPullRequestWithDeliveredSuggestions[]> {
+        return this.pullRequestsRepository.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+            organizationId,
+            prRefs,
             status,
         );
     }
@@ -468,6 +642,13 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    refreshFileTotalsIfStale(prUuid: string, organizationId: string) {
+        return this.pullRequestsRepository.refreshFileTotalsIfStale(
+            prUuid,
+            organizationId,
+        );
+    }
+
     computeEmbeddedPatchBytes(prUuid: string, organizationId: string) {
         return this.pullRequestsRepository.computeEmbeddedPatchBytes(
             prUuid,
@@ -497,14 +678,21 @@ export class PullRequestsService implements IPullRequestsService {
 
     async addPrLevelSuggestions(
         pullRequestNumber: number,
+        repositoryId: string,
         repositoryName: string,
         prLevelSuggestions: ISuggestionByPR[],
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         try {
-            const existingPR = await this.findByNumberAndRepositoryName(
+            // Resolved by ID first, with the name as a guarded fallback: a
+            // name hit is only taken when the stored row carries no id, or this
+            // repository's, so it stays safe in the #2059 case where two
+            // repositories of one organization share a name - while a legacy
+            // document that has no id is still appended to instead of missed
+            // (#2076 review).
+            const existingPR = await this.findExistingPullRequest(
                 pullRequestNumber,
-                repositoryName,
+                { id: repositoryId, name: repositoryName },
                 organizationAndTeamData,
             );
 
@@ -514,6 +702,7 @@ export class PullRequestsService implements IPullRequestsService {
                     context: PullRequestsService.name,
                     metadata: {
                         pullRequestNumber,
+                        repositoryId,
                         repositoryName,
                         organizationAndTeamData,
                     },
@@ -521,17 +710,13 @@ export class PullRequestsService implements IPullRequestsService {
                 return null;
             }
 
-            const existingPrLevelSuggestions =
-                existingPR.prLevelSuggestions || [];
-            const updatedPrLevelSuggestions = [
-                ...existingPrLevelSuggestions,
-                ...prLevelSuggestions,
-            ];
-
-            return this.update(existingPR, {
-                prLevelSuggestions: updatedPrLevelSuggestions,
-                updatedAt: new Date().toISOString(),
-            });
+            // Appended atomically to the document the identity lookup
+            // resolved: nothing is re-read between that decision and the
+            // write, so a concurrent writer's append survives (#2076 review).
+            return this.appendPrLevelSuggestions(
+                existingPR,
+                prLevelSuggestions,
+            );
         } catch (error) {
             this.logger.error({
                 message: `Failed to add PR level suggestions to PR#${pullRequestNumber}`,
@@ -539,6 +724,7 @@ export class PullRequestsService implements IPullRequestsService {
                 error,
                 metadata: {
                     pullRequestNumber,
+                    repositoryId,
                     repositoryName,
                     suggestionsCount: prLevelSuggestions.length,
                     organizationAndTeamData,
@@ -547,14 +733,22 @@ export class PullRequestsService implements IPullRequestsService {
             return null;
         }
     }
-    //#endregion
 
-    //#region Update
     async update(
         pullRequest: PullRequestsEntity,
         updateData: Partial<IPullRequests>,
     ): Promise<PullRequestsEntity | null> {
         return this.pullRequestsRepository.update(pullRequest, updateData);
+    }
+
+    async appendPrLevelSuggestions(
+        pullRequest: PullRequestsEntity,
+        suggestions: ISuggestionByPR[],
+    ): Promise<PullRequestsEntity | null> {
+        return this.pullRequestsRepository.appendPrLevelSuggestions(
+            pullRequest,
+            suggestions,
+        );
     }
 
     async updateFile(
@@ -573,11 +767,13 @@ export class PullRequestsService implements IPullRequestsService {
         suggestionId: string,
         updateData: Partial<ISuggestion>,
         organizationAndTeamData: OrganizationAndTeamData,
+        options?: UpdateSuggestionOptions,
     ): Promise<PullRequestsEntity | null> {
         return this.pullRequestsRepository.updateSuggestion(
             suggestionId,
             updateData,
             organizationAndTeamData,
+            options,
         );
     }
 
@@ -621,6 +817,7 @@ export class PullRequestsService implements IPullRequestsService {
         organizationAndTeamData: OrganizationAndTeamData,
         commits: ICommit[],
         prLevelSuggestions?: ISuggestionByPR[],
+        options?: { keepStoredState?: boolean; filesUnchanged?: boolean },
     ): Promise<IPullRequests | null> {
         // Gate from issue #1107 / fix A. Very large PRs hit the BSON
         // 16MB document cap and waste the worker on every webhook
@@ -656,6 +853,7 @@ export class PullRequestsService implements IPullRequestsService {
                     organizationAndTeamData,
                     commits,
                     prLevelSuggestions,
+                    options,
                 ),
                 PullRequestsService.SAVE_TIMEOUT_MS,
                 `aggregateAndSaveDataStructure (PR#${pullRequest?.number})`,
@@ -685,6 +883,7 @@ export class PullRequestsService implements IPullRequestsService {
         organizationAndTeamData: OrganizationAndTeamData,
         commits: ICommit[],
         prLevelSuggestions?: ISuggestionByPR[],
+        options?: { keepStoredState?: boolean; filesUnchanged?: boolean },
     ): Promise<IPullRequests | null> {
         const organizationId = organizationAndTeamData?.organizationId;
 
@@ -748,12 +947,19 @@ export class PullRequestsService implements IPullRequestsService {
             platformType,
         );
 
-        const existingPR =
-            await this.pullRequestsRepository.findByNumberAndRepositoryName(
-                pullRequest?.number,
-                repository.name,
-                organizationAndTeamData,
-            );
+        // Identity is the repository ID — the column the unique index
+        // (`number_1_repository.id_1_organizationId_1`) already enforces — not
+        // the repository name (see `findExistingPullRequest`). The name is only
+        // a fallback: for a provider that hands us no id, and for a stored
+        // document whose id column is absent or differently formatted.
+        const existingPR = await this.findExistingPullRequest(
+            pullRequest?.number,
+            repository,
+            organizationAndTeamData,
+            options?.filesUnchanged
+                ? PullRequestsService.LIFECYCLE_LOOKUP_PROJECTION
+                : PullRequestsService.SAVE_LOOKUP_PROJECTION,
+        );
 
         if (!existingPR) {
             return this.handleInitialPullRequest(
@@ -768,11 +974,23 @@ export class PullRequestsService implements IPullRequestsService {
             );
         }
 
-        await this.update(existingPR, {
-            status: await this.identifyPullRequestStatus(pullRequest),
-            merged: this.extractMergedStatus(pullRequest),
+        // The review passes the PR as it was when it started: a close or merge
+        // stored meanwhile must not be overwritten with `open`.
+        const lifecycle = options?.keepStoredState
+            ? {}
+            : {
+                  status: await this.identifyPullRequestStatus(pullRequest),
+                  merged: this.extractMergedStatus(pullRequest),
+                  closedAt: this.extractClosedAt(pullRequest),
+              };
+        const updatedPr = await this.update(existingPR, {
+            ...lifecycle,
+            // Reflect how the last review ran; only overwrite when the caller
+            // passed it (review path) so a plain webhook update doesn't clear it.
+            ...(pullRequest.heavy !== undefined
+                ? { heavy: pullRequest.heavy }
+                : {}),
             updatedAt: new Date().toISOString(),
-            closedAt: this.extractClosedAt(pullRequest),
             user: await this.extractUser(
                 pullRequest.user,
                 organizationAndTeamData,
@@ -793,7 +1011,11 @@ export class PullRequestsService implements IPullRequestsService {
                 platformType,
                 pullRequest?.number,
             ),
-            commits: enrichedPullRequest.commits,
+            // An event that fetched nothing carries no commits: the stored
+            // ones stay.
+            ...(options?.filesUnchanged
+                ? {}
+                : { commits: enrichedPullRequest.commits }),
             isDraft: enrichedPullRequest.isDraft ?? false,
             repository: {
                 id:
@@ -818,12 +1040,47 @@ export class PullRequestsService implements IPullRequestsService {
         });
 
         if (prLevelSuggestions && prLevelSuggestions.length > 0) {
-            await this.addPrLevelSuggestions(
-                pullRequest.number,
-                repository.name,
-                prLevelSuggestions,
-                organizationAndTeamData,
-            );
+            // Append to the record the identity lookup already resolved rather
+            // than looking it up again by repository name: in the #2059 scenario
+            // two repositories of one organization share a name, and a name
+            // lookup can return the OTHER repository's document, splitting this
+            // save's suggestions onto a foreign record (#2076 review).
+            //
+            // Appended in one atomic statement, targeted at the document the
+            // identity lookup already resolved. A re-read followed by a
+            // whole-array `$set` dropped whatever a concurrent writer (the
+            // review stage, or a second webhook) appended between the read and
+            // the write, and re-resolving by name could land on another
+            // repository's record (#2076 review). Appending stays non-fatal:
+            // the main save is already committed, so a rejection here is logged
+            // and the event still reported as handled.
+            try {
+                await this.appendPrLevelSuggestions(
+                    existingPR,
+                    prLevelSuggestions,
+                );
+            } catch (error) {
+                this.logger.error({
+                    message: 'Failed to append PR level suggestions',
+                    context: PullRequestsService.name,
+                    error,
+                    metadata: {
+                        pullRequestNumber: pullRequest?.number,
+                        repositoryId: existingPR.repository?.id,
+                        suggestionsCount: prLevelSuggestions.length,
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                    },
+                });
+            }
+        }
+
+        // A close, an assignment, a label: the files did not change, so there
+        // is nothing to rewrite. Re-saving them from the stored copy rewrote
+        // every file (and blanked what the review recorded on each).
+        if (options?.filesUnchanged) {
+            await this.repairStaleTotals(existingPR, organizationAndTeamData);
+            return updatedPr;
         }
 
         return this.handleExistingPullRequest(
@@ -848,6 +1105,7 @@ export class PullRequestsService implements IPullRequestsService {
                 title: pullRequest.title || '',
                 status: await this.identifyPullRequestStatus(pullRequest),
                 merged: this.extractMergedStatus(pullRequest),
+                heavy: pullRequest.heavy ?? false,
                 number: pullRequest.number,
                 url: pullRequest.url || '',
                 baseBranchRef: this.extractBaseBranchRef(pullRequest),
@@ -1044,6 +1302,123 @@ export class PullRequestsService implements IPullRequestsService {
         }
     }
 
+    /**
+     * The stored PR this save must UPDATE, or null when it is a PR we have not
+     * seen before.
+     *
+     * Identity is the repository ID — the column the unique index
+     * (`number_1_repository.id_1_organizationId_1`) already enforces — not the
+     * repository name: two repositories in one organization can share a name
+     * across owners or providers, and matching on the name merged their records
+     * (#2059).
+     *
+     * The name is the fallback, used in two cases: a provider that hands us no
+     * id at all, and an id lookup that MISSED because the stored document
+     * carries no id (or a different representation of it) — retrying by name
+     * before creating keeps those documents updated instead of duplicated.
+     * With neither an id nor a name there is nothing to bound the query to, so
+     * the name lookup is never issued on its own: `{number, organizationId}`
+     * alone can match a DIFFERENT repository's PR and contaminate it — the path
+     * the previous TypeError used to abort (#2076 review).
+     */
+    private async findExistingPullRequest(
+        pullRequestNumber: number,
+        repository: any,
+        organizationAndTeamData: OrganizationAndTeamData,
+        projection?: Record<string, 0 | 1>,
+    ): Promise<any> {
+        // The write paths store `repository.id?.toString()` on a Mixed path
+        // Mongoose does not cast, so a numeric provider id (GitHub webhook
+        // `repository.id`, GitLab `project.id`) must be stringified here too or
+        // the query never matches the stored value and the id key is a silent
+        // no-op (#2076 review).
+        const repositoryId = repository?.id ? String(repository.id) : undefined;
+
+        if (repositoryId) {
+            const byId =
+                await this.pullRequestsRepository.findByNumberAndRepositoryId(
+                    pullRequestNumber,
+                    repositoryId,
+                    organizationAndTeamData,
+                    projection,
+                );
+            if (byId) {
+                return byId;
+            }
+        }
+
+        if (repository?.name) {
+            const byName =
+                await this.pullRequestsRepository.findByNumberAndRepositoryName(
+                    pullRequestNumber,
+                    repository.name,
+                    organizationAndTeamData,
+                    projection,
+                );
+
+            // No name hit: this pull request has not been stored yet, which is
+            // the normal case, so there is nothing to name. Returning here also
+            // keeps the warning below honest - it used to fire on every new
+            // pull request, with `storedRepositoryId: undefined`, because a
+            // missed name lookup fell through to it (#2076 review).
+            if (!byName) {
+                return undefined;
+            }
+
+            // A name hit is this pull request's document only when the stored
+            // row carries no id (a legacy document) or carries THIS repository's
+            // id. A non-empty, different id means the row belongs to another
+            // repository that merely shares the name; updating it would rewrite
+            // its `repository.id` from this payload and hand it this save's
+            // suggestions — the cross-repository contamination of #2059
+            // (#2076 review).
+            const storedId = byName.repository?.id;
+            const sameRepository =
+                !repositoryId || !storedId || String(storedId) === repositoryId;
+
+            if (sameRepository) {
+                return byName;
+            }
+
+            // A name hit owned by a DIFFERENT repository is worth naming: two
+            // repositories of one organization share a name, this save is about
+            // the other one, and the document is left alone on purpose
+            // (#2076 review).
+            this.logger.warn({
+                message:
+                    'Skipping the name match for a pull request: the stored document belongs to a different repository id',
+                context: PullRequestsService.name,
+                metadata: {
+                    pullRequestNumber,
+                    repositoryId,
+                    storedRepositoryId: storedId,
+                    organizationAndTeamData,
+                },
+            });
+
+            return undefined;
+        }
+
+        // No identity at all: nothing bounds the query, so nothing is looked
+        // up. With an id or a name, a miss is simply a pull request whose
+        // review has not been stored yet, which is the normal case rather than
+        // something to warn about (#2076 review).
+        if (!repositoryId && !repository?.name) {
+            this.logger.warn({
+                message:
+                    'Saving a pull request with no repository id and no repository name; skipping the identity lookup',
+                context: PullRequestsService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    number: pullRequestNumber,
+                },
+            });
+        }
+
+        return null;
+    }
+
     private async handleInitialPullRequest(
         pullRequest: any,
         repository: any,
@@ -1179,6 +1554,44 @@ export class PullRequestsService implements IPullRequestsService {
      *    (`computeFileTotals`) so they are ground truth and never
      *    drift from the actual sub-documents.
      */
+    /**
+     * Whether writing `fields` and the budgeted patch over `stored` changes
+     * the file. `updatedAt` is left out: it only records the write itself.
+     */
+    private static fileIsUnchanged(
+        stored: IFile,
+        fields: Partial<IFile> | Record<string, unknown>,
+        budgeted: { patch: string; truncated?: boolean },
+    ): boolean {
+        const f = fields as Partial<IFile>;
+        const value = (v: unknown, empty: unknown) =>
+            JSON.stringify(
+                v === undefined || v === null || v === '' ? empty : v,
+                (_key, nested) =>
+                    nested &&
+                    typeof nested === 'object' &&
+                    !Array.isArray(nested)
+                        ? Object.fromEntries(
+                              Object.entries(nested).sort(([a], [b]) =>
+                                  a.localeCompare(b),
+                              ),
+                          )
+                        : nested,
+            );
+        const same = (a: unknown, b: unknown, empty: unknown) =>
+            value(a, empty) === value(b, empty);
+        return (
+            same(stored.patch, budgeted.patch, '') &&
+            !!stored.patchTruncated === !!budgeted.truncated &&
+            same(stored.status, f.status, '') &&
+            same(stored.added, f.added, 0) &&
+            same(stored.deleted, f.deleted, 0) &&
+            same(stored.changes, f.changes, 0) &&
+            same(stored.reviewMode, f.reviewMode, '') &&
+            same(stored.codeReviewModelUsed, f.codeReviewModelUsed, '')
+        );
+    }
+
     private async handleExistingPullRequest(
         existingPR: PullRequestsEntity,
         pullRequest: any,
@@ -1369,20 +1782,50 @@ export class PullRequestsService implements IPullRequestsService {
                         added: file.additions ?? 0,
                         deleted: file.deletions ?? 0,
                         changes: file.changes ?? 0,
-                        reviewMode: file.reviewMode ?? '',
-                        codeReviewModelUsed: file.codeReviewModelUsed ?? '',
+                        // How the file was last reviewed. Only the review
+                        // knows it; a webhook save (files from the Git API)
+                        // keeps the stored value instead of blanking it.
+                        reviewMode:
+                            file.reviewMode ?? existing.reviewMode ?? '',
+                        codeReviewModelUsed:
+                            file.codeReviewModelUsed ??
+                            existing.codeReviewModelUsed ??
+                            '',
                         updatedAt: new Date().toISOString(),
                     };
-                    patchUpdates.push({
-                        fileId: existing.id,
-                        rawPatch,
-                        fields,
-                    });
                     const budgeted = budgetPatchForPersist(
                         rawPatch,
                         remainingTotalPatchBudget,
                     );
                     remainingTotalPatchBudget -= budgeted.consumed;
+
+                    // The file as stored already: writing it again only cost
+                    // a rewrite of the whole document (one per file, every
+                    // event). Its patch keeps its place in the budget, and it
+                    // is not ours to tighten in the enforcement pass below.
+                    if (
+                        PullRequestsService.fileIsUnchanged(
+                            existing,
+                            fields,
+                            budgeted,
+                        )
+                    ) {
+                        if (newSuggestionsForFile.length > 0) {
+                            ops.push({
+                                kind: 'addSuggestions',
+                                fileId: existing.id,
+                                suggestions: newSuggestionsForFile,
+                            });
+                            totalNewSuggestions += newSuggestionsForFile.length;
+                        }
+                        continue;
+                    }
+
+                    patchUpdates.push({
+                        fileId: existing.id,
+                        rawPatch,
+                        fields,
+                    });
                     ourPatchBytes += budgeted.consumed;
 
                     // Record the op slot that carries this patch payload so
@@ -1631,6 +2074,18 @@ export class PullRequestsService implements IPullRequestsService {
             // never trust an in-memory projection here, because
             // partial chunk failures or concurrent writes from
             // another webhook could leave the projection wrong.
+            // The totals sum the files' counts; with no file written they are
+            // what is stored.
+            const fileWritten = ops.some(
+                (op) => op.kind === 'updateFile' || op.kind === 'addFile',
+            );
+            if (!fileWritten) {
+                await this.repairStaleTotals(existingPR, {
+                    organizationId,
+                });
+                return existingPR;
+            }
+
             const { totalAdded, totalDeleted, totalChanges } =
                 await this.pullRequestsRepository.computeFileTotals(
                     existingPR.uuid,
@@ -1657,6 +2112,38 @@ export class PullRequestsService implements IPullRequestsService {
                 },
             });
             return null;
+        }
+    }
+
+    /**
+     * A save that writes no file skips the totals step, so totals an earlier
+     * save left stale (its totals step failed) are repaired here, writing
+     * only when they differ. Never fails the save.
+     */
+    private async repairStaleTotals(
+        existingPR: { uuid?: string; number?: number },
+        organizationAndTeamData: Pick<
+            OrganizationAndTeamData,
+            'organizationId'
+        >,
+    ): Promise<void> {
+        if (!existingPR?.uuid || !organizationAndTeamData?.organizationId) {
+            return;
+        }
+        try {
+            await this.pullRequestsRepository.refreshFileTotalsIfStale(
+                existingPR.uuid,
+                organizationAndTeamData.organizationId,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not refresh the totals of PR#${existingPR.number}`,
+                context: PullRequestsService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                },
+            });
         }
     }
 

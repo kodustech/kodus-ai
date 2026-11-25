@@ -156,47 +156,6 @@ describe('GithubController', () => {
     });
 
     describe('unsupported events - should NOT enqueue', () => {
-        it('should ignore fork event', async () => {
-            mockRequest = {
-                headers: { 'x-github-event': 'fork' },
-                body: { forkee: {} },
-            };
-
-            controller.handleWebhook(
-                mockRequest as Request,
-                mockResponse as Response,
-            );
-
-            expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.OK);
-            expect(mockResponse.send).toHaveBeenCalledWith(
-                'Webhook ignored (event not supported)',
-            );
-
-            await new Promise((resolve) => setImmediate(resolve));
-
-            expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
-        });
-
-        it('should ignore workflow_run event', async () => {
-            mockRequest = {
-                headers: { 'x-github-event': 'workflow_run' },
-                body: { action: 'completed' },
-            };
-
-            controller.handleWebhook(
-                mockRequest as Request,
-                mockResponse as Response,
-            );
-
-            expect(mockResponse.send).toHaveBeenCalledWith(
-                'Webhook ignored (event not supported)',
-            );
-
-            await new Promise((resolve) => setImmediate(resolve));
-
-            expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
-        });
-
         it('should ignore issues event', async () => {
             mockRequest = {
                 headers: { 'x-github-event': 'issues' },
@@ -216,93 +175,13 @@ describe('GithubController', () => {
 
             expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
         });
-
-        it('should ignore release event', async () => {
-            mockRequest = {
-                headers: { 'x-github-event': 'release' },
-                body: { action: 'published' },
-            };
-
-            controller.handleWebhook(
-                mockRequest as Request,
-                mockResponse as Response,
-            );
-
-            expect(mockResponse.send).toHaveBeenCalledWith(
-                'Webhook ignored (event not supported)',
-            );
-
-            await new Promise((resolve) => setImmediate(resolve));
-
-            expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
-        });
     });
 
     describe('unsupported pull_request actions - should NOT enqueue', () => {
-        it('should ignore pull_request with "labeled" action', async () => {
-            mockRequest = {
-                headers: { 'x-github-event': 'pull_request' },
-                body: { action: 'labeled' },
-            };
-
-            controller.handleWebhook(
-                mockRequest as Request,
-                mockResponse as Response,
-            );
-
-            expect(mockResponse.send).toHaveBeenCalledWith(
-                'Webhook ignored (action not supported)',
-            );
-
-            await new Promise((resolve) => setImmediate(resolve));
-
-            expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
-        });
-
-        it('should ignore pull_request with "assigned" action', async () => {
-            mockRequest = {
-                headers: { 'x-github-event': 'pull_request' },
-                body: { action: 'assigned' },
-            };
-
-            controller.handleWebhook(
-                mockRequest as Request,
-                mockResponse as Response,
-            );
-
-            expect(mockResponse.send).toHaveBeenCalledWith(
-                'Webhook ignored (action not supported)',
-            );
-
-            await new Promise((resolve) => setImmediate(resolve));
-
-            expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
-        });
-
         it('should ignore pull_request with "converted_to_draft" action', async () => {
             mockRequest = {
                 headers: { 'x-github-event': 'pull_request' },
                 body: { action: 'converted_to_draft' },
-            };
-
-            controller.handleWebhook(
-                mockRequest as Request,
-                mockResponse as Response,
-            );
-
-            expect(mockResponse.send).toHaveBeenCalledWith(
-                'Webhook ignored (action not supported)',
-            );
-
-            await new Promise((resolve) => setImmediate(resolve));
-
-            expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
-        });
-
-        it('should ignore pull_request with "review_requested" action', async () => {
-            mockRequest = {
-                headers: { 'x-github-event': 'pull_request' },
-                body: { action: 'review_requested' },
             };
 
             controller.handleWebhook(

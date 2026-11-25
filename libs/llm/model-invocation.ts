@@ -35,6 +35,12 @@ import {
 import { getModelName, type ByokModelOptions } from '@libs/llm/byok-to-vercel';
 import { envManagedReasoningDescriptor } from '@libs/llm/managed-slot';
 import {
+    anthropicDeclaredMaxTokens,
+    bedrockDeclaredMaxTokens,
+    budgetAddedToAnswerCap,
+    optionsNamespace,
+} from '@libs/llm/answer-cap-budget';
+import {
     resolveSlotCallOptions,
     type SlotCallOptions,
 } from '@libs/llm/slot-call-options';
@@ -112,7 +118,9 @@ export function resolveModelConfig(
     // BYOK slot) and reuse it for both the model build and the reasoning default —
     // so a failing env-LLM (e.g. a suspended Moonshot/Kimi key) reports its REAL
     // provider in the byok-error notification instead of "unknown".
-    const envDescriptor = resolvedSlot ? undefined : envManagedReasoningDescriptor();
+    const envDescriptor = resolvedSlot
+        ? undefined
+        : envManagedReasoningDescriptor();
 
     const model = resolveAgentModel(resolvedSlot, {
         ...agentModelOptions,
@@ -123,14 +131,71 @@ export function resolveModelConfig(
         modelOptions,
     });
 
+    const { providerOptions } = resolveReasoningOptions(
+        resolvedSlot,
+        envDescriptor,
+        {
+            runName,
+            suppressReasoning,
+            reasoningEffortDefault,
+            telemetryMetadata,
+            openrouterProviderOrder,
+            openrouterAllowFallbacks,
+        },
+    );
+
+    return {
+        model,
+        // `defaultModelOverride` (in agentModelOptions) already reached the model
+        // build via resolveAgentModel; honor it here too so the env/managed-default
+        // NAME matches the model actually built (no slot → the override wins).
+        modelName: getModelName(
+            resolvedSlot,
+            agentModelOptions.defaultModelOverride,
+        ),
+        callOptions: resolveSlotCallOptions(resolvedSlot),
+        providerOptions,
+    };
+}
+
+/**
+ * The reasoning `providerOptions` a call on this slot carries: the slot's own
+ * effort or override, else the env's, else the family default, else the
+ * caller's. Pure (no model build), so a caller can learn what will be sent
+ * before sending it.
+ */
+function resolveReasoningOptions(
+    resolvedSlot: NormalizedModel | undefined,
+    envDescriptor: ReturnType<typeof envManagedReasoningDescriptor>,
+    opts: Pick<
+        ResolveModelInvocationOptions,
+        | 'runName'
+        | 'suppressReasoning'
+        | 'telemetryMetadata'
+        | 'openrouterProviderOrder'
+        | 'openrouterAllowFallbacks'
+    > & { reasoningEffortDefault: ReasoningEffort },
+): {
+    providerOptions: Record<string, any>;
+    reasoningSlot: { provider: string; model: string } | undefined;
+} {
+    const {
+        runName,
+        suppressReasoning,
+        reasoningEffortDefault,
+        telemetryMetadata,
+        openrouterProviderOrder,
+        openrouterAllowFallbacks,
+    } = opts;
     // The env/managed path routes an `undefined` slot (no BYOK), so its provider +
     // model live in the env config, NOT the slot. Recover them for the reasoning
     // computation ONLY — so an env-configured reasoner (Opus/Kimi/GLM) gets the
     // SAME family-default thinking a connected BYOK slot of that model would. The
-    // model BUILD still flows through resolveAgentModel above (it reads the env
+    // model BUILD flows through resolveAgentModel in resolveModelConfig (it reads the env
     // itself); this descriptor only feeds the reasoning-effort default and the
     // provider-options namespace. A real BYOK slot always wins over it.
-    const reasoningSlot: NormalizedModel | { provider: string; model: string } | undefined =
+    const reasoningSlot:
+        NormalizedModel | { provider: string; model: string } | undefined =
         resolvedSlot ?? envDescriptor;
 
     // `suppressReasoning` forces reasoning OFF (effort 'none', override dropped) —
@@ -143,6 +208,8 @@ export function resolveModelConfig(
     const effectiveReasoningEffort: ReasoningEffort = suppressReasoning
         ? 'none'
         : (resolvedSlot?.reasoningEffort ??
+          // API_LLM_REASONING_EFFORT: the env's equivalent of the slot's own.
+          envDescriptor?.reasoningEffort ??
           // Family default from the provider's own reasoningTraits (thinks-by-
           // default → 'medium'), applied to BOTH env and BYOK slots. Replaces the
           // dead per-model catalog default; the slot's explicit effort still wins,
@@ -163,16 +230,109 @@ export function resolveModelConfig(
         openrouterAllowFallbacks,
     });
 
-    return {
-        model,
-        // `defaultModelOverride` (in agentModelOptions) already reached the model
-        // build via resolveAgentModel; honor it here too so the env/managed-default
-        // NAME matches the model actually built (no slot → the override wins).
-        modelName: getModelName(
-            resolvedSlot,
-            agentModelOptions.defaultModelOverride,
-        ),
-        callOptions: resolveSlotCallOptions(resolvedSlot),
-        providerOptions,
-    };
+    return { providerOptions, reasoningSlot };
+}
+
+/** How a call resolves reasoning: an agent loop's, or a structured call's. */
+export interface AnswerCallReasoning {
+    /** The effort an unset slot gets: `low` in an agent loop, `none` structured. */
+    reasoningEffortDefault?: ReasoningEffort;
+    /** The call turns thinking off (a structured call's `suppress-thinking` plan). */
+    suppressReasoning?: boolean;
+    /**
+     * The reasoning options the call sends, when its caller builds them
+     * itself (the review's finder and verify pass their own): used as they
+     * are, instead of resolving them from the slot.
+     */
+    providerOptions?: Record<string, unknown>;
+}
+
+/** What @ai-sdk/amazon-bedrock adds when thinking is on and no answer is set. */
+const BEDROCK_UNSET_ANSWER_ROOM = 4096;
+
+/**
+ * The answer a call on this slot (or, without one, on the env-managed model)
+ * declares to the provider for `answerTokens`: Anthropic and Bedrock ask for
+ * `max_tokens = answer + thinking budget`, and Anthropic caps that sum at a
+ * known Claude model's output limit. With `answerTokens` unset, what the
+ * provider is sent when the slot sets no limit: Anthropic's adapter still
+ * declares the model's whole output limit, so the window must hold it.
+ * Undefined only when nothing is declared (the provider decides).
+ * Reasoning resolves as an agent loop's unless `call` says otherwise.
+ */
+export async function declaredAnswerTokens(
+    slot: NormalizedModel | undefined,
+    answerTokens: number,
+    call?: AnswerCallReasoning,
+): Promise<number>;
+export async function declaredAnswerTokens(
+    slot: NormalizedModel | undefined,
+    answerTokens: number | undefined,
+    call?: AnswerCallReasoning,
+): Promise<number | undefined>;
+export async function declaredAnswerTokens(
+    slot: NormalizedModel | undefined,
+    answerTokens: number | undefined,
+    call: AnswerCallReasoning = {},
+): Promise<number | undefined> {
+    try {
+        const resolved = resolveReasoningOptions(
+            slot,
+            slot ? undefined : envManagedReasoningDescriptor(),
+            {
+                runName: 'declaredAnswerTokens',
+                reasoningEffortDefault: call.reasoningEffortDefault ?? 'low',
+                suppressReasoning: call.suppressReasoning,
+            },
+        );
+        const reasoningSlot = resolved.reasoningSlot;
+        const providerOptions =
+            call.providerOptions ?? resolved.providerOptions;
+        const namespace = optionsNamespace(reasoningSlot);
+        if (namespace === 'amazonBedrock' && reasoningSlot?.model) {
+            const declared = await bedrockDeclaredMaxTokens(
+                reasoningSlot.model,
+                answerTokens,
+                providerOptions,
+            );
+            if (declared?.maxTokens !== undefined) {
+                return declared.maxTokens;
+            }
+            if (declared && answerTokens === undefined) {
+                // Nothing in the body: AWS applies the model's maximum
+                // output. A Claude model's is the one Anthropic's adapter
+                // knows; for another model it is not known here.
+                return /claude/i.test(reasoningSlot.model)
+                    ? await anthropicDeclaredMaxTokens(
+                          reasoningSlot.model,
+                          undefined,
+                          undefined,
+                      )
+                    : undefined;
+            }
+        }
+        if (namespace === 'anthropic' && reasoningSlot?.model) {
+            const declared = await anthropicDeclaredMaxTokens(
+                reasoningSlot.model,
+                answerTokens,
+                providerOptions,
+            );
+            if (declared !== undefined) {
+                return declared;
+            }
+        }
+        const budget = budgetAddedToAnswerCap(
+            providerOptions,
+            reasoningSlot,
+            namespace,
+        );
+        if (answerTokens === undefined) {
+            return budget === undefined
+                ? undefined
+                : budget + BEDROCK_UNSET_ANSWER_ROOM;
+        }
+        return answerTokens + (budget ?? 0);
+    } catch {
+        return answerTokens;
+    }
 }

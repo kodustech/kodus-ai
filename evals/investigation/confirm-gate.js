@@ -116,7 +116,8 @@ function main() {
         return 2;
     }
     const setName = (process.argv.find((a) => a.startsWith('--set=')) || '--set=controlled').slice(6);
-    const combined = combineRuns(first, second, (summary, rows) => evaluateGate(summary, rows, first.model, setName));
+    // The floors the first run was gated with (a heavy run carries its own).
+    const combined = combineRuns(first, second, (summary, rows) => evaluateGate(summary, rows, first.model, setName, first.targets || undefined));
     // The confirmation scored none of the PRs the first run scored (every case
     // failed to parse, say). There is nothing to confirm WITH, and deciding on
     // the first run alone would ping people for a drop one run measured.

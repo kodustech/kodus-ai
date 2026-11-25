@@ -71,6 +71,529 @@ rss: true
 
     <div className="kodus-changelog-release">
         <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">November 17, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">What's new</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-git-provider filter-self-hosted">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">PR risk assessment, routing, and approval policies (Beta)</div>
+                    <p className="kodus-changelog-copy">Until now, risk assessment was tied to auto-approval. This meant auto-approval had to be enabled for Kody to assess a PR's risk.</p>
+                    <p className="kodus-changelog-copy">Now, risk assessment, routing, and approval work independently, while sharing the same risk assessment result.</p>
+
+                    <div role="heading" aria-level="4" className="kodus-changelog-title">Risk assessment</div>
+                    <p className="kodus-changelog-copy">Kody evaluates the entire PR before determining the review mode, even when auto-approval is disabled. No configuration is needed to get started.</p>
+                    <p className="kodus-changelog-copy">You can also add criteria specific to your team, such as the impact of changing account permissions or deleting customer data. Each criterion can have its own instructions and apply only to specific files.</p>
+                    <p className="kodus-changelog-copy">With Preview on a PR, you can test these criteria against a real PR, including changes you haven't saved yet, without posting comments or approving the PR.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="https://kodus.io/wp-content/uploads/2026/11/risk_assessment.mp4" type="video/mp4" />
+                    </video>
+
+                    <div role="heading" aria-level="4" className="kodus-changelog-title">Routing</div>
+                    <p className="kodus-changelog-copy">You can set one review mode for PRs with no identified risks and another for PRs where risks are detected.</p>
+                    <p className="kodus-changelog-copy">For example, you could use Balanced for everyday reviews and Heavy when Kody identifies a risk. If risk assessment can't run, Kody falls back to the configured default mode. If risk assessment is disabled, the same mode applies to every PR.</p>
+                    <p className="kodus-changelog-copy">You can also see which models are used at each scope (global, repository, or directory) and configure different models for Balanced and Heavy at the organization level.</p>
+                    <p className="kodus-changelog-copy">The <code className="kodus-changelog-code">--heavy</code> and <code className="kodus-changelog-code">--balanced</code> commands still take precedence over routing, subject to your plan's restrictions.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="https://kodus.io/wp-content/uploads/2026/11/rounting.mp4" type="video/mp4" />
+                    </video>
+
+                    <div role="heading" aria-level="4" className="kodus-changelog-title">Approval policies</div>
+                    <p className="kodus-changelog-copy">Auto-approval now lets you create policies with custom names and conditions.</p>
+                    <p className="kodus-changelog-copy">You can combine PR labels, authors (including GitHub teams, GitLab groups, and Azure DevOps teams), included or excluded files, limits on changed lines, and instructions Kody must check before approving.</p>
+                    <p className="kodus-changelog-copy">For example, you could create a policy that only approves dependency updates that stay within the same major version.</p>
+                    <p className="kodus-changelog-copy">If a PR meets at least one policy, auto-approval may be allowed. Kody also posts a comment explaining which policy allowed the approval or which conditions weren't met.</p>
+                    <p className="kodus-changelog-copy">If a risk is identified, risk assessment is unavailable, or the PR modifies a file that requires human approval, no policy can automatically approve it.</p>
+                    <p className="kodus-changelog-copy">Already using auto-approval? Your current configuration won't change. It will be converted into a policy called Existing approval policy.</p>
+                    <p className="kodus-changelog-copy">Available on Teams and Enterprise plans. For self-hosted installations, <code className="kodus-changelog-code">BETA_FEATURES=true</code> must be enabled.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="https://kodus.io/wp-content/uploads/2026/11/approval-policies.mp4" type="video/mp4" />
+                    </video>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-git-provider filter-self-hosted filter-billing-licenses">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Review every repository, including new ones</div>
+                    <p className="kodus-changelog-copy">With Review every repository, Kody can review every repository accessible through your Git integration and automatically include new repositories as they're created. No need to add them manually.</p>
+                    <p className="kodus-changelog-copy">Before enabling it, you can see how many repositories will be included. Archived repositories are excluded, while forks and mirrors are only included if you enable that option.</p>
+                    <p className="kodus-changelog-copy">Kody checks for new repositories every 10 minutes. On GitHub, if the Kodus app is configured to receive the <code className="kodus-changelog-code">Repository</code> event, new repositories are added as soon as GitHub reports their creation.</p>
+                    <p className="kodus-changelog-copy">Want to exclude a repository? Just disable automated review in its settings. That choice is preserved during future syncs, and PR authors don't consume licenses for automated reviews.</p>
+                    <p className="kodus-changelog-copy">Available for GitHub, GitLab, Bitbucket Cloud, Bitbucket Data Center, Azure DevOps, and Forgejo, on both cloud and self-hosted deployments.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="https://kodus.io/wp-content/uploads/2026/11/Revise-todos-os-repositorios.mp4" type="video/mp4" />
+                    </video>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-custom-agents filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Custom Agents (Beta): CLAUDE.md and AGENTS.md can now be used as references</div>
+                    <p className="kodus-changelog-copy">When repository instructions are enabled, Kody loads files like <code className="kodus-changelog-code">CLAUDE.md</code> and <code className="kodus-changelog-code">AGENTS.md</code> from the target branch to understand the repository's guidelines.</p>
+                    <p className="kodus-changelog-copy">The problem was that even though these instructions were available, Custom Agents couldn't reference them in comments. If an agent found a violation of a rule defined in one of these files, the comment was discarded because Kody only accepted citations from guides directly linked to the agent.</p>
+                    <p className="kodus-changelog-copy">Now, these files are also accepted as sources.</p>
+                    <p className="kodus-changelog-copy">For example, if <code className="kodus-changelog-code">CLAUDE.md</code> specifies that discount rules must live in <code className="kodus-changelog-code">PricingService</code>, an agent can flag a controller that applies discounts directly and cite that rule in its comment.</p>
+                    <p className="kodus-changelog-copy">Validation still applies: if the cited text doesn't exist in the file, the comment is discarded.</p>
+                    <p className="kodus-changelog-copy">Another improvement is that teams using only Custom Agents, with bug, security, and performance categories disabled, will now also load these files during reviews.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-custom-agents filter-cli">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Custom Agents (Beta): Architecture template improvements</div>
+                    <p className="kodus-changelog-copy">The Architecture template now includes a clearer rule about dependency direction between code layers.</p>
+                    <p className="kodus-changelog-copy">The rule is simple: dependencies must point inward.</p>
+                    <p className="kodus-changelog-copy">If domain or model code imports something from a controller, route handler, adapter, job, page, or web framework, even if it's just a type, the agent should flag it as a violation.</p>
+                    <p className="kodus-changelog-copy">On the other hand, a component built on top of UI primitives follows the expected dependency direction and shouldn't trigger a comment.</p>
+                    <p className="kodus-changelog-copy">This change applies to new agents created with the Architecture template, both through the app and the CLI (<code className="kodus-changelog-code">kodus agents create --template architecture</code>).</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-cockpit">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">More accurate detection of implemented suggestions</div>
+                    <p className="kodus-changelog-copy">With every new commit to a PR, Kody checks which suggestions have been implemented.</p>
+                    <p className="kodus-changelog-copy">Previously, this check relied heavily on the suggested fix example. Now, Kody considers the comment text, the affected lines, and the original code. This means developers don't have to follow the exact suggested fix for their changes to be recognized as implemented.</p>
+                    <p className="kodus-changelog-copy">The check is also performed file by file, using the corresponding patch.</p>
+                    <p className="kodus-changelog-copy">When Kody can't confirm whether a suggestion was implemented, whether due to a model failure, an unreadable response, or a missing file-specific patch, the suggestion receives a Not measured status instead of being marked as not implemented.</p>
+                    <p className="kodus-changelog-copy">These suggestions are excluded from the implementation rate calculation in Cockpit's Kodus Review, but remain visible in the weekly chart and explorer.</p>
+                    <p className="kodus-changelog-copy">Threads are still automatically resolved only when the suggestion has been fully implemented.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-performance filter-kody-rules filter-git-provider">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Worker performance improvements</div>
+                    <p className="kodus-changelog-copy">We fixed three issues that were causing unnecessary processing during reviews.</p>
+                    <p className="kodus-changelog-copy">On large PRs, checking ignored file patterns could block the worker for about a minute. Kody Rules synchronization also reread the organization's entire document whenever a rule was updated.</p>
+                    <p className="kodus-changelog-copy">Additionally, when GitHub returned a rate limit, Kody kept trying to fetch files individually.</p>
+                    <p className="kodus-changelog-copy">All three issues have been fixed without changing review results.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-performance filter-ux-interface">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Faster reviews list</div>
+                    <p className="kodus-changelog-copy">Teams with a large review history sometimes had to wait tens of seconds for the list to open. In some cases, it wouldn't load at all.</p>
+                    <p className="kodus-changelog-copy">Now, each page fetches only the items it needs, and filters for open PRs are processed directly in the database.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Kody's change requests:</strong> when auto-approval was disabled or blocked by a policy, Kody's "changes requested" status could continue blocking a PR even after all critical findings had been resolved. Now, Kody dismisses the change request as soon as all those findings are resolved.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Risk assessment on large PRs:</strong> PRs with diffs larger than 50,000 characters weren't receiving risk assessments. Now, Kody sends the entire PR to the model, respecting the actual context window limit of the configured model.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Approval withholding reasons:</strong> previously, different reasons for withholding approval could display the same message. Now, Kody tells you exactly what happened: a new commit during the review, a change to the target branch, or issues reading the PR labels or PR data. We also fixed an issue where the same reason could be posted twice in the comments.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Grouped suggestions:</strong> when a comment flagged the same issue in multiple locations using "Also found in", Kody could mark the suggestion as implemented and resolve the thread after only the primary file had been fixed. Now, the suggestion is only considered implemented once every affected location has been fixed. Until then, its status remains partial.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-custom-agents">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Custom Agents (Beta), code file references:</strong> when a Custom Agent referenced a line from the repository itself as an example of a pattern to follow, the comment could be discarded. Now, Kody validates that comment as a bug, using the file from the target branch as a reference.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine filter-byok">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Context window:</strong> some models without a known context window size were being assigned the default 128k limit. Now, Kody checks additional sources to identify each model's actual limit.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Bitbucket Cloud:</strong> Kody was making multiple individual requests to fetch authors and files, quickly consuming Bitbucket's per-user API request quota. In accounts that hit the limit, some reviews ended up being skipped. Now, Kody uses a single diff per PR and reuses previously stored author data.</p>
+                        <p className="kodus-changelog-copy">We've also improved how 429 errors are handled. When Bitbucket returns this error, it's displayed in the repository list instead of showing an empty list.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Forgejo:</strong> when multiple Forgejo instances were connected, a webhook could be associated with the wrong repository if their IDs matched. Now, Kody identifies the repository within the instance that sent the webhook. This fix has been live on cloud since November 12.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">GitHub:</strong> we fixed an issue where fetching a PR diff and making other API calls could use the wrong repository owner. Now, Kody uses the owner saved when the repository was selected.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-mcp filter-cli">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">MCP:</strong> we fixed an issue that caused Kody's issue list to appear empty for team keys used by the CLI.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-self-hosted">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Self-hosted:</strong> some beta features were being enabled even without <code className="kodus-changelog-code">BETA_FEATURES=true</code>. Now, they remain disabled until that setting is enabled.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Kody Rules:</strong> files referenced by a Kody Rule now appear only once per prompt, preventing duplicate content.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-custom-agents">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Agents:</strong> we fixed an issue with reading files in Next.js routes that contain dots in segment names.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">PR description:</strong> we fixed an issue where emojis could be cut in half when a PR description needed to be truncated.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">November 9, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">What's new</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-custom-agents filter-git-provider filter-security">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Custom Agents can now read skills and documentation from other repositories (Beta)</div>
+                    <p className="kodus-changelog-copy">Custom Agents can now access skills and documents referenced in their instructions, even when those files are stored in another repository within the same Git integration.</p>
+                    <p className="kodus-changelog-copy">You can also specify a branch or tag.</p>
+                    <p className="kodus-changelog-copy">For security, agents only use the specified fixed reference or the default branch. The PR being reviewed cannot control which reference is used.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="https://kodus.io/wp-content/uploads/2026/11/1109.mp4" type="video/mp4" />
+                    </video>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-cli filter-performance">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Heavy Review has been rebuilt (Beta)</div>
+                    <p className="kodus-changelog-copy">The <code className="kodus-changelog-code">@kody review --heavy</code> command (or <code className="kodus-changelog-code">kodus review --heavy</code> in the CLI) now runs 9 specialist review lenses (M3) in parallel with the general-purpose review.</p>
+                    <p className="kodus-changelog-copy">All findings go through the same verification pipeline used by other Kody reviews.</p>
+                    <p className="kodus-changelog-copy">Heavy Review is available on Teams and Enterprise plans, both cloud and self-hosted, as well as trial accounts. On other plans, reviews continue to run normally in Balanced mode.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-cli filter-cockpit filter-kody-rules filter-custom-agents">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">CLI can now access web app data and settings</div>
+                    <p className="kodus-changelog-copy">Until now, the CLI could only communicate with the API through team key endpoints (<code className="kodus-changelog-code">/cli/*</code>). With <code className="kodus-changelog-code">kodus auth login</code>, it can now access the same endpoints as the web app, while respecting the logged-in user's permissions.</p>
+                    <p className="kodus-changelog-copy">Existing team key workflows continue to work as before. Only the new commands require login.</p>
+                    <p className="kodus-changelog-copy">This brings several features that were previously only available in the web app directly to your terminal:</p>
+                    <ul className="kodus-changelog-list">
+                        <li><code className="kodus-changelog-code">kodus cockpit &lt;tab&gt;</code>: Access Cockpit tabs while respecting your organization's visibility settings.</li>
+                        <li><code className="kodus-changelog-code">kodus usage tokens --by daily|pr|developer|review|model</code>: Check token usage directly from the terminal.</li>
+                        <li><code className="kodus-changelog-code">kodus rules pause|resume|delete</code>: Pause, resume, and delete rules. The <code className="kodus-changelog-code">view/create/update</code> commands now also work with login.</li>
+                        <li><code className="kodus-changelog-code">kodus agents list|show|create|update|enable|disable|delete|try</code>: Manage Custom Agents without opening the web app.</li>
+                        <li><code className="kodus-changelog-code">kodus config remote show|set|unset|keys</code>: View and edit remote settings at the global, repository, or directory level, including where each value comes from.</li>
+                        <li><code className="kodus-changelog-code">kodus pr reviews</code>: A new command available in the CLI.</li>
+                    </ul>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-git-provider">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">GitHub merge queue support</div>
+                    <p className="kodus-changelog-copy">When a PR entered GitHub's merge queue, Kody's check could time out while waiting for the queue to advance. This would block the merge until someone manually triggered another review.</p>
+                    <p className="kodus-changelog-copy">Now, Kody tracks the PR throughout the entire process and publishes the review result directly to the commit being tested by the merge queue, without requiring another manual run.</p>
+                </div>
+
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-byok filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">BYOK: Custom base URLs for native OpenAI credentials</div>
+                    <p className="kodus-changelog-copy">Previously, teams using an OpenAI-compatible proxy or gateway had to configure a separate “OpenAI-compatible” provider.</p>
+                    <p className="kodus-changelog-copy">Now, you can use native OpenAI credentials and simply customize the base URL. This makes setup easier for teams already using an internal gateway to route their requests.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-self-hosted filter-byok filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Self-hosted: Explicit LLM provider configuration</div>
+                    <p className="kodus-changelog-copy">The <code className="kodus-changelog-code">API_LLM_PROVIDER</code> variable (<code className="kodus-changelog-code">openai</code>, <code className="kodus-changelog-code">openai_compatible</code>, <code className="kodus-changelog-code">anthropic</code>, <code className="kodus-changelog-code">anthropic_compatible</code>, <code className="kodus-changelog-code">google_gemini</code>, <code className="kodus-changelog-code">google_vertex</code>) is now respected exactly as configured.</p>
+                    <p className="kodus-changelog-copy">Previously, heuristics based on the model name or URL could silently override this setting.</p>
+                    <p className="kodus-changelog-copy">We've also improved error handling. HTTP 400/422 responses from a provider are now identified as rejections from that specific provider instead of being reported as generic failures.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-kody-rules">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Fewer false positives for unused imports</div>
+                    <p className="kodus-changelog-copy">Kody Rules now checks the importing file itself before flagging an import as unused.</p>
+                    <p className="kodus-changelog-copy">This fixes cases where certain code constructs, such as <code className="kodus-changelog-code">using var</code> and syntax variations in Kotlin, PHP, and Rust, could trigger false positives.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-git-provider filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Reviews after merging the target branch or removing changes</div>
+                    <p className="kodus-changelog-copy">We've fixed two scenarios where Kody could skip a review because it incorrectly determined there were no new changes:</p>
+                    <ul className="kodus-changelog-list">
+                        <li>When a push happened immediately after the target branch was merged into the PR branch.</li>
+                        <li>When a rebase or force-push removed a line that had already been reviewed.</li>
+                    </ul>
+                    <p className="kodus-changelog-copy">Both scenarios now correctly trigger a full review.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-byok filter-kody-rules">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Better handling of LLM provider rate limits</div>
+                    <p className="kodus-changelog-copy">Previously, when a request hit a provider's rate limit (429), some checks could fail completely without trying an alternative.</p>
+                    <p className="kodus-changelog-copy">This affected Kody Rules checks, finding recovery, and verification of implemented suggestions.</p>
+                    <p className="kodus-changelog-copy">Now, the system retries the request. If the rate limit persists, it correctly falls back to the configured BYOK model instead of failing the check.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-cli">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">CLI: <code className="kodus-changelog-code">kodus review</code> now respects the repository's configured review mode</div>
+                    <p className="kodus-changelog-copy">Previously, running <code className="kodus-changelog-code">kodus review</code> without any flags would always start a Balanced review, even if the repository was configured to use a different mode.</p>
+                    <p className="kodus-changelog-copy">Now, the CLI automatically uses the review mode configured for that repository.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-custom-agents filter-git-provider filter-kody-rules">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Custom Agents (Beta): Fewer false positives and clearer error messages</div>
+                    <p className="kodus-changelog-copy">We've fixed an issue where agent runs that submitted results at a later processing stage were incorrectly treated as unfinished. This frequently caused false positives in production.</p>
+                    <p className="kodus-changelog-copy">We've also made a few other improvements:</p>
+                    <ul className="kodus-changelog-list">
+                        <li>Agents can now follow rule files explicitly referenced in their instructions.</li>
+                        <li>If an agent fails to read skills or documents from another repository, it now displays a clear error message instead of loading indefinitely or incorrectly reporting that nothing was found.</li>
+                        <li>Directory-level branch and tag overrides are now saved correctly.</li>
+                    </ul>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-git-provider filter-kody-rules">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Centralized config: GitLab subgroup support</div>
+                    <p className="kodus-changelog-copy">Repositories with “/” in their paths, as is common with GitLab subgroups, could have their configurations interpreted incorrectly.</p>
+                    <p className="kodus-changelog-copy">The system was treating only the first segment of the path as the repository name. As a result, repository-specific settings, directory groups, and Kody Rules could be silently ignored.</p>
+                    <p className="kodus-changelog-copy">This has been fixed.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-byok">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">BYOK: Clearer error messages when testing or saving credentials</div>
+                    <p className="kodus-changelog-copy">Previously, when a BYOK connection test or credential save was rejected, the app only displayed a generic error message.</p>
+                    <p className="kodus-changelog-copy">Now, the interface shows the actual error message returned by the API, making it easier to identify and resolve the issue.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-cockpit filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Auto-approval history with risk assessment:</strong> fixed two issues in the feature released on October 30. Decision reasons longer than 500 characters are now saved in full, and the scheduled job responsible for maintaining the history no longer treats partial runs as complete.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Reviews occasionally finishing without comments:</strong> findings recovered from model output that referenced a function or line but didn't point to a valid file were consuming verification calls before being discarded. In some cases, this left the review with no findings to publish. These results are now filtered out before verification, preserving the verification budget for valid findings.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine filter-byok">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">DeepSeek V4.1 Flash:</strong> fixed an issue where some comments displayed the model's raw reasoning instead of the expected severity, reference, and summary.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine filter-byok">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Claude prompt caching via Bedrock:</strong> fixed an issue that caused the cache to be silently discarded, increasing costs for Bedrock users.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine filter-byok">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">OpenAI-compatible endpoints with “Thinking Off”:</strong> fixed an issue that could cause reviews using gpt-5.6/gpt-6 to fail due to tool incompatibilities with <code className="kodus-changelog-code">reasoning_effort</code> when reasoning was disabled.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">PR summary and description:</strong> failures when writing this information, such as when the configured token only had read permissions, were incorrectly reported as API key issues. Error messages now show the actual cause. We've also fixed this behavior in Azure Repos, Bitbucket, and Forgejo.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Azure Repos:</strong> fixed project resolution during incremental reads, eliminating implementation verification failures that could occur starting with the second read.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-mcp">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">MCP:</strong> tools with identical names across different servers no longer cause all tools in a conversation to fail. Also, <code className="kodus-changelog-code">KODUS_LIST_KODY_ISSUES</code> now returns an empty list instead of an error when no results are found.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Malformed model outputs:</strong> invalid shard/verifier responses during Kody Rules checks can no longer bypass the configured suggestion limits.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Integration settings:</strong> failures when reading integration settings are now reported as errors instead of silently appearing as “not configured.”</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Vertex AI in BYOK:</strong> removed retired Gemini 2.5 models from the model selector.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-self-hosted filter-security">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Self-hosted:</strong> expanded sensitive data protection in logs. Credential fields are now detected based on field name suffixes and known token formats (<code className="kodus-changelog-code">ghp_</code>, <code className="kodus-changelog-code">github_pat_</code>, <code className="kodus-changelog-code">glpat-</code>, <code className="kodus-changelog-code">Bearer</code>), rather than relying only on exact field name matches.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">October 30, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">What's new</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-kody-rules filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Coding agent instruction reviews</div>
+                    <p className="kodus-changelog-copy">Previously, files such as <code className="kodus-changelog-code">CLAUDE.md</code>, <code className="kodus-changelog-code">AGENTS.md</code>, <code className="kodus-changelog-code">.cursor/rules</code>, and Copilot instructions were converted into Kody Rules. Now, when “Use coding-agent instructions in reviews” is enabled, Kody reads these files directly during code reviews.</p>
+                    <p className="kodus-changelog-copy">This also works when one instruction file references another. To prevent unsupported suggestions, Kody only accepts findings based on these instructions when it can verify that the cited information actually exists in the file.</p>
+                    <p className="kodus-changelog-copy">During onboarding, detected instruction files for each repository are also listed next to the toggle.</p>
+                    <p className="kodus-changelog-copy">Learn more about <a className="kodus-changelog-link" href="https://docs.kodus.io/en/how_to_use/code_review/configs/rules_file_detection">coding-agent instruction reviews in our documentation</a>.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-cockpit filter-git-provider filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Automatic approval with risk assessment</div>
+                    <p className="kodus-changelog-copy">Auto-approval already considered labels, authors, and sensitive file paths before approving a clean PR. Now, it also takes into account the historical risk of the affected code area by analyzing changes made over the past 30 days. This risk history is now available in the Cockpit. On GitHub, if Kody has already approved a PR but a subsequent review identifies an issue that blocks approval, the previous approval is automatically dismissed.</p>
+                    <p className="kodus-changelog-copy">Learn more about <a className="kodus-changelog-link" href="https://docs.kodus.io/en/how_to_use/code_review/configs/auto_approve">automatic approval in our documentation</a>.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="https://kodus.io/wp-content/uploads/2026/10/approve.mp4" type="video/mp4" />
+                    </video>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-kody-rules filter-cockpit filter-notifications">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Automatic pausing of noisy Kody Rules</div>
+                    <p className="kodus-changelog-copy">Kody can now automatically pause rules that generate too much noise during reviews. This feature is disabled by default and follows the configuration hierarchy: organization → repository → directory.</p>
+                    <p className="kodus-changelog-copy">A daily check identifies rules marked as “ignored” or “noisy” in the Cockpit, including manually created rules, and automatically pauses them. When this happens, the team receives an in-app notification. Every Monday, organization owners also receive an email summarizing which rules were paused or resumed during the week. If nothing has changed, no email is sent.</p>
+                    <p className="kodus-changelog-copy">Paused rules are labeled “Paused by Kody” and display the reason, date, and metrics behind the decision. They can also be reactivated at any time using the <strong>Resume</strong> button.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="https://kodus.io/wp-content/uploads/2026/10/pause-rules.mp4" type="video/mp4" />
+                    </video>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-cockpit">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Business logic validation revamped</div>
+                    <p className="kodus-changelog-copy">We've rebuilt the engine that checks whether a PR meets a task's requirements and acceptance criteria. Each requirement is now evaluated individually and marked as MET, PARTIAL, MISSING, CHECK MANUALLY, or NOT IN TASK.</p>
+                    <p className="kodus-changelog-copy">All results are consolidated into a single comment per PR, which gets updated after each check instead of creating duplicates.</p>
+                    <p className="kodus-changelog-copy">You can configure the validation at the repository or directory level, including where tasks and acceptance criteria come from, team-specific guidelines, what qualifies as “met,” and whether rechecks run automatically or only when requested using <code className="kodus-changelog-code">@kody -v business-logic</code>.</p>
+                    <p className="kodus-changelog-copy">You can also preview the results with Try it and track them in a dedicated Cockpit tab. If someone other than the PR author challenges a result, Kody rechecks it against the actual code.</p>
+                    <p className="kodus-changelog-copy">Learn more about <a className="kodus-changelog-link" href="https://docs.kodus.io/en/how_to_use/code_review/business_logic_validation">business logic validation in our documentation</a>.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="https://kodus.io/wp-content/uploads/2026/10/business-logic-config.mp4" type="video/mp4" />
+                    </video>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">More accurate suggestion deduplication</div>
+                    <p className="kodus-changelog-copy">We've improved how duplicate findings are identified and grouped, reducing repetitive comments about the same issue.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">More thorough finding verification</div>
+                    <p className="kodus-changelog-copy">Kody now checks code-related facts more carefully before confirming a finding. Verification also respects behavior explicitly documented as intentional in the repository, helping reduce false positives.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-performance">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">More efficient post-rebase reviews</div>
+                    <p className="kodus-changelog-copy">Previously, after a rebase, Kody would review the entire PR again, including code that hadn't changed. This meant agents could analyze the same code multiple times, potentially generating duplicate comments. Now, Kody compares the previous diff with the latest one and reviews only the lines that have actually changed since the last review, using the rest of the code only as context.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-cli">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">“Heavy” mode removed</div>
+                    <p className="kodus-changelog-copy">We decided to discontinue this mode because it was being rewritten and wasn't delivering the expected improvements. The <code className="kodus-changelog-code">@kody review --heavy</code> and <code className="kodus-changelog-code">kodus review --heavy</code> commands still work, but now run a standard review.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Partial GitLab reviews no longer create duplicate status notes:</strong> when a review ran in multiple stages, each update created a new note on the merge request. Now, all updates are made to the same note.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">PRs closed during a review no longer reopen unexpectedly:</strong> if a PR was closed while Kody was still reviewing it, the review result could reopen it. Kody now checks whether the PR is still open before taking any action.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Kody Rules that require additional repository context now work in Azure Repos:</strong> we fixed an issue that prevented rules requiring information beyond the diff from running. These rules now receive the same context available in other integrations.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Renaming a file no longer incorrectly blocks approval, and approval dismissal now works across all Git integrations:</strong> a simple file rename could be interpreted as a change to a sensitive path, unnecessarily blocking approval. We also fixed approval dismissal, which previously worked only with certain Git providers.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-cockpit filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Code-area risk history now waits for the initial scan to finish before updating:</strong> we've adjusted the update sequence to prevent partial results from overwriting a full scan that's still in progress.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed linking between reviews identified as duplicates:</strong> reviews recognized as belonging to the same change weren't always linked correctly. This has now been fixed.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">GitLab webhook creation failures are now visible:</strong> previously, webhook creation errors during onboarding weren't shown to users. These failures now display a clear error message.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">GitLab now handles rate limits (429) correctly:</strong> we fixed retry behavior so the system backs off when a rate limit is reached, preventing onboarding from getting stuck under heavy load.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-self-hosted">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Personal access token (PAT) requests on GitHub Enterprise Server now use the correct host:</strong> we fixed GraphQL requests that could be sent to the public GitHub host instead of the customer's configured GHES instance.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed reaction counts in Forgejo, including comments with no reactions:</strong> reaction counts now correctly handle comments with zero reactions.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-security">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Git token rotation now preserves the configured host:</strong> updating a token no longer causes the system to lose its reference to the configured Git server.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules filter-mcp">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Null legacy fields in Kody Rules no longer break MCP rule listings:</strong> we fixed invalid responses from MCP tools when listing rules containing null legacy fields.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine filter-byok">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Improved handling of AI model rate and quota limits:</strong> we've improved how the system interprets rate-limit and quota responses from Anthropic, Google, Z.AI, Together, and Claude through a proxy. The system now recognizes these limits correctly and avoids unnecessary retries.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">BYOK: a second OpenAI-compatible endpoint now uses its own API key:</strong> we fixed an issue where configuring two OpenAI-compatible endpoints could cause one to use the other's API key.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-notifications filter-self-hosted">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Email notifications now respect the configured sender (API_SMTP_FROM):</strong> we fixed email delivery so it correctly uses the sender address defined in this setting.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Rule library imports now surface errors and preserve the correct language:</strong> import failures are now shown to users, and imported rules correctly retain their language settings.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">GitLab work item URLs are now correctly recognized as issues:</strong> we fixed how these links are identified during business rule validation.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Valid findings are no longer discarded due to minor formatting differences:</strong> we've improved how findings that slightly deviate from the expected format are handled, so valid findings are no longer lost.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-security filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Accepting a divergence on GitHub now requires write access:</strong> we fixed an issue that allowed collaborators with read-only access to accept divergences. Kody now checks permissions directly with GitHub, allowing only users with write or admin access to accept them.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Unreadable tasks are no longer mistaken for typos:</strong> when a task tracker recognized a task key but returned data in a format Kody couldn't parse, the system incorrectly suggested a possible typo. This is now treated as a read error, with no comment posted on the PR and a notification sent to the administrator. A possible typo is only suggested when the tracker genuinely doesn't recognize the key.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed chat responses when a requirement's status is challenged:</strong> we fixed an issue that prevented Kody from responding correctly when someone challenged a requirement's status. Previously, this only worked when the status, such as MISSING, appeared in uppercase as a standalone word in the comment.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-cli">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">CLI now points to the correct flag for structured output:</strong> we fixed the CLI help text, which incorrectly referenced the nonexistent <code className="kodus-changelog-code">--json</code> flag. It now correctly points to <code className="kodus-changelog-code">--format json</code>, which already returns the verdict in a structured format.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">“Try it” no longer mistakes lowercase task keys for regular names:</strong> we fixed an issue where references such as <code className="kodus-changelog-code">gpt-5</code> in a task description could be interpreted as ordinary names rather than valid task identifiers, even when they matched the correct task.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
             <span className="kodus-changelog-date">October 22, 2026</span>
         </div>
 
@@ -1606,7 +2129,7 @@ rss: true
                     <div role="heading" aria-level="3" className="kodus-changelog-title">Moonshot Kimi support for BYOK</div>
                     <p className="kodus-changelog-copy">We added support for Moonshot as a provider, compatible with the Anthropic API.</p>
                     <p className="kodus-changelog-copy">You can now use the Kimi Coding Plan model in BYOK setups. To configure it, set the <code className="kodus-changelog-code">API_MOONSHOT_API_KEY</code> key and select the model in the organization preferences.</p>
-                    <p className="kodus-changelog-copy">See the <a className="kodus-changelog-link" href="https://docs.kodus.io/en/knowledge_base/how-to-use-moonshot-with-kodus">Moonshot (Kimi)</a> documentation for more setup details.</p>
+                    <p className="kodus-changelog-copy">See the <a className="kodus-changelog-link" href="https://docs.kodus.io/en/cookbook/moonshot">Moonshot (Kimi)</a> documentation for more setup details.</p>
                 </div>
 
                 <div className="kodus-changelog-item kodus-changelog-filterable filter-byok">
@@ -2199,7 +2722,7 @@ rss: true
 
         You can now use the Kimi Coding Plan model in BYOK setups. To configure it, set the API_MOONSHOT_API_KEY key and select the model in the organization preferences.
 
-        See the Moonshot Kimi documentation for more setup details: https://docs.kodus.io/en/knowledge_base/how-to-use-moonshot-with-kodus
+        See the Moonshot Kimi documentation for more setup details: https://docs.kodus.io/en/cookbook/moonshot
     </Update>
 
     <Update label="June 8, 2026 - Monthly token usage control" tags={["BYOK"]}>

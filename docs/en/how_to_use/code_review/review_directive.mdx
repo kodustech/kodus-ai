@@ -6,7 +6,7 @@ description: "Direct Kody's attention to a specific area of a pull request with 
 A **review directive** lets you tell Kody where to focus its deepest analysis for a single review. Instead of changing any configuration, you attach a short instruction when you trigger the review — for example, "focus on the auth and session logic" — and Kody spends its hardest analysis on the changed code that matches.
 
 <Note>
-  A directive is **ephemeral**: it applies to that one review run only. It is not saved to your settings and does not affect future reviews. To change Kody's behavior permanently, use category instructions and Kody's personality ([Instructions & Personality](/en/how_to_use/code_review/configs/custom_prompts), formerly Custom Prompts) or [Kody Rules](/en/how_to_use/code_review/configs/kody_rules) instead.
+  A directive is **ephemeral**: it applies to that one review run only. It is not saved to your settings and does not affect future reviews. To change Kody's behavior permanently, use category instructions and Kody's personality ([Instructions & Personality](/en/how_to_use/code_review/configs/custom_prompts)) or [Kody Rules](/en/how_to_use/code_review/configs/kody_rules) instead.
 </Note>
 
 ## When to Use It
@@ -62,6 +62,64 @@ Use a directive to say *"look here hardest"* — not *"only look here."*
     See the [CLI commands reference](/en/how_to_use/cli/commands) for the full command surface.
   </Tab>
 </Tabs>
+
+## Heavy mode
+
+<Badge color="yellow" size="sm">Beta</Badge>
+
+Teams and Enterprise, including the Cloud workspace trial. Self-hosted accepts a valid Teams or Enterprise license. In the CLI, use an authenticated workspace. Anonymous trial reviews run Balanced.
+
+A focus directive tells Kody *where* to look hardest. `--heavy` tells it to look *wider*: next
+to the usual review, nine specialist reviewers each read the whole diff for one kind of defect
+only:
+
+- code that says one thing and does another (names, measurements, results)
+- text that reaches a person — messages, comments, translations — disagreeing with the code
+- invalid state, broken invariants and race conditions
+- boundary, index and ordering assumptions
+- secrets and identity: comparisons, normalisation, fallbacks
+- a changed contract that a caller was not updated for
+- tests that would still pass if the behaviour they cover broke
+- data leaking into responses, logs and error messages
+- two changed files that do not agree with each other
+
+Every finding of a specialist goes through the same verification as the main review's before
+anything is posted, then through the usual deduplication and severity, so a guess that does not
+hold up is dropped like any other.
+
+### Heavy by default, or for one review
+
+**Code review → Routing** picks how reviews of a repository run: **Balanced** (the default, the main review alone) or **Heavy**. With [risk assessment](/en/how_to_use/code_review/configs/risk) on, the risk result picks the mode of pull request reviews. The setting applies to automatic reviews, to `@kody review` and to `kodus review`; `kodus review` takes the mode from the setting alone, not from the risk result. A flag on one command overrides it for that review:
+
+```text
+@kody review --heavy
+@kody review --heavy focus on the payment reconciliation logic
+@kody review --balanced
+kodus review --heavy
+kodus review --balanced
+```
+
+`--heavy` runs a heavy review on a repository set to Balanced; `--balanced` runs a balanced review on a repository set to Heavy. If a command carries both, `--heavy` wins.
+
+Either flag can sit anywhere on the command line, before or after your focus text, and it is stripped from the directive either way, so `@kody review focus on the retry logic --heavy` focuses on "the retry logic".
+
+Flags combine in any order: `@kody review --heavy --force` runs a forced heavy review. On a pull request Kody already reviewed, a flag asking for a different mode than the last review used reviews the whole pull request, not only the commits since then.
+
+A dash is required: a bare `heavy` or `balanced` is read as directive text, so `@kody review heavy checkout path` focuses on "heavy checkout path" rather than enabling the flag.
+
+### What to expect
+
+- If your plan does not include Heavy, the review runs Balanced and Kody reports the fallback.
+- **Your categories still apply.** The specialists of a category you turned off do not run: seven of them are Bug, two are Security. Kody Rules and custom agents run as they always do.
+- **It runs on the Heavy model.** At Global scope, **Code review → Routing** has a **Heavy model** and a **Balanced model**. With no Heavy model set, a heavy review uses the organization's default model. A **Code review model override** on a repository or directory runs both modes.
+- **It costs more and takes longer.** On our evaluation of 30 pull requests, against Balanced on the same model, a heavy review took up to about twice as long and about 2.5 times the model cost per pull request. It found about one more real issue every two pull requests, and posted about one more comment per pull request that was not a real problem. On your own model key (BYOK) the extra cost is on your provider's bill, and a provider with a low concurrency limit may queue the calls.
+- **Without repository access** (no sandbox), the specialists read the diff alone, as the main review does in that case.
+- See the [Pull requests list](/en/how_to_use/reviews/pull_requests) for review mode badges and the **Specialist Agents** timeline.
+
+<Tip>
+  Set Heavy as the review mode of the repositories where missing something is expensive — a
+  payments service, an auth module — or ask for it with `--heavy` on a single risky change.
+</Tip>
 
 ## Writing a Good Directive
 

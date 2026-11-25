@@ -152,6 +152,9 @@ export interface AzureRepoIteration {
     id?: number | string;
     createdDate?: string;
     lastUpdatedDate?: string;
+    sourceRefCommit?: { commitId: string };
+    targetRefCommit?: { commitId: string };
+    commonRefCommit?: { commitId: string };
 }
 
 /**
@@ -168,6 +171,26 @@ export interface AzureRepoChange {
         isFolder?: boolean;
     };
     originalPath?: string;
+}
+
+/** An entry of `diffs/commits`; folders come back alongside files. */
+export interface AzureRepoDiffChange {
+    changeType?: string;
+    item?: {
+        path?: string;
+        gitObjectType?: 'blob' | 'tree' | string;
+        objectId?: string;
+    };
+    originalPath?: string;
+    diff?: string;
+    additions?: number;
+    deletions?: number;
+}
+
+export interface AzureRepoCommitDiff {
+    changes: AzureRepoDiffChange[];
+    /** False when the entries were not all read. */
+    allChangesIncluded: boolean;
 }
 
 /**
@@ -203,16 +226,6 @@ export interface AzureRepoFileContent {
             href: string;
         };
     };
-}
-
-export interface AzureRepoDiffChange {
-    item?: {
-        path?: string;
-    };
-    changeType?: string;
-    diff?: string;
-    additions?: number;
-    deletions?: number;
 }
 
 /**

@@ -3,7 +3,7 @@ title: "How to self-host an AI code review tool"
 description: "Deploy Kodus on your own infrastructure with full control over data, models, and configuration."
 ---
 
-Kodus is open-source and can be self-hosted on your own infrastructure. This gives you full control over your data, network access, and LLM provider.
+Kodus is open-source and can be self-hosted on your own infrastructure. This gives you control over where your review data lives, which LLM provider reviews use, and how your Git provider reaches Kodus.
 
 ## Deployment options
 
@@ -11,29 +11,42 @@ Kodus is open-source and can be self-hosted on your own infrastructure. This giv
 
 Deploy Kodus using Docker Compose on any VM:
 
-1. Clone the Kodus repository
-2. Configure environment variables
-3. Run `docker compose up`
-4. Access the web UI and connect your Git provider
+1. Clone the `kodus-installer` repository
+2. Copy `.env.example` to `.env`, generate the keys and fill in your values
+3. Run `./scripts/install.sh`
+4. Run `./scripts/doctor.sh` to check the stack
+5. Open the web UI, create your admin account, connect an LLM provider (no review runs without a model) and connect your Git provider
+
+The installer starts the web app, the API, the webhooks service, the worker, PostgreSQL, MongoDB and RabbitMQ. Step-by-step instructions are in [Deploy with Docker](/en/how_to_deploy/deploy_kodus/generic_vm).
 
 ### Local development
 
-For testing or contributing:
+For testing or contributing, use the [local quickstart](/en/how_to_deploy/local_quickstart/orchestrator). It runs the whole stack on your machine.
 
-1. Use the orchestrator for a quick local setup
-2. Includes all services in a single command
+## Connecting your Git provider
+
+| Provider | Connection |
+| --- | --- |
+| GitHub | GitHub App you create, or a token. [GitHub App](/en/how_to_deploy/platforms/github/github_app) |
+| GitLab | OAuth app you create, or a token. [GitLab OAuth](/en/how_to_deploy/platforms/gitlab/gitlab_oauth) |
+| Bitbucket | API token on Cloud; username and password on Data Center (alpha). [Bitbucket webhooks](/en/how_to_deploy/platforms/bitbucket/bitbucket_webhook) |
+| Azure Repos | Token. [Azure DevOps webhooks](/en/how_to_deploy/platforms/azure_devops/azdevops_webhook) |
+| Forgejo | Token. Support is maintained by the community. [Forgejo webhooks](/en/how_to_deploy/platforms/forgejo/forgejo_webhook) |
 
 ## What you control
 
-- **Data** — all code and review data stays on your infrastructure
-- **LLM provider** — use any provider or self-hosted models
-- **Network** — runs behind your firewall, no external access required
-- **Configuration** — full control over all settings
+- **Data** — pull request, suggestion and settings data is stored in your own PostgreSQL and MongoDB
+- **LLM provider** — use any provider, or a self-hosted model through an OpenAI-compatible endpoint
+- **Network** — your Git provider must reach the webhooks service (port 3332), and Kodus must reach your Git provider and your LLM provider
+- **Configuration** — settings live in your `.env` and in the web app
+
+Each instance sends one anonymous heartbeat per day; see [Anonymous Telemetry](/en/how_to_deploy/deploy_kodus/telemetry) to inspect or turn it off.
 
 ## Requirements
 
 - Docker and Docker Compose
 - Sufficient compute resources for the API and worker services
-- Network access to your Git provider (GitHub, GitLab, Bitbucket)
+- A domain or fixed IP that your Git provider can reach, if it is a cloud provider such as GitHub.com or GitLab.com
+- Network access to your Git provider (GitHub, GitLab, Bitbucket, Azure Repos or Forgejo)
 
 For the full deployment guide, see [Deploy with Docker](/en/how_to_deploy/deploy_kodus/generic_vm).

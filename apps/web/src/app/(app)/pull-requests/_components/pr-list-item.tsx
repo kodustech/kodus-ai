@@ -36,6 +36,8 @@ import {
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
+import { latestReviewMode, ReviewModeTag } from "./review-mode-tag";
+import { getSpecialists, SpecialistAgentsTable } from "./specialist-agents";
 import type { PullRequestExecutionGroup } from "./types";
 
 interface PrListItemProps {
@@ -390,6 +392,7 @@ const getStageDisplay = (item: CodeReviewTimelineItem) => {
     const partialErrors = getPartialErrors(item.metadata);
     const fileTimings = getFileTimings(item.metadata);
     const agentTrace = getAgentTrace(item.metadata);
+    const specialists = getSpecialists(item.metadata);
 
     return {
         label,
@@ -398,6 +401,7 @@ const getStageDisplay = (item: CodeReviewTimelineItem) => {
         partialErrors,
         fileTimings,
         agentTrace,
+        specialists,
         visibility:
             item.metadata && typeof item.metadata === "object"
                 ? (item.metadata as Record<string, any>).visibility
@@ -442,7 +446,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
         ? "merged"
         : latest.automationExecution?.status || "pending";
     const rowAccent =
-        rowStatus === "error"
+        latest.approvalReasonDeliveryFailure || rowStatus === "error"
             ? "border-l-danger/70"
             : rowStatus === "partial_error"
               ? "border-l-warning/70"
@@ -587,6 +591,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                 Source branch
                             </TooltipContent>
                         </Tooltip>
+                        <ReviewModeTag mode={latestReviewMode(executions)} />
                         {/* "opened" already carries its own label + the
                             TimeAgoDisplay tooltip shows the exact date. */}
                         <span className="flex items-center gap-1 tabular-nums">
@@ -700,11 +705,33 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                     </Tooltip>
                 </NextLink>
 
-                {/* Status column — "Merged" is a terminal state: a merged PR
-                    reads as "Merged", full stop (no review-status chip stacked
-                    next to it). Only when the PR is NOT merged do we surface the
-                    review-run status (success/error/skipped/…). */}
+                {/* The approval notice is separate from review execution status.
+                    Keep it visible even if the PR has since been merged. */}
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    {latest.approvalReasonDeliveryFailure && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Badge
+                                    tabIndex={0}
+                                    variant="helper"
+                                    className="bg-danger/10 text-danger ring-danger/40 whitespace-nowrap ring-1">
+                                    Approval note unverified
+                                </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-sm text-xs break-words normal-case">
+                                Kody could not confirm the{" "}
+                                {latest.approvalReasonDeliveryFailure
+                                    .decision === "hold"
+                                    ? "hold"
+                                    : "approval"}{" "}
+                                reason appeared on the PR. Kody's reason:{" "}
+                                {latest.approvalReasonDeliveryFailure.reason}
+                                {
+                                    " Check the repository integration permissions and the PR comments."
+                                }
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
                     {latest.merged ? (
                         <Badge variant="primary" className="whitespace-nowrap">
                             Merged
@@ -810,6 +837,11 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                                     {getStatusBadge(
                                                         executionStatus,
                                                     )}
+                                                    <ReviewModeTag
+                                                        mode={
+                                                            execution.reviewMode
+                                                        }
+                                                    />
                                                     {executionDuration && (
                                                         <span className="text-text-tertiary text-xs tabular-nums">
                                                             {executionStatus ===
@@ -983,6 +1015,13 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                                                                             )}
                                                                                         </p>
                                                                                     )}
+                                                                                {stageInfo.specialists && (
+                                                                                    <SpecialistAgentsTable
+                                                                                        rows={
+                                                                                            stageInfo.specialists
+                                                                                        }
+                                                                                    />
+                                                                                )}
                                                                                 {stageInfo.agentTrace &&
                                                                                     stageInfo
                                                                                         .agentTrace
@@ -1213,7 +1252,7 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
     CALLGRAPH_DROPPED: "Pre-computed call graph omitted",
     HUNK_HEADERS_ONLY:
         "File diffs sent as hunk headers only; agent reads on demand",
-    DIFF_TRUNCATED: "Long file diffs truncated to fit the window",
+    DIFF_TRUNCATED: "Long file diffs truncated",
     LOW_SIGNAL_FILES_DROPPED: "Low-signal files (tests, docs, styles) dropped",
     HEAVY_PASSES_SKIPPED: "Verifier / second-chance / rescue passes skipped",
     // Rendered by ProviderFallbackNotice, not the fidelity list — label kept
@@ -1234,7 +1273,8 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
         "Skill or doc edited in this PR (target-branch version used)",
     DOC_NOT_FOUND: "Linked doc not found on the target branch",
     KNOWLEDGE_TRUNCATED: "Skills or docs cut to fit their budget",
-    KNOWLEDGE_UNAVAILABLE: "Reviewed without skills and docs (could not be read)",
+    KNOWLEDGE_UNAVAILABLE:
+        "Reviewed without skills and docs (could not be read)",
     SKILL_COMPATIBILITY: "Skill requirements may not be met by the reviewer",
     CLI_INSTALL_FAILED: "Custom agent ran without a CLI",
     CROSS_REPO_UNAVAILABLE:

@@ -1,8 +1,12 @@
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
-import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    FileChange,
+    Repository,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { WebhookSetupResult } from '../types/codeManagement/webhook-setup.type';
 import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.type';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 
@@ -32,6 +36,10 @@ import { Repositories } from '../types/codeManagement/repositories.type';
 import { RepositoryFile } from '../types/codeManagement/repositoryFile.type';
 import { RepositoryAccessDiagnosis } from '../types/codeManagement/repositoryAccessDiagnosis.type';
 import { ICommonPlatformIntegrationService } from './common.interface';
+import type {
+    ApprovalTeamMembership,
+    ApprovalTeamMembershipParams,
+} from '../types/codeManagement/approvalTeamMembership.type';
 
 type GitActor = {
     name: string;
@@ -52,7 +60,18 @@ export type CodeManagementConnectionStatus = {
     category?: IntegrationCategory;
 };
 
+/** An account as a host webhook names it. */
+export interface HostAccount {
+    login: string;
+    node_id: string;
+    /** GitHub: `Bot` for an App, `User` for a person. */
+    type?: string;
+}
+
 export interface ICodeManagementService extends ICommonPlatformIntegrationService {
+    getApprovalTeamMembership?(
+        params: ApprovalTeamMembershipParams,
+    ): Promise<ApprovalTeamMembership>;
     /**
      * Read the host's native issue tracker. Optional: implemented per provider
      * as the generic issues MCP rolls out (GitHub first). The facade throws a
@@ -141,6 +160,7 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        includeLabels?: boolean;
     }): Promise<PullRequest | null>;
     getRepositories(params: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -155,6 +175,9 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
                 lastNDays?: number;
                 limit?: number;
             };
+            // A screen is waiting: providers that back off on rate limits
+            // give up sooner. Only Bitbucket Cloud reads it today.
+            interactive?: boolean;
         };
     }): Promise<Repositories[]>;
     getListMembers(
@@ -176,7 +199,27 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     getOrganizations(params: any): Promise<Organization[]>;
 
     getFilesByPullRequestId(params): Promise<any[] | null>;
+    /**
+     * The PR's files changed since `lastCommit`. `keepRemovedFiles` also
+     * keeps the files deleted since then that the PR no longer lists (one it
+     * added and later deleted), with status `removed`. Honored by GitHub,
+     * GitLab and Bitbucket Data Center; Azure Repos, Bitbucket Cloud and
+     * Forgejo ignore it and leave such a file out, so a grouped suggestion
+     * with a location in it stays partial there.
+     */
     getChangedFilesSinceLastCommit(params: any): Promise<any | null>;
+    /**
+     * The PR's diff as it stood when `headSha` was its head: from the merge
+     * base of `baseBranch` and `headSha` to `headSha`. Null when the host
+     * can't give it whole (commit gone, response capped, no such API).
+     */
+    getPullRequestFilesAtCommit(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; project?: { id: string } };
+        prNumber: number;
+        baseBranch: string;
+        headSha: string;
+    }): Promise<FileChange[] | null>;
     createReviewComment(params: any): Promise<any | null>;
     createCommentInPullRequest(params): Promise<any[] | null>;
     getRepositoryContentFile(params: any): Promise<any | null>;
@@ -254,11 +297,20 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        /**
+         * Throw a `RepositoryListingError` instead of returning `[]` when the
+         * repository cannot be listed, so a failure is not read as a
+         * repository without the files.
+         */
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]>;
     getCloneParams(params: any): Promise<GitCloneParams>;
     mergePullRequest(params: any): Promise<any>;
     approvePullRequest(params: any): Promise<any>;
-    requestChangesPullRequest(params: any): Promise<any>;
+    /** Hands back the summary comment the host keeps open next to the request, where it leaves one. */
+    requestChangesPullRequest(
+        params: any,
+    ): Promise<{ summaryCommentId?: string } | null | void>;
 
     getAllCommentsInPullRequest(params: any): Promise<any[]>;
 
@@ -338,6 +390,17 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     getPullRequestAuthors(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         determineBots?: boolean;
+        // Fail rather than answer [] when the provider cannot tell "no recent
+        // author" from "not loaded yet". For callers that revoke on absence.
+        requireLoaded?: boolean;
+    }): Promise<PullRequestAuthor[]>;
+
+    // Which of these ids opened a pull request on the configured repositories
+    // in the recent window, asked of the provider rather than stored PRs.
+    // Optional: providers without it cannot confirm absence this way.
+    findRecentPullRequestAuthors?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        authorIds: string[];
     }): Promise<PullRequestAuthor[]>;
 
     checkIfPullRequestShouldBeApproved(params: {
@@ -356,18 +419,30 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     }): Promise<boolean>;
 
     /**
+     * Makes sure each given repository has the Kodus webhook, creating it
+     * where missing. Touches only these repositories, never removes a hook,
+     * and reports per repository instead of throwing.
+     */
+    ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult>;
+
+    /**
      * Read-only check of what the stored credential can do on one selected
      * repository. Never throws; anything the provider does not report is
      * `unknown`. Optional so a provider without it degrades to `unknown`.
      */
     /**
      * Whether one user can push to the repository (GitLab: Developer or
-     * above). Undefined when the provider can't say.
+     * above; GitHub: write or admin). Undefined when the provider can't say.
      */
     userCanWrite?(params: {
         organizationAndTeamData: OrganizationAndTeamData;
-        repository: { id: string };
-        userId: string | number;
+        repository: { id: string; name?: string; owner?: string };
+        userId?: string | number;
+        /** GitHub reads the permission by login. */
+        login?: string;
     }): Promise<boolean | undefined>;
 
     diagnoseRepositoryAccess?(params: {
@@ -416,6 +491,29 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         repository: Partial<Repository>;
         prNumber: number;
     }): Promise<PullRequestReviewState | null>;
+
+    dismissOwnPullRequestApprovals?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number>;
+    /** Whether an account, as a webhook names it, is the one Kody acts as. */
+    isOwnAccount?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        account: HostAccount;
+    }): Promise<boolean>;
+    /**
+     * Withdraws Kody's own "changes requested" without approving. Returns how
+     * many requests it withdrew. Absent on a host where a change request
+     * leaves no review state (GitLab: a thread only).
+     */
+    dismissOwnPullRequestChangeRequests?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number>;
 
     addReactionToPR?(params: {
         organizationAndTeamData: OrganizationAndTeamData;

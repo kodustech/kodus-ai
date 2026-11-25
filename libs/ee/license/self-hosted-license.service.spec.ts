@@ -61,14 +61,6 @@ describe('SelfHostedLicenseService.consumeTrialReviewCredit', () => {
         const result = await makeService().consumeTrialReviewCredit(orgTeam);
         expect(result).toEqual({ allowed: true, reason: 'SELF_HOSTED' });
     });
-
-    it('allows regardless of the usageKey', async () => {
-        const result = await makeService().consumeTrialReviewCredit(
-            orgTeam,
-            'repo-1:7',
-        );
-        expect(result.allowed).toBe(true);
-    });
 });
 
 /**

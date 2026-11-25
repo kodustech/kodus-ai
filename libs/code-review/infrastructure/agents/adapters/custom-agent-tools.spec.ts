@@ -93,20 +93,7 @@ describe('buildCustomAgentTools', () => {
         expect(set.tools[0].inputSchema.properties).toHaveProperty('useRules');
     });
 
-    it('leaves astGrep out when the sandbox has no ast-grep binary', async () => {
-        const set = await buildCustomAgentTools(
-            { tools: {} },
-            {
-                remoteCommands,
-                writeFile: jest.fn(async () => {}),
-                changedFiles: ['src/a.ts'],
-            },
-        );
-        expect(set.tools).toEqual([]);
-        expect(remoteCommands.exec).toHaveBeenCalledWith('ast-grep --version');
-    });
-
-    it('warns that the agent ran without astGrep when the sandbox has no ast-grep binary', async () => {
+    it('leaves astGrep out, and warns, when the sandbox has no ast-grep binary', async () => {
         const set = await buildCustomAgentTools(
             { name: 'Ledger Rules', tools: {} },
             {
@@ -115,6 +102,8 @@ describe('buildCustomAgentTools', () => {
                 changedFiles: ['src/a.ts'],
             },
         );
+        expect(set.tools).toEqual([]);
+        expect(remoteCommands.exec).toHaveBeenCalledWith('ast-grep --version');
         expect(set.warnings).toEqual([
             expect.objectContaining({
                 kind: 'AST_GREP_UNAVAILABLE',

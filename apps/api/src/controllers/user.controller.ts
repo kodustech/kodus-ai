@@ -25,6 +25,7 @@ import { checkPermissions } from '@libs/identity/infrastructure/adapters/service
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import { AcceptUserInvitationUseCase } from '@libs/identity/application/use-cases/user/accept-user-invitation.use-case';
 import { CheckUserWithEmailUserUseCase } from '@libs/identity/application/use-cases/user/check-user-email.use-case';
+import { GetInvitationTokenUseCase } from '@libs/identity/application/use-cases/user/get-invitation-token.use-case';
 import { GetUserUseCase } from '@libs/identity/application/use-cases/user/get-user.use-case';
 import { InviteDataUserUseCase } from '@libs/identity/application/use-cases/user/invite-data.use-case';
 import { UpdateAnotherUserUseCase } from '@libs/identity/application/use-cases/user/update-another.use-case';
@@ -64,6 +65,7 @@ export class UsersController {
         private readonly joinOrganizationUseCase: JoinOrganizationUseCase,
         private readonly updateAnotherUserUseCase: UpdateAnotherUserUseCase,
         private readonly getUserUseCase: GetUserUseCase,
+        private readonly getInvitationTokenUseCase: GetInvitationTokenUseCase,
         private readonly saveMarketingSurveyUseCase: SaveMarketingSurveyUseCase,
 
         @Inject(REQUEST)
@@ -89,15 +91,15 @@ export class UsersController {
     @Public()
     @ApiOperation({
         summary: 'Get invite data',
-        description: 'Return invitation data for a user id.',
+        description: 'Return invitation data for an invitation token.',
     })
-    @ApiQuery({ name: 'userId', type: String, required: true })
+    @ApiQuery({ name: 'token', type: String, required: true })
     @ApiOkResponse({ type: ApiObjectResponseDto })
     public async getInviteDate(
-        @Query('userId')
-        userId: string,
+        @Query('token')
+        token: string,
     ) {
-        return await this.inviteDataUserUseCase.execute(userId);
+        return await this.inviteDataUserUseCase.execute(token);
     }
 
     @Post('/invite/complete-invitation')
@@ -191,6 +193,30 @@ export class UsersController {
             targetUserId,
             body,
             organizationId,
+        );
+    }
+
+    @Get('/:targetUserId/invitation-token')
+    @ApiBearerAuth('jwt')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Update,
+            resource: ResourceType.UserSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Get an invitation token',
+        description:
+            'A fresh token for the invitation link of a pending member of the organization.',
+    })
+    @ApiOkResponse({ type: ApiObjectResponseDto })
+    public async getInvitationToken(
+        @Param('targetUserId') targetUserId: string,
+    ): Promise<{ token: string }> {
+        return await this.getInvitationTokenUseCase.execute(
+            targetUserId,
+            this.request.user?.organization?.uuid,
         );
     }
 

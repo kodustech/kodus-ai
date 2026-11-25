@@ -76,6 +76,7 @@ try {
             .digest('hex');
     } else {
         cases = require('./cases').cases;
+        casesSourceDigest = crypto.createHash('sha256').update(JSON.stringify(cases)).digest('hex');
     }
     if (!Array.isArray(cases))
         throw new Error('Expected a JSON object with a cases array');
@@ -277,9 +278,9 @@ function instrumentVerifier() {
     };
 }
 
-// The repeat check's own verdict, read where the stage calls it: a check whose
-// model call failed posts what it had to judge (fail-open), which is not a
-// measurement of the repeat drop.
+// Read the repeat check where the stage calls it. An unresolved comparison
+// exercises the timeout fallback, covered by the stage contract. It does not
+// measure the model's ability to identify a repeat.
 let repeatChecks;
 function observeRepeatCheck() {
     if (repeatChecks) return;
@@ -336,13 +337,13 @@ async function once(c, judgeKey) {
     phase.verify = false;
     phase.verdicts = [];
     const counter = { calls: 0, failed: 0 };
-    const t0 = Date.now();
     const { route, permissionService } = orgRoute();
     const checks = [];
     // The PR through production's review (evals/shared/review-stage.js):
     // the changed files, the earlier decisions loaded from the PR's decision
     // store, both agents, the anchoring, the repeat drop, dedup, severity, the
     // formatter, and what the stage hands to posting.
+    const t0 = Date.now();
     const review = await repeatChecks.run(checks, () =>
         reviewPullRequest({
             pr: prOf(c),
@@ -358,6 +359,7 @@ async function once(c, judgeKey) {
                     : dyingSandbox(c.sandbox || 'alive', counter),
         }),
     );
+    const reviewMs = Date.now() - t0;
     if (review.skipped) {
         throw new Error(`INFRA: production skipped the review: ${review.skipped}`);
     }
@@ -409,6 +411,55 @@ async function once(c, judgeKey) {
         ];
     });
 
+    const scoringStarted = Date.now();
+    const claims = await scoreDeliveredClaims(c, delivered, judgeKey, SET !== 'review-quality-2597');
+    const scoringMs = Date.now() - scoringStarted;
+    const { PriorityStatus } = require('../../libs/platformData/domain/pullRequests/enums/priorityStatus.enum.ts');
+    const repeats = review.discarded.filter((s) => s.priorityStatus === PriorityStatus.DISCARDED_BY_REPEAT);
+    const loop = review.loops[0]?.result;
+    return {
+        case: c.id,
+        family: c.family,
+        sandbox: c.sandbox,
+        ms: Date.now() - t0,
+        reviewMs,
+        scoringMs,
+        // #2039: a delivered finding pointed at an earlier one by its prompt index
+        // ("previous decision #3"), which means nothing to the reader.
+        indexRefs: delivered.filter(
+            (d) => !d.alsoFoundIn && INDEX_REF.test(d.text),
+        ).length,
+        verificationEvidence: phase.verdicts,
+        // What the repeat drop kept off the PR.
+        alreadyPosted: repeats.map((r) => ({
+            file: r.relevantFile,
+            line: r.relevantLinesStart,
+            label: r.label,
+            revisesSuggestionId: r.revisesSuggestionId ?? null,
+        })),
+        repeatCheck: { model: checks.map((r) => r.model).join(',') || null },
+        discarded: review.discarded.length,
+        sandboxCalls: counter.calls,
+        sandboxFailed: counter.failed,
+        anomalies: loop?.anomalies,
+        warnings: (loop?.warnings || []).length,
+        verification: loop?.verification && {
+            before: loop.verification.beforeCount,
+            after: loop.verification.afterCount,
+        },
+        delivered,
+        // What posting saves, for a later round's decision store (lifecycle.js).
+        posted: {
+            onFiles: review.shippedOnFiles.map(postedFields),
+            onPR: review.shippedOnPR.map(postedFields),
+        },
+        claims,
+    };
+}
+
+// A team rule eval attributes a finding to its rule. For whole-review quality,
+// a user receives the same useful (or incorrect) comment from any agent.
+async function scoreDeliveredClaims(c, delivered, judgeKey, ruleSpecific) {
     const claims = [];
     // A delivered comment answers one claim at most: two claims on the same
     // rule read alike, and one comment must not count as both.
@@ -417,6 +468,7 @@ async function once(c, judgeKey) {
         let match = null;
         for (const d of delivered) {
             if (taken.has(d)) continue;
+            if (ruleSpecific && claim.ruleId && !d.brokenKodyRulesIds?.includes(claim.ruleId)) continue;
             // `at` pins a claim to a region when two claims read alike. The
             // two lines of slack around it never reach into another claim's
             // region: a comment on the next function answers that one.
@@ -465,45 +517,7 @@ async function once(c, judgeKey) {
             pass,
         });
     }
-    const { PriorityStatus } = require('../../libs/platformData/domain/pullRequests/enums/priorityStatus.enum.ts');
-    const repeats = review.discarded.filter((s) => s.priorityStatus === PriorityStatus.DISCARDED_BY_REPEAT);
-    const loop = review.loops[0]?.result;
-    return {
-        case: c.id,
-        family: c.family,
-        sandbox: c.sandbox,
-        ms: Date.now() - t0,
-        // #2039: a delivered finding pointed at an earlier one by its prompt index
-        // ("previous decision #3"), which means nothing to the reader.
-        indexRefs: delivered.filter(
-            (d) => !d.alsoFoundIn && INDEX_REF.test(d.text),
-        ).length,
-        verificationEvidence: phase.verdicts,
-        // What the repeat drop kept off the PR.
-        alreadyPosted: repeats.map((r) => ({
-            file: r.relevantFile,
-            line: r.relevantLinesStart,
-            label: r.label,
-            revisesSuggestionId: r.revisesSuggestionId ?? null,
-        })),
-        repeatCheck: { model: checks.map((r) => r.model).join(',') || null },
-        discarded: review.discarded.length,
-        sandboxCalls: counter.calls,
-        sandboxFailed: counter.failed,
-        anomalies: loop?.anomalies,
-        warnings: (loop?.warnings || []).length,
-        verification: loop?.verification && {
-            before: loop.verification.beforeCount,
-            after: loop.verification.afterCount,
-        },
-        delivered,
-        // What posting saves, for a later round's decision store (lifecycle.js).
-        posted: {
-            onFiles: review.shippedOnFiles.map(postedFields),
-            onPR: review.shippedOnPR.map(postedFields),
-        },
-        claims,
-    };
+    return claims;
 }
 
 // The fields of a posted suggestion its decision record is read from
@@ -672,6 +686,7 @@ async function main() {
                     startedAt: STARTED_AT,
                     updatedAt: new Date().toISOString(),
                     complete,
+                    ...(SET === 'review-quality-2597' && { deliveryScope: 'all-agents' }),
                     selectedCases: selected.map((c) => c.id),
                     casesSourceDigest,
                     summary: summarize(rows),
@@ -816,7 +831,7 @@ function sharedResult(rows, selected) {
     };
 }
 
-module.exports = { once, instrumentVerifier, engineSnapshot, orgRoute };
+module.exports = { once, instrumentVerifier, engineSnapshot, orgRoute, scoreDeliveredClaims };
 if (require.main === module)
     main().catch((error) => {
         console.error(`INFRA: ${error.stack || error}`);

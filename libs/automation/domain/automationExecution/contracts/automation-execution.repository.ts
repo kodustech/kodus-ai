@@ -2,6 +2,7 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 
 import { AutomationExecutionEntity } from '../entities/automation-execution.entity';
 import { IAutomationExecution } from '../interfaces/automation-execution.interface';
+import type { AutomationType } from '../../automation/enum/automation-type';
 
 export const AUTOMATION_EXECUTION_REPOSITORY_TOKEN = Symbol(
     'AutomationExecutionRepository',
@@ -24,6 +25,7 @@ export interface IAutomationExecutionRepository {
         filter?: Partial<IAutomationExecution>,
     ): Promise<AutomationExecutionEntity[]>;
     findPullRequestExecutionsByOrganizationAndTeam(params: {
+        automationType?: AutomationType;
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryIds?: string[];
         repositoryName?: string;
@@ -37,12 +39,14 @@ export interface IAutomationExecutionRepository {
         cursor?: { createdAt: string | Date; uuid: string };
         take?: number;
         order?: 'ASC' | 'DESC';
-        includeTotal?: boolean;
+        countOnly?: boolean;
+        teamAutomationIds?: string[];
     }): Promise<{
         data: AutomationExecutionEntity[];
         total: number;
-        // Distinct PRs matching the DB-level filters (only with includeTotal).
+        // Distinct PRs matching the DB-level filters (only with countOnly).
         distinctPrTotal: number;
+        teamAutomationIds?: string[];
     }>;
     getDistinctReviewedPullRequestKeys(params: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -78,7 +82,15 @@ export interface IAutomationExecutionRepository {
     }>;
     findLatestExecutionByFilters(
         filters?: Partial<any>,
+        /** A failed read throws instead of reading as "none found". */
+        options?: { rethrow?: boolean },
     ): Promise<AutomationExecutionEntity | null>;
+    hasPullRequestExecutionWithDataKey(params: {
+        teamAutomationId: string;
+        repositoryId: string;
+        pullRequestNumber: number;
+        key: string;
+    }): Promise<boolean>;
     findStaleInProgress(
         cutoffDate: Date,
         limit?: number,
@@ -98,5 +110,11 @@ export interface IAutomationExecutionRepository {
         startDate: Date,
         endDate: Date,
         teamAutomationId: string,
-    ): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>>;
+    ): Promise<
+        Array<{
+            repositoryId: string;
+            pullRequestNumber: number;
+            mayAllowNoComments: boolean;
+        }>
+    >;
 }

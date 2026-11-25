@@ -1,4 +1,5 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 /**
  * Interface for the parameters passed to webhook event handlers.
@@ -8,6 +9,12 @@ export interface IWebhookEventParams {
     event: string;
     platformType: PlatformType;
     correlationId?: string;
+    /**
+     * The workspace the handler's webhook context resolved, handed to the
+     * steps after it (saving the PR, generating issues) so they act on the
+     * team that reviews the PR instead of resolving the repository again.
+     */
+    organizationAndTeamData?: OrganizationAndTeamData;
 }
 
 /**

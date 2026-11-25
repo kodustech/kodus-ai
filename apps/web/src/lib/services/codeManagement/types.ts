@@ -40,6 +40,7 @@ export type GitFileOrFolder = {
 
 export const CODE_MANAGEMENT_API_PATHS = {
     GET_ONBOARDING_PULL_REQUESTS: pathToApiUrl("/code-management/get-prs"),
+    GET_AREA_RISK_MAP: pathToApiUrl("/code-management/area-risk-map"),
 
     GET_REPOSITORIES_ORG: pathToApiUrl("/code-management/repositories/org"),
     GET_SELECTED_REPOSITORIES: pathToApiUrl(
@@ -59,7 +60,12 @@ export const CODE_MANAGEMENT_API_PATHS = {
     GET_PULL_REQUESTS: pathToApiUrl("/code-management/get-prs-repo"),
 
     GET_WEBHOOK_CREATION_FAILURES: pathToApiUrl(
-        "/code-management/webhook-failures",
+        "/code-management/hook-failures",
+    ),
+
+    REPOSITORY_SELECTION: pathToApiUrl("/code-management/repository-selection"),
+    REPOSITORY_SELECTION_PREVIEW: pathToApiUrl(
+        "/code-management/repository-selection/preview",
     ),
 } as const;
 

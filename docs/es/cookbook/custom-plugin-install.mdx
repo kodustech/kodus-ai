@@ -1,84 +1,91 @@
 ---
 title: "Instalar plugins MCP personalizados"
-description: "Instrucciones paso a paso para conectar cualquier plugin personalizado de Model Context Protocol a Kodus."
+description: "Instrucciones paso a paso para conectar tu propio servidor de Model Context Protocol a Kodus."
 icon: "plug"
 ---
 
 ## Por qué son importantes los plugins personalizados
 
-Los plugins MCP personalizados permiten a tu equipo conectar a Kody con sistemas internos: bases de conocimiento, paneles de incidencias, motores de políticas, entre otros. Una vez instalados, cada interacción de Kody puede llamar a esas herramientas con datos en tiempo real, de modo que los revisores dejan de copiar capturas de pantalla o fragmentos desactualizados en los pull requests.
-
-Esta guía muestra el flujo recomendado para cualquier plugin personalizado, ya sea un endpoint de solo lectura sencillo (como el MCP de Kodus Docs) o un pipeline más avanzado con autenticación.
+Un plugin personalizado permite que Kody lea tus sistemas internos, como una base de conocimiento, un panel de incidentes o un motor de políticas, mientras responde en un pull request. Los revisores dejan de pegar capturas de pantalla y fragmentos desactualizados en los comentarios.
 
 <Callout icon="globe">
-  Kodus admite **únicamente servidores MCP remotos**, lo que significa que el plugin debe ser accesible desde la infraestructura de Kodus.
+  Kodus admite **únicamente servidores MCP remotos**. El servidor debe ser accesible desde la infraestructura de Kodus: sin `localhost`, sin endpoints MCP de escritorio.
 </Callout>
-
----
 
 ## Prepara la información de tu plugin
 
-Reúne estos datos antes de abrir el catálogo de Plugins:
+Reúne estos datos antes de abrir la página de Plugins:
 
 | Campo | Por qué importa |
 | ----- | --------------- |
-| **URL pública** | Endpoint donde está alojado el manifiesto MCP (p. ej., `https://acme-internal-tools.com/mcp`). |
-| **Protocolo** | Tipo de implementación MCP (HTTP o SSE). |
-| **Alojamiento** | Debe ser un servidor remoto accesible desde Kodus (sin localhost ni endpoints MCP de escritorio). |
-| **Autenticación** | Si el plugin requiere claves de API, OAuth, o está abierto a las IPs de tu workspace. |
-| **Descripción / Logo** | Ayuda a otros ingenieros a entender qué hace el plugin al navegar por el catálogo. |
+| **URL** | El endpoint MCP, por ejemplo `https://acme-internal-tools.com/mcp`. |
+| **Protocol** | **HTTP** o **SSE**. |
+| **Authorization** | **None**, **Bearer Token**, **Basic Auth**, **API Key** (y el header en el que va) u **OAuth 2.0** (un client ID, o dynamic client registration). |
+| **Descripción y logo** | Opcional. Ayudan a tus compañeros a reconocer el plugin. |
 
 ¿Buscas servidores MCP remotos para probar?
 
-- [Smithery.ai](https://smithery.ai/) ofrece servicios MCP desplegables junto con un lanzador fácil que puedes apuntar a tu propia infraestructura.
-- [Awesome Remote MCP Servers](https://github.com/sylviangth/awesome-remote-mcp-servers) lista endpoints mantenidos por la comunidad que abarcan búsqueda de documentación, escáneres de seguridad y bots de flujo de trabajo.
+- [Smithery.ai](https://smithery.ai/) reúne servicios MCP desplegables.
+- [Awesome Remote MCP Servers](https://github.com/sylviangth/awesome-remote-mcp-servers) lista endpoints mantenidos por la comunidad.
 
 ## Instala el plugin en Kodus
 
-<Frame caption="En Plugins, el botón Add Plugin de la tarjeta Add Custom Plugin abre este formulario">
+<Frame caption="Plugins → tarjeta Add Custom Plugin → Add Plugin abre este formulario">
   <img src="/images/custom-plugin.png" alt="Add Custom Plugin form" />
 </Frame>
 
-1. En la barra lateral, abre **Plugins** (Beta) dentro de tu workspace de Kodus.
-2. En la tarjeta **Add Custom Plugin**, haz clic en **Add Plugin**.
-3. Completa el formulario:
+<Steps>
+  <Step title="Abre el formulario">
+    En la barra lateral, abre **Plugins**. En la tarjeta **Add Custom Plugin**, haz clic en **Add Plugin**.
+  </Step>
+  <Step title="Complétalo">
+    ```text
+    Plugin Name: Descriptive label (for example "Security Runbooks MCP")
+    Description: What data it exposes (optional)
+    Logo URL: Optional
+    URL: https://your-domain.com/mcp
+    Protocol: HTTP or SSE
+    Authorization: None, Bearer Token, Basic Auth, API Key or OAuth 2.0
+    Custom Headers: Any extra header your server needs (optional)
+    ```
 
-   ```text
-   Plugin Name: Etiqueta descriptiva (p. ej., "Security Runbooks MCP")
-   Description: Qué datos/acciones expone
-   Logo URL: Opcional, pero útil para identificación
-   URL: https://your-domain.com/mcp
-   Protocol: HTTP o SSE
-   Authorization / Headers: Añade si tu host MCP los requiere (p. ej., clave de API, OAuth, etc.) (opcional)
-   ```
+    Haz clic en **Create Plugin**.
+  </Step>
+  <Step title="Elige sus herramientas e instálalo">
+    Se abre el plugin. Con OAuth 2.0, haz clic primero en **Authenticate with** el plugin. En **Selected tools**, conserva solo las herramientas que Kody necesita y luego haz clic en **Install plugin**. Un plugin instalado muestra **Installed** en su tarjeta.
+  </Step>
+</Steps>
 
-4. Haz clic en **Crear Plugin**. Una vez que aparezca en la lista, estará disponible de inmediato para todo el workspace.
+Si **Selected tools** muestra 0 of 0, Kodus no pudo listar las herramientas del servidor. Abre el plugin, haz clic en **Edit Plugin** y revisa la URL, el protocolo y la autorización.
 
 <Warning>
-  Los plugins personalizados se ejecutan con los mismos permisos que el workspace. Solo instala endpoints en los que tu organización confíe y que pueda monitorear.
+  Kody puede llamar a cualquier herramienta que selecciones. Instala solo endpoints en los que tu organización confíe y selecciona solo las herramientas que Kody necesita.
 </Warning>
 
 ## Verifica la conexión
 
-1. Abre cualquier pull request donde Kody esté habilitado.
-2. Menciona `@kody` e incluye una pregunta que obligue al plugin a responder.
+1. Abre un pull request en un repositorio donde Kody esté habilitado.
+2. Comenta con `@kody` y una pregunta que solo el plugin pueda responder:
 
    ```
-   @kody ¿puedes obtener la lista de verificación de despliegue desde nuestro MCP y confirmar si se requieren feature flags?
+   @kody can you fetch the deployment checklist from our MCP and confirm whether feature flags are required?
    ```
 
-3. Revisa la respuesta de Kody: debería incluir datos devueltos por tu nuevo plugin. Si no es así, confirma la URL, el protocolo y la autorización del plugin en la página **Plugins**.
+3. Revisa la respuesta de Kody. Debería incluir datos devueltos por tu plugin. Si no es así, abre el plugin en la página **Plugins** y revisa su URL, protocolo y autorización.
 
 <Info>
-  El MCP de Kodus Docs (`https://docs.kodus.io/mcp`) es una prueba de verificación rápida: puedes instalarlo primero para asegurarte de que tu workspace puede alcanzar hosts externos.
+  Para ensayar el flujo sin construir un servidor, agrega `https://docs.kodus.io/mcp` como plugin personalizado: protocolo **HTTP**, autorización **None**.
 </Info>
 
----
+## Úsalo en un agente personalizado
+
+Un agente personalizado lee de un plugin instalado cuando lo activas en **Tools → Plugins** en la página del agente. Solo se ofrecen herramientas de lectura. Consulta [Skills, docs y herramientas](/es/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp).
 
 ## Lista de verificación rápida
 
-- [ ] El manifiesto del plugin está alojado y es accesible.
-- [ ] El modelo de autenticación (si existe) está documentado y probado.
-- [ ] El plugin está instalado mediante **Agregar Plugin Personalizado** con la URL y los encabezados correctos.
-- [ ] Un PR de prueba confirmó que Kody puede llamar al plugin.
-- [ ] Los responsables saben cómo monitorear y actualizar la integración.
+- [ ] El servidor es accesible desde Kodus por HTTP o SSE.
+- [ ] Su autorización funciona con el método que elegiste.
+- [ ] **Selected tools** lista herramientas, y solo están seleccionadas las que Kody necesita.
+- [ ] El plugin muestra **Installed**.
+- [ ] Un comentario de prueba en un pull request devolvió datos del plugin.
+- [ ] Alguien es responsable de monitorear y actualizar la integración.

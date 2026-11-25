@@ -5,7 +5,22 @@ import {
     repositoryForLookup,
     resolveTasks,
 } from './task-resolver';
+import { TrackerConnectionError } from './trackers/mcp-tool-session';
 import type { TaskTracker } from './trackers/tracker';
+
+const warnings: Array<{ message: string; metadata?: Record<string, unknown> }> =
+    [];
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        warn: (entry: {
+            message: string;
+            metadata?: Record<string, unknown>;
+        }) => warnings.push(entry),
+        log: () => undefined,
+        error: () => undefined,
+        debug: () => undefined,
+    }),
+}));
 
 const context = { organizationAndTeamData: { organizationId: 'org-1' } };
 
@@ -157,6 +172,64 @@ describe('resolveTasks', () => {
         expect(result.kind).toBe('tracker_unavailable');
     });
 
+    it('does not call a task a typo when the tracker answered something it could not read', async () => {
+        // A server that returns its error as plain text content (no isError)
+        // reads as "answered, without the issue": that is no proof the task
+        // is missing, so the author must not be told DEV-5400 is a typo.
+        const jira = {
+            ...tracker('Jira', {}, { teams: ['DEV'] }),
+            read: async (): Promise<TrackerLookup> => ({
+                status: 'not_found',
+                unread: true,
+            }),
+        };
+        const result = await resolveTasks(
+            refs('', 'feat(DEV-5400): export invoices'),
+            [jira],
+            context,
+        );
+        expect(result.kind).toBe('tracker_unavailable');
+        expect(result.attempts[0]).toMatchObject({
+            tracker: 'Jira',
+            status: 'error',
+        });
+    });
+
+    it('keeps an unreadable answer from a tracker that does not own the key a miss, not an outage', async () => {
+        // A custom plugin that says "no such task" in plain text, for a key of
+        // a project it doesn't have: the PR is told the task wasn't found, and
+        // no admin is told the plugin is down.
+        const plugin = {
+            ...tracker('Plugin', {}, { teams: [] }),
+            read: async (): Promise<TrackerLookup> => ({
+                status: 'not_found',
+                unread: true,
+            }),
+        };
+        const result = await resolveTasks(
+            refs('', 'feat(DEV-5400): export invoices'),
+            [plugin],
+            context,
+        );
+        expect(result).toMatchObject({
+            kind: 'not_found',
+            looksIntended: false,
+        });
+    });
+
+    it('still calls it a typo when the tracker read cleanly that the task does not exist', async () => {
+        const jira = tracker('Jira', {}, { teams: ['DEV'] });
+        const result = await resolveTasks(
+            refs('', 'feat(DEV-5400): export invoices'),
+            [jira],
+            context,
+        );
+        expect(result).toMatchObject({
+            kind: 'not_found',
+            looksIntended: true,
+        });
+    });
+
     it('treats a plugin with no read tool as unreadable, not as an outage to retry', async () => {
         const plugin: TaskTracker = {
             name: 'Acme',
@@ -201,6 +274,62 @@ describe('resolveTasks', () => {
             context,
         );
         expect(result.kind).toBe('tracker_unavailable');
+    });
+
+    it('asks a tracker whose connection failed once per run, however many keys the PR has', async () => {
+        let asked = 0;
+        warnings.length = 0;
+        const linear = {
+            ...tracker('Linear', {}, { down: true }),
+            ownsReference: async () => {
+                asked += 1;
+                throw new TrackerConnectionError(
+                    'Failed to connect to any MCP server',
+                );
+            },
+        };
+        const result = await resolveTasks(
+            refs(
+                'Compares opus-5 with fable-5 over round-1 and round-2',
+                'feat(kod-10): sticky notes',
+            ),
+            [linear],
+            context,
+        );
+        expect(asked).toBe(1);
+        expect(result.kind).toBe('tracker_unavailable');
+        const kept = warnings.filter((w) =>
+            w.message.includes('could not list its keys'),
+        );
+        expect(kept).toHaveLength(1);
+        expect(kept[0].metadata).toMatchObject({
+            tracker: 'Linear',
+            keptKeys: 5,
+        });
+    });
+
+    it('still drops version strings and reads the real task when one team lookup fails', async () => {
+        const linear = {
+            ...tracker('Linear', { 'KOD-10': 'Sticky notes' }),
+            ownsReference: async (r: { id: string }) => {
+                const prefix = r.id.split('-')[0];
+                if (prefix === 'GPT') {
+                    throw new Error('503 Service Unavailable');
+                }
+                return prefix === 'KOD';
+            },
+        };
+        const result = await resolveTasks(
+            refs(
+                '',
+                'compare gpt-5, node-22, python-3 and openssl-3 for kod-10',
+            ),
+            [linear],
+            context,
+        );
+        expect(result.kind).toBe('found');
+        expect(linear.reads).toContain('KOD-10');
+        expect(linear.reads).not.toContain('NODE-22');
     });
 
     it('still reports the miss when the typo check cannot list the keys', async () => {

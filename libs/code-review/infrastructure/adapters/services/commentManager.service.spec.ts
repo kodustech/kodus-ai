@@ -42,7 +42,10 @@ jest.mock('@libs/llm/llm-call', () => ({
             if (prompt) {
                 capturedPrompts.push({ prompt, role: 'user' });
             }
-            return { text: NEW_SUMMARY_TEXT };
+            return {
+                text: NEW_SUMMARY_TEXT,
+                output: { description: NEW_SUMMARY_TEXT },
+            };
         },
     ),
     // The summary now runs through runTextReviewCall, which arms a real 10-min
@@ -54,10 +57,11 @@ jest.mock('@libs/core/log/langfuse', () => ({
     toAiSdkTelemetryArgs: (cfg: any) => ({ telemetry: cfg }),
 }));
 
+import { JSONParseError, NoObjectGeneratedError } from 'ai';
 import { getClassification } from '@libs/llm/error-classifier';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import { LLM } from '@libs/llm/llm';
-import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 import { prompt_repeated_suggestion_clustering_system } from '@libs/common/utils/prompts/repeatedCodeReviewSuggestionClustering';
 
 import {
@@ -67,7 +71,7 @@ import {
 
 describe('CommentManagerService.generateSummaryPR', () => {
     let service: CommentManagerService;
-    let codeManagementService: { getPullRequestByNumber: jest.Mock };
+    let codeManagementService: Record<string, never>;
     let observabilityService: {
         runLLMInSpan: jest.Mock;
         runAiSdkLLMInSpan: jest.Mock;
@@ -109,11 +113,14 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 if (prompt) {
                     capturedPrompts.push({ prompt, role: 'user' });
                 }
-                return { text: NEW_SUMMARY_TEXT };
+                return {
+                    text: NEW_SUMMARY_TEXT,
+                    output: { description: NEW_SUMMARY_TEXT },
+                };
             },
         );
 
-        codeManagementService = { getPullRequestByNumber: jest.fn() };
+        codeManagementService = {};
 
         observabilityService = {
             runLLMInSpan: jest.fn(async ({ exec }) => {
@@ -137,7 +144,85 @@ describe('CommentManagerService.generateSummaryPR', () => {
             observabilityService as any,
             permissionValidationService,
             codeManagementService as any,
+            {} as any,
         );
+    });
+
+    describe('reasoning returned as the answer (#2407)', () => {
+        it('publishes only the description when reasoning precedes the reply', async () => {
+            // A host that ends the reasoning channel at a `</think>` the model
+            // quotes returns the rest of the reasoning ahead of the answer.
+            const leaked =
+                'inside it.\n\nWait, the second one is ambiguous. Draft:\n## Summary\nfirst try\n\nLet me tighten wording.';
+            const reply = `${leaked}\n${JSON.stringify({ description: '## Summary\nThe real description.' })}`;
+            (tracedGenerateText as jest.Mock).mockImplementationOnce(
+                async () => {
+                    throw new NoObjectGeneratedError({
+                        message: 'No object generated',
+                        cause: new JSONParseError({
+                            text: reply,
+                            cause: new Error('Unexpected token'),
+                        }),
+                        text: reply,
+                        response: {} as any,
+                        usage: {} as any,
+                        finishReason: 'stop',
+                    });
+                },
+            );
+
+            const result = await service.generateSummaryPR(
+                { ...stubPR, body: '' },
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'en-US',
+                summaryConfig,
+                false,
+                false,
+                undefined,
+                PlatformType.GITHUB,
+            );
+
+            expect(result).toContain('The real description.');
+            expect(result).not.toContain('inside it.');
+            expect(result).not.toContain('Draft:');
+            expect(result).not.toContain('first try');
+        });
+
+        it('retries instead of publishing a placeholder description', async () => {
+            const callsBefore = (tracedGenerateText as jest.Mock).mock.calls
+                .length;
+            (tracedGenerateText as jest.Mock)
+                .mockImplementationOnce(async () => ({
+                    text: '{ "description": "..." }',
+                    output: { description: '...' },
+                }))
+                .mockImplementationOnce(async () => ({
+                    text: '',
+                    output: { description: '## Summary\nSecond attempt.' },
+                }));
+
+            const result = await service.generateSummaryPR(
+                { ...stubPR, body: '' },
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'en-US',
+                summaryConfig,
+                false,
+                false,
+                undefined,
+                PlatformType.GITHUB,
+            );
+
+            expect(
+                (tracedGenerateText as jest.Mock).mock.calls.length -
+                    callsBefore,
+            ).toBe(2);
+            expect(result).toContain('Second attempt.');
+            expect(result).not.toMatch(/start -->\s*\.\.\.\s*</);
+        });
     });
 
     describe('Bug A — re-run dedup of <!-- kody-pr-summary --> block (issue #1019)', () => {
@@ -152,12 +237,9 @@ describe('CommentManagerService.generateSummaryPR', () => {
             // original text by the `\n\n---\n\n` separator we emit.
             const userText = 'User-authored description text';
             const previousBlock = `${startMarker}\nOLD SUMMARY CONTENT\n${endMarker}`;
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body: `${userText}\n\n---\n\n${previousBlock}`,
-            });
 
             const result = await service.generateSummaryPR(
-                stubPR,
+                { ...stubPR, body: `${userText}\n\n---\n\n${previousBlock}` },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -186,14 +268,14 @@ describe('CommentManagerService.generateSummaryPR', () => {
             // legacy data from before the fix). The new code should still
             // collapse to a single block.
             const userText = 'Original text';
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body:
-                    `${userText}\n\n---\n\n${startMarker}\nFirst run\n${endMarker}` +
-                    `\n\n---\n\n${startMarker}\nSecond run\n${endMarker}`,
-            });
 
             const result = await service.generateSummaryPR(
-                stubPR,
+                {
+                    ...stubPR,
+                    body:
+                        `${userText}\n\n---\n\n${startMarker}\nFirst run\n${endMarker}` +
+                        `\n\n---\n\n${startMarker}\nSecond run\n${endMarker}`,
+                },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -214,12 +296,9 @@ describe('CommentManagerService.generateSummaryPR', () => {
 
         it('appends a fresh block to a clean body (first-ever run, no stripping needed)', async () => {
             const userText = 'I wrote this PR description';
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body: userText,
-            });
 
             const result = await service.generateSummaryPR(
-                stubPR,
+                { ...stubPR, body: userText },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -241,12 +320,12 @@ describe('CommentManagerService.generateSummaryPR', () => {
             // No `\n\n---\n\n` between user text and the block — older
             // version of Kody appended directly. The fix should still
             // strip the standalone block via the second regex.
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body: `${userText}${startMarker}\nlegacy\n${endMarker}`,
-            });
 
             const result = await service.generateSummaryPR(
-                stubPR,
+                {
+                    ...stubPR,
+                    body: `${userText}${startMarker}\nlegacy\n${endMarker}`,
+                },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -265,15 +344,9 @@ describe('CommentManagerService.generateSummaryPR', () => {
     });
 
     describe('Bug E — Length Constraint hint in the LLM prompt (Azure-only)', () => {
-        beforeEach(() => {
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body: 'irrelevant for prompt-shape tests',
-            });
-        });
-
         it('includes the Length Constraint block when platformType is AZURE_REPOS', async () => {
             await service.generateSummaryPR(
-                stubPR,
+                { ...stubPR, body: 'irrelevant for prompt-shape tests' },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -300,7 +373,7 @@ describe('CommentManagerService.generateSummaryPR', () => {
 
         it('omits the Length Constraint block when platformType is GITHUB', async () => {
             await service.generateSummaryPR(
-                stubPR,
+                { ...stubPR, body: 'irrelevant for prompt-shape tests' },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -322,7 +395,7 @@ describe('CommentManagerService.generateSummaryPR', () => {
 
         it('omits the Length Constraint block when platformType is undefined', async () => {
             await service.generateSummaryPR(
-                stubPR,
+                { ...stubPR, body: 'irrelevant for prompt-shape tests' },
                 stubRepository,
                 [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                 stubOrg,
@@ -355,14 +428,11 @@ describe('CommentManagerService.generateSummaryPR', () => {
         );
 
         it('throws after exhausting its retries when the LLM call keeps failing', async () => {
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body: '',
-            });
             (tracedGenerateText as jest.Mock).mockRejectedValue(providerError);
 
             await expect(
                 service.generateSummaryPR(
-                    stubPR,
+                    { ...stubPR, body: '' },
                     stubRepository,
                     [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                     stubOrg,
@@ -373,14 +443,11 @@ describe('CommentManagerService.generateSummaryPR', () => {
         });
 
         it('classifies the thrown error so the PR comment can name the cause', async () => {
-            codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                body: '',
-            });
             (tracedGenerateText as jest.Mock).mockRejectedValue(providerError);
 
             const thrown = await service
                 .generateSummaryPR(
-                    stubPR,
+                    { ...stubPR, body: '' },
                     stubRepository,
                     [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
                     stubOrg,
@@ -392,10 +459,241 @@ describe('CommentManagerService.generateSummaryPR', () => {
             expect(getClassification(thrown)).toBeDefined();
         });
 
+        it('classifies a frozen model error through a wrapper that keeps it as the cause', async () => {
+            const frozen = Object.freeze(
+                Object.assign(new Error('Unauthorized'), {
+                    name: 'AI_APICallError',
+                    statusCode: 401,
+                }),
+            );
+            (tracedGenerateText as jest.Mock).mockRejectedValue(frozen);
+
+            const thrown = await service
+                .generateSummaryPR(
+                    { ...stubPR, body: '' },
+                    stubRepository,
+                    [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                )
+                .catch((e) => e);
+
+            expect(getClassification(thrown)?.category).toBe('AUTH_INVALID');
+            expect(thrown.cause).toBe(frozen);
+        });
+
         // Production 2026-09-28: a gateway with a smaller window than the model
         // name suggests rejected the single summary call ("Your input exceeds
         // the context window of this model"), and the retry re-sent the same
         // oversized prompt. With no maxInputTokens configured nothing split it.
+        // #2233: the summary sent 4.7M-token requests to 1M-token models.
+        describe("within the model's window (#2233)", () => {
+            // Numbers with no space between them: about 1.2 characters a
+            // token, where the old character split assumed 3.5.
+            const dense = (chars: number, seed: number) => {
+                let out = '+';
+                while (out.length < chars) {
+                    seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+                    out += `${seed % 256},`;
+                }
+                return out.slice(0, chars);
+            };
+            const worst = (text: string) =>
+                estimateTextTokens(text, { worstCase: true });
+            const summarize = (slot: unknown, files: any[]) => {
+                permissionValidationService.resolveTaskSlot = jest.fn(
+                    async () => slot,
+                );
+                return service.generateSummaryPR(
+                    { ...stubPR, body: '' },
+                    stubRepository,
+                    files,
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                );
+            };
+            const sent = () => {
+                const system = capturedPrompts.find((p) => p.role === 'system');
+                return capturedPrompts
+                    .filter((p) => p.role === 'user')
+                    .map((p) => worst(p.prompt) + worst(system?.prompt ?? ''));
+            };
+
+            it('splits dense files by their real tokens, so no call overflows the slot', async () => {
+                const files = ['a', 'b', 'c'].map((name, i) => ({
+                    filename: `icons/${name}.svg`,
+                    patch: dense(9_000, i + 1),
+                    status: 'added',
+                }));
+                await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 16_000,
+                    },
+                    files,
+                );
+                expect(sent().length).toBeGreaterThan(0);
+                for (const tokens of sent()) {
+                    expect(tokens).toBeLessThanOrEqual(16_000);
+                }
+            });
+
+            it('cuts a file larger than one call instead of sending it whole', async () => {
+                await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 16_000,
+                    },
+                    [
+                        {
+                            filename: 'fixtures/catalog.json',
+                            patch: dense(60_000, 7),
+                            status: 'added',
+                        },
+                    ],
+                );
+                const users = capturedPrompts.filter((p) => p.role === 'user');
+                expect(users.length).toBeGreaterThan(0);
+                expect(
+                    users.some((p) =>
+                        p.prompt.includes('fixtures/catalog.json'),
+                    ),
+                ).toBe(true);
+                for (const tokens of sent()) {
+                    expect(tokens).toBeLessThanOrEqual(16_000);
+                }
+            });
+
+            it('never splits a character when it cuts a file', async () => {
+                // Where the cut lands depends on the length: every offset
+                // puts it on each side of a pair at least once.
+                for (const lead of [
+                    '+',
+                    '++',
+                    '+++',
+                    '++++',
+                    '+++++',
+                    '++++++',
+                ]) {
+                    capturedPrompts.length = 0;
+                    await summarize(
+                        {
+                            provider: 'openai_compatible',
+                            model: 'local-open-weights',
+                            maxInputTokens: 16_000,
+                        },
+                        [
+                            {
+                                filename: 'docs/emoji.md',
+                                patch: `${lead}${'😀'.repeat(40_000 + lead.length * 7)}`,
+                                status: 'added',
+                            },
+                        ],
+                    );
+                    const users = capturedPrompts.filter(
+                        (p) => p.role === 'user',
+                    );
+                    expect(users.length).toBeGreaterThan(0);
+                    for (const { prompt } of users) {
+                        // A lone high surrogate is invalid in the request
+                        // body: raw, or as the escape JSON.stringify writes.
+                        expect(prompt).not.toMatch(
+                            /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/,
+                        );
+                        expect(prompt).not.toMatch(
+                            /\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f][0-9a-f]{2})/i,
+                        );
+                    }
+                }
+            });
+
+            it('says a file was cut in its own field, not inside the patch the author wrote', async () => {
+                await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 16_000,
+                    },
+                    [
+                        {
+                            filename: 'fixtures/catalog.json',
+                            patch: dense(60_000, 11),
+                            status: 'added',
+                        },
+                    ],
+                );
+                const users = capturedPrompts.filter((p) => p.role === 'user');
+                expect(
+                    users.some((p) =>
+                        p.prompt.includes('"patchTruncated":true'),
+                    ),
+                ).toBe(true);
+                expect(users.some((p) => /\(cut:/.test(p.prompt))).toBe(false);
+            });
+
+            it("keeps room for the output limit Anthropic's adapter declares when the slot sets none", async () => {
+                await summarize(
+                    {
+                        provider: 'anthropic',
+                        model: 'claude-haiku-4-5-20251001',
+                        apiKey: 'k',
+                        maxInputTokens: 100_000,
+                    },
+                    [
+                        {
+                            filename: 'src/catalog.ts',
+                            patch: Array.from(
+                                { length: 6_000 },
+                                (_, line) =>
+                                    `+export const item${line} = load('${line}');`,
+                            ).join('\n'),
+                            status: 'added',
+                        },
+                    ],
+                );
+                expect(sent().length).toBeGreaterThan(0);
+                for (const tokens of sent()) {
+                    // The adapter sends max_tokens = 64,000 for Haiku 4.5.
+                    expect(tokens + 64_000).toBeLessThanOrEqual(100_000);
+                }
+            });
+
+            it('asks the model nothing when the prompt alone leaves no room', async () => {
+                const result = await summarize(
+                    {
+                        provider: 'openai_compatible',
+                        model: 'local-open-weights',
+                        maxInputTokens: 300,
+                    },
+                    [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                );
+                expect(capturedPrompts).toHaveLength(0);
+                expect(result).toBeNull();
+            });
+
+            it("sizes the calls by the model's known window when the slot sets none", async () => {
+                const files = ['a', 'b', 'c'].map((name, i) => ({
+                    filename: `src/${name}.ts`,
+                    patch: Array.from(
+                        { length: 500 },
+                        (_, line) =>
+                            `+export const ${name}${line} = load('${i}-${line}');`,
+                    ).join('\n'),
+                    status: 'modified',
+                }));
+                expect(worst(JSON.stringify(files))).toBeGreaterThan(8_192);
+                await summarize({ provider: 'openai', model: 'gpt-4' }, files);
+                expect(sent().length).toBeGreaterThan(1);
+                for (const tokens of sent()) {
+                    expect(tokens).toBeLessThanOrEqual(8_192);
+                }
+            });
+        });
+
         describe('context overflow on the single call', () => {
             const overflow = new Error(
                 'Your input exceeds the context window of this model. Please adjust your input and try again.',
@@ -407,21 +705,21 @@ describe('CommentManagerService.generateSummaryPR', () => {
             }));
 
             it('retries split into chunks and consolidates', async () => {
-                codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                    body: '',
-                });
                 (tracedGenerateText as jest.Mock)
                     .mockRejectedValueOnce(overflow)
                     .mockImplementation(
                         async ({ prompt }: { prompt?: string }) => {
                             if (prompt)
                                 capturedPrompts.push({ prompt, role: 'user' });
-                            return { text: NEW_SUMMARY_TEXT };
+                            return {
+                                text: NEW_SUMMARY_TEXT,
+                                output: { description: NEW_SUMMARY_TEXT },
+                            };
                         },
                     );
 
                 const result = await service.generateSummaryPR(
-                    stubPR,
+                    { ...stubPR, body: '' },
                     stubRepository,
                     bigFiles,
                     stubOrg,
@@ -443,21 +741,21 @@ describe('CommentManagerService.generateSummaryPR', () => {
             });
 
             it('does not split on an error that is not an overflow', async () => {
-                codeManagementService.getPullRequestByNumber.mockResolvedValue({
-                    body: '',
-                });
                 (tracedGenerateText as jest.Mock)
                     .mockRejectedValueOnce(new Error('Service Unavailable'))
                     .mockImplementation(
                         async ({ prompt }: { prompt?: string }) => {
                             if (prompt)
                                 capturedPrompts.push({ prompt, role: 'user' });
-                            return { text: NEW_SUMMARY_TEXT };
+                            return {
+                                text: NEW_SUMMARY_TEXT,
+                                output: { description: NEW_SUMMARY_TEXT },
+                            };
                         },
                     );
 
                 await service.generateSummaryPR(
-                    stubPR,
+                    { ...stubPR, body: '' },
                     stubRepository,
                     bigFiles,
                     stubOrg,
@@ -539,6 +837,111 @@ describe('CommentManagerService.generateSummaryPR', () => {
     });
 });
 
+describe('CommentManagerService GitLab status note reuse (#1721)', () => {
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    } as any;
+    const repository = { id: 'repo-1', name: 'repo' };
+    const createIssueComment = jest.fn();
+    const updateIssueComment = jest.fn();
+    const service = new CommentManagerService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        { createIssueComment, updateIssueComment } as any,
+        {} as any,
+    );
+
+    beforeEach(() => {
+        createIssueComment.mockReset();
+        updateIssueComment.mockReset();
+        jest.spyOn(
+            service as any,
+            'generatePullRequestSummaryMarkdown',
+        ).mockResolvedValue('# Code Review Started');
+    });
+
+    const publish = (previous?: { commentId: number; noteId: number }) =>
+        service.createInitialComment(
+            organizationAndTeamData,
+            42,
+            repository,
+            [],
+            'en-US',
+            PlatformType.GITLAB,
+            undefined,
+            undefined,
+            previous,
+        );
+
+    it('returns the plain note ID for the end-of-review update', async () => {
+        createIssueComment.mockResolvedValue({ id: 11 });
+
+        await expect(publish()).resolves.toMatchObject({
+            commentId: 11,
+            noteId: 11,
+        });
+        expect(updateIssueComment).not.toHaveBeenCalled();
+    });
+
+    it('edits the prior note on a later push instead of posting another', async () => {
+        updateIssueComment.mockResolvedValue({ id: 11 });
+
+        await expect(
+            publish({ commentId: 11, noteId: 11 }),
+        ).resolves.toMatchObject({ commentId: 11, noteId: 11 });
+        expect(updateIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                commentId: 11,
+                noteId: 11,
+                body: '# Code Review Started',
+            }),
+        );
+        expect(createIssueComment).not.toHaveBeenCalled();
+    });
+
+    it('creates a new note if the stored note can no longer be edited', async () => {
+        updateIssueComment.mockResolvedValue(null);
+        createIssueComment.mockResolvedValue({ id: 12 });
+
+        await expect(
+            publish({ commentId: 11, noteId: 11 }),
+        ).resolves.toMatchObject({ commentId: 12, noteId: 12 });
+        expect(createIssueComment).toHaveBeenCalledTimes(1);
+    });
+
+    it('creates a replacement note when editing the stored note rejects', async () => {
+        updateIssueComment.mockRejectedValue(new Error('note not found'));
+        createIssueComment.mockResolvedValue({ id: 12 });
+
+        await expect(
+            publish({ commentId: 11, noteId: 11 }),
+        ).resolves.toMatchObject({ commentId: 12, noteId: 12 });
+        expect(createIssueComment).toHaveBeenCalledTimes(1);
+    });
+
+    it('surfaces the edit error if creating a replacement also fails', async () => {
+        const editError = new Error('GitLab token expired');
+        updateIssueComment.mockRejectedValue(editError);
+        createIssueComment.mockResolvedValue(null);
+
+        await expect(publish({ commentId: 11, noteId: 11 })).rejects.toBe(
+            editError,
+        );
+        expect(createIssueComment).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails when a new status note cannot be published', async () => {
+        createIssueComment.mockResolvedValue(null);
+
+        await expect(publish()).rejects.toThrow(
+            'Could not create initial review status for PR#42',
+        );
+    });
+});
+
 // repeatedCodeReviewSuggestionClustering was migrated from the legacy
 // STRING/JSON PromptRunner onto runStructuredReviewCall (REQ-NOLC-01). The
 // structured result is JSON.stringify'd and fed through LLMResponseProcessor
@@ -571,6 +974,7 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — struc
             parametersService,
             {} as any,
             observabilityService,
+            {} as any,
             {} as any,
             {} as any,
         );
@@ -667,6 +1071,7 @@ describe('CommentManagerService — pure helpers', () => {
             {} as any,
             {} as any,
             {} as any,
+            {} as any,
         ) as any;
 
     describe('sanitizeBitbucketMarkdown', () => {
@@ -721,6 +1126,51 @@ describe('CommentManagerService — pure helpers', () => {
             const out = svc().resolvePartialErrorsNotice(LanguageValue.ENGLISH);
             expect(out).toContain('https://custom.dev/pull-requests');
             expect(out).not.toContain('custom.dev//');
+        });
+    });
+
+    describe('generateConfigReviewMarkdown — configuration link', () => {
+        const KEY = 'API_USER_INVITE_BASE_URL';
+        let saved: string | undefined;
+        beforeEach(() => {
+            saved = process.env[KEY];
+        });
+        afterEach(() => {
+            if (saved === undefined) delete process.env[KEY];
+            else process.env[KEY] = saved;
+        });
+
+        const render = () =>
+            (
+                new CommentManagerService(
+                    {} as any,
+                    { processTemplate: async () => '' } as any,
+                    {} as any,
+                    {} as any,
+                    {} as any,
+                    {} as any,
+                ) as any
+            ).generateConfigReviewMarkdown(
+                { organizationId: 'org' } as any,
+                1,
+                { languageResultPrompt: LanguageValue.ENGLISH } as any,
+            );
+
+        it('falls back to the public dashboard when no env is set', async () => {
+            delete process.env[KEY];
+            const out = await render();
+            expect(out).toContain(
+                '(https://app.kodus.io/settings/code-review/global/general)',
+            );
+        });
+
+        it('points at the self-hosted dashboard and strips trailing slashes', async () => {
+            process.env[KEY] = 'https://kodus.example.com//';
+            const out = await render();
+            expect(out).toContain(
+                '(https://kodus.example.com/settings/code-review/global/general)',
+            );
+            expect(out).not.toContain('app.kodus.io');
         });
     });
 
@@ -827,6 +1277,7 @@ describe('CommentManagerService — pure helpers', () => {
                     {} as any,
                     {} as any,
                     {} as any,
+                    {} as any,
                 ) as any
             ).generatePullRequestFinishSummaryMarkdown(
                 { organizationId: 'org' },
@@ -860,6 +1311,7 @@ describe('CommentManagerService — pure helpers', () => {
             new CommentManagerService(
                 {} as any,
                 { processTemplate: async () => '' } as any,
+                {} as any,
                 {} as any,
                 {} as any,
                 {} as any,
@@ -912,6 +1364,7 @@ describe('CommentManagerService — pure helpers', () => {
             new CommentManagerService(
                 {} as any,
                 { processTemplate: async () => '' } as any,
+                {} as any,
                 {} as any,
                 {} as any,
                 {} as any,
@@ -1009,51 +1462,6 @@ describe('CommentManagerService — pure helpers', () => {
             );
         });
     });
-
-    describe('chunkChangedFilesForSummary', () => {
-        const files = (n: number, size = 0) =>
-            Array.from({ length: n }, (_, i) => ({
-                filename: `f${i}.ts`,
-                // large payload forces one file per chunk when a budget is set
-                fileContent: 'x'.repeat(size),
-            }));
-        const chunk = (fs: any[], max?: number) =>
-            svc().chunkChangedFilesForSummary(fs, '', '', max);
-
-        it('returns a single chunk (all files) when no token budget is configured', () => {
-            const fs = files(3);
-            expect(chunk(fs, undefined)).toEqual([fs]);
-        });
-
-        it('returns a single chunk when the budget is zero or negative', () => {
-            const fs = files(3);
-            expect(chunk(fs, 0)).toEqual([fs]);
-        });
-
-        it('keeps everything in one chunk when it all fits the budget', () => {
-            const fs = files(2);
-            const out = chunk(fs, 100000);
-            expect(out).toHaveLength(1);
-            expect(out[0]).toHaveLength(2);
-        });
-
-        it('splits into multiple chunks when files exceed the per-chunk budget', () => {
-            const out = chunk(files(3, 50000), 1000);
-            expect(out).not.toBeNull();
-            expect(out.length).toBeGreaterThan(1);
-        });
-
-        it('still returns chunks at exactly the max chunk count (boundary is strictly greater-than)', () => {
-            // 4 oversized files → 4 chunks == MAX_CHUNKS: must NOT be null.
-            const out = chunk(files(4, 50000), 1000);
-            expect(out).not.toBeNull();
-            expect(out).toHaveLength(4);
-        });
-
-        it('bails out with null when the split would exceed the max chunk count', () => {
-            expect(chunk(files(6, 50000), 1000)).toBeNull();
-        });
-    });
 });
 
 /**
@@ -1136,6 +1544,7 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
             { runLLMInSpan: jest.fn(), runAiSdkLLMInSpan: jest.fn() } as any,
             {} as any,
             {} as any,
+            {} as any,
         );
         // Spy on the REAL boundary; each test sets its own resolved/rejected value.
         runSpy = jest.spyOn(LLM as any, 'run');
@@ -1178,40 +1587,10 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
                 prNumber: PR,
             });
         });
-
-        it('resolves the language from ParametersService before assembling the prompt', async () => {
-            runSpy.mockResolvedValue({ codeSuggestions: [] });
-            await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                input3(),
-            );
-            expect(parametersService.findByKey).toHaveBeenCalledWith(
-                ParametersKey.LANGUAGE_CONFIG,
-                stubOrg,
-            );
-        });
     });
 
     // ── A. Output-shape zoo ─────────────────────────────────────────────────
     describe('A. output-shape zoo', () => {
-        // Row 1 — exact D (happy). Enrichment applies a+b clustering.
-        it('[1] exact D → applies the clustering (a=PARENT, b=RELATED)', async () => {
-            runSpy.mockResolvedValue(cleanClusterAB());
-            const result = await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                input3(),
-            );
-            expect(clusteringWasApplied(result)).toBe(true);
-            // Non-clustered c survives untouched.
-            expect(result.find((r) => r.id === 'c')).toEqual({
-                id: 'c',
-                relevantFile: 'c.ts',
-                suggestionContent: 'C',
-            });
-        });
-
         // Row 2 — bare array of clusters (D is an object). The real payload sits
         // in the array; prod parses it, finds no top-level `codeSuggestions`, and
         // SILENTLY returns the input unchanged (#1786 drop). CORRECT = recover.
@@ -1240,22 +1619,18 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         // array. processResponse does `.map` on the object → throws → returns
         // null → `null.codeSuggestions` throws PAST the boundary. CORRECT =
         // fail-safe (return input, never throw).
-        it.failing(
-            '[3] codeSuggestions as a single object → fail-safe returns input (throws past boundary today)',
-            async () => {
-                runSpy.mockResolvedValue({
-                    codeSuggestions: { id: 'a', sameSuggestionsId: ['b'] },
-                });
-                const original = input3();
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        original,
-                    );
-                expect(result).toEqual(original);
-            },
-        );
+        it('[3] codeSuggestions as a single object → fail-safe returns input', async () => {
+            runSpy.mockResolvedValue({
+                codeSuggestions: { id: 'a', sameSuggestionsId: ['b'] },
+            });
+            const original = input3();
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
+            expect(result).toEqual(original);
+        });
 
         // Row 4 — wrapper key {result: D}. Data hidden under `result` → silent drop.
         it.failing(
@@ -1272,150 +1647,40 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
             },
         );
 
-        // Row 5 — double wrapper {result:{result:D}}.
-        it.failing(
-            '[5] {result:{result:D}} double wrapper → recovers clustering (silent-drop today)',
-            async () => {
-                runSpy.mockResolvedValue({
-                    result: { result: cleanClusterAB() },
-                });
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        input3(),
-                    );
-                expect(clusteringWasApplied(result)).toBe(true);
-            },
-        );
-
-        // Row 6 — opaque single-key wrap {content: D}.
-        it.failing(
-            '[6] {content: D} opaque wrap → recovers clustering (silent-drop today)',
-            async () => {
-                runSpy.mockResolvedValue({ content: cleanClusterAB() });
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        input3(),
-                    );
-                expect(clusteringWasApplied(result)).toBe(true);
-            },
-        );
-
         // Row 7 — the whole D as a JSON string. `clustered` is a string; it gets
         // re-JSON.stringify'd (double-encoded), parses back to a string (not an
         // object) → null → throws past the boundary. CORRECT = fail-safe.
-        it.failing(
-            '[7] stringified-JSON payload → fail-safe returns input (throws past boundary today)',
-            async () => {
-                runSpy.mockResolvedValue(
-                    JSON.stringify(cleanClusterAB()) as any,
-                );
-                const original = input3();
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        original,
-                    );
-                expect(result).toEqual(original);
-            },
-        );
-
-        // Row 8 — markdown-fenced payload as a string. Double-encoded like row 7.
-        it.failing(
-            '[8] markdown-fenced string payload → fail-safe returns input (throws past boundary today)',
-            async () => {
-                runSpy.mockResolvedValue(
-                    ('```json\n' +
-                        JSON.stringify(cleanClusterAB()) +
-                        '\n```') as any,
-                );
-                const original = input3();
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        original,
-                    );
-                expect(result).toEqual(original);
-            },
-        );
-
-        // Row 9 — prose-wrapped string.
-        it.failing(
-            '[9] prose-wrapped string payload → fail-safe returns input (throws past boundary today)',
-            async () => {
-                runSpy.mockResolvedValue(
-                    ('Here is the result: ' +
-                        JSON.stringify(cleanClusterAB())) as any,
-                );
-                const original = input3();
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        original,
-                    );
-                expect(result).toEqual(original);
-            },
-        );
-
-        // Row 10 — right data, wrong keys.
-        it.failing(
-            '[10] renamed keys {clusters:[...]} → recovers clustering (silent-drop today)',
-            async () => {
-                runSpy.mockResolvedValue({
-                    clusters: cleanClusterAB().codeSuggestions,
-                });
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        input3(),
-                    );
-                expect(clusteringWasApplied(result)).toBe(true);
-            },
-        );
-
-        // Row 11 — case/convention mismatch on the top-level key.
-        it.failing(
-            '[11] case mismatch {CodeSuggestions:[...]} → recovers clustering (silent-drop today)',
-            async () => {
-                runSpy.mockResolvedValue({
-                    CodeSuggestions: cleanClusterAB().codeSuggestions,
-                });
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        input3(),
-                    );
-                expect(clusteringWasApplied(result)).toBe(true);
-            },
-        );
+        it('[7] stringified-JSON payload → fail-safe returns input', async () => {
+            runSpy.mockResolvedValue(JSON.stringify(cleanClusterAB()) as any);
+            const original = input3();
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                original,
+            );
+            expect(result).toEqual(original);
+        });
 
         // Row 12 — partial cluster object (missing sameSuggestionsId). Passes
         // the array predicate, then extractAllClusteredIds does `.map` on
         // undefined → throws PAST the boundary. CORRECT = fail-safe/tolerate.
-        it.failing(
-            '[12] cluster missing sameSuggestionsId → does not throw past boundary (crashes today)',
-            async () => {
-                runSpy.mockResolvedValue({
-                    codeSuggestions: [{ id: 'a' }],
-                });
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        input3(),
-                    );
-                // At minimum: return a well-formed array, never throw.
-                expect(Array.isArray(result)).toBe(true);
-            },
-        );
+        it('[12] cluster missing sameSuggestionsId → does not throw past boundary', async () => {
+            runSpy.mockResolvedValue({
+                codeSuggestions: [{ id: 'a' }],
+            });
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                input3(),
+            );
+            // No related ids: every input suggestion survives.
+            expect(Array.isArray(result)).toBe(true);
+            expect(result.map((r: any) => r.id).sort()).toEqual(
+                input3()
+                    .map((s: any) => s.id)
+                    .sort(),
+            );
+        });
 
         // Row 13 — extra unknown keys alongside the right ones: must tolerate.
         it('[13] extra unknown keys → tolerated, clustering still applied', async () => {
@@ -1476,105 +1741,9 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
             expect(result).toEqual(original);
         });
 
-        // Row 16b — whitespace-only string is TRUTHY, so it is JSON.stringify'd,
-        // parses to a string, and throws past the boundary. CORRECT = fail-safe.
-        it.failing(
-            '[16w] whitespace-only string → fail-safe returns input (throws past boundary today)',
-            async () => {
-                runSpy.mockResolvedValue('   ' as any);
-                const original = input3();
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        original,
-                    );
-                expect(result).toEqual(original);
-            },
-        );
-
         // Row 17 — null / undefined return. Falsy → fail-safe returns input.
         it('[17] null return → fail-safe returns the original suggestions', async () => {
             runSpy.mockResolvedValue(null as any);
-            const original = input3();
-            const result = await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                original,
-            );
-            expect(result).toEqual(original);
-        });
-
-        it('[17b] undefined return → fail-safe returns the original suggestions', async () => {
-            runSpy.mockResolvedValue(undefined as any);
-            const original = input3();
-            const result = await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                original,
-            );
-            expect(result).toEqual(original);
-        });
-
-        // Row 18 — primitive where object expected. `0` is falsy → fail-safe.
-        it('[18a] primitive 0 → fail-safe returns the original suggestions', async () => {
-            runSpy.mockResolvedValue(0 as any);
-            const original = input3();
-            const result = await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                original,
-            );
-            expect(result).toEqual(original);
-        });
-
-        // Row 18 — `true` is truthy → stringifies to "true", parses to a boolean
-        // → null → throws past the boundary. CORRECT = fail-safe.
-        it.failing(
-            '[18b] primitive true → fail-safe returns input (throws past boundary today)',
-            async () => {
-                runSpy.mockResolvedValue(true as any);
-                const original = input3();
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        original,
-                    );
-                expect(result).toEqual(original);
-            },
-        );
-
-        // Row 19 — provider envelope leak. Cluster data buried under choices → drop.
-        it.failing(
-            '[19] provider envelope {choices:[{message:{content}}]} → recovers clustering (silent-drop today)',
-            async () => {
-                runSpy.mockResolvedValue({
-                    choices: [
-                        {
-                            message: {
-                                content: JSON.stringify(cleanClusterAB()),
-                            },
-                        },
-                    ],
-                });
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        input3(),
-                    );
-                expect(clusteringWasApplied(result)).toBe(true);
-            },
-        );
-
-        // Row 20 — reasoning/thinking leak: a thinking object with no
-        // codeSuggestions key. No recoverable clusters → safe-default returns
-        // input (acceptable: nothing to apply, and no data is lost).
-        it('[20] thinking-leak object (no codeSuggestions) → safe-default returns input', async () => {
-            runSpy.mockResolvedValue({
-                thinking: 'let me analyze the duplicates...',
-            });
             const original = input3();
             const result = await service.repeatedCodeReviewSuggestionClustering(
                 stubOrg as any,
@@ -1591,47 +1760,14 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         // input. Prod emits a contentless phantom suggestion (only
         // clusteringInformation, no id/file/content) → a garbled comment (#1786).
         // CORRECT = drop the unknown reference, never emit a contentless entry.
-        it.failing(
-            '[25] dangling sameSuggestionsId (unknown id) → no contentless phantom suggestion (garbles today)',
-            async () => {
-                runSpy.mockResolvedValue({
-                    codeSuggestions: [
-                        {
-                            id: 'a',
-                            sameSuggestionsId: ['ghost-does-not-exist'],
-                            problemDescription: 'dup',
-                            actionStatement: 'fix',
-                        },
-                    ],
-                });
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        input3(),
-                    );
-                // No emitted suggestion should be a contentless shell.
-                const hasPhantom = result.some(
-                    (r) =>
-                        r?.clusteringInformation &&
-                        r?.id === undefined &&
-                        r?.suggestionContent === undefined,
-                );
-                expect(hasPhantom).toBe(false);
-            },
-        );
-
-        // Row 27 — unicode / escaped newlines / emoji inside string fields must
-        // survive into the enriched clustering payload.
-        it('[27] unicode/emoji/newlines in cluster fields survive enrichment', async () => {
-            const desc = 'café \n dup 🚀 <tag>';
+        it('[25] dangling sameSuggestionsId (unknown id) → no contentless phantom suggestion', async () => {
             runSpy.mockResolvedValue({
                 codeSuggestions: [
                     {
                         id: 'a',
-                        sameSuggestionsId: ['b'],
-                        problemDescription: desc,
-                        actionStatement: 'fix ✅',
+                        sameSuggestionsId: ['ghost-does-not-exist'],
+                        problemDescription: 'dup',
+                        actionStatement: 'fix',
                     },
                 ],
             });
@@ -1640,12 +1776,49 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
                 PR,
                 input3(),
             );
-            const parent = result.find((r) => r.id === 'a');
-            expect(parent?.clusteringInformation?.problemDescription).toBe(
-                desc,
+            // No emitted suggestion should be a contentless shell.
+            const hasPhantom = result.some(
+                (r) =>
+                    r?.clusteringInformation &&
+                    r?.id === undefined &&
+                    r?.suggestionContent === undefined,
             );
-            expect(parent?.clusteringInformation?.actionStatement).toBe(
-                'fix ✅',
+            expect(hasPhantom).toBe(false);
+            // Nothing left to cluster: 'a' stays a plain suggestion.
+            const parent = result.find((r: any) => r.id === 'a');
+            expect(parent?.clusteringInformation).toBeUndefined();
+        });
+
+        it('a cluster without a problemDescription is ignored, its members kept unclustered', async () => {
+            runSpy.mockResolvedValue({
+                codeSuggestions: [{ id: 'a', sameSuggestionsId: ['b'] }],
+            });
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                input3(),
+            );
+            expect(result.every((r: any) => !r.clusteringInformation)).toBe(
+                true,
+            );
+        });
+
+        it('a cluster whose parent id is unknown is ignored, its members kept unclustered', async () => {
+            runSpy.mockResolvedValue({
+                codeSuggestions: [{ id: 'ghost', sameSuggestionsId: ['a'] }],
+            });
+            const result = await service.repeatedCodeReviewSuggestionClustering(
+                stubOrg as any,
+                PR,
+                input3(),
+            );
+            expect(result.map((r: any) => r.id).sort()).toEqual(
+                input3()
+                    .map((s: any) => s.id)
+                    .sort(),
+            );
+            expect(result.every((r: any) => !r.clusteringInformation)).toBe(
+                true,
             );
         });
     });
@@ -1655,66 +1828,6 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
         // Row 30 — LLM.run throws (network/timeout) → caught → returns input.
         it('[30] LLM.run rejects → fail-safe returns the original suggestions', async () => {
             runSpy.mockRejectedValue(new Error('network down'));
-            const original = input3();
-            const result = await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                original,
-            );
-            expect(result).toEqual(original);
-        });
-
-        // Row 31 — {error:...} object returned (not thrown). No codeSuggestions →
-        // no recoverable clusters → safe-default returns input.
-        it('[31] {error} object → safe-default returns the original suggestions', async () => {
-            runSpy.mockResolvedValue({ error: 'rate_limited' } as any);
-            const original = input3();
-            const result = await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                original,
-            );
-            expect(result).toEqual(original);
-        });
-
-        // Row 32 — empty success (content:''), modeled as an empty string return
-        // → falsy → fail-safe returns input.
-        it('[32] empty-success (empty string) → fail-safe returns the original suggestions', async () => {
-            runSpy.mockResolvedValue('' as any);
-            const original = input3();
-            const result = await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                original,
-            );
-            expect(result).toEqual(original);
-        });
-
-        // Row 33 — refusal prose string. Truthy → stringified → parses to a
-        // string → null → throws past the boundary. CORRECT = fail-safe.
-        it.failing(
-            '[33] refusal prose string → fail-safe returns input (throws past boundary today)',
-            async () => {
-                runSpy.mockResolvedValue(
-                    "I'm sorry, I can't help with that." as any,
-                );
-                const original = input3();
-                const result =
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        original,
-                    );
-                expect(result).toEqual(original);
-            },
-        );
-
-        // Row 34 — abort surfaces as a rejection (the boundary does not thread an
-        // abortSignal INTO LLM.run — see rowsNA). It must still fail-safe.
-        it('[34] abort-style rejection → fail-safe returns the original suggestions', async () => {
-            runSpy.mockRejectedValue(
-                Object.assign(new Error('aborted'), { name: 'AbortError' }),
-            );
             const original = input3();
             const result = await service.repeatedCodeReviewSuggestionClustering(
                 stubOrg as any,
@@ -1740,70 +1853,6 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
             expect(runSpy.mock.calls[0][0].user).toContain(
                 '<codeSuggestionsContext>[]</codeSuggestionsContext>',
             );
-        });
-
-        // Row 36 — single item, model finds no duplicates.
-        it('[36] single item, no clusters → returns the item unchanged', async () => {
-            runSpy.mockResolvedValue({ codeSuggestions: [] });
-            const original = [
-                { id: 'only', relevantFile: 'x.ts', suggestionContent: 'X' },
-            ];
-            const result = await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                original,
-            );
-            expect(result).toEqual(original);
-        });
-
-        // Row 38 — duplicate items (same id) in the input on the no-cluster path.
-        it('[38] duplicate-id input, no clusters → returns input without crashing', async () => {
-            runSpy.mockResolvedValue({ codeSuggestions: [] });
-            const original = [
-                { id: 'a', relevantFile: 'a.ts', suggestionContent: 'A1' },
-                { id: 'a', relevantFile: 'a.ts', suggestionContent: 'A2' },
-            ];
-            const result = await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                original,
-            );
-            expect(result).toEqual(original);
-        });
-
-        // Row 39 — input items with null/undefined fields on the no-cluster path.
-        it('[39] null/undefined-field input, no clusters → returns input without crashing', async () => {
-            runSpy.mockResolvedValue({ codeSuggestions: [] });
-            const original: any[] = [
-                { id: 'a', relevantFile: null, suggestionContent: undefined },
-                { id: undefined },
-            ];
-            const result = await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                original,
-            );
-            expect(result).toEqual(original);
-        });
-
-        // Row 40 — special chars / whitespace inside input are serialized safely
-        // into the user prompt (no crash, JSON-escaped).
-        it('[40] special-char input → serialized (escaped) into the user prompt', async () => {
-            runSpy.mockResolvedValue({ codeSuggestions: [] });
-            const original = [
-                {
-                    id: 'a',
-                    suggestionContent: 'weird "quotes" \n \t 🚀 </xml>',
-                },
-            ];
-            const result = await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                original,
-            );
-            expect(result).toEqual(original);
-            // JSON.stringify escaped the embedded double-quotes.
-            expect(runSpy.mock.calls[0][0].user).toContain('\\"quotes\\"');
         });
 
         // Row 42 — order permutation is metamorphic: the same suggestions in a
@@ -1833,87 +1882,6 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — LLM.r
             expect(summarize(r1)).toEqual(summarize(r2));
         });
     });
-
-    // ── E. Provider / model matrix ──────────────────────────────────────────
-    // The structured-output-gate policy (strict json_schema vs json_object
-    // fallback) lives DOWNSTREAM of this boundary, inside LLM.run /
-    // runStructuredReviewCall. This boundary applies the SAME processResponse to
-    // every model, so E is closed here by (a) verifying byokConfig is threaded
-    // verbatim for both a strict-prefix and a fallback-prefix slot, and (b) the
-    // A/B/C zoo above, which stands in for the json_object-fallback outputs.
-    describe('E. provider/model threading (policy is downstream)', () => {
-        it.each([
-            [
-                'strict json_schema model',
-                { provider: 'moonshotai', model: 'kimi-k2' },
-            ],
-            [
-                'json_object fallback model',
-                { provider: 'z-ai', model: 'glm-4' },
-            ],
-        ])(
-            'threads the byokConfig verbatim into LLM.run for a %s',
-            async (_label, slot) => {
-                runSpy.mockResolvedValue({ codeSuggestions: [] });
-                await service.repeatedCodeReviewSuggestionClustering(
-                    stubOrg as any,
-                    PR,
-                    input3(),
-                    slot as any,
-                );
-                expect(runSpy.mock.calls[0][0].byokConfig).toBe(slot);
-            },
-        );
-
-        it('undefined byokConfig (managed default) is threaded as undefined', async () => {
-            runSpy.mockResolvedValue({ codeSuggestions: [] });
-            await service.repeatedCodeReviewSuggestionClustering(
-                stubOrg as any,
-                PR,
-                input3(),
-            );
-            expect(runSpy.mock.calls[0][0].byokConfig).toBeUndefined();
-        });
-    });
-
-    // ── Declared return type: ALWAYS an array of suggestions ─────────────────
-    describe('guaranteed return shape', () => {
-        it('returns an array for the happy path, the no-cluster path, and every fail-safe path', async () => {
-            // happy
-            runSpy.mockResolvedValue(cleanClusterAB());
-            expect(
-                Array.isArray(
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        input3(),
-                    ),
-                ),
-            ).toBe(true);
-            // no-cluster
-            runSpy.mockResolvedValue({ codeSuggestions: [] });
-            expect(
-                Array.isArray(
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        input3(),
-                    ),
-                ),
-            ).toBe(true);
-            // fail-safe (rejection)
-            runSpy.mockRejectedValue(new Error('boom'));
-            expect(
-                Array.isArray(
-                    await service.repeatedCodeReviewSuggestionClustering(
-                        stubOrg as any,
-                        PR,
-                        input3(),
-                    ),
-                ),
-            ).toBe(true);
-        });
-    });
 });
 
 /**
@@ -1927,6 +1895,7 @@ describe('LLMResponseProcessor.processResponse — raw-string parse rows', () =>
     const proc = () =>
         (
             new CommentManagerService(
+                {} as any,
                 {} as any,
                 {} as any,
                 {} as any,
@@ -1988,6 +1957,7 @@ describe('CommentManagerService.createReviewCommentWithRetry — line mismatch',
             {} as any,
             {} as any,
             { createReviewComment } as any,
+            {} as any,
         ) as any;
         const result = svc.createReviewCommentWithRetry({
             organizationAndTeamData: { organizationId: 'o', teamId: 't' },
@@ -2015,20 +1985,6 @@ describe('CommentManagerService.createReviewCommentWithRetry — line mismatch',
         for (const [args] of createReviewComment.mock.calls) {
             expect(args.lineComment.line).toBe(10);
         }
-    });
-
-    it('still tries the start of a multi-line range as the last attempt', async () => {
-        const { result, createReviewComment } = retryWith({
-            path: 'a.ts',
-            start_line: 5,
-            line: 10,
-            side: 'RIGHT',
-            body: {},
-        });
-
-        await expect(result).rejects.toBeDefined();
-        expect(createReviewComment).toHaveBeenCalledTimes(3);
-        expect(createReviewComment.mock.calls[2][0].lineComment.line).toBe(5);
     });
 });
 
@@ -2066,6 +2022,7 @@ describe('CommentManagerService.createPrLevelReviewComments carries the kody-cod
             {} as never,
             {} as never,
             codeManagementService,
+            {} as any,
         );
     });
 
@@ -2218,6 +2175,7 @@ describe('CommentManagerService.createLineComments — anchors on the reviewed c
             {} as any,
             {} as any,
             codeManagementService as any,
+            {} as any,
         );
         return { svc, createReviewComment };
     };
@@ -2297,6 +2255,7 @@ describe('CommentManagerService.createLineComments — anchors on the reviewed c
             {} as any,
             {} as any,
             codeManagementService as any,
+            {} as any,
         );
 
         const result = await svc.createLineComments(
@@ -2314,5 +2273,47 @@ describe('CommentManagerService.createLineComments — anchors on the reviewed c
 
         expect(createReviewComment.mock.calls[0][0].commit).toBe(PUSHED);
         expect(result.lastAnalyzedCommit).toBe(PUSHED);
+    });
+
+    it('pins a short reviewed sha to its full commit (#2037)', async () => {
+        // Bitbucket's webhook carries a 12-character sha while the commit list
+        // has full ones. Rebased commits share one committer date, so the list
+        // can end on the oldest commit: without the pin, the next push would
+        // be compared from it and re-review what was already reviewed.
+        const head = { sha: 'abcdef123456' + '0'.repeat(28), message: 'head' };
+        const oldest = { sha: 'f'.repeat(40), message: 'oldest' };
+        const createReviewComment = jest
+            .fn()
+            .mockResolvedValue({ id: 'c-1', pull_request_review_id: 42 });
+        const svc = new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {
+                getCommitsForPullRequestForCodeReview: jest
+                    .fn()
+                    .mockResolvedValue([head, oldest]),
+                createReviewComment,
+            } as any,
+        );
+
+        const result = await svc.createLineComments(
+            { organizationId: 'o', teamId: 't' } as any,
+            7,
+            { name: 'repo', id: '1', language: 'ts' },
+            lineComments,
+            'en-US',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            'abcdef123456',
+        );
+
+        expect(result.lastAnalyzedCommit).toEqual({ sha: head.sha });
+        expect(createReviewComment.mock.calls[0][0].commit).toEqual({
+            sha: head.sha,
+        });
     });
 });

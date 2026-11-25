@@ -1,68 +1,51 @@
 ---
-title: "Tasa de Error en Cambios"
-description: "Mide el porcentaje de PRs que son correcciones de errores (también conocida como Change Failure Rate)"
+title: "Proporción de Bugs"
+description: "Mide el porcentaje de pull requests cerrados que son correcciones de bugs"
 ---
 
-## Qué es la Tasa de Error en Cambios
+## Qué es la Proporción de Bugs
 
-La Tasa de Error en Cambios mide el porcentaje de Pull Requests que son correcciones de errores o correcciones en relación con el número total de PRs. Esta métrica te ayuda a entender cuánto esfuerzo de desarrollo se dedica a corregir problemas versus crear nuevas funciones. También puede leerse como "Change Failure Rate": la tasa a la que los cambios resultan en fallos.
+La Proporción de Bugs (Bug Ratio) es el porcentaje de pull requests cerrados que son correcciones de bugs. Muestra qué parte de tu entrega se dedica a corregir problemas en lugar de construir funcionalidades.
+
+En el Cockpit, es la tarjeta **Bug Ratio** de la pestaña **Productivity**. No es la change failure rate de DORA: cuenta PRs de corrección de bugs, no despliegues fallidos.
 
 ## Cómo la Calculamos
 
-Identificamos automáticamente qué PRs son correcciones de errores usando modelos de lenguaje de IA (LLM) que analizan los nombres y descripciones de los Pull Requests. Luego el sistema calcula el porcentaje de trabajo relacionado con errores en relación con tu actividad total de PRs.
+Un job en segundo plano le pide a un modelo de IA que clasifique cada pull request **solo a partir de su título** como **Bug Fix**, **Feature**, **Refactor** o **Test**. No se usan la descripción del PR, las etiquetas ni el diff, y no hay nada que configurar.
 
-**Lo que Rastreamos:**
-- PRs identificados como correcciones de errores por análisis de IA
-- Número total de PRs en el período
-- El porcentaje de trabajo relacionado con errores
-
-**Cómo se Calcula:**
 ```
-Tasa de Error = (PRs de Corrección de Errores) ÷ (Total de PRs) × 100
+Bug Ratio = (PRs classified as Bug Fix) ÷ (PRs closed in the range) × 100
 ```
 
-Por ejemplo, si 3 de 15 PRs se identifican como correcciones de errores, tu tasa de error es del 20%.
+El rango es el rango de fechas seleccionado en la parte superior del Cockpit, y un PR cerrado es uno mergeado o cerrado sin merge. Un PR que aún no se ha clasificado cuenta en el total pero no como corrección de bug. Por ejemplo, si 3 de 15 PRs se clasifican como correcciones de bugs, tu Bug Ratio es del 20%.
 
-**Cómo Identificamos las Correcciones de Errores:**
-Usamos modelos de lenguaje avanzados para analizar los títulos de los PRs y clasificarlos automáticamente. La IA busca patrones como:
-- "Fix bug in..." o "Bug fix for..."
-- "Resolve issue with..." o "Fix problem in..."
-- "Patch for..." o "Hotfix:..."
+Cuando la proporción es 0% tanto en el rango seleccionado como en el período anterior, la tarjeta muestra **Once we have enough data, your metrics will appear here.** en lugar de 0%.
 
-## Por qué es Importante
+## Cómo leer la tarjeta
 
-La Tasa de Error en Cambios es un indicador clave del enfoque de desarrollo de tu equipo y la calidad del código. Comprender esta tasa te ayuda a:
+La tarjeta muestra el porcentaje, una insignia de nivel y el valor del período anterior de la misma duración con el cambio porcentual (cuanto más bajo, mejor). El pie dice "Last 2 weeks was …" sin importar qué rango esté seleccionado; el número corresponde al período anterior. Pasa el cursor sobre la insignia para ver los niveles:
 
-- **Enfoque de Desarrollo**: Ver cuánto tiempo se dedica a corregir versus construir
-- **Calidad del Código**: Identificar si se está invirtiendo demasiado tiempo en errores
-- **Mejora del Proceso**: Entender si tu proceso de desarrollo necesita optimización
-- **Planificación de Recursos**: Planificar cuánto esfuerzo asignar a las correcciones de errores
+| Bug Ratio | Nivel |
+| --- | --- |
+| Menos del 5% | Elite |
+| 5% a 10% | High |
+| 10% a 20% | Fair |
+| Más del 20% | Need focus |
+
+## Por qué importan los títulos de los PRs
+
+Como solo se lee el título, un título descriptivo da una proporción más precisa.
+
+| Buenos títulos de corrección de bugs | Títulos vagos |
+| --- | --- |
+| "Fix: User login fails with invalid credentials" | "Fix stuff" |
+| "Resolve issue: API returns 500 error for large requests" | "Update code" |
+| "Patch: Fix null pointer exception in user service" | "Improve performance" |
 
 ## Cómo Mejorar
 
-- Implementar estrategias de prueba integrales (unitarias, de integración, E2E)
-- Usar herramientas automatizadas (linters, analizadores estáticos) antes de producción
-- Asegurar revisiones de código exhaustivas para todos los cambios
-- Dividir las funciones grandes en partes más pequeñas y comprobables
-- Usar feature flags para implementaciones más seguras
+- Probar más a nivel unitario, de integración y de extremo a extremo
+- Usar linters y analizadores estáticos antes de producción
+- Dividir las funcionalidades grandes en partes más pequeñas y comprobables
+- Usar feature flags para despliegues más seguros
 - Realizar revisiones post-incidente para prevenir la recurrencia
-
-## Mejores Prácticas para Nombrar PRs
-
-Para ayudar a la IA a identificar con precisión las correcciones de errores, considera estas convenciones de nomenclatura:
-
-### Buenos Nombres para PRs de Corrección de Errores
-- "Fix: User login fails with invalid credentials"
-- "Bug fix: Memory leak in data processing module"
-- "Resolve issue: API returns 500 error for large requests"
-- "Patch: Fix null pointer exception in user service"
-
-### Evita Nombres Vagos
-- "Fix stuff" o "Bug fix"
-- "Update code" o "Improve performance"
-- "Fix things" o "Resolve issues"
-
-### Corrección de Error vs. Nueva Función
-- **Corrección de Error**: "Fix: Payment validation fails for expired cards"
-- **Nueva Función**: "Add: New payment method support"
-- **Mejora**: "Enhance: Payment validation error messages"

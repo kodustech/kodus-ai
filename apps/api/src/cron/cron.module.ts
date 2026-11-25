@@ -1,5 +1,6 @@
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-review-configuration.module';
+import { CodeReviewPipelineModule } from '@libs/code-review/pipeline/code-review-pipeline.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.module';
 import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequestMessages.module';
@@ -33,10 +34,20 @@ import { PruneLicenseSeatsCronProvider } from './pruneLicenseSeats.cron';
 import { SpendLimitAlertCronProvider } from './spendLimitAlert.cron';
 import { SSOTestSessionCleanupCronProvider } from './ssoTestSessionCleanup.cron';
 import { StaleReviewWatchdogCronProvider } from './staleReviewWatchdog.cron';
+import { SyncAllRepositoriesCronProvider } from './syncAllRepositories.cron';
 import { SSOModule } from '@libs/ee/sso/sso.module';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
+import { FeatureGateModule } from '@libs/feature-gate';
+import { LicenseModule } from '@libs/ee/license/license.module';
+import { OrganizationModule } from '@libs/organization/modules/organization.module';
+import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 
 @Module({
     imports: [
+        forwardRef(() => CodeReviewPipelineModule),
+        OrganizationParametersModule,
         ScheduleModule.forRoot(),
         AutomationModule,
         ParametersModule,
@@ -55,8 +66,16 @@ import { SSOModule } from '@libs/ee/sso/sso.module';
         forwardRef(() => SSOModule),
         SpendLimitModule,
         KodusCreditsModule,
+        PlatformDataModule,
+        FeatureGateModule,
+        forwardRef(() => LicenseModule),
+        forwardRef(() => OrganizationModule),
     ],
     providers: [
+        {
+            provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+            useClass: ConditionalApprovalAccessService,
+        },
         CheckIfPRCanBeApprovedCronProvider,
         ClassifyOrphanedSessionsCronProvider,
         CodeReviewFeedbackCronProvider,
@@ -66,6 +85,7 @@ import { SSOModule } from '@libs/ee/sso/sso.module';
         SpendLimitAlertCronProvider,
         KodusCreditsSweepCronProvider,
         StaleReviewWatchdogCronProvider,
+        SyncAllRepositoriesCronProvider,
         DistributedLockService,
         // Checks adapters for the stale review watchdog (same registration
         // pattern as code-review-pipeline.module — the factory is not

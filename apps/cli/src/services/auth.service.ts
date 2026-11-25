@@ -165,6 +165,37 @@ class AuthService {
         );
     }
 
+    /**
+     * The logged-in user's token, never a team key: KODUS_TOKEN when it holds
+     * a user token, else the stored login (refreshed when due). For the
+     * commands that only run as a user, so an exported KODUS_TEAM_KEY (for
+     * hooks, say) does not shadow a `kodus auth login`. Null when there is
+     * no user credential.
+     */
+    async getUserToken(): Promise<string | null> {
+        const envToken = process.env.KODUS_TOKEN?.trim();
+        if (envToken && !envToken.startsWith('kodus_')) {
+            return envToken;
+        }
+
+        const credentials = await this.getCredentials();
+        if (!credentials) {
+            return null;
+        }
+
+        const isExpired =
+            Date.now() > credentials.expiresAt - TOKEN_REFRESH_BUFFER_MS;
+        if (!isExpired) {
+            return credentials.accessToken;
+        }
+        // A failed refresh falls back to the stored team key; that is not a
+        // user token.
+        const refreshed = await this.refreshTokenOrFallback(
+            credentials.refreshToken,
+        );
+        return refreshed.startsWith('kodus_') ? null : refreshed;
+    }
+
     async generateCIToken(): Promise<string> {
         const token = await this.getValidToken();
         return api.auth.generateCIToken(token);

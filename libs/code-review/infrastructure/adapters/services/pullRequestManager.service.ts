@@ -5,11 +5,17 @@ import pLimit from 'p-limit';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { IPullRequestManagerService } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
+import {
+    ChangedFilesOptions,
+    ChangedFilesSource,
+    IPullRequestManagerService,
+} from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CacheService } from '@libs/core/cache/cache.service';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import { PullRequestAuthor } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import { RebaseInterdiffResult, rebaseInterdiff } from './rebase-interdiff';
+import { PullRequestChangesUnreadableError } from '@libs/code-review/domain/errors/pull-request-changes-unreadable.error';
 
 @Injectable()
 export class PullRequestHandlerService implements IPullRequestManagerService {
@@ -34,7 +40,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getPullRequestDetails(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         prNumber: number,
     ): Promise<any> {
         try {
@@ -60,28 +66,32 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getChangedFiles(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         ignorePaths?: string[],
         lastCommit?: string,
+        reviewedBaseBranch?: string,
+        options?: ChangedFilesOptions,
     ): Promise<FileChange[]> {
         try {
             let changedFiles: FileChange[];
 
             if (lastCommit) {
-                // Retrieve files changed since the last commit
-                changedFiles =
-                    await this.codeManagementService.getChangedFilesSinceLastCommit(
-                        {
-                            organizationAndTeamData,
-                            repository,
-                            prNumber: pullRequest?.number,
-                            lastCommit,
-                        },
-                    );
+                changedFiles = await this.getChangedFilesSinceLastCommit(
+                    organizationAndTeamData,
+                    repository,
+                    pullRequest,
+                    lastCommit,
+                    reviewedBaseBranch,
+                    options?.onDiffSource,
+                    // Removed files leave the list below; only a caller that
+                    // reads them asks for the ones the PR no longer lists.
+                    !!options?.onRemovedFiles,
+                );
             } else {
+                options?.onDiffSource?.('none');
                 // Retrieve all files changed in the pull request. Pass
-                // `headSha` so the GitHub adapter can memoize by (PR, SHA)
+                // `headSha` and `baseSha` so the adapter binds cached files to both refs
                 // — `getChangedFilesMetadata` will hit the same key in the
                 // same job, halving the GitHub fan-out.
                 changedFiles =
@@ -90,6 +100,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                         repository,
                         prNumber: pullRequest?.number,
                         headSha: pullRequest?.head?.sha,
+                        ...(pullRequest?.base?.sha
+                            ? { baseSha: pullRequest.base.sha }
+                            : {}),
                     });
             }
 
@@ -99,6 +112,11 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
             // ref — wasting two GitHub requests for content we'll never
             // review. Real impact: ~10-20% of /contents calls on PRs with
             // file deletions.
+            options?.onRemovedFiles?.(
+                (changedFiles ?? [])
+                    .filter((file) => file.status === 'removed')
+                    .map((file) => file.filename),
+            );
             const filteredFiles = changedFiles?.filter((file) => {
                 if (file.status === 'removed') return false;
                 return !isFileMatchingGlob(file.filename, ignorePaths);
@@ -229,7 +247,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
 
     async getNewCommitsSinceLastExecution(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         lastCommit?: any,
     ): Promise<Commit[]> {
@@ -294,23 +312,22 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
      */
     async getChangedFilesMetadata(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         lastCommit?: string,
+        reviewedBaseBranch?: string,
     ): Promise<FileChange[]> {
         try {
             let changedFiles: FileChange[];
 
             if (lastCommit) {
-                changedFiles =
-                    await this.codeManagementService.getChangedFilesSinceLastCommit(
-                        {
-                            organizationAndTeamData,
-                            repository,
-                            prNumber: pullRequest?.number,
-                            lastCommit,
-                        },
-                    );
+                changedFiles = await this.getChangedFilesSinceLastCommit(
+                    organizationAndTeamData,
+                    repository,
+                    pullRequest,
+                    lastCommit,
+                    reviewedBaseBranch,
+                );
             } else {
                 changedFiles =
                     await this.codeManagementService.getFilesByPullRequestId({
@@ -319,9 +336,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                         prNumber: pullRequest?.number,
                         // Memoization key (see GithubService.getFilesByPullRequestId).
                         // The same call lands in `getChangedFiles` earlier in
-                        // the pipeline; same (PR, SHA) → cache hit, no extra
+                        // the pipeline; same (PR, head, base) → cache hit, no extra
                         // GitHub round-trip on this second hop.
                         headSha: pullRequest?.head?.sha,
+                        ...(pullRequest?.base?.sha
+                            ? { baseSha: pullRequest.base.sha }
+                            : {}),
                     });
             }
 
@@ -342,6 +362,144 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
     }
 
     /**
+     * `null` from the provider means the diff since the last review could not
+     * be read in full (#2268), not that nothing changed: what is new is then
+     * read from the PR diff at the last reviewed commit, else the whole PR.
+     */
+    private async getChangedFilesSinceLastCommit(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
+        pullRequest: any,
+        lastCommit: string | Commit,
+        reviewedBaseBranch?: string,
+        onDiffSource?: (source: ChangedFilesSource) => void,
+        keepRemovedFiles = false,
+    ): Promise<FileChange[]> {
+        const lastCommitSha =
+            typeof lastCommit === 'string' ? lastCommit : lastCommit?.sha;
+        // Providers read `lastCommit.sha`.
+        const changedFiles =
+            await this.codeManagementService.getChangedFilesSinceLastCommit({
+                organizationAndTeamData,
+                repository,
+                prNumber: pullRequest?.number,
+                lastCommit:
+                    typeof lastCommit === 'string'
+                        ? { sha: lastCommit }
+                        : lastCommit,
+                ...(keepRemovedFiles ? { keepRemovedFiles } : {}),
+            });
+        if (changedFiles) {
+            onDiffSource?.('incremental');
+            return changedFiles;
+        }
+
+        // The earlier diff would be read against the new base branch, as in
+        // ValidateNewCommitsStage.
+        const retargeted =
+            !!reviewedBaseBranch &&
+            reviewedBaseBranch !== pullRequest?.base?.ref;
+        const interdiff =
+            lastCommitSha && !retargeted
+                ? await this.getRebaseInterdiff(
+                      organizationAndTeamData,
+                      repository,
+                      pullRequest,
+                      lastCommitSha,
+                  )
+                : null;
+        // #2319: an interdiff cannot show a removed reviewed change, so a
+        // push with one is reviewed whole, as ValidateNewCommitsStage does.
+        const useInterdiff = !!interdiff && !interdiff.revertedFiles.length;
+
+        // With removals the interdiff has already read the whole PR.
+        const files = useInterdiff
+            ? interdiff.files
+            : (interdiff?.currentFiles ??
+              (await this.codeManagementService.getFilesByPullRequestId({
+                  organizationAndTeamData,
+                  repository,
+                  prNumber: pullRequest?.number,
+                  headSha: pullRequest?.head?.sha,
+                  ...(pullRequest?.base?.sha
+                      ? { baseSha: pullRequest.base.sha }
+                      : {}),
+              })));
+        // Not `[]`: that would skip the review as a PR with nothing new.
+        // Readers answer an unreadable whole-PR list with `[]` too.
+        if (!files || (!useInterdiff && !files.length)) {
+            throw new PullRequestChangesUnreadableError(
+                pullRequest?.number,
+                lastCommitSha,
+            );
+        }
+
+        onDiffSource?.(useInterdiff ? 'interdiff' : 'full');
+
+        this.logger.warn({
+            message: `Diff of PR#${pullRequest?.number} since the last review was unreadable; reviewing ${useInterdiff ? 'its changes since then' : 'the whole PR'}`,
+            context: PullRequestHandlerService.name,
+            metadata: {
+                organizationId: organizationAndTeamData?.organizationId,
+                teamId: organizationAndTeamData?.teamId,
+                repositoryId: repository?.id,
+                prNumber: pullRequest?.number,
+                lastCommitSha,
+                headSha: pullRequest?.head?.sha,
+                ...(pullRequest?.base?.sha
+                    ? { baseSha: pullRequest.base.sha }
+                    : {}),
+                fallback: useInterdiff ? 'interdiff' : 'full',
+                retargeted,
+                revertedFiles: interdiff?.revertedFiles.length ?? 0,
+                files: files.length,
+                reason: 'incremental_diff_unavailable',
+            },
+        });
+
+        return files;
+    }
+
+    async getRebaseInterdiff(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: {
+            name: string;
+            id: any;
+            fullName?: string;
+            project?: { id: any };
+        },
+        pullRequest: any,
+        previousHeadSha: string,
+    ): Promise<
+        (RebaseInterdiffResult & { currentFiles: FileChange[] }) | null
+    > {
+        const previous =
+            await this.codeManagementService.getPullRequestFilesAtCommit({
+                organizationAndTeamData,
+                repository,
+                prNumber: pullRequest?.number,
+                baseBranch: pullRequest?.base?.ref,
+                headSha: previousHeadSha,
+            });
+        if (!previous) return null;
+
+        const current = await this.getChangedFilesMetadata(
+            organizationAndTeamData,
+            repository,
+            pullRequest,
+        );
+        // An empty current diff is a failed read, not a PR with nothing in it.
+        if (!current.length) return null;
+
+        return { ...rebaseInterdiff(current, previous), currentFiles: current };
+    }
+
+    /**
      * Enriquece arquivos com conteúdo.
      * Usado para buscar conteúdo apenas dos arquivos que passaram pelo filtro ignorePaths.
      *
@@ -353,7 +511,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
      */
     async enrichFilesWithContent(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository: { name: string; id: any },
+        repository: { name: string; id: any; fullName?: string },
         pullRequest: any,
         files: FileChange[],
     ): Promise<FileChange[]> {
@@ -383,14 +541,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
             let batchMap: Map<string, any> | null | undefined;
             try {
                 batchMap =
-                    await this.codeManagementService.getRepositoryContentBatch(
-                        {
-                            organizationAndTeamData,
-                            repository,
-                            files,
-                            pullRequest,
-                        },
-                    );
+                    await this.codeManagementService.getRepositoryContentBatch({
+                        organizationAndTeamData,
+                        repository,
+                        files,
+                        pullRequest,
+                    });
             } catch (batchErr) {
                 this.logger.warn({
                     message:

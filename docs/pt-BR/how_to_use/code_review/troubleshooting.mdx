@@ -1,83 +1,47 @@
 ---
 title: "Solução de Problemas"
-description: "Solução de problemas do Code Review com Kody"
+description: "Descubra por que uma revisão não rodou, falhou ou saiu diferente do esperado."
 ---
 
-## Code Review com Kody Não Está Funcionando? Passos para Corrigir Problemas Comuns
+## Sem Resposta ou Sem Comentários da Kody
 
-### Problemas com Token
+Comece pela reação no PR. 👀 significa que a Kody pulou o review, 😕 significa que a revisão falhou e 🎉 significa que ela terminou (um review limpo não posta comentários inline). No GitHub (GitHub App) e no Forgejo, o check **Kody Code Review** mostra o motivo de um skip. [Quando a Kody pula](/pt-BR/how_to_use/code_review/flow#quando-a-kody-pula) lista todos os motivos e a correção de cada um.
 
-Se você está conectado via token, verifique os seguintes pontos:
+### Quando uma revisão automática não começa
 
-- **Usuários GitHub**: Verifique se o seu token está habilitado para a sua organização:
-  1. Você deve ser o proprietário da organização.
-  2. Vá para as configurações da sua organização no GitHub:
-     - Use a seguinte URL e substitua `YOUR_ORG_NAME` pelo nome da sua organização:
-       <small>
-         `https://github.com/organizations/YOUR_ORG_NAME/settings/member_privileges`
-       </small>
-       .
-  3. Em **Fine-Grained Personal Access Tokens**, certifique-se de que **"Allow access via fine-grained personal access tokens"** está selecionado.
-- **Personal Access Token (PAT)**: Confirme que o seu token está configurado para a sua organização e tem as permissões necessárias. [Gerenciar tokens](https://github.com/settings/tokens?type=beta).
-- **Expiração do Token**: Certifique-se de que o seu token está ativo. [Verificar status do token](https://github.com/settings/tokens?type=beta).
+1. Confirme se o repositório está selecionado em **Repositories** ou incluído em **Review every repository**.
+2. Confira se o provedor Git entregou o evento do PR. [Diagnostique a entrega do webhook](/pt-BR/knowledge_base/how-to-fix-webhook-issues).
+3. Abra **Code review → General** no escopo do repositório e confira **Automated code review**. Se o repositório usa [kodus-config.yml](/pt-BR/how_to_use/code_review/configs/general#kodus-config-yml), confira `automatedReviewActive` no arquivo.
+4. Para pedir uma revisão agora, comente `@kody start-review` no PR. Se a Kody ainda pular a revisão, [veja o motivo que ela registrou](/pt-BR/how_to_use/code_review/flow#quando-a-kody-pula).
 
-<Frame caption="Seu token deve exibir o logo da sua organização. Se mostrar a foto do seu perfil pessoal, o token está configurado para acesso pessoal em vez de acesso organizacional.
-">
-    ![Token Example](/images/token.png)
+### A revisão terminou sem sugestões
 
-</Frame>
+Certifique-se de que pelo menos uma categoria (Bug, Performance, Security, Business Logic) está ativada para a Kody fornecer sugestões, e confira o **Minimum severity to post**. Ambos ficam em **Code review → What to review** ([abrir](https://app.kodus.io/settings/code-review/global/review-scope)).
 
----
+## Revisões pararam depois de um push
 
-### Problemas de Configuração
+Comente `@kody start-review` para retomar um PR pausado ou pedir uma revisão no modo **Manual**. Para revisar cada novo push automaticamente, escolha **Automatic**. Veja como os modos funcionam em [Cadência de review](/pt-BR/how_to_use/code_review/flow#cadência-de-review).
 
-- **Revisões Automatizadas**: Certifique-se de que **Enable Automated Code Review** está ativado em **Code review → General** no escopo Global ([abrir](https://app.kodus.io/settings/code-review/global/general)). Se desabilitado, inicie as revisões manualmente com `@kody start-review`.
-- **Categorias de Revisão**: Certifique-se de que pelo menos uma categoria (Bug, Performance, Security, Business Logic) está ativada para que Kody forneça sugestões, e confira o **Minimum severity to post**. Ambos ficam em **Code review → What to review** ([abrir](https://app.kodus.io/settings/code-review/global/review-scope)).
-- **Revisões de Branch**: Por padrão, Kody revisa PRs mesclados na branch padrão. Para incluir branches adicionais, atualize **Base Branches** em **Code review → General** ([abrir](https://app.kodus.io/settings/code-review/global/general)).
-- **PRs Grandes**: Esteja ciente de que PRs com um alto número de alterações podem demorar mais para serem processados.
+## Problemas com Token
 
----
+Confira se o token está ativo, se tem acesso ao repositório e se tem as permissões listadas para o seu provedor.
 
-### Configurações Globais vs. de Repositório
+[GitHub](/pt-BR/how_to_use/code_review/general_config/github_pat) · [GitLab](/pt-BR/how_to_use/code_review/general_config/gitlab_pat) · [Bitbucket](/pt-BR/how_to_use/code_review/general_config/bitbucket_pat) · [Azure DevOps](/pt-BR/how_to_use/code_review/general_config/azure_devops_pat) · [Forgejo](/pt-BR/how_to_use/code_review/general_config/forgejo_pat)
 
-Kody usa um sistema de configuração hierárquico. Veja como funciona:
+## Configurações Globais vs. de Repositório
 
-- **Configurações Globais**: Aplicadas a todos os repositórios por padrão.
-- **Configurações Específicas de Repositório**: Se configuradas, sobrescrevem as configurações globais para aquele repositório específico.
+Confira as configurações do repositório ou diretório no seletor de escopo em **Code review**. Veja [como as configurações são herdadas](/pt-BR/how_to_use/code_review/configs/inheritance_overrides) para encontrar qual nível sobrescreveu a configuração.
 
-#### Passos para Solução de Problemas
+`kodus-config.yml` só vale quando **Prefer kodus-config.yml settings** está ativado em **Code review → General** para aquele repositório. Um badge sob o seletor de escopo mostra se o arquivo foi aplicado, não foi encontrado ou está indisponível.
 
-1. **Verifique a Configuração Global**: Revise e confirme que as configurações globais estão corretas. [Acessar Configurações Globais](https://app.kodus.io/settings/code-review/global/general).
-2. **Verifique as Configurações do Repositório**:
-   - Abra o seletor de escopo no topo do grupo **Code review** na barra lateral. Repositórios (e diretórios) com configuração própria aparecem listados abaixo de **Global**.
-   - Confirme se configurações personalizadas estão definidas para o repositório em questão.
-   - Verifique também se o repositório está selecionado para revisão na página **Repositories** (barra lateral → **Repositories**).
-3. **Alinhe ou Limpe as Configurações**:
-   - Para aplicar as configurações globais, limpe quaisquer configurações específicas do repositório (menu **⋯** do repositório no seletor de escopo → **Delete configuration**).
-   - Alternativamente, ajuste as configurações específicas do repositório para atender às suas necessidades.
+## A Kody diz que já está revisando este PR
 
-#### Sintomas Comuns
+Um comando de review (`@kody review`, `@kody -v …`) enviado enquanto outro review roda no mesmo PR espera e começa quando o review atual termina. Se esse review ainda estiver rodando quando a Kody parar de esperar (cerca de 25 minutos no máximo), a Kody comenta "Kody is already reviewing this PR" e não inicia o comando. Espere o review terminar e peça de novo.
 
-- Revisões automatizadas não são acionadas para um repositório.
-- Kody aplica configurações ou sugestões inesperadas.
-- As configurações globais não se refletem em repositórios específicos.
+## A merge queue remove PRs enquanto espera o check Kody Code Review
 
+No GitHub, quando `Kody Code Review` é um check obrigatório e um PR entra na merge queue, a Kody reporta o resultado do último review concluído do PR no commit que a fila testa. Nenhum novo review roda. Isso exige a Kody conectada pelo GitHub App; com um personal access token a Kody não posta checks.
 
-## Sem Resposta ou Sem Comentários de Kody
+O check significa que a Kody revisou o PR, não que o PR está livre de problemas. Ele passa mesmo com sugestões críticas ainda em aberto, e no PR só falha quando o review em si não pôde rodar. Exigi-lo garante que um review aconteceu; ele não bloqueia um merge pelos apontamentos da Kody.
 
-Siga este checklist rápido:
-
-1. O PR contém alterações de código revisáveis (não apenas docs ou imagens)? Kody pode pular se não houver nada relevante para analisar.
-2. A branch está no escopo? Por padrão, apenas PRs destinados à branch padrão são revisados, a menos que branches base adicionais sejam configuradas.
-3. **PRs Grandes:** Kody revisa PRs com até 2.000 **arquivos revisáveis** (após aplicar **Ignored files**). Exemplo: PR com 2.500 arquivos totais, mas 600 são arquivos `.lock` → Kody revisa os 1.900 arquivos restantes ✅
-4. Modo: Se as revisões automatizadas estiverem desabilitadas, acione manualmente com `@kody start-review`.
-5. Cadência de push: Se estiver usando auto-pause, aguarde o período de resfriamento ou solicite uma revisão manual.
-6. Sobrescritas de repositório: Configurações específicas do repositório podem sobrescrever as globais. Limpe ou alinhe conforme necessário.
-
-<Card title="Modos e Cadência de Revisão" icon="clock" href="/pt-BR/how_to_use/code_review/configs/general">
-  Verifique revisão automatizada, cadência e filtros de branch.
-</Card>
-
-<Card title="Limites e Preços" icon="scale-balanced" href="/pt-BR/how_to_use/pricing">
-  Saiba sobre os limites sugeridos e como eles afetam as revisões.
-</Card>
+Se o último commit do PR não tem um review concluído da Kody quando ele entra na fila (por exemplo, porque um admin ignorou o check obrigatório), o check falha na hora com **No finished Kody review** e a fila remove o PR. Comente `@kody start-review` no PR, deixe o review terminar e adicione-o à fila de novo. **Could not carry Kody's review** significa que o GitHub não devolveu o resultado do review; adicione o PR à fila de novo.

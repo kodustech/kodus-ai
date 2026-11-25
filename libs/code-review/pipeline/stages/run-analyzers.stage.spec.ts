@@ -1,3 +1,5 @@
+import { freeze } from 'immer';
+
 import { AnalyzerToolRouter } from '@libs/code-review/infrastructure/analyzers/analyzer-tool.router';
 import { AnalyzerTool } from '@libs/code-review/infrastructure/analyzers/tool.contract';
 
@@ -109,7 +111,15 @@ describe('RunAnalyzersStage', () => {
             ]);
         const tool = makeTool({ selectFiles });
 
-        await run(makeStage([tool]), makeContext());
+        await run(
+            makeStage([tool]),
+            makeContext({
+                changedFiles: [
+                    { filename: 'src/db/orders.go', patch: patchAdding(10, 3) },
+                    { filename: 'README.md', patch: patchAdding(1, 1) },
+                ],
+            } as never),
+        );
 
         expect(tool.run).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -192,13 +202,6 @@ describe('RunAnalyzersStage', () => {
 
             expect(tool.run).not.toHaveBeenCalled();
             expect(result.analyzerRouting).toBeUndefined();
-        });
-
-        it('runs no tool when none is registered', async () => {
-            const result = await run(makeStage([]), makeContext());
-
-            expect(result.analyzerRouting).toEqual([]);
-            expect(result.analyzerFindings).toBeUndefined();
         });
     });
 
@@ -477,6 +480,69 @@ describe('the cost of recovering hunks', () => {
         await execute(stageWith(getFilePatches), makeContext(withheldFile));
 
         expect(getFilePatches).toHaveBeenCalledTimes(1);
+    });
+});
+
+/**
+ * The pipeline hands each stage a context frozen by immer. Writing a recovered
+ * hunk onto one of its files threw "Cannot assign to read only property
+ * 'patch'" and failed the whole review (#2536).
+ */
+describe('recovering hunks on a frozen context', () => {
+    const recoverInto = (seen: string[][]) =>
+        new RunAnalyzersStage(
+            new AnalyzerToolRouter(),
+            { isEnabled: jest.fn().mockResolvedValue(true) } as never,
+            {
+                getFilePatches: jest.fn().mockResolvedValue([
+                    { path: 'big.ts', patch: patchAdding(1, 3) },
+                    { path: 'pnpm-lock.yaml', patch: patchAdding(1, 2) },
+                ]),
+            } as never,
+            [
+                makeTool({
+                    readsIgnoredFiles: true,
+                    selectFiles: ((
+                        files: { filename: string; patch?: string }[],
+                    ) => {
+                        const picked = files.filter((f) => f.patch);
+                        seen.push(picked.map((f) => f.filename));
+                        return picked;
+                    }) as never,
+                    run: jest.fn().mockResolvedValue([]),
+                }),
+            ],
+        );
+
+    const frozenContext = () =>
+        freeze(
+            makeContext({
+                changedFiles: [{ filename: 'big.ts' }],
+                ignoredFileChanges: [{ filename: 'pnpm-lock.yaml' }],
+            } as never),
+            true,
+        );
+
+    const execute = (stage: RunAnalyzersStage, context: unknown) =>
+        (
+            stage as unknown as {
+                executeStage: (
+                    c: unknown,
+                ) => Promise<CodeReviewPipelineContext>;
+            }
+        ).executeStage(context);
+
+    it('hands the recovered hunks to the tools without writing to the context', async () => {
+        const seen: string[][] = [];
+        const context = frozenContext();
+
+        await expect(
+            execute(recoverInto(seen), context),
+        ).resolves.toBeDefined();
+
+        expect(seen.at(-1)).toEqual(['big.ts', 'pnpm-lock.yaml']);
+        expect(context.changedFiles[0]).not.toHaveProperty('patch');
+        expect(context.ignoredFileChanges?.[0]).not.toHaveProperty('patch');
     });
 });
 

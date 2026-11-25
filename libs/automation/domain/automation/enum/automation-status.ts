@@ -27,6 +27,7 @@ export enum AutomationMessage {
     CONFIG_VALIDATION_ERROR = 'Error during configuration validation.',
     UNKNOWN_CUSTOM_AGENT = 'No custom agent matches the @kody -v command.',
     CUSTOM_AGENTS_PLAN_REQUIRED = "Custom agents are not on this organization's plan.",
+    CUSTOM_AGENTS_BETA_REQUIRED = 'Custom agents are in beta and BETA_FEATURES is off on this install.',
     NO_NEW_COMMITS_SINCE_LAST = 'No new commits since the last run.',
     ONLY_MERGE_COMMITS_SINCE_LAST = 'Only merge commits since the last run.',
     PROVIDER_RATE_LIMITED = 'The Git provider rate-limited the request; the review was not run.',

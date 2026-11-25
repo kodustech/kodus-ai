@@ -93,7 +93,8 @@ describe('repeatCandidates', () => {
         const unrelated = earlier({
             suggestionId: 'unrelated',
             relevantFile: 'src/reports/export.ts',
-            suggestionContent: 'The CSV export drops the header row when the report is empty.',
+            suggestionContent:
+                'The CSV export drops the header row when the report is empty.',
         });
         const finding: RepeatCheckFinding = {
             label: 'bug',
@@ -143,7 +144,7 @@ describe('repeatCandidates', () => {
         ).toEqual(['other-bug']);
     });
 
-    it('a rule finding\'s link is not trusted: rule reposts carry it too', () => {
+    it("a rule finding's link is not trusted: rule reposts carry it too", () => {
         expect(
             repeatCandidates(
                 {
@@ -233,6 +234,22 @@ describe('occurrenceKeys', () => {
 });
 
 describe('buildRepeatCheckPrompt', () => {
+    it('gives the comparison the concrete downstream failure when a short title omits it', () => {
+        const prompt = buildRepeatCheckPrompt([
+            {
+                finding: {
+                    oneSentenceSummary: 'Handle offline inventory',
+                    suggestionContent:
+                        'Returning empty names during an outage removes the entire catalog.',
+                },
+                candidates: [ruleComment],
+            },
+        ]);
+        expect(prompt).toContain(
+            'Finding: Returning empty names during an outage removes the entire catalog.',
+        );
+    });
+
     it('names rules by title and shows each finding with its own earlier comments', () => {
         const prompt = buildRepeatCheckPrompt(
             [
@@ -257,7 +274,9 @@ describe('buildRepeatCheckPrompt', () => {
         expect(prompt).toContain('Kind: Kody Rule "Use the logger"');
         expect(prompt).toContain('<Earlier id="rule-old">');
         expect(prompt).toContain('Use the logger instead of console.log.');
-        expect(prompt).toContain('another file where the earlier code is still in place');
+        expect(prompt).toContain(
+            'another file where the earlier code is still in place',
+        );
         expect(prompt).toContain('caused_by_earlier');
     });
 });
@@ -274,7 +293,10 @@ describe('checkRepeats', () => {
 
     it('without history, posts everything and calls no model', async () => {
         const findings = [{ label: 'bug', relevantFile: 'src/a.ts' }];
-        const result = await checkRepeats(findings, [], { organizationId: 'org-1', byokConfig: slot });
+        const result = await checkRepeats(findings, [], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
         expect(result.kept).toEqual(findings);
         expect(result.model).toBe('not-needed');
         expect(runSpy).not.toHaveBeenCalled();
@@ -288,7 +310,8 @@ describe('checkRepeats', () => {
             existingCode: "console.log('order', order)",
         };
         const result = await checkRepeats([finding], [ruleComment], {
-            organizationId: 'org-1', byokConfig: slot,
+            organizationId: 'org-1',
+            byokConfig: slot,
         });
         expect(result.kept).toEqual([]);
         expect(result.repeats).toEqual([
@@ -339,11 +362,19 @@ describe('checkRepeats', () => {
             suggestionContent: 'Same pattern in the webhook retry.',
         };
         runSpy.mockResolvedValue({
-            verdicts: [{ finding: 0, verdict: 'same_occurrence', earlierId: 'bug-old' }],
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'same_occurrence',
+                    earlierId: 'bug-old',
+                },
+                { finding: 1, verdict: 'new_place', earlierId: 'bug-old' },
+            ],
         });
 
         const result = await checkRepeats([repeat, newPlace], [declined], {
-            organizationId: 'org-1', byokConfig: slot,
+            organizationId: 'org-1',
+            byokConfig: slot,
             prNumber: 7,
         });
 
@@ -353,7 +384,8 @@ describe('checkRepeats', () => {
         ]);
         expect(runSpy).toHaveBeenCalledTimes(1);
         expect(runSpy.mock.calls[0][0]).toMatchObject({
-            organizationId: 'org-1', byokConfig: slot,
+            organizationId: 'org-1',
+            byokConfig: slot,
             spanName: 'code-review::repeat-check',
         });
     });
@@ -368,11 +400,18 @@ describe('checkRepeats', () => {
             suggestionContent: 'The retry branch is unreachable again.',
         };
         runSpy.mockResolvedValue({
-            verdicts: [{ finding: 0, verdict: 'same_occurrence', earlierId: 'bug-old' }],
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'same_occurrence',
+                    earlierId: 'bug-old',
+                },
+            ],
         });
 
         const result = await checkRepeats([back], [applied], {
-            organizationId: 'org-1', byokConfig: slot,
+            organizationId: 'org-1',
+            byokConfig: slot,
         });
 
         expect(result.kept).toEqual([]);
@@ -394,33 +433,98 @@ describe('checkRepeats', () => {
             existingCode: "console.info('order', order.id)",
         };
         runSpy.mockResolvedValue({
-            verdicts: [{ finding: 0, verdict: 'same_occurrence', earlierId: 'rule-old' }],
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'same_occurrence',
+                    earlierId: 'rule-old',
+                },
+            ],
         });
 
         const result = await checkRepeats([still], [applied], {
-            organizationId: 'org-1', byokConfig: slot,
+            organizationId: 'org-1',
+            byokConfig: slot,
         });
 
         expect(result.kept).toEqual([]);
         expect(result.repeats[0].earlier).toBe(applied);
     });
 
-    it('posts a finding the model calls a new place or caused by the earlier comment', async () => {
+    it('keeps a new place and identifies a finding caused by the earlier comment', async () => {
         const newPlace = { label: 'bug', relevantFile: 'src/retry.ts' };
         const consequence = { label: 'bug', relevantFile: 'src/retry.ts' };
         runSpy.mockResolvedValue({
             verdicts: [
                 { finding: 0, verdict: 'new_place', earlierId: 'bug-old' },
-                { finding: 1, verdict: 'caused_by_earlier', earlierId: 'bug-old' },
+                {
+                    finding: 1,
+                    verdict: 'caused_by_earlier',
+                    earlierId: 'bug-old',
+                },
             ],
         });
 
-        const result = await checkRepeats([newPlace, consequence], [bugComment], {
-            organizationId: 'org-1', byokConfig: slot,
-        });
+        const result = await checkRepeats(
+            [newPlace, consequence],
+            [bugComment],
+            {
+                organizationId: 'org-1',
+                byokConfig: slot,
+            },
+        );
 
         expect(result.kept).toEqual([newPlace, consequence]);
         expect(result.repeats).toEqual([]);
+        expect(result.revisions).toEqual([
+            { finding: consequence, earlier: bugComment },
+        ]);
+    });
+
+    it("does not link a caused-by verdict to an id absent from that finding's candidates", async () => {
+        const unrelated = earlier({
+            suggestionId: 'elsewhere',
+            relevantFile: 'src/unrelated.ts',
+        });
+        const finding = { label: 'bug', relevantFile: 'src/retry.ts' };
+        runSpy.mockResolvedValue({
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'caused_by_earlier',
+                    earlierId: 'elsewhere',
+                },
+            ],
+        });
+
+        const result = await checkRepeats([finding], [bugComment, unrelated], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+
+        expect(result.kept).toEqual([finding]);
+        expect(result.revisions).toEqual([]);
+    });
+
+    it('does not treat a missing finding index as finding zero', async () => {
+        const finding = { label: 'bug', relevantFile: 'src/retry.ts' };
+        runSpy.mockResolvedValue({
+            verdicts: [
+                {
+                    finding: null,
+                    verdict: 'caused_by_earlier',
+                    earlierId: 'bug-old',
+                },
+            ],
+        });
+
+        const result = await checkRepeats([finding], [bugComment], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+
+        expect(result.kept).toEqual([finding]);
+        expect(result.revisions).toEqual([]);
     });
 
     it('ignores an id the model was not offered for that finding', async () => {
@@ -430,11 +534,18 @@ describe('checkRepeats', () => {
         });
         const finding = { label: 'bug', relevantFile: 'src/retry.ts' };
         runSpy.mockResolvedValue({
-            verdicts: [{ finding: 0, verdict: 'same_occurrence', earlierId: 'elsewhere' }],
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'same_occurrence',
+                    earlierId: 'elsewhere',
+                },
+            ],
         });
 
         const result = await checkRepeats([finding], [bugComment, other], {
-            organizationId: 'org-1', byokConfig: slot,
+            organizationId: 'org-1',
+            byokConfig: slot,
         });
 
         expect(result.kept).toEqual([finding]);
@@ -444,18 +555,27 @@ describe('checkRepeats', () => {
         const finding = { label: 'bug', relevantFile: 'src/retry.ts' };
         runSpy.mockResolvedValue(
             JSON.stringify({
-                result: { verdicts: [{ finding: 0, verdict: 'same_occurrence', earlierId: 'bug-old' }] },
+                result: {
+                    verdicts: [
+                        {
+                            finding: 0,
+                            verdict: 'same_occurrence',
+                            earlierId: 'bug-old',
+                        },
+                    ],
+                },
             }),
         );
 
         const result = await checkRepeats([finding], [bugComment], {
-            organizationId: 'org-1', byokConfig: slot,
+            organizationId: 'org-1',
+            byokConfig: slot,
         });
 
         expect(result.repeats).toHaveLength(1);
     });
 
-    it('fails open: a model error posts the findings it had to judge, code matches still hold', async () => {
+    it('a model failure preserves code matches and posts findings without a plausible repeat', async () => {
         const byCode = {
             label: 'kody_rules',
             brokenKodyRulesIds: ['rule-no-console'],
@@ -476,9 +596,129 @@ describe('checkRepeats', () => {
         expect(result.repeats.map((r) => r.finding)).toEqual([byCode]);
     });
 
+    it('after two timeouts withholds the repeated CSV claim and delivers the PDF claim under the same PR rule', async () => {
+        const old = earlier({
+            suggestionId: 'pr-comment-old',
+            relevantFile: undefined,
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['export-tests'],
+            suggestionContent: 'The CSV export has no regression test.',
+        });
+        const repeat = {
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['export-tests'],
+            suggestionContent: old.suggestionContent,
+        };
+        const different = {
+            ...repeat,
+            suggestionContent: 'The PDF export has no regression test.',
+        };
+        runSpy.mockRejectedValue(new DOMException('timed out', 'TimeoutError'));
+        const result = await checkRepeats([repeat, different], [old], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+        expect(runSpy.mock.calls.map(([call]) => call.timeoutMs)).toEqual([
+            120_000, 25_000,
+        ]);
+        expect(result.withheld).toEqual([repeat]);
+        expect(result.kept).toEqual([different]);
+        expect(result.repeats).toEqual([]);
+    });
+
+    it.each([
+        {
+            name: 'outer whitespace on the same claim',
+            previous: 'Missing test for PDF.',
+            current: '  Missing test for PDF.  ',
+            hold: true,
+        },
+        {
+            name: 'case-sensitive identifiers',
+            previous: 'Missing test for `encodeID`.',
+            current: 'Missing test for `encodeId`.',
+            hold: false,
+        },
+        {
+            name: 'different thresholds',
+            previous: 'The retry limit must be 10.',
+            current: 'The retry limit must be 100.',
+            hold: false,
+        },
+        {
+            name: 'a paraphrase without a verdict',
+            previous: 'Missing test for PDF.',
+            current: 'PDF export is untested.',
+            hold: false,
+        },
+        {
+            name: 'empty claim with only a summary',
+            previous: '',
+            current: '',
+            hold: false,
+        },
+    ])('on timeout: $name', async ({ previous, current, hold }) => {
+        const old = earlier({
+            suggestionId: 'pr-comment-timeout',
+            relevantFile: undefined,
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-a'],
+            suggestionContent: previous,
+        });
+        const candidate = {
+            label: 'kody_rules',
+            brokenKodyRulesIds: ['rule-a'],
+            oneSentenceSummary: 'Review the implementation',
+            suggestionContent: current,
+        };
+        runSpy.mockRejectedValue(new DOMException('timed out', 'TimeoutError'));
+        const result = await checkRepeats([candidate], [old], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+        expect(runSpy).toHaveBeenCalledTimes(2);
+        expect(result.kept).toEqual(hold ? [] : [candidate]);
+        expect(result.withheld).toEqual(hold ? [candidate] : []);
+    });
+
+    it('retries only missing verdicts and lets an explicit new-place verdict through', async () => {
+        const first = {
+            label: 'bug',
+            relevantFile: 'src/retry.ts',
+            suggestionContent: 'first',
+        };
+        const second = { ...bugComment };
+        runSpy
+            .mockResolvedValueOnce({
+                verdicts: [
+                    {
+                        finding: 0,
+                        verdict: 'same_occurrence',
+                        earlierId: 'bug-old',
+                    },
+                ],
+            })
+            .mockResolvedValueOnce({
+                verdicts: [
+                    { finding: 0, verdict: 'new_place', earlierId: null },
+                ],
+            });
+        const result = await checkRepeats([first, second], [bugComment], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+        expect(runSpy.mock.calls[1][0].user).toContain(
+            `Finding: ${second.suggestionContent}`,
+        );
+        expect(runSpy.mock.calls[1][0].user).not.toContain('Finding: first');
+        expect(result.kept).toEqual([second]);
+        expect(result.repeats.map(({ finding }) => finding)).toEqual([first]);
+        expect(result.model).toBe('ok');
+    });
+
     it('without a model, posts what it could not match by code', async () => {
         hasManagedModelKeyMock.mockReturnValue(false);
-        const finding = { label: 'bug', relevantFile: 'src/retry.ts' };
+        const finding = { ...bugComment };
 
         const result = await checkRepeats([finding], [bugComment], {
             organizationId: 'org-1',
@@ -506,16 +746,68 @@ describe('checkRepeats', () => {
         expect(result.repeats).toEqual([]);
     });
 
+    it('does not retry an invalid API key', async () => {
+        runSpy.mockRejectedValue(
+            Object.assign(new Error('invalid API key'), { status: 401 }),
+        );
+        await checkRepeats(
+            [{ label: 'bug', relevantFile: 'src/retry.ts' }],
+            [bugComment],
+            { organizationId: 'org-1', byokConfig: slot },
+        );
+        expect(runSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('limits both the initial batches and retries on a large review', async () => {
+        const peak = new Map<number, number>();
+        let active = 0;
+        runSpy.mockImplementation(async ({ timeoutMs, user }) => {
+            peak.set(timeoutMs, Math.max(peak.get(timeoutMs) ?? 0, ++active));
+            await new Promise((resolve) => setImmediate(resolve));
+            active--;
+            if (timeoutMs === 120_000)
+                throw new DOMException('timed out', 'TimeoutError');
+            return {
+                verdicts: [...user.matchAll(/<Finding n="(\d+)">/g)].map(
+                    ([, n]) => ({
+                        finding: Number(n),
+                        verdict: 'different_problem',
+                        earlierId: null,
+                    }),
+                ),
+            };
+        });
+        const findings = Array.from({ length: 60 }, () => ({
+            label: 'bug',
+            relevantFile: 'src/retry.ts',
+        }));
+        const result = await checkRepeats(findings, [bugComment], {
+            organizationId: 'org',
+            byokConfig: slot,
+        });
+        expect([...peak.values()]).toEqual([4, 4]);
+        expect(result.kept).toHaveLength(60);
+    });
+
     it('judges ten findings per call', async () => {
         const findings = Array.from({ length: 23 }, (_, i) => ({
             label: 'bug',
             relevantFile: 'src/retry.ts',
             suggestionContent: `finding ${i}`,
         }));
-        runSpy.mockResolvedValue({ verdicts: [] });
+        runSpy.mockImplementation(async ({ user }) => ({
+            verdicts: [...user.matchAll(/<Finding n="(\d+)">/g)].map(
+                ([, n]) => ({
+                    finding: Number(n),
+                    verdict: 'different_problem',
+                    earlierId: null,
+                }),
+            ),
+        }));
 
         const result = await checkRepeats(findings, [bugComment], {
-            organizationId: 'org-1', byokConfig: slot,
+            organizationId: 'org-1',
+            byokConfig: slot,
         });
 
         expect(runSpy).toHaveBeenCalledTimes(3);

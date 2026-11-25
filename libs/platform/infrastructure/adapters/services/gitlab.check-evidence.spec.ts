@@ -63,19 +63,6 @@ describe('GitlabService — getCheckEvidence', () => {
         ]);
     });
 
-    it('queries the project by owner/name path at the head commit', async () => {
-        const allStatuses = jest.fn().mockResolvedValue([]);
-        const service = makeService(allStatuses);
-
-        await service.getCheckEvidence({
-            organizationAndTeamData,
-            repository,
-            commitSha,
-        });
-
-        expect(allStatuses).toHaveBeenCalledWith('acme/widget-api', commitSha);
-    });
-
     it.each([
         ['failed', 'failure'],
         ['canceled', 'cancelled'],

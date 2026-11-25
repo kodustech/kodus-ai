@@ -8,6 +8,11 @@
  *
  * So: skip locally, but make a CI run that lost its Mongo FAIL LOUDLY instead
  * of silently covering nothing.
+ *
+ * The one way out is explicit: SKIP_INTEGRATION=true, the same opt-out the
+ * Postgres suites honour. A job that starts no database and says so (the
+ * mutation gate, scripts/dev/mutation-diff.sh) skips; a job that merely lost
+ * its Mongo still fails.
  */
 
 /** Truthy on GitHub Actions and every other mainstream CI. */
@@ -15,7 +20,10 @@ const isCI = (): boolean =>
     process.env.CI === 'true' || process.env.CI === '1';
 
 export type MongoTestGate = {
-    /** Whether this suite should describe.skip. Never true in CI. */
+    /**
+     * Whether this suite should describe.skip. In CI, true only under
+     * SKIP_INTEGRATION=true.
+     */
     shouldSkip: boolean;
     /** Connection string; only meaningful when shouldSkip is false. */
     mongoUri: string;
@@ -32,6 +40,12 @@ export const resolveMongoTestGate = (
     dbName = 'kodus_test',
     allowHostFallback = true,
 ): MongoTestGate => {
+    // Checked before the URI, like the Postgres suites: the opt-out wins even
+    // when a database happens to be reachable.
+    if (process.env.SKIP_INTEGRATION === 'true') {
+        return { shouldSkip: true, mongoUri: '' };
+    }
+
     const raw =
         process.env.TEST_MONGODB_URI ||
         (allowHostFallback ? process.env.API_MG_DB_HOST : undefined);

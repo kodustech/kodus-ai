@@ -3,7 +3,11 @@ import {
     IdGenerator,
     StorageEnum,
 } from '@libs/core/observability';
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import {
+    BeforeApplicationShutdown,
+    Injectable,
+    OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ConnectionString } from 'connection-string';
 
@@ -14,9 +18,10 @@ import { withLangfuseObservation } from './langfuse';
 import { deriveTu } from './token-usage-tu';
 import { setLlmObservability } from '@libs/llm/llm-observability';
 import {
+    failedCallUsage,
     readAiSdkUsage,
-    readAiSdkUsageFromError,
     type AiSdkUsage,
+    type AiSdkUsageInput,
 } from '@libs/llm/ai-sdk-usage';
 
 export type TokenUsage = {
@@ -147,7 +152,9 @@ function buildUsageSpanAttributes(p: UsageSpanInput): Record<string, any> {
 }
 
 @Injectable()
-export class ObservabilityService implements OnModuleInit {
+export class ObservabilityService
+    implements OnModuleInit, BeforeApplicationShutdown
+{
     private readonly instances = new Map<
         string,
         ReturnType<typeof getObservability>
@@ -193,6 +200,30 @@ export class ObservabilityService implements OnModuleInit {
     async onModuleInit() {
         const serviceName = process.env.COMPONENT_TYPE || 'unknown';
         await this.init(serviceName);
+    }
+
+    /**
+     * NestJS lifecycle hook - Flush observability before Nest re-sends the
+     * shutdown signal. Nest awaits this hook; the process-level SIGTERM/SIGINT
+     * listener does not hold the process, so without it the exit could cut off
+     * telemetry and MongoDB buffer writes. `shutdown()` is idempotent, so the
+     * signal listener and this hook share one run.
+     */
+    async beforeApplicationShutdown(): Promise<void> {
+        const entries = [...this.instances.entries()];
+        const results = await Promise.allSettled(
+            entries.map(([, obs]) => obs.shutdown()),
+        );
+        results.forEach((result, index) => {
+            if (result.status === 'rejected') {
+                this.logger.error({
+                    message: 'Error shutting down observability',
+                    context: ObservabilityService.name,
+                    error: this.safeErrorForLog(result.reason),
+                    metadata: { instance: entries[index][0] },
+                });
+            }
+        });
     }
 
     /**
@@ -426,6 +457,14 @@ export class ObservabilityService implements OnModuleInit {
         traced?: boolean;
         attrs?: Record<string, any>;
         exec: () => Promise<T>;
+        /** On a throw, the usage the caller measured itself (an agent loop's
+         *  finished steps), recorded when it covers more than the error's own:
+         *  an abort carries none, and an output error only the last step's. */
+        usageOnError?: () => AiSdkUsageInput;
+        /** On a throw, attributes to stamp on the span besides usage (an
+         *  in-flight abort and its estimated input). Not part of `tu`, so
+         *  never billed. */
+        attrsOnError?: (err: unknown) => Record<string, unknown> | undefined;
     }): Promise<T> {
         // agentName/phase: prefer explicit attrs (the agent-loop path sets them so
         // the phase column is exact, e.g. 'conversation' not 'conversationAgent');
@@ -496,11 +535,18 @@ export class ObservabilityService implements OnModuleInit {
                     // rethrowing, else the span lands in Mongo with the error
                     // flag and zero tokens while Langfuse shows the real spend.
                     // runInSpan's own catch still stamps `error`/`exception.*`.
-                    const failed = readAiSdkUsageFromError(err);
+                    const failed = failedCallUsage(
+                        err,
+                        params.usageOnError?.(),
+                    );
                     if (failed) {
                         span?.setAttributes?.(
                             usageAttrs(failed.usage, failed.finishReason),
                         );
+                    }
+                    const extra = params.attrsOnError?.(err);
+                    if (extra) {
+                        span?.setAttributes?.(extra);
                     }
                     throw err;
                 }

@@ -278,8 +278,8 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
             });
         });
 
-        describe('action: "closed" → must use DB cache', () => {
-            it('should NOT call CodeManagementService and pass DB data to aggregateAndSaveDataStructure', async () => {
+        describe('action: "closed" → keeps the stored files and commits', () => {
+            it('should NOT call CodeManagementService and tell the save nothing changed', async () => {
                 await insertPRInDB();
 
                 await useCase.execute({
@@ -296,31 +296,14 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
                     mockCodeManagementService.getCommitsForPullRequestForCodeReview,
                 ).not.toHaveBeenCalled();
 
-                // aggregateAndSaveDataStructure receives data FROM THE DATABASE
+                // Nothing read back to be re-saved: the stored files and
+                // commits stay as they are.
                 const callArgs =
                     mockPullRequestsService.aggregateAndSaveDataStructure.mock
                         .calls[0];
-                const filesArg = callArgs[2];
-                const commitsArg = callArgs[7];
-
-                // Files from DB, mapped to API format
-                expect(filesArg).toHaveLength(2);
-                // 'filename' must be full path (from DB 'path')
-                expect(filesArg[0].filename).toBe('src/cached-file.ts');
-                expect(filesArg[1].filename).toBe('src/cached-file2.ts');
-                // 'additions'/'deletions' must be mapped from DB 'added'/'deleted'
-                expect(filesArg[0].additions).toBe(10);
-                expect(filesArg[0].deletions).toBe(5);
-                expect(filesArg[1].additions).toBe(20);
-                expect(filesArg[1].deletions).toBe(0);
-                // 'patch' must be preserved (stored via MongoDB Mixed type)
-                expect(filesArg[0].patch).toBe('@@ cached');
-                expect(filesArg[1].patch).toBe('@@ cached2');
-
-                // Commits from DB
-                expect(commitsArg).toHaveLength(2);
-                expect(commitsArg[0].sha).toBe('db-commit-1');
-                expect(commitsArg[1].sha).toBe('db-commit-2');
+                expect(callArgs[2]).toEqual([]);
+                expect(callArgs[7]).toEqual([]);
+                expect(callArgs[9]).toEqual({ filesUnchanged: true });
             });
 
             it('should pass empty arrays when PR does not exist in DB', async () => {
@@ -352,8 +335,8 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
             });
         });
 
-        describe('action: "assigned" → must use DB cache', () => {
-            it('should NOT call CodeManagementService and pass DB data', async () => {
+        describe('action: "assigned" → keeps the stored files and commits', () => {
+            it('should NOT call CodeManagementService and tell the save nothing changed', async () => {
                 await insertPRInDB();
 
                 await useCase.execute({
@@ -372,11 +355,7 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
                 const callArgs =
                     mockPullRequestsService.aggregateAndSaveDataStructure.mock
                         .calls[0];
-                const filesArg = callArgs[2];
-                const commitsArg = callArgs[7];
-
-                expect(filesArg).toHaveLength(2);
-                expect(commitsArg).toHaveLength(2);
+                expect(callArgs[9]).toEqual({ filesUnchanged: true });
             });
         });
 

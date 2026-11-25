@@ -556,7 +556,92 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
             expect(ops[0].file.path).toBe('src/real.ts');
         });
 
-        it('does not call bulkApplyFileChanges when there are zero ops', async () => {
+        it('does not rewrite a file the push left as it was, but still adds its new suggestions', async () => {
+            const stored = makeExistingFile('src/same.ts', {
+                patch: '@@ same @@',
+                patchTruncated: false,
+                added: 10,
+                deleted: 4,
+                changes: 14,
+                reviewMode: 'light_mode',
+            });
+
+            await callHandleExisting({
+                existingPR: { uuid: 'pr-uuid-same', files: [stored] },
+                changedFiles: [makeChangedFile('src/same.ts', { patch: '@@ same @@' })],
+                prioritized: [
+                    { id: 's-new', relevantFile: 'src/same.ts' } as any,
+                ],
+            });
+
+            const [, , ops] =
+                pullRequestsRepository.bulkApplyFileChanges.mock.calls[0];
+            expect(ops.map((op: any) => op.kind)).toEqual(['addSuggestions']);
+            expect(
+                pullRequestsRepository.computeEmbeddedPatchBytes,
+            ).not.toHaveBeenCalled();
+            expect(
+                pullRequestsRepository.computeFileTotals,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('rewrites a file whose patch or counts changed', async () => {
+            const stored = makeExistingFile('src/edited.ts', {
+                patch: '@@ before @@',
+                added: 10,
+                deleted: 4,
+                changes: 14,
+            });
+
+            await callHandleExisting({
+                existingPR: { uuid: 'pr-uuid-edit', files: [stored] },
+                changedFiles: [
+                    makeChangedFile('src/edited.ts', { patch: '@@ after @@' }),
+                ],
+            });
+
+            const [, , ops] =
+                pullRequestsRepository.bulkApplyFileChanges.mock.calls[0];
+            expect(ops).toHaveLength(1);
+            expect(ops[0]).toMatchObject({
+                kind: 'updateFile',
+                fileId: stored.id,
+                data: { patch: '@@ after @@' },
+            });
+            expect(
+                pullRequestsRepository.computeFileTotals,
+            ).toHaveBeenCalledWith('pr-uuid-edit', 'org-1');
+        });
+
+        it('keeps how a file was reviewed when the Git API sends it without that', async () => {
+            const stored = makeExistingFile('src/reviewed.ts', {
+                patch: '@@ before @@',
+                reviewMode: 'heavy_mode',
+                codeReviewModelUsed: {
+                    generateSuggestions: 'model-a',
+                    safeguard: 'model-b',
+                },
+            });
+
+            await callHandleExisting({
+                existingPR: { uuid: 'pr-uuid-rev', files: [stored] },
+                changedFiles: [
+                    makeChangedFile('src/reviewed.ts', { patch: '@@ after @@' }),
+                ],
+            });
+
+            const [, , ops] =
+                pullRequestsRepository.bulkApplyFileChanges.mock.calls[0];
+            expect(ops[0].data).toMatchObject({
+                reviewMode: 'heavy_mode',
+                codeReviewModelUsed: {
+                    generateSuggestions: 'model-a',
+                    safeguard: 'model-b',
+                },
+            });
+        });
+
+        it('writes nothing and keeps the stored totals when there are zero ops', async () => {
             const existingPR = {
                 uuid: 'pr-uuid-empty',
                 files: [],
@@ -570,13 +655,13 @@ describe('PullRequestsService — #1107 bulk file changes', () => {
             expect(
                 pullRequestsRepository.bulkApplyFileChanges,
             ).not.toHaveBeenCalled();
-            // Totals must still be recomputed — empty changes can
-            // happen on a webhook for status-only updates, and we
-            // want the PR's persisted totals to stay correct even
-            // then.
+            // The totals sum the files' counts: with no file written
+            // they are what is stored, so neither the aggregation over
+            // the document nor the second write runs.
             expect(
                 pullRequestsRepository.computeFileTotals,
-            ).toHaveBeenCalledWith('pr-uuid-empty', 'org-1');
+            ).not.toHaveBeenCalled();
+            expect(pullRequestsRepository.update).not.toHaveBeenCalled();
         });
     });
 

@@ -1,0 +1,113 @@
+---
+title: "自動承認"
+description: "名前付きポリシーと記録された判断で、問題のない PR を承認します。"
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="all-plans" detail="基本の PR 自動承認はすべてのプランで利用できます。">
+    <Badge icon="layer-group" stroke>すべてのプラン</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="policies" detail="承認ポリシーと Human approval は Kodus Cloud の Teams、Enterprise、トライアルで利用できるベータ機能です。ワークスペースでベータ機能へのアクセスが必要です。">
+    <Badge icon="flask" color="orange" stroke>承認ポリシー・ベータ版</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="承認ポリシーと Human approval には Enterprise ライセンスと BETA_FEATURES=true が必要です。">
+    <Badge icon="server" stroke>セルフホスト</Badge>
+  </FeatureBadge>
+</div>
+
+レビューに問題がなければ、Kody は Git プロバイダーにレビューの承認を送信します。PR をマージすることはありません。
+
+## 自動承認を有効にする
+
+**Code review → General** で **Automatic PR approval** をオンにし、**Save settings** をクリックします。承認ポリシーを利用できるワークスペースでは、PR が有効なポリシーにも一致する必要があります。
+
+## 承認ポリシー
+
+各ポリシーには、名前、スイッチ、任意の条件があります。ポリシー内のすべての条件に一致する必要があります。有効なポリシーのいずれかが承認を許可でき、保存された順序で最初に一致したものが PR に記録されます。
+
+新しいポリシーは**オフ**の状態で作成されます。条件のないポリシーは **All clean PRs** を対象とし、エディターと一覧の両方にそう表示されます。ポリシーの追加や編集によって、自動承認がオンになることはありません。
+
+ポリシーは Global、Repository、Directory のスコープをサポートします。インクリメンタルレビューでスキップされたファイルや、レビューコメントの対象外になっているファイルを含め、PR 全体に適用されます。
+
+### ドキュメントだけを変更した PR を承認する
+
+`docs/` 内のファイルだけを変更し、レビューで問題が見つからなかった PR を Kody に承認させる例です。
+
+1. **Code review → General** の **Approval policies** で **Add policy** をクリックします。
+2. 名前を `Documentation only` にします。**Add condition** で **Changed files** を選びます。**Included files** の **Add files** をクリックし、`docs/**` を入力して Enter キーを押します。
+3. **Apply** をクリックしてポリシーをオンにします。**Automatic PR approval** をオンにし、**Save settings** をクリックします。
+
+`docs/` 内のファイルだけを変更し、レビューで問題がなかった PR は、このポリシーの対象です。アプリケーションコードも変更した PR には、別の一致するポリシーが必要です。
+
+### ポリシーの条件
+
+| 条件 | 要件 |
+| --- | --- |
+| PR labels | 一覧に挙げたラベルのうち、少なくとも1つに一致する必要があります。ラベル条件は Bitbucket と Azure Repos では使用できません。 |
+| PR author | PR を作成した人が、一覧に挙げたユーザー名またはボット、あるいは一覧に挙げたプロバイダーのチームの確認済みメンバーである必要があります。すべてのコミットの作成者が確認されるわけではありません。 |
+| Included files | 変更されたすべてのパスが、含めるパターンのいずれかに一致する必要があります。空の場合はすべてのファイルが対象です。 |
+| Excluded files | 一致するパスが1つでもあると、そのポリシーはスキップされます。 |
+| Changed lines | 追加行と削除行の合計が上限以内である必要があります。`yarn.lock` などの指定したファイルは、この集計から除外できます。 |
+| Eligibility instruction | PR がその指示を満たしていることを Kody が確認する必要があります。他の条件の後に、レビューモデルを使用して実行されます。 |
+
+ユーザー名とラベルは大文字と小文字を区別せずに比較されます。チームのメンバーシップは、評価のたびに再確認されます。GitHub のチーム、GitLab のグループ、Azure DevOps のチームがサポートされており、メンバーシップを取得できない場合は一致として扱われません。サポートされていないチームセレクターは、保存時に拒否されます。
+
+名前が変更されたファイルは、旧パスと新パスの両方でカウントされます。行数が不明またはバイナリのファイルは、そのファイルがこの集計から明示的に除外されていない限り、行数の上限を満たせません。ファイルパターンエディターで、glob 構文の検証とサンプルパスのテストができます。
+
+Eligibility instruction が失敗した場合、タイムアウトした場合、または根拠が不足している場合、そのポリシーは承認できません。他の有効なポリシーが一致する場合もあります。
+
+## すべてのポリシーに適用される要件
+
+- レビューは、ブロックする失敗や未解決の指摘なしに完了している必要があります。PR サマリーの生成失敗のみで、投稿済みの問題のないレビューが無効になることはありません。
+- [リスク評価](/ja/how_to_use/code_review/configs/risk)がオンの場合、リスクが見つかったとき、または評価を実行できないときは、すべてのポリシーがブロックされます。
+- **Human approval** に挙げたファイルは、ポリシーの内容にかかわらず、常に自動承認をブロックします。
+- PR の head と base が、レビューしたスナップショットと一致している必要があります。より新しいレビューが失敗または未完了の場合、古い問題のない結果は再利用されません。
+
+リスク評価がオフの場合でも、問題のないレビューとポリシーの要件は引き続き適用されます。ポリシーごとにリスクを回避する設定はありません。
+
+Kody は、ラベルが変更されたとき、または投稿済みの行コメントが解決されたときに、レビュー済みの PR を再検討できます。PR レベルの指摘がある場合は、新たに問題のないレビューが必要です。カスタムエージェントのみの実行が PR 全体を承認することはありません。
+
+## 判断コメント
+
+Kody がポリシーに基づいて承認したとき、または承認を保留したときは、PR に判断コメントを投稿し、常に最新の状態に保ちます。コメントには、一致したポリシー名、または満たされなかった条件の説明が示されます。非公開の Eligibility instruction や、モデルの自由形式の推論は公開されません。
+
+コメントが PR に表示されたことを Kody が確認できない場合、[Pull requests](/ja/how_to_use/reviews/pull_requests) 一覧のその PR に **Approval note unverified** が表示され、ツールチップに Kody が投稿を試みた理由が示されます。PR のコメントとリポジトリ連携の権限を確認してください。
+
+ポリシーを変更または無効にしても、プロバイダー上にすでにある承認は取り消されません。後のレビューが承認を保留した場合（たとえば、問題のない状態でなくなった、またはリスクが見つかった場合）、Kody は以前の承認を取り消し、その理由を示します。
+
+## YAML
+
+リポジトリの設定ファイルを使用する前に、**Code review → General**（リポジトリスコープ）で **Prefer kodus-config.yml settings** をオンにしてください。
+
+```yaml
+pullRequestApprovalActive: true
+approvalSensitivePaths:
+  - 'src/payments/**'
+approvalPolicies:
+  - id: docs
+    name: Documentation
+    enabled: true
+    includedFiles:
+      - 'docs/**'
+  - id: dependency-updates
+    name: Dependency updates
+    enabled: false
+    authors:
+      - 'dependabot[bot]'
+    authorTeams:
+      - 'platform'
+    includedFiles:
+      - 'package.json'
+      - 'yarn.lock'
+    maxChangedLines: 150
+    lineCountExcludedFiles:
+      - 'yarn.lock'
+    instruction: 'Only dependency updates that keep the same major version.'
+```
+
+`approvalSensitivePaths` は **Human approval** の一覧です。`authors` にはユーザー名とボット、`authorTeams` にはプロバイダーのチーム、`labels` には PR のラベルを指定します。ポリシー ID は変更せず、名前は重複しないようにしてください。ポリシーは最大50件、Eligibility instruction は最大4,000文字です。明示的に空のリストを指定すると、すべてのポリシーが無効になります。制限のない既存の承認は、マスタースイッチを維持したまま、有効な1つの **Existing approval policy** に変換されます。
+
+従来の `approvalLabels` と `approvalAuthors` は、移行されたそのポリシーのスコープとして引き続き機能します。優先度の高いファイルが従来のフィルターを使用していて、移行されたポリシーのない新しいポリシーリストと併用されている場合は、ファイルを `approvalPolicies` に更新してください。Kody は、制限を無視するのではなく、曖昧な設定を拒否します。

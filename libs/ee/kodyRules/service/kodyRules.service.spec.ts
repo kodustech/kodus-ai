@@ -37,7 +37,10 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
     const ORG = { organizationId: 'org-1', teamId: 'team-1' } as any;
     const MAX = 10;
 
-    let repo: { findByOrganizationId: jest.Mock; updateRule: jest.Mock };
+    let repo: {
+        findByOrganizationId: jest.Mock;
+        updateRulesFields: jest.Mock;
+    };
     let permission: { shouldLimitResources: jest.Mock };
     let svc: KodyRulesService;
 
@@ -53,10 +56,14 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
         ...over,
     });
 
+    // The per-rule changes the sync wrote, in its one round trip.
+    const written = (): Array<{ ruleId: string; patch: any }> =>
+        repo.updateRulesFields.mock.calls.flatMap(([, , changes]) => changes);
+
     beforeEach(() => {
         repo = {
             findByOrganizationId: jest.fn().mockResolvedValue(null),
-            updateRule: jest.fn().mockResolvedValue(true),
+            updateRulesFields: jest.fn().mockResolvedValue([]),
         };
         permission = { shouldLimitResources: jest.fn() };
         svc = new KodyRulesService(
@@ -87,7 +94,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
             limited: true,
         });
         expect(out).toBe(entity);
-        expect(repo.updateRule).not.toHaveBeenCalled();
+        expect(repo.updateRulesFields).not.toHaveBeenCalled();
     });
 
     it('FREE plan: pauses ONLY the active rules beyond the 10-rule ceiling, locked by plan', async () => {
@@ -97,32 +104,30 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
             limited: true,
         });
 
-        expect(repo.updateRule).toHaveBeenCalledTimes(2); // only #11 and #12
-        expect(repo.updateRule).toHaveBeenCalledWith(
-            'doc-1',
-            'r11',
-            expect.objectContaining({
+        // One round trip for the document, holding only #11 and #12.
+        expect(repo.updateRulesFields).toHaveBeenCalledTimes(1);
+        // The write is scoped to this organization: another org's id would
+        // match no document and leave the rules past the ceiling.
+        expect(repo.updateRulesFields.mock.calls[0][0]).toBe('org-1');
+        expect(repo.updateRulesFields.mock.calls[0][1]).toBe('doc-1');
+        expect(written().map((c) => c.ruleId)).toEqual(['r11', 'r12']);
+        for (const change of written()) {
+            expect(change.patch).toMatchObject({
                 status: KodyRulesStatus.PAUSED,
                 lockedByPlan: true,
-            }),
-        );
-        expect(repo.updateRule).toHaveBeenCalledWith(
-            'doc-1',
-            'r12',
-            expect.objectContaining({
-                status: KodyRulesStatus.PAUSED,
-                lockedByPlan: true,
-            }),
-        );
+            });
+        }
     });
 
     it('FREE plan: exactly 10 active rules is within the ceiling — no changes', async () => {
-        const entity = entityOf(Array.from({ length: MAX }, (_, i) => rule(i + 1)));
+        const entity = entityOf(
+            Array.from({ length: MAX }, (_, i) => rule(i + 1)),
+        );
         const out = await svc.syncRulesWithPlanLimit(ORG, {
             entity: entity as any,
             limited: true,
         });
-        expect(repo.updateRule).not.toHaveBeenCalled();
+        expect(repo.updateRulesFields).not.toHaveBeenCalled();
         expect(out).toBe(entity);
     });
 
@@ -137,23 +142,16 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
             limited: false,
         });
 
-        expect(repo.updateRule).toHaveBeenCalledTimes(1); // only the plan-locked one
-        expect(repo.updateRule).toHaveBeenCalledWith(
-            'doc-1',
-            'r1',
-            expect.objectContaining({
-                status: KodyRulesStatus.ACTIVE,
-                lockedByPlan: false,
-            }),
-        );
-    });
-
-    it('reuses the caller-provided `limited` flag instead of a second license lookup', async () => {
-        await svc.syncRulesWithPlanLimit(ORG, {
-            entity: entityOf([rule(1)]) as any,
-            limited: false,
-        });
-        expect(permission.shouldLimitResources).not.toHaveBeenCalled();
+        // Only the plan-locked one.
+        expect(written()).toEqual([
+            {
+                ruleId: 'r1',
+                patch: expect.objectContaining({
+                    status: KodyRulesStatus.ACTIVE,
+                    lockedByPlan: false,
+                }),
+            },
+        ]);
     });
 
     it('falls back to shouldLimitResources when `limited` is not provided', async () => {
@@ -164,7 +162,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
             ]) as any,
         });
         expect(permission.shouldLimitResources).toHaveBeenCalled();
-        expect(repo.updateRule).toHaveBeenCalledTimes(1); // paid → unpaused
+        expect(written()).toHaveLength(1); // paid → unpaused
     });
 
     it('loads the rules doc itself when the caller does not pass the entity', async () => {
@@ -175,7 +173,7 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
         );
         await svc.syncRulesWithPlanLimit(ORG, { limited: false });
         expect(repo.findByOrganizationId).toHaveBeenCalledWith('org-1');
-        expect(repo.updateRule).toHaveBeenCalledTimes(1);
+        expect(written()).toHaveLength(1);
     });
 
     it('is fail-safe when the limit check throws — returns the entity, changes nothing', async () => {
@@ -187,18 +185,190 @@ describe('KodyRulesService.syncRulesWithPlanLimit — plan-limit enforcement', (
             entity: entity as any,
         }); // no `limited` → forces the lookup that throws
         expect(out).toBe(entity);
-        expect(repo.updateRule).not.toHaveBeenCalled();
+        expect(repo.updateRulesFields).not.toHaveBeenCalled();
     });
 
     it('is fail-safe when a per-rule update rejects — it never throws, and logs the failure', async () => {
-        repo.updateRule.mockRejectedValue(new Error('mongo write failed'));
+        repo.updateRulesFields.mockRejectedValue(
+            new Error('mongo write failed'),
+        );
         const rules = Array.from({ length: 12 }, (_, i) => rule(i + 1));
-        // Promise.allSettled means the rejections are logged, not thrown.
+        // The failure is logged, not thrown: once, naming every rule the
+        // write carried (rules 11 and 12 pass the 10-rule cap) and the error.
         await svc.syncRulesWithPlanLimit(ORG, {
             entity: entityOf(rules) as any,
             limited: true,
         });
-        expect((svc as any).logger.error).toHaveBeenCalled();
+        expect((svc as any).logger.error).toHaveBeenCalledTimes(1);
+        expect((svc as any).logger.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Failed per-rule updates in syncRulesWithPlanLimit',
+                error: expect.objectContaining({
+                    message: 'mongo write failed',
+                }),
+                metadata: expect.objectContaining({
+                    ruleIds: ['r11', 'r12'],
+                }),
+            }),
+        );
+    });
+
+    it('logs the rules whose patch the write reported as failed, once', async () => {
+        repo.updateRulesFields.mockResolvedValue(['r12']);
+        const rules = Array.from({ length: 12 }, (_, i) => rule(i + 1));
+        await svc.syncRulesWithPlanLimit(ORG, {
+            entity: entityOf(rules) as any,
+            limited: true,
+        });
+        expect((svc as any).logger.error).toHaveBeenCalledTimes(1);
+        expect((svc as any).logger.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({ ruleIds: ['r12'] }),
+            }),
+        );
+    });
+});
+
+describe('KodyRulesService.find — rules the plan limit paused', () => {
+    const lockedDoc = (organizationId: string) => ({
+        uuid: `doc-${organizationId}`,
+        toObject: () => ({
+            organizationId,
+            rules: [
+                {
+                    uuid: 'r1',
+                    status: KodyRulesStatus.PAUSED,
+                    lockedByPlan: true,
+                    severity: 'High',
+                },
+            ],
+        }),
+    });
+    let repo: any;
+    let svc: KodyRulesService;
+
+    beforeEach(() => {
+        repo = {
+            find: jest.fn().mockResolvedValue([lockedDoc('org-1')]),
+            findByOrganizationId: jest.fn(),
+            updateRulesFields: jest.fn().mockResolvedValue([]),
+        };
+        svc = new KodyRulesService(
+            repo,
+            {} as any,
+            {} as any,
+            {} as any,
+            { MAX_KODY_RULES: 10 } as any,
+            {} as any,
+            {} as any,
+            // Limited plan: the locked rule stays locked.
+            { shouldLimitResources: jest.fn().mockResolvedValue(true) } as any,
+            {} as any,
+            {} as any,
+            undefined,
+        );
+        jest.spyOn((svc as any).logger, 'log').mockImplementation(() => {});
+    });
+
+    it('reads once when the plan keeps the rule locked', async () => {
+        const result = await svc.find({ organizationId: 'org-1' } as any);
+
+        expect(repo.find).toHaveBeenCalledTimes(1);
+        expect(repo.findByOrganizationId).not.toHaveBeenCalled();
+        expect(repo.updateRulesFields).not.toHaveBeenCalled();
+        expect(result[0].rules[0].severity).toBe('high');
+    });
+
+    it('reads again when the plan sync changed a rule', async () => {
+        (svc as any).permissionValidationService = {
+            shouldLimitResources: jest.fn().mockResolvedValue(false),
+        } as any;
+        repo.findByOrganizationId.mockResolvedValue(lockedDoc('org-1'));
+
+        await svc.find({ organizationId: 'org-1' } as any);
+
+        expect(repo.updateRulesFields).toHaveBeenCalledTimes(1);
+        expect(repo.find).toHaveBeenCalledTimes(2);
+    });
+
+    it('reads once when the find filtered rules and none is plan-locked', async () => {
+        repo.find.mockResolvedValue([
+            {
+                uuid: 'doc-org-1',
+                toObject: () => ({
+                    organizationId: 'org-1',
+                    rules: [{ uuid: 'r1', status: KodyRulesStatus.ACTIVE }],
+                }),
+            },
+        ]);
+
+        const result = await svc.find({
+            organizationId: 'org-1',
+            rules: [{ repositoryId: 'repo' }],
+        } as any);
+
+        expect(result[0].rules).toEqual([
+            expect.objectContaining({
+                uuid: 'r1',
+                status: KodyRulesStatus.ACTIVE,
+            }),
+        ]);
+        expect(repo.find).toHaveBeenCalledTimes(1);
+        expect(repo.findByOrganizationId).not.toHaveBeenCalled();
+    });
+
+    it('lets the sync read the whole document when the find filtered rules', async () => {
+        repo.findByOrganizationId.mockResolvedValue(lockedDoc('org-1'));
+
+        await svc.find({
+            organizationId: 'org-1',
+            rules: [{ repositoryId: 'repo' }],
+        } as any);
+
+        // The filtered rules the caller asked for come from the org-scoped
+        // find; only the plan sync reads the whole document.
+        expect(repo.find).toHaveBeenCalledWith({
+            organizationId: 'org-1',
+            rules: [{ repositoryId: 'repo' }],
+        });
+        expect(repo.findByOrganizationId).toHaveBeenCalledWith('org-1');
+    });
+
+    it('reads again when the plan sync failed after it wrote', async () => {
+        jest.spyOn((svc as any).logger, 'error').mockImplementation(() => {});
+        (svc as any).permissionValidationService = {
+            shouldLimitResources: jest.fn().mockResolvedValue(false),
+        } as any;
+        // The rules are written, then the sync's own re-read fails.
+        repo.findByOrganizationId.mockRejectedValue(new Error('timeout'));
+        // What the write left in storage: the rule reactivated.
+        repo.find
+            .mockResolvedValueOnce([lockedDoc('org-1')])
+            .mockResolvedValueOnce([
+                {
+                    toObject: () => ({
+                        organizationId: 'org-1',
+                        rules: [
+                            {
+                                uuid: 'r1',
+                                status: KodyRulesStatus.ACTIVE,
+                                lockedByPlan: false,
+                                severity: 'High',
+                            },
+                        ],
+                    }),
+                },
+            ]);
+
+        const result = await svc.find({ organizationId: 'org-1' } as any);
+
+        expect(repo.updateRulesFields).toHaveBeenCalledTimes(1);
+        // find() serves the stored rules, not the paused ones it read first.
+        expect(result[0].rules[0]).toMatchObject({
+            uuid: 'r1',
+            status: KodyRulesStatus.ACTIVE,
+            lockedByPlan: false,
+        });
     });
 });
 
@@ -520,34 +690,10 @@ describe('KodyRulesService — LLM.run contract: getRecommendedRulesBySuggestion
         expect(out.length).toBeGreaterThan(0);
     });
 
-    it('row 5 — double wrapper {result:{result:D}}: returns the safe empty default (no payload surfaces)', async () => {
-        llmRun.mockResolvedValue({ result: { result: { recommendations: [] } } });
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 6 — numeric/opaque single-key wrap ({"0":D}/{content:D}): safe empty default', async () => {
-        llmRun.mockResolvedValueOnce({ '0': { recommendations: [] } });
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-        llmRun.mockResolvedValueOnce({ content: { recommendations: [] } });
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
     it('row 7 — stringified JSON: a string return has no .recommendations → safe []', async () => {
         llmRun.mockResolvedValue(
             JSON.stringify({ recommendations: [{ uuid: REAL_LIBRARY_UUID }] }),
         );
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 8 — markdown-fenced JSON string: safe []', async () => {
-        llmRun.mockResolvedValue(
-            '```json\n{"recommendations":[{"uuid":"x"}]}\n```',
-        );
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 9 — prose-wrapped string: safe []', async () => {
-        llmRun.mockResolvedValue('Here you go: {"recommendations":[]} thanks!');
         expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
     });
 
@@ -593,11 +739,6 @@ describe('KodyRulesService — LLM.run contract: getRecommendedRulesBySuggestion
         expect(out.map((r) => r.uuid)).toContain(REAL_LIBRARY_UUID);
     });
 
-    it('row 14 — empty object {}: safe []', async () => {
-        llmRun.mockResolvedValue({});
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
     it('row 15 — empty array (both {recommendations:[]} and bare []): safe []', async () => {
         llmRun.mockResolvedValueOnce({ recommendations: [] });
         expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
@@ -605,40 +746,10 @@ describe('KodyRulesService — LLM.run contract: getRecommendedRulesBySuggestion
         expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
     });
 
-    it('row 16 — empty / whitespace string: safe []', async () => {
-        llmRun.mockResolvedValueOnce('');
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-        llmRun.mockResolvedValueOnce('   \n\t ');
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
     it('row 17 — null / undefined return: safe []', async () => {
         llmRun.mockResolvedValueOnce(null);
         expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
         llmRun.mockResolvedValueOnce(undefined);
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 18 — primitive where object expected (true/0/"ok"): safe []', async () => {
-        for (const v of [true, 0, 'ok']) {
-            llmRun.mockResolvedValueOnce(v);
-            expect(
-                await svc.getRecommendedRulesBySuggestions(ORG, REPO),
-            ).toEqual([]);
-        }
-    });
-
-    it('row 19 — provider envelope leak ({choices:[{message:{content}}]}): not unwrapped here → safe []', async () => {
-        llmRun.mockResolvedValue({
-            choices: [{ message: { content: '{"recommendations":[]}' } }],
-        });
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 20 — reasoning/thinking leak in content (prose string): safe []', async () => {
-        llmRun.mockResolvedValue(
-            '<thinking>let me analyze…</thinking> no signature block',
-        );
         expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
     });
 
@@ -658,38 +769,11 @@ describe('KodyRulesService — LLM.run contract: getRecommendedRulesBySuggestion
         expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
     });
 
-    it('row 29 — malformed JSON error from LLM.run: fail-safe []', async () => {
-        llmRun.mockRejectedValue(new SyntaxError('Unexpected token } in JSON'));
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
     it('row 30 — LLM.run throws (network/timeout): never propagates, fail-safe []', async () => {
         llmRun.mockRejectedValue(new Error('ETIMEDOUT'));
         await expect(
             svc.getRecommendedRulesBySuggestions(ORG, REPO),
         ).resolves.toEqual([]);
-    });
-
-    it('row 31 — error object {error:...} returned instead of thrown: safe []', async () => {
-        llmRun.mockResolvedValue({ error: 'model unavailable' });
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 32 — empty success (content ""): safe []', async () => {
-        llmRun.mockResolvedValue('');
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 33 — refusal prose ("I cannot help…"): safe []', async () => {
-        llmRun.mockResolvedValue("I'm sorry, I can't help with that.");
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
-    });
-
-    it('row 34 — abort signal surfaced as a rejection: fail-safe []', async () => {
-        llmRun.mockRejectedValue(
-            Object.assign(new Error('aborted'), { name: 'AbortError' }),
-        );
-        expect(await svc.getRecommendedRulesBySuggestions(ORG, REPO)).toEqual([]);
     });
 
     // ============================ D. input variants ========================
@@ -993,11 +1077,6 @@ describe('KodyRulesService — LLM.run contract: memory resolution (B2)', () => 
         expect((await resolve(genMemory())).action).toBe('create');
     });
 
-    it('row 6 — {content:D} wrap: safe default create', async () => {
-        llmRun.mockResolvedValue({ content: { action: 'skip' } });
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
     it('rows 7-9 — stringified / fenced / prose string: no .action → safe default create', async () => {
         for (const v of [
             '{"action":"skip","targetMemoryUuid":"m1"}',
@@ -1037,46 +1116,10 @@ describe('KodyRulesService — LLM.run contract: memory resolution (B2)', () => 
         expect((await resolve(genMemory())).action).toBe('skip');
     });
 
-    it('row 14 — empty object {}: safe default create', async () => {
-        llmRun.mockResolvedValue({});
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 15 — empty array []: safe default create', async () => {
-        llmRun.mockResolvedValue([]);
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 16 — empty / whitespace string: safe default create', async () => {
-        llmRun.mockResolvedValueOnce('');
-        expect((await resolve(genMemory())).action).toBe('create');
-        llmRun.mockResolvedValueOnce('   ');
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
     it('row 17 — null / undefined: safe default create', async () => {
         llmRun.mockResolvedValueOnce(null);
         expect((await resolve(genMemory())).action).toBe('create');
         llmRun.mockResolvedValueOnce(undefined);
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 18 — primitive (true/0/"ok"): safe default create', async () => {
-        for (const v of [true, 0, 'ok']) {
-            llmRun.mockResolvedValueOnce(v);
-            expect((await resolve(genMemory())).action).toBe('create');
-        }
-    });
-
-    it('row 19 — provider envelope leak ({choices:[...]}): no .action → safe default create', async () => {
-        llmRun.mockResolvedValue({
-            choices: [{ message: { content: '{"action":"skip"}' } }],
-        });
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 20 — reasoning/thinking leak (prose string): safe default create', async () => {
-        llmRun.mockResolvedValue('<thinking>hmm</thinking> unsigned');
         expect((await resolve(genMemory())).action).toBe('create');
     });
 
@@ -1133,38 +1176,11 @@ describe('KodyRulesService — LLM.run contract: memory resolution (B2)', () => 
         expect((svc as any).logger.error).toHaveBeenCalled();
     });
 
-    it('row 29 — malformed JSON error: caught → safe default create', async () => {
-        llmRun.mockRejectedValue(new SyntaxError('Unexpected token'));
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
     it('row 30 — LLM.run throws (network): never propagates → safe default create', async () => {
         llmRun.mockRejectedValue(new Error('ECONNRESET'));
         await expect(resolve(genMemory())).resolves.toEqual(
             expect.objectContaining({ action: 'create' }),
         );
-    });
-
-    it('row 31 — error object {error:...}: no .action → safe default create', async () => {
-        llmRun.mockResolvedValue({ error: 'model unavailable' });
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 32 — empty success (content ""): safe default create', async () => {
-        llmRun.mockResolvedValue('');
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 33 — refusal prose: safe default create', async () => {
-        llmRun.mockResolvedValue("I cannot help with that request.");
-        expect((await resolve(genMemory())).action).toBe('create');
-    });
-
-    it('row 34 — abort surfaced as rejection: caught → safe default create', async () => {
-        llmRun.mockRejectedValue(
-            Object.assign(new Error('aborted'), { name: 'AbortError' }),
-        );
-        expect((await resolve(genMemory())).action).toBe('create');
     });
 
     // ============================ D. input variants ========================

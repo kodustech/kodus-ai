@@ -1,0 +1,62 @@
+---
+title: "Biblioteca de Reglas"
+description: "Explora Kody Rules y paquetes de reglas listos para usar, y agrégalos a Global, a un repositorio o a un directorio."
+---
+
+La Biblioteca de Reglas es un catálogo de [Kody Rules](/es/how_to_use/code_review/configs/kody_rules) listas para usar, agrupadas en paquetes por tema. Al agregar una regla, se copia a tus reglas, donde puedes editarla, pausarla o eliminarla como cualquier otra.
+
+## Abre la biblioteca
+
+- En **Code review → Kody Rules**, pestaña **Review Rules**, haz clic en **Discovery**.
+- En una lista de reglas vacía, haz clic en **Browse the library**. La lista también muestra tres reglas de la biblioteca para empezar.
+- Busca **Rules library** en la paleta de comandos ⌘K.
+
+La ruta de navegación **Kody Rules → Rules Library** te lleva de vuelta a la página de reglas de la que venías.
+
+## Encuentra una regla
+
+La biblioteca tiene dos vistas, **Featured** y **Browse**, en la navegación izquierda.
+
+- **Featured:** **Recommended for you**, que sugiere reglas de la biblioteca relacionadas con lo que Kody marcó recientemente en tus repositorios conectados (**Refresh** lo recarga), luego la colección **Plug and play** y algunos paquetes.
+- **Browse:** todas las reglas, de 48 en 48 (**Load more** para el resto).
+
+Al escribir en **Search rules...** se cambia a **Browse**. En **Browse** puedes filtrar por:
+
+| Filtro | Opciones |
+|--------|----------|
+| **Severity** | Low, Medium, High, Critical |
+| **Language** | JS/TS, Python, Java, C#, Dart, Ruby, PHP, Go, Kotlin, Rust |
+| **Packs** | Un paquete de la lista, con su cantidad de reglas |
+| **Collections** | **All rules** o **Plug and play** |
+
+**Browse** se abre filtrado por el lenguaje de tu equipo cuando Kodus lo conoce; elige **All** en **Language** para quitar el filtro. **Reset** quita los filtros que definiste.
+
+### Paquetes
+
+Un paquete es un conjunto de reglas en torno a un tema, como el refuerzo de seguridad, testing, observabilidad, accesibilidad, cumplimiento normativo (GDPR, HIPAA, SOC 2, PCI DSS, LGPD) o un stack (React, Next.js, Vue, Node.js, Python, PHP, Flutter). **Browse all packs** abre la página **Rules Packs**, donde puedes buscar paquetes y ver reglas de ejemplo; **Explore pack** abre las reglas del paquete en **Browse**.
+
+## Lee una regla
+
+Cada tarjeta muestra el título, la severidad, el lenguaje y una insignia **Plug-and-Play** en las reglas que están listas para usarse tal cual. Haz clic en una tarjeta para abrirla:
+
+- **Why is it important?**
+- **Instructions**: el texto que Kody comprueba.
+- Un **Bad example** y un **Good example**, cuando la regla los tiene.
+
+Usa el pulgar arriba y el pulgar abajo para calificar una regla. Tu voto se muestra en la tarjeta.
+
+## Agrega reglas
+
+1. Abre una regla y haz clic en la flecha junto a **Add to my rules**.
+2. Elige dónde va: **Global**, uno o más repositorios, o directorios. Solo se listan los lugares donde puedes crear reglas. Si eliges **Global**, la regla se agrega solo a Global, ya que los repositorios la heredan.
+3. Haz clic en **Add to my rules**. Una confirmación lista dónde se agregó la regla.
+
+Cuando abres una regla desde las tres que se muestran en una página **Kody Rules** vacía, **Add to my rules** la agrega directamente a ese ámbito y te lleva de vuelta a la página **Kody Rules**.
+
+Una regla agregada:
+
+- está activa, siempre se ejecuta **Per file** (aunque la regla de la biblioteca describa una comprobación de todo el PR), conserva la severidad y los ejemplos de la biblioteca, y muestra el origen **Library**;
+- no tiene path, por lo que se aplica a todos los archivos, con dos excepciones: una regla con un lenguaje se limita a los archivos de ese lenguaje, y una regla agregada desde dentro de un ámbito de directorio recibe como path la primera carpeta de ese directorio, `<folder>/**`;
+- cuenta para el límite de 10 reglas activas del plan Free. Superado ese límite, la regla se agrega pero queda **Locked**. Consulta los [límites de reglas](/es/how_to_use/code_review/configs/kody_rules#límites-de-reglas).
+
+Si tu workspace usa [configuración centralizada](/es/how_to_use/code_review/configs/centralized_config), al agregar una regla se abre un pull request en el repositorio de configuración.

@@ -56,6 +56,9 @@ describe('GithubService — GitHub App on GitHub Enterprise Server', () => {
                 API_GITHUB_APP_HOST: 'https://ghe.example.com',
             });
             svc.assertGithubOAuthEnv = jest.fn();
+            // The user authorization of the link has its own suite
+            // (github.service.installation-link.spec.ts).
+            svc.assertCanLinkInstallation = jest.fn();
             svc.createOctokitInstance = jest.fn().mockReturnValue({
                 auth: jest.fn().mockResolvedValue({ token: 'ghs_token' }),
                 rest: {

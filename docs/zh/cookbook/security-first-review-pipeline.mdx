@@ -1,89 +1,96 @@
 ---
-title: "安全优先的审查流程"
-description: "设置专注于 OWASP Top 10、密钥检测和安全编码模式的 Kody 规则。"
+title: "安全优先的审查流水线"
+description: "设置专注于 OWASP Top 10、密钥检测和安全编码模式的 Kody Rules。"
 icon: "shield-halved"
 ---
 
-## 为什么需要安全优先的流程
+## 为什么需要专注安全的流水线
 
-通用代码审查捕获风格和 bug。但安全漏洞 — SQL 注入、硬编码密钥、不安全的认证模式 — 需要专门的规则，将发现视为关键阻断。
+通用的代码审查能发现风格问题和 bug。但安全漏洞 — SQL 注入、硬编码密钥、不安全的认证模式 — 需要专门的规则，把发现视为关键阻碍项。
 
-此 cookbook 在现有审查之上设置安全优先层。
+本 cookbook 在你现有的审查之上设置一层安全优先的规则。
 
 ## 步骤 1 — 启用安全分析
 
-确保安全分析已启用：
+请确保 **Code review → What to review** 中的 **Security** 类别已开启，或在 `kodus-config.yml` 中设置（仅当该仓库开启 **Prefer kodus-config.yml settings** 时才会读取）：
 
 ```yaml
 reviewOptions:
   security: true
 ```
 
-这提供 Kodus 的内置安全检查。以下规则在此基础上添加团队的特定安全策略。
+这会提供 Kodus 内置的安全检查。下面的规则在此基础上添加你团队特有的安全策略。
 
-## 步骤 2 — 创建 OWASP 专项规则
+## 步骤 2 — 创建以 OWASP 为重点的规则
 
-### SQL 注入防护
+在 **Code review → Kody Rules** 中创建每条规则：在 **Review Rules** 标签页点击 **New rule**，按下方所示填写各字段。
+
+### 防止 SQL 注入
 
 ```
-名称：禁止原始 SQL 查询
-执行模式：Per file
-路径：**/*.ts, **/*.js, **/*.py
-严重性：严重
-说明：
-  标记任何使用字符串拼接或模板字面量构建 SQL 查询的情况。
-  查找模式如：
+Rule name: No raw SQL queries
+Execution mode: Per file
+Path: **/*.ts, **/*.js, **/*.py
+Severity: Critical
+Instructions:
+  Flag any use of string concatenation or template literals
+  to build SQL queries. Look for patterns like:
   - `query("SELECT ... " + variable)`
   - `query(\`SELECT ... ${variable}\`)`
   - `execute(f"SELECT ... {variable}")`
-  必须使用参数化查询或 ORM。
+  Must use parameterized queries or an ORM instead.
 ```
 
 ### 硬编码密钥检测
 
 ```
-名称：禁止硬编码密钥或凭据
-执行模式：Per file
-路径：**/*
-严重性：严重
-说明：
-  标记 fileDiff 中看起来像 API 密钥、密码、令牌或密钥的任何字符串。
-  需要捕获的模式：
-  - 名为 *_KEY、*_SECRET、*_TOKEN、*_PASSWORD 且赋值为字符串字面量的变量
-  - 匹配 "sk_live_"、"ghp_"、"AKIA"、"Bearer " 后跟长字符串的模式
-  - 包含嵌入密码的连接字符串
-  密钥必须来自环境变量或保管库。
+Rule name: No hardcoded secrets or credentials
+Execution mode: Per file
+Path: **/*
+Severity: Critical
+Instructions:
+  Flag any string that looks like an API key, password,
+  token, or secret in fileDiff. Patterns to catch:
+  - Variables named *_KEY, *_SECRET, *_TOKEN, *_PASSWORD
+    assigned to string literals
+  - Strings matching patterns like "sk_live_", "ghp_",
+    "AKIA", "Bearer " followed by a long string
+  - Connection strings with embedded passwords
+  Secrets must come from environment variables or a vault.
 ```
 
 ### 认证绕过
 
 ```
-名称：不得跳过认证中间件
-执行模式：Per PR
-严重性：严重
-说明：
-  检查 pr_files_diff 中是否有任何处理用户数据但没有认证中间件的路由或控制器。
-  查找：
-  - 没有 @UseGuards、@Authenticated 或等效装饰器的新路由
-  - 中间件绕过模式如 skipAuth: true
-  - 访问用户特定数据的公共端点
-  参考 @file:src/shared/auth/guards/ 了解批准的认证模式。
+Rule name: Auth middleware must not be skipped
+Execution mode: Per PR
+Severity: Critical
+Instructions:
+  Check pr_files_diff for any route or controller that
+  handles user data without auth middleware. Look for:
+  - New routes without @UseGuards, @Authenticated,
+    or equivalent decorators
+  - Middleware bypass patterns like skipAuth: true
+  - Public endpoints that access user-specific data
+  Reference @file:src/shared/auth/guards/auth.guard.ts for the
+  approved auth patterns.
 ```
 
-### XSS 防护
+### 防止 XSS
 
 ```
-名称：禁止未经清理的 dangerouslySetInnerHTML
-执行模式：Per file
-路径：**/*.tsx, **/*.jsx
-严重性：严重
-说明：
-  标记 fileDiff 中任何使用 dangerouslySetInnerHTML 的情况。
-  如果使用，验证输入是否已使用 DOMPurify 或等效库进行清理。
-  未清理的 HTML 注入是严重的 XSS 漏洞。
+Rule name: No dangerouslySetInnerHTML without sanitization
+Execution mode: Per file
+Path: **/*.tsx, **/*.jsx
+Severity: Critical
+Instructions:
+  Flag any use of dangerouslySetInnerHTML in fileDiff.
+  If used, verify the input is sanitized with DOMPurify
+  or an equivalent library. Unsanitized HTML injection
+  is a critical XSS vulnerability.
 ```
 
-## 步骤 3 — 教授安全记忆
+## 步骤 3 — 传授安全记忆
 
 创建适用于所有地方的持久约定：
 
@@ -102,37 +109,25 @@ must use HTTPS only and include rate limiting.
 internal paths, or database details to the client.
 ```
 
-## 步骤 4 — 配置零容忍
+## 步骤 4 — 配置为零容忍
 
-对于安全规则，您希望关键发现能够阻断：
+对于安全规则，你希望关键发现能够阻止合并，并且绝不被过滤掉：
 
-1. 在 **Code review → General** 中，开启 **Enable changing status of Review to 'Request Changes'**，使 Kody 在发现严重问题时请求更改
-2. 将安全规则设置为**严重**级别，使它们始终高于任何严重性过滤器
-3. 不要设置低的 `maxSuggestions` 限制 — 安全发现永远不应被抑制
+1. 在 **Code review → General → Review feedback** 中，开启 **Request changes on critical issues**（当所有已连接的提供商都是 GitLab 时不可用）。Kody 发布 Critical 行内评论时会将审查设为 Request Changes
+2. 将安全规则设置为 **Critical** 严重级别
+3. 在 **Code review → What to review** 中，让 **Apply the threshold to Kody Rules** 保持关闭（默认值）。这样无论 **Minimum severity to post** 是什么，规则都会以任何严重级别发布
 
-## 步骤 5 — 添加依赖审计规则（可选）
-
-如果您使用 MCP 插件，可以检查依赖项：
-
-```
-名称：禁止已知漏洞的依赖项
-执行模式：Per PR
-严重性：严重
-说明：
-  如果 pr_files_diff 修改了 package.json、requirements.txt
-  或任何依赖文件，使用 @MCP 检查添加或更新的包中是否存在
-  已知漏洞。标记任何具有已知严重 CVE 的依赖项。
-```
+Request changes 跟随行内评论，因此由 **Per file** 规则设置。**Per PR** 规则（例如认证中间件那条）只发布一条 pull request 评论，不会设置它。
 
 ## 检查清单
 
-- [ ] reviewOptions 中启用安全分析
-- [ ] SQL 注入规则覆盖所有数据库交互代码
+- [ ] **Security** 类别已开启
+- [ ] SQL 注入规则覆盖所有与数据库交互的代码
 - [ ] 密钥检测规则覆盖所有文件类型
-- [ ] 认证绕过规则引用实际的认证模式
+- [ ] 认证绕过规则引用了你实际的认证模式
 - [ ] XSS 规则覆盖所有前端组件文件
-- [ ] 安全记忆教授一般安全编码原则
-- [ ] 为严重发现启用请求更改
-- [ ] 测试 PR 确认规则正确触发
+- [ ] 安全记忆传授了一般的安全编码原则
+- [ ] **Request changes on critical issues** 已开启，且 **Apply the threshold to Kody Rules** 已关闭
+- [ ] 已用测试 PR 确认规则正确触发
 
-有关配置规则的更多信息，请参阅 [Kody 规则](/zh/how_to_use/code_review/configs/kody_rules)。
+有关配置规则的更多信息，请参阅 [Kody Rules](/zh/how_to_use/code_review/configs/kody_rules)。

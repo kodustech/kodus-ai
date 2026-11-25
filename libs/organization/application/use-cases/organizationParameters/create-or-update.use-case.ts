@@ -1,3 +1,4 @@
+import { byokAuthKind } from '@libs/llm/slot-auth';
 import { encrypt } from '@libs/common/utils/crypto';
 import {
     isByokConfig,
@@ -26,6 +27,18 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { OrganizationParametersEntity } from '@libs/organization/domain/organizationParameters/entities/organizationParameters.entity';
 import {
+    IParametersService,
+    PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
+import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
+import { ultraModeScopes } from '@libs/code-review/domain/review-mode';
+import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
+import { normalizeModelId } from '@libs/ee/ultra-review/ultra-merge-ranking';
+import {
     BadRequestException,
     HttpException,
     Inject,
@@ -43,6 +56,7 @@ const AUDITABLE_KEYS = new Set([
     OrganizationParametersKey.AUTO_JOIN_CONFIG,
     OrganizationParametersKey.TIMEZONE_CONFIG,
     OrganizationParametersKey.COCKPIT_METRICS_VISIBILITY,
+    OrganizationParametersKey.REVIEW_COMMAND_MODES_CONFIG,
 ]);
 
 @Injectable()
@@ -63,6 +77,12 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         @Optional()
         @Inject(KODUS_PROVIDER_GATE_TOKEN)
         private readonly kodusGate?: KodusProviderGate,
+        @Optional()
+        @Inject(PARAMETERS_SERVICE_TOKEN)
+        private readonly parametersService?: IParametersService,
+        @Optional()
+        @Inject(TEAM_SERVICE_TOKEN)
+        private readonly teamService?: ITeamService,
     ) {}
 
     async execute(
@@ -143,6 +163,72 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         }
     }
 
+    /**
+     * The Ultra trio cannot stop being three different models while a review
+     * mode of any team, at any scope, is Ultra: those reviews would all be
+     * refused. Change the mode first. Only a save that breaks a set trio is
+     * checked, so an unrelated edit never trips over it; a read that fails
+     * refuses the save rather than passing unchecked.
+     */
+    private async assertUltraTrioKeptWhileInUse(
+        next: BYOKConfig,
+        previous: BYOKConfig | undefined,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<void> {
+        // Three different models, counted as the review counts them: one
+        // model through two providers is one.
+        const isSet = (config: BYOKConfig | undefined) => {
+            const picked = (config?.routing?.ultraModelIds ?? []).filter(
+                Boolean,
+            );
+            const modelById = new Map(
+                (config?.models ?? []).map((m) => [m?.id, m?.model]),
+            );
+            const models = picked.map((id) => {
+                const model = modelById.get(id);
+                return model ? normalizeModelId(model) : id;
+            });
+            return picked.length === 3 && new Set(models).size === 3;
+        };
+        if (
+            !isSet(previous) ||
+            isSet(next) ||
+            !this.parametersService ||
+            !this.teamService
+        ) {
+            return;
+        }
+        const organizationId = organizationAndTeamData.organizationId;
+        // Active teams only: a removed team's settings cannot be opened to
+        // change its mode, so it must not hold the trio.
+        const teams = await this.teamService.find(
+            { organization: { uuid: organizationId } },
+            [STATUS.ACTIVE],
+        );
+        // One read at a time: an org's teams are few, and a failed read
+        // refuses the save rather than passing unchecked.
+        const scopes: string[] = [];
+        for (const team of teams) {
+            const stored = await this.parametersService.findByKey(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                { organizationId, teamId: team.uuid },
+            );
+            for (const scope of ultraModeScopes(stored?.configValue)) {
+                scopes.push(
+                    teams.length > 1
+                        ? `${scope} of team "${team.name}"`
+                        : scope,
+                );
+            }
+        }
+        if (scopes.length) {
+            throw new BadRequestException(
+                `Ultra review is the review mode in ${scopes.join('; ')}. ` +
+                    'Keep three different Ultra models, or change that mode first.',
+            );
+        }
+    }
+
     private async saveByokConfig(
         organizationParametersKey: OrganizationParametersKey,
         configValue: any,
@@ -197,6 +283,11 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             await this.assertKodusProviderAllowed(
                 configValue as BYOKConfig,
                 isByokConfig(existingConfig) ? existingConfig : undefined,
+            );
+            await this.assertUltraTrioKeptWhileInUse(
+                configValue as BYOKConfig,
+                isByokConfig(existingConfig) ? existingConfig : undefined,
+                organizationAndTeamData,
             );
         }
 
@@ -400,7 +491,8 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!(await this.kodusGate?.isEnabledFor(organizationId))) {
             this.logger.warn({
-                message: 'Refused to connect the Kodus provider: org outside the private alpha',
+                message:
+                    'Refused to connect the Kodus provider: org outside the private alpha',
                 context: CreateOrUpdateOrganizationParametersUseCase.name,
                 metadata: { organizationId, provider: 'kodus' },
             });
@@ -411,8 +503,8 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
     /**
      * v2 encrypt/keep. For each incoming credential, encrypt/keep its secret
      * fields against the matching prior credential (matched by `id`, else by
-     * `provider`): a blank/empty field keeps the prior ciphertext, a real value
-     * is encrypt()'d, and the `••••` mask is NEVER encrypted (encryptOrKeep).
+     * `provider`) on the same endpoint: a blank/empty field keeps the prior
+     * ciphertext, a real value is encrypt()'d, and the `••••` mask is NEVER encrypted (encryptOrKeep).
      * models[] / routing / version pass through untouched — field-level encrypt
      * only, no re-encryption of untouched ciphertext.
      */
@@ -464,11 +556,33 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 }
                 return managed;
             }
+            const byId = existingById.get(cred.id);
+            // A stored key only stays with the endpoint it was saved for.
+            // Repointing a credential — or a new one on another endpoint
+            // borrowing by provider — needs its key typed again; a blank
+            // field would otherwise send the old key to the new host.
+            const candidate =
+                byId ?? existingByProvider.get(cred.provider) ?? undefined;
             const prior =
-                (cred.id ? existingById.get(cred.id) : undefined) ??
-                (cred.provider
-                    ? (existingByProvider.get(cred.provider) ?? undefined)
-                    : undefined);
+                candidate && sameEndpoint(cred, candidate)
+                    ? candidate
+                    : undefined;
+            if (candidate && !prior) {
+                this.logger.warn({
+                    message:
+                        'BYOK save: refused to reuse a stored key across endpoints',
+                    context: CreateOrUpdateOrganizationParametersUseCase.name,
+                    metadata: {
+                        organizationId: this.request?.user?.organization?.uuid,
+                        provider: cred.provider,
+                        credentialId: cred.id,
+                        priorCredentialId: candidate.id,
+                        matchedBy: byId ? 'id' : 'provider',
+                        host: hostOf(credentialBaseURL(cred)),
+                        priorHost: hostOf(credentialBaseURL(candidate)),
+                    },
+                });
+            }
             const encrypted = this.encryptCredentialSecrets(cred, prior);
             // Auth-path integrity: after encrypt/keep, a non-managed credential
             // must carry a usable secret (a kept ciphertext counts). Bedrock
@@ -554,16 +668,14 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             }
             return;
         }
-        const has = (v: unknown): boolean =>
-            typeof v === 'string' && v.length > 0;
         const settings = (cred?.settings ?? {}) as Record<string, unknown>;
 
+        const auth = byokAuthKind(cred?.provider, {
+            ...settings,
+            apiKey: cred?.apiKey,
+        });
         if (cred?.provider === BYOKProvider.AMAZON_BEDROCK) {
-            const hasBearer = has(settings.awsBearerToken);
-            const hasIam =
-                has(settings.awsAccessKeyId) &&
-                has(settings.awsSecretAccessKey);
-            if (!hasBearer && !hasIam) {
+            if (!auth) {
                 throw new BadRequestException(
                     'Bedrock BYOK credential requires either awsBearerToken or awsAccessKeyId + awsSecretAccessKey',
                 );
@@ -571,7 +683,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             return;
         }
 
-        if (!has(cred?.apiKey)) {
+        if (!auth) {
             throw new BadRequestException(
                 `apiKey is required for the ${cred?.provider ?? 'unknown'} BYOK credential`,
             );
@@ -639,3 +751,34 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         return /^.{2}\.{3}.{3}$/.test(value);
     }
 }
+
+const credentialBaseURL = (cred: BYOKCredential): string | undefined => {
+    const value = (cred.settings as Record<string, unknown> | undefined)
+        ?.baseURL;
+    return typeof value === 'string' ? value : undefined;
+};
+
+/** No endpoint on either side counts as the provider's default. */
+const sameEndpoint = (next: BYOKCredential, prior: BYOKCredential): boolean =>
+    normalizeEndpoint(credentialBaseURL(next)) ===
+    normalizeEndpoint(credentialBaseURL(prior));
+
+/** Scheme and host compare without case (URL lowercases them), and a
+ *  trailing slash is dropped; the path and query keep their case, since a
+ *  gateway may route by tenant in the path. */
+const normalizeEndpoint = (value?: string): string => {
+    const trimmed = (value ?? '').trim();
+    if (!URL.canParse(trimmed)) return trimmed;
+    const url = new URL(trimmed);
+    url.pathname = stripTrailingSlashes(url.pathname);
+    return url.href;
+};
+
+const stripTrailingSlashes = (value: string): string => {
+    let end = value.length;
+    while (end > 0 && value[end - 1] === '/') end--;
+    return value.slice(0, end);
+};
+
+const hostOf = (value?: string): string | undefined =>
+    value && URL.canParse(value) ? new URL(value).host : undefined;

@@ -11,7 +11,9 @@ kodus auth status
 kodus review --verbose    # or any command with --verbose
 ```
 
-`kodus status` shows the consolidated state (auth mode, org, repo, hook, version). `--verbose` prints the resolved API URL and per-request details.
+`kodus status` shows the CLI version, auth mode, repository, hook, and skills. `--verbose` prints the URL and status of each API request.
+
+`kodus auth status` reads the credentials the CLI stored. It says "No credentials found" when the only credential is `KODUS_TEAM_KEY` or `KODUS_TOKEN` in the environment. `kodus status` reports those.
 
 ## Common Errors
 
@@ -24,49 +26,80 @@ kodus review --verbose    # or any command with --verbose
     - `pnpm add -g @kodus/cli`
     - `bun add -g @kodus/cli`
 
-    If you installed via the skill installer, re-run `curl -fsSL https://review-skill.com/install | bash` to fix PATH entries.
+    The CLI needs Node.js 22.19.0 or later. If you installed with the installer, re-run `curl -fsSL https://review-skill.com/install | bash` to fix PATH entries.
   </Accordion>
 
-  <Accordion title="AUTH_REQUIRED or 401 Unauthorized">
-    - Run `kodus auth status` to see the current mode.
+  <Accordion title="Not authenticated, AUTH_REQUIRED, or 401 Unauthorized">
+    - Run `kodus status` to see the current mode.
     - If using a team key, verify its **Status** is still **Active** under **Organization → CLI keys** (<a href="https://app.kodus.io/organization/cli-keys" target="_blank">app.kodus.io/organization/cli-keys</a>).
-    - If using personal login, try `kodus auth login` again — the refresh token may have expired.
-    - For CI, confirm `KODUS_TOKEN` (or `KODUS_TEAM_KEY`) is set in the environment the pipeline runs in.
+    - If using personal login, run `kodus auth login` again. The refresh may have failed.
+    - For CI, confirm `KODUS_TEAM_KEY` is set in the environment the pipeline runs in.
     - If self-hosted, confirm `KODUS_API_URL` points to the correct instance.
+
+    When a review is rejected for revoked or expired credentials, `kodus review` runs as a trial review and says so. Trial reviews have lower limits.
+  </Accordion>
+
+  <Accordion title="Requires a logged-in user">
+    `pr reviews`, `agents`, `cockpit`, `usage`, `rules pause`, `rules resume`, `rules delete`, and the `config remote` subcommands `unset`, `model`, `messages`, `language`, and `skills` don't accept a team key. Run `kodus auth login`. A `KODUS_TEAM_KEY` in your environment doesn't get in the way of these commands.
+  </Accordion>
+
+  <Accordion title="Access denied when configuring repositories or Kody Rules with a team key">
+    The API answers "This CLI key is not allowed to configure repositories" or "Team API key does not have permission to manage Kody Rules". A team key can't configure repositories or manage Kody Rules until you allow it. Open **Organization → CLI keys**, click **Configure** on the key, and turn on **Allow repository configuration via CLI** or **Allow Kody Rules management via CLI**. Both are off by default. Logging in with `kodus auth login` uses your role's permissions in the web app instead.
   </Accordion>
 
   <Accordion title="NOT_IN_GIT_REPO">
-    `kodus review` requires a git working directory. `cd` into a repo or initialize one with `git init`. For `kodus config repo` commands, you can pass `owner/repo` explicitly instead of `.`.
+    `kodus review` requires a git working directory. `cd` into a repo or initialize one with `git init`. For `kodus config remote` commands, you can pass `owner/repo` explicitly instead of `.`.
+  </Accordion>
+
+  <Accordion title="No changes to review">
+    The working-tree review covers tracked changes, staged and unstaged. A new file doesn't count until you run `git add` on it. Try:
+
+    - `kodus review --staged` for staged changes only
+    - `kodus review --branch <base>` for the commits on your branch (use this in CI, where the checkout has no uncommitted changes)
+    - `kodus review --commit <sha>` for one commit
+    - `kodus review src/file.ts` for specific files
+
+    This is not an error: the command exits with code 0.
   </Accordion>
 
   <Accordion title="Review takes very long or seems to hang">
-    Large branches (hundreds of files, thousands of lines) can take several minutes. The default request timeout is 60 minutes — you should see progress in verbose mode.
+    The CLI submits the review and checks on it until it finishes, waiting up to 30 minutes. The spinner says whether the review is queued or analyzing. Large branches can take several minutes.
 
-    - Use `--verbose` to confirm the request is in flight.
-    - For very large diffs, prefer `--branch <base>` or `--commit <sha>` over working-tree mode: these let the backend clone the same commit instead of receiving inlined file contents.
-    - Override the timeout with `KODUS_REQUEST_TIMEOUT_MIN=90 kodus review` if needed.
+    - Use `--verbose` to confirm requests are going out.
+    - For very large diffs, prefer `--branch <base>` or `--commit <sha>` over working-tree mode: they send the diff without the file contents.
     - Split work across smaller branches when practical.
   </Accordion>
 
+  <Accordion title="The review is too large, or the API answers 403 or 413">
+    The request is bigger than the API accepts. The CLI refuses a request over 24 MB, or a diff over 20 million characters, before sending it. A gateway in front of the API can also answer 403 or 413 on a large request. Narrow the scope: pass specific files, or use `--branch`, `--commit`, or `--fast`, which send the diff without the file contents.
+  </Accordion>
+
   <Accordion title="Files are being skipped from the review">
-    Review honors the `ignore-files` patterns configured in `kodus config repo`. List current settings with:
-
-    ```bash
-    kodus config repo show
-    ```
-
-    You can add or remove patterns:
-
-    ```bash
-    kodus config repo add-ignore-file . "**/*.generated.ts"
-    kodus config repo remove-ignore-file . "**/*.generated.ts"
-    ```
-
-    Binary files, images, and lockfiles are skipped by default.
+    - A new file that isn't tracked yet is not in any diff. Run `git add` on it.
+    - A file whose diff is over 500,000 characters or whose content is over 2,000,000 characters is skipped in reviews that send file contents (not with `--branch`, `--commit`, or `--fast`). The CLI prints which files and why.
+    - A review sends at most 500 files. The CLI warns when it cuts the list.
   </Accordion>
 
   <Accordion title="Rate limit reached / Trial exhausted">
-    Trial mode allows 5 reviews per day. Sign in with `kodus auth login` or configure a team key via `kodus auth team-key --key kodus_xxxxx` to raise limits. `kodus auth status` prints your current usage.
+    Trial mode allows 2 reviews per hour for each user, device, and repository folder, counted over a rolling hour. Sign in with `kodus auth login` or configure a team key with `KODUS_TEAM_KEY` to raise the limit. In trial mode, `kodus auth status` prints your usage and when it resets. It labels the limit "daily" and shows "Files limit: 10 per review"; the server applies neither: the limit is hourly, and no file limit applies to a trial review. When the trial limit is reached, `kodus review` prints a "Daily limit reached" notice and exits with code 0, whatever `--fail-on` says.
+
+    A signed-in team is limited to 1,000 requests per hour. Reviews, business validation checks, and Kodus Trace session events count toward it. The CLI then says "Rate limit exceeded. Please try again later."
+  </Accordion>
+
+  <Accordion title="The login page doesn't open or the login times out">
+    - The CLI prints the URL when the browser doesn't open. Paste it into a browser.
+    - For a private SSH session or a machine without a browser, use the [device-code sign-in steps](/en/how_to_use/cli/getting_started). In CI, configure `KODUS_TEAM_KEY` as a secret.
+    - When you aren't signed in to Kodus in that browser, the page sends you to the sign-in page, and after you sign in you land on the dashboard, not on **Authorize CLI**. Open the URL again; the CLI keeps waiting.
+    - The login waits up to 10 minutes. "Authorization timed out", "expired", or "denied" means you need to run `kodus auth login` again.
+    - To force the code flow, run `kodus auth login --device-code`.
+  </Accordion>
+
+  <Accordion title="The Hunk viewer doesn't open">
+    `kodus review` opens the Hunk viewer only in an interactive terminal on macOS and Linux, with the default terminal output. It shows the interactive list instead with `--no-hunk`, `--interactive`, `--agent`, `--output`, a non-terminal `--format`, output that isn't a terminal, or on Windows. When you would expect the viewer and it is skipped (on Windows, with `--commit` together with `--branch`, or when no finding has a file and line), the CLI prints a one-line note that says why. `kodus diff` is not available on Windows.
+  </Accordion>
+
+  <Accordion title="Skills aren't installed in my agent">
+    `kodus skills install` reports "No compatible local agent directories were detected" when it finds none of the agent config folders listed in [AI Agents](/en/how_to_use/cli/ai_agents#supported-agents). Run the agent once so it creates its folder, then run the command again.
   </Accordion>
 
   <Accordion title="API returned invalid response (expected JSON, got HTML)">
@@ -74,18 +107,25 @@ kodus review --verbose    # or any command with --verbose
 
     - The URL path (no stray `/api`, `/v1`, etc.).
     - Cloudflare Access credentials (`CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`) if applicable.
-    - That the proxy forwards `Authorization` and `CF-Access-*` headers intact.
+    - That the proxy forwards the `Authorization`, `X-Team-Key`, and `CF-Access-*` headers intact.
   </Accordion>
 
   <Accordion title="HTTPS required for API URL">
-    The CLI rejects non-HTTPS API URLs for everything except `localhost` and `127.0.0.1`. Provision a valid TLS certificate for your self-hosted instance, or use `http://localhost:<port>` for local development.
+    The CLI rejects non-HTTPS API URLs for everything except `localhost` and `127.0.0.1`, prints "Security Error: API URL must use HTTPS protocol", and falls back to `https://api.kodus.io`. Provision a valid TLS certificate for your self-hosted instance, or use `http://localhost:<port>` for local development.
   </Accordion>
 
   <Accordion title="Pre-push hook is not running">
     - Confirm installation: `kodus hook status`.
     - Make sure `.git/hooks/pre-push` is executable.
     - Other hook managers (Husky, Lefthook, pre-commit) may overwrite `.git/hooks/pre-push`. Either chain them or reinstall with `kodus hook install --force`.
+    - The hook reviews only the branch you have checked out, and skips a new branch and a branch deletion. It also skips `git push origin HEAD`, because Git passes `HEAD` to the hook instead of the branch name. Push the branch by name: `git push origin my-branch`.
     - Skip the hook for a single push: `KODUS_SKIP_HOOK=1 git push`.
+  </Accordion>
+
+  <Accordion title="A push is blocked by the pre-push hook">
+    The hook blocks the push when a finding reaches the `--fail-on` severity (`critical` by default), and also when the review itself fails, for example when the API can't be reached. Read the message above Git's "failed to push some refs" line. Use `kodus hook status` to see the severity, and reinstall with `kodus hook install --fail-on error` to change it.
+
+    A push that doesn't run in an interactive terminal, such as one from an IDE or a Git GUI, can't open the Hunk viewer. The hook then shows the interactive list, which needs a terminal, and ends with "User force closed the prompt". Any finding blocks that push, whatever the `--fail-on` severity. Push from a terminal, or skip the hook for that push with `KODUS_SKIP_HOOK=1`.
   </Accordion>
 
   <Accordion title="Device limit reached">
@@ -97,28 +137,37 @@ kodus review --verbose    # or any command with --verbose
 
 Use these in scripts and CI pipelines.
 
-| Code | Meaning                                                                |
-| ---- | ---------------------------------------------------------------------- |
-| `0`  | Success. No issues found, or issues were found but below `--fail-on`. |
-| `1`  | Issues found at or above the `--fail-on` severity.                     |
-| `2`  | CLI usage error (invalid flag, missing argument).                      |
-| `3`  | Authentication or authorization failure.                               |
-| `4`  | Network or API error (timeout, 5xx, invalid response).                 |
-| `5`  | Not in a git repository, or no changes to review.                      |
+| Code | Meaning                                                                                      |
+| ---- | -------------------------------------------------------------------------------------------- |
+| `0`  | Success. No issues found, issues found but below `--fail-on`, no changes to review, or the trial limit was reached (no review ran). |
+| `1`  | Issues at or above the `--fail-on` severity, or an error: bad flag or argument, authentication, network or API failure, not in a git repository. |
 
 <Tip>
-  For CI, pair `--fail-on error` with `--format json` and `--output review.json` to surface structured results as pipeline artifacts without affecting the exit code logic.
+  For CI, pair `--fail-on error` with `--format json` and `--output review.json` to keep structured results as pipeline artifacts.
 </Tip>
+
+### Error codes in agent mode
+
+With `--agent`, a failure prints an envelope with `ok: false` and an `error.code`:
+
+| Code                 | Meaning                                                           |
+| -------------------- | ----------------------------------------------------------------- |
+| `INVALID_INPUT`      | A flag or argument is wrong or missing                            |
+| `AUTH_REQUIRED`      | No usable credential for this command                             |
+| `NOT_IN_GIT_REPO`    | The command needs a git repository                                |
+| `NO_CHANGES`         | Nothing to review in the chosen scope. The exit code is 0         |
+| `API_REQUEST_FAILED` | The API refused the request, or could not be reached              |
+| `REVIEW_TOO_LARGE`   | The diff or request is over the size limit                        |
+| `INTERNAL_ERROR`     | Anything else                                                     |
 
 ## Debugging Tips
 
-- **`--verbose` on any command** prints the resolved API URL, request IDs, and timings.
-- **`kodus schema`** outputs the machine-readable command schema — useful when your agent reports a missing flag.
-- **`--agent`** enforces deterministic, machine-readable output; combine with `--format json` when scripting.
-- **`KODUS_VERBOSE=true`** persists verbose mode across multiple commands in a session.
+- **`--verbose` on any command** prints each API request's method and URL, and error details. Output goes to stderr.
+- **`kodus schema`** outputs the machine-readable command schema, which helps when your agent reports a missing flag.
+- **`--agent`** prints deterministic JSON on the commands that support it; combine with `--fields` to keep it small.
 
 ## Getting Help
 
-- Report bugs: [github.com/kodustech/cli/issues](https://github.com/kodustech/cli/issues)
+- Report bugs: [github.com/kodustech/kodus-ai/issues](https://github.com/kodustech/kodus-ai/issues)
 - Feature requests, configuration questions: your Kodus account manager, or `support@kodus.io`.
-- For self-hosted deployments, include `kodus status --verbose` output when filing an issue.
+- For self-hosted deployments, include the output of `kodus status` and your CLI version (`kodus --version`) when filing an issue.

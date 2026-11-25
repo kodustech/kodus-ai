@@ -5,7 +5,8 @@ import type {
 } from '../business-validation.types';
 import { deriveStatus } from '../judge/validation-verdict';
 import type { CheckedCommit } from '../render';
-import { taskTextHash } from '../carry-over';
+import { matchPrevious, requirementKey, taskTextHash } from '../carry-over';
+import type { Acceptance } from '../judge/validation.types';
 import type { RunAuthor, RunTask } from './validation-run.model';
 import type {
     NewValidationRun,
@@ -78,6 +79,122 @@ export function toRunTasks(result: BusinessValidationResult): RunTask[] {
         }));
     }
     return [];
+}
+
+/** Outcomes whose comment names the references it could not read or find. */
+const NAMES_REFERENCES = new Set(['task_required', 'task_missing', 'skipped']);
+
+/** What `sameResult` compares. */
+type ResultFields = Pick<
+    NewValidationRun,
+    | 'outcome'
+    | 'skipReason'
+    | 'passed'
+    | 'tasks'
+    | 'unseenFiles'
+    | 'attempts'
+    | 'references'
+>;
+
+/**
+ * Whether two runs reached the same result, as the author reads it (#2423):
+ * the outcome, the tasks it is about and the references it looked up, the files the judge
+ * could not see, and per task its verdict and scope, each requirement's state
+ * and acceptance, and each out-of-scope change. A requirement is the same
+ * one by the match the comment's "was missing" uses (`matchPrevious`), so a
+ * re-quote in other words is not a change, and AC01 fixed while AC02 broke
+ * is. The commit is left out: a new push with the same verdict is the same
+ * result.
+ */
+export function sameResult(
+    previous: ResultFields,
+    next: ResultFields,
+): boolean {
+    if (outlineKey(previous) !== outlineKey(next)) {
+        return false;
+    }
+    const before = new Map(
+        (previous.tasks ?? []).map((t) => [`${t.tracker}:${t.id}`, t]),
+    );
+    return (next.tasks ?? []).every((task) => {
+        const prior = before.get(`${task.tracker}:${task.id}`);
+        return !!prior && sameTaskVerdict(prior, task);
+    });
+}
+
+/** Everything but each task's requirements and out-of-scope changes. */
+function outlineKey(run: ResultFields): string {
+    return JSON.stringify([
+        run.outcome,
+        run.skipReason ?? null,
+        run.passed ?? null,
+        // What it looked up, not every mention the text has: a description
+        // that adds "SHA-256" or "#2410" changes nothing the author reads
+        // (a verdict, or a task too thin, names the tasks it read). Where the
+        // comment names the references instead (none could be read, or the
+        // one asked for was not found), they are the result; a stored run
+        // with no lookups still has them.
+        [...new Set((run.attempts ?? []).map((a) => a.reference))].sort(),
+        !NAMES_REFERENCES.has(run.outcome)
+            ? []
+            : [
+                  ...new Set(
+                      (run.references ?? []).map((r) => `${r.kind}:${r.id}`),
+                  ),
+              ].sort(),
+        (run.tasks ?? [])
+            .map((t) =>
+                [t.tracker, t.id, t.passed, t.scopeMismatch ?? false].join('|'),
+            )
+            .sort(),
+        [...(run.unseenFiles ?? [])].sort(),
+    ]);
+}
+
+/**
+ * An acceptance as the comment shows it: who gave it, why and where the work
+ * went. Not its time: the same acceptance carried to a re-check keeps it, and
+ * none (absent) is its own value.
+ */
+function acceptanceKey(accepted: Acceptance | undefined): string {
+    return accepted
+        ? JSON.stringify([
+              accepted.by,
+              accepted.reason ?? null,
+              accepted.movedTo ?? null,
+          ])
+        : 'none';
+}
+
+function sameTaskVerdict(before: RunTask, now: RunTask): boolean {
+    const was = before.requirements ?? [];
+    const is = now.requirements ?? [];
+    if (was.length !== is.length) {
+        return false;
+    }
+    const matched = matchPrevious(
+        is.map((r) => r.requirement),
+        was.map((r) => r.requirement),
+        { similar: !!before.textHash && before.textHash === now.textHash },
+    );
+    const sameRequirements = is.every((r, i) => {
+        const at = matched[i];
+        const prior = at === undefined ? undefined : was[at];
+        return (
+            !!prior &&
+            prior.state === r.state &&
+            acceptanceKey(prior.accepted) === acceptanceKey(r.accepted)
+        );
+    });
+    const changes = (run: RunTask) =>
+        (run.outOfScope ?? [])
+            .map(
+                (o) =>
+                    `${requirementKey(o.change)}:${acceptanceKey(o.accepted)}`,
+            )
+            .sort()
+            .join('\n');
+    return sameRequirements && changes(before) === changes(now);
 }
 
 export function buildRun(

@@ -8,6 +8,7 @@ import {
     IChecksAdapter,
     UpdateCheckRunParams,
 } from '@libs/core/infrastructure/pipeline/interfaces/checks-adapter.interface';
+import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
 import { Injectable } from '@nestjs/common';
 import { Octokit } from '@octokit/rest';
@@ -41,11 +42,212 @@ const checkConclusionMap = {
     [CheckConclusion.NEUTRAL]: GithubCheckConclusion.NEUTRAL,
     [CheckConclusion.SKIPPED]: GithubCheckConclusion.SKIPPED,
 } as const;
+export interface CompletedGithubCheckRun {
+    id: number;
+    conclusion: string;
+    title?: string;
+    htmlUrl?: string;
+}
+
+export interface MergeQueueEntry {
+    /** The commit the merge queue built and tests for the PR. */
+    queueSha: string;
+    /** The PR head at the time of the lookup. */
+    headSha: string;
+}
+
 @Injectable()
 export class GithubChecksService implements IChecksAdapter {
     private readonly logger = createLogger(GithubChecksService.name);
 
     constructor(private readonly gitHubService: GithubService) {}
+
+    /** False under PAT auth, which has no Checks API. */
+    async isChecksApiAvailable(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean> {
+        const authDetails = await this.gitHubService.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+        return authDetails?.authMode !== AuthMode.TOKEN;
+    }
+
+    /**
+     * Newest completed run with this name posted by this deployment's App on
+     * the commit. Returns null under PAT auth (no Checks API) or when none
+     * has completed; throws on GitHub errors or an unknown App id so callers
+     * can tell "no run" from "could not read". Runs from another App
+     * using the same name are ignored, and so are `stale` ones, which only
+     * GitHub can set.
+     */
+    async findLatestCompletedCheckRun(
+        params: FindCheckRunParams,
+    ): Promise<CompletedGithubCheckRun | null> {
+        const { organizationAndTeamData, repository, headSha, name } = params;
+
+        const authDetails = await this.gitHubService.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+        if (authDetails.authMode === AuthMode.TOKEN) {
+            return null;
+        }
+
+        // Without it, runs from another App can't be told apart. Throw so
+        // this is not mistaken for "no finished review".
+        const appId = this.gitHubService.getGithubAppId();
+        if (!appId) {
+            throw new Error(
+                'API_GITHUB_APP_ID is not set; cannot tell Kody check runs from other Apps',
+            );
+        }
+
+        const octokit = await this.gitHubService.getAuthenticatedOctokit(
+            organizationAndTeamData,
+        );
+
+        const response = await octokit.checks.listForRef({
+            owner: repository.owner,
+            repo: repository.name,
+            ref: headSha,
+            check_name: name,
+            status: GithubCheckStatus.COMPLETED,
+            filter: 'all',
+            app_id: appId,
+            per_page: 100,
+        });
+
+        const latest = (response.data.check_runs ?? [])
+            .filter(
+                (run) =>
+                    run.status === GithubCheckStatus.COMPLETED &&
+                    run.conclusion &&
+                    // Octokit's types omit `stale`, but GitHub returns it.
+                    (run.conclusion as string) !==
+                        GithubCheckConclusion.STALE &&
+                    run.completed_at,
+            )
+            .sort(
+                (a, b) =>
+                    Date.parse(b.completed_at) - Date.parse(a.completed_at),
+            )[0];
+
+        if (!latest) {
+            return null;
+        }
+
+        return {
+            id: latest.id,
+            conclusion: latest.conclusion,
+            title: latest.output?.title ?? undefined,
+            htmlUrl: latest.html_url ?? undefined,
+        };
+    }
+
+    /**
+     * The commit GitHub's merge queue built for this PR and the PR head, in
+     * one query, or null when the PR has no queue entry. Anyone with push
+     * access can create a branch named like a queue branch, so only the queue
+     * itself is trusted. Reading the queue needs no extra App permission.
+     * A GraphQL rate limit is thrown as a RateLimitError; other GitHub errors
+     * are thrown as is.
+     */
+    async findMergeQueueEntry(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { owner: string; name: string };
+        prNumber: number;
+    }): Promise<MergeQueueEntry | null> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+
+        const octokit = await this.gitHubService.getAuthenticatedOctokit(
+            organizationAndTeamData,
+        );
+
+        // The PR's own entry, so the lookup does not depend on queue depth.
+        let response: {
+            repository?: {
+                pullRequest?: {
+                    headRefOid?: string;
+                    mergeQueueEntry?: {
+                        headCommit?: { oid?: string } | null;
+                    } | null;
+                } | null;
+            };
+        };
+        try {
+            response = await octokit.graphql(
+                `query ($owner: String!, $name: String!, $number: Int!) {
+                    repository(owner: $owner, name: $name) {
+                        pullRequest(number: $number) {
+                            headRefOid
+                            mergeQueueEntry {
+                                headCommit { oid }
+                            }
+                        }
+                    }
+                }`,
+                {
+                    owner: repository.owner,
+                    name: repository.name,
+                    number: prNumber,
+                },
+            );
+        } catch (error) {
+            throw toGraphqlRateLimitError(error) ?? error;
+        }
+
+        const pullRequest = response?.repository?.pullRequest;
+        const queueSha = pullRequest?.mergeQueueEntry?.headCommit?.oid;
+        const headSha = pullRequest?.headRefOid;
+
+        return queueSha && headSha ? { queueSha, headSha } : null;
+    }
+
+    async createCompletedCheckRun(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { owner: string; name: string };
+        headSha: string;
+        name: string;
+        conclusion: string;
+        detailsUrl?: string;
+        output: { title: string; summary: string };
+    }): Promise<number | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            headSha,
+            name,
+            conclusion,
+            detailsUrl,
+            output,
+        } = params;
+
+        const authDetails = await this.gitHubService.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+        if (authDetails.authMode === AuthMode.TOKEN) {
+            return null;
+        }
+
+        const octokit = await this.gitHubService.getAuthenticatedOctokit(
+            organizationAndTeamData,
+        );
+
+        const now = new Date().toISOString();
+        const response = await octokit.checks.create({
+            owner: repository.owner,
+            repo: repository.name,
+            name,
+            head_sha: headSha,
+            status: GithubCheckStatus.COMPLETED,
+            conclusion: conclusion as GithubCheckConclusion,
+            started_at: now,
+            completed_at: now,
+            ...(detailsUrl ? { details_url: detailsUrl } : {}),
+            output,
+        });
+
+        return response.data.id;
+    }
 
     async findCheckRun(params: FindCheckRunParams): Promise<number | null> {
         const { organizationAndTeamData, repository, headSha, name } = params;
@@ -264,4 +466,32 @@ export class GithubChecksService implements IChecksAdapter {
             return false;
         }
     }
+}
+
+/**
+ * GitHub's GraphQL API reports an exhausted bucket in the response body
+ * (`errors[].type: RATE_LIMITED`) with HTTP 200, so the header-based
+ * classifier never sees it.
+ */
+function toGraphqlRateLimitError(error: unknown): RateLimitError | null {
+    const graphqlErrors = (error as { errors?: Array<{ type?: string }> })
+        ?.errors;
+    if (
+        !Array.isArray(graphqlErrors) ||
+        !graphqlErrors.some((e) => e?.type === 'RATE_LIMITED')
+    ) {
+        return null;
+    }
+
+    const headers = (error as { headers?: Record<string, unknown> })?.headers;
+    const reset = Number(headers?.['x-ratelimit-reset']);
+    const resetAt =
+        Number.isFinite(reset) && reset > 0
+            ? new Date(reset * 1000)
+            : new Date(Date.now() + 60_000);
+
+    return new RateLimitError({
+        resetAt,
+        message: `GitHub GraphQL rate limit: reset at ${resetAt.toISOString()}`,
+    });
 }

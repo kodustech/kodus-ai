@@ -1,5 +1,7 @@
 import { Injectable, Inject, BadRequestException } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
+import { dataCenterConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import { IntegrationConfigKey, PlatformType } from '@libs/core/domain/enums';
 import { ICodeManagementService } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -31,6 +33,15 @@ import {
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
+import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
+import { WebhookSetupResult } from '@libs/platform/domain/platformIntegrations/types/codeManagement/webhook-setup.type';
+import { PullRequestAuthor } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import {
+    IPullRequestsService,
+    PULL_REQUESTS_SERVICE_TOKEN,
+} from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+
+const PULL_REQUEST_AUTHORS_WINDOW_DAYS = 60;
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.BITBUCKET, 'codeManagement')
@@ -56,11 +67,21 @@ export class BitbucketService implements Omit<
 
         @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
         private readonly integrationConfigService: IIntegrationConfigService,
+
+        private readonly moduleRef: ModuleRef,
     ) {}
 
     private async getImplementation(
         organizationAndTeamData?: OrganizationAndTeamData,
+        requestedHost?: string,
     ): Promise<any> {
+        // A request that carries a Data Center host is a first-time setup: no
+        // auth is stored yet, so the lookup below cannot answer, and Cloud
+        // would take the call and report a connection it never made (#2570).
+        if (requestedHost?.trim()) {
+            return this.bitbucketDataCenterService;
+        }
+
         if (!organizationAndTeamData) {
             return this.bitbucketCloudService;
         }
@@ -84,9 +105,7 @@ export class BitbucketService implements Omit<
         }
     }
 
-    async listIssues(
-        params: ListIssuesParams,
-    ): Promise<CodeManagementIssue[]> {
+    async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
         const impl = await this.getImplementation(
             params.organizationAndTeamData,
         );
@@ -118,10 +137,34 @@ export class BitbucketService implements Omit<
         params: any,
     ): Promise<IntegrationConfigEntity | null> {
         try {
+            // Bitbucket Data Center numbers repositories per server: a
+            // config takes the event only with the same project key and slug.
+            if (params?.dataCenterRepository) {
+                const repositoryId = String(params?.repository?.id ?? '');
+                const configs =
+                    await this.integrationConfigService.findIntegrationConfigWithTeams(
+                        IntegrationConfigKey.REPOSITORIES,
+                        repositoryId,
+                        PlatformType.BITBUCKET,
+                    );
+                return (
+                    dataCenterConfigsForWebhook(configs, {
+                        ...params.dataCenterRepository,
+                        repositoryId,
+                    })[0] ?? null
+                );
+            }
+
+            // Scoped to this platform's active integrations, as GitHub's
+            // is: the id alone also matches repositories of other platforms.
             const integrationConfig =
                 await this.integrationConfigService.findOne({
                     configKey: IntegrationConfigKey.REPOSITORIES,
                     configValue: [{ id: params?.repository?.id?.toString() }],
+                    integration: {
+                        status: true,
+                        platform: PlatformType.BITBUCKET,
+                    },
                 });
 
             return integrationConfig &&
@@ -317,7 +360,82 @@ export class BitbucketService implements Omit<
         const impl = await this.getImplementation(
             params.organizationAndTeamData,
         );
+        if (impl === this.bitbucketCloudService) {
+            return this.getCloudPullRequestAuthors(
+                params.organizationAndTeamData,
+                params.requireLoaded === true,
+            );
+        }
         return impl.getPullRequestAuthors(params);
+    }
+
+    /**
+     * Bitbucket Cloud meters 1,000 repository-data requests per hour per
+     * user, and listing recent authors from the API cost at least one request
+     * per configured repository. The PRs are already stored from webhooks and
+     * the backfill, so the authors are read from there at no API cost.
+     */
+    private async getCloudPullRequestAuthors(
+        organizationAndTeamData: OrganizationAndTeamData,
+        requireLoaded: boolean,
+    ): Promise<PullRequestAuthor[]> {
+        const repositories =
+            ((await this.bitbucketCloudService.findOneByOrganizationAndTeamDataAndConfigKey(
+                organizationAndTeamData,
+                IntegrationConfigKey.REPOSITORIES,
+            )) as Repositories[] | null) ?? [];
+
+        const since = new Date();
+        since.setDate(since.getDate() - PULL_REQUEST_AUTHORS_WINDOW_DAYS);
+
+        const pullRequestsService = this.moduleRef.get<IPullRequestsService>(
+            PULL_REQUESTS_SERVICE_TOKEN,
+            { strict: false },
+        );
+        const repositoryIds = repositories
+            .map((repo) => repo.id)
+            .filter(Boolean);
+        const rows =
+            await pullRequestsService.findPullRequestAuthorsOpenedSince(
+                since.toISOString(),
+                organizationAndTeamData.organizationId,
+                repositoryIds,
+            );
+
+        // No recent author is a real answer only once PRs have been stored
+        // for these repositories. Before the first backfill or webhook it
+        // means "not loaded yet": fine for everyone else, but the seat prune
+        // (requireLoaded) must not read it as "nobody opened a PR".
+        if (
+            requireLoaded &&
+            rows.length === 0 &&
+            repositoryIds.length > 0 &&
+            !(await pullRequestsService.hasStoredPullRequests(
+                organizationAndTeamData.organizationId,
+                repositoryIds,
+            ))
+        ) {
+            throw new Error(
+                'No pull requests stored yet for the configured Bitbucket repositories',
+            );
+        }
+
+        // Stored ids come with or without braces depending on the path that
+        // saved the PR; seats and workspace members carry them without.
+        const authors = new Map<string, PullRequestAuthor>();
+        for (const row of rows) {
+            const id = row.id.replace(/[{}]/g, '');
+            if (!id || authors.has(id)) continue;
+            authors.set(id, {
+                id,
+                name: row.name || row.username || id,
+                type: 'user',
+            });
+        }
+
+        return [...authors.values()].sort((a, b) =>
+            a.name.localeCompare(b.name),
+        );
     }
 
     async getPullRequestsWithChangesRequested(params: any) {
@@ -369,6 +487,14 @@ export class BitbucketService implements Omit<
         return impl.getListMembers(params);
     }
 
+    /** Data Center reads the permission; Cloud cannot say. */
+    async userCanWrite(params: any): Promise<boolean | undefined> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.userCanWrite?.(params);
+    }
+
     async verifyConnection(params: any) {
         const impl = await this.getImplementation(
             params.organizationAndTeamData,
@@ -409,6 +535,17 @@ export class BitbucketService implements Omit<
             params.organizationAndTeamData,
         );
         return impl.getChangedFilesSinceLastCommit(params);
+    }
+
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ) {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.getPullRequestFilesAtCommit(params);
     }
 
     async createReviewComment(params: any) {
@@ -523,7 +660,10 @@ export class BitbucketService implements Omit<
 
     async createAuthIntegration(params: any) {
         const impl = await this.getImplementation(
-            params.organizationAndTeamData,
+            params?.organizationAndTeamData,
+            // The submitted host decides, not the stored one: on the first
+            // Data Center connection there is nothing stored to read.
+            params?.host,
         );
         return impl.createAuthIntegration(params);
     }
@@ -627,6 +767,20 @@ export class BitbucketService implements Omit<
         return impl.approvePullRequest(params);
     }
 
+    async dismissOwnPullRequestApprovals(params: any): Promise<number> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.dismissOwnPullRequestApprovals(params);
+    }
+
+    async dismissOwnPullRequestChangeRequests(params: any): Promise<number> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.dismissOwnPullRequestChangeRequests(params);
+    }
+
     async requestChangesPullRequest(params: any) {
         const impl = await this.getImplementation(
             params.organizationAndTeamData,
@@ -674,6 +828,16 @@ export class BitbucketService implements Omit<
             params.organizationAndTeamData,
         );
         return impl.isWebhookActive(params);
+    }
+
+    async ensureRepositoryWebhooks(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositories: Repositories[];
+    }): Promise<WebhookSetupResult> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.ensureRepositoryWebhooks(params);
     }
 
     async diagnoseRepositoryAccess(params: {

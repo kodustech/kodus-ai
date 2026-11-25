@@ -1,3 +1,5 @@
+import { resolveSuggestionLabel } from '@libs/code-review/infrastructure/agents/collaborators/finding-mapper';
+
 import { GeneralistAgentProvider } from './generalist-agent.provider';
 
 const provider = new GeneralistAgentProvider({} as any, {} as any);
@@ -50,10 +52,43 @@ describe('GeneralistAgentProvider — coding-agent instructions', () => {
             'repo_instruction',
         );
     });
+});
 
-    it('keeps three review lenses when instructions were collected', () => {
-        const prompt = categoryPrompt({ repoInstructions: instructions });
-        expect(prompt).toContain('Run three explicit review lenses');
-        expect(prompt).not.toContain('repository-instructions lens');
+// Discarded findings were once tagged with the agent label ('generalist'),
+// overwriting the bug/security/performance label the model emitted. The policy
+// is built the way base-code-review-agent.provider builds it before mapping.
+describe('GeneralistAgentProvider — finding label policy', () => {
+    const resolve = (label: unknown, input: any = {}) =>
+        resolveSuggestionLabel({ label } as any, {
+            categoryLabel: (provider as any).getCategoryLabel(),
+            allowedLabels: allowed(input),
+            supportsMixed: (provider as any).supportsMixedLabels(),
+        });
+
+    it('keeps the label the model emitted, case-normalized', () => {
+        expect(resolve('security')).toBe('security');
+        expect(resolve('PERFORMANCE')).toBe('performance');
+    });
+
+    it('never labels a finding "generalist"; a missing or unknown label falls back to the first allowed one', () => {
+        expect(resolve('generalist')).toBe('bug');
+        expect(resolve(undefined)).toBe('bug');
+        expect(resolve(null)).toBe('bug');
+    });
+
+    it('keeps a label outside the requested categories; the stage discards it, never moves it (#1821)', () => {
+        const narrow = { requestedCategories: ['security', 'performance'] };
+        expect(resolve('bug', narrow)).toBe('bug');
+        expect(resolve('performance', narrow)).toBe('performance');
+    });
+});
+
+describe('GeneralistAgentProvider — a run without a submitted result', () => {
+    // Whether the finder submitted a result (a tool call or a whole final
+    // answer) only matters to an agent that reads a missing one as stopped
+    // early: custom agents. The generalist's prose answers stay with prose
+    // recovery, so an org with no custom agent sees no change (#2172 AC #16).
+    it('is not read as stopped early', () => {
+        expect((provider as any).readsMissingResultAsIncomplete()).toBe(false);
     });
 });

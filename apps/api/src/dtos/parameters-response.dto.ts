@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ApiResponseBaseDto } from './api-response.dto';
 
 export class CodeReviewAutomationLabelDto {
@@ -132,6 +132,9 @@ export class CodeReviewConfigDataDto {
     @ApiProperty()
     showStatusFeedback: boolean;
 
+    @ApiPropertyOptional({ enum: ['balanced', 'heavy', 'ultra'] })
+    reviewMode?: 'balanced' | 'heavy' | 'ultra';
+
     @ApiProperty()
     kodusConfigFileOverridesWebPreferences: boolean;
 
@@ -140,6 +143,21 @@ export class CodeReviewConfigDataDto {
 
     @ApiProperty()
     pullRequestApprovalActive: boolean;
+
+    @ApiPropertyOptional({ type: String, isArray: true })
+    approvalLabels?: string[];
+
+    @ApiPropertyOptional({ type: String, isArray: true })
+    approvalAuthors?: string[];
+
+    @ApiPropertyOptional()
+    approvalRiskActive?: boolean;
+
+    @ApiPropertyOptional()
+    approvalRiskInstructions?: string;
+
+    @ApiPropertyOptional({ type: String, isArray: true })
+    approvalSensitivePaths?: string[];
 
     @ApiProperty()
     isRequestChangesActive: boolean;

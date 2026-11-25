@@ -3,16 +3,14 @@ title: "Feedback on suggestions"
 description: "What feedback records today, and which mechanisms shape future reviews."
 ---
 
-<Note>
-Reaction-based fine-tuning is not currently active. 👍/👎 reactions and suggestion implementation status can be recorded, but they do not train a model, build preference clusters, or filter the next review.
-</Note>
+Reactions on Kody's comments do not train a model or filter the next review. Kody records 👍 and 👎 reactions, and whether each suggestion was applied, and reports them in Cockpit. The one place they act is **Pause ignored and noisy rules** (below): a Kody Rule whose suggestions collect 👎 or are rarely applied can be paused.
 
-A thumbs-up or thumbs-down alone does not explain why a suggestion was rejected. Richer negative-feedback context is needed before this learning loop can be reintroduced.
-
-You can still leave reactions as optional product feedback. Do not expect reacting to a suggestion to automatically suppress similar suggestions in later reviews.
+You can still react to a suggestion as feedback for your team. To stop a kind of suggestion from coming back, use one of the mechanisms below.
 
 ## What affects future reviews
 
-- [Memories](/en/knowledge_base/how-to-teach-ai-your-team-conventions): Persist explicit team conventions through `@kody remember` and conversations.
-- [Kody Rules](/en/how_to_use/code_review/configs/kody_rules): Define standards that are applied during code review.
-- [Automatic Rules Generation](/en/how_to_use/code_review/learning/kody_rules_generation): Generate rules from review history (active by default, or held in **Pending review** for approval when **Kody knowledge approval** is on). This is separate from reaction-based fine-tuning and remains an active feature.
+- **Earlier suggestions on the same PR:** on a PR Kody already reviewed, it sees the suggestions it posted before and whether they were applied, and avoids posting them again.
+- [Memories](/en/knowledge_base/how-to-teach-ai-your-team-conventions): persist explicit team conventions through `@kody remember` and conversations.
+- [Kody Rules](/en/how_to_use/code_review/configs/kody_rules): define standards that are applied during code review.
+- [Automatic Rules Generation](/en/how_to_use/code_review/learning/kody_rules_generation): generate rules from review history. Rules are active by default, or held in **Pending review** for approval when **Kody knowledge approval** is on.
+- [Pause ignored and noisy rules](/en/how_to_use/code_review/configs/kody_rules#pause-ignored-and-noisy-rules): on Teams and Enterprise plans, off by default. When on, Kody pauses once a day the active rules labeled **Ignored** (few suggestions applied) or **Noisy** (mostly 👎) over the last 30 days.

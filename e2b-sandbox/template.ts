@@ -48,10 +48,12 @@ export const kodusTemplate = Template()
         'sudo mv sslocal /usr/local/bin/',
         ...installSecurityTools,
     ])
-    .copy('config.json', 'config.json')
+    // The config holds the proxy's password: root-only, outside the review
+    // user's home (ROOT_ONLY_DIR/PROXY_CONFIG_FILE in review-user-privileges).
+    .copy('config.json', '/etc/kodus/proxy.json', { user: 'root', mode: 0o600 })
     .copy('iptables-rules.sh', 'iptables-rules.sh', { mode: 0o755 })
     .setStartCmd(
-        'sudo sslocal -c config.json --protocol redir -b 0.0.0.0:12345 --daemonize && sudo ./iptables-rules.sh',
+        'sudo sslocal -c /etc/kodus/proxy.json --protocol redir -b 0.0.0.0:12345 --daemonize && sudo ./iptables-rules.sh',
         waitForPort(12345),
     );
 

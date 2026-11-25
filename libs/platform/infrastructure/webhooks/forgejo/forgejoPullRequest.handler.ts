@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { reviewCommandAccess } from '@libs/platform/application/services/commenter-access';
 import { EnqueueAstGraphUpdateOnMergedUseCase } from '@libs/code-review/application/use-cases/enqueue-ast-graph-update-on-merged.use-case';
 import { EnqueueImplementationCheckUseCase } from '@libs/code-review/application/use-cases/enqueue-implementation-check.use-case';
 import {
@@ -7,9 +8,13 @@ import {
     isKodyMentionNonReview,
     isReviewCommand,
     parseReviewDirective,
-    parseCustomAgentCommand
+    requestedReviewModeOf,
+    parseCustomAgentCommand,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
-import { getMappedPlatform } from '@libs/common/utils/webhooks';
+import {
+    forgejoWebhookSource,
+    getMappedPlatform,
+} from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
@@ -142,6 +147,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.FORGEJO,
             String(payload?.repository?.id),
+            forgejoWebhookSource(payload),
         );
 
         // If no active automation found, complete the webhook processing immediately
@@ -159,7 +165,10 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         }
 
         try {
-            await this.savePullRequestUseCase.execute(params);
+            await this.savePullRequestUseCase.execute({
+                ...params,
+                organizationAndTeamData: context?.organizationAndTeamData,
+            });
 
             if (this.enqueueCodeReviewJobUseCase) {
                 this.enqueueCodeReviewJobUseCase
@@ -237,7 +246,10 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
             }
 
             if (payload?.action === WebhookForgejoHookIssueAction.CLOSED) {
-                this.generateIssuesFromPrClosedUseCase.execute(params);
+                this.generateIssuesFromPrClosedUseCase.execute({
+                    ...params,
+                    organizationAndTeamData: context?.organizationAndTeamData,
+                });
 
                 // Durable sandbox invalidation via outbox (SBX-05).
                 // Written in the same DB transaction context so it survives worker crashes.
@@ -398,6 +410,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
         const context = await this.webhookContextService.getContext(
             PlatformType.FORGEJO,
             repository.id,
+            forgejoWebhookSource(payload),
         );
         if (!context?.organizationAndTeamData) {
             return;
@@ -530,7 +543,6 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
             const customAgentSlug = parseCustomAgentCommand(comment.body);
 
             const isStartCommand =
-
                 isReviewCommand(comment.body) || !!customAgentSlug;
             const isForceCommand = isForceReviewCommand(comment.body);
             const hasMarker = hasReviewMarker(comment.body);
@@ -563,6 +575,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                     const context = await this.webhookContextService.getContext(
                         PlatformType.FORGEJO,
                         String(repository.id),
+                        forgejoWebhookSource(payload),
                     );
 
                     if (!context?.organizationAndTeamData) {
@@ -637,6 +650,8 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
 
                     const updatedParams = {
                         ...params,
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
                         payload: {
                             ...payload,
                             action: 'synchronize',
@@ -645,6 +660,16 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                                 : 'command',
                             triggerCommentId: comment?.id,
                             reviewDirective: parseReviewDirective(comment.body),
+                            requestedReviewMode: requestedReviewModeOf(
+                                comment.body,
+                            ),
+                            requestedReviewModeAccess:
+                                await reviewCommandAccess(
+                                    this.codeManagement,
+                                    params,
+                                    context?.organizationAndTeamData,
+                                    requestedReviewModeOf(comment.body),
+                                ),
                             onlyCustomAgent: customAgentSlug,
                             pull_request:
                                 pullRequestData ||

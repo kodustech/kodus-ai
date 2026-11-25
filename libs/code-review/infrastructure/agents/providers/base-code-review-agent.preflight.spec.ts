@@ -3,38 +3,6 @@ import { AgentContextWindowTooSmallError } from '@libs/llm/errors';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 
 describe('assertContextWindowFitsOverhead', () => {
-    it('does not throw when contextWindow comfortably exceeds the static overhead', () => {
-        expect(() =>
-            assertContextWindowFitsOverhead({
-                input: {
-                    changedFiles: [],
-                    prTitle: 'Add feature',
-                    prBody: 'small body',
-                },
-                contextWindow: 128_000,
-                modelName: 'gemini-2.5-pro',
-            }),
-        ).not.toThrow();
-    });
-
-    it('throws AgentContextWindowTooSmallError when overhead alone exceeds the window (Llama 12,288)', () => {
-        // The agent's static prompt overhead is ~15_500 tokens (system prompt
-        // + tool schemas). A 12_288-token Llama cannot fit even an empty PR.
-        expect(() =>
-            assertContextWindowFitsOverhead({
-                input: {
-                    changedFiles: [
-                        { filename: 'a.ts', patch: 'diff --git a/a.ts b/a.ts' },
-                    ] as any,
-                    prTitle: 'tiny',
-                    prBody: 'tiny',
-                },
-                contextWindow: 12_288,
-                modelName: 'meta-llama/Llama-3.3-70B-Instruct',
-            }),
-        ).toThrow(AgentContextWindowTooSmallError);
-    });
-
     it('error carries the numeric context for telemetry/UI', () => {
         try {
             assertContextWindowFitsOverhead({
@@ -70,13 +38,8 @@ describe('assertContextWindowFitsOverhead', () => {
         ).not.toThrow();
     });
 
-    describe('adaptive-fit profile is honored', () => {
-        it('compact profile reduces estimated overhead → 16K window passes preflight', () => {
-            // Without the profile, 16K throws because the 15.5K-token
-            // static overhead leaves ~0 headroom — exactly the bug the
-            // first post-fix benchmark surfaced. With the compact
-            // profile in input, overhead drops to ~12K, leaving ~4K
-            // headroom for diffs.
+    describe('the overhead must leave room in the prompt budget', () => {
+        it('throws at 16K: the compact overhead fills the 55% budget', () => {
             expect(() =>
                 assertContextWindowFitsOverhead({
                     input: {
@@ -90,21 +53,10 @@ describe('assertContextWindowFitsOverhead', () => {
                     contextWindow: 16_000,
                     modelName: 'llama-16k',
                 }),
-            ).not.toThrow();
+            ).toThrow(AgentContextWindowTooSmallError);
         });
 
-        it('compact profile reduces 12K overhead to JUST under the window — preflight passes', () => {
-            // After the compact path drops 14K chars from the static
-            // overhead, a 12K window has ~288 tokens of headroom over
-            // the overhead estimate. The overhead preflight (this one)
-            // passes; whether the diffs + output reserve fit is left to
-            // the agent loop's compressor.
-            //
-            // This locks in the structural change: 12K is no longer
-            // blocked by the OVERHEAD preflight. Whether 12K is
-            // end-to-end viable is a benchmark question, not a unit
-            // test question — the benchmark sweep is the source of
-            // truth.
+        it('throws at 12K even though the overhead fits the window', () => {
             expect(() =>
                 assertContextWindowFitsOverhead({
                     input: {
@@ -116,23 +68,51 @@ describe('assertContextWindowFitsOverhead', () => {
                     contextWindow: 12_288,
                     modelName: 'llama-12k',
                 }),
-            ).not.toThrow();
+            ).toThrow(AgentContextWindowTooSmallError);
         });
 
-        it('callGraph is excluded from estimate when dropCallGraph is set', () => {
-            // A big callGraph (10K chars) would normally push overhead
-            // over a 16K window. Profile drops it → overhead unchanged
-            // and the preflight passes.
-            const bigCallGraph = 'edge: a→b\n'.repeat(1_000); // ~10K chars
+        it('fits a 24K window only with the compact overhead', () => {
+            const compact = resolveAdaptiveProfile(24_000);
+            const check = (adaptiveProfile: any) => () =>
+                assertContextWindowFitsOverhead({
+                    input: { changedFiles: [], adaptiveProfile },
+                    contextWindow: 24_000,
+                    modelName: 'llama-24k',
+                });
+            expect(check(compact)).not.toThrow();
+            expect(check({ ...compact, compactPrompt: false })).toThrow(
+                AgentContextWindowTooSmallError,
+            );
+        });
+
+        it('leaves out a callGraph the profile drops', () => {
+            const light = resolveAdaptiveProfile(32_768);
+            const check = (adaptiveProfile: any) => () =>
+                assertContextWindowFitsOverhead({
+                    input: {
+                        changedFiles: [],
+                        callGraph: 'edge: a→b\n'.repeat(2_000), // ~20K chars
+                        adaptiveProfile,
+                    },
+                    contextWindow: 32_768,
+                    modelName: 'llama-32k',
+                });
+            expect(check({ ...light, dropCallGraph: false })).toThrow(
+                AgentContextWindowTooSmallError,
+            );
+            expect(check(light)).not.toThrow();
+        });
+
+        it('a full-size window still allows overhead past the budget', () => {
             expect(() =>
                 assertContextWindowFitsOverhead({
                     input: {
                         changedFiles: [],
-                        callGraph: bigCallGraph,
-                        adaptiveProfile: resolveAdaptiveProfile(16_000),
+                        callGraph: 'x'.repeat(400_000),
+                        adaptiveProfile: resolveAdaptiveProfile(200_000),
                     },
-                    contextWindow: 16_000,
-                    modelName: 'llama-16k',
+                    contextWindow: 200_000,
+                    modelName: 'big',
                 }),
             ).not.toThrow();
         });

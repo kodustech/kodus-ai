@@ -1,31 +1,26 @@
 ---
 title: "How to set up AI code review on Azure DevOps"
-description: "Install and configure Kodus for Azure DevOps repositories to get automated AI code review on every pull request."
+description: "Connect Azure DevOps to Kodus and select repositories for automated review."
 ---
 
-Kodus integrates with Azure DevOps via webhooks. Once configured, every pull request gets reviewed automatically.
+Kodus connects to Azure DevOps Services (`dev.azure.com`) with a personal access token and receives pull request events through service hooks.
 
 ## Steps
 
 1. **Create an account** at [kodus.io](https://kodus.io) or [self-host Kodus](/en/how_to_deploy/deploy_kodus/generic_vm)
-2. **Connect Azure DevOps** — in the **Connect your Git tool** step of onboarding, open the **Azure Repos** tab, click **Connect via token**, and enter your Azure Repos organization name and Personal Access Token (you can also connect later from **Repositories** in the sidebar)
-3. **Select repositories** — choose which Azure DevOps repositories Kodus should review
-4. **Webhooks** — Kodus creates the pull request service hooks automatically when you save the selection. If that didn't happen (typically on self-hosted installs), register them manually with the [Azure DevOps Webhooks](/en/how_to_deploy/platforms/azure_devops/azdevops_webhook) guide
-5. **Open a pull request** — Kodus reviews it automatically
+2. **Connect Azure DevOps** — in the **Connect your Git tool** step of onboarding, open the **Azure Repos** tab, click **Connect via token**, and enter your Azure Repos organization name and Personal Access Token (you can also connect later from **Repositories** in the sidebar: click **Azure Repos** under **Connect a provider**)
+3. **Select repositories** — choose which Azure DevOps repositories Kodus should review, or turn on [Review every repository](/en/how_to_use/code_review/configs/review_all_repositories) on **Repositories**
+4. **Webhooks** — Kodus creates the pull request service hooks automatically when you save the selection. That needs the **Edit subscriptions** permission on the project (Project Administrators have it). Check them under **Project settings** → **Service hooks**; **Repositories** lists a repository whose hooks failed, with the reason, only when **Review every repository** is on. If they are missing, register the hooks manually with the [Azure DevOps Webhooks](/en/how_to_deploy/platforms/azure_devops/azdevops_webhook) guide
+5. Open a pull request in a selected repository. See [what Kody posts and how to check its status](/en/how_to_use/code_review/flow).
 
-## What you get
-
-- Automated reviews on every PR
-- Comments posted directly in the pull request
-- Customizable rules, review categories, and a minimum severity threshold
-- Business logic validation against linked work items
+For Business Logic Validation with an Azure Boards work item, select a custom plugin as the **Task source**. [See Business Logic settings](/en/how_to_use/code_review/business_logic_validation).
 
 ## Custom configuration
 
-Drop a `kodus-config.yml` in your repo root to customize behavior per repository. The file overrides web settings once **kodus Config File Overrides Web Preferences** is on for that repository (**Code review → General**).
+Use [kodus-config.yml](/en/how_to_use/code_review/configs/general#kodus-config-yml) to customize review settings per repository.
 
 ## Using a Personal Access Token
 
-Azure DevOps requires a PAT for Kodus to access your repositories and post review comments. Make sure the token has the appropriate scopes for code read and PR comment access.
+Azure DevOps requires a PAT for Kodus to access your repositories and post review comments. Create it with the scopes listed in the [Azure DevOps PAT](/en/how_to_use/code_review/general_config/azure_devops_pat) guide; without **Code: Read & Write**, Kodus can read your repositories but cannot comment.
 
 For the full setup guide, see [Azure DevOps Webhooks](/en/how_to_deploy/platforms/azure_devops/azdevops_webhook) and [Azure DevOps PAT](/en/how_to_use/code_review/general_config/azure_devops_pat).

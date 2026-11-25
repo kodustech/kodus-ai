@@ -8,7 +8,20 @@ import type {
     ConfigRepository,
     ConfigTeam,
 } from '../../types/config.js';
+import type { IssueListItem, IssuesFixPrompt } from '../../types/issues.js';
 import type { RepositorySettings } from '../../types/repo-config.js';
+import type {
+    CodeReviewScope,
+    FormattedCodeReviewParameter,
+    LLMConfigStatus,
+    SaveCodeReviewConfigParams,
+    SaveCodeReviewConfigResult,
+    PreviewPrRiskParams,
+    PreviewPrRiskResult,
+    PreviewPrApprovalParams,
+    PreviewPrApprovalResult,
+    TestByokModelResult,
+} from '../../types/review-settings.js';
 import type {
     BusinessValidationResponse,
     PullRequestSuggestionsResponse,
@@ -17,10 +30,13 @@ import type {
     TrialReviewResult,
 } from '../../types/review.js';
 import type {
+    ChangeKodyRulesStatusRequest,
     CreateKodyRuleRequest,
     KodyRule,
     KodyRuleMutationResult,
+    KodyRulesStatusResult,
     UpdateKodyRuleRequest,
+    UserKodyRulePayload,
     ViewKodyRulesRequest,
 } from '../../types/rules.js';
 import type { SessionApiEvent } from '../../types/session-events.js';
@@ -148,6 +164,32 @@ export interface IConfigApi {
         accessToken: string,
     ): Promise<CentralizedConfigActionResponse>;
     downloadCentralizedConfig(accessToken: string): Promise<Uint8Array>;
+    getFormattedCodeReviewParameter(
+        accessToken: string,
+        teamId: string,
+        options?: { includeFileOverlay?: boolean },
+    ): Promise<FormattedCodeReviewParameter>;
+    getCodeReviewScopes(
+        accessToken: string,
+        teamId: string,
+    ): Promise<CodeReviewScope[]>;
+    saveCodeReviewConfig(
+        accessToken: string,
+        params: SaveCodeReviewConfigParams,
+    ): Promise<SaveCodeReviewConfigResult>;
+    previewPrRisk(
+        accessToken: string,
+        params: PreviewPrRiskParams,
+    ): Promise<PreviewPrRiskResult>;
+    previewPrApproval(
+        accessToken: string,
+        params: PreviewPrApprovalParams,
+    ): Promise<PreviewPrApprovalResult>;
+    getLLMConfigStatus(accessToken: string): Promise<LLMConfigStatus>;
+    testByokModel(
+        accessToken: string,
+        params: { provider: string; model: string },
+    ): Promise<TestByokModelResult>;
 }
 
 export interface ISessionsApi {
@@ -168,6 +210,23 @@ export interface IRulesApi {
         accessToken: string,
         query?: ViewKodyRulesRequest,
     ): Promise<KodyRule[]>;
+    findRulesAsUser(
+        accessToken: string,
+        query?: ViewKodyRulesRequest,
+    ): Promise<KodyRule[]>;
+    saveRuleAsUser(
+        accessToken: string,
+        payload: UserKodyRulePayload,
+    ): Promise<KodyRuleMutationResult>;
+    changeStatusAsUser(
+        accessToken: string,
+        payload: ChangeKodyRulesStatusRequest,
+    ): Promise<KodyRulesStatusResult>;
+}
+
+export interface IIssuesApi {
+    listIssues(accessToken: string): Promise<IssueListItem[]>;
+    fixPrompt(accessToken: string, ids: string[]): Promise<IssuesFixPrompt>;
 }
 
 export interface IKodusApi {
@@ -177,4 +236,5 @@ export interface IKodusApi {
     trial: ITrialApi;
     sessions: ISessionsApi;
     rules: IRulesApi;
+    issues: IIssuesApi;
 }

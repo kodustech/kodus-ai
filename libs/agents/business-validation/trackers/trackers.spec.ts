@@ -100,6 +100,24 @@ describe('buildTaskTrackers', () => {
         ).toEqual(['Azure DevOps']);
     });
 
+    it("lets the team's own Jira plugin read a Jira Server link on the company's host (#2422)", () => {
+        const [link] = extractTaskReferences({
+            body: 'Implements https://tracker.acme.com/browse/PAY-123',
+        });
+        const [jiraServer] = buildTaskTrackers(
+            [
+                server({
+                    name: 'Jira Server',
+                    integrationId: 'jira-server',
+                    provider: 'custom',
+                }),
+            ],
+            { taskSource: 'jira-server', taskSourceTool: 'get_issue' },
+        );
+        expect(link).toMatchObject({ kind: 'key', id: 'PAY-123' });
+        expect(jiraServer.canRead(link)).toBe(true);
+    });
+
     it('uses nothing when the chosen source is no longer connected', () => {
         expect(buildTaskTrackers(servers, { taskSource: 'gone' })).toEqual([]);
     });
@@ -272,11 +290,19 @@ describe('McpTaskTracker', () => {
                 };
             },
         });
-        const lookup = await new LinearTracker(s).read(ref('SAA-96'), {
-            organizationAndTeamData: {} as any,
-        });
-        expect(calls).toBe(2);
-        expect(lookup.status).toBe('found');
+        // The second read waits RETRY_DELAY_MS (1s); fake timers skip it.
+        jest.useFakeTimers();
+        try {
+            const pending = new LinearTracker(s).read(ref('SAA-96'), {
+                organizationAndTeamData: {} as any,
+            });
+            await jest.runAllTimersAsync();
+            const lookup = await pending;
+            expect(calls).toBe(2);
+            expect(lookup.status).toBe('found');
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('reads a tool the org turned off as setup, not an outage, without retrying', async () => {

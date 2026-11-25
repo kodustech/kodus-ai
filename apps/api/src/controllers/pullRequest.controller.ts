@@ -9,10 +9,12 @@ import { BackfillHistoricalPRsUseCase } from '@libs/platformData/application/use
 import { GetEnrichedPullRequestsUseCase } from '@libs/code-review/application/use-cases/dashboard/get-enriched-pull-requests.use-case';
 import {
     GetPullRequestsDailyDigestUseCase,
+    parsePullRequestsDailyDigestFields,
     PullRequestsDailyDigest,
 } from '@libs/code-review/application/use-cases/dashboard/get-pull-requests-daily-digest.use-case';
 import {
     GetPullRequestsFacetsUseCase,
+    parsePullRequestsFacetFields,
     PullRequestsFacets,
 } from '@libs/code-review/application/use-cases/dashboard/get-pull-requests-facets.use-case';
 import {
@@ -54,7 +56,10 @@ import { filter, map, takeUntil } from 'rxjs/operators';
 import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adapters/services/automationExecution.service';
 import { BackfillPRsDto } from '../dtos/backfill-prs.dto';
 import { EnrichedPullRequestsQueryDto } from '@libs/code-review/dtos/dashboard/enriched-pull-requests-query.dto';
-import { PaginatedEnrichedPullRequestsResponse } from '@libs/code-review/dtos/dashboard/paginated-enriched-pull-requests.dto';
+import {
+    PaginatedEnrichedPullRequestsResponse,
+    PullRequestExecutionsTotals,
+} from '@libs/code-review/dtos/dashboard/paginated-enriched-pull-requests.dto';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
     IPullRequestsService,
@@ -64,7 +69,12 @@ import {
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
-import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
+import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
+import {
+    checkPermissions,
+    checkRepoPermissions,
+} from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
 import {
     ApiBearerAuth,
     ApiCreatedResponse,
@@ -72,6 +82,7 @@ import {
     ApiOkResponse,
     ApiOperation,
     ApiProduces,
+    ApiQuery,
     ApiTags,
     ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -128,6 +139,7 @@ export class PullRequestController implements OnApplicationShutdown {
         private readonly jwtService: JwtService,
         private readonly configService: ConfigService,
         private readonly eventEmitter: EventEmitter2,
+        private readonly authorizationService: AuthorizationService,
     ) {
         this.jwtConfig = this.configService.get<JWT>('jwtConfig');
     }
@@ -154,7 +166,27 @@ export class PullRequestController implements OnApplicationShutdown {
     public async getPullRequestExecutions(
         @Query() query: EnrichedPullRequestsQueryDto,
     ): Promise<PaginatedEnrichedPullRequestsResponse> {
-        return await this.getEnrichedPullRequestsUseCase.execute(query);
+        return this.getEnrichedPullRequestsUseCase.execute(query);
+    }
+
+    @Get('/executions/totals')
+    @ApiBearerAuth('jwt')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.PullRequests,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Count PR executions',
+        description:
+            'Totals for the filters of GET /pull-requests/executions: matching executions and the distinct pull requests behind them. Covers the DB-level filters (repository, PR number, title, status, dates); paging and suggestion/author filters are ignored.',
+    })
+    public async getPullRequestExecutionsTotals(
+        @Query() query: EnrichedPullRequestsQueryDto,
+    ): Promise<PullRequestExecutionsTotals> {
+        return await this.getEnrichedPullRequestsUseCase.countTotals(query);
     }
 
     @Get('/executions/summary')
@@ -169,12 +201,22 @@ export class PullRequestController implements OnApplicationShutdown {
     @ApiOperation({
         summary: 'Daily PR digest',
         description:
-            "Today's counts: reviewed, needs attention, errored, awaiting review.",
+            "Today's counts: reviewed, needs attention, errored, awaiting review. A count is null when it was not requested.",
+    })
+    @ApiQuery({
+        name: 'fields',
+        required: false,
+        description:
+            'Comma-separated counts to compute (reviewedToday, needsAttention, erroredToday, awaitingReview). Default: all.',
     })
     public async getPullRequestsDailyDigest(
         @Query('teamId') teamId?: string,
+        @Query('fields') fields?: string | string[],
     ): Promise<PullRequestsDailyDigest> {
-        return await this.getPullRequestsDailyDigestUseCase.execute({ teamId });
+        return await this.getPullRequestsDailyDigestUseCase.execute({
+            teamId,
+            fields: parsePullRequestsDailyDigestFields(fields),
+        });
     }
 
     @Get('/executions/facets')
@@ -189,17 +231,25 @@ export class PullRequestController implements OnApplicationShutdown {
     @ApiOperation({
         summary: 'PR segment facet counts',
         description:
-            'All-time counts per segment (all, needs attention, errored, awaiting, mine).',
+            'All-time counts per segment (all, needs attention, errored, awaiting, mine). A segment is null when it was not requested or could not be counted.',
+    })
+    @ApiQuery({
+        name: 'fields',
+        required: false,
+        description:
+            'Comma-separated segments to count (all, needsAttention, errored, awaiting, mine). Each is a query of its own; ask only for what is shown. Default: every segment the scope uses.',
     })
     public async getPullRequestsFacets(
         @Query('teamId') teamId?: string,
         // 'mine' narrows the actionable facet to the caller's own PRs (the dev
         // "Minha fila" view); default 'team' counts the whole team scope.
         @Query('scope') scope?: 'mine' | 'team',
+        @Query('fields') fields?: string | string[],
     ): Promise<PullRequestsFacets> {
         return await this.getPullRequestsFacetsUseCase.execute({
             teamId,
             scope: scope === 'mine' ? 'mine' : 'team',
+            fields: parsePullRequestsFacetFields(fields),
         });
     }
 
@@ -473,6 +523,8 @@ export class PullRequestController implements OnApplicationShutdown {
 
         const bearerToken = authHeader?.replace(/^Bearer\s+/i, '');
         let organizationId: string | undefined;
+        // Set on the JWT route only: a team CLI key is team-wide.
+        let jwtUser: Partial<IUser> | undefined;
 
         // Route 1: Team CLI key (via x-team-key or Bearer kodus_...)
         if (teamKey || bearerToken?.startsWith('kodus_')) {
@@ -515,6 +567,7 @@ export class PullRequestController implements OnApplicationShutdown {
             if (!organizationId) {
                 throw new UnauthorizedException('Invalid JWT payload');
             }
+            jwtUser = user;
         } else {
             throw new UnauthorizedException('Team API key or JWT required');
         }
@@ -547,6 +600,15 @@ export class PullRequestController implements OnApplicationShutdown {
         }
 
         const pr = prEntity.toObject();
+
+        if (jwtUser) {
+            await this.authorizationService.ensure({
+                user: jwtUser,
+                action: Action.Read,
+                resource: ResourceType.PullRequests,
+                repoIds: [String(pr.repository?.id)],
+            });
+        }
         const { response, suggestionsCount } =
             await this.getPullRequestSuggestionsUseCase.execute({
                 organizationId,
@@ -655,9 +717,10 @@ export class PullRequestController implements OnApplicationShutdown {
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
-        checkPermissions({
+        checkRepoPermissions({
             action: Action.Read,
             resource: ResourceType.PullRequests,
+            repo: { key: { query: 'repositoryId' } },
         }),
     )
     @ApiOperation({
@@ -723,6 +786,19 @@ export class PullRequestController implements OnApplicationShutdown {
         repositories = repositories.filter(
             (r: any) => r && (r.selected === true || r.isSelected === true),
         );
+
+        // A repo-scoped member only backfills their own repositories.
+        const repositoryScope =
+            await this.authorizationService.getRepositoryScope({
+                user: this.request.user,
+                action: Action.Create,
+                resource: ResourceType.PullRequests,
+            });
+        if (repositoryScope !== null) {
+            repositories = repositories.filter((r: any) =>
+                repositoryScope.includes(String(r.id)),
+            );
+        }
 
         if (repositoryIds && repositoryIds.length > 0) {
             repositories = repositories.filter(

@@ -24,6 +24,10 @@ function buildUseCase(
     existing?: unknown,
     options: {
         kodusGate?: { isEnabledFor: (org?: string) => Promise<boolean> };
+        /** Each team's stored code review config. */
+        teamConfigs?: unknown[];
+        /** Each team's status; active when absent. */
+        teamStatuses?: string[];
     } = {},
 ) {
     const persisted: { value?: any } = {};
@@ -51,12 +55,31 @@ function buildUseCase(
     const kodusGate = options.kodusGate ?? {
         isEnabledFor: jest.fn(async () => true),
     };
+    const teamConfigs = options.teamConfigs ?? [];
+    const teams = teamConfigs.map((_, i) => ({
+        uuid: `team-${i}`,
+        name: `Team ${i}`,
+        status: options.teamStatuses?.[i] ?? 'active',
+    }));
+    const teamService = {
+        // Honors the status filter, as the repository does.
+        find: jest.fn(async (_filter: unknown, statuses?: string[]) =>
+            teams.filter((t) => !statuses || statuses.includes(t.status)),
+        ),
+    };
+    const parametersService = {
+        findByKey: jest.fn(async (_key: unknown, org: { teamId: string }) => ({
+            configValue: teamConfigs[Number(org.teamId.split('-')[1])],
+        })),
+    };
     const useCase = new CreateOrUpdateOrganizationParametersUseCase(
         organizationParametersService as any,
         request,
         eventEmitter,
         telemetry,
         kodusGate as any,
+        parametersService as any,
+        teamService as any,
     );
 
     return {
@@ -64,6 +87,7 @@ function buildUseCase(
         persisted,
         createOrUpdateConfig,
         organizationParametersService,
+        teamService,
     };
 }
 
@@ -203,6 +227,298 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             expect(persisted.value.credentials[0].apiKey).toBe(priorCipher);
         });
 
+        it("refuses to lend the only gateway's key to a new endpoint", async () => {
+            // Fireworks is the org's only OpenAI-compatible credential; the
+            // second endpoint arrives with a fresh id and no key. The provider
+            // fallback must not hand it the Fireworks key just because it is
+            // the single credential of that provider.
+            const fireworksCipher = encrypt('sk-fireworks');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-fireworks',
+                        provider: 'openai_compatible',
+                        apiKey: fireworksCipher,
+                        settings: {
+                            baseURL: 'https://api.fireworks.ai/inference/v1',
+                        },
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-fireworks',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                        settings: {
+                            baseURL: 'https://api.fireworks.ai/inference/v1',
+                        },
+                    },
+                    {
+                        id: 'cred-together',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                        settings: { baseURL: 'https://api.together.ai/v1' },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-together',
+                        model: 'deepseek-v3',
+                    },
+                ],
+            });
+
+            const { useCase, createOrUpdateConfig } = buildUseCase(existing);
+
+            await expect(saveByok(useCase, incoming)).rejects.toThrow(
+                'apiKey is required for the openai_compatible BYOK credential',
+            );
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        describe('same credential id, endpoint repointed', () => {
+            const fireworks = 'https://api.fireworks.ai/inference/v1';
+            const stored = (baseURL?: string) =>
+                v2({
+                    credentials: [
+                        {
+                            id: 'cred-gw',
+                            provider: 'openai_compatible',
+                            apiKey: encrypt('sk-fireworks'),
+                            ...(baseURL ? { settings: { baseURL } } : {}),
+                        },
+                    ],
+                    models: [
+                        {
+                            id: 'model-a',
+                            credentialId: 'cred-gw',
+                            model: 'deepseek-v3',
+                        },
+                    ],
+                });
+            const resubmit = (apiKey: string, baseURL?: string) =>
+                v2({
+                    credentials: [
+                        {
+                            id: 'cred-gw',
+                            provider: 'openai_compatible',
+                            apiKey,
+                            ...(baseURL ? { settings: { baseURL } } : {}),
+                        },
+                    ],
+                    models: [
+                        {
+                            id: 'model-a',
+                            credentialId: 'cred-gw',
+                            model: 'deepseek-v3',
+                        },
+                    ],
+                });
+
+            it('refuses to keep the stored key for a new host', async () => {
+                const { useCase, createOrUpdateConfig } = buildUseCase(
+                    stored(fireworks),
+                );
+
+                await expect(
+                    saveByok(
+                        useCase,
+                        resubmit('', 'https://api.together.ai/v1'),
+                    ),
+                ).rejects.toThrow(
+                    'apiKey is required for the openai_compatible BYOK credential',
+                );
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('refuses to keep the stored key when the endpoint is removed', async () => {
+                const { useCase, createOrUpdateConfig } = buildUseCase(
+                    stored(fireworks),
+                );
+
+                await expect(saveByok(useCase, resubmit(''))).rejects.toThrow(
+                    'apiKey is required',
+                );
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('refuses to keep the stored key when an endpoint is added', async () => {
+                const { useCase, createOrUpdateConfig } =
+                    buildUseCase(stored());
+
+                await expect(
+                    saveByok(useCase, resubmit('', fireworks)),
+                ).rejects.toThrow('apiKey is required');
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('keeps the stored key when the endpoint is only spelled differently', async () => {
+                const existing = stored(fireworks);
+                const { useCase, persisted } = buildUseCase(existing);
+
+                await saveByok(
+                    useCase,
+                    resubmit('', 'https://API.fireworks.ai/inference/v1/'),
+                );
+
+                expect(persisted.value.credentials[0].apiKey).toBe(
+                    existing.credentials[0].apiKey,
+                );
+            });
+
+            it('treats a path that differs only in case as another endpoint', async () => {
+                // Paths are case-sensitive: a gateway that routes by tenant or
+                // account in the path serves a different upstream per casing.
+                const { useCase, createOrUpdateConfig } = buildUseCase(
+                    stored('https://api.fireworks.ai/Inference/v1'),
+                );
+
+                await expect(
+                    saveByok(useCase, resubmit('', fireworks)),
+                ).rejects.toThrow('apiKey is required');
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('logs which credential and hosts a refusal was about', async () => {
+                const { useCase } = buildUseCase(stored(fireworks));
+                (useCase as any).request.user.organization = { uuid: 'org-1' };
+
+                await expect(
+                    saveByok(
+                        useCase,
+                        resubmit('', 'https://api.together.ai/v1'),
+                    ),
+                ).rejects.toThrow('apiKey is required');
+
+                expect((useCase as any).logger.warn).toHaveBeenCalledWith({
+                    message:
+                        'BYOK save: refused to reuse a stored key across endpoints',
+                    context: 'CreateOrUpdateOrganizationParametersUseCase',
+                    metadata: {
+                        organizationId: 'org-1',
+                        provider: 'openai_compatible',
+                        credentialId: 'cred-gw',
+                        priorCredentialId: 'cred-gw',
+                        matchedBy: 'id',
+                        host: 'api.together.ai',
+                        priorHost: 'api.fireworks.ai',
+                    },
+                });
+            });
+
+            it('logs a provider match, and no host for an endpoint that is unset', async () => {
+                const { useCase } = buildUseCase(stored(fireworks));
+                const renamed = resubmit('');
+                renamed.credentials[0].id = 'cred-renamed';
+                renamed.models[0].credentialId = 'cred-renamed';
+
+                await expect(saveByok(useCase, renamed)).rejects.toThrow(
+                    'apiKey is required',
+                );
+
+                expect((useCase as any).logger.warn).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        metadata: expect.objectContaining({
+                            credentialId: 'cred-renamed',
+                            priorCredentialId: 'cred-gw',
+                            matchedBy: 'provider',
+                            host: undefined,
+                            priorHost: 'api.fireworks.ai',
+                        }),
+                    }),
+                );
+            });
+
+            it('logs nothing when the stored key is kept', async () => {
+                const { useCase } = buildUseCase(stored(fireworks));
+
+                await saveByok(useCase, resubmit('', fireworks));
+
+                expect((useCase as any).logger.warn).not.toHaveBeenCalled();
+            });
+
+            it('treats a baseURL that is not a string as no endpoint', async () => {
+                const { useCase, createOrUpdateConfig } = buildUseCase(
+                    stored(fireworks),
+                );
+                const odd = resubmit('');
+                odd.credentials[0].settings = { baseURL: 42 };
+
+                await expect(saveByok(useCase, odd)).rejects.toThrow(
+                    'apiKey is required',
+                );
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('keeps the key on a legacy endpoint that does not parse as a URL, left as it was', async () => {
+                const existing = stored('legacy-gateway');
+                const { useCase, persisted } = buildUseCase(existing);
+
+                await saveByok(useCase, resubmit('', 'legacy-gateway'));
+
+                expect(persisted.value.credentials[0].apiKey).toBe(
+                    existing.credentials[0].apiKey,
+                );
+            });
+
+            it('saves the repoint when a new key comes with it', async () => {
+                const { useCase, persisted } = buildUseCase(stored(fireworks));
+
+                await saveByok(
+                    useCase,
+                    resubmit('sk-together', 'https://api.together.ai/v1'),
+                );
+
+                expect(decrypt(persisted.value.credentials[0].apiKey)).toBe(
+                    'sk-together',
+                );
+            });
+        });
+
+        it('matches by provider across an id change when the endpoint is the same', async () => {
+            const priorCipher = encrypt('sk-fireworks');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-old-id',
+                        provider: 'openai_compatible',
+                        apiKey: priorCipher,
+                        settings: {
+                            baseURL: 'https://api.fireworks.ai/inference/v1',
+                        },
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-new-id',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                        // Same upstream, spelled with a trailing slash and caps.
+                        settings: {
+                            baseURL: 'https://API.fireworks.ai/inference/v1/',
+                        },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-new-id',
+                        model: 'deepseek-v3',
+                    },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            expect(persisted.value.credentials[0].apiKey).toBe(priorCipher);
+        });
+
         it('refuses to borrow a key when the provider has two credentials', async () => {
             // Two OpenAI-compatible gateways (Fireworks and Together) are two
             // upstreams with two keys. Matching a blank resubmit "by provider"
@@ -233,7 +549,9 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
                         id: 'cred-brand-new',
                         provider: 'openai_compatible',
                         apiKey: '',
-                        settings: { baseURL: 'https://api.novita.ai/v3/openai' },
+                        settings: {
+                            baseURL: 'https://api.novita.ai/v3/openai',
+                        },
                     },
                 ],
                 models: [
@@ -863,8 +1181,103 @@ describe('platform-funded (`kodus`) credential — keyless by design, cloud-only
         await expect(
             saveByok(
                 useCase,
-                v2({ credentials: [{ id: 'cred-openai', provider: 'openai' }] }),
+                v2({
+                    credentials: [{ id: 'cred-openai', provider: 'openai' }],
+                }),
             ),
         ).rejects.toThrow(BadRequestException);
+    });
+});
+
+describe('the Ultra trio while a review mode is Ultra', () => {
+    const key = encrypt('sk-test');
+    const withTrio = (ultraModelIds?: string[]) =>
+        v2({
+            credentials: [
+                { id: 'cred-openai', provider: 'openai', apiKey: key },
+            ],
+            models: [
+                { id: 'a', credentialId: 'cred-openai', model: 'gpt-5' },
+                { id: 'b', credentialId: 'cred-openai', model: 'gpt-5-mini' },
+                { id: 'c', credentialId: 'cred-openai', model: 'gpt-6' },
+            ],
+            routing: {
+                mode: 'manual',
+                defaultModelId: 'a',
+                ...(ultraModelIds && { ultraModelIds }),
+            } as any,
+        });
+
+    it('refuses clearing it while a scope of any team runs Ultra, naming the scopes', async () => {
+        const { useCase, createOrUpdateConfig } = buildUseCase(
+            withTrio(['a', 'b', 'c']),
+            {
+                teamConfigs: [
+                    { configs: { reviewMode: 'balanced' } },
+                    {
+                        configs: {},
+                        repositories: [
+                            {
+                                name: 'api',
+                                configs: {
+                                    riskReviewRouting: { riskFound: 'ultra' },
+                                },
+                            },
+                        ],
+                    },
+                ],
+            },
+        );
+        await expect(saveByok(useCase, withTrio())).rejects.toThrow(
+            /Ultra review is the review mode in repository "api" of team "Team 1"/,
+        );
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('a removed team still on Ultra does not hold the trio', async () => {
+        const { useCase, persisted } = buildUseCase(withTrio(['a', 'b', 'c']), {
+            teamConfigs: [
+                { configs: { reviewMode: 'heavy' } },
+                { configs: { reviewMode: 'ultra' } },
+            ],
+            teamStatuses: ['active', 'removed'],
+        });
+        await saveByok(useCase, withTrio());
+        expect(persisted.value.routing.ultraModelIds).toBeUndefined();
+    });
+
+    it('refuses a trio that becomes one model through two providers while a scope runs Ultra', async () => {
+        const existing = withTrio(['a', 'b', 'c']);
+        const next = withTrio(['a', 'b', 'd']);
+        next.models.push({
+            id: 'd',
+            credentialId: 'cred-openai',
+            model: 'openai/gpt-5',
+        });
+        const { useCase, createOrUpdateConfig } = buildUseCase(existing, {
+            teamConfigs: [{ configs: { reviewMode: 'ultra' } }],
+        });
+        await expect(saveByok(useCase, next)).rejects.toThrow(
+            /Ultra review is the review mode in the global settings/,
+        );
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('saves a cleared trio when no scope runs Ultra', async () => {
+        const { useCase, persisted } = buildUseCase(withTrio(['a', 'b', 'c']), {
+            teamConfigs: [{ configs: { reviewMode: 'heavy' } }],
+        });
+        await saveByok(useCase, withTrio());
+        expect(persisted.value).toBeDefined();
+        expect(persisted.value.routing?.ultraModelIds).toBeUndefined();
+    });
+
+    it('an edit that keeps the trio reads no team config', async () => {
+        const { useCase, teamService } = buildUseCase(
+            withTrio(['a', 'b', 'c']),
+            { teamConfigs: [{ configs: { reviewMode: 'ultra' } }] },
+        );
+        await saveByok(useCase, withTrio(['c', 'b', 'a']));
+        expect(teamService.find).not.toHaveBeenCalled();
     });
 });

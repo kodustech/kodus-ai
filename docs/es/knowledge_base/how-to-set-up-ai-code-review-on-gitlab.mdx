@@ -1,27 +1,26 @@
 ---
 title: "Cómo configurar la revisión de código con IA en GitLab"
-description: "Instala y configura Kodus para proyectos de GitLab para obtener revisión de código automatizada con IA en cada merge request."
+description: "Conecta GitLab a Kodus y selecciona los repositorios para la revisión automática."
 ---
 
-Kodus se integra con GitLab mediante OAuth y webhooks. Una vez configurado, los merge requests se revisan automáticamente.
+Kodus se conecta a GitLab con OAuth o con un access token, y recibe los eventos de merge request mediante webhooks.
+
+GitLab no tiene una app que instalar: **Install Gitlab app** es un inicio de sesión OAuth. Las revisiones se publican como el usuario que se conectó con OAuth, o como el propietario del token.
 
 ## Pasos
 
 1. **Crea una cuenta** en [kodus.io](https://kodus.io) o [aloja Kodus tú mismo](/es/how_to_deploy/deploy_kodus/generic_vm)
-2. **Conecta GitLab** — en el paso **Connect your Git tool** del onboarding, haz clic en **Install Gitlab app** para autorizar mediante OAuth, o en **Connect via token** (también puedes conectarlo más tarde desde **Repositories** en la barra lateral)
-3. **Selecciona proyectos** — elige qué proyectos de GitLab debe revisar Kodus
-4. **Webhooks** — Kodus registra automáticamente el webhook de merge request cuando guardas la selección. Si eso no ocurrió (por ejemplo, en algunas instalaciones self-hosted), agrégalo manualmente con la guía de [Webhooks de GitLab](/es/how_to_deploy/platforms/gitlab/gitlab_webhook)
-5. **Abre un merge request** — Kodus lo revisa automáticamente
-
-## Qué obtienes
-
-- Revisiones automatizadas en cada MR
-- Comentarios publicados directamente en el merge request
-- Reglas personalizables, categorías de revisión y un umbral de severidad mínima
-- Validación de lógica de negocio contra tareas vinculadas
+2. **Conecta GitLab** — en el paso **Connect your Git tool** del onboarding, haz clic en **Install Gitlab app** para autorizar mediante OAuth, o en **Connect via token** (también puedes conectarlo más tarde desde **Repositories** en la barra lateral: haz clic en **Gitlab** en **Connect a provider** y usa la pestaña **OAuth** o **Token**). Para un GitLab autogestionado con un token, activa **Self-hosted** e ingresa la **Gitlab URL**
+3. **Selecciona proyectos** — elige qué proyectos de GitLab debe revisar Kodus, o activa [Revisar todos los repositorios](/es/how_to_use/code_review/configs/review_all_repositories) en **Repositories**
+4. **Webhooks** — Kodus registra automáticamente el webhook de merge request cuando guardas la selección. Eso requiere el rol **Maintainer** u **Owner** en cada proyecto. Si no ocurrió, **Repositories** lista el proyecto con el motivo; agrega el webhook manualmente con la guía de [Webhooks de GitLab](/es/how_to_deploy/platforms/gitlab/gitlab_webhook)
+5. Abre un merge request en un proyecto seleccionado. Consulta [qué publica Kody y cómo comprobar el estado](/es/how_to_use/code_review/flow).
 
 ## Configuración personalizada
 
-Coloca un archivo `kodus-config.yml` en la raíz de tu repositorio para personalizar el comportamiento por proyecto. El archivo anula la configuración de la web una vez que **kodus Config File Overrides Web Preferences** está activado para ese proyecto (**Code review → General**).
+Usa [kodus-config.yml](/es/how_to_use/code_review/configs/general#kodus-config-yml) para personalizar la configuración de revisión por repositorio.
+
+## Autoalojado
+
+**Install Gitlab app** y **Sign in with Gitlab** necesitan una aplicación OAuth de GitLab y sus credenciales en tu `.env`: consulta [OAuth de GitLab](/es/how_to_deploy/platforms/gitlab/gitlab_oauth). Una conexión con token no necesita nada de eso; genéralo como se describe en [PAT de GitLab](/es/how_to_use/code_review/general_config/gitlab_pat).
 
 Para la guía de configuración completa, consulta [OAuth de GitLab](/es/how_to_deploy/platforms/gitlab/gitlab_oauth) y [Webhooks de GitLab](/es/how_to_deploy/platforms/gitlab/gitlab_webhook).

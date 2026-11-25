@@ -164,22 +164,247 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
                         name: 'repo',
                         platform: PlatformType.GITLAB,
                     }),
+                    // The author's git id drives the permission check downstream.
+                    pullRequest: expect.objectContaining({
+                        user: gitlabMergePayload.user,
+                    }),
                     prFiles: mockPrFiles,
                 }),
             );
         });
 
-        it('should pass the user from the webhook payload through to processClosedPr', async () => {
+        it("carries the PR's instance, and the team of the config listing the repository on it", async () => {
+            const payloadHost = new URL(
+                gitlabMergePayload.project.web_url,
+            ).host.toLowerCase();
+            // Two servers each list a project 999; the most recent config is
+            // the other server's.
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    {
+                        team: {
+                            uuid: 'other-team',
+                            organization: { uuid: 'other-org' },
+                        },
+                        configValue: [
+                            {
+                                id: '999',
+                                http_url:
+                                    'https://gitlab-b.example/group/repo.git',
+                            },
+                        ],
+                    },
+                    {
+                        ...mockIntegrationConfig,
+                        configValue: [
+                            {
+                                id: '999',
+                                http_url: `https://${payloadHost}/group/repo.git`,
+                            },
+                        ],
+                    },
+                ],
+            );
+
             await useCase.execute({
                 payload: gitlabMergePayload,
                 platformType: PlatformType.GITLAB,
             });
 
-            const callArgs =
-                kodyIssuesManagementServiceMock.processClosedPr.mock
-                    .calls[0][0];
-            expect(callArgs.pullRequest.user).toEqual(gitlabMergePayload.user);
-            expect(callArgs.pullRequest.user.id).toBe(101);
+            expect(
+                kodyIssuesManagementServiceMock.processClosedPr,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationAndTeamData: {
+                        organizationId: 'org-uuid',
+                        teamId: 'team-uuid',
+                    },
+                    repository: expect.objectContaining({
+                        id: '999',
+                        host: payloadHost,
+                    }),
+                }),
+            );
+        });
+
+        it.each([
+            [
+                'the one server every config lists it on',
+                ['https://bb.acme.dev/scm/a/repo.git'],
+                'bb.acme.dev',
+            ],
+            [
+                'none, when the configs list it on two servers',
+                [
+                    'https://bb.acme.dev/scm/a/repo.git',
+                    'https://bb2.acme.dev/scm/a/repo.git',
+                ],
+                undefined,
+            ],
+        ])('carries, for a payload with no URL, %s', async (_, urls, host) => {
+            // Bitbucket Data Center's payload names no URL to tell the server.
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                urls.map((http_url) => ({
+                    ...mockIntegrationConfig,
+                    configValue: [{ id: '999', http_url }],
+                })),
+            );
+
+            await useCase.execute({
+                payload: {
+                    isDataCenterEvent: true,
+                    pullrequest: {
+                        id: 42,
+                        title: 'Fix bug in auth',
+                        author: { user: { id: 101, name: 'dev-user' } },
+                        toRef: {
+                            displayId: 'main',
+                            repository: { id: 999, name: 'repo' },
+                        },
+                        fromRef: {
+                            displayId: 'fix/auth',
+                            repository: { id: 999, name: 'repo' },
+                        },
+                    },
+                },
+                platformType: PlatformType.BITBUCKET,
+            });
+
+            const [context] =
+                kodyIssuesManagementServiceMock.processClosedPr.mock.calls.at(
+                    -1,
+                );
+            expect(context.repository.host).toBe(host);
+        });
+
+        it('generates no issues when the only config lists the project id on another server', async () => {
+            // Project 999 of another GitLab server: its issues would land in
+            // that organization.
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    {
+                        ...mockIntegrationConfig,
+                        configValue: [
+                            {
+                                id: '999',
+                                name: 'group/repo',
+                                http_url:
+                                    'https://gitlab-b.example/group/repo.git',
+                            },
+                        ],
+                    },
+                ],
+            );
+
+            await useCase.execute({
+                payload: gitlabMergePayload,
+                platformType: PlatformType.GITLAB,
+            });
+
+            expect(
+                kodyIssuesManagementServiceMock.processClosedPr,
+            ).not.toHaveBeenCalled();
+        });
+
+        it("generates the issues for the team the handler's context resolved", async () => {
+            // The same project connected in two workspaces on one server: the
+            // review ran for the second team, so its issues belong there.
+            const listedHere = (team: string, org: string) => ({
+                team: { uuid: team, organization: { uuid: org } },
+                configValue: [
+                    {
+                        id: '999',
+                        http_url: 'https://gitlab.example.com/org/repo.git',
+                    },
+                ],
+            });
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    listedHere('first-team', 'first-org'),
+                    listedHere('team-uuid', 'org-uuid'),
+                ],
+            );
+
+            await useCase.execute({
+                payload: gitlabMergePayload,
+                platformType: PlatformType.GITLAB,
+                organizationAndTeamData: {
+                    organizationId: 'org-uuid',
+                    teamId: 'team-uuid',
+                },
+            });
+
+            expect(
+                kodyIssuesManagementServiceMock.processClosedPr,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationAndTeamData: {
+                        organizationId: 'org-uuid',
+                        teamId: 'team-uuid',
+                    },
+                    repository: expect.objectContaining({
+                        host: 'gitlab.example.com',
+                    }),
+                }),
+            );
+        });
+
+        it("resolves the project's server when its mapped URL is the SSH remote", async () => {
+            // The most recent config is another server's project 999.
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    {
+                        team: {
+                            uuid: 'other-team',
+                            organization: { uuid: 'other-org' },
+                        },
+                        configValue: [
+                            {
+                                id: '999',
+                                http_url:
+                                    'https://gitlab-b.example/group/repo.git',
+                            },
+                        ],
+                    },
+                    {
+                        ...mockIntegrationConfig,
+                        configValue: [
+                            {
+                                id: '999',
+                                http_url:
+                                    'https://gitlab.example.com/org/repo.git',
+                            },
+                        ],
+                    },
+                ],
+            );
+
+            await useCase.execute({
+                payload: {
+                    ...gitlabMergePayload,
+                    project: {
+                        ...gitlabMergePayload.project,
+                        web_url: undefined,
+                        url: 'git@gitlab.example.com:org/repo.git',
+                        git_http_url: 'https://gitlab.example.com/org/repo.git',
+                    },
+                },
+                platformType: PlatformType.GITLAB,
+            });
+
+            expect(
+                kodyIssuesManagementServiceMock.processClosedPr,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationAndTeamData: {
+                        organizationId: 'org-uuid',
+                        teamId: 'team-uuid',
+                    },
+                    repository: expect.objectContaining({
+                        host: 'gitlab.example.com',
+                    }),
+                }),
+            );
         });
 
         it('should clear issues cache after processing', async () => {
@@ -219,6 +444,61 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
             );
         });
 
+        it('resolves the GitHub server from the web URL, not the API address', async () => {
+            // A payload whose repository has no html_url: the mapped URL falls
+            // back to the API address, which is no server a config lists.
+            // The most recent config is a GitHub Enterprise Server's repo 888.
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    {
+                        team: {
+                            uuid: 'other-team',
+                            organization: { uuid: 'other-org' },
+                        },
+                        configValue: [
+                            {
+                                id: '888',
+                                http_url: 'https://ghe-b.example/org/repo',
+                            },
+                        ],
+                    },
+                    {
+                        ...mockIntegrationConfig,
+                        configValue: [
+                            {
+                                id: '888',
+                                http_url: 'https://github.com/org/repo',
+                            },
+                        ],
+                    },
+                ],
+            );
+
+            await useCase.execute({
+                payload: {
+                    ...githubMergePayload,
+                    repository: {
+                        ...githubMergePayload.repository,
+                        html_url: undefined,
+                        url: 'https://api.github.com/repos/org/repo',
+                        clone_url: 'https://github.com/org/repo.git',
+                    },
+                },
+                platformType: PlatformType.GITHUB,
+            });
+
+            expect(
+                kodyIssuesManagementServiceMock.processClosedPr,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationAndTeamData: {
+                        organizationId: 'org-uuid',
+                        teamId: 'team-uuid',
+                    },
+                }),
+            );
+        });
+
         it('should call processClosedPr with correct params when GitHub PR is closed/merged', async () => {
             await useCase.execute({
                 payload: githubMergePayload,
@@ -238,24 +518,105 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
                         name: 'repo',
                         platform: PlatformType.GITHUB,
                     }),
+                    pullRequest: expect.objectContaining({
+                        user: githubMergePayload.pull_request.user,
+                    }),
                     prFiles: mockPrFiles,
                 }),
             );
         });
+    });
 
-        it('should pass the user from the webhook payload through to processClosedPr', async () => {
+    describe('Forgejo - resolves the instance that sent the webhook', () => {
+        // Forgejo numbers repositories per instance: repository 26 is
+        // alpha/app on git.alpha.example and beta/api on git.beta.example.
+        const forgejoConfig = (org: string, host: string, name: string) => ({
+            team: { uuid: `team-${org}`, organization: { uuid: `org-${org}` } },
+            integration: { authIntegration: { authDetails: { host } } },
+            configValue: [{ id: '26', name }],
+        });
+        const forgejoClosedPayload = {
+            action: 'closed',
+            pull_request: {
+                number: 7,
+                title: 'Add feature Y',
+                body: 'Implements feature Y',
+                user: { id: 303, login: 'fj-user' },
+                head: { ref: 'feat/y', sha: 'def456' },
+                base: { ref: 'main' },
+                html_url: 'https://git.beta.example/beta/api/pulls/7',
+                merged: true,
+            },
+            repository: {
+                id: 26,
+                name: 'api',
+                full_name: 'beta/api',
+                default_branch: 'main',
+                html_url: 'https://git.beta.example/beta/api',
+            },
+        };
+
+        beforeEach(() => {
+            pullRequestServiceMock.findByNumberAndRepositoryName.mockResolvedValue(
+                { files: mockPrFiles },
+            );
+        });
+
+        it('generates issues for the organization on the sending instance', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    forgejoConfig(
+                        'alpha',
+                        'https://git.alpha.example',
+                        'alpha/app',
+                    ),
+                    forgejoConfig(
+                        'beta',
+                        'https://git.beta.example',
+                        'beta/api',
+                    ),
+                ],
+            );
+
             await useCase.execute({
-                payload: githubMergePayload,
-                platformType: PlatformType.GITHUB,
+                payload: forgejoClosedPayload,
+                platformType: PlatformType.FORGEJO,
             });
 
-            const callArgs =
-                kodyIssuesManagementServiceMock.processClosedPr.mock
-                    .calls[0][0];
-            expect(callArgs.pullRequest.user).toEqual(
-                githubMergePayload.pull_request.user,
+            expect(
+                kodyIssuesManagementServiceMock.processClosedPr,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationAndTeamData: {
+                        organizationId: 'org-beta',
+                        teamId: 'team-beta',
+                    },
+                }),
             );
-            expect(callArgs.pullRequest.user.id).toBe(202);
+        });
+
+        it('generates nothing when only another instance has the repository id', async () => {
+            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
+                [
+                    forgejoConfig(
+                        'alpha',
+                        'https://git.alpha.example',
+                        'alpha/app',
+                    ),
+                ],
+            );
+
+            await useCase.execute({
+                payload: forgejoClosedPayload,
+                platformType: PlatformType.FORGEJO,
+            });
+
+            expect(
+                kodyIssuesManagementServiceMock.processClosedPr,
+            ).not.toHaveBeenCalled();
+            expect(
+                pullRequestServiceMock.findByNumberAndRepositoryName,
+            ).not.toHaveBeenCalled();
         });
     });
 
@@ -335,7 +696,7 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
     });
 
     describe('error handling', () => {
-        it('should not throw when processClosedPr fails', async () => {
+        it('swallows a processClosedPr failure without clearing the issues cache', async () => {
             integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
                 [mockIntegrationConfig],
             );
@@ -351,24 +712,7 @@ describe('GenerateIssuesFromPrClosedUseCase (cloud mode)', () => {
                     payload: gitlabMergePayload,
                     platformType: PlatformType.GITLAB,
                 }),
-            ).resolves.not.toThrow();
-        });
-
-        it('should not call clearIssuesCache when processClosedPr fails', async () => {
-            integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
-                [mockIntegrationConfig],
-            );
-            pullRequestServiceMock.findByNumberAndRepositoryName.mockResolvedValue(
-                { files: mockPrFiles },
-            );
-            kodyIssuesManagementServiceMock.processClosedPr.mockRejectedValue(
-                new Error('LLM timeout'),
-            );
-
-            await useCase.execute({
-                payload: gitlabMergePayload,
-                platformType: PlatformType.GITLAB,
-            });
+            ).resolves.toBeUndefined();
 
             expect(
                 kodyIssuesManagementServiceMock.clearIssuesCache,

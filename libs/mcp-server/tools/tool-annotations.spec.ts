@@ -4,13 +4,15 @@
  * Consumers derive behavior from these annotations instead of keeping their own
  * name lists: the conversation agent audits anything that is not `readOnlyHint`,
  * refuses to proactively offer anything `destructiveHint`, and offers exactly
- * the tools carrying a `proactiveHint`. An un-annotated tool would silently drop
- * out of that wiring, so the declaration is enforced here rather than trusted.
+ * the tools carrying a proactive hint in `_meta`. An un-annotated tool would
+ * silently drop out of that wiring, so the declaration is enforced here rather
+ * than trusted.
  */
 import { CodeManagementTools } from './codeManagement.tools';
 import { KodyIssuesTools } from './kodyIssues.tools';
 import { KodyRulesTools } from './kodyRules.tools';
 import { KodusIssuesTools } from './kodusIssues.tools';
+import { PROACTIVE_HINT_META_KEY } from '../types/mcp-tool.interface';
 
 // The tool builders only close over their services (used inside `execute`), so
 // definitions can be listed without a container.
@@ -58,13 +60,23 @@ describe('Kodus MCP tool annotations', () => {
     });
 
     it('never offers a destructive tool proactively', () => {
-        const offerable = ALL_TOOLS.filter((t) => t.annotations?.proactiveHint);
+        const offerable = ALL_TOOLS.filter(
+            (t) => t._meta?.[PROACTIVE_HINT_META_KEY],
+        );
 
         expect(offerable.length).toBeGreaterThan(0);
         for (const tool of offerable) {
             expect(tool.annotations?.readOnlyHint).toBe(false);
             expect(tool.annotations?.destructiveHint).not.toBe(true);
-            expect(typeof tool.annotations?.proactiveHint).toBe('string');
+            expect(typeof tool._meta?.[PROACTIVE_HINT_META_KEY]).toBe('string');
+        }
+    });
+
+    // The SDK client parses `annotations` with a closed schema: a hint there
+    // never reaches the agent.
+    it('declares the proactive hint in _meta, never in annotations', () => {
+        for (const tool of ALL_TOOLS) {
+            expect(tool.annotations).not.toHaveProperty('proactiveHint');
         }
     });
 });

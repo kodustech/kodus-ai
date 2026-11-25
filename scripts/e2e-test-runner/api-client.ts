@@ -221,7 +221,7 @@ export class KodusApiClient {
      * Check webhook status for a repository
      */
     async checkWebhookStatus(repositoryId: string): Promise<{ active: boolean }> {
-        const response = await this.client.get('/code-management/webhook-status', {
+        const response = await this.client.get('/code-management/hook-status', {
             headers: this.getAuthHeaders(),
             params: {
                 organizationId: this.organizationId,

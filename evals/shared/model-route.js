@@ -48,7 +48,31 @@ const BYOK_PROVIDER = {
     openai_compatible: 'openai_compatible',
     'openai-compatible': 'openai_compatible',
     openrouter: 'open_router',
+    amazon_bedrock: 'amazon_bedrock',
 };
+
+/**
+ * One stored credential, shaped the way production stores it
+ * (libs/llm/resolve-model-slot.ts): Bedrock authenticates with an encrypted
+ * bearer token and a region in `settings`, never `apiKey`.
+ */
+function credentialOf(id, provider, m, encrypt) {
+    const bedrock = provider === 'amazon_bedrock';
+    return {
+        id,
+        provider,
+        apiKey: bedrock ? '' : encrypt(m.apiKey),
+        settings: {
+            ...(m.baseURL ? { baseURL: m.baseURL } : {}),
+            ...(bedrock
+                ? { awsBearerToken: encrypt(m.apiKey), ...(m.awsRegion ? { awsRegion: m.awsRegion } : {}) }
+                : {}),
+            ...(m.openrouterProviderOrder?.length
+                ? { openrouterProviderOrder: m.openrouterProviderOrder, openrouterAllowFallbacks: false }
+                : {}),
+        },
+    };
+}
 
 /** A model the eval cannot run the way production would: not measured. */
 class NotAProductionRoute extends Error {
@@ -58,28 +82,25 @@ class NotAProductionRoute extends Error {
     }
 }
 
-function storedByokConfig({ provider, model, apiKey, baseURL, reasoningEffort, openrouterProviderOrder }) {
+// crypto.ts runs `dotenv/config` on its first import, which puts back any .env
+// variable the route has just removed (applyPlatformEnv drops API_LLM_PROVIDER_MODEL).
+function loadEncrypt() {
+    const before = new Set(Object.keys(process.env));
+    const { encrypt } = require('../../libs/common/utils/crypto.ts');
+    for (const name of Object.keys(process.env)) if (!before.has(name)) delete process.env[name];
+    return encrypt;
+}
+
+function storedByokConfig({ provider, model, apiKey, baseURL, awsRegion, reasoningEffort, openrouterProviderOrder }) {
     const byokProvider = openrouterProviderOrder?.length ? 'open_router' : BYOK_PROVIDER[provider];
     if (!byokProvider) {
         throw new NotAProductionRoute(`provider '${provider}' has no BYOK route in production`);
     }
-    const { encrypt } = require('../../libs/common/utils/crypto.ts');
+    const encrypt = loadEncrypt();
     return {
         version: 2,
-        credentials: [
-            {
-                id: 'eval-credential',
-                provider: byokProvider,
-                apiKey: encrypt(apiKey),
-                // Where resolveModelSlot reads them (resolve-model-slot.ts).
-                settings: {
-                    ...(baseURL ? { baseURL } : {}),
-                    ...(openrouterProviderOrder?.length
-                        ? { openrouterProviderOrder, openrouterAllowFallbacks: false }
-                        : {}),
-                },
-            },
-        ],
+        // Where resolveModelSlot reads them (resolve-model-slot.ts).
+        credentials: [credentialOf('eval-credential', byokProvider, { apiKey, baseURL, awsRegion, openrouterProviderOrder }, encrypt)],
         models: [
             {
                 id: 'eval-model',
@@ -95,26 +116,16 @@ function storedByokConfig({ provider, model, apiKey, baseURL, reasoningEffort, o
 /**
  * A stored BYOK config (version 2) holding several models, one credential each,
  * with `routing` as the org would save it. Each model: { id, provider, model,
- * apiKey, baseURL?, reasoningEffort?, openrouterProviderOrder? }.
+ * apiKey, baseURL?, awsRegion?, reasoningEffort?, openrouterProviderOrder? }.
  */
 function storedByokConfigOf(models, routing) {
-    const { encrypt } = require('../../libs/common/utils/crypto.ts');
+    const encrypt = loadEncrypt();
     return {
         version: 2,
         credentials: models.map((m) => {
             const provider = m.openrouterProviderOrder?.length ? 'open_router' : BYOK_PROVIDER[m.provider];
             if (!provider) throw new NotAProductionRoute(`provider '${m.provider}' has no BYOK route in production`);
-            return {
-                id: `${m.id}-credential`,
-                provider,
-                apiKey: encrypt(m.apiKey),
-                settings: {
-                    ...(m.baseURL ? { baseURL: m.baseURL } : {}),
-                    ...(m.openrouterProviderOrder?.length
-                        ? { openrouterProviderOrder: m.openrouterProviderOrder, openrouterAllowFallbacks: false }
-                        : {}),
-                },
-            };
+            return credentialOf(`${m.id}-credential`, provider, m, encrypt);
         }),
         models: models.map((m) => ({
             id: m.id,
@@ -133,7 +144,7 @@ function tier0ModelEntry(id, modelId) {
     if (!spec) throw new Error(`unknown model ${modelId} (evals/shared/tier0-models.js)`);
     const apiKey = (spec.keyEnvs || []).map((name) => process.env[name]).find(Boolean);
     if (!apiKey) throw new Error(`no key for ${modelId} (${(spec.keyEnvs || []).join(', ') || 'none known'})`);
-    return { id, provider: spec.provider, model: spec.doModel || modelId, apiKey, baseURL: spec.baseURL, openrouterProviderOrder: spec.openrouterProviderOrder };
+    return { id, provider: spec.provider, model: spec.doModel || modelId, apiKey, baseURL: spec.baseURL, awsRegion: spec.awsRegion, openrouterProviderOrder: spec.openrouterProviderOrder };
 }
 
 /**
@@ -147,14 +158,10 @@ function resolveRoute(config) {
         const modelId = process.env.RECALL_MODEL || config.model;
         const { applyPlatformEnv, TIER0 } = require('./tier0-models');
         const spec = TIER0[modelId];
-        if (spec && spec.provider === 'codex_subscription') {
-            throw new NotAProductionRoute(
-                `${modelId} runs on a ChatGPT subscription, which production has no route for ` +
-                    '(libs/llm/codex-subscription-model.ts is used only by evals): the finder would run another model',
-            );
-        }
+        // Not a tier-0 id (a typo, a removed route): nothing production would
+        // run under that name, so not measured rather than another model.
+        if (!spec) throw new NotAProductionRoute(`unknown tier-0 model '${modelId}' (evals/shared/tier0-models.js)`);
         applyPlatformEnv();
-        if (!spec) throw new Error(`unknown tier-0 model '${modelId}'`);
         // `kodus-managed`: an org with no model config, which gets Kodus's default
         // model on Kodus's key (libs/llm/managed-slot.ts). No stored config, no effort.
         if (spec.managed) {
@@ -170,6 +177,7 @@ function resolveRoute(config) {
                 model: spec.doModel || modelId,
                 apiKey: key,
                 baseURL: spec.baseURL,
+                awsRegion: spec.awsRegion,
                 reasoningEffort: effort,
                 openrouterProviderOrder: spec.openrouterProviderOrder,
             }),

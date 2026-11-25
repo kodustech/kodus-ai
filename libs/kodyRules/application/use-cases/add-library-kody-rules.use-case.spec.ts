@@ -198,25 +198,6 @@ describe('resolveLibraryRuleFileScope (#1832)', () => {
         ).toBe(true);
     });
 
-    it('documents the gap the source-only lists left', () => {
-        // The pre-fix lists, run through the same predicate: every one of these
-        // files was silently outside its rule, so it never fired where it
-        // mattered. This is the before/after, not a description of it.
-        const sourceOnlyJsTs = ['.js', '.jsx', '.ts', '.tsx'];
-        expect(
-            extensionScopeAppliesToFile('Component.vue', sourceOnlyJsTs),
-        ).toBe(false);
-        expect(extensionScopeAppliesToFile('mod.mjs', sourceOnlyJsTs)).toBe(
-            false,
-        );
-        expect(
-            extensionScopeAppliesToFile('go.work', ['.go']),
-        ).toBe(false);
-        expect(
-            extensionScopeAppliesToFile('Cargo.toml', ['.rs']),
-        ).toBe(false);
-    });
-
     it('matches keys case-insensitively and ignores surrounding whitespace', () => {
         expect(scopeFor(' Ruby ').extensions).toEqual(
             expect.arrayContaining(['.rb', '.rake', '.erb', '.gemspec']),

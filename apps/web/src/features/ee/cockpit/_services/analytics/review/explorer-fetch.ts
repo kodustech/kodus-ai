@@ -15,6 +15,8 @@ export type SuggestionsExplorerItem = {
     category: string | null;
     severity: string | null;
     implementationStatus: string | null;
+    /** The last implementation check could not decide this suggestion. */
+    notMeasured?: boolean;
     summary: string | null;
     existingCode: string | null;
     improvedCode: string | null;

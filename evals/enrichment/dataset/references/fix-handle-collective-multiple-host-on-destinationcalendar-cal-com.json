@@ -1,0 +1,133 @@
+{
+ "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+ "items": [
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08",
+   "defectStatement": "When neither the event type nor the organizer has a destination calendar, evt.destinationCalendar is null and the optional push discards the collective hosts’ destination calendars. Their configured calendars therefore never reach event creation.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Include team destination calendars even when evt.destinationCalendar is null.",
+    "Preserve any existing destination calendar before the appended team calendars.",
+    "Keep the change restricted to collective team events."
+   ],
+   "exampleFix": "  if (isTeamEventType && eventType.schedulingType === \"COLLECTIVE\") {\n    evt.destinationCalendar = [...(evt.destinationCalendar ?? []), ...teamDestinationCalendars];",
+   "notes": "The closing brace is outside the replacement. Initializing the array before pushing is also valid."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03",
+   "defectStatement": "Google updateEvent searches destination calendars for the absent externalCalendarId instead of falling back to the first configured destination. This passes an undefined calendarId to update and its follow-up patch, preventing updates to the configured calendar.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Preserve an explicitly supplied, nonempty externalCalendarId.",
+    "Use the main host destination’s externalId when externalCalendarId is absent.",
+    "Handle an empty or null destinationCalendar without throwing."
+   ],
+   "exampleFix": "      const selectedCalendar = externalCalendarId\n        ? externalCalendarId\n        : mainHostDestinationCalendar?.externalId;",
+   "notes": "Scoped to the finding’s updateEvent defect. The gold also mentions the analogous deleteEvent defect, which requires a separate edit. Unlike deleteEvent, updateEvent has no explicit primary fallback."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#07",
+   "defectStatement": "EventManager.create dereferences the first destination calendar without checking whether it exists. A Google Meet booking with a null or empty destinationCalendar throws instead of selecting the Cal Video fallback.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Allow null, undefined, and empty destination-calendar collections without throwing.",
+    "Select Cal Video for Meet when the first destination is absent or is not Google Calendar.",
+    "Preserve Meet for a Google Calendar destination and preserve unrelated locations."
+   ],
+   "exampleFix": "    const [mainHostDestinationCalendar] = evt.destinationCalendar ?? [];\n    if (evt.location === MeetLocationType && mainHostDestinationCalendar?.integration !== \"google_calendar\") {",
+   "notes": "The fallback assignment and closing brace remain outside the replacement."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#04",
+   "defectStatement": "Organization creation sets slug when team billing is enabled instead of disabled. Billing-enabled organizations receive both slug and requestedSlug prematurely, while billing-disabled organizations receive neither.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Set the organization slug directly when team billing is disabled.",
+    "When billing is enabled, store requestedSlug without setting slug directly.",
+    "Preserve the remaining organization metadata."
+   ],
+   "exampleFix": "            ...(!IS_TEAM_BILLING_ENABLED ? { slug } : {}),\n            metadata: {\n              ...(IS_TEAM_BILLING_ENABLED ? { requestedSlug: slug } : {}),",
+   "notes": "Only the slug condition needs inversion."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13",
+   "defectStatement": "Recurring cancellation ignores the current reference’s resolved credential and deletes each occurrence’s first calendar reference through the organizer’s credentials. This repeats organizer deletions and leaves co-host calendar events undeleted.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Use the current reference’s resolved credential, including credentials loaded from the database.",
+    "Select each occurrence’s calendar reference by the current credential rather than taking its first calendar reference.",
+    "Delete using the selected occurrence reference’s uid and externalCalendarId.",
+    "Preserve awaiting and error handling for the deletion promises."
+   ],
+   "exampleFix": "            const promises = [calendarCredential]\n              .map(async (credential) => {\n                const calendar = await getCalendar(credential);\n                for (const updBooking of updatedBookings) {\n                  const bookingRef = updBooking.references.find(\n                    (ref) => ref.type.includes(\"_calendar\") && ref.credentialId === credential.id\n                  );\n                  if (bookingRef) {\n                    const { uid, externalCalendarId } = bookingRef;\n                    const deletedEvent = await calendar?.deleteEvent(uid, evt, externalCalendarId);",
+   "notes": "The replacement deliberately leaves the existing push, closing blocks, and Promise.all intact. It addresses the credential-bearing collective references described by the finding."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#09",
+   "defectStatement": "EventManager.create drops credentialId from video booking references by assigning undefined to every non-calendar result. Cancellation requires that credentialId to locate the video credential, so those meetings are not deleted.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Preserve result.credentialId for video references.",
+    "Continue using result.credentialId for calendar references.",
+    "Keep externalCalendarId restricted to calendar references."
+   ],
+   "exampleFix": "        externalCalendarId: isCalendarType ? result.externalId : undefined,\n        credentialId: result.credentialId,",
+   "notes": "No destination-calendar credential fallback is needed."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#05",
+   "defectStatement": "Office365 createEvent always targets the first destination calendar, regardless of which host’s credential authenticates the request. A collective co-host’s token therefore targets the organizer’s calendar instead of the co-host’s configured calendar, potentially failing creation.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Make the invoking credential’s ID available to Office365 createEvent.",
+    "Select the destination associated with that credential instead of the first destination.",
+    "Preserve the default-calendar endpoint when no applicable destination externalId exists."
+   ],
+   "exampleFix": null,
+   "notes": "The createEvent signature at line 72 is outside the anchor and must accept credentialId, or equivalent credential state must be added elsewhere. An arguments-based workaround is incompatible with this package’s ES5-targeted async TypeScript. The gold’s analogous Lark defect is outside this finding."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01",
+   "defectStatement": "The recurring deletion block runs inside the calendar-reference loop but scans all organizer calendar credentials on every iteration. It repeatedly deletes each occurrence’s first calendar event and fails to delete co-host events through their own credentials.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Scope each outer reference’s recurring deletions to its resolved credential.",
+    "Match each occurrence’s calendar reference to that credential.",
+    "Use each matched reference’s uid and externalCalendarId without repeating organizer deletions for other hosts.",
+    "Preserve the recurrence guard, promise error handling, and single-booking path."
+   ],
+   "exampleFix": "          if (\n            bookingToDelete.eventType?.recurringEvent &&\n            bookingToDelete.recurringEventId &&\n            allRemainingBookings\n          ) {\n            const promises = [calendarCredential]\n              .map(async (credential) => {\n                const calendar = await getCalendar(credential);\n                for (const updBooking of updatedBookings) {\n                  const bookingRef = updBooking.references.find(\n                    (ref) => ref.type.includes(\"_calendar\") && ref.credentialId === credential.id\n                  );\n                  if (bookingRef) {\n                    const { uid, externalCalendarId } = bookingRef;\n                    const deletedEvent = await calendar?.deleteEvent(uid, evt, externalCalendarId);\n                    apiDeletes.push(deletedEvent);\n                  }\n                }\n              });",
+   "notes": "Overlaps #13. Moving the bulk operation outside the outer loop is another approach, but scoping it to the current credential fits this anchor."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#prod-01",
+   "defectStatement": "Google createEvent applies the primary-calendar fallback only to insertion, leaving selectedCalendar undefined when no destination matches the credential. The subsequent hangout-link patch uses that undefined value and fails to update the event description.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Resolve selectedCalendar to primary when no matching destination externalId exists.",
+    "Use the same resolved calendar ID for insertion and the follow-up patch.",
+    "Preserve credential-specific destination selection when a match exists."
+   ],
+   "exampleFix": "      // Find in calEventRaw.destinationCalendar the one with the same credentialId\n\n      const selectedCalendar =\n        calEventRaw.destinationCalendar?.find((cal) => cal.credentialId === credentialId)?.externalId ||\n        \"primary\";\n\n      calendar.events.insert(\n        {\n          auth: myGoogleAuth,\n          calendarId: selectedCalendar,",
+   "notes": "Resolving the shared variable fixes the later patch without editing its call site."
+  }
+ ]
+}

@@ -20,10 +20,15 @@
  *   Test 5 — reaper cleans crashed-worker lease (Phase 1 criterion 3)
  */
 
-import { Sandbox } from 'e2b';
+import { RateLimitError, Sandbox } from 'e2b';
 import { SandboxLeaseManager } from './sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
+import {
+    assertValidPrKey,
+    SandboxCircuitOpenError,
+    SandboxWaitAbortedError,
+} from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import {
     ISandboxProvider,
     SandboxInstance,
@@ -524,6 +529,7 @@ describe('SandboxLeaseManager', () => {
                 repoDir: '/home/user/repo',
             } as any);
 
+        const warn = jest.spyOn((manager as any).logger, 'warn');
         jest.useFakeTimers();
         const acquirePromise = manager.acquire(
             prKey,
@@ -532,13 +538,20 @@ describe('SandboxLeaseManager', () => {
             cloneParams,
         );
 
-        // Fast-forward through the 60s backoff between attempt 1 and 2
+        // Fast-forward through the 10s delay between attempt 1 and 2
         await jest.runAllTimersAsync();
 
         const result = await acquirePromise;
         jest.useRealTimers();
 
         expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(2);
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message:
+                    'SandboxLeaseManager: provider.createSandboxWithRepo failed (attempt 1/2); retrying in 10000ms',
+                metadata: { prKey },
+            }),
+        );
         expect(result.sandboxId).toBe('retry-success-id');
         // Failed first sandbox was never created (provider threw before returning),
         // so nothing to kill.
@@ -547,7 +560,7 @@ describe('SandboxLeaseManager', () => {
 
     // ─── Test 8: retry budget exhausted — error propagates, no orphan ────
 
-    it('throws after 3 failed createSandboxWithRepo attempts and cleans lease doc', async () => {
+    it('throws after 2 failed createSandboxWithRepo attempts and cleans lease doc', async () => {
         const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:51';
         const cloneParams = {
             cloneUrl: 'https://github.com/org/repo.git',
@@ -565,30 +578,667 @@ describe('SandboxLeaseManager', () => {
             expiresAt: new Date(Date.now() + 30 * 60 * 1000),
         } as any);
 
-        // All 3 attempts fail
         sandboxProvider.createSandboxWithRepo.mockRejectedValue(
             new Error('E2B quota exceeded'),
         );
+        const warn = jest.spyOn((manager as any).logger, 'warn');
 
         jest.useFakeTimers();
         const acquirePromise = manager
             .acquire(prKey, 'review', undefined, cloneParams)
             .catch((err) => err);
 
-        // Fast-forward through both backoffs (60s + 120s)
         await jest.runAllTimersAsync();
 
         const err = await acquirePromise;
         jest.useRealTimers();
 
-        // 3 attempts (initial + 2 retries) before giving up
-        expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(3);
+        // Initial attempt + one retry before giving up
+        expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(2);
+        // A retry is announced once: not after the last attempt
+        const retries = warn.mock.calls.filter(([entry]: any[]) =>
+            String(entry?.message).includes('retrying in'),
+        );
+        expect(retries).toHaveLength(1);
         expect(err).toBeInstanceOf(Error);
         expect(err.message).toMatch(/E2B quota exceeded/);
         // Lease doc cleaned up so polling joiners don't hang forever
         expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
         // No sandbox to kill — provider never returned one
         expect(Sandbox.kill).not.toHaveBeenCalled();
+    });
+
+    // ─── Sandbox capacity: a review waits for room, never skips it ───────
+
+    describe('sandbox capacity', () => {
+        const prKeyFor = (pr: number) =>
+            `7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:${pr}`;
+        const cloneParamsFor = (prNumber: number) => ({
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber,
+            platform: 'GITHUB' as any,
+        });
+        const planFull = () =>
+            new RateLimitError(
+                '429: You have reached the maximum number of concurrent E2B sandboxes',
+            );
+
+        function cappedManager(
+            maxPerWorker: number | (() => Promise<{ maxPerWorker: number }>),
+        ) {
+            const concurrencyConfig = {
+                getLimits:
+                    typeof maxPerWorker === 'number'
+                        ? jest.fn().mockResolvedValue({ maxPerWorker })
+                        : jest.fn(maxPerWorker),
+            };
+            return new SandboxLeaseManager(
+                sandboxProvider as any,
+                leaseRepo,
+                configService,
+                concurrencyConfig as any,
+            );
+        }
+
+        beforeEach(() => {
+            leaseRepo.upsertAcquire.mockImplementation(
+                async (prKey: string) =>
+                    ({
+                        _id: prKey,
+                        leaseCount: 1,
+                        state: 'CREATING',
+                        createdAt: new Date(),
+                        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                    }) as any,
+            );
+            leaseRepo.decrementLease.mockResolvedValue({
+                leaseCount: 1,
+            } as any);
+        });
+
+        afterEach(() => jest.useRealTimers());
+
+        it('waits in line past the cap instead of refusing, then takes the freed slot', async () => {
+            const capped = cappedManager(1);
+            const first = await capped.acquire(prKeyFor(1), 'review');
+
+            let settled = false;
+            const second = capped
+                .acquire(prKeyFor(2), 'review')
+                .finally(() => (settled = true));
+            await new Promise((r) => setTimeout(r, 50));
+
+            expect(settled).toBe(false);
+            expect(capped.concurrencyLimiter.waiting).toBe(1);
+            expect(leaseRepo.upsertAcquire).toHaveBeenCalledTimes(1);
+
+            await capped.release(first.leaseId);
+
+            await expect(second).resolves.toMatchObject({ wasCreated: true });
+            expect(capped.concurrencyLimiter.active).toBe(1);
+        });
+
+        it('logs the wait with the line state on each backoff tick', async () => {
+            jest.useFakeTimers();
+            const capped = cappedManager(1);
+            const warn = jest.spyOn((capped as any).logger, 'warn');
+            await capped.acquire(prKeyFor(1), 'review');
+            void capped.acquire(prKeyFor(2), 'review');
+
+            await jest.advanceTimersByTimeAsync(7_000);
+
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'waiting for a sandbox slot',
+                    ),
+                    metadata: expect.objectContaining({
+                        attempt: 1,
+                        maxPerWorker: 1,
+                        active: 1,
+                        waiting: 1,
+                    }),
+                }),
+            );
+        });
+
+        it('admits the line once the cap is raised in the global parameter', async () => {
+            jest.useFakeTimers();
+            let cap = 1;
+            const capped = cappedManager(async () => ({ maxPerWorker: cap }));
+            await capped.acquire(prKeyFor(1), 'review');
+            const second = capped.acquire(prKeyFor(2), 'review');
+
+            cap = 2;
+            await jest.advanceTimersByTimeAsync(7_000);
+
+            await expect(second).resolves.toMatchObject({ wasCreated: true });
+            expect(capped.concurrencyLimiter.active).toBe(2);
+        });
+
+        it('stops waiting only when the job aborts, giving its place up', async () => {
+            const capped = cappedManager(1);
+            const first = await capped.acquire(prKeyFor(1), 'review');
+            const job = new AbortController();
+
+            const second = capped.acquire(
+                prKeyFor(2),
+                'review',
+                undefined,
+                undefined,
+                { signal: job.signal },
+            );
+            job.abort();
+
+            await expect(second).rejects.toBeInstanceOf(
+                SandboxWaitAbortedError,
+            );
+            expect(capped.concurrencyLimiter.waiting).toBe(0);
+            await capped.release(first.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(0);
+        });
+
+        it('bounds the wait of a caller that passes no signal, so it cannot wait forever', async () => {
+            jest.useFakeTimers();
+            const capped = cappedManager(1);
+            await capped.acquire(prKeyFor(1), 'review');
+
+            const second = capped
+                .acquire(prKeyFor(2), 'conversation')
+                .catch((e) => e);
+            await jest.advanceTimersByTimeAsync(10 * 60_000 - 1_000);
+            expect(capped.concurrencyLimiter.waiting).toBe(1);
+
+            await jest.advanceTimersByTimeAsync(61_000);
+            await expect(second).resolves.toBeInstanceOf(
+                SandboxWaitAbortedError,
+            );
+            expect(capped.concurrencyLimiter.waiting).toBe(0);
+        });
+
+        it('lets a renewal replace its own sandbox without queueing behind its own slot', async () => {
+            const capped = cappedManager(1);
+            const review = await capped.acquire(prKeyFor(1), 'review');
+
+            const renewal = await capped.acquire(
+                '7e2e97b8-aefa-422e-92d4-30b378c0332e:safeguard-renew:1:abc',
+                'safeguard-renewal',
+                undefined,
+                undefined,
+                { replacesOwnSandbox: true },
+            );
+
+            expect(renewal.leaseId).toBeDefined();
+            expect(capped.concurrencyLimiter.active).toBe(1);
+            // Releasing the renewal leaves the review's slot in place
+            await capped.release(renewal.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(1);
+            await capped.release(review.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(0);
+        });
+
+        it('shares one slot between leases on the same PR', async () => {
+            const capped = cappedManager(1);
+
+            const review = await capped.acquire(prKeyFor(1), 'review');
+            const safeguard = await capped.acquire(prKeyFor(1), 'safeguard');
+
+            expect(review.leaseId).not.toBe(safeguard.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(1);
+
+            await capped.release(review.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(1);
+            await capped.release(safeguard.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(0);
+        });
+
+        it('stays quiet when uncapped', async () => {
+            const uncapped = cappedManager(0);
+            const warn = jest.spyOn((uncapped as any).logger, 'warn');
+            const log = jest.spyOn((uncapped as any).logger, 'log');
+
+            await uncapped.acquire(prKeyFor(3), 'review');
+
+            const slotLines = [...warn.mock.calls, ...log.mock.calls].filter(
+                ([p]: any[]) => /sandbox slot/.test(p?.message),
+            );
+            expect(slotLines).toEqual([]);
+        });
+
+        it('frees the slot when the acquire itself fails', async () => {
+            const capped = cappedManager(1);
+            leaseRepo.upsertAcquire.mockRejectedValueOnce(
+                new Error('Mongo down'),
+            );
+
+            await expect(capped.acquire(prKeyFor(1), 'review')).rejects.toThrow(
+                /Mongo down/,
+            );
+            expect(capped.concurrencyLimiter.active).toBe(0);
+        });
+
+        it('waits for room in the E2B plan and retries, without spending attempts or tripping the breaker', async () => {
+            jest.useFakeTimers();
+            const manager = cappedManager(0);
+            sandboxProvider.createSandboxWithRepo
+                .mockRejectedValueOnce(planFull())
+                .mockRejectedValueOnce(planFull())
+                .mockRejectedValueOnce(planFull());
+
+            const acquired = manager.acquire(
+                prKeyFor(10),
+                'review',
+                undefined,
+                cloneParamsFor(10),
+            );
+            // 5s, 10s, 20s backoff (±25% jitter)
+            await jest.advanceTimersByTimeAsync(60_000);
+
+            await expect(acquired).resolves.toMatchObject({ wasCreated: true });
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                4,
+            );
+            // Not one plan-full refusal counted as a failure (CLOSED alone
+            // would hold anyway: they all come from one organization)
+            expect((manager.createCircuit as any).failures).toHaveLength(0);
+        });
+
+        it('stops waiting for room in the E2B plan when the job aborts', async () => {
+            const manager = cappedManager(0);
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(planFull());
+            const job = new AbortController();
+
+            const acquired = manager.acquire(
+                prKeyFor(11),
+                'review',
+                undefined,
+                cloneParamsFor(11),
+                { signal: job.signal },
+            );
+            await new Promise((r) => setTimeout(r, 20));
+            job.abort();
+
+            await expect(acquired).rejects.toBeInstanceOf(
+                SandboxWaitAbortedError,
+            );
+            expect((manager.createCircuit as any).failures).toHaveLength(0);
+        });
+
+        it('keeps waiting for E2B room when another create took the probe meanwhile', async () => {
+            jest.useFakeTimers({ now: 1_000_000 });
+            const manager = cappedManager(0);
+            const breaker = manager.createCircuit as any;
+            breaker.now = () => Date.now();
+            for (const org of ['a', 'b', 'c', 'a', 'b']) {
+                breaker.recordFailure(org, { probe: false });
+            }
+            jest.setSystemTime(1_000_000 + 2 * 60_000);
+            expect(manager.createCircuit.getState()).toBe('HALF_OPEN');
+
+            let finishOtherProbe!: (value: SandboxInstance) => void;
+            sandboxProvider.createSandboxWithRepo
+                // This create is the probe, and E2B has no room for it
+                .mockRejectedValueOnce(planFull())
+                // Meanwhile another review takes the probe
+                .mockImplementationOnce(
+                    () => new Promise((r) => (finishOtherProbe = r)),
+                );
+
+            const waiting = manager
+                .acquire(prKeyFor(20), 'review', undefined, cloneParamsFor(20))
+                .catch((e) => e);
+            await jest.advanceTimersByTimeAsync(0);
+            const other = manager.acquire(
+                prKeyFor(21),
+                'review',
+                undefined,
+                cloneParamsFor(21),
+            );
+            await jest.advanceTimersByTimeAsync(30_000);
+
+            // Not ejected while the other probe runs
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                2,
+            );
+            finishOtherProbe({
+                type: 'e2b',
+                sandboxId: 'probe-ok',
+                cleanup: jest.fn(),
+                remoteCommands: {} as any,
+                run: jest.fn(),
+                readFile: jest.fn(),
+                writeFile: jest.fn(),
+                repoDir: '/home/user/repo',
+            });
+            await other;
+            expect(manager.createCircuit.getState()).toBe('CLOSED');
+
+            await jest.advanceTimersByTimeAsync(70_000);
+            await expect(waiting).resolves.toMatchObject({ wasCreated: true });
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                3,
+            );
+        });
+
+        it('takes a new slot on a prKey whose slot was dropped as stale, and a late release leaves it alone', async () => {
+            jest.useFakeTimers({ now: 1_000_000 });
+            const capped = cappedManager(1);
+            (capped.concurrencyLimiter as any).now = () => Date.now();
+            const old = await capped.acquire(prKeyFor(30), 'review');
+
+            // Two hours on without a release: the next acquire drops it
+            jest.setSystemTime(1_000_000 + 2 * 60 * 60 * 1000 + 1);
+            const other = await capped.acquire(prKeyFor(31), 'review');
+            expect(capped.concurrencyLimiter.active).toBe(1);
+
+            // prKey 30 queues for a slot of its own instead of joining the
+            // dropped one
+            let joined = false;
+            const again = capped
+                .acquire(prKeyFor(30), 'safeguard')
+                .then((r) => ((joined = true), r));
+            await jest.advanceTimersByTimeAsync(1_000);
+            expect(joined).toBe(false);
+            expect(capped.concurrencyLimiter.waiting).toBe(1);
+
+            // The old lease's late release frees nothing that is held
+            await capped.release(old.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(1);
+            expect(capped.concurrencyLimiter.waiting).toBe(1);
+
+            await capped.release(other.leaseId);
+            await expect(again).resolves.toMatchObject({
+                leaseId: expect.any(String),
+            });
+            expect(capped.concurrencyLimiter.active).toBe(1);
+        });
+    });
+
+    // ─── Fail-fast: timeouts, repo errors, circuit breaker ───────────────
+
+    describe('fail-fast on sandbox creation', () => {
+        const cloneParamsFor = (prNumber: number) => ({
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber,
+            platform: 'GITHUB' as any,
+        });
+        const prKeyFor = (repo: string, pr: number) =>
+            `7e2e97b8-aefa-422e-92d4-30b378c0332e:${repo}:${pr}`;
+        // A distinct organization (tenant) per letter
+        const orgPrKeyFor = (org: 'a' | 'b' | 'c' | 'd', pr: number) =>
+            `7e2e97b8-aefa-422e-92d4-30b378c0332${org}:repo:${pr}`;
+
+        beforeEach(() => {
+            leaseRepo.upsertAcquire.mockImplementation(
+                async (prKey: string) =>
+                    ({
+                        _id: prKey,
+                        leaseCount: 1,
+                        state: 'CREATING',
+                        createdAt: new Date(),
+                        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                    }) as any,
+            );
+        });
+
+        const timeoutError = () => {
+            const err = new Error('Command timed out after 120000ms');
+            err.name = 'TimeoutError';
+            return err;
+        };
+
+        it('does not retry a clone timeout', async () => {
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                timeoutError(),
+            );
+
+            await expect(
+                manager.acquire(
+                    prKeyFor('repo', 60),
+                    'review',
+                    undefined,
+                    cloneParamsFor(60),
+                ),
+            ).rejects.toThrow(/timed out/);
+
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                1,
+            );
+        });
+
+        it('does not retry a repository-specific git failure', async () => {
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                new Error(
+                    "Git clone failed in E2B sandbox (exit code 128): fatal: couldn't find remote ref refs/pull/61/head",
+                ),
+            );
+
+            await expect(
+                manager.acquire(
+                    prKeyFor('repo', 61),
+                    'review',
+                    undefined,
+                    cloneParamsFor(61),
+                ),
+            ).rejects.toThrow(/couldn't find remote ref/);
+
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                1,
+            );
+        });
+
+        it('opens the circuit after infra failures from 3+ organizations and then skips the provider', async () => {
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                timeoutError(),
+            );
+            const warn = jest.spyOn((manager as any).logger, 'warn');
+
+            // 5 timeouts across 3 distinct organizations open the breaker
+            const orgs = ['a', 'b', 'c', 'a', 'b'] as const;
+            for (const [i, org] of orgs.entries()) {
+                await manager
+                    .acquire(
+                        orgPrKeyFor(org, 100 + i),
+                        'review',
+                        undefined,
+                        cloneParamsFor(100 + i),
+                    )
+                    .catch(() => undefined);
+            }
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                5,
+            );
+            expect(manager.createCircuit.getState()).toBe('OPEN');
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'sandbox creation circuit CLOSED -> OPEN',
+                    ),
+                    metadata: expect.objectContaining({
+                        failures: 5,
+                        distinctOrgs: 3,
+                    }),
+                }),
+            );
+
+            const err = await manager
+                .acquire(
+                    orgPrKeyFor('d', 200),
+                    'review',
+                    undefined,
+                    cloneParamsFor(200),
+                )
+                .catch((e) => e);
+
+            expect(err).toBeInstanceOf(SandboxCircuitOpenError);
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: `SandboxLeaseManager: sandbox creation circuit open, skipping create prKey="${orgPrKeyFor('d', 200)}"`,
+                    metadata: {
+                        prKey: orgPrKeyFor('d', 200),
+                        retryInMs: expect.any(Number),
+                        attempt: 1,
+                    },
+                }),
+            );
+            // Provider never called while open, lease doc still cleaned up
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                5,
+            );
+            expect(leaseRepo.delete).toHaveBeenCalledWith(
+                orgPrKeyFor('d', 200),
+            );
+        });
+
+        it('keeps the circuit closed when only one repository keeps timing out', async () => {
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                timeoutError(),
+            );
+
+            for (let i = 0; i < 8; i++) {
+                await manager
+                    .acquire(
+                        prKeyFor('huge-monorepo', 300 + i),
+                        'review',
+                        undefined,
+                        cloneParamsFor(300 + i),
+                    )
+                    .catch(() => undefined);
+            }
+
+            expect(manager.createCircuit.getState()).toBe('CLOSED');
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                8,
+            );
+        });
+
+        it("keeps the circuit closed when one organization's repos all time out", async () => {
+            // Its git host is down: every repo of that tenant times out, which
+            // says nothing about the sandbox infrastructure for the others.
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                timeoutError(),
+            );
+
+            for (const [i, repo] of ['r1', 'r2', 'r3', 'r4', 'r5'].entries()) {
+                await manager
+                    .acquire(
+                        prKeyFor(repo, 500 + i),
+                        'review',
+                        undefined,
+                        cloneParamsFor(500 + i),
+                    )
+                    .catch(() => undefined);
+            }
+
+            expect(manager.createCircuit.getState()).toBe('CLOSED');
+        });
+
+        describe('after the breaker trips', () => {
+            const trip = async () => {
+                // The breaker keeps the Date.now it was built with; read the
+                // (fake) clock at call time instead
+                (manager.createCircuit as any).now = () => Date.now();
+                sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                    timeoutError(),
+                );
+                const orgs = ['a', 'b', 'c', 'a', 'b'] as const;
+                for (const [i, org] of orgs.entries()) {
+                    await manager
+                        .acquire(
+                            orgPrKeyFor(org, 600 + i),
+                            'review',
+                            undefined,
+                            cloneParamsFor(600 + i),
+                        )
+                        .catch(() => undefined);
+                }
+                expect(manager.createCircuit.getState()).toBe('OPEN');
+            };
+            const acquireOnce = (pr: number) =>
+                manager
+                    .acquire(
+                        orgPrKeyFor('d', pr),
+                        'review',
+                        undefined,
+                        cloneParamsFor(pr),
+                    )
+                    .catch((e) => e);
+
+            afterEach(() => jest.useRealTimers());
+
+            it('closes once the probe create succeeds, logging the step back as a log line', async () => {
+                jest.useFakeTimers({ now: 1_000_000 });
+                await trip();
+                const log = jest.spyOn((manager as any).logger, 'log');
+                jest.setSystemTime(1_000_000 + 2 * 60_000);
+                sandboxProvider.createSandboxWithRepo.mockReset();
+                sandboxProvider.createSandboxWithRepo.mockResolvedValue({
+                    sandboxId: 'sb-1',
+                } as any);
+
+                await acquireOnce(700);
+
+                expect(manager.createCircuit.getState()).toBe('CLOSED');
+                expect(log).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        message: expect.stringContaining(
+                            'sandbox creation circuit OPEN -> HALF_OPEN',
+                        ),
+                    }),
+                );
+            });
+
+            it('frees the probe for the next create when the probe hits a repository error', async () => {
+                jest.useFakeTimers({ now: 1_000_000 });
+                await trip();
+                jest.setSystemTime(1_000_000 + 2 * 60_000);
+                sandboxProvider.createSandboxWithRepo.mockReset();
+                sandboxProvider.createSandboxWithRepo
+                    .mockRejectedValueOnce(
+                        new Error('remote: Repository not found.'),
+                    )
+                    .mockResolvedValue({ sandboxId: 'sb-2' } as any);
+
+                await acquireOnce(701);
+                const next = await acquireOnce(702);
+
+                // The second create was admitted as the new probe
+                expect(next).not.toBeInstanceOf(SandboxCircuitOpenError);
+                expect(
+                    sandboxProvider.createSandboxWithRepo,
+                ).toHaveBeenCalledTimes(2);
+                expect(manager.createCircuit.getState()).toBe('CLOSED');
+            });
+        });
+
+        it('does not count repository-specific failures toward the circuit', async () => {
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                new Error('remote: Repository not found.'),
+            );
+
+            // Enough failures from enough organizations to trip it, were
+            // they counted: only the exclusion keeps it CLOSED
+            const orgs = ['a', 'b', 'c', 'd', 'a', 'b'] as const;
+            for (const [i, org] of orgs.entries()) {
+                await manager
+                    .acquire(
+                        orgPrKeyFor(org, 400 + i),
+                        'review',
+                        undefined,
+                        cloneParamsFor(400 + i),
+                    )
+                    .catch(() => undefined);
+            }
+
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                6,
+            );
+            expect(manager.createCircuit.getState()).toBe('CLOSED');
+        });
     });
 
     // ─── Test 9c: release writes killAt on the lease doc ──────────────────
@@ -645,6 +1295,121 @@ describe('SandboxLeaseManager', () => {
         );
         // No synchronous kill — that's the cron's job
         expect(Sandbox.kill).not.toHaveBeenCalled();
+        expect(leaseRepo.delete).not.toHaveBeenCalled();
+    });
+
+    // ─── Test 9c: single-use release stops compute now (#2626) ────────────
+
+    async function acquireAndReleaseWith(
+        idleMs: number,
+        claim: Record<string, unknown> | null = {
+            _id: 'claimed',
+            leaseCount: 0,
+            state: 'READY',
+            sandboxId: 'graph-sandbox',
+        },
+    ) {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:202';
+
+        leaseRepo.upsertAcquire.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'CREATING',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+        leaseRepo.findByPrKey.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'READY',
+            sandboxId: '',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        const result = await manager.acquire(prKey, 'graph-build');
+
+        leaseRepo.decrementLease.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 0,
+            state: 'READY',
+            sandboxId: 'graph-sandbox',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+        leaseRepo.claimCleanup.mockResolvedValue(
+            claim ? ({ ...claim, _id: prKey } as any) : null,
+        );
+
+        const before = Date.now();
+        await manager.release(result.leaseId, { idleMs });
+
+        return { prKey, before };
+    }
+
+    it('release with idleMs 0 claims the lease with killAt, kills and completes cleanup', async () => {
+        const { prKey, before } = await acquireAndReleaseWith(0);
+
+        // Claim and killAt are one write, and the claim only wins while
+        // leaseCount is still 0.
+        expect(leaseRepo.claimCleanup).toHaveBeenCalledTimes(1);
+        const [claimedKey, claimedSandbox, requireZero, claimedKillAt] = (
+            leaseRepo.claimCleanup as jest.Mock
+        ).mock.calls[0];
+        expect(claimedKey).toBe(prKey);
+        expect(claimedSandbox).toBe('graph-sandbox');
+        expect(requireZero).toBe(true);
+        expect(claimedKillAt).toBeInstanceOf(Date);
+        expect(claimedKillAt.getTime()).toBeGreaterThanOrEqual(before);
+        expect(claimedKillAt.getTime()).toBeLessThanOrEqual(Date.now() + 50);
+
+        expect(Sandbox.kill).toHaveBeenCalledWith('graph-sandbox', {
+            apiKey: 'test-e2b-key',
+        });
+        expect(leaseRepo.completeCleanup).toHaveBeenCalledWith(
+            prKey,
+            'graph-sandbox',
+        );
+        // No idle window to defend: the provider timeout is not what stops it.
+        expect(Sandbox.setTimeout).not.toHaveBeenCalled();
+    });
+
+    it('release with idleMs 0 keeps the claim and killAt when the kill fails', async () => {
+        (Sandbox.kill as jest.Mock).mockRejectedValueOnce(
+            new Error('provider unavailable'),
+        );
+
+        await acquireAndReleaseWith(0);
+
+        // The kill is attempted; the lease stays for the cron to retry.
+        expect(Sandbox.kill).toHaveBeenCalledWith('graph-sandbox', {
+            apiKey: 'test-e2b-key',
+        });
+        expect(leaseRepo.completeCleanup).not.toHaveBeenCalled();
+        expect(leaseRepo.delete).not.toHaveBeenCalled();
+        expect(leaseRepo.retire).not.toHaveBeenCalled();
+        // FAILED is the local-cleanup marker; stamping it would reject every
+        // later acquire for the key.
+        expect(leaseRepo.failCleanup).not.toHaveBeenCalled();
+        const [, , , claimedKillAt] = (leaseRepo.claimCleanup as jest.Mock).mock
+            .calls[0];
+        expect(claimedKillAt.getTime()).toBeLessThanOrEqual(Date.now() + 50);
+    });
+
+    it('release with idleMs 0 leaves the sandbox alone when it loses the cleanup claim', async () => {
+        // A concurrent acquire re-upped leaseCount before the claim: the doc is
+        // no longer single-use, so nothing may be killed or deleted.
+        const { prKey } = await acquireAndReleaseWith(0, null);
+
+        expect(leaseRepo.claimCleanup).toHaveBeenCalledWith(
+            prKey,
+            'graph-sandbox',
+            true,
+            expect.any(Date),
+        );
+        expect(Sandbox.kill).not.toHaveBeenCalled();
+        expect(leaseRepo.completeCleanup).not.toHaveBeenCalled();
+        expect(leaseRepo.failCleanup).not.toHaveBeenCalled();
         expect(leaseRepo.delete).not.toHaveBeenCalled();
     });
 
@@ -813,7 +1578,9 @@ describe('SandboxLeaseManager', () => {
                 "git -c http.extraHeader=\"$GIT_AUTH_HEADER\" fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD",
             ),
             expect.objectContaining({
-                envs: expect.objectContaining({ GIT_AUTH_HEADER: expect.any(String) }),
+                envs: expect.objectContaining({
+                    GIT_AUTH_HEADER: expect.any(String),
+                }),
             }),
         );
     });
@@ -1031,6 +1798,185 @@ describe('SandboxLeaseManager', () => {
             30_000, // not the 5min default
             { apiKey: 'test-e2b-key' },
         );
+    });
+
+    // How long a checkout stays held after its last use (#2628)
+    describe('sandbox usage', () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77';
+
+        const acquireCreated = async () => {
+            leaseRepo.upsertAcquire.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'CREATING',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: '',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+            return manager.acquire(prKey, 'review', undefined, {
+                cloneUrl: 'https://github.com/org/repo.git',
+                authToken: 'token',
+                branch: 'feature',
+                platform: 'github' as any,
+            });
+        };
+
+        const releasedWith = (leaseCount: number) =>
+            leaseRepo.decrementLease.mockResolvedValue({
+                _id: prKey,
+                leaseCount,
+                state: 'READY',
+                sandboxId: 'review-sandbox-id',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+        it('stamps the last command and records the release and the provider stop', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+
+            expect(sandbox.usage?.()).toEqual({
+                consumer: 'review',
+                acquiredAt: expect.any(Date),
+            });
+
+            await sandbox.remoteCommands.read('src/a.ts', 1, 10);
+            const firstUsedAt = sandbox.usage?.().firstUsedAt;
+            await sandbox.run('git status');
+            expect(provided.remoteCommands.read).toHaveBeenCalledWith(
+                'src/a.ts',
+                1,
+                10,
+            );
+            const lastUsedAt = sandbox.usage?.().lastUsedAt;
+            expect(firstUsedAt).toBeInstanceOf(Date);
+            expect(sandbox.usage?.().firstUsedAt).toBe(firstUsedAt);
+            expect(lastUsedAt).toBeInstanceOf(Date);
+
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            const usage = sandbox.usage?.();
+            expect(usage?.lastUsedAt).toEqual(lastUsedAt);
+            expect(usage?.releasedAt).toBeInstanceOf(Date);
+            const idleMs =
+                usage!.stopAt!.getTime() - usage!.releasedAt!.getTime();
+            expect(idleMs).toBeGreaterThanOrEqual(29_000);
+            expect(idleMs).toBeLessThanOrEqual(30_000);
+        });
+
+        // The review does not await its release (#2628)
+        it('stamps the release when it starts, before the Mongo writes', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            leaseRepo.decrementLease.mockReturnValueOnce(
+                new Promise(() => {}) as any,
+            );
+
+            void manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(sandbox.usage?.().releasedAt).toBeInstanceOf(Date);
+        });
+
+        it('stops stamping after the release, and logs a use after it once', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            await sandbox.run('git status');
+            const lastUsedAt = sandbox.usage?.().lastUsedAt;
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            const warn = (manager as any).logger.warn as jest.Mock;
+            warn.mockClear();
+
+            await sandbox.run('git log');
+            await sandbox.remoteCommands.read('src/a.ts', 1, 10);
+
+            expect(sandbox.usage?.().lastUsedAt).toBe(lastUsedAt);
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn.mock.calls[0][0].message).toContain(
+                'sandbox used after release',
+            );
+        });
+
+        it('a command still running at the release does not stamp after it', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+            let finish!: (content: string) => void;
+            (provided.readFile as jest.Mock).mockReturnValueOnce(
+                new Promise<string>((resolve) => (finish = resolve)),
+            );
+
+            const reading = sandbox.readFile('src/a.ts');
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+            finish('content');
+            await reading;
+
+            expect(sandbox.usage?.().firstUsedAt).toBeInstanceOf(Date);
+            expect(sandbox.usage?.().lastUsedAt).toBeUndefined();
+        });
+
+        it('stamps a command that fails too', async () => {
+            const { sandbox } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+            (provided.readFile as jest.Mock).mockRejectedValueOnce(
+                new Error('ENOENT'),
+            );
+
+            await expect(sandbox.readFile('missing')).rejects.toThrow('ENOENT');
+
+            expect(sandbox.usage?.().lastUsedAt).toBeInstanceOf(Date);
+        });
+
+        // A review releases before publishing: E2B must not hold its comments
+        it("does not wait for E2B's idle timeout to release", async () => {
+            const { leaseId } = await acquireCreated();
+            jest.spyOn(Sandbox, 'setTimeout').mockReturnValueOnce(
+                new Promise(() => {}),
+            );
+
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(Sandbox.setTimeout).toHaveBeenCalledWith(
+                'review-sandbox-id',
+                30_000,
+                { apiKey: 'test-e2b-key' },
+            );
+            expect(leaseRepo.setKillAt).toHaveBeenCalled();
+        });
+
+        it('records no stop when another holder keeps the sandbox', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+
+            releasedWith(1);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(sandbox.usage?.().releasedAt).toBeInstanceOf(Date);
+            expect(sandbox.usage?.().stopAt).toBeUndefined();
+            expect(leaseRepo.setKillAt).not.toHaveBeenCalled();
+        });
+
+        it('hands the null sandbox out as it is', async () => {
+            manager = makeLeaseManager(
+                leaseRepo,
+                makeMockSandboxProvider(false),
+                configService,
+            );
+
+            const { sandbox } = await acquireCreated();
+
+            expect(sandbox.type).toBe('null');
+            expect(sandbox.usage).toBeUndefined();
+        });
     });
 
     // ─── Test 9: mid-create invalidation kills the sandbox ────────────────
@@ -1799,46 +2745,6 @@ describe('SandboxLeaseReaperService', () => {
         expect(leaseRepo.delete).not.toHaveBeenCalled();
     });
 
-    it('killIdleSandboxes: continues deleting Mongo doc even when Sandbox.kill fails', async () => {
-        const leaseRepo = makeMockLeaseRepo();
-        const configService = makeMockConfigService('test-e2b-key');
-
-        leaseRepo.findReadyToKill.mockResolvedValue([
-            {
-                _id: 'org-uuid:repo:9',
-                sandboxId: 'e2b-already-gone',
-                leaseCount: 0,
-                state: 'READY',
-                killAt: new Date(Date.now() - 1000),
-                createdAt: new Date(Date.now() - 60 * 1000),
-                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-            } as any,
-        ]);
-
-        // E2B already removed the sandbox (race with reaper, external kill, etc.)
-        (Sandbox.kill as jest.Mock).mockRejectedValueOnce(
-            new Error('sandbox not found'),
-        );
-
-        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
-        const mockDistributedLockService = {
-            acquire: jest.fn().mockResolvedValue(mockLock),
-        };
-
-        const reaper = new SandboxLeaseReaperService(
-            leaseRepo,
-            mockDistributedLockService as any,
-            configService,
-        );
-
-        await reaper.killIdleSandboxes();
-
-        // Doc deleted regardless — lease can't linger waiting for a sandbox
-        // that's already gone
-        expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:9');
-        expect(mockLock.release).toHaveBeenCalledTimes(1);
-    });
-
     // ─── Concurrency and error isolation tests ──────────────────────────
 
     it('reapExpiredLeases: processes with bounded concurrency (max 5 in-flight)', async () => {
@@ -1919,35 +2825,6 @@ describe('SandboxLeaseReaperService', () => {
         expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:1');
         expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:3');
         expect(leaseRepo.delete).not.toHaveBeenCalledWith('org:repo:2');
-    });
-
-    it('reapExpiredLeases: treats E2B "already gone" as successful cleanup', async () => {
-        const leaseRepo = makeMockLeaseRepo();
-        const configService = makeMockConfigService('test-e2b-key');
-
-        leaseRepo.findExpired.mockResolvedValue([
-            { _id: 'org:repo:1', sandboxId: 'e2b-gone', state: 'READY' },
-        ] as any);
-
-        (Sandbox.kill as jest.Mock).mockRejectedValue(
-            new Error('sandbox not found'),
-        );
-
-        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
-        const mockDistributedLockService = {
-            acquire: jest.fn().mockResolvedValue(mockLock),
-        };
-
-        const reaper = new SandboxLeaseReaperService(
-            leaseRepo,
-            mockDistributedLockService as any,
-            configService,
-        );
-
-        await reaper.reapExpiredLeases();
-
-        // Lease was deleted despite "not found" error
-        expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:1');
     });
 
     it('reapExpiredLeases: skips Sandbox.kill when no API key is configured', async () => {

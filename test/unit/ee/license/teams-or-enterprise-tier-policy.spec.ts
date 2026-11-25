@@ -123,3 +123,38 @@ describe('isTeamsOrEnterpriseTierAllowed', () => {
         }
     });
 });
+
+describe('isTeamsOrEnterpriseTierAllowed — self-hosted tiers', () => {
+    const selfHosted = (planType: string) => ({
+        valid: true,
+        subscriptionStatus: SubscriptionStatus.LICENSED_SELF_HOSTED,
+        planType,
+    });
+
+    it('lets only an Enterprise key through by default', () => {
+        expect(isTeamsOrEnterpriseTierAllowed(selfHosted('enterprise'))).toBe(
+            true,
+        );
+        expect(isTeamsOrEnterpriseTierAllowed(selfHosted('teams'))).toBe(false);
+        expect(isTeamsOrEnterpriseTierAllowed(selfHosted('teams_byok'))).toBe(
+            false,
+        );
+    });
+
+    it('lets a Teams key through when the feature names it', () => {
+        const both = { selfHostedTiers: ['teams', 'enterprise'] as const };
+
+        expect(isTeamsOrEnterpriseTierAllowed(selfHosted('teams'), both)).toBe(
+            true,
+        );
+        expect(
+            isTeamsOrEnterpriseTierAllowed(selfHosted('teams_byok'), both),
+        ).toBe(true);
+        expect(
+            isTeamsOrEnterpriseTierAllowed(selfHosted('enterprise'), both),
+        ).toBe(true);
+        expect(
+            isTeamsOrEnterpriseTierAllowed(selfHosted('free_byok'), both),
+        ).toBe(false);
+    });
+});

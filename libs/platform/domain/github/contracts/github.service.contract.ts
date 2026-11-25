@@ -21,6 +21,11 @@ export interface IGithubService {
     ): Promise<any>;
     findOneByOrganizationName(organizationName: string): Promise<any>;
     findOneByInstallId(installId: string): Promise<any>;
+    getInstallationAuthorizationUrl(params: {
+        installationId: unknown;
+        userId: string;
+        organizationId: string;
+    }): { url: string };
     getAllMembersByOrg(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<any>;

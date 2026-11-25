@@ -1,0 +1,113 @@
+---
+title: "自动批准"
+description: "通过命名策略批准干净的 PR，并记录决策。"
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="all-plans" detail="所有套餐均支持基本的 PR 自动批准。">
+    <Badge icon="layer-group" stroke>所有套餐</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="policies" detail="批准策略和 Human approval 在 Kodus Cloud 上处于 Beta 阶段，适用于 Teams、Enterprise 和试用版。工作区需开通 Beta 功能。">
+    <Badge icon="flask" color="orange" stroke>批准策略 · Beta</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="批准策略和 Human approval 需要 Enterprise 许可证和 BETA_FEATURES=true。">
+    <Badge icon="server" stroke>自托管</Badge>
+  </FeatureBadge>
+</div>
+
+当审查结果干净时，Kody 会向您的 Git 平台提交一次审查批准。它从不合并 PR。
+
+## 启用自动批准
+
+打开 **Code review → General**，开启 **Automatic PR approval**，然后点击 **Save settings**。对于支持批准策略的工作区，PR 还必须匹配一条已启用的策略。
+
+## 批准策略
+
+每个策略都有名称、开关和可选条件。同一策略内的所有条件必须全部匹配。任何已启用的策略都可以授权批准；按保存顺序的第一个匹配项会记录在 PR 上。
+
+新策略默认**关闭**。没有条件的策略覆盖 **All clean PRs**，在编辑器和列表中都会显示。添加或编辑策略不会开启自动批准。
+
+策略支持 Global、Repository 和 Directory 范围。它们作用于完整的 PR，包括被增量审查跳过或在审查评论中被忽略的文件。
+
+### 批准仅修改文档的 PR
+
+这个示例让 Kody 批准仅修改 `docs/` 下的文件且审查通过的 PR。
+
+1. 在 **Code review → General** 中找到 **Approval policies**，然后点击 **Add policy**。
+2. 将策略命名为 `Documentation only`。在 **Add condition** 中选择 **Changed files**。在 **Included files** 中点击 **Add files**，输入 `docs/**` 并按 Enter。
+3. 点击 **Apply**，然后启用新策略。开启 **Automatic PR approval**，再点击 **Save settings**。
+
+如果 PR 只修改了 `docs/` 下的文件且通过了审查，就可以匹配此策略。如果同时修改了应用代码，则需要匹配其他策略。
+
+### 策略条件
+
+| 条件 | 要求 |
+| --- | --- |
+| PR labels | 至少有一个列出的标签匹配。标签条件在 Bitbucket 和 Azure Repos 上不可用。 |
+| PR author | PR 创建者必须是列出的用户名或机器人，或是列出的平台团队中已验证的成员。这不会检查每个提交的作者。 |
+| Included files | 每个变更路径都必须匹配某个包含模式。留空表示所有文件。 |
+| Excluded files | 任何匹配的路径都会使该策略被跳过。 |
+| Changed lines | 新增行数加删除行数必须在限制之内。选定的文件（例如 `yarn.lock`）可以从此计数中排除。 |
+| Eligibility instruction | Kody 必须确认 PR 满足该指令。它在其他条件之后运行，使用审查模型。 |
+
+用户名和标签的比较不区分大小写。团队成员资格在每次评估时都会重新检查。支持 GitHub 团队、GitLab 群组和 Azure DevOps 团队；无法获取的成员资格永远不算匹配。不支持的团队选择器在保存时会被拒绝。
+
+被重命名的文件会同时按旧路径和新路径计算。未知或二进制文件的行数无法满足行数限制，除非该文件被明确排除在此计数之外。使用文件模式编辑器可以验证 glob 语法并测试示例路径。
+
+如果 eligibility instruction 失败、超时或缺少依据，该策略不能批准。其他已启用的策略仍可能匹配。
+
+## 适用于每个策略的要求
+
+- 审查必须在没有阻塞性失败或未解决问题的情况下完成。仅 PR 摘要生成失败，不会使已交付的干净审查失效。
+- 如果开启了[风险评估](/zh/how_to_use/code_review/configs/risk)，发现风险或评估不可用会阻止每个策略。
+- 无论策略如何设置，列在 **Human approval** 下的文件始终会阻止自动批准。
+- PR 的 head 和 base 必须仍与已审查的快照一致。更新的失败或不完整的审查会阻止复用更早的干净结果。
+
+关闭风险评估时，干净审查和策略要求仍然适用。没有按策略绕过风险的选项。
+
+当标签变化或已发布的行评论被解决时，Kody 可以重新考虑已审查的 PR。PR 级别的问题需要重新进行一次干净的审查。仅由自定义代理执行的运行永远不会批准整个 PR。
+
+## 决策评论
+
+当 Kody 依据某个策略批准，或暂缓批准时，它会在 PR 上发布一条决策评论并保持更新。评论会指明匹配的策略，或说明未通过的条件。私有的 eligibility instruction 和自由形式的模型推理不会发布。
+
+如果 Kody 无法确认评论已出现在 PR 上，[Pull requests](/zh/how_to_use/reviews/pull_requests) 列表中的该 PR 会显示 **Approval note unverified**，其提示框会给出 Kody 尝试发布的原因。请检查 PR 评论和仓库集成的权限。
+
+更改或禁用策略不会撤回 Git 平台上已有的批准。之后某次暂缓批准的审查（例如因为不再干净或发现了风险）会撤销 Kody 之前的批准并说明原因。
+
+## YAML
+
+在使用仓库配置文件之前，请在 **Code review → General**（仓库范围）中开启 **Prefer kodus-config.yml settings**。
+
+```yaml
+pullRequestApprovalActive: true
+approvalSensitivePaths:
+  - 'src/payments/**'
+approvalPolicies:
+  - id: docs
+    name: Documentation
+    enabled: true
+    includedFiles:
+      - 'docs/**'
+  - id: dependency-updates
+    name: Dependency updates
+    enabled: false
+    authors:
+      - 'dependabot[bot]'
+    authorTeams:
+      - 'platform'
+    includedFiles:
+      - 'package.json'
+      - 'yarn.lock'
+    maxChangedLines: 150
+    lineCountExcludedFiles:
+      - 'yarn.lock'
+    instruction: 'Only dependency updates that keep the same major version.'
+```
+
+`approvalSensitivePaths` 是 **Human approval** 列表。`authors` 接受用户名和机器人，`authorTeams` 接受平台团队，`labels` 接受 PR 标签。请保持策略 ID 稳定，名称互不相同。最多可以有 50 个策略，eligibility instruction 最长 4,000 个字符。显式的空列表会禁用所有策略。现有的无限制批准会解析为一个已启用的 **Existing approval policy**，并保留总开关。
+
+旧版的 `approvalLabels` 和 `approvalAuthors` 仍会限定该迁移后的策略。如果优先级更高的文件使用旧版筛选条件，同时又带有不含迁移策略的新策略列表，请将该文件更新为 `approvalPolicies`；Kody 会拒绝这种含糊的配置，而不是忽略某项限制。

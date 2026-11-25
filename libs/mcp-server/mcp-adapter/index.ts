@@ -7,7 +7,7 @@ import {
     MCPResourceWithServer,
     MCPTool,
 } from './types';
-import { MCPRegistry } from './registry';
+import { isCredentialRejection, MCPRegistry } from './registry';
 import { mcpToolsToEngineTools } from './tools';
 /**
  * Create an MCP adapter for Kodus Flow
@@ -117,13 +117,19 @@ export function createMCPAdapter(config: MCPAdapterConfig): MCPAdapter {
                     context: 'createMCPAdapter',
                 });
 
-                for (const result of rejected) {
-                    logger.error({
+                results.forEach((result, index) => {
+                    if (result.status !== 'rejected') return;
+                    // Already reported to whoever issued the credential.
+                    const handled =
+                        isCredentialRejection(result.reason) &&
+                        !!config.servers[index]?.onCredentialRejected;
+                    logger[handled ? 'warn' : 'error']({
                         message: 'MCP connection error:',
                         context: 'createMCPAdapter',
                         error: result.reason,
+                        metadata: { serverName: config.servers[index]?.name },
                     });
-                }
+                });
             }
 
             if (successful.length === 0) {
@@ -166,7 +172,22 @@ export function createMCPAdapter(config: MCPAdapterConfig): MCPAdapter {
             await this.ensureConnection();
 
             const mcpTools = await registry.listAllTools();
-            const engineTools = mcpToolsToEngineTools(mcpTools);
+            const engineTools = mcpToolsToEngineTools(
+                mcpTools,
+                (toolName, servers) => {
+                    const message = `MCP tool "${toolName}" is listed by more than one server (${servers.join(', ')}); leaving it out so the other tools stay available. Rename it in one of the servers to use it.`;
+
+                    logger.warn({
+                        message,
+                        context: 'getTools',
+                        metadata: { toolName, servers },
+                    });
+
+                    // The caller decides what to show: connectMcpTools forwards
+                    // this to the conversation, which runs without that tool.
+                    config.onError?.(new Error(message), 'mcp-adapter');
+                },
+            );
 
             return engineTools.map((tool: EngineTool) => ({
                 name: tool.name,
@@ -174,6 +195,8 @@ export function createMCPAdapter(config: MCPAdapterConfig): MCPAdapter {
                 inputSchema: tool?.inputSchema,
                 outputSchema: tool?.outputSchema,
                 annotations: tool?.annotations,
+                _meta: tool?._meta,
+                serverName: tool?.serverName,
                 title: tool?.title,
                 execute: async (args: unknown, _ctx: unknown) => {
                     return registry.executeTool(

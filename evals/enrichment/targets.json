@@ -1,0 +1,38 @@
+{
+ "__doc": [
+  "Floors per model for the enrichment step (enrich-content.ts, prompt v2, one call, no tools) on dataset/items.json (150 gold-v3 TPs, enrichment-v2), as ratios.",
+  "fix: of the 100 fixable items (Astra reference: a correct fix fits exactly the cited lines and the input shows enough), the share whose improvedCode the judge passes. An empty answer or a failed fix counts against it.",
+  "noCode: of the 50 items with no correct fix inside the cited lines (30 needs-wider-change, 18 insufficient context, 2 no-code-fix), the share answered with no code (any fixStatus but local). The subgroups are reported, not gated: 30 and 20 items are too few for a floor of their own, and the fixStatus chosen is not graded, since the three give the user the same comment.",
+  "title: of the 150 items, the share whose title names the finding's problem, per the judge.",
+  "Judge: Opus 5.5 (judge.js, with the Astra references), by the Claude Agent SDK subscription while the API is out of quota; Opus and Sonnet ran by the same route. A floor holds only under that judge and those routes.",
+  "observed: the mean of the runs listed in runs, each on the same commit. Floors set by hand from those means (22/10/26); a nightly below the floor is re-measured and decided on the mean of both runs."
+ ],
+ "models": {
+  "gpt-6.1-sol@sub": {
+   "reasoning": "low",
+   "fix": { "floor": 0.8, "observed": 0.82, "runs": [0.83, 0.81] },
+   "noCode": { "floor": 0.8, "observed": 0.84, "runs": [0.84, 0.84] },
+   "title": { "floor": 0.9, "observed": 0.993, "runs": [0.993, 0.993] }
+  },
+  "claude-opus-5.5@sdk": {
+   "fix": { "floor": 0.75, "observed": 0.785, "runs": [0.78, 0.79] },
+   "noCode": { "floor": 0.75, "observed": 0.79, "runs": [0.8, 0.78] },
+   "title": { "floor": 0.9, "observed": 0.993, "runs": [0.993, 0.993] }
+  },
+  "claude-sonnet-5.5@sdk": {
+   "fix": { "floor": 0.75, "observed": 0.775, "runs": [0.77, 0.76, 0.78, 0.79], "note": "Short margin, measured over 4 runs: the mean sits 2.5 points above the floor and single runs reach 0.76, so an isolated 'oscilou' is expected, not a regression." },
+   "noCode": { "floor": 0.6, "observed": 0.63, "runs": [0.64, 0.6, 0.62, 0.66], "note": "Short margin, measured over 4 runs: the mean sits 3 points above the floor and one run landed on it, so an isolated 'oscilou' is expected, not a regression." },
+   "title": { "floor": 0.9, "observed": 0.99, "runs": [0.993, 0.987] }
+  },
+  "deepseek-v4.1-flash@together": {
+   "fix": { "floor": 0.6, "observed": 0.67, "runs": [0.64, 0.7] },
+   "noCode": { "floor": 0.65, "observed": 0.68, "runs": [0.7, 0.66] },
+   "title": { "floor": 0.9, "observed": 0.99, "runs": [0.987, 0.993] }
+  },
+  "kimi-k2.7-code@openrouter": {
+   "fix": { "floor": 0.6, "observed": 0.665, "runs": [0.65, 0.68] },
+   "noCode": { "floor": 0.55, "observed": 0.58, "runs": [0.54, 0.62], "note": "5 of 150 items unanswered on each run (OpenRouter retries exhausted); they count against every metric." },
+   "title": { "floor": 0.9, "observed": 0.947, "runs": [0.94, 0.953] }
+  }
+ }
+}

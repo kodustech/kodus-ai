@@ -6,9 +6,6 @@ description: "Respuestas a preguntas frecuentes sobre revisión de código con I
 ## Revisión de Código
 
 <CardGroup cols={2}>
-  <Card title="Cómo aplicar estándares de codificación en pull requests" href="/es/knowledge_base/how-to-enforce-coding-standards-in-pull-requests">
-    Aplica automáticamente las convenciones de codificación de tu equipo en cada PR usando reglas personalizadas.
-  </Card>
   <Card title="Cómo automatizar la revisión de código en GitHub, GitLab y Bitbucket" href="/es/knowledge_base/how-to-automate-code-review">
     Configura revisión de código con IA que se ejecuta automáticamente en cada pull request.
   </Card>
@@ -29,11 +26,11 @@ description: "Respuestas a preguntas frecuentes sobre revisión de código con I
 ## Validación de Lógica de Negocio
 
 <CardGroup cols={2}>
-  <Card title="Cómo validar si un PR implementa un ticket de Jira" href="/es/knowledge_base/how-to-validate-pr-against-jira-ticket">
-    Compara tu pull request con los criterios de aceptación de Jira antes de fusionar.
+  <Card title="Conecta Jira y valida pull requests" href="/es/knowledge_base/how-to-connect-jira-to-code-review">
+    Configura Atlassian Rovo en Kodus y comprueba un PR contra su ticket de Jira.
   </Card>
-  <Card title="Cómo validar issues de Linear contra pull requests" href="/es/knowledge_base/how-to-validate-pr-against-linear-issue">
-    Asegúrate de que tu PR implementa lo que describe el issue de Linear.
+  <Card title="Conecta Linear y valida pull requests" href="/es/knowledge_base/how-to-connect-linear-to-code-review">
+    Configura Linear en Kodus y comprueba un PR contra su issue.
   </Card>
   <Card title="Cómo verificar el código contra especificaciones de Google Docs" href="/es/knowledge_base/how-to-check-code-against-google-docs">
     Valida la implementación contra especificaciones escritas en Google Docs.
@@ -46,8 +43,8 @@ description: "Respuestas a preguntas frecuentes sobre revisión de código con I
 ## Reglas y Automatización
 
 <CardGroup cols={2}>
-  <Card title="Cómo importar reglas desde Cursor, Copilot o Claude" href="/es/knowledge_base/how-to-import-rules-from-ide-tools">
-    Sincroniza tus reglas existentes de herramientas de codificación con IA en tu flujo de revisión de código.
+  <Card title="Cómo usar las instrucciones de Cursor, Copilot o Claude en la revisión de código" href="/es/knowledge_base/how-to-import-rules-from-ide-tools">
+    Deja que Kody compruebe tus pull requests con las instrucciones que ya escribiste para los agentes de programación.
   </Card>
   <Card title="Cómo generar reglas de revisión de código automáticamente" href="/es/knowledge_base/how-to-generate-rules-automatically">
     Deja que la IA analice tu historial de revisiones y sugiera reglas basadas en los patrones de tu equipo.
@@ -72,14 +69,14 @@ description: "Respuestas a preguntas frecuentes sobre revisión de código con I
   <Card title="Cómo configurar la revisión de código con IA en GitLab" href="/es/knowledge_base/how-to-set-up-ai-code-review-on-gitlab">
     Instala y configura Kodus para proyectos de GitLab.
   </Card>
+  <Card title="Cómo configurar la revisión de código con IA en Bitbucket" href="/es/knowledge_base/how-to-set-up-ai-code-review-on-bitbucket">
+    Conecta Bitbucket Cloud con un token de API para que Kody revise cada pull request.
+  </Card>
   <Card title="Cómo configurar la revisión de código con IA en Azure DevOps" href="/es/knowledge_base/how-to-set-up-ai-code-review-on-azure-devops">
     Instala y configura Kodus para repositorios de Azure DevOps.
   </Card>
-  <Card title="Cómo conectar Jira a tu herramienta de revisión de código" href="/es/knowledge_base/how-to-connect-jira-to-code-review">
-    Vincula Jira para habilitar el contexto automático de tareas en tus revisiones de código.
-  </Card>
-  <Card title="Cómo conectar Linear a tu herramienta de revisión de código" href="/es/knowledge_base/how-to-connect-linear-to-code-review">
-    Vincula Linear para habilitar el contexto automático de tareas en tus revisiones de código.
+  <Card title="Cómo configurar la revisión de código con IA en Forgejo" href="/es/knowledge_base/how-to-set-up-ai-code-review-on-forgejo">
+    Conecta una instancia de Forgejo con un token de acceso.
   </Card>
   <Card title="¿Puedo usar mi propio proveedor de LLM para la revisión de código?" href="/es/knowledge_base/can-i-use-my-own-llm-provider">
     Trae tu propia clave API y elige tu proveedor de LLM preferido.
@@ -92,30 +89,42 @@ description: "Respuestas a preguntas frecuentes sobre revisión de código con I
 ## Proveedores de LLM
 
 <CardGroup cols={2}>
-  <Card title="Cómo usar Novita AI con Kodus" href="/es/knowledge_base/how-to-use-novita-with-kodus">
+  <Card title="Cómo usar Novita AI con Kodus" href="/es/cookbook/novita">
     Configura la plataforma de GPU sin servidor de Novita como tu proveedor de LLM.
   </Card>
-  <Card title="Cómo usar Groq con Kodus" href="/es/knowledge_base/how-to-use-groq-with-kodus">
+  <Card title="Cómo usar Groq con Kodus" href="/es/cookbook/groq">
     Configura la inferencia ultrarrápida de Groq como tu proveedor de LLM.
   </Card>
-  <Card title="Cómo usar Together AI con Kodus" href="/es/knowledge_base/how-to-use-together-ai-with-kodus">
+  <Card title="Cómo usar Together AI con Kodus" href="/es/cookbook/together">
     Configura los modelos de código abierto de Together AI como tu proveedor de LLM.
   </Card>
-  <Card title="Cómo usar Fireworks AI con Kodus" href="/es/knowledge_base/how-to-use-fireworks-with-kodus">
+  <Card title="Cómo usar Fireworks AI con Kodus" href="/es/cookbook/fireworks">
     Configura la inferencia rápida de Fireworks AI como tu proveedor de LLM.
+  </Card>
+  <Card title="Cómo usar Moonshot (Kimi) con Kodus" href="/es/cookbook/moonshot">
+    Conecta Kimi mediante la API para desarrolladores de Moonshot o el plan Kimi Code.
+  </Card>
+  <Card title="Cómo usar Z.AI (GLM) con Kodus" href="/es/cookbook/z-ai">
+    Conecta los modelos GLM, incluida la suscripción al GLM Coding Plan.
+  </Card>
+  <Card title="Cómo usar Synthetic con Kodus" href="/es/cookbook/synthetic">
+    Conecta la suscripción de tarifa fija de Synthetic para modelos de programación de código abierto.
+  </Card>
+  <Card title="Cómo usar Chutes con Kodus" href="/es/cookbook/chutes">
+    Conecta los planes de suscripción de Chutes para modelos de código abierto.
   </Card>
 </CardGroup>
 
 ## Solución de Problemas
 
 <CardGroup cols={2}>
-  <Card title="Por qué no se está activando la revisión de código con IA" href="/es/knowledge_base/why-is-ai-code-review-not-triggering">
+  <Card title="Por qué no se está activando la revisión de código con IA" href="/es/how_to_use/code_review/troubleshooting">
     Causas comunes y soluciones cuando las revisiones no se inician automáticamente.
   </Card>
-  <Card title="Cómo solucionar problemas de webhook con GitHub o GitLab" href="/es/knowledge_base/how-to-fix-webhook-issues">
-    Diagnostica y resuelve problemas de conectividad de webhooks.
+  <Card title="Cómo solucionar problemas de webhook" href="/es/knowledge_base/how-to-fix-webhook-issues">
+    Diagnostica y resuelve problemas de conectividad de los webhooks.
   </Card>
-  <Card title="Por qué están pausadas mis revisiones de código" href="/es/knowledge_base/why-are-code-reviews-paused">
+  <Card title="Por qué están pausadas mis revisiones de código" href="/es/how_to_use/code_review/flow#cadencia-de-revisión">
     Comprende el comportamiento de pausa automática y cómo reanudar las revisiones.
   </Card>
 </CardGroup>

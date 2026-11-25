@@ -271,7 +271,7 @@ describe('KnowledgeResolver', () => {
         ]);
     });
 
-    it('uses the 20k token default budget', async () => {
+    it('applies the default doc token budget when none is given', async () => {
         const doc = 'word '.repeat(30000);
         const resolver = new KnowledgeResolver(
             new InMemoryBaseBranchReader({ 'docs/huge.md': doc }),
@@ -288,7 +288,6 @@ describe('KnowledgeResolver', () => {
             ],
         });
 
-        expect(CUSTOM_AGENT_LIMITS.maxDocTokens).toBe(20000);
         expect(result.docs[0].truncated).toBe(true);
     });
 

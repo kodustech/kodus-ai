@@ -759,7 +759,7 @@ Examples:
         console.log(`Using env file: ${envPath}`);
         console.log(`Connecting to MongoDB (database: ${dbName})...`);
 
-        mongoClient = new MongoClient(mongoUri);
+        mongoClient = new MongoClient(mongoUri, { appName: 'kodus-script-check-pr-errors' });
         await mongoClient.connect();
 
         const db = mongoClient.db(dbName);

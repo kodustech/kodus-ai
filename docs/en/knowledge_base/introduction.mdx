@@ -6,9 +6,6 @@ description: "Answers to common questions about AI code review, coding standards
 ## Code Review
 
 <CardGroup cols={2}>
-  <Card title="How to enforce coding standards in pull requests" href="/en/knowledge_base/how-to-enforce-coding-standards-in-pull-requests">
-    Automatically enforce your team's coding conventions on every PR using custom rules.
-  </Card>
   <Card title="How to automate code review on GitHub, GitLab, and Bitbucket" href="/en/knowledge_base/how-to-automate-code-review">
     Set up AI-powered code review that runs automatically on every pull request.
   </Card>
@@ -29,11 +26,11 @@ description: "Answers to common questions about AI code review, coding standards
 ## Business Logic Validation
 
 <CardGroup cols={2}>
-  <Card title="How to validate if a PR implements a Jira ticket" href="/en/knowledge_base/how-to-validate-pr-against-jira-ticket">
-    Compare your pull request against Jira acceptance criteria before merging.
+  <Card title="Connect Jira and validate pull requests" href="/en/knowledge_base/how-to-connect-jira-to-code-review">
+    Set up Atlassian Rovo in Kodus and check a PR against its Jira ticket.
   </Card>
-  <Card title="How to validate Linear issues against pull requests" href="/en/knowledge_base/how-to-validate-pr-against-linear-issue">
-    Ensure your PR implements what the Linear issue describes.
+  <Card title="Connect Linear and validate pull requests" href="/en/knowledge_base/how-to-connect-linear-to-code-review">
+    Set up Linear in Kodus and check a PR against its issue.
   </Card>
   <Card title="How to check code against Google Docs specs" href="/en/knowledge_base/how-to-check-code-against-google-docs">
     Validate implementation against specifications written in Google Docs.
@@ -46,8 +43,8 @@ description: "Answers to common questions about AI code review, coding standards
 ## Rules & Automation
 
 <CardGroup cols={2}>
-  <Card title="How to import rules from Cursor, Copilot, or Claude" href="/en/knowledge_base/how-to-import-rules-from-ide-tools">
-    Sync your existing AI coding tool rules into your code review workflow.
+  <Card title="How to use your Cursor, Copilot, or Claude instructions in code review" href="/en/knowledge_base/how-to-import-rules-from-ide-tools">
+    Let Kody check pull requests against the instructions you already wrote for coding agents.
   </Card>
   <Card title="How to generate code review rules automatically" href="/en/knowledge_base/how-to-generate-rules-automatically">
     Let AI analyze your review history and suggest rules based on your team's patterns.
@@ -72,14 +69,14 @@ description: "Answers to common questions about AI code review, coding standards
   <Card title="How to set up AI code review on GitLab" href="/en/knowledge_base/how-to-set-up-ai-code-review-on-gitlab">
     Install and configure Kodus for GitLab projects.
   </Card>
+  <Card title="How to set up AI code review on Bitbucket" href="/en/knowledge_base/how-to-set-up-ai-code-review-on-bitbucket">
+    Connect Bitbucket Cloud with an API token and let Kody review every pull request.
+  </Card>
   <Card title="How to set up AI code review on Azure DevOps" href="/en/knowledge_base/how-to-set-up-ai-code-review-on-azure-devops">
     Install and configure Kodus for Azure DevOps repositories.
   </Card>
-  <Card title="How to connect Jira to your code review tool" href="/en/knowledge_base/how-to-connect-jira-to-code-review">
-    Link Jira to enable automatic task context in your code reviews.
-  </Card>
-  <Card title="How to connect Linear to your code review tool" href="/en/knowledge_base/how-to-connect-linear-to-code-review">
-    Link Linear to enable automatic task context in your code reviews.
+  <Card title="How to set up AI code review on Forgejo" href="/en/knowledge_base/how-to-set-up-ai-code-review-on-forgejo">
+    Connect a Forgejo instance with an access token.
   </Card>
   <Card title="Can I use my own LLM provider for code review" href="/en/knowledge_base/can-i-use-my-own-llm-provider">
     Bring your own API key and choose your preferred LLM provider.
@@ -92,30 +89,42 @@ description: "Answers to common questions about AI code review, coding standards
 ## LLM Providers
 
 <CardGroup cols={2}>
-  <Card title="How to use Novita AI with Kodus" href="/en/knowledge_base/how-to-use-novita-with-kodus">
+  <Card title="How to use Novita AI with Kodus" href="/en/cookbook/novita">
     Configure Novita's serverless GPU platform as your LLM provider.
   </Card>
-  <Card title="How to use Groq with Kodus" href="/en/knowledge_base/how-to-use-groq-with-kodus">
+  <Card title="How to use Groq with Kodus" href="/en/cookbook/groq">
     Configure Groq's ultra-fast inference as your LLM provider.
   </Card>
-  <Card title="How to use Together AI with Kodus" href="/en/knowledge_base/how-to-use-together-ai-with-kodus">
+  <Card title="How to use Together AI with Kodus" href="/en/cookbook/together">
     Configure Together AI's open-source models as your LLM provider.
   </Card>
-  <Card title="How to use Fireworks AI with Kodus" href="/en/knowledge_base/how-to-use-fireworks-with-kodus">
+  <Card title="How to use Fireworks AI with Kodus" href="/en/cookbook/fireworks">
     Configure Fireworks AI's fast inference as your LLM provider.
+  </Card>
+  <Card title="How to use Moonshot (Kimi) with Kodus" href="/en/cookbook/moonshot">
+    Connect Kimi through the Moonshot Developer API or the Kimi Code Plan.
+  </Card>
+  <Card title="How to use Z.AI (GLM) with Kodus" href="/en/cookbook/z-ai">
+    Connect GLM models, including the GLM Coding Plan subscription.
+  </Card>
+  <Card title="How to use Synthetic with Kodus" href="/en/cookbook/synthetic">
+    Connect Synthetic's flat-rate subscription for open-source coding models.
+  </Card>
+  <Card title="How to use Chutes with Kodus" href="/en/cookbook/chutes">
+    Connect Chutes' subscription plans for open-source models.
   </Card>
 </CardGroup>
 
 ## Troubleshooting
 
 <CardGroup cols={2}>
-  <Card title="Why is my AI code review not triggering" href="/en/knowledge_base/why-is-ai-code-review-not-triggering">
+  <Card title="Why is my AI code review not triggering" href="/en/how_to_use/code_review/troubleshooting">
     Common reasons and fixes when reviews don't start automatically.
   </Card>
-  <Card title="How to fix webhook issues with GitHub or GitLab" href="/en/knowledge_base/how-to-fix-webhook-issues">
+  <Card title="How to fix webhook issues" href="/en/knowledge_base/how-to-fix-webhook-issues">
     Debug and resolve webhook connectivity problems.
   </Card>
-  <Card title="Why are my code reviews paused" href="/en/knowledge_base/why-are-code-reviews-paused">
+  <Card title="Why are my code reviews paused" href="/en/how_to_use/code_review/flow#review-cadence">
     Understand auto-pause behavior and how to resume reviews.
   </Card>
 </CardGroup>

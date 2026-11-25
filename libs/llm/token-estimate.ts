@@ -41,6 +41,31 @@ import { get_encoding, type Tiktoken } from 'tiktoken';
  */
 export const FALLBACK_CHARS_PER_TOKEN = 3;
 
+/**
+ * The fallback for a caller whose limit is a hard one (a request that must
+ * fit the model's window): one token per ASCII character. Dense text runs far
+ * below 3 characters per token in o200k_base — measured 1.14 for SVG path
+ * data, 1.45 for base64, 1.75 for hex — so the ordinary fallback can let
+ * such a text through at less than half its real size.
+ */
+export const WORST_CASE_CHARS_PER_TOKEN = 1;
+
+/**
+ * The worst case for one non-ASCII UTF-16 code unit: a byte-level BPE never
+ * spends more than a token per UTF-8 byte, and a code unit is at most three
+ * bytes (a surrogate pair is four bytes over two units). o200k spends 1.5 per
+ * unit on 🫠 and 2 on 𠮷 and U+2000.
+ */
+const WORST_CASE_TOKENS_PER_NON_ASCII_UNIT = 3;
+
+/** Tokens a text can never exceed: what `worstCase` counts uncounted text at. */
+function worstCaseTokens(length: number, nonAscii: number): number {
+    return (
+        Math.ceil((length - nonAscii) / WORST_CASE_CHARS_PER_TOKEN) +
+        nonAscii * WORST_CASE_TOKENS_PER_NON_ASCII_UNIT
+    );
+}
+
 let encoder: Tiktoken | null = null;
 let encoderFailed = false;
 
@@ -70,18 +95,75 @@ function getEncoder(): Tiktoken | null {
  * seconds to every review to answer a question whose input never changed.
  *
  * Bounded on both axes: at most MEMO_MAX_ENTRIES strings, and nothing above
- * MEMO_MAX_CHARS is cached at all (a huge string is both the least likely to
- * repeat and the most expensive to hold in a long-running worker). Insertion
+ * MEMO_MAX_CHARS is cached here (a huge string is the most expensive to hold
+ * in a long-running worker; the few that repeat go to the large memo below,
+ * which is bounded by total characters instead). Insertion
  * order eviction — the planner's access pattern is a sweep, not a hot subset,
  * so LRU bookkeeping would cost more than it saves.
  */
 const MEMO_MAX_ENTRIES = 512;
-const MEMO_MAX_CHARS = 200_000;
+export const MEMO_MAX_CHARS = 200_000;
 const memo = new Map<string, number>();
+
+/**
+ * Memo for the few HUGE texts that do repeat: the head message of an agent
+ * run (diff plus graph context), which the context compressor re-measures
+ * on every step and several more times when it trims rounds.
+ *
+ * Kept out of the main memo, it was tokenized in full on every count. On
+ * 2026-11-23 a 2,353,179-char graph context cost 1.8s per count and held a
+ * worker's event loop 9.2s in one compression pass (seen as a 9.4s "slow
+ * query" whose reply waited on the loop). This memo makes every count after
+ * the first a lookup.
+ *
+ * Bounded by entries and by total characters, so a long-running worker
+ * holds at most LARGE_MEMO_MAX_TOTAL_CHARS (~16MB of UTF-16) here; the
+ * least recently used text goes first, since one run reuses one head.
+ * A text above LARGE_MEMO_MAX_TOTAL_CHARS on its own is never cached.
+ */
+const LARGE_MEMO_MAX_ENTRIES = 8;
+const LARGE_MEMO_MAX_TOTAL_CHARS = 8_000_000;
+const largeMemo = new Map<string, number>();
+let largeMemoChars = 0;
+
+function rememberLarge(text: string, tokens: number): number {
+    if (text.length > LARGE_MEMO_MAX_TOTAL_CHARS) {
+        return tokens;
+    }
+    while (
+        largeMemo.size > 0 &&
+        (largeMemo.size >= LARGE_MEMO_MAX_ENTRIES ||
+            largeMemoChars + text.length > LARGE_MEMO_MAX_TOTAL_CHARS)
+    ) {
+        const oldest = largeMemo.keys().next().value as string;
+        largeMemo.delete(oldest);
+        largeMemoChars -= oldest.length;
+    }
+    largeMemo.set(text, tokens);
+    largeMemoChars += text.length;
+    return tokens;
+}
+
+function recallLarge(text: string): number | undefined {
+    const hit = largeMemo.get(text);
+    if (hit !== undefined) {
+        // Re-insert: Map order is the LRU order.
+        largeMemo.delete(text);
+        largeMemo.set(text, hit);
+    }
+    return hit;
+}
+
+/** @internal Exported for testing purposes only */
+export function _resetTokenEstimateMemo(): void {
+    memo.clear();
+    largeMemo.clear();
+    largeMemoChars = 0;
+}
 
 function remember(text: string, tokens: number): number {
     if (text.length > MEMO_MAX_CHARS) {
-        return tokens;
+        return rememberLarge(text, tokens);
     }
     if (memo.size >= MEMO_MAX_ENTRIES) {
         const oldest = memo.keys().next().value;
@@ -93,22 +175,174 @@ function remember(text: string, tokens: number): number {
     return tokens;
 }
 
-/** Token count of a single string, tokenizer-backed with a safe fallback. */
-export function estimateTextTokens(text: string): number {
+/**
+ * Longest run without whitespace that tiktoken is asked to encode.
+ *
+ * tiktoken's BPE is quadratic in the length of one pre-token piece, and a
+ * piece never spans whitespace. A long run with no separator (a repeated
+ * character, a hex blob, a minified line pasted by a grep) took 0.9s at 40KB
+ * locally and froze a worker for 88s in prod (2026-11-19, inside the context
+ * compressor). Longer runs are counted with the conservative char ratio
+ * instead: a code token is never this long, so ordinary text is counted
+ * exactly as before.
+ */
+export const MAX_ENCODED_RUN_CHARS = 1_000;
+
+function isWhitespace(code: number): boolean {
+    // Unicode White_Space, the set tiktoken's `\s` splits on: a character
+    // missing here would restart a whitespace run at every step, so a run
+    // alternating it with a space would never reach the limit while
+    // tiktoken still saw one quadratic piece.
+    return (
+        (code >= 9 && code <= 13) ||
+        code === 32 ||
+        code === 0x85 ||
+        code === 0xa0 ||
+        code === 0x1680 ||
+        (code >= 0x2000 && code <= 0x200a) ||
+        code === 0x2028 ||
+        code === 0x2029 ||
+        code === 0x202f ||
+        code === 0x205f ||
+        code === 0x3000
+    );
+}
+
+/** What tiktoken's pre-tokenizer keeps in one piece, as far as cost goes. */
+const enum Stretch {
+    Whitespace,
+    /** Letters and anything else outside ASCII: one piece can span them. */
+    Letters,
+    /** o200k cuts digits into pieces of three: never one long piece. */
+    Digits,
+    /** ASCII punctuation and symbols: a run of them is one piece. */
+    Symbols,
+}
+
+function stretchOf(code: number): Stretch {
+    if (isWhitespace(code)) return Stretch.Whitespace;
+    if (code >= 48 && code <= 57) return Stretch.Digits;
+    if (
+        (code >= 65 && code <= 90) ||
+        (code >= 97 && code <= 122) ||
+        code > 0x7f
+    ) {
+        return Stretch.Letters;
+    }
+    return Stretch.Symbols;
+}
+
+/**
+ * tiktoken count, except that a stretch of more than MAX_ENCODED_RUN_CHARS
+ * characters that tiktoken keeps in one pre-token piece (whitespace, letters,
+ * or symbols) is estimated instead: its BPE is quadratic in a piece's length,
+ * and a piece never spans two of these. Measured at 40k chars: a letter run
+ * 0.64s, a repeated `=` 0.98s; base64, hex, minified JSON and digit runs,
+ * whose pieces are short, 4-9ms. So those are counted exactly. They used to
+ * be estimated as one whitespace-free run, at ~4 characters a token, which
+ * read a 0.5MB base64 image at half its size (#2233) and a tool's JSON
+ * result, which has no spaces, the same way.
+ *
+ * A whitespace stretch counts by the fallback ratio (conservative: tiktoken
+ * packs many spaces per token). In a letter or symbol stretch, ASCII
+ * characters count by the fallback ratio and every other character as one
+ * token (CJK and other scripts written without spaces run about 1-1.5
+ * characters per token, so 3 would under-count them). One linear pass over
+ * the text; no regex (a `\S{n,}` scan would itself be O(n·k)).
+ */
+function countTokens(enc: Tiktoken, text: string, worstCase = false): number {
+    if (text.length <= MAX_ENCODED_RUN_CHARS) {
+        return enc.encode_ordinary(text).length;
+    }
+    let tokens = 0;
+    let segmentStart = 0;
+    let runStart = 0;
+    let runKind = stretchOf(text.charCodeAt(0));
+    let longRuns = false;
+    // Non-ASCII code units in the current stretch.
+    let runNonAscii = 0;
+    const flushRun = (runEnd: number) => {
+        const length = runEnd - runStart;
+        // A long digit run is encoded (o200k cuts it in threes, never one
+        // long piece), except for a limit: some tokenizers spend a token per
+        // digit, and the worst case is held to that.
+        if (
+            length <= MAX_ENCODED_RUN_CHARS ||
+            (runKind === Stretch.Digits && !worstCase)
+        ) {
+            return;
+        }
+        longRuns = true;
+        if (runStart > segmentStart) {
+            tokens += enc.encode_ordinary(
+                text.slice(segmentStart, runStart),
+            ).length;
+        }
+        tokens += worstCase
+            ? worstCaseTokens(length, runNonAscii)
+            : runKind === Stretch.Whitespace
+              ? Math.ceil(length / FALLBACK_CHARS_PER_TOKEN)
+              : Math.ceil((length - runNonAscii) / FALLBACK_CHARS_PER_TOKEN) +
+                runNonAscii;
+        segmentStart = runEnd;
+    };
+    for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i);
+        const kind = stretchOf(code);
+        if (kind !== runKind) {
+            flushRun(i);
+            runStart = i;
+            runKind = kind;
+            runNonAscii = 0;
+        }
+        if (code > 0x7f) runNonAscii++;
+    }
+    flushRun(text.length);
+    if (!longRuns) return enc.encode_ordinary(text).length;
+    if (segmentStart < text.length) {
+        tokens += enc.encode_ordinary(text.slice(segmentStart)).length;
+    }
+    return tokens;
+}
+
+/** Token count of a single string; transient slices can bypass the shared memo. */
+export function estimateTextTokens(
+    text: string,
+    options?: {
+        cache?: boolean;
+        /**
+         * Count what the tokenizer can't (it failed to load, or a run too
+         * long to encode) at its worst: a token per ASCII character, three
+         * per other code unit, a long digit run included (some tokenizers
+         * spend a token per digit). For a limit the text must never
+         * exceed. Not memoized, so a cached ordinary count never answers it.
+         */
+        worstCase?: boolean;
+    },
+): number {
     if (!text) {
         return 0;
     }
-    const hit = memo.get(text);
+    const worstCase = options?.worstCase === true;
+    const useMemo = options?.cache !== false && !options?.worstCase;
+    let hit: number | undefined;
+    if (useMemo) {
+        hit = text.length > MEMO_MAX_CHARS ? recallLarge(text) : memo.get(text);
+    }
     if (hit !== undefined) {
         return hit;
     }
     const enc = getEncoder();
     if (enc) {
         try {
-            return remember(text, enc.encode_ordinary(text).length);
+            const tokens = countTokens(enc, text, worstCase);
+            return useMemo ? remember(text, tokens) : tokens;
         } catch {
             // fall through to the char estimate
         }
     }
-    return Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN);
+    // A byte-level BPE spends at most a token per UTF-8 byte.
+    return worstCase
+        ? Buffer.byteLength(text, 'utf8')
+        : Math.ceil(text.length / FALLBACK_CHARS_PER_TOKEN);
 }

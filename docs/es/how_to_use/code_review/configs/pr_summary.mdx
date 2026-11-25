@@ -1,59 +1,65 @@
 ---
 title: "Resumen de PR"
-description: "Haz que Kody escriba descripciones de pull request concisas y accionables, y ajusta el tono, los disparadores y el comportamiento sobre descripciones existentes."
+description: "Haz que Kody escriba la descripción del pull request y elige qué ocurre con una descripción existente y con los nuevos commits."
 ---
 
-La función de Resumen de PR de Kody te permite automatizar la creación de descripciones de pull request concisas y accionables.
-Esta guía de configuración explica cómo adaptar la función al flujo de trabajo y las preferencias de tu equipo.
+Kody puede escribir una descripción de lo que cambia un pull request. Abre **Code review → What Kody writes**; los ajustes están en la sección **PR summary**. Se pueden definir en el ámbito Global, de Repositorio y de Directorio.
 
-En la barra lateral, abre **Code review → What Kody writes**; estos ajustes están en la sección **PR summary**.
-La vista previa en vivo de la página (**Show preview** / **Hide preview**) muestra cómo queda el resumen
-en un pull request de ejemplo.
+La vista previa de la página (**Show preview** / **Hide preview**) muestra cómo queda el resumen en un pull request de ejemplo.
 
-## Habilitar Resúmenes Automáticos
+## Escribir un resumen
 
-Habilita o deshabilita la generación automática de resúmenes de pull request:
+Activa **Write a summary on every pull request**. Está activado por defecto. Si lo desactivas, Kody no escribe ningún resumen y las opciones de abajo quedan deshabilitadas.
 
-Activa **Write a summary on every pull request**.
-
-Cuando está habilitado, Kody generará resúmenes para cada pull request, asegurando consistencia y ahorrando tiempo.
+Kody escribe el resumen en el idioma definido en **Kody Language**, dentro de [General](/es/how_to_use/code_review/configs/general).
 
 ## Cuando el PR ya tiene una descripción
 
-Controla cómo Kody interactúa con las descripciones de pull request existentes. Puedes elegir entre tres modos:
+Elige qué hace Kody con una descripción escrita por el autor:
 
-### Reemplazar (Predeterminado):
+- **Replace** (predeterminado) — escribe una descripción nueva desde cero.
+- **Concatenate** — agrega el resumen al final de la descripción existente.
+- **Complement** — lee la descripción existente y escribe una que destaca solo lo que es nuevo o relevante.
 
-Sobreescribe cualquier descripción existente con un resumen recién generado desde cero.
+Replace y Complement mantienen al inicio de la nueva descripción las líneas de la anterior que enlazan una tarea, como `Closes #12`, `AB#12` o un enlace a un tracker. Concatenate deja toda la descripción en su lugar.
 
-### Concatenar:
-
-Agrega el resumen generado al final de la descripción existente.
-
-### Complementar:
-
-Combina los insights generados por Kody con la descripción actual, destacando solo lo que es nuevo o relevante.
+El texto de Kody queda entre dos marcadores de comentario ocultos, de modo que una nueva ejecución actualiza ese bloque en vez de apilar uno nuevo.
 
 ## Cuando llegan nuevos commits
 
-Controla qué pasa con el resumen de Kody cuando se envían nuevos commits después de abrir el PR:
+Elige qué ocurre con el resumen de Kody cuando se envían commits después de abrir el pull request:
 
-- **Do nothing** (predeterminado) — el resumen se deja como está.
-- **Concatenate new summary** — se agrega un nuevo resumen al resumen existente de Kody.
-- **Replace Kody's summary** — el resumen existente de Kody se reemplaza por uno nuevo.
+- **Do nothing** (predeterminado) — el resumen se queda como está.
+- **Concatenate new summary** — se agrega al bloque existente de Kody un resumen de los nuevos commits.
+- **Replace Kody's summary** — el bloque de Kody se reemplaza por un resumen de todo el pull request.
+
+Solo cambia el bloque de Kody. El texto escrito por el autor se mantiene.
 
 ## Instrucciones del resumen
 
-Ajusta cómo Kody genera los resúmenes proporcionando pautas específicas:
+El campo opcional **Summary instructions** le indica a Kody en qué debe enfocarse el resumen o qué debe dejar fuera. Los chips de **Examples** agregan líneas listas para usar.
 
-Agrega instrucciones en el campo opcional **Summary instructions**: en qué debe enfocarse el resumen
-o qué debe dejar fuera. Los chips de **Examples** insertan instrucciones listas para usar.
+- "Focus on security changes and performance impacts"
+- "Summarize concisely, highlighting modified public APIs"
 
-**Ejemplos:**
+Las instrucciones también pueden referirse a lo que encontró la revisión, por ejemplo para mencionar la severidad más alta. Las instrucciones pueden referenciar archivos del repositorio; consulta [External References](/es/how_to_use/code_review/configs/custom_prompts#referencias-externas).
 
-* "Enfócate en los cambios de seguridad y los impactos en el rendimiento."
-* "Resume de forma concisa, destacando las APIs públicas modificadas."
+**Try on a real PR** ejecuta los ajustes actuales sobre uno de tus pull requests. Está disponible cuando el resumen está activado y puedes leer pull requests. La vista previa se ejecuta antes de cualquier revisión, por lo que no muestra hallazgos de la revisión.
 
-Haz clic en **Try on a real PR** para previsualizar el resumen que producen estos ajustes en uno de tus pull
-requests.
+<Note>
+  En un pull request muy grande que no cabe en el contexto del modelo en unas pocas pasadas, Kody omite el resumen.
+</Note>
 
+Una descripción que supera el límite del proveedor se corta con una nota de truncamiento: 4.000 caracteres en Azure DevOps, 32.768 en Bitbucket y 65.536 en GitHub. En Azure DevOps, Kody mantiene su resumen corto para dejar espacio a la descripción existente.
+
+## YAML
+
+```yaml
+summary:
+    generatePRSummary: true
+    behaviourForExistingDescription: 'replace' # replace | concatenate | complement
+    behaviourForNewCommits: 'none' # none | concatenate | replace
+    customInstructions: ''
+```
+
+El archivo solo se lee cuando **Prefer kodus-config.yml settings** está activado. Consulta [General](/es/how_to_use/code_review/configs/general#prioridad-de-configuración).

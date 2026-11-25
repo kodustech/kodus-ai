@@ -5,17 +5,84 @@
  * dimensions the Langfuse UI filters and groups BY.
  */
 const propagated: { params: any[] } = { params: [] };
+const updates: unknown[] = [];
 jest.mock('@langfuse/tracing', () => ({
     propagateAttributes: (params: any, fn: () => unknown) => {
         propagated.params.push(params);
         return fn();
     },
+    getActiveTraceId: () => 'trace-1',
+    startActiveObservation: (_name: string, cb: (o: any) => unknown) =>
+        cb({
+            update: (arg: unknown) => {
+                updates.push(arg);
+                throw new Error('langfuse export failed');
+            },
+        }),
 }));
 
 import {
     pullRequestSessionId,
+    withLangfuseObservation,
     withLangfuseTrace,
 } from '@libs/core/log/langfuse';
+
+describe('withLangfuseObservation', () => {
+    const originalEnv = { ...process.env };
+    afterEach(() => {
+        process.env = { ...originalEnv };
+    });
+
+    it('runs fn once and returns its value when the observation update throws', async () => {
+        process.env.LANGFUSE_TRACING = 'true';
+        process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
+        process.env.LANGFUSE_SECRET_KEY = 'sk-test';
+        const fn = jest.fn().mockResolvedValue('ok');
+
+        await expect(
+            withLangfuseObservation('call', fn, { correlationId: 'c-1' }),
+        ).resolves.toBe('ok');
+        expect(fn).toHaveBeenCalledTimes(1);
+        expect(fn).toHaveBeenCalledWith('trace-1');
+    });
+
+    it('records what output makes of the result, and still returns it when the update throws', async () => {
+        process.env.LANGFUSE_TRACING = 'true';
+        process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
+        process.env.LANGFUSE_SECRET_KEY = 'sk-test';
+        updates.length = 0;
+
+        await expect(
+            withLangfuseObservation(
+                'open',
+                async () => ({ wasCreated: true, secret: 'x' }),
+                undefined,
+                (r) => ({ wasCreated: r.wasCreated }),
+            ),
+        ).resolves.toEqual({ wasCreated: true, secret: 'x' });
+        expect(updates).toEqual([{ output: { wasCreated: true } }]);
+    });
+
+    it('returns the result when building the output throws', async () => {
+        process.env.LANGFUSE_TRACING = 'true';
+        process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
+        process.env.LANGFUSE_SECRET_KEY = 'sk-test';
+        const buildOutput = jest.fn((): never => {
+            throw new Error('bad output');
+        });
+
+        await expect(
+            withLangfuseObservation(
+                'open',
+                async () => 'lease',
+                undefined,
+                buildOutput,
+            ),
+        ).resolves.toBe('lease');
+        // The output was built, and its failure did not reach the caller.
+        expect(buildOutput).toHaveBeenCalledTimes(1);
+    });
+});
 
 describe('pullRequestSessionId', () => {
     it('is byte-identical for every agent working the same PR', () => {

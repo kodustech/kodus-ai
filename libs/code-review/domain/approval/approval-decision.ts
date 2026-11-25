@@ -1,0 +1,230 @@
+import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
+import type { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import type { ChangeRiskAssessment } from '../risk/assess-change-risk';
+
+export interface ApprovalPolicy {
+    /** Any configured label matches. When authors are also set, both groups apply. */
+    labels?: string[];
+    /** Provider login, compared without case. */
+    authors?: string[];
+    assessRisk?: boolean;
+    riskInstructions?: string;
+    /** Team policy marks; these veto approval independently of the risk model. */
+    sensitivePaths?: string[];
+}
+
+export type ApprovalRiskLevel = ChangeRiskAssessment['level'];
+export type ApprovalRiskAssessment = ChangeRiskAssessment;
+
+export interface ApprovalDecision {
+    kind: 'approve' | 'hold' | 'out-of-scope' | 'disabled';
+    reason: string;
+    matchedPolicy?: { id: string; name: string };
+    policies?: import('./approval-policies').ApprovalPolicyResult[];
+    reviewedHeadSha?: string;
+    reviewedBaseSha?: string;
+    reviewedMetadataKey?: string;
+}
+
+const normalized = (value: string) => value.trim().toLocaleLowerCase('en-US');
+
+/**
+ * Why a review cannot decide on the PR as the provider now has it. Each reason
+ * names what happened: a push during the review is routine and must not read
+ * like a failure to reach the provider (#2534).
+ */
+export function reviewedSnapshotHoldReason(
+    live: { head?: { sha?: string }; base?: { sha?: string } } | null,
+    reviewed: { headSha?: string; baseSha?: string },
+): string | null {
+    if (!live)
+        return 'Kody could not read the current PR from the Git provider.';
+    if (reviewed.headSha && live.head?.sha !== reviewed.headSha)
+        return 'A newer commit arrived while Kody reviewed this one; Kody decides on the next reviewed commit.';
+    if (reviewed.baseSha && live.base?.sha !== reviewed.baseSha)
+        return 'The target branch changed during the review, so this review cannot approve the PR.';
+    return null;
+}
+
+export function approvalPolicyFromConfig(
+    config: CodeReviewConfig,
+): ApprovalPolicy {
+    return {
+        labels: config.approvalLabels,
+        authors: config.approvalAuthors,
+        assessRisk: config.riskAssessmentActive ?? config.approvalRiskActive,
+        riskInstructions: config.approvalRiskInstructions,
+        sensitivePaths: config.approvalSensitivePaths,
+    };
+}
+
+/**
+ * The paths a PR changes, for the team path veto: a rename changes both its
+ * paths, so moving a file out of a sensitive path touches that path too.
+ */
+export function approvalPathsOf(
+    files: Array<{
+        filename?: string;
+        path?: string;
+        previous_filename?: string;
+    }>,
+): string[] {
+    return files.flatMap((file) => {
+        const path = file.filename ?? file.path;
+        const previous = file.previous_filename;
+        return [
+            path,
+            previous && previous !== path ? previous : undefined,
+        ].filter((p): p is string => !!p);
+    });
+}
+
+/** Bitbucket PRs do not expose the label contract required by this policy. */
+export function approvalPolicyForPlatform(
+    policy: ApprovalPolicy,
+    platformType?: PlatformType,
+): ApprovalPolicy {
+    return platformType === PlatformType.BITBUCKET
+        ? { ...policy, labels: [] }
+        : policy;
+}
+
+export function matchesApprovalScope(input: {
+    policy?: ApprovalPolicy;
+    author?: string;
+    labels?: string[];
+}): { matches: boolean; reason?: string } {
+    const labels = new Set(
+        (input.policy?.labels ?? []).map(normalized).filter(Boolean),
+    );
+    const authors = (input.policy?.authors ?? [])
+        .map(normalized)
+        .filter(Boolean);
+    if (
+        labels.size > 0 &&
+        !(input.labels ?? []).some((label) => labels.has(normalized(label)))
+    ) {
+        return {
+            matches: false,
+            reason: 'The PR does not carry a configured approval label.',
+        };
+    }
+    if (
+        authors.length > 0 &&
+        !authors.includes(normalized(input.author ?? ''))
+    ) {
+        return {
+            matches: false,
+            reason: 'The PR author is outside the approval scope.',
+        };
+    }
+    return { matches: true };
+}
+
+export function evaluateApproval(input: {
+    approvalActive: boolean;
+    policy?: ApprovalPolicy;
+    author?: string;
+    labels?: string[];
+    changedPaths?: string[];
+    reviewClean: boolean;
+    risk?: ApprovalRiskAssessment;
+    currentHeadSha?: string;
+}): ApprovalDecision {
+    if (!input.approvalActive) {
+        return { kind: 'disabled', reason: 'Automatic approval is disabled.' };
+    }
+    if (!input.reviewClean) {
+        return { kind: 'hold', reason: 'The review is not clean.' };
+    }
+
+    const policy = input.policy;
+    const scope = matchesApprovalScope(input);
+    if (!scope.matches) {
+        return {
+            kind: 'out-of-scope',
+            reason: scope.reason ?? 'The PR is outside the approval scope.',
+        };
+    }
+    const matchingSensitivePath = (input.changedPaths ?? []).find((path) =>
+        (policy?.sensitivePaths ?? []).some((pattern) =>
+            isFileMatchingGlob(path, [pattern]),
+        ),
+    );
+    if (matchingSensitivePath) {
+        return {
+            kind: 'hold',
+            reason: `The PR changes a team-marked sensitive path: ${matchingSensitivePath}.`,
+        };
+    }
+    if (!policy?.assessRisk) {
+        return {
+            kind: 'approve',
+            reason: 'The review is clean and the PR matches the approval scope.',
+        };
+    }
+    if (
+        !input.risk ||
+        !input.currentHeadSha ||
+        input.risk.reviewedHeadSha !== input.currentHeadSha ||
+        input.risk.level === 'unknown'
+    ) {
+        return {
+            kind: 'hold',
+            reason: 'Kody could not assess risk for the current PR head.',
+        };
+    }
+    if (input.risk.level !== 'low') {
+        return {
+            kind: 'hold',
+            reason: input.risk.reason || 'The PR needs a human risk review.',
+        };
+    }
+    return {
+        kind: 'approve',
+        reason: input.risk.reason || 'Kody assessed low risk for this PR.',
+    };
+}
+
+/**
+ * The cron's decision for the head Kody reviewed. With risk assessment on, a
+ * review approves only with an assessment, so an approval saved without one
+ * was made while it was off. When the host still shows that approval it stands
+ * for this head (scope and sensitive paths still apply) and the next commit is
+ * assessed, instead of holding a PR that was approved correctly. Nothing new is
+ * approved this way: a head reviewed without an assessment that Kody has not
+ * approved on the host is held until the next commit, and says so.
+ */
+export function evaluateReviewedHeadApproval(
+    input: Parameters<typeof evaluateApproval>[0] & {
+        reviewedDecision?: { kind?: string };
+        /** The host currently shows Kody's approval on this PR. */
+        approvedOnHost?: boolean;
+    },
+): ApprovalDecision {
+    const { reviewedDecision, approvedOnHost, ...rest } = input;
+    if (
+        rest.policy?.assessRisk &&
+        !rest.risk &&
+        reviewedDecision?.kind === 'approve' &&
+        approvedOnHost
+    ) {
+        return evaluateApproval({
+            ...rest,
+            policy: { ...rest.policy, assessRisk: false },
+        });
+    }
+    const decision = evaluateApproval(rest);
+    if (rest.policy?.assessRisk && !rest.risk && decision.kind === 'hold') {
+        return {
+            ...decision,
+            reason:
+                decision.reason ===
+                'Kody could not assess risk for the current PR head.'
+                    ? 'This commit was reviewed without a risk assessment; Kody assesses the next commit.'
+                    : decision.reason,
+        };
+    }
+    return decision;
+}

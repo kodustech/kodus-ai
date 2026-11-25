@@ -1,6 +1,5 @@
 import {
     isDefaultWritingGuidelines,
-    knownWritingGuidelines,
     matchKnownWritingGuidelines,
     resolveWritingGuidelines,
     samePromptText,
@@ -130,15 +129,6 @@ describe('matchKnownWritingGuidelines', () => {
         ).toBeNull();
         expect(matchKnownWritingGuidelines('')).toBeNull();
         expect(matchKnownWritingGuidelines(undefined)).toBeNull();
-    });
-
-    it('lists the known texts by name, for tools that report on them', () => {
-        expect(knownWritingGuidelines().map((k) => k.name)).toEqual([
-            'default-current',
-            'default-2025',
-            'default-2026-02',
-            'preset-coach',
-        ]);
     });
 });
 

@@ -18,6 +18,7 @@ jest.mock('@libs/core/log/logger', () => ({
     }),
 }));
 
+import { KodusCreditsLedgerRepository } from '@libs/analytics/infrastructure/adapters/repositories/kodus-credits-ledger.repository';
 import {
     DEBIT_BATCH_SIZE,
     KodusCreditsMeteringService,
@@ -33,6 +34,7 @@ const chain = (result: unknown) => {
     q.sort = () => q;
     q.limit = () => q;
     q.lean = () => q;
+    q.option = () => q;
     q.exec = async () => result;
     return q;
 };
@@ -128,9 +130,11 @@ function harness(opts: {
     const licenseService = { debitCredits: debit };
 
     const service = new KodusCreditsMeteringService(
-        telemetryModel as any,
-        chargeModel as any,
-        sweepStateModel as any,
+        new KodusCreditsLedgerRepository(
+            telemetryModel as any,
+            chargeModel as any,
+            sweepStateModel as any,
+        ),
         orgParams as any,
         licenseService as any,
     );
@@ -208,7 +212,7 @@ describe('sweepOrganization — journaling', () => {
         const { service, charges, telemetryModel, debit } = harness({
             spans: [
                 span('s1', { input: 1_000_000, output: 100_000, cacheRead: 400_000, cacheWrite: 100_000 }),
-                span('s2', { model: 'fireworks/accounts/fireworks/models/deepseek-v4-pro-0813', input: 1_000_000, output: 0 }),
+                span('s2', { model: 'fireworks/accounts/fireworks/models/glm-5p3', input: 1_000_000, output: 0 }),
             ],
         });
 
@@ -232,9 +236,8 @@ describe('sweepOrganization — journaling', () => {
         expect(summary.spansSeen).toBe(2);
         expect(summary.journaled).toBe(2);
         const s1 = charges.find((c) => c.spanId === 's1')!;
-        // uncached 500K×$2 + read 400K×$0.2 + write 100K×$2.5 + out 100K×$10
-        // flash: uncached 500K×0.22 + read 400K×0.007 + write 100K×0.22 (no write rate) + out 100K×0.66
-        expect(s1.amountUsd).toBeCloseTo(0.2008, 6);
+        // flash: uncached 500K×0.30 + read 400K×0.006 + write 100K×0.30 (no write rate) + out 100K×1.20
+        expect(s1.amountUsd).toBeCloseTo(0.3024, 6);
         expect(s1).toMatchObject({
             organizationId: 'org-1',
             teamId: 'team-1',
@@ -244,7 +247,7 @@ describe('sweepOrganization — journaling', () => {
             status: 'debited',
         });
         const s2 = charges.find((c) => c.spanId === 's2')!;
-        expect(s2.amountUsd).toBeCloseTo(1.32, 6);
+        expect(s2.amountUsd).toBeCloseTo(1.4, 6);
 
         // Debited in one batch for the team, usageKey = span:<id>.
         expect(debit).toHaveBeenCalledTimes(1);
@@ -252,7 +255,7 @@ describe('sweepOrganization — journaling', () => {
         expect(org).toEqual({ organizationId: 'org-1', teamId: 'team-1' });
         expect(entries.map((e: any) => e.usageKey)).toEqual(['span:s1', 'span:s2']);
         expect(summary.debited).toBe(2);
-        expect(summary.debitedUsd).toBeCloseTo(1.5208, 6);
+        expect(summary.debitedUsd).toBeCloseTo(1.7024, 6);
         expect(summary.balanceUsd).toBe(10);
     });
 

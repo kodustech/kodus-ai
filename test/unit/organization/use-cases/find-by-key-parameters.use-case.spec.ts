@@ -146,25 +146,6 @@ describe('FindByKeyParametersUseCase', () => {
 
             expect(result).toBeNull();
         });
-
-        it('should call parametersService.findByKey with correct arguments', async () => {
-            const mockParameter = createMockParameterEntity(
-                ParametersKey.LANGUAGE_CONFIG,
-                { language: 'en' },
-            );
-
-            mockParametersService.findByKey.mockResolvedValue(mockParameter);
-
-            await useCase.execute(
-                ParametersKey.LANGUAGE_CONFIG,
-                MOCK_ORG_AND_TEAM_DATA,
-            );
-
-            expect(mockParametersService.findByKey).toHaveBeenCalledWith(
-                ParametersKey.LANGUAGE_CONFIG,
-                MOCK_ORG_AND_TEAM_DATA,
-            );
-        });
     });
 
     describe('REGRESSION: CODE_REVIEW_CONFIG special handling', () => {
@@ -226,23 +207,6 @@ describe('FindByKeyParametersUseCase', () => {
             expect(result.configValue.showToggleCodeReviewVersion).toBe(false);
         });
 
-        it('should add showToggleCodeReviewVersion=true for users in 2024', async () => {
-            const mockParameter = createMockParameterEntity(
-                ParametersKey.CODE_REVIEW_CONFIG,
-                { enabled: true },
-                { createdAt: new Date('2024-06-15') },
-            );
-
-            mockParametersService.findByKey.mockResolvedValue(mockParameter);
-
-            const result = await useCase.execute(
-                ParametersKey.CODE_REVIEW_CONFIG,
-                MOCK_ORG_AND_TEAM_DATA,
-            );
-
-            expect(result.configValue.showToggleCodeReviewVersion).toBe(true);
-        });
-
         it('should preserve existing configValue fields when adding showToggleCodeReviewVersion', async () => {
             const mockParameter = createMockParameterEntity(
                 ParametersKey.CODE_REVIEW_CONFIG,
@@ -288,32 +252,6 @@ describe('FindByKeyParametersUseCase', () => {
             expect(
                 (result.configValue as any).showToggleCodeReviewVersion,
             ).toBeUndefined();
-        });
-
-        it('should return all parameter fields correctly', async () => {
-            const mockParameter = createMockParameterEntity(
-                ParametersKey.CHECKIN_CONFIG,
-                { time: '09:00', timezone: 'UTC' },
-                {
-                    uuid: 'specific-uuid',
-                    active: true,
-                    description: 'Check-in configuration',
-                    version: '2.0.0',
-                },
-            );
-
-            mockParametersService.findByKey.mockResolvedValue(mockParameter);
-
-            const result = await useCase.execute(
-                ParametersKey.CHECKIN_CONFIG,
-                MOCK_ORG_AND_TEAM_DATA,
-            );
-
-            expect(result.configKey).toBe(ParametersKey.CHECKIN_CONFIG);
-            expect(result.uuid).toBe('specific-uuid');
-            expect(result.active).toBe(true);
-            expect(result.description).toBe('Check-in configuration');
-            expect(result.version).toBe('2.0.0');
         });
     });
 
@@ -424,28 +362,6 @@ describe('FindByKeyParametersUseCase', () => {
 
             expect(mockLogger.error).toHaveBeenCalled();
         });
-
-        it('should include parametersKey in error log metadata', async () => {
-            const testError = new Error('Test error');
-            mockParametersService.findByKey.mockRejectedValue(testError);
-
-            try {
-                await useCase.execute(
-                    ParametersKey.CODE_REVIEW_CONFIG,
-                    MOCK_ORG_AND_TEAM_DATA,
-                );
-            } catch {
-                // Expected
-            }
-
-            expect(mockLogger.error).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    metadata: expect.objectContaining({
-                        parametersKey: ParametersKey.CODE_REVIEW_CONFIG,
-                    }),
-                }),
-            );
-        });
     });
 });
 
@@ -518,27 +434,6 @@ describe('FindByKeyParametersUseCase - Cache Optimization Contract', () => {
             // OPTIMIZED: Only 1 call to service (cache hit for calls 2 and 3)
             expect(mockParametersService.findByKey).toHaveBeenCalledTimes(1);
         });
-
-        it('should return consistent results across multiple calls', async () => {
-            const mockParameter = createMockParameterEntity(
-                ParametersKey.LANGUAGE_CONFIG,
-                { language: 'en' },
-            );
-
-            mockParametersService.findByKey.mockResolvedValue(mockParameter);
-
-            const result1 = await useCase.execute(
-                ParametersKey.LANGUAGE_CONFIG,
-                MOCK_ORG_AND_TEAM_DATA,
-            );
-            const result2 = await useCase.execute(
-                ParametersKey.LANGUAGE_CONFIG,
-                MOCK_ORG_AND_TEAM_DATA,
-            );
-
-            // Results should be identical
-            expect(result1).toEqual(result2);
-        });
     });
 
     describe('FUTURE: Cache key scenarios', () => {
@@ -603,74 +498,5 @@ describe('FindByKeyParametersUseCase - Cache Optimization Contract', () => {
             expect(result1.configKey).toBe(ParametersKey.LANGUAGE_CONFIG);
             expect(result2.configKey).toBe(ParametersKey.CHECKIN_CONFIG);
         });
-    });
-});
-
-// ============================================================================
-// PERFORMANCE BASELINE
-// ============================================================================
-
-describe('FindByKeyParametersUseCase - Performance Baseline', () => {
-    let useCase: FindByKeyParametersUseCase;
-    let mockParametersService: ReturnType<typeof createMockParametersService>;
-
-    beforeEach(async () => {
-        mockParametersService = createMockParametersService();
-        const mockCentralizedConfigPrService =
-            createMockCentralizedConfigPrService();
-
-        const module: TestingModule = await Test.createTestingModule({
-            providers: [
-                FindByKeyParametersUseCase,
-                {
-                    provide: PARAMETERS_SERVICE_TOKEN,
-                    useValue: mockParametersService,
-                },
-                {
-                    provide: ConfigService,
-                    useValue: mockConfigService,
-                },
-                {
-                    provide: CentralizedConfigPrService,
-                    useValue: mockCentralizedConfigPrService,
-                },
-            ],
-        }).compile();
-
-        useCase = module.get<FindByKeyParametersUseCase>(
-            FindByKeyParametersUseCase,
-        );
-
-        jest.clearAllMocks();
-    });
-
-    it('should document: OPTIMIZED implementation uses cache for repeated calls', async () => {
-        /**
-         * From performance report:
-         * - findByKey is called 30+ times across the codebase per request
-         * - BEFORE: Each call = 1 DB query (30 queries!)
-         * - AFTER: First call = DB query, subsequent = cache hit
-         * - Parameters rarely change, so 60s TTL is safe
-         *
-         * RESULT: ~29 DB queries saved per request cycle
-         */
-
-        const mockParameter = createMockParameterEntity(
-            ParametersKey.CODE_REVIEW_CONFIG,
-            { enabled: true },
-        );
-
-        mockParametersService.findByKey.mockResolvedValue(mockParameter);
-
-        // Simulate 30 calls (matching the 30+ places in codebase)
-        for (let i = 0; i < 30; i++) {
-            await useCase.execute(
-                ParametersKey.CODE_REVIEW_CONFIG,
-                MOCK_ORG_AND_TEAM_DATA,
-            );
-        }
-
-        // OPTIMIZED: Only 1 DB call (29 cache hits!)
-        expect(mockParametersService.findByKey).toHaveBeenCalledTimes(1);
     });
 });

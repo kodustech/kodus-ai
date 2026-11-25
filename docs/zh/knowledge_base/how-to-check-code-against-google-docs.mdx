@@ -3,32 +3,13 @@ title: "如何根据 Google Docs 规范检查代码"
 description: "验证拉取请求的实现是否符合 Google Docs 中编写的规范。"
 ---
 
-产品规范和需求通常存放在 Google Docs 中。Kodus 可以获取文档内容并将其与 PR 差异进行比较，验证实现是否匹配规范。
+产品规范和需求通常存放在 Google Docs 中。Google Docs 不是业务逻辑验证的内置任务来源,后者从 Linear、Jira、Notion、Git Issues 或自定义插件中读取任务。命令中的 Google Docs 链接不会被读取。
 
-## 工作原理
+有两种方式可以根据 Google Doc 中的规范检查 PR:
 
-1. **连接 Google Docs 插件** — 在工作区的[插件](/zh/how_to_use/code_review/plugins)页面中连接
-2. 确保文档对连接的帐户可访问
-3. 在 PR 中评论：
+## 在命令中粘贴需求
 
-```
-@kody -v business-logic https://docs.google.com/document/d/1abc123/edit
-```
-
-4. Kody 获取文档，提取需求，并与 PR 差异进行比较
-
-## 您获得什么
-
-Kody 生成结构化验证报告：
-
-- **发现**及严重性：MUST_FIX、SUGGESTION 或 INFO
-- **需求追溯** — 每个发现引用 Google Doc 中的文本
-- **已验证需求** — 正确实现的内容
-
-## 提示
-
-- 保持规范结构化，具有清晰的部分和编号需求以获得最佳效果
-- 您也可以内联粘贴规范内容：
+从文档中复制需求,然后在您的 PR 上评论:
 
 ```
 @kody -v business-logic
@@ -38,6 +19,16 @@ Kody 生成结构化验证报告：
 3. Deleted comments show "[removed]" placeholder
 ```
 
-- 将大文档分解为多个部分并分别验证以获得更集中的反馈
+Kody 会根据您写的文本检查 PR。不需要跟踪器,但文本至少需要 40 个字符。结果是 PR 上的一条评论 **Kody · Business Logic**,其中每条需求被标记为 **MET**、**PARTIAL**、**MISSING**、**CHECK MANUALLY** 或 **NOT IN TASK**。
 
-更多详情，请参阅[业务逻辑验证](/zh/how_to_use/code_review/business_logic_validation)。
+## 将需求保存在任务中
+
+将需求复制到跟踪器中某个任务的描述里,放在诸如 `Acceptance criteria` 的标题下,并在 PR 标题、分支或描述中写明该任务。之后 Kody 会检查每个引用该任务的 PR,无需命令。如果验收标准位于某个标题下或自定义字段中,请在业务逻辑设置中设置 **Requirements → Where acceptance criteria live**。Notion 页面可以作为任务使用:将其 URL 放在 PR 中。
+
+## 提示
+
+- 保持规范结构化,具有清晰的章节和编号的需求。
+- 将大文档分解为多个部分并逐个检查,以获得更集中的反馈。
+- 修复某个缺口后,再次评论 `@kody -v business-logic`。同一条评论会被更新。
+
+更多详情,请参阅[业务逻辑验证](/zh/how_to_use/code_review/business_logic_validation)。

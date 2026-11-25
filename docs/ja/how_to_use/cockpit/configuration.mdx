@@ -1,36 +1,40 @@
 ---
 title: "Cockpit の設定"
-description: "組織として見せたくない Cockpit のタブや個別メトリクスを、組織レベルの設定ひとつで非表示にします。"
+description: "組織として見せたくない Cockpit のタブや個別のメトリクスを、組織レベルの設定ひとつで非表示にします。"
 ---
 
 すべてのチームがすべてのメトリクスを表示したいわけではありません。Cockpit では Owner が
-タブ全体や個別のチャートを**組織全体**に対してオフにできます — そのメトリクスが自分たちの
+タブ全体や個別のチャートを**組織全体**に対してオフにできます。そのメトリクスが自分たちの
 運用ではノイズになる場合や、開発者ごとの数値を表示したくない場合に有効です。
 
-サイドバーで **Organization → Cockpit visibility**（`/organization/cockpit`）を開きます。ページのタイトルは
+組織全体の表示設定を **Organization → Cockpit visibility** で変更できるのは Owner です。プランとセルフホストの要件は [Cockpit の利用条件](/ja/how_to_use/cockpit/overview)を参照してください。
+
+サイドバーで **Organization → Cockpit visibility** を開きます。ページのタイトルは
 **Cockpit Configuration** です。変更を適用するには **Save settings** をクリックします。
 
 <Info>
   これは**組織単位**の設定であり、ユーザーごとの環境設定ではありません。メトリクスをオフに
-  すると全員に対して非表示になります。
+  すると全員に対して非表示になります。変更できるのは Owner のみです。
 </Info>
 
 ## タブ
 
-Cockpit には 2 つのメトリクスタブがあり、それぞれ非表示にできます（その隣にある **Issues** タブは
-ここでは制御されません）：
+3 つのメトリクスタブはそれぞれ非表示にできます（その隣にある **Code hotspots** タブと
+**Issues** タブはここでは制御されません）：
 
 | タブ | 内容 |
 | --- | --- |
-| **Kodus Review** | Kodus のレビューがどれだけ効果的か — 実装率、重大度キャリブレーション、ネガティブフィードバック、Kody Rules のヘルス。 |
-| **Productivity** | デリバリー系メトリクス — デプロイ頻度、サイクルタイム、PR サイズ、チームの活動量。 |
+| **Kodus Review** | Kodus のレビューがどれだけ効果的か。実装率、重大度キャリブレーション、ネガティブフィードバック、Kody Rules のヘルス。このタブには個別のメトリクスのトグルはありません。 |
+| **Delivered as asked** | タスクに照らしてチェックされたプルリクエスト。タスクを満たした割合、タスクにない変更、作成者別・チーム別の内訳。 |
+| **Productivity** | デリバリー系メトリクス。デプロイ頻度、サイクルタイム、PR サイズ、チームの活動量。 |
 
 <Warning>
-  **少なくとも 1 つのタブは有効なままである必要があります。** 両方オフにするとフォームが拒否します。
+  **少なくとも 1 つのタブは有効なままである必要があります。** すべてオフにするとフォームが拒否します。
 </Warning>
 
 Productivity タブを非表示にすると、その中身もすべて非表示になります。したがって以下の個別
-トグルは、そのタブが有効な間だけ意味を持ちます。
+トグルは、そのタブが有効な間だけ意味を持ちます。**Kodus Review** も非表示にした場合でも、
+Cockpit には Productivity タブが表示されます。
 
 ## サマリーカード
 
@@ -38,10 +42,10 @@ Productivity タブ上部のカード：
 
 | メトリクス | 内容 |
 | --- | --- |
-| **Deploy Frequency** | 本番デプロイの頻度 |
-| **PR Cycle Time** | PR 作成からマージまでの時間（75 パーセンタイル） |
-| **Bug Ratio** | バグ修正 PR の割合 |
-| **PR Size** | PR の平均サイズ |
+| **Deploy Frequency** | 週あたりにクローズされた PR 数。[デプロイ頻度](/ja/how_to_use/cockpit/metrics/deploy_frequency)を参照 |
+| **PR Cycle Time** | PR のオープンからクローズまでの時間（75 パーセンタイル）。[PR サイクルタイム](/ja/how_to_use/cockpit/metrics/lead_time_for_changes)を参照 |
+| **Bug Ratio** | バグ修正に分類されたクローズ済み PR の割合。[バグ比率](/ja/how_to_use/cockpit/metrics/change_failure_rate)を参照 |
+| **PR Size** | プルリクエストあたりの平均変更行数。[PR サイズ](/ja/how_to_use/cockpit/metrics/pr_size)を参照 |
 
 ## 詳細チャート
 
@@ -49,16 +53,15 @@ Productivity タブ上部のカード：
 
 | チャート | 内容 |
 | --- | --- |
-| **Lead Time Breakdown** | リードタイムを段階ごとに分解 |
-| **PR Cycle Time Chart** | 期間を通じたサイクルタイムの推移 |
-| **PRs Opened vs Closed** | 週ごとのオープン／クローズ数 — [オープン vs クローズの PR 数](/ja/how_to_use/cockpit/metrics/prs_opened_vs_closed) を参照 |
-| **PRs Merged by Developer** | メンバーごとのマージ済み PR 数 |
-| **Team Activity** | チーム全体の活動と貢献 |
+| **Lead Time Breakdown** | 週ごとのコーディング時間、ピックアップ時間、レビュー時間。[リードタイム内訳](/ja/how_to_use/cockpit/metrics/lead_time_breakdown)を参照 |
+| **PR Cycle Time Chart** | 週ごとにプロットしたサイクルタイム |
+| **PRs Opened vs Closed** | 週ごとのオープン数とクローズ数。[オープン vs クローズの PR 数](/ja/how_to_use/cockpit/metrics/prs_opened_vs_closed)を参照 |
+| **PRs Merged by Developer** | 作成者ごと・週ごとにクローズされた PR 数。[開発者別 PR](/ja/how_to_use/cockpit/metrics/prs_by_developer)を参照 |
+| **Team Activity** | 開発者ごとにオープンされた PR 数。[開発者アクティビティ](/ja/how_to_use/cockpit/metrics/developer_activity)を参照 |
 
 ## 補足
 
-- 新しいメトリクスは**デフォルトで表示**の状態で追加されます。Kodus がチャートを追加すると、
-  誰かがオフにするまで全員に表示されます — 保存済みの設定は現在のデフォルトを置き換えるのでは
-  なく、その上にマージされるため、古い設定が新しいものを隠すことはありません。
-- メトリクスを非表示にしても影響するのは表示だけです。裏側のデータ取り込みは続くため、再び
-  オンにすると、その時点以降だけでなく全履歴が表示されます。
+- 設定していないメトリクスは表示されます。保存済みの設定は現在のデフォルトの上にマージされるため、
+  古い保存済み設定が、後から追加されたチャートを隠すことはありません。
+- メトリクスを非表示にしても影響するのは表示だけです。Kodus は裏側のデータの取り込みを続けるため、
+  再びオンにすると、その時点以降だけでなく全履歴が表示されます。

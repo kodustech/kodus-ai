@@ -30,3 +30,9 @@ does:
 
 Each step runs alone on its own frozen input, not chained, so a loss is the
 step's.
+
+Heavy mode (`@kody review --heavy`, evals/heavy-recall) hands the same steps the
+lenses' findings too. `snapshot.js --heavy` freezes a heavy review into
+`snapshot/<model>-heavy.json`, and each step measures on it with
+`--snapshot=<model>-heavy`, against the floors under `sets.heavy-<set>` of its
+`targets.json`, on demand.

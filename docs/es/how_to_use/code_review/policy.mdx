@@ -1,33 +1,35 @@
 ---
 title: "Política de Revisión"
-description: "Cómo leer el feedback de Kody y cómo interactúa con tus políticas de merge — qué bloquea un PR, qué no y quién decide."
+description: "Cómo leer el feedback de Kody y cómo interactúa con tus políticas de merge: qué bloquea un PR, qué no y quién decide."
 ---
 
-## Propósito
+## Sugerencias vs. bloqueo
 
-Aclarar cómo interpretar el feedback de Kody y cómo interactúa con las políticas de merge de tu repositorio.
-
-## Sugerencias vs. Bloqueo
-
-- Sugerencias: Por defecto, Kody publica comentarios no bloqueantes para que los evalúes.
-- Solicitar Cambios (opcional): Si está habilitado, Kody puede marcar una revisión como "cambios solicitados" para problemas críticos.
-- Auto-aprobar (opcional): Si está habilitado, Kody aprueba los PRs cuando no se encuentran problemas.
+- **Sugerencias:** por defecto, Kody publica comentarios que no bloquean el PR. Tú decides cuáles aplicar.
+- **Solicitar cambios en problemas críticos (opcional):** cuando Kody encuentra un problema crítico, marca su revisión en el PR como Request Changes. Solo los hallazgos críticos hacen esto. Kody retira la solicitud una vez resueltos esos hallazgos, incluso en un PR que no aprueba. Este ajuste está en **Code review → General → Review feedback**. No está disponible cuando GitLab es tu único proveedor conectado.
+- **Aprobación automática del PR (opcional):** cuando una revisión está limpia, Kody aprueba el PR. Nunca hace el merge. Con políticas de aprobación, solo se aprueban los PRs que coinciden con una política. Consulta [Auto-aprobación](/es/how_to_use/code_review/configs/auto_approve).
 
 <Note>
-  Habilita los comportamientos de bloqueo solo cuando tu equipo esté de acuerdo con los umbrales y tenga una CI sólida en su lugar.
+  Activa el comportamiento de bloqueo solo cuando tu equipo esté de acuerdo con los umbrales y tenga una CI sólida en su lugar.
 </Note>
 
-## Cuándo Habilitar Solicitar Cambios
+## Qué no bloquea
 
-- Áreas sensibles a la seguridad donde los problemas críticos nunca deben pasar a producción.
+- **El check Kody Code Review** (GitHub App y Forgejo) informa de que se ejecutó una revisión. Pasa con sugerencias abiertas y falla solo cuando la revisión misma no pudo ejecutarse. Un check requerido garantiza que hubo una revisión; no bloquea un merge por los hallazgos de Kody.
+- **Business Logic** publica un comentario y ningún check ni estado. Consulta [Validación de Lógica de Negocio](/es/how_to_use/code_review/business_logic_validation).
+- La **evaluación de riesgo** y el **routing** cambian cómo revisa Kody y si puede aprobar. No bloquean un merge. Consulta [Evaluación de riesgo](/es/how_to_use/code_review/configs/risk) y [Routing](/es/how_to_use/code_review/configs/routing).
+
+## Cuándo activar Request changes
+
+- Áreas sensibles a la seguridad donde los problemas críticos nunca deben llegar a producción.
 - Puntos calientes de rendimiento donde las regresiones son costosas.
 - Repositorios con estándares de codificación claros y reglas de revisión estables.
 
-## Cuándo Usar Auto-aprobar
+## Cuándo activar la aprobación automática
 
-- Cambios pequeños y de bajo riesgo (documentación/pruebas).
+- Cambios pequeños y de bajo riesgo, como documentación o pruebas. Agrega políticas de aprobación cuando solo algunos PRs deban ser elegibles.
 - Equipos con alta cobertura de pruebas y CI confiable.
 
-## La Decisión Humana Siempre Importa
+## La decisión humana siempre importa
 
 Kody acelera el feedback pero no reemplaza el juicio humano. Tu equipo decide qué sugerencias adoptar y cuándo hacer el merge.

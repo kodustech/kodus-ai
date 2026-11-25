@@ -12,6 +12,10 @@ on:
             - "libs/**"
             - "packages/**"
             - "test/**"
+            # architecture-template.spec.ts keeps the CLI's copy of the
+            # Architecture template equal to the web's.
+            - "apps/cli/src/services/custom-agents.service.ts"
+            - "evals/custom-agents/**"
             - "scripts/**"
             - "docker-compose.test.yml"
             - "docker/Dockerfile"

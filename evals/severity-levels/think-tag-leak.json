@@ -1,0 +1,43 @@
+{
+    "__doc": [
+        "Three suggestions whose text quotes </think>, in one call (#2409). Together ends DeepSeek V4.1 Flash's reasoning channel at a </think> the model writes and returns the rest of the reasoning as content; the severity parser then fell back to all-medium. Levels: the first loses every finding (high), the second falls back with a bounded loss (medium), the third is a stray tag in text (low). Run by hand on deepseek-v4.1-flash@together, not in CI: see README."
+    ],
+    "items": [
+        {
+            "issueId": "think-tag-leak#01",
+            "caseId": "think-tag-leak",
+            "severity": "high",
+            "label": "bug",
+            "finding": {
+                "relevantFile": "libs/llm/structured-output-repair.ts",
+                "relevantLinesStart": 40,
+                "relevantLinesEnd": 52,
+                "suggestionContent": "`extractJsonFromText` strips a `<think>` block by cutting at the first `</think>` it finds. When the reasoning itself quotes `</think>` (for example while discussing this very parser), the block ends early, the rest of the reasoning is treated as the answer, and the real JSON after it is never parsed, so the review silently loses every finding. Match the closing tag that balances the opening one instead of the first `</think>`."
+            }
+        },
+        {
+            "issueId": "think-tag-leak#02",
+            "caseId": "think-tag-leak",
+            "severity": "medium",
+            "label": "bug",
+            "finding": {
+                "relevantFile": "libs/llm/structured-output-repair.ts",
+                "relevantLinesStart": 60,
+                "relevantLinesEnd": 64,
+                "suggestionContent": "Only `<think>…</think>` is removed; a model that wraps its preamble in `<thinking>…</thinking>` keeps it, and the `{` characters inside that preamble are picked as the start of the JSON, so parsing fails and the formatter falls back to stripping the labels locally. Accept both `<think>` and `<thinking>` and require the matching `</think>` or `</thinking>`."
+            }
+        },
+        {
+            "issueId": "think-tag-leak#03",
+            "caseId": "think-tag-leak",
+            "severity": "low",
+            "label": "bug",
+            "finding": {
+                "relevantFile": "libs/code-review/agents/prompt.ts",
+                "relevantLinesStart": 12,
+                "relevantLinesEnd": 12,
+                "suggestionContent": "The system prompt tells the model to \"end your reasoning with </think> and then answer\". Hosts that parse reasoning already insert the tag, so the extra instruction makes models write a second `</think>` that shows up as a stray tag in the answer text. Drop the instruction."
+            }
+        }
+    ]
+}

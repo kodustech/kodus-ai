@@ -42,6 +42,11 @@ export type OrganizationLicenseValidationResult = {
      *  provider"). Absent when billing predates the ledger. May be negative:
      *  usage is metered after the fact, so the gate blocks the NEXT review. */
     creditBalanceUsd?: number;
+    /** The license service could not be asked (5xx, rate limit, timeout,
+     *  network). `valid` is false in that case, but that says nothing about
+     *  the organization's license: callers must not report "no subscription"
+     *  from a read that never happened. */
+    unavailable?: boolean;
 };
 
 // ── Prepaid credits ("Kodus as the provider") ────────────────────────────

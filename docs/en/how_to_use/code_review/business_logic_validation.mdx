@@ -7,6 +7,8 @@ description: "Check each pull request against the task it references, requiremen
 
 Business Logic Validation checks that a pull request delivers what its task asks for. Kody finds the task the PR references, reads it from your task tracker, and lists every requirement with where it stands in the code. The result is one comment on the PR, kept up to date, the same on GitHub, GitLab, Bitbucket, Azure Repos and Forgejo.
 
+On by default in **Code review → What to review → Business Logic**. Connect a task tracker in [Plugins](/en/how_to_use/code_review/plugins) for automatic task lookups, or pass the requirements directly in a review command.
+
 What the comment looks like on a PR that delivers part of its task:
 
 > **Kody · Business Logic**
@@ -19,12 +21,12 @@ What the comment looks like on a PR that delivers part of its task:
 > | ❌ **MISSING** | The badge turns red when less than 1 hour is left. | `SlaBadge.tsx:14` · The badge always uses the "info" tone. **Do:** switch to the danger tone under 60 minutes. |
 > | ❌ **MISSING** | Resolved tickets show no badge. | `TicketPanel.tsx:40` · Rendered whatever the status. **Do:** hide it when the ticket is resolved. |
 
-After the fix, the same comment reads "All requirements met · ✅ 3 of 3 met", with the earlier check kept below it.
+After the fix, the same comment reads "All requirements met" and "✅ 3 of 3 met", with the earlier checks listed below it.
 
 ## Prerequisites
 
 - A task tracker connected in [Plugins](/en/how_to_use/code_review/plugins): Linear, Jira (Atlassian Rovo), Notion, Git Issues, or a custom plugin.
-- Kody only **reads** tasks by their id, and what they link to (a parent, sub-tasks, attached documents). It never searches for a task or writes to your tracker.
+- Kody only **reads** from your tracker: the task a PR names by its id, and what it links to (a parent, sub-tasks, attached documents). It never writes to it, and it uses a task only when the tracker returns one with that id.
 - Without a tracker, you can still paste the task text in the command (see below).
 
 ## Turning it on
@@ -45,7 +47,7 @@ Kody looks for task references in the PR title, branch name and description, in 
 - Keys like `PROJ-123` (Jira, Linear and most trackers)
 - `#123` and `owner/repo#123` (Git issues; a number that is a pull request is ignored)
 - `AB#123` (Azure Boards)
-- Links to Linear, Jira, Notion, GitHub/GitLab issues and Azure work items
+- Links to Linear, Jira (Cloud, or Server and Data Center on your own domain: any `/browse/PROJ-123` link), Notion, GitHub/GitLab issues and Azure work items
 
 A reference only counts once the tracker returns a task with that exact id, so `UTF-8` or `gpt-5` in a title are never mistaken for tasks. A lower-case key in the title (`feat(kod-10)`) counts when your tracker has that team or project; a Linear project id (`P-KOD-1`) never does.
 
@@ -57,10 +59,10 @@ Kody also reads what the task links to:
 
 ### How the PR names the task
 
-- **"Closes PROJ-1"** or a key in the title or branch: the PR is checked against the whole task.
+- **"Closes PROJ-1"** (also fixes, resolves, implements, completes) or a key in the title or branch: the PR is checked against the whole task.
 - **"Part of PROJ-1"**: the PR delivers a slice. What's missing is listed, but not as something to merge.
-- **"Refs PROJ-1"**, **"see PROJ-1"** or **"related to PROJ-1"** in the description: a mention. It is checked only when the PR names no other task, and then as the PR's own.
-- **Up to three tasks** are checked per PR, one section each. A PR that states more (a release or a merge) is skipped.
+- **"Refs PROJ-1"**, **"see PROJ-1"**, **"related to PROJ-1"** or a bare key in the description: a mention. It is checked only when the PR names no other task, and then as the PR's own. A bare `#123` in the description is never read as the task: write `Closes #123` (`Refs #123` also counts when the PR names nothing else).
+- **Up to three** references are read per PR, one section each. Ids and links count before the tracker confirms them, so a PR that names more (a release or a merge) is skipped.
 
 ## The five states
 
@@ -69,40 +71,41 @@ Kody also reads what the task links to:
 | **MET** | The diff implements it. | No |
 | **PARTIAL** | Part of what the requirement says is implemented. | No, shown: half done is a judgment call that can change between two runs |
 | **MISSING** | No evidence in this PR diff, or the code the PR relies on doesn't do it. | Yes |
-| **CHECK MANUALLY** | A visual or flow requirement, one Kody isn't sure about even after reading the repository, or one that may live in a file too large to read. | Never |
+| **CHECK MANUALLY** | A visual or flow requirement, one Kody isn't sure about even after reading the repository, or one that may live in a part of the PR too large to read. | Never |
 | **NOT IN TASK** | A change the task doesn't ask for. | No, shown |
 
-Every row cites the file and line it is based on, and says what to change.
+Every row cites the file and line it is based on, and says what to change. A reviewer's acceptance shows as **ACCEPTED** (see below). If the whole diff works on something other than the task, the comment says so and that is left to fix, unless the PR says it is part of the task.
 
 ### Before a gap is shown
 
 A gap tells the author to redo work, so Kody holds each one to the code:
 
 - **The requirement as the task writes it.** An input or edge case the task never names (negative amounts, another code path, a format it doesn't mention) never makes a row PARTIAL, and neither does what happens after the change (that an existing job sends the message the PR queues, that a route uses the serializer the PR fills in).
-- **The code the PR calls, not only the diff.** When a rule lives in code the PR calls but didn't change (a validator, a helper, the mapper that builds a response), Kody reads it in the repository at the PR's head before anything is shown, and does the same for every MISSING, PARTIAL and CHECK MANUALLY row. A row turns MET only on a file and line Kody read, and says it is already in the code, outside the diff. A row turns MISSING only when Kody read the code the PR relies on and cites the line that lacks the rule. Whatever the repository doesn't settle stays as it was.
+- **The code the PR calls, not only the diff.** When a rule lives in code the PR calls but didn't change (a validator, a helper, the mapper that builds a response), Kody reads it in the repository at the PR's head before anything is shown, and does the same for up to eight MISSING, CHECK MANUALLY and PARTIAL rows, in that order. Visual requirements are not re-read: no file settles them. A row turns MET only on a file and line Kody read, and says it is already in the code, outside the diff. A row turns MISSING only when Kody read the code the PR relies on and cites the line that lacks the rule. Whatever the repository doesn't settle stays as it was.
 - **Work that belongs elsewhere.** A requirement a sub-task delivers, or one your team guidance says isn't checked here, stays CHECK MANUALLY and is never re-judged as missing.
 
 ## On the pull request
 
-- Kody checks the PR on its **first review**. After that it re-checks when someone comments `@kody -v business-logic` or runs `@kody review --force`. **Re-check** can also be set to each push while something is missing, so a fix updates the comment without anyone asking, or to every push; each is one more validation per push.
+- Kody checks the PR on its **first review**. A review that skips it with nothing posted (no task referenced, a tracker that is down) doesn't count: the next review tries again. Once the PR was checked, it re-checks when someone comments `@kody -v business-logic` or runs `@kody review --force`. **Re-check after a push** can also be set to **While something is missing**, so a fix updates the comment without anyone asking, or to **On every push**; each is one more validation per push.
 - Re-check any time with `@kody -v business-logic`. The **same comment is edited**; Kody never posts a second one.
-- A PR that meets its task gets a one-line comment ("✅ 4 of 4 met"), plus anything to check by hand, so the author knows it was checked. Turn off **Comment when every requirement is met** to stay quiet on those.
+- A PR that meets its task gets a short comment ("✅ 4 of 4 met"), plus anything to check by hand, so the author knows it was checked. Turn off **Comment when every requirement is met** to stay quiet on those.
 - The comment is the signal on every platform: Kody doesn't write a check or a status, so it never blocks a merge by itself. Its header says what is left to fix.
 
 ### Replying to the comment
 
-Reply to the Business Logic comment and mention `@kody`. Kody reads a comment as a reply when it is posted in that comment's thread (GitLab, Bitbucket, Azure Repos), quotes it, or names the requirement, its state (MISSING, PARTIAL) or the task id; any other comment goes to the chat.
+Reply to the Business Logic comment and mention `@kody`. Kody reads a comment as a reply when it is posted in that comment's thread (GitLab, Bitbucket, Azure Repos), quotes it (its title or a requirement's words), or names the requirement, its state as the comment writes it (MISSING, PARTIAL) or the task id; any other comment goes to the chat.
 
 - **Disagree**: "It's covered in `useDrag.ts`". Kody re-checks what you pointed at and either marks it MET or says what it looked at and keeps it.
-- **Accept a finding** (someone other than the PR's author: on GitHub, with write access to the repository; on GitLab, Developer or above on the repository; on Bitbucket, Azure Repos and Forgejo, a member of the organization the platform lists): "Keyboard reordering is out of scope, moved to SAA-102". Kody confirms SAA-102 exists, marks the row **ACCEPTED** with who accepted it, and it is no longer left to fix. The decision stays on later re-checks, even when Kody words the requirement a little differently, as long as the task's text is unchanged; once the task is edited, the requirement has to be accepted again.
+- **Accept a finding** (someone other than the PR's author: on GitHub, with write access to the repository; on GitLab, Developer or above on the repository; on Bitbucket, Azure Repos and Forgejo, a member of the organization the platform lists): "Keyboard reordering is out of scope, moved to SAA-102". Kody confirms SAA-102 exists, marks the row **ACCEPTED** with who accepted it, and it is no longer left to fix. The decision stays on later re-checks, even when Kody words the requirement a little differently, as long as the task's text is unchanged; once the task is edited, only a requirement worded exactly as before keeps it.
 
 What Kody answers:
 
 | Reply | Kody |
 |---|---|
-| A reviewer accepts, moving it to SAA-102 | "Got it. SAA-102 exists, I marked AC #2 as accepted by @rafa and updated the table above." |
+| A reviewer accepts, moving it to SAA-102 | "Got it. SAA-102 exists, I marked “Keyboard reordering” as accepted by @rafa and updated the table above. Nothing is left to merge." (or "Other requirements are still listed to merge.") |
 | The PR's author tries to accept | "The pull request's author can't accept its own requirements: ask a reviewer to. If the code already covers it, say where and I'll re-check." |
 | Someone without the access above | "Only someone with write access to the repository can accept a requirement…" |
+| Kody can't look up the commenter's access | "I couldn't check your access to the repository, so nothing was accepted. Reply again in a moment." |
 | The task it was moved to doesn't exist | "I couldn't find SAA-102 in the task tracker, so nothing was accepted. Check the id and reply again." |
 
 ## When Kody stays quiet
@@ -111,13 +114,13 @@ Kody comments only when the author can do something about it:
 
 | Situation | On the PR |
 |---|---|
-| The task has only a title | A comment asking for acceptance criteria |
+| The task has only a title, or says too little to check against | A comment asking for acceptance criteria |
 | `SAA-999` doesn't exist, but SAA is a team in your tracker | A comment saying it looks like a typo, with the closest real tasks. With **Ask for a task** on, it stays open until fixed |
 | No task referenced, or only ids no tracker has (`UTF-8` in a title) | Nothing. With **Ask for a task** on, a comment asking for one (never on a bot's PR) |
 | A GitHub issue, but only Linear is connected | Nothing; admins see a count on the settings page. With **Ask for a task** on, a comment saying which tracker can't read it |
 | The tracker is down or its token expired | Nothing; owners are notified, and Kody re-checks once the tracker answers, for up to a day after the first miss |
 
-The reason for every skip is recorded and shown on the Business Logic settings page.
+Every skip is recorded with its reason. The top of the Business Logic settings page says whether Kody is working (PRs checked in the last 30 days, last task read) or paused because a tracker isn't answering, and counts the PRs it couldn't read by reason: the task doesn't exist, a typo in the reference, the tracker didn't answer, no connected tracker reads the reference, or the task is too thin.
 
 ## Running on demand
 
@@ -125,15 +128,15 @@ Comment on the PR (not on a line of code):
 
 - `@kody -v business-logic`: re-check the tasks the PR references
 - `@kody -v business-logic PROJ-123` or a task link: check against that task
-- `@kody -v business-logic` followed by the requirements as text: check against what you wrote, no tracker needed
+- `@kody -v business-logic` followed by the requirements as text (40 characters or more): check against what you wrote, no tracker needed
 
 ## Settings
 
 Open **Code review → What to review** and click **Business Logic** (or **⋯ → Edit**). Every setting can be set globally and overridden per repository or directory.
 
-- **Task source**: every connected tracker (custom task plugins like ClickUp included), or one plugin. For a custom plugin, pick the tool that reads one task by its id; only read-only tools are offered. Use **Try it**, pinned on the right of the page (it needs permission to edit these settings): a task alone shows what Kody reads from it, and a pull request runs the whole check without posting, with the settings on screen, saved or not. **Post to the pull request** posts the result shown, without running it again, once per test; it refuses when the pull request got a commit after the test, so run the test again first.
-- **Custom task id format** (optional): a regular expression for ids Kody doesn't find on its own: `T(\d{4})` reads `T1234` as task 1234. Keys like `SAA-96`, `#12`, `AB#8`, `CU-…` and tracker links are found without it, and so is a lower-case key like `sc-123` in a branch name. In a title or description a lower-case key counts only when Linear or Jira has that team or project; for another tracker, set the format. A number the format captures is read as a Git issue only when Git Issues is the task source; with every connected tracker, `T1234` is never issue #1234 of the repository.
-- **Where acceptance criteria live**: detected automatically (a criteria field, a checklist, or a list in the description), under a heading in the description, or in a custom field; a task without the field is read from its description. With **Under a heading** set to `Acceptance criteria`, this task is checked against its three bullets, and the paragraph above them is context:
+- **Task source**: every connected tracker, or one plugin. Under **Every connected tracker**, Kody reads Linear, Jira, Notion and Git Issues, and the custom plugins whose name says they are a task tracker (Jira, Linear, Notion, ClickUp); any other custom plugin, such as Azure DevOps, is read only when you pick it. For a custom plugin, pick the tool that reads one task by its id; only read-only tools are offered. Use **Try it**, pinned on the right of the page (it needs permission to edit these settings): a task alone shows what Kody reads from it, and a pull request runs the whole check without posting, with the settings on screen, saved or not. **Post to the pull request** posts the result shown, without running it again, once per test; it refuses when the pull request got a commit after the test or when 30 minutes have passed, so run the test again first.
+- **Custom task id format** (optional): a regular expression for ids Kody doesn't find on its own: `T(\d{4})` reads `T1234` as task 1234. Keys like `SAA-96`, `#12`, `AB#8`, `CU-…` and tracker links are found without it, and so is a lower-case key like `sc-123` in a branch name. In a title or description a lower-case key counts only when Linear or Jira has that team or project; for another tracker, set the format. A number the format captures is read as a Git issue only when Git Issues is the task source; with every connected tracker, `T1234` is never issue #1234 of the repository. The format is 200 characters at most, and Kody drops one that could take too long to run, like `(a+)+`.
+- **Requirements → Where acceptance criteria live**: detected automatically (a criteria field, a checklist, or a list in the description), under a heading in the description, or in a custom field; a task without the field is read from its description. With **Under a heading in the description** set to `Acceptance criteria`, this task is checked against its three bullets, and the paragraph above them is context:
 
   ```markdown
   Agents should see at a glance how much time is left on a ticket's SLA.
@@ -143,22 +146,22 @@ Open **Code review → What to review** and click **Business Logic** (or **⋯ �
   - The badge turns red when less than 1 hour is left.
   - Resolved tickets show no badge.
   ```
-- **Comment when every requirement is met** (on by default): a PR that meets its task gets a one-line comment. Off, it gets none; gaps are still posted.
-- **Ask for a task when the PR references none**: Kody comments asking which task the PR is for (or pointing at the typo), instead of skipping it. PRs opened by bots, like Dependabot or Renovate, are left alone. A tracker that is down never counts.
-- **Re-check**: only on request (default), each push while something is missing, or every push. Each check runs on your organization's model like a review does, so **every push** costs one validation per push.
-- **Skipped pull requests**: the ones code review skips are skipped here too: titles with an ignored keyword (`ignoredTitleKeywords`, like `wip`) and drafts when `runOnDraft` is off. A `@kody -v business-logic` comment always runs.
-- **Team guidance**: notes Kody follows when it judges, for example "Feature flags count as implemented when the flag exists and defaults to off". It can't change the verdict format or make Kody invent requirements.
+- **On the pull request → Comment when every requirement is met** (on by default): a PR that meets its task gets a short comment. Off, it gets none; a PR with anything left to check by hand, partial or not in the task still gets its comment, and a comment already on the PR is still updated.
+- **On the pull request → Ask for a task when the PR references none**: Kody comments asking which task the PR is for, instead of skipping it, and a reference that looks like a typo stays open until fixed. PRs opened by bots, like Dependabot or Renovate, are left alone. A tracker that is down never counts.
+- **On the pull request → Re-check after a push**: **Only on request** (default), **While something is missing**, or **On every push**. Each check runs on your organization's model like a review does (**Business Rules** under **Other task models** in **Code review → Routing** can pin a different one), so **On every push** costs one validation per push.
+- **Skipped pull requests**: Business Logic skips the PRs code review skips: titles with an ignored keyword (`ignoredTitleKeywords`, like `wip`) and drafts when `runOnDraft` is off. Set those in **Code review → General**. A `@kody -v business-logic` comment always runs.
+- **Requirements → Team guidance**: notes Kody follows when it judges, up to 2,000 characters, for example "Feature flags count as implemented when the flag exists and defaults to off". It can't change the verdict format or make Kody invent requirements.
 
 ### Common setups
 
 | Team | Settings |
 |---|---|
 | Wants the check, not the noise (default) | Re-check on request, **Comment when every requirement is met** on |
-| Every PR must deliver a task | **Ask for a task** on, re-check **while something is missing**: a PR without a task is asked for one, and each fix updates the comment until it passes |
+| Every PR must deliver a task | **Ask for a task** on, **Re-check after a push** set to **While something is missing**: a PR without a task is asked for one, and each fix updates the comment until it passes |
 | Only wants to hear about gaps | **Comment when every requirement is met** off |
 | Monorepo with one tracker per area | Set **Task source** and **Where acceptance criteria live** per directory |
 
-The same settings in `kodus-config.yml`:
+The same settings in `kodus-config.yml` (read when **Prefer kodus-config.yml settings** is on in **Code review → General**):
 
 ```yaml
 businessLogic:
@@ -185,6 +188,8 @@ kodus pr business-validation --task-id AB#8 --format json
 
 It checks your local changes against the task and prints one line per requirement and the status. With `--format json` (or `--agent`) it prints the same verdict structured, for an agent to act on. Nothing is posted to a pull request.
 
+Give the task with `--task-id` or `--task-url` (not both). Pick which changes are checked with file paths, `--staged`, `--commit <sha>` or `--branch <name>` (one of them); without any, it checks your staged and unstaged changes to tracked files.
+
 ## Cockpit
 
-**Cockpit → Delivered as asked** shows the share of PRs that met their task, changes not in the task, how often developers agreed with Kody, and the split by who wrote the code (people or coding agents, from commit authors and `Co-Authored-By` trailers) and by team. It follows the Cockpit's repository picker, and can be hidden in **Organization → Cockpit** like the other tabs.
+**Cockpit → Delivered as asked** (Teams and Enterprise plans) shows the share of PRs that met their task (**Met their task**), the share with changes not in the task, how often developers agreed with Kody (**Findings accepted**), the share without a readable task, the split by who wrote the code (people or coding agents, from commit authors and `Co-Authored-By` trailers), the kinds of requirement most often missed, and a table by team when the organization has more than one. It follows the Cockpit's repository picker and date range, and can be hidden in **Organization → Cockpit visibility** like the other tabs.

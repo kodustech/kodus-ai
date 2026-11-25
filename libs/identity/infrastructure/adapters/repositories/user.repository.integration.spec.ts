@@ -14,6 +14,9 @@ import { UserModel } from './schemas/user.model';
 
 import { ENTITIES } from '@libs/core/infrastructure/database/typeorm/entities';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
+import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
+import { OrganizationDatabaseRepository } from '@libs/organization/infrastructure/adapters/repositories/organization.repository';
+import { OrganizationModel } from '@libs/organization/infrastructure/adapters/repositories/schemas/organization.model';
 
 const dataSource = new DataSource({
     type: 'postgres',
@@ -207,6 +210,45 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
             expect(failure).toBeInstanceOf(Error);
             expect((failure as Error).message).toBe('Failed to update user');
             expect((failure as Error).cause).toBeInstanceOf(Error);
+        });
+
+        // The public signup returns the user it creates with its organization,
+        // also when the user joins an existing one: the creator's first touch
+        // is stored, but must never come back with it.
+        it('stores the first touch, and creates a user whose organization leaves it out', async () => {
+            if (!canRun) return;
+            const firstTouch = { utm_source: 'google', gclid: 'TEST' };
+            const organizationId = randomUUID();
+            createdOrganizations.push(organizationId);
+            await new OrganizationDatabaseRepository(
+                dataSource.getRepository(OrganizationModel),
+            ).create({
+                uuid: organizationId,
+                name: `user-repo-it-${organizationId}`,
+                tenantName: 'user-repo-it',
+                status: true,
+                firstTouch,
+            });
+
+            const [row] = await dataSource.query(
+                'SELECT first_touch FROM organizations WHERE uuid = $1',
+                [organizationId],
+            );
+            expect(row.first_touch).toEqual(firstTouch);
+
+            const uuid = randomUUID();
+            created.push(uuid);
+            const user = await repository.create({
+                uuid,
+                email: `user-repo-it-${uuid}@example.com`,
+                password: 'not-a-real-hash',
+                status: STATUS.PENDING,
+                role: Role.CONTRIBUTOR,
+                organization: { uuid: organizationId },
+            });
+
+            expect(user?.organization?.uuid).toBe(organizationId);
+            expect(user?.toObject().organization?.firstTouch).toBeUndefined();
         });
 
         describe('delete', () => {

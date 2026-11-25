@@ -32,15 +32,19 @@ The token must include **all** of the following permissions for full functionali
 | Category | Level | Purpose |
 |----------|-------|---------|
 | `repository` | **Read & Write** | Access code, branches, files, create PR comments, manage webhooks |
-| `issue` | **Read & Write** | View and modify issues, labels, and milestones |
-| `notification` | **Read** | View notifications |
-| `user` | **Read** | Read basic user information |
+| `issue` | **Read & Write** | Read and post pull request comments and reactions |
+| `organization` | **Read** | List the organizations the token user belongs to and their repositories |
+| `user` | **Read** | Read basic user information, required for authentication |
+
+The token user must also be an **admin of each repository** Kody reviews. Forgejo only lets a repository admin create webhooks and dismiss reviews, so without it Kody cannot register the webhook automatically or withdraw its approval when a later review holds it.
 
 ---
 
 ## Adding the Token to Kody
 
 Paste the generated token into Kodus: during onboarding (**Connect your Git tool** → **Forgejo** tab → **Connect via token**), or later in the sidebar under **Repositories** → **Connect a provider** → **Forgejo**. Fill in **Forgejo Instance URL** and **Personal Access Token**, then click **Validate and save**.
+
+To replace a token later, click **Update token** on the **Forgejo** card on **Repositories**, paste the new token and click **Update token**.
 
 ---
 

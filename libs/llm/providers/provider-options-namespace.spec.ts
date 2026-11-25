@@ -99,7 +99,7 @@ const MODEL_SPECIFIC: Array<{ id: string; model: string; extra?: Record<string, 
     { id: 'google_vertex', model: 'claude-opus-4-7', extra: { apiKey: FAKE_SA_JSON } },
     // Kodus: one id, an SDK client per upstream — the namespace must follow
     // the upstream (Fireworks is spoken over openai_compatible).
-    { id: 'kodus', model: 'fireworks/accounts/fireworks/models/kimi-k2p7-code', extra: { apiKey: '' } },
+    { id: 'kodus', model: 'fireworks/accounts/fireworks/models/glm-5p3', extra: { apiKey: '' } },
     { id: 'kodus', model: 'fireworks/accounts/fireworks/models/glm-5p3-flash', extra: { apiKey: '' } },
 ];
 

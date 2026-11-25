@@ -5,7 +5,6 @@ import { Document } from 'mongoose';
 @Schema({
     collection: 'ruleLikes',
     timestamps: true,
-    autoIndex: true,
 })
 export class RuleLikeModel extends CoreDocument {
     @Prop({ type: String, required: true, index: true })

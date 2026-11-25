@@ -28,8 +28,18 @@ type OrganizationMember = {
     type?: "user" | "bot";
 };
 
+/**
+ * `complete` is true only when the platform answered in full. Anyone missing
+ * from an incomplete list may still be in the organization.
+ */
 export type OrganizationMemberListResult =
-    | { status: "ok"; members: Array<OrganizationMember> }
+    | {
+          status: "ok";
+          complete: boolean;
+          members: Array<OrganizationMember>;
+          /** Seat holders checked with the provider and not found. */
+          absentSeatHolderIds?: Array<string>;
+      }
     | { status: "unavailable"; members: [] };
 
 /**
@@ -43,22 +53,41 @@ export const MEMBERS_UNAVAILABLE: OrganizationMemberListResult = {
 };
 
 /**
- * Tolerates the pre-status response shape so a rolling deploy where the web app
- * is ahead of the API does not report every member as removed from the org.
+ * Tolerates older response shapes so a rolling deploy where the web app is
+ * ahead of the API does not report every member as removed from the org. A
+ * response without `complete` is never read as complete.
  */
 const toMemberListResult = (
     response: unknown,
 ): OrganizationMemberListResult => {
     if (Array.isArray(response)) {
         return response.length > 0
-            ? { status: "ok", members: response as Array<OrganizationMember> }
+            ? {
+                  status: "ok",
+                  complete: false,
+                  members: response as Array<OrganizationMember>,
+              }
             : { status: "unavailable", members: [] };
     }
 
-    const result = response as OrganizationMemberListResult | undefined;
+    const result = response as
+        | {
+              status?: string;
+              complete?: unknown;
+              members?: unknown;
+              absentSeatHolderIds?: unknown;
+          }
+        | undefined;
 
     if (result?.status === "ok" && Array.isArray(result.members)) {
-        return { status: "ok", members: result.members };
+        return {
+            status: "ok",
+            complete: result.complete === true,
+            members: result.members as Array<OrganizationMember>,
+            ...(Array.isArray(result.absentSeatHolderIds) && {
+                absentSeatHolderIds: result.absentSeatHolderIds.map(String),
+            }),
+        };
     }
 
     return { status: "unavailable", members: [] };
@@ -73,6 +102,25 @@ export const getOrganizationMembers = async (params: { teamId: string }) => {
     );
 
     return toMemberListResult(response);
+};
+
+/** git id → stored name; ids that never opened a PR are absent. */
+export const getOrganizationMemberLabels = async (params: {
+    teamId: string;
+    ids: Array<string>;
+}): Promise<Record<string, string>> => {
+    if (params.ids.length === 0) return {};
+
+    const response = await authorizedFetch<unknown>(
+        pathToApiUrl("/code-management/organization-members/labels"),
+        {
+            params: { teamId: params.teamId, ids: params.ids.join(",") },
+        },
+    );
+
+    return response && typeof response === "object" && !Array.isArray(response)
+        ? (response as Record<string, string>)
+        : {};
 };
 
 export const refreshOrganizationMembers = async (params: {
@@ -155,9 +203,9 @@ export type UserWithLicense = {
     status?: "active" | "inactive";
 };
 
-export const getUsersWithLicense = async (
-    params: { teamId: string },
-): Promise<Array<UserWithLicense>> => {
+export const getUsersWithLicense = async (params: {
+    teamId: string;
+}): Promise<Array<UserWithLicense>> => {
     if (isSelfHosted) {
         try {
             return await authorizedFetch<Array<UserWithLicense>>(
@@ -402,6 +450,7 @@ export const updateCreditAutoTopUp = async (params: {
     enabled: boolean;
     thresholdUsd?: number;
     amountUsd?: number;
+    monthlyLimitUsd?: number | null;
 }): Promise<CreditAutoTopUp> => {
     const organizationId = await getOrganizationId();
     return billingRequest<CreditAutoTopUp>(`credits/auto-topup`, {

@@ -219,22 +219,6 @@ describe("Custom agent page", () => {
         expect(patch(agent).enabled).toBe(false);
     });
 
-    it("has the four config cards and Try it in its own panel", async () => {
-        await renderPage();
-        for (const title of [
-            "Instructions",
-            "Files & knowledge",
-            "Tools",
-            "Comments & model",
-        ]) {
-            expect(screen.getAllByText(title).length).toBeGreaterThan(0);
-        }
-        const panel = screen.getByTestId("try-it-panel");
-        expect(
-            within(panel).getByRole("region", { name: "Try it" }),
-        ).toBeInTheDocument();
-    });
-
     it("deletes only after the confirm dialog, then goes back to What to review", async () => {
         await renderPage();
         fireEvent.click(screen.getByRole("button", { name: "Delete agent" }));

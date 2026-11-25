@@ -28,7 +28,9 @@ export interface ByokRefValidationResult {
  * Validate the referential integrity of a BYOK config. Legacy `{main,fallback}`
  * (and any non-config blob) is a no-op PASS — only the shape carries refs to gate.
  */
-export function validateByokConfigRefs(config: unknown): ByokRefValidationResult {
+export function validateByokConfigRefs(
+    config: unknown,
+): ByokRefValidationResult {
     if (!isByokConfig(config)) {
         return { valid: true, errors: [] };
     }
@@ -61,19 +63,13 @@ export function validateByokConfigRefs(config: unknown): ByokRefValidationResult
     // Every routing ref must point at an existing model.
     const routing = config.routing;
     if (routing) {
-        if (
-            routing.defaultModelId &&
-            !modelIds.has(routing.defaultModelId)
-        ) {
+        if (routing.defaultModelId && !modelIds.has(routing.defaultModelId)) {
             errors.push(
                 `routing.defaultModelId "${routing.defaultModelId}" does not ` +
                     `resolve to any model`,
             );
         }
-        if (
-            routing.fallbackModelId &&
-            !modelIds.has(routing.fallbackModelId)
-        ) {
+        if (routing.fallbackModelId && !modelIds.has(routing.fallbackModelId)) {
             errors.push(
                 `routing.fallbackModelId "${routing.fallbackModelId}" does not ` +
                     `resolve to any model`,
@@ -89,6 +85,29 @@ export function validateByokConfigRefs(config: unknown): ByokRefValidationResult
                 );
             }
         }
+        const ultra = routing.ultraModelIds;
+        if (ultra !== undefined) {
+            if (!Array.isArray(ultra) || ultra.length > 3) {
+                errors.push(
+                    'routing.ultraModelIds must list up to three models',
+                );
+            } else {
+                for (const modelId of ultra) {
+                    if (modelId && !modelIds.has(modelId)) {
+                        errors.push(
+                            `routing.ultraModelIds "${modelId}" does not ` +
+                                `resolve to any model`,
+                        );
+                    }
+                }
+                const set = ultra.filter(Boolean);
+                if (new Set(set).size !== set.length) {
+                    errors.push(
+                        'routing.ultraModelIds must list three different models',
+                    );
+                }
+            }
+        }
     }
 
     return { valid: errors.length === 0, errors };
@@ -98,12 +117,15 @@ export function validateByokConfigRefs(config: unknown): ByokRefValidationResult
  *  the user, so it must read in product terms, not raw config paths. */
 const TASK_LABEL: Record<LlmTask, string> = {
     codeReview: 'the Code Review model',
+    codeReviewHeavy: 'the Heavy Code Review model',
+    riskAssessment: 'the Risk Assessment model',
     kodyRulesReview: 'the Kody Rules review model',
     ruleGeneration: 'the Kody Rules generation model',
     businessValidation: 'the Business Rules validation model',
     prSummary: 'the PR Summary model',
     conversation: 'the Chat model',
     customAgent: 'the Custom Agents model',
+    securityScan: 'the Deep scan model',
 };
 
 /**
@@ -137,6 +159,10 @@ export function findModelReferences(
         if (id === modelId) {
             refs.push(TASK_LABEL[task] ?? `the ${task} model`);
         }
+    }
+    const ultraIndex = (routing.ultraModelIds ?? []).indexOf(modelId);
+    if (ultraIndex >= 0) {
+        refs.push(`Ultra review model ${ultraIndex + 1}`);
     }
 
     return refs;

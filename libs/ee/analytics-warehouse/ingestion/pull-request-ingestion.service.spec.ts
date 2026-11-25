@@ -292,8 +292,77 @@ describe('PullRequestIngestionService (deterministic logic)', () => {
                 new Date('2026-05-05T10:00:00.000Z'), // createdAt (parsed)
                 ['r1', 'r2'], // brokenKodyRulesIds (array kept)
                 JSON.stringify(suggestion), // raw
+                null, // implementation check outcome (never checked)
             ]);
         });
+
+        it('counts as decided a suggestion an earlier check decided, even when the last one could not', async () => {
+            const pr = {
+                _id: 'PR_D',
+                files: [
+                    {
+                        path: 'a.ts',
+                        suggestions: [
+                            {
+                                id: 's',
+                                implementationStatus: 'not_implemented',
+                                implementationCheck: {
+                                    checkedAt: '2026-11-07T00:00:00.000Z',
+                                    outcome: 'unmeasured',
+                                    reason: 'llm_error',
+                                    verdict: 'not_implemented',
+                                },
+                            },
+                        ],
+                    },
+                ],
+                commits: [],
+            };
+            const manager = makeManager();
+
+            await writeOnePR(pr, manager);
+
+            const [, params] = manager.query.mock.calls.find(([q]) =>
+                q.includes('INSERT INTO "analytics"."suggestions_mv"'),
+            );
+            expect(params[12]).toBe('decided');
+        });
+
+        it.each(['decided', 'unmeasured'])(
+            "carries the last implementation check's outcome (%s)",
+            async (outcome) => {
+                const pr = {
+                    _id: 'PR_C',
+                    files: [
+                        {
+                            path: 'a.ts',
+                            suggestions: [
+                                {
+                                    id: 's',
+                                    implementationStatus: 'not_implemented',
+                                    implementationCheck: {
+                                        checkedAt: '2026-11-07T00:00:00.000Z',
+                                        outcome,
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    commits: [],
+                };
+                const manager = makeManager();
+
+                await writeOnePR(pr, manager);
+
+                const [sql, params] = manager.query.mock.calls.find(([q]) =>
+                    q.includes('INSERT INTO "analytics"."suggestions_mv"'),
+                );
+                expect(params[12]).toBe(outcome);
+                expect(sql).toContain(
+                    '"suggestionImplementationCheckOutcome" = EXCLUDED."suggestionImplementationCheckOutcome"',
+                );
+            },
+        );
 
         it('falls back to file.filename when file.path is absent', async () => {
             const pr = {

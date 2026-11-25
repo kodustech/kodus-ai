@@ -1,27 +1,24 @@
 ---
-title: "Groq Cloud - Inferencia Ultra Rápida"
+title: "Groq Cloud"
 description: "Aprende cómo usar los modelos de Groq con Kodus"
 icon: "bolt"
 ---
 
 ## Cómo funciona Groq
 
-Groq Cloud proporciona inferencia rápida de LLM con APIs compatibles con OpenAI. Diseñado para la velocidad y simplicidad, Groq ofrece inferencia ultrarrápida para modelos populares como Llama, Deepseek y más. La plataforma está diseñada para ser sencilla de integrar y fácil de escalar, lo que la hace perfecta para aplicaciones en producción.
+Groq Cloud sirve modelos abiertos a través de una API **compatible con OpenAI**. Kodus se comunica con ella mediante el proveedor compatible con OpenAI, por lo que no hay cambios de código, solo credenciales BYOK.
 
 ## Modelos recomendados
 
-Recomendamos buenos modelos de codificación con ventanas de contexto amplias e inferencia rápida.
-
 <Info>
-  Para la información más actualizada, visita la [página de modelos de Groq](https://console.groq.com/docs/models).
+  El catálogo de Groq cambia con frecuencia. Consulta la [página de modelos de Groq](https://console.groq.com/docs/models) para ver los modelos de producción actuales, ventanas de contexto, precios y límites.
 </Info>
 
-| Modelo                              | Ventana de contexto | Velocidad     |
-| ---------------------------------- | -------------- | --------- |
-| **Llama 3.3 70B Versatile** `recommended` | ~128k tokens   | Ultra rápida |
-| **Deepseek R1 Distill Llama 70B** | ~128k tokens   | Ultra rápida |
-| **Llama 3.1 70B Versatile**       | ~128k tokens   | Ultra rápida |
+| ID del modelo | Ventana de contexto |
+| ------------- | ------------------- |
+| `openai/gpt-oss-120b` | 131,072 tokens |
 
+Los agentes de revisión de Kodus llaman a herramientas y esperan salida estructurada. La página de Groq para este modelo indica uso de herramientas y modo JSON Schema. Verifica ambos en cualquier otro modelo antes de cambiar.
 
 ## Crear clave de API
 
@@ -31,139 +28,78 @@ Ve directamente a la [página de claves de API de Groq](https://console.groq.com
 
 O sigue estos pasos:
 
-1. Ve a la [Consola de Groq](https://console.groq.com)
+1. Ve a la [consola de Groq](https://console.groq.com)
 2. Inicia sesión o crea tu cuenta
-3. Navega a "API Keys" en la navegación superior
-4. Haz clic en el botón "Create API Key"
+3. Abre **API Keys**
+4. Haz clic en **Create API Key**
 5. Dale un nombre como 'Kodus' o cualquier nombre descriptivo
 6. Copia la clave de API y guárdala en un lugar seguro
 
 <Info>
-  Solo los propietarios del equipo o los usuarios con el rol de desarrollador pueden crear o gestionar claves de API en Groq.
+  Solo los propietarios del equipo o los usuarios con el rol de desarrollador pueden crear o administrar claves de API en Groq.
 </Info>
 
-## Cómo usar
+## Configurar Groq en Kodus
 
-<Snippet file="deploy-basic-setup.mdx" />
+### Opción 1 — Página AI providers (recomendado)
 
-### Configura Groq en el archivo de entorno
+Sigue [Conectar un proveedor](/es/how_to_use/byok#conectar-un-proveedor) y elige **Custom → OpenAI-compatible**. Usa estos valores en el formulario.
 
-Edita tu archivo `.env` y configura los ajustes principales. Para la **Integración con LLM**, usa Groq en Modo Fijo:
+| Campo | Valor |
+| --- | --- |
+| **Key** (en la tarjeta **API key**) | tu clave de API de Groq |
+| **Base URL** | `https://api.groq.com/openai/v1` |
+| **Model** | `openai/gpt-oss-120b` |
+| **Max concurrent requests** | opcional; en **Advanced (optional)**, expande **Advanced settings**; redúcelo si ves errores de límite de velocidad |
 
-```env
-# Core System Settings (update with your domains)
-WEB_HOSTNAME_API="kodus-api.yourdomain.com"    
-WEB_PORT_API=443                               
-NEXTAUTH_URL="https://kodus-web.yourdomain.com"
-
-# Security Keys (generate with openssl commands above)
-WEB_NEXTAUTH_SECRET="your-generated-secret"
-API_CRYPTO_KEY="your-generated-hex-key"
-API_JWT_SECRET="your-generated-secret"
-API_JWT_REFRESH_SECRET="your-generated-secret"
-
-# Database Configuration
-API_PG_DB_PASSWORD="your-secure-db-password"
-API_MG_DB_PASSWORD="your-secure-db-password"
-
-# Groq Configuration (Fixed Mode) 
-API_LLM_PROVIDER_MODEL="llama-3.3-70b-versatile"             # Choose your preferred model
-API_OPENAI_FORCE_BASE_URL="https://api.groq.com/openai/v1"   # Groq API URL
-API_OPEN_AI_API_KEY="your-groq-api-key"                      # Your Groq API Key
-
-# Git Provider Webhooks (choose your provider)
-API_GITHUB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/github/webhook"
-# or API_GITLAB_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/gitlab/webhook"
-# or GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK="https://kodus-api.yourdomain.com/bitbucket/webhook"
-```
+Haz clic en **Test & save** y elige el modelo predeterminado y de respaldo en [Routing](/es/how_to_use/code_review/configs/routing).
 
 <Note>
-  Las URLs de webhook deben alcanzar el servicio de Webhooks (puerto 3332). Usa un dominio dedicado para webhooks o enruta `/.../webhook` al puerto 3332 en tu proxy inverso.
+  Usa la URL base sin `/chat/completions`. Define un modelo de otro proveedor como **Fallback model** para que las revisiones sigan funcionando si Groq te aplica un límite de velocidad.
 </Note>
 
-<Info>
-  **El Modo Fijo es ideal para Groq** porque proporciona APIs compatibles con OpenAI con inferencia ultrarrápida. Esto te da el mejor rendimiento con una configuración sencilla.
-</Info>
+### Opción 2 — Alojamiento autónomo (variables de entorno)
 
-<Snippet file="deploy-installation.mdx" />
+Para darle un modelo a una instancia con alojamiento autónomo mediante `.env`:
 
-### Configura el proxy inverso (para producción)
-
-Para webhooks y acceso externo, configura Nginx:
-
-```nginx
-# Web App (port 3000)
-server {
-    listen 80;
-    server_name kodus-web.yourdomain.com;
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-
-# API (port 3001)  
-server {
-    listen 80;
-    server_name kodus-api.yourdomain.com;
-    location ~ ^/(github|gitlab|bitbucket|azure-repos)/webhook {
-        proxy_pass http://localhost:3332;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location / {
-        proxy_pass http://localhost:3001;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="openai/gpt-oss-120b"
+API_LLM_BASE_URL="https://api.groq.com/openai/v1"
+API_LLM_API_KEY="your-groq-api-key"
 ```
 
-### Verifica la integración con Groq
+Sigue la guía de instalación para [aplicar el cambio de modelo](/es/how_to_deploy/deploy_kodus/generic_vm#aplicar-cambios-en-el-modelo).
 
-Además de la verificación básica de instalación, confirma que Groq está funcionando:
-
-```bash
-# Verify Groq API connection specifically
-docker-compose logs api worker | grep -i groq
-```
-
-<Tip>
-  Para información detallada sobre la configuración de SSL, monitoreo y configuraciones avanzadas, consulta nuestra [guía de despliegue completa](https://docs.kodus.io/es/how_to_deploy/deploy_kodus/generic_vm).
-</Tip>
-
-### Solución de problemas
+## Solución de problemas
 
 <AccordionGroup>
   <Accordion title="Problemas con la clave de API">
-    - Verifica que tu clave de API sea correcta y esté activa en la [Consola de Groq](https://console.groq.com/keys)
-    - Comprueba si tienes créditos o cuota suficientes en tu cuenta de Groq
-    - Asegúrate de que no haya espacios adicionales en tu archivo `.env`
+    - Verifica que tu clave de API sea correcta y esté activa en la [consola de Groq](https://console.groq.com/keys)
+    - Comprueba que tu plan de Groq pueda usar el modelo que elegiste
+    - Asegúrate de que no haya espacios al final ni comillas en el valor del `.env`
   </Accordion>
-  
+
   <Accordion title="Modelo no encontrado">
-    - Verifica que el nombre del modelo esté escrito correctamente en tu configuración
-    - Confirma que el modelo esté disponible en la lista de modelos actual de Groq
-    - Prueba con un modelo diferente de nuestra lista recomendada
+    - Comprueba que el ID del modelo esté escrito exactamente como en la página de modelos de Groq
+    - Verifica que el modelo esté en la lista actual de modelos de Groq; los modelos se retiran con el tiempo
+    - Groq retiró `llama-3.3-70b-versatile` y `llama-3.1-8b-instant` para los planes Free y Developer el 16 de agosto de 2026. Los contratos Enterprise no se ven afectados. Consulta las [deprecaciones](https://console.groq.com/docs/deprecations) de Groq
   </Accordion>
-  
+
   <Accordion title="Errores de conexión">
     - Verifica que tu servidor tenga acceso a internet para alcanzar `api.groq.com`
     - Comprueba si hay restricciones de firewall
-    - Revisa los logs de la API/worker para mensajes de error detallados
+    - Revisa los registros de la API y del worker para ver el error upstream exacto
   </Accordion>
-  
+
   <Accordion title="Límite de velocidad">
-    - Groq tiene límites de velocidad basados en tu plan
-    - Consulta la [documentación de límites de velocidad de Groq](https://console.groq.com/docs/rate-limits)
-    - Considera actualizar tu plan para obtener límites más altos
+    - Groq devuelve HTTP 429 cuando se excede un límite, y los límites dependen de tu plan
+    - Consulta los límites exactos de tu organización en la página Limits de tu cuenta de Groq ([console.groq.com/settings/limits](https://console.groq.com/settings/limits)) y en la [documentación de límites de velocidad de Groq](https://console.groq.com/docs/rate-limits)
+    - Reduce **Max concurrent requests** en el modelo, o mejora tu plan
   </Accordion>
 </AccordionGroup>
+
+## Relacionado
+
+- [Modelos de Groq](https://console.groq.com/docs/models)
+- [Resumen de BYOK](/es/how_to_use/byok)

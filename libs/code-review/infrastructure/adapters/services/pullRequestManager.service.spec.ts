@@ -19,6 +19,7 @@ type CodeMgmtStub = {
     getCommitsForPullRequestForCodeReview: jest.Mock;
     getChangedFilesSinceLastCommit: jest.Mock;
     getFilesByPullRequestId: jest.Mock;
+    getPullRequestFilesAtCommit: jest.Mock;
     getRepositoryContentBatch: jest.Mock;
     getRepositoryContentFile: jest.Mock;
 };
@@ -31,6 +32,7 @@ function makeService(): {
         getCommitsForPullRequestForCodeReview: jest.fn(),
         getChangedFilesSinceLastCommit: jest.fn(),
         getFilesByPullRequestId: jest.fn(),
+        getPullRequestFilesAtCommit: jest.fn(),
         getRepositoryContentBatch: jest.fn(),
         getRepositoryContentFile: jest.fn(),
     };
@@ -249,7 +251,7 @@ describe('PullRequestHandlerService.getChangedFilesMetadata', () => {
             organizationAndTeamData: orgData,
             repository,
             prNumber: 42,
-            lastCommit: 'last-sha',
+            lastCommit: { sha: 'last-sha' },
         });
         expect(
             codeManagementService.getFilesByPullRequestId,
@@ -281,20 +283,27 @@ describe('PullRequestHandlerService.getChangedFilesMetadata', () => {
         ).not.toHaveBeenCalled();
     });
 
-    it('returns [] when the fetch resolves null (lastCommit path)', async () => {
+    it('throws when the fetch resolves null and no fallback reads any file (lastCommit path)', async () => {
         const { service, codeManagementService } = makeService();
         codeManagementService.getChangedFilesSinceLastCommit.mockResolvedValue(
             null,
         );
-
-        const result = await (service as any).getChangedFilesMetadata(
-            orgData,
-            repository,
-            pullRequest,
-            'last-sha',
+        codeManagementService.getPullRequestFilesAtCommit.mockResolvedValue(
+            null,
         );
+        codeManagementService.getFilesByPullRequestId.mockResolvedValue([]);
 
-        expect(result).toEqual([]);
+        await expect(
+            (service as any).getChangedFilesMetadata(
+                orgData,
+                repository,
+                pullRequest,
+                'last-sha',
+            ),
+        ).rejects.toThrow('PR#42');
+        expect(
+            codeManagementService.getPullRequestFilesAtCommit,
+        ).toHaveBeenCalledTimes(1);
     });
 
     it('returns [] when the fetch resolves undefined (no-lastCommit path)', async () => {
@@ -649,5 +658,70 @@ describe('PullRequestHandlerService.enrichFilesWithContent', () => {
                 [file],
             ),
         ).rejects.toBeInstanceOf(TypeError);
+    });
+});
+
+describe('PullRequestHandlerService.getChangedFiles', () => {
+    // The implementation check reads these files; a deleted one is left out
+    // of them, so it is named apart.
+    it('names the files the diff removed, and returns the others', async () => {
+        const { service, codeManagementService } = makeService();
+        codeManagementService.getFilesByPullRequestId.mockResolvedValue([
+            { filename: 'app/a.rb', status: 'modified', patch: '@@ a @@' },
+            { filename: 'app/b.rb', status: 'removed', patch: '@@ b @@' },
+        ]);
+        codeManagementService.getRepositoryContentFile.mockResolvedValue({
+            data: { content: 'a', encoding: 'utf-8' },
+        });
+        const onRemovedFiles = jest.fn();
+
+        const files = await service.getChangedFiles(
+            orgData,
+            repository,
+            pullRequest,
+            [],
+            undefined,
+            undefined,
+            { onRemovedFiles },
+        );
+
+        expect(onRemovedFiles).toHaveBeenCalledWith(['app/b.rb']);
+        expect(files.map((file) => file.filename)).toEqual(['app/a.rb']);
+    });
+
+    it('asks the host for files removed since the review only when the caller wants them', async () => {
+        const { service, codeManagementService } = makeService();
+        codeManagementService.getChangedFilesSinceLastCommit.mockResolvedValue([
+            { filename: 'app/a.rb', status: 'modified', patch: '@@ a @@' },
+            { filename: 'app/new.rb', status: 'removed', patch: '@@ n @@' },
+        ]);
+        codeManagementService.getRepositoryContentFile.mockResolvedValue({
+            data: { content: 'a', encoding: 'utf-8' },
+        });
+        const onRemovedFiles = jest.fn();
+
+        const files = await service.getChangedFiles(
+            orgData,
+            repository,
+            pullRequest,
+            [],
+            'reviewed-sha',
+            undefined,
+            { onRemovedFiles },
+        );
+        await service.getChangedFiles(
+            orgData,
+            repository,
+            pullRequest,
+            [],
+            'reviewed-sha',
+        );
+
+        const [[withRemoved], [without]] =
+            codeManagementService.getChangedFilesSinceLastCommit.mock.calls;
+        expect(withRemoved.keepRemovedFiles).toBe(true);
+        expect(without.keepRemovedFiles).toBeUndefined();
+        expect(onRemovedFiles).toHaveBeenCalledWith(['app/new.rb']);
+        expect(files.map((file) => file.filename)).toEqual(['app/a.rb']);
     });
 });

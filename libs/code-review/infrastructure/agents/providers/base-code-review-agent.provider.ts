@@ -29,7 +29,7 @@ import {
     listsRepoInstructions,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
-import { resolveContextWindow } from '@libs/llm/model-context-window';
+import { resolveContextWindowWithSource } from '@libs/llm/model-context-window';
 import {
     buildPathMismatchWarning,
     buildVerifyUnavailableWarning,
@@ -56,14 +56,24 @@ import {
     type AgentModelParams,
     type ResolvedAgentModel,
 } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
-import type { NormalizedModel } from '@libs/llm/byok-config';
+import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import { providerErrorFromResult } from '@libs/code-review/infrastructure/agents/collaborators/provider-error';
+import {
+    SPECIALISTS_CATEGORY,
+    finishedSpecialists,
+    keptByLensTotal,
+    runningSpecialists,
+} from '@libs/code-review/infrastructure/agents/collaborators/specialist-agents';
 import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
 import { AgentProgressReporter } from '@libs/code-review/infrastructure/agents/collaborators/agent-progress-reporter';
 import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
+import { sandboxBaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 import { renderKnowledgeSection } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-prompt';
 import { buildKnowledgeTools } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
+import type { BaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
+import type { ResolvedKnowledge } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-resolver';
+import { parseKnowledgeSourcePath } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
 
 /** Tools an agent adds to its run, and how to release them afterwards. */
@@ -150,6 +160,12 @@ export abstract class BaseCodeReviewAgentProvider {
         return false;
     }
 
+    /** Whether heavy mode runs the M3 lenses next to this agent. Only the
+     *  generalist: its findings are the ones the lenses complement. */
+    protected runsHeavyLenses(): boolean {
+        return false;
+    }
+
     protected getAllowedSuggestionLabels(
         _input: ReviewAgentInput,
     ): ReviewFindingLabel[] {
@@ -174,12 +190,32 @@ export abstract class BaseCodeReviewAgentProvider {
     /**
      * The run's model and, when the agent checks its findings on a model of
      * its own, the check slot (#2172). The built-in agents route `codeReview`
-     * and verify on the same model.
+     * — `codeReviewHeavy` for the agent that runs the lenses in a heavy
+     * review — and verify on the same model.
      */
     protected async resolveModels(
         input: ReviewAgentInput,
     ): Promise<ResolvedAgentModel & { checkByokConfig?: NormalizedModel }> {
-        return resolveReviewAgentModel(input, this.permissionValidationService);
+        return resolveReviewAgentModel(
+            input,
+            this.permissionValidationService,
+            this.runsHeavyLenses() && input.heavy
+                ? LLM_TASK.codeReviewHeavy
+                : LLM_TASK.codeReview,
+        );
+    }
+
+    /**
+     * Run settings that depend on the resolved model, applied once it is
+     * known. Unchanged for every agent but the generalist. Must be idempotent:
+     * a chunked review runs execute again on each batch.
+     */
+    protected applyModelSettings(
+        input: ReviewAgentInput,
+        _modelName: string,
+        _byokConfig?: NormalizedModel,
+    ): ReviewAgentInput {
+        return input;
     }
 
     /**
@@ -285,6 +321,18 @@ export abstract class BaseCodeReviewAgentProvider {
             agentReplicaIndex: input.agentReplicaIndex,
             agentReplicaTotal: input.agentReplicaTotal,
         });
+        // Heavy mode's lenses report as one "Specialist Agents" entry: once
+        // when they start, once when the agent finishes.
+        const specialistsProgress = new AgentProgressReporter(
+            input.onAgentProgress,
+            {
+                agentName: identity.name,
+                agentCategory: SPECIALISTS_CATEGORY,
+                agentReplicaIndex: input.agentReplicaIndex,
+                agentReplicaTotal: input.agentReplicaTotal,
+            },
+        );
+        let specialistsStarted = false;
 
         this.agentLogger.debug({
             message: `[AGENT] Starting ${identity.name} for PR#${input.prNumber}`,
@@ -315,13 +363,34 @@ export abstract class BaseCodeReviewAgentProvider {
             context: identity.name,
         });
 
+        input = this.applyModelSettings(input, modelName, byokConfig);
+
         // Check if the estimated prompt exceeds the context window budget
         // and needs chunking. The measurement accounts for diff + callGraph
         // + PR context + coverage list + static overhead (system prompt +
         // tool schemas) — not just the diff.
-        const contextWindow = resolveContextWindow({
-            byokMaxInputTokens: mainModel.maxInputTokens,
-            modelName,
+        // Looked up by the bare model id: the `provider:model` label misses the
+        // mirror's exact and normalized keys.
+        const windowModelId = mainModel.modelId ?? modelName;
+        const { tokens: contextWindow, source: contextWindowSource } =
+            resolveContextWindowWithSource({
+                byokMaxInputTokens: mainModel.maxInputTokens,
+                modelName: windowModelId,
+            });
+        // The window is otherwise invisible: a model the mirror does not know
+        // gets the 128k default with no error, and the review plans against it.
+        this.agentLogger.log({
+            message: `[AGENT] ${identity.name} context window: ${contextWindow} tokens for ${modelName}`,
+            context: identity.name,
+            metadata: {
+                organizationId: input.organizationAndTeamData?.organizationId,
+                teamId: input.organizationAndTeamData?.teamId,
+                prNumber: input.prNumber,
+                modelName,
+                modelId: windowModelId,
+                contextWindowTokens: contextWindow,
+                contextWindowSource,
+            },
         });
         // Resolve adaptive-fit profile from the same context window the
         // preflight will check against. Prefer the stage-supplied profile
@@ -430,6 +499,12 @@ export abstract class BaseCodeReviewAgentProvider {
                 (estimatedPromptTokens > promptBudget &&
                     input.reviewMode !== 'deep'));
 
+        // Tiers only where main has them: a PR over the prompt budget or a
+        // small-window model. With tiers, CompletionGatePolicy holds the
+        // result until every critical hunk is read, which on a PR that fits
+        // can run a finder that answers from the diff to its step cap.
+        const shouldTierFiles = shouldFireFilter;
+
         if (shouldFireFilter) {
             const filesBefore = input.changedFiles.length;
             const filteredFiles = applyLargePrAggressiveFilter(
@@ -451,6 +526,7 @@ export abstract class BaseCodeReviewAgentProvider {
                         reviewMode: input.reviewMode,
                     },
                 });
+                estimatedPromptTokens = filteredTokens;
 
                 if (adaptiveProfile.lowSignalFilterUnconditional) {
                     emitWarning(
@@ -470,22 +546,21 @@ export abstract class BaseCodeReviewAgentProvider {
                     });
                 }
             }
+        }
 
+        if (shouldTierFiles) {
             const scores = computeFileScores(
                 input.changedFiles,
                 input.callGraphJson,
             );
             fileTiers = assignFileTiers(scores);
-            // Adaptive fit (`minimal`): force every file to `optional`
-            // so the user prompt renders hunk-headers only (cutting
-            // ~80–90% of diff chars). The agent must readFile each hunk
-            // it cares about — slower per-finding but the only way to
-            // squeeze a multi-file PR into an 8K–16K window.
+            // Adaptive fit (`minimal`): every file is `optional` for the
+            // coverage gate. The prompt still sends full diffs; sending
+            // optional files as hunk headers is #2652.
             if (adaptiveProfile.allOptional) {
                 for (const filename of fileTiers.keys()) {
                     fileTiers.set(filename, 'optional');
                 }
-                emitWarning('HUNK_HEADERS_ONLY');
             }
 
             let criticalCount = 0;
@@ -516,13 +591,10 @@ export abstract class BaseCodeReviewAgentProvider {
                     reviewMode: input.reviewMode,
                 },
             });
-            // Stash so buildUserPrompt and formatDiffs can render tiered
-            // output without recomputing scores.
+            // Feeds the coverage list and the completion gate. Diffs are
+            // sent whole whatever the tier (#2652), so the estimate above
+            // must not discount optional files.
             input = { ...input, fileTiers };
-            // Re-estimate prompt tokens now that optional files will be
-            // rendered as hunk headers only — this often brings a large
-            // PR back under the single-batch budget.
-            estimatedPromptTokens = estimatePromptTokens(input);
         }
 
         if (
@@ -599,8 +671,8 @@ export abstract class BaseCodeReviewAgentProvider {
                     startTime,
                     diffBudget: chunkDiffBudget,
                     // Parent-level warnings emitted before the chunk split
-                    // (PROMPT_COMPACTED, DIFF_TRUNCATED, LOW_SIGNAL_FILES_DROPPED,
-                    // HUNK_HEADERS_ONLY) — forward so they're preserved in the
+                    // (PROMPT_COMPACTED, DIFF_TRUNCATED, LOW_SIGNAL_FILES_DROPPED)
+                    // — forward so they're preserved in the
                     // final aggregate. Each per-batch execute() resolves the
                     // profile again and may emit additional dedup-able copies;
                     // dedupReviewWarnings in the orchestrator folds them.
@@ -651,6 +723,10 @@ export abstract class BaseCodeReviewAgentProvider {
                 verifyByokConfig: checkByokConfig,
                 gitHubToken: input.gitHubToken,
                 linkedRepoAccess: input.linkedRepoAccess,
+                referenceRepositories: knowledgeRepositories(
+                    input.knowledge,
+                    input.knowledgeReader,
+                ),
                 documentationSearchService: this.documentationSearchService,
                 documentationSearchOptions: {
                     organizationAndTeamData: input.organizationAndTeamData,
@@ -725,12 +801,45 @@ export abstract class BaseCodeReviewAgentProvider {
                         input.repoInstructions,
                         this.getAllowedSuggestionLabels(input),
                     ),
+                    allowedLabels: this.getAllowedSuggestionLabels(input),
                     conventionGuides: this.getConventionGuides(input),
+                    // The target branch: the knowledge reader, else the
+                    // sandbox's fetched base ref through sandbox.run (a code
+                    // file a convention cites, with no skill or doc linked).
+                    conventionGuideReader:
+                        input.knowledgeReader ??
+                        sandboxBaseBranchReader(
+                            input.customAgentTooling?.sandbox,
+                            input.baseBranch,
+                        ),
                     teamInstructions: this.getTeamInstructions(),
                     laneFocus: this.getLaneFocus(input),
                     ...(agentTools.teamSystemTools?.length && {
                         teamSystemTools: agentTools.teamSystemTools,
                     }),
+                    // Heavy mode (`--heavy`) — forwarded explicitly: loopParams is
+                    // built field-by-field, so without this line the lenses never run.
+                    heavy: this.runsHeavyLenses() && input.heavy,
+                    onHeavyLensesStarted: (labels: string[]) => {
+                        specialistsStarted = true;
+                        specialistsProgress.send({
+                            status: 'started',
+                            specialists: runningSpecialists(
+                                labels,
+                                input.batchIndex,
+                            ),
+                        });
+                    },
+                    // A chunked review runs the lenses per batch: tell them so.
+                    ...(this.runsHeavyLenses() &&
+                        input.heavy &&
+                        input.batchIndex &&
+                        (input.batchTotal ?? 0) > 1 && {
+                            lensBatch: {
+                                index: input.batchIndex,
+                                total: input.batchTotal,
+                            },
+                        }),
                     outlineFirst: input.outlineFirst,
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,
@@ -883,9 +992,30 @@ export abstract class BaseCodeReviewAgentProvider {
                         ? 'max-steps'
                         : 'stop';
 
+            // Each agent counts its own findings: the lenses' leave the
+            // generalist's count and go on the Specialist Agents entry.
+            const lensKept = keptByLensTotal(mapped.keptByLens);
+            if (agentResult.heavyLensOutcomes?.length) {
+                const specialists = finishedSpecialists(
+                    agentResult.heavyLensOutcomes,
+                    mapped.keptByLens,
+                    input.batchIndex,
+                    typeof byokConfig?.provider === 'string'
+                        ? byokConfig.provider
+                        : undefined,
+                );
+                specialistsProgress.send({
+                    status: specialists.every((e) => e.status !== 'success')
+                        ? 'error'
+                        : 'completed',
+                    findings: lensKept,
+                    specialists,
+                });
+            }
+
             progress.send({
                 status: hitHardLimit ? 'error' : 'completed',
-                findings: suggestions.length,
+                findings: mapped.ownSuggestions.length,
                 durationMs,
                 totalTokens: agentResult.usage.totalTokens,
                 step: agentResult.steps,
@@ -894,14 +1024,16 @@ export abstract class BaseCodeReviewAgentProvider {
                 coverage: agentResult.coverage,
                 verification: agentResult.verification,
                 anomalies: agentResult.anomalies,
-                suggestionsPreview: suggestions.slice(0, 10).map((s) => ({
-                    relevantFile: s.relevantFile,
-                    relevantLinesStart: s.relevantLinesStart,
-                    relevantLinesEnd: s.relevantLinesEnd,
-                    oneSentenceSummary: s.oneSentenceSummary,
-                    label: s.label,
-                    severity: s.severity,
-                })),
+                suggestionsPreview: mapped.ownSuggestions
+                    .slice(0, 10)
+                    .map((s) => ({
+                        relevantFile: s.relevantFile,
+                        relevantLinesStart: s.relevantLinesStart,
+                        relevantLinesEnd: s.relevantLinesEnd,
+                        oneSentenceSummary: s.oneSentenceSummary,
+                        label: s.label,
+                        severity: s.severity,
+                    })),
                 toolCalls: agentResult.toolCalls.map((tc) => ({
                     tool: tc.toolName || tc.tool,
                     args: JSON.stringify(tc.args).substring(0, 100),
@@ -957,6 +1089,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 agentReplicaTotal: input.agentReplicaTotal,
                 turnsUsed: agentResult.steps,
                 durationMs,
+                ...(lensKept > 0 && { specialistFindings: lensKept }),
                 // Merge agent-loop-emitted warnings (currently none — the
                 // loop's warnings: [] is the PR1 placeholder) with the
                 // strategy warnings emitted in this provider above.
@@ -987,6 +1120,14 @@ export abstract class BaseCodeReviewAgentProvider {
                 );
             if (error instanceof Error) {
                 attachClassification(error, classification);
+            }
+
+            // The generalist failing stops its lenses (runFinderWithVerify).
+            if (specialistsStarted) {
+                specialistsProgress.send({
+                    status: 'error',
+                    specialistsStoppedByGeneralist: true,
+                });
             }
 
             progress.send({
@@ -1041,7 +1182,12 @@ export abstract class BaseCodeReviewAgentProvider {
             changedFiles: input.changedFiles,
             kodyRules: input.kodyRules,
             prNumber: input.prNumber,
+            organizationId: input.organizationAndTeamData?.organizationId,
+            teamId: input.organizationAndTeamData?.teamId,
             isKodyRules: this.getCategoryLabel() === 'kody_rules',
+            leanOutput:
+                this.getCategoryLabel() !== 'kody_rules' &&
+                this.getConventionGuides(input) === undefined,
             identityName: this.getIdentity().name,
             labelPolicy: {
                 categoryLabel: this.getCategoryLabel(),
@@ -1073,4 +1219,26 @@ export abstract class BaseCodeReviewAgentProvider {
     protected buildUserPrompt(input: ReviewAgentInput): string {
         return buildUserPromptFor(input, this.promptMeta(input));
     }
+}
+
+/** The other repositories an agent's skills and docs come from
+ *  (`owner/repo:path` → `owner/repo`), which readReference may read. */
+export function knowledgeRepositories(
+    knowledge: ResolvedKnowledge | undefined,
+    reader: BaseBranchReader | undefined,
+): string[] {
+    const paths = [
+        ...(knowledge?.skills ?? []).map((skill) => skill.path),
+        ...(knowledge?.docs ?? []).map((doc) => doc.path),
+    ];
+    return [
+        ...new Set(
+            paths
+                // Only what the reader routes to a linked repository: a path
+                // of the reviewed repository can hold a colon too.
+                .filter((path) => reader?.isOtherRepository?.(path))
+                .map((path) => parseKnowledgeSourcePath(path)?.repository)
+                .filter((repository): repository is string => !!repository),
+        ),
+    ];
 }

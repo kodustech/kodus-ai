@@ -12,7 +12,8 @@ import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 import type { LlmTask, NormalizedModel } from '@libs/llm/byok-config';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK } from '@libs/llm/byok-config';
-import { getModelName } from '@libs/llm/byok-to-vercel';
+import { getModelId, getModelName } from '@libs/llm/byok-to-vercel';
+import { overrideContext } from '@libs/llm/routing-strategy';
 
 import type { ReviewAgentInput } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 
@@ -22,6 +23,7 @@ type ModelInput = Pick<
     | 'byokModel'
     | 'byokModelId'
     | 'defaultModelOverride'
+    | 'forcedModel'
 >;
 
 /**
@@ -31,6 +33,8 @@ type ModelInput = Pick<
 export interface AgentModelParams {
     role: 'main';
     modelName: string;
+    /** The bare model id, for lookups keyed by model (the context window). */
+    modelId?: string;
     maxInputTokens?: number;
     reasoningEffort?: ReasoningEffort;
     reasoningConfigOverride?: string;
@@ -66,32 +70,39 @@ export async function resolveReviewAgentModel(
     // `kodyRulesReview` so an org can route it to its own model (it inherits
     // `codeReview` when unset — TASK_ROUTING_FALLBACK).
     task: LlmTask = LLM_TASK.codeReview,
+    // A custom agent's own model id: wins over the repository override while
+    // it resolves, and falls back to it when that model was deleted.
+    pinnedModelId?: string,
 ): Promise<ResolvedAgentModel> {
+    // An Ultra run's model is chosen by the review, not routed per task.
+    if (input.forcedModel) {
+        return {
+            byokConfig: input.forcedModel,
+            main: mainParams(input.forcedModel),
+        };
+    }
+
     // Route the `task` to its slot through the single task→slot entry point owned
     // by the permission service. byokModelId (id) wins over the legacy byokModel
     // NAME; resolveTaskSlot handles the id-THEN-name match, the capability gate,
     // and the null-slot → env/managed default degrade (no BYOK too). No model is
     // BUILT here — LLM.run builds + wraps it from the slot at call time (one door).
-    const overrideRef = input.byokModelId?.trim() || input.byokModel?.trim();
     const slot = await permissionService.resolveTaskSlot(
         input.organizationAndTeamData,
         task,
-        { ctx: overrideRef ? { override: { modelId: overrideRef } } : {} },
+        {
+            ctx: overrideContext(
+                input.byokModelId,
+                input.byokModel,
+                pinnedModelId,
+            ),
+        },
     );
 
     // The MAIN bundle from the routed slot (undefined on a BLOCKED/managed verdict
     // or no BYOK → the env/managed default, whose NAME `defaultModelOverride`
     // still sets). `modelName` is the human `provider:model` label for telemetry.
-    const main: AgentModelParams = {
-        role: 'main',
-        modelName: getModelName(slot, input.defaultModelOverride),
-        maxInputTokens: slot?.maxInputTokens,
-        reasoningEffort: slot?.reasoningEffort,
-        reasoningConfigOverride: slot?.reasoningConfigOverride,
-        byokProvider: slot?.provider,
-        openrouterProviderOrder: (slot as any)?.openrouterProviderOrder,
-        openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
-    };
+    const main = mainParams(slot ?? undefined, input.defaultModelOverride);
 
     // 1 model per task: no fallback slot is resolved or returned. No BYOK →
     // null slot → `undefined` byokConfig (the optional-field contract; callers
@@ -99,4 +110,21 @@ export async function resolveReviewAgentModel(
     const byokConfig = slot ?? undefined;
 
     return { byokConfig, main };
+}
+
+function mainParams(
+    slot: NormalizedModel | undefined,
+    defaultModelOverride?: string,
+): AgentModelParams {
+    return {
+        role: 'main',
+        modelName: getModelName(slot, defaultModelOverride),
+        modelId: getModelId(slot, defaultModelOverride),
+        maxInputTokens: slot?.maxInputTokens,
+        reasoningEffort: slot?.reasoningEffort,
+        reasoningConfigOverride: slot?.reasoningConfigOverride,
+        byokProvider: slot?.provider,
+        openrouterProviderOrder: (slot as any)?.openrouterProviderOrder,
+        openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
+    };
 }

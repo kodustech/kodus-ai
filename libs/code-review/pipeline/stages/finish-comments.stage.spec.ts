@@ -1,5 +1,14 @@
 import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { UpdateCommentsAndGenerateSummaryStage } from './finish-comments.stage';
+import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
+import {
+    attachClassification,
+    classifyLLMError,
+} from '@libs/llm/error-classifier';
+
+/** A failed model call as generateSummaryPR throws it: classified. */
+const modelFailure = (error: Error) =>
+    attachClassification(error, classifyLLMError(error));
 import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 
 /**
@@ -17,6 +26,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
                 .mockResolvedValue('rendered body'),
             updateOverallComment: jest.fn().mockResolvedValue(undefined),
             createComment: jest.fn().mockResolvedValue(undefined),
+            postApprovalReason: jest.fn().mockResolvedValue(undefined),
         } as any;
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
@@ -27,6 +37,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
                     reason: 'no-decisions',
                 }),
             } as any, // postTracePrCommentUseCase
+            {} as any, // codeManagementService — unused when summary is off
         );
         return { stage, commentManagerService };
     };
@@ -122,7 +133,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
             commentManagerService.updateOverallComment,
         ).toHaveBeenCalledTimes(1);
         const args = commentManagerService.updateOverallComment.mock.calls[0];
-        expect(args[args.length - 2]).toEqual(reviewWarnings);
+        expect(args[15]).toEqual(reviewWarnings);
     });
 
     // The stage forwards the warnings from THREE call sites, one per message
@@ -154,7 +165,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
         await (stage as any).executeStage(context);
 
         const args = commentManagerService.updateOverallComment.mock.calls[0];
-        expect(args[args.length - 2]).toEqual(reviewWarnings);
+        expect(args[15]).toEqual(reviewWarnings);
     });
 
     it('forwards context.reviewWarnings on the createComment branch (KRC-16)', async () => {
@@ -188,7 +199,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
 
         expect(commentManagerService.createComment).toHaveBeenCalledTimes(1);
         const args = commentManagerService.createComment.mock.calls[0];
-        expect(args[args.length - 1]).toEqual(reviewWarnings);
+        expect(args[15]).toEqual(reviewWarnings);
     });
 });
 
@@ -201,6 +212,7 @@ describe('UpdateCommentsAndGenerateSummaryStage - Trace pack forwarding', () => 
             {} as any,
             {} as any,
             postTrace as any,
+            {} as any,
         );
         const selected = [
             {
@@ -259,6 +271,11 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
                 .fn()
                 .mockResolvedValue('rendered body'),
         } as any;
+        const codeManagementService = {
+            getPullRequestByNumber: jest
+                .fn()
+                .mockResolvedValue({ body: 'current description' }),
+        };
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
             {} as any,
@@ -268,8 +285,9 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
                     reason: 'no-decisions',
                 }),
             } as any, // postTracePrCommentUseCase
+            codeManagementService as any,
         );
-        return { stage, commentManagerService };
+        return { stage, commentManagerService, codeManagementService };
     };
 
     const summaryFailContext = () =>
@@ -307,6 +325,11 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         expect(result.errors[0].metadata.reason).toBe(
             'summary_generation_failed',
         );
+        // A summary failure is never 'critical'; as of #1844 it alone no
+        // longer holds back the approve gate (RequestChangesOrApproveStage
+        // excludes SUMMARY_GENERATION_FAILED_REASON), but it stays 'partial'
+        // so one co-occurring with something else still counts there.
+        expect(result.errors[0].severity).toBe('partial');
     });
 
     it('appends to a frozen non-empty errors array without dropping the prior error', async () => {
@@ -332,33 +355,170 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         );
     });
 
-    // The recorded error still has severity 'partial' — a summary failure is
-    // never 'critical' — but as of #1844 this alone no longer holds back the
-    // approve gate (RequestChangesOrApproveStage excludes
-    // SUMMARY_GENERATION_FAILED_REASON specifically); severity stays 'partial'
-    // so a summary failure co-occurring with something else still counts
-    // there. See finish-process-review.stage.spec.ts for the approve-gate
-    // behavior itself.
-    it('marks the summary failure as partial (not critical)', async () => {
-        const { stage } = makeStage();
-
-        const result = await (stage as any).executeStage(summaryFailContext());
-
-        expect(result.errors[0].severity).toBe('partial');
-    });
-
     it('records lastReviewError so the PR comment can name the provider failure', async () => {
         const { stage, commentManagerService } = makeStage();
         commentManagerService.generateSummaryPR.mockRejectedValue(
-            Object.assign(new Error('Path not found: /chat/completions'), {
-                name: 'AI_APICallError',
-                statusCode: 404,
-            }),
+            modelFailure(
+                Object.assign(new Error('Path not found: /chat/completions'), {
+                    name: 'AI_APICallError',
+                    statusCode: 404,
+                }),
+            ),
         );
 
         const result = await (stage as any).executeStage(summaryFailContext());
 
         expect(result.lastReviewError?.friendlyMessage).toBeTruthy();
+    });
+
+    // The model wrote the summary, but the git platform refused to put it on
+    // the PR: a token without write access gets a 403 there. Reading that 403
+    // as an LLM failure reported "The configured API key (google_vertex)
+    // appears invalid or lacks permission" while the model worked fine and the
+    // real cause sat one stage row above.
+    it('does not report a failed write of the summary to the PR as an LLM failure', async () => {
+        const { stage, commentManagerService } = makeStage();
+        commentManagerService.generateSummaryPR.mockResolvedValue('summary');
+        commentManagerService.updateSummarizationInPR.mockRejectedValue(
+            Object.assign(
+                new Error('Resource not accessible by personal access token'),
+                { name: 'HttpError', status: 403 },
+            ),
+        );
+
+        const result = await (stage as any).executeStage(summaryFailContext());
+
+        expect(result.lastReviewError).toBeUndefined();
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0].metadata).toEqual({
+            message: 'Failed to publish summary to the pull request',
+            reason: 'summary_generation_failed',
+        });
+        expect(describePipelineError(result.errors[0]).text).toBe(
+            'Resource not accessible by personal access token',
+        );
+    });
+
+    it('still reads a failed model call of the summary as an LLM failure', async () => {
+        const { stage, commentManagerService } = makeStage();
+        commentManagerService.generateSummaryPR.mockRejectedValue(
+            modelFailure(
+                Object.assign(new Error('Unauthorized'), {
+                    name: 'AI_APICallError',
+                    statusCode: 401,
+                }),
+            ),
+        );
+
+        const result = await (stage as any).executeStage(summaryFailContext());
+
+        expect(result.lastReviewError?.category).toBe('AUTH_INVALID');
+        expect(result.errors[0].metadata.message).toBe(
+            'Failed to generate summary',
+        );
+        expect(
+            commentManagerService.updateSummarizationInPR,
+        ).not.toHaveBeenCalled();
+    });
+
+    // The summary keeps or replaces the PR description, so the stage reads the
+    // current one first. That read is the code host's: a 403 there is not the
+    // model's, and a blip on it should not cost the summary.
+    describe('reading the current PR description', () => {
+        afterEach(() => jest.useRealTimers());
+
+        it('hands the description read now, not the webhook one, to the summary', async () => {
+            const { stage, commentManagerService } = makeStage();
+            commentManagerService.generateSummaryPR.mockResolvedValue(
+                'summary',
+            );
+
+            await (stage as any).executeStage(
+                frozenContext({
+                    ...summaryFailContext(),
+                    pullRequest: { number: 7, body: 'webhook description' },
+                } as any),
+            );
+
+            expect(
+                commentManagerService.generateSummaryPR.mock.calls[0][0],
+            ).toEqual({ number: 7, body: 'current description' });
+        });
+
+        it('keeps the webhook description when the code host returns no PR', async () => {
+            const { stage, commentManagerService, codeManagementService } =
+                makeStage();
+            commentManagerService.generateSummaryPR.mockResolvedValue(
+                'summary',
+            );
+            codeManagementService.getPullRequestByNumber.mockResolvedValue(
+                null,
+            );
+
+            await (stage as any).executeStage(
+                frozenContext({
+                    ...summaryFailContext(),
+                    pullRequest: { number: 7, body: 'Closes #993' },
+                } as any),
+            );
+
+            expect(
+                commentManagerService.generateSummaryPR.mock.calls[0][0].body,
+            ).toBe('Closes #993');
+        });
+
+        it('reports a refused read as the code host failure and never calls the model', async () => {
+            const { stage, commentManagerService, codeManagementService } =
+                makeStage();
+            codeManagementService.getPullRequestByNumber.mockRejectedValue(
+                Object.assign(
+                    new Error('Resource not accessible by integration'),
+                    { name: 'HttpError', status: 403 },
+                ),
+            );
+
+            const result = await (stage as any).executeStage(
+                summaryFailContext(),
+            );
+
+            expect(
+                codeManagementService.getPullRequestByNumber,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                commentManagerService.generateSummaryPR,
+            ).not.toHaveBeenCalled();
+            expect(result.lastReviewError).toBeUndefined();
+            expect(result.errors[0].metadata.message).toBe(
+                'Failed to read the pull request for the summary',
+            );
+            expect(describePipelineError(result.errors[0]).text).toBe(
+                'Resource not accessible by integration',
+            );
+        });
+
+        it('retries a transient 502 from the code host', async () => {
+            jest.useFakeTimers();
+            const { stage, commentManagerService, codeManagementService } =
+                makeStage();
+            commentManagerService.generateSummaryPR.mockResolvedValue(
+                'summary',
+            );
+            codeManagementService.getPullRequestByNumber
+                .mockRejectedValueOnce(
+                    Object.assign(new Error('Bad Gateway'), { status: 502 }),
+                )
+                .mockResolvedValue({ body: 'current description' });
+
+            const run = (stage as any).executeStage(summaryFailContext());
+            await jest.runAllTimersAsync();
+            const result = await run;
+
+            expect(
+                codeManagementService.getPullRequestByNumber,
+            ).toHaveBeenCalledTimes(2);
+            expect(commentManagerService.generateSummaryPR).toHaveBeenCalled();
+            expect(result.errors).toHaveLength(0);
+        });
     });
 
     it('does NOT flag reviewHasPartialErrors for a summary-only failure (#1844)', async () => {
@@ -425,6 +585,10 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
             {} as any,
+            {} as any,
+            {
+                getPullRequestByNumber: jest.fn().mockResolvedValue({}),
+            } as any,
         );
 
         const ctx = frozenContext({
@@ -490,5 +654,238 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         expect(commentManagerService.generateSummaryPR).toHaveBeenCalledTimes(
             1,
         );
+    });
+});
+
+describe('UpdateCommentsAndGenerateSummaryStage - Ultra review notice', () => {
+    const makeStage = () => {
+        const commentManagerService = {
+            processEndReviewMessageTemplate: jest
+                .fn()
+                .mockResolvedValue('rendered body'),
+            updateOverallComment: jest.fn().mockResolvedValue(undefined),
+            createComment: jest.fn().mockResolvedValue(undefined),
+        } as any;
+        const codeManagementService = {
+            createIssueComment: jest.fn().mockResolvedValue({ id: 1 }),
+        } as any;
+        const stage = new UpdateCommentsAndGenerateSummaryStage(
+            commentManagerService,
+            {} as any,
+            {
+                execute: jest.fn().mockResolvedValue({
+                    action: 'skipped',
+                    reason: 'no-decisions',
+                }),
+            } as any,
+            codeManagementService,
+        );
+        return { stage, commentManagerService, codeManagementService };
+    };
+
+    const model = (position: any, modelId: string) => ({
+        position,
+        modelId,
+        modelName: `openai:${modelId}`,
+        slot: {} as any,
+    });
+    const ultra = (
+        outcome: 'success' | 'degraded' | 'failed',
+        runs: any[],
+    ) => ({
+        models: [model(1, 'a'), model(2, 'b'), model(3, 'c')],
+        fallback: model('fallback', 'f'),
+        mergeModel: model(1, 'a'),
+        runs,
+        merge: { status: 'success', inputCount: 3, outputCount: 2 },
+        outcome,
+    });
+    const run = (position: any, id: string, status: string, extra = {}) => ({
+        position,
+        modelId: id,
+        modelName: `openai:${id}`,
+        status,
+        ...extra,
+    });
+
+    const context = (
+        endStatus: PullRequestMessageStatus | undefined,
+        ultraState: any,
+        over: Record<string, unknown> = {},
+    ) =>
+        frozenContext({
+            lastExecution: { uuid: 'previous' },
+            errors: [],
+            codeReviewConfig: { languageResultPrompt: 'en-US' },
+            repository: { id: 'r', name: 'ledger' },
+            pullRequest: { number: 7 },
+            organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+            initialCommentData: { commentId: 1, noteId: 2, threadId: 3 },
+            changedFiles: [],
+            lineComments: [],
+            ultra: ultraState,
+            pullRequestMessagesConfig: endStatus
+                ? {
+                      startReviewMessage: {
+                          status: PullRequestMessageStatus.ACTIVE,
+                          content: 'Review started',
+                      },
+                      endReviewMessage: {
+                          status: endStatus,
+                          content: 'All good!',
+                      },
+                  }
+                : undefined,
+            ...over,
+        }) as any;
+
+    const degraded = ultra('degraded', [
+        run(1, 'a', 'completed'),
+        run(2, 'b', 'failed', {
+            failureReason: 'The key (openai) appears invalid.',
+            replacedBy: 'f',
+        }),
+        run(3, 'c', 'completed'),
+        run('fallback', 'f', 'failed', { failureReason: 'Timed out.' }),
+    ]);
+
+    it.each([
+        ['off', PullRequestMessageStatus.OFF],
+        ['inactive', PullRequestMessageStatus.INACTIVE],
+        [
+            'only when opened, on a later push',
+            PullRequestMessageStatus.ONLY_WHEN_OPENED,
+        ],
+        ['a custom template', PullRequestMessageStatus.ACTIVE],
+        ['the default message', undefined],
+    ])(
+        'posts the degraded notice as its own comment with the final comment %s',
+        async (_, status) => {
+            const { stage, codeManagementService } = makeStage();
+            await stage.execute(context(status as any, degraded));
+
+            expect(
+                codeManagementService.createIssueComment,
+            ).toHaveBeenCalledTimes(1);
+            const body: string =
+                codeManagementService.createIssueComment.mock.calls[0][0].body;
+            expect(body).toContain('## Ultra review did not run as configured');
+            expect(body).toContain(
+                'Model 2 (`openai:b`) failed: The key (openai) appears invalid. The fallback `openai:f` took its place and failed too: Timed out.',
+            );
+            expect(body).toContain('2 of 3 models completed');
+            expect(body).toContain('Automatic approval is held');
+            expect(body).toContain('/pull-requests?repo=ledger&q=7&by=number');
+        },
+    );
+
+    it('posts no notice for a successful Ultra review, and adds the fallback line to the final comment', async () => {
+        const { stage, codeManagementService, commentManagerService } =
+            makeStage();
+        await stage.execute(
+            context(
+                undefined,
+                ultra('success', [
+                    run(1, 'a', 'completed'),
+                    run(2, 'b', 'failed', { replacedBy: 'f' }),
+                    run(3, 'c', 'completed'),
+                    run('fallback', 'f', 'completed'),
+                ]),
+            ),
+        );
+
+        expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
+        const args = commentManagerService.updateOverallComment.mock.calls[0];
+        expect(args.at(-1)).toBe(
+            '> Ultra review: `openai:b` failed, and the fallback `openai:f` took its place.',
+        );
+    });
+
+    it('adds the fallback line when the final comment is a new one (start message off)', async () => {
+        const { stage, commentManagerService } = makeStage();
+        await stage.execute(
+            context(
+                undefined,
+                ultra('success', [
+                    run(1, 'a', 'completed'),
+                    run(2, 'b', 'failed', { replacedBy: 'f' }),
+                    run(3, 'c', 'completed'),
+                    run('fallback', 'f', 'completed'),
+                ]),
+                {
+                    pullRequestMessagesConfig: {
+                        startReviewMessage: {
+                            status: PullRequestMessageStatus.OFF,
+                        },
+                        endReviewMessage: {
+                            status: PullRequestMessageStatus.ACTIVE,
+                            content: 'All good!',
+                        },
+                    },
+                },
+            ),
+        );
+
+        const args = commentManagerService.createComment.mock.calls[0];
+        expect(args.at(-1)).toBe(
+            '> Ultra review: `openai:b` failed, and the fallback `openai:f` took its place.',
+        );
+    });
+
+    it('posts nothing for a review that is not Ultra', async () => {
+        const { stage, codeManagementService, commentManagerService } =
+            makeStage();
+        await stage.execute(context(undefined, undefined));
+        expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
+        expect(
+            commentManagerService.updateOverallComment.mock.calls[0].at(-1),
+        ).toBeUndefined();
+    });
+
+    it('says the partial comments were posted when no model completed', async () => {
+        const { stage, codeManagementService } = makeStage();
+        await stage.execute(
+            context(
+                undefined,
+                ultra('failed', [
+                    run(1, 'a', 'failed', {
+                        failureReason: 'Down.',
+                        findings: 2,
+                    }),
+                    run(2, 'b', 'failed', { failureReason: 'Down.' }),
+                    run(3, 'c', 'failed', { failureReason: 'Down.' }),
+                ]),
+            ),
+        );
+        const body: string =
+            codeManagementService.createIssueComment.mock.calls[0][0].body;
+        expect(body).toContain(
+            'No model completed. The comments the models found before they stopped were posted.',
+        );
+    });
+
+    it('posts the notice again when the code host took nothing, as most adapters report a failure', async () => {
+        const { stage, codeManagementService } = makeStage();
+        codeManagementService.createIssueComment
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({ id: 1 });
+        await stage.execute(context(undefined, degraded));
+        expect(codeManagementService.createIssueComment).toHaveBeenCalledTimes(
+            2,
+        );
+        const retried: string =
+            codeManagementService.createIssueComment.mock.calls[1][0].body;
+        expect(retried).toContain('## Ultra review did not run as configured');
+        expect(retried).toContain('Automatic approval is held');
+    }, 15_000);
+
+    it('a failed notice post does not fail the stage', async () => {
+        const { stage, codeManagementService, commentManagerService } =
+            makeStage();
+        codeManagementService.createIssueComment.mockRejectedValue(
+            new Error('502'),
+        );
+        await stage.execute(context(undefined, degraded));
+        expect(commentManagerService.updateOverallComment).toHaveBeenCalled();
     });
 });

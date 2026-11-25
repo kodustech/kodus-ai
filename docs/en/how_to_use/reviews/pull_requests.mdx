@@ -1,0 +1,62 @@
+---
+title: "Pull requests"
+description: "Follow every Kody review, filter by outcome, and open the findings on any pull request."
+---
+
+**Reviews → Pull requests** lists the pull requests Kody has run on, with the outcome of each review. It is open to Owners, Repo Admins and Contributors on every plan, and it updates while reviews run. The **CLI** tab next to it lists [CLI reviews](/en/how_to_use/reviews/cli_reviews).
+
+## The list
+
+Each row is one pull request. A PR reviewed more than once is a single row.
+
+| Column | What it shows |
+| --- | --- |
+| **Pull request** | Number, title, repository, source branch, when it was opened and the author. The title opens the review screen; the arrow icon opens the PR on your Git provider |
+| **Reviews** | How many times Kody reviewed the PR and how recently |
+| **Suggestions** | Two counts: delivered on the PR (check icon) and held back by your review configuration (filter icon) |
+| **Status** | The latest review: **Success**, **Review failed**, **In Progress**, **Skipped**, **Partial Error** or **Pending**. **Merged** replaces it once the PR is merged |
+
+Click a row to expand it. It lists each review of the PR with its status, duration, the commit it reviewed, and a timeline of the stages it ran. **Open full review** opens the review screen.
+
+When the review records its mode, each run shows a **Balanced** or **Heavy** badge. The PR row shows the mode of the most recent run that reviewed the PR. For Heavy runs with specialist data, expand **Specialist Agents** in the timeline to see each agent’s duration, tool calls, findings and any recorded failure reason. **Findings** counts items kept after verification, before duplicates are removed. This timeline detail was added after self-hosted 2.2.11.
+
+When a review succeeded but worked with less than it should have, for example without a repository checkout or with some Kody Rules not evaluated, the expanded review lists what was lost. These notices appear only here, not on the pull request.
+
+## Shortcuts
+
+Three counters at the top right filter the list when clicked:
+
+- **Reviewed today**: distinct PRs Kody reviewed today (UTC). Add a **Status** filter to narrow it, for example to failed reviews.
+- **Kody skipped**: PRs Kody was triggered on but skipped and never reviewed because of configuration (no license, BYOK, manual or paused cadence, ignored user). It is the current backlog, not a daily number, and it opens its own list.
+- **Needs attention**: open PRs where Kody delivered a suggestion the author hasn't applied yet. It can lag until the next implementation check.
+
+## Filters
+
+Search by **title**, **number** or **author**, then narrow with:
+
+- **Repository**
+- **Authors**: the default hides PRs from authors your review settings exclude; **All authors** shows everyone and **Excluded authors** shows only the excluded
+- **Suggestions**: **Has suggestions** or **No suggestions**
+- **Date**: a range of review dates, from the presets (**Last week**, **Last 15 days**, **Last month**, **Last 3 months**) or custom dates
+- **PR state**: **Open** or **Closed**, the state of the pull request itself
+- **Status**: how the review went (**Success**, **Error**, **Partial error**, **Skipped**, **In progress**, **Pending**)
+
+Active filters show as chips you can remove, and **Clear all** resets them. Filters are kept in the URL, so you can share a filtered view.
+
+## The review screen
+
+Click a PR title to open its **Code Review** screen. It shows the findings from all of the PR's reviews on top of the diff.
+
+- **Left**: the changed files, as a folder tree or grouped by role with **Group by role**. Files with findings are marked, and you can mark files as viewed.
+- **Center**: the PR header with a **Review** tab and a **Commits** tab, a bar with the number of potential bugs and flags and how many files you have viewed, and the diff in unified or split view. Kody's findings sit inline under the lines they refer to.
+- **Right**: the findings grouped by severity (**Critical**, **High**, **Medium**, **Low**). Click one to jump to it.
+
+Critical and high findings are labeled **Potential Bug**, medium **Suggestion** and low **Nit**. A finding shows Kody's explanation, a **Suggested fix** or **Recommendation**, and buttons to **Copy fix**, **Copy AI prompt** (a prompt you can paste into a coding agent to apply the fix) and **Open on provider**.
+
+If the review didn't produce findings, the screen says why, for example **Nothing to flag.**, **Review failed — nothing to show.** or **Review skipped.**
+
+Suggestions on the pull request as a whole, rather than on a file, are not shown on this screen.
+
+Shortcuts: **J** and **K** go to the next and previous file, **B** hides or shows the file tree, and **Esc** clears the selected file.
+
+When you open a suggestion from [Suggestions](/en/how_to_use/cockpit/suggestions) with **Open in PR review**, the screen scrolls to that finding.

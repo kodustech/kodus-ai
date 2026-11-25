@@ -1,0 +1,447 @@
+[
+    {
+        "id": "dismiss-lenses-config",
+        "checks": "Extracts nothing from lens-by-lens prose whose every verdict is dismiss (control: nothing to extract)",
+        "prose": "Bug lens — Premise: the diff only raises `maxConnections` from 20 to 40 in config/pool.yaml and updates the comment above it. Hypothesis: a larger pool could exhaust the database's connection limit. Checked infra/db.tf:12: the instance allows 200 connections and there are 3 replicas, so 120 at most. Verdict: dismiss.\n\nSecurity lens — Premise: no auth, input handling or secrets touched. Verdict: dismiss.\n\nPerformance lens — Premise: more connections could add memory pressure. Each connection is ~2MB, 40MB extra on a 2GB container. Verdict: no performance regression introduced; the change is intentional and documented in the PR description.\n\nNote: the PR description also mentions raising `idleTimeout`, but that line is missing from this diff (the diff only shows the comment and the maxConnections change).",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "config/pool.yaml",
+                "infra/db.tf"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-null-guarded",
+        "checks": "Extracts nothing from prose that rules out a null dereference by tracing the caller (control: nothing to extract)",
+        "prose": "I looked at src/orders/checkout.ts:48 where `order.customer.email` is read. My first concern was a null dereference if `customer` is missing for guest checkouts. Tracing back, `loadOrder` in src/orders/repository.ts:112 always joins the customer and throws NotFound when it is absent, and guest orders get a synthetic customer row in createGuestOrder. So `customer` can never be null at line 48. No bug here.\n\nI also considered whether `sendReceipt` should be awaited — it is fire-and-forget by design, the comment on line 52 says failures are retried by the mail queue. Fine as is.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "src/orders/checkout.ts",
+                "src/orders/repository.ts"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-race-locked",
+        "checks": "Extracts nothing from prose that rules out a race because the code holds a row lock (control: nothing to extract)",
+        "prose": "The change adds a balance check before `debit()` in src/wallet/service.go:77. A TOCTOU race between the check and the debit would be a real issue if two requests hit the same wallet concurrently. However, the whole function runs inside `s.lockWallet(walletID)` (line 70), a row-level SELECT ... FOR UPDATE, and the debit happens in the same transaction. The race is not possible. Verdict: dismiss.\n\nNothing else in the diff changes behavior: the rest is a rename of `amt` to `amount`.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "src/wallet/service.go"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-sql-parameterized",
+        "checks": "Extracts nothing from prose that rules out SQL injection because the query is parameterized (control: nothing to extract)",
+        "prose": "Security review of app/models/report.rb. The new `by_region` scope interpolates `region` into a where clause, which would be SQL injection if it were string interpolation. Reading line 23 again: `where(\"region = ?\", region)` — it is a bound parameter, not interpolation. Dismissed.\n\nThe `limit(params[:n])` on line 31 could take an arbitrary value, but `n` is cast with `.to_i` and clamped to 100 on line 29. Dismissed as well. No security issue introduced by this diff.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "app/models/report.rb"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-off-by-one-correct",
+        "checks": "Extracts nothing from prose that confirms a suspected off-by-one is a consistent change (control: nothing to extract)",
+        "prose": "Pagination in lib/paginate.py:15 changed from `offset = page * size` to `offset = (page - 1) * size`. At first this looks like an off-by-one that would skip the first page, but the callers were updated in the same PR: api/views.py:40 now passes 1-based pages (default 1), and the tests in tests/test_paginate.py cover page=1 returning the first rows. The change is consistent. Verdict: no bug.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "lib/paginate.py",
+                "api/views.py",
+                "tests/test_paginate.py"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-leak-closed",
+        "checks": "Extracts nothing from prose that rules out a resource leak because of try-with-resources (control: nothing to extract)",
+        "prose": "Resource handling in src/main/java/com/acme/export/CsvExporter.java. The new `export()` opens a FileWriter at line 54; a leak would happen if an exception fires before close. It is opened in a try-with-resources block (line 53), so it is closed on every path. I considered the BufferedWriter wrapping it too: also declared in the same try header. No leak.\n\nPerformance: the loop at line 60 writes row by row through the buffered writer, which is fine for the expected 10k rows. Verdict: dismiss.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "src/main/java/com/acme/export/CsvExporter.java"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-speculative-upstream",
+        "checks": "Extracts nothing from prose that rules out a deadline overrun because every caller sets its own deadline (control: nothing to extract)",
+        "prose": "The diff updates the retry policy in src/http/client.ts:30 from 3 to 5 attempts with exponential backoff. One hypothesis: callers with tight timeouts could now exceed their deadline. I checked every caller (src/jobs/sync.ts, src/api/proxy.ts): both set their own AbortSignal with a deadline, and the client honors the signal between attempts (line 41). So a longer retry chain is cut by the caller's deadline. This is not a defect.\n\nBug lens verdict: dismiss. Security lens: nothing relevant. Performance lens: at most two more requests on failure paths; intentional.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "src/http/client.ts",
+                "src/jobs/sync.ts",
+                "src/api/proxy.ts"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-type-narrowed",
+        "checks": "Extracts nothing from prose that rules out a crash on an optional field and a stale memo (control: nothing to extract)",
+        "prose": "src/components/UserCard.tsx:22 reads `user.avatar.url`. If `avatar` were optional this would crash on users without an avatar. The `User` type in src/types.ts:8 declares `avatar: Avatar` (required) and the API normalizer in src/api/normalize.ts:31 fills a default avatar. Also the component is only rendered after the `user &&` check on line 18. No null issue.\n\nThe new `useMemo` on line 25 has `[user.id]` as dependency while computing from `user.name` — but name is derived from id in this codebase (immutable profile), so it cannot go stale. Considered and rejected.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "src/components/UserCard.tsx",
+                "src/types.ts",
+                "src/api/normalize.ts"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-overflow-bounded",
+        "checks": "Extracts nothing from prose that rules out an integer overflow because both operands are bounded (control: nothing to extract)",
+        "prose": "In crates/codec/src/frame.rs:88 the length is computed as `header_len + payload_len` with u16 values. Integer overflow would be a problem, but both are validated against MAX_FRAME (1024) on lines 80-84 before the addition, so the sum is at most 2048, far below u16::MAX. No overflow. I also checked the slice at line 90: indices are within the validated buffer. Nothing to report.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "crates/codec/src/frame.rs"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-missing-test-not-bug",
+        "checks": "Extracts nothing from prose that notes a missing test while stating the code itself is correct (control: nothing to extract)",
+        "prose": "The PR adds `formatCurrency` in src/utils/money.js:12. I checked rounding: it uses Intl.NumberFormat with minimumFractionDigits 2, which rounds per locale rules — acceptable and matches the existing formatter in src/utils/legacy.js. Negative values render with the locale's minus sign, also consistent.\n\nThere is no unit test for the new function, but that is not a correctness issue in the code itself. No concrete bug, security, or performance issue is introduced by this diff.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "src/utils/money.js",
+                "src/utils/legacy.js"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-auth-already-checked",
+        "checks": "Extracts nothing from prose that rules out missing authorization because middleware enforces it (control: nothing to extract)",
+        "prose": "New endpoint DELETE /projects/:id in server/routes/projects.js:64. Missing authorization would be critical: any user deleting any project. But the router is mounted under `requireAuth` and `requireProjectRole('admin')` (server/routes/index.js:20), which loads the project and checks membership before the handler runs. Verified the middleware covers `:id` routes. Authorization is enforced. Verdict: dismiss.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "server/routes/projects.js",
+                "server/routes/index.js"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-question-answered",
+        "checks": "Extracts nothing from prose that asks whether a cache key leaks across tenants and answers no (control: nothing to extract)",
+        "prose": "Looking at the cache invalidation in src/cache/invalidate.ts:19. Should the key include the tenant id? If two tenants shared a key, one could read another's cached data — that would be a serious leak. The key builder at src/cache/keys.ts:5 already prefixes every key with `t:${tenantId}:`, so the tenant is part of the key. The TTL change from 60s to 300s on line 22 is intentional per the PR description. I don't see an issue that must be fixed here.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "src/cache/invalidate.ts",
+                "src/cache/keys.ts"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-deadlock-ordered",
+        "checks": "Extracts nothing from prose that rules out a deadlock because locks are taken in a fixed order (control: nothing to extract)",
+        "prose": "src/transfer/engine.go:55 now locks two accounts in `Transfer`. Two transfers in opposite directions could deadlock if each takes its first lock and waits for the other. Line 52 sorts the two account ids and always locks the lower id first, so both transfers wait on the same first lock. No deadlock. The new error wrap on line 70 only adds context. Verdict: dismiss.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "src/transfer/engine.go"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-xss-escaped",
+        "checks": "Extracts nothing from prose that rules out XSS because the template escapes by default (control: nothing to extract)",
+        "prose": "templates/profile.html:14 renders `{{ user.bio }}` and the bio is user-controlled, so XSS would be possible if it were rendered raw. The project's Jinja environment in app/__init__.py:30 sets `autoescape=True` and this template does not use `|safe`. The value is escaped. I also checked the new `title` attribute on line 16: same escaping applies inside attributes. No vulnerability.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "templates/profile.html",
+                "app/__init__.py"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-perf-bounded-loop",
+        "checks": "Extracts nothing from prose that rules out a performance problem because the loop is bounded and off the hot path (control: nothing to extract)",
+        "prose": "Performance check of src/reports/builder.ts:88: the new nested loop over `sections` and `rows` is O(n·m), which would be slow on large inputs. Reports are capped at 20 sections and 500 rows by the validator in src/reports/validate.ts:12, and the builder runs in the nightly job, not in a request. At most 10k iterations once a night. Not a performance issue. Bug lens found nothing either: the totals are recomputed the same way as before.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "src/reports/builder.ts",
+                "src/reports/validate.ts"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-refactor-equivalent",
+        "checks": "Extracts nothing from prose that confirms a refactor preserves behavior (control: nothing to extract)",
+        "prose": "The PR rewrites `isEligible` in lib/eligibility.rb:10 from nested ifs to a single boolean expression. An incorrect rewrite could flip a branch, so I compared both versions case by case: age >= 18 and (country in ALLOWED or has_waiver) gives the same result as the old nesting for all four combinations, and the early return for `blocked?` is still first on line 11. Behavior is unchanged. Verdict: no bug.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "lib/eligibility.rb"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-secret-not-logged",
+        "checks": "Extracts nothing from prose that rules out a secret in logs because the logger redacts it (control: nothing to extract)",
+        "prose": "src/auth/login.py:41 adds `logger.info(\"login attempt\", extra=request_ctx)` and `request_ctx` holds the request headers, which include the Authorization header. Logging it would be unsafe. The logging setup in src/logging/config.py:18 registers a RedactingFilter that drops `authorization` and `cookie` keys before any handler sees them, and there is a test for it in tests/test_logging.py. The secret never reaches the log. Dismiss.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "src/auth/login.py",
+                "src/logging/config.py"
+            ]
+        }
+    },
+    {
+        "id": "dismiss-migration-safe",
+        "checks": "Extracts nothing from prose that rules out a locking migration because the column is nullable with no default (control: nothing to extract)",
+        "prose": "db/migrate/20240501_add_archived_at.rb adds a column to `orders`, a large table. Adding a column with a default would rewrite the table and lock it. This migration adds `archived_at` as nullable with no default, which is a metadata-only change on our Postgres version, and the index on line 6 is created with `algorithm: :concurrently`. Safe to run online. No issue introduced.",
+        "expected": {
+            "files": []
+        },
+        "dismissed": {
+            "files": [
+                "db/migrate/20240501_add_archived_at.rb"
+            ]
+        }
+    },
+    {
+        "id": "real-null-deref",
+        "checks": "Extracts a crash on a value the lookup can return undefined (control: must extract)",
+        "prose": "src/billing/invoice.ts:57 reads `plan.price.amount` but `plan` comes from `findPlan(code)`, which returns `undefined` for retired plan codes. Customers still on a retired plan will crash the invoice job with a TypeError. This should guard for a missing plan and fall back to the stored price on the subscription.",
+        "expected": {
+            "files": [
+                "src/billing/invoice.ts"
+            ]
+        },
+        "dismissed": {
+            "files": []
+        }
+    },
+    {
+        "id": "real-sql-injection",
+        "checks": "Extracts an SQL injection through an f-string query (control: must extract)",
+        "prose": "Security: app/services/search.py:34 builds the query with an f-string, `f\"SELECT * FROM items WHERE name LIKE '%{term}%'\"`, and `term` comes straight from the request query string. This is SQL injection. Use a bound parameter instead.",
+        "expected": {
+            "files": [
+                "app/services/search.py"
+            ]
+        },
+        "dismissed": {
+            "files": []
+        }
+    },
+    {
+        "id": "real-two-files",
+        "checks": "Extracts two defects in two files, one each (control: must extract)",
+        "prose": "Two bugs.\n\n1. src/queue/worker.go:42: the retry loop never increments `attempt`, so a permanently failing message is retried forever and blocks the worker. It should increment `attempt` and stop at maxAttempts.\n\n2. src/queue/conn.go:71: `defer conn.Close()` is inside the for loop, so connections are only closed when the function returns — with long-running workers this is a leak of one connection per message.",
+        "expected": {
+            "files": [
+                "src/queue/worker.go",
+                "src/queue/conn.go"
+            ]
+        },
+        "dismissed": {
+            "files": []
+        }
+    },
+    {
+        "id": "real-race",
+        "checks": "Extracts a check-then-update race that double-books a seat (control: must extract)",
+        "prose": "The new `reserveSeat` in src/booking/seats.ts:30 reads the seat, checks `seat.available`, then updates it in a separate query without a transaction. Two concurrent requests can both see the seat available and both reserve it — a race that double-books. The update should be conditional (`WHERE available = true`) and check the affected row count.",
+        "expected": {
+            "files": [
+                "src/booking/seats.ts"
+            ]
+        },
+        "dismissed": {
+            "files": []
+        }
+    },
+    {
+        "id": "real-perf",
+        "checks": "Extracts an N+1 query on a hot path (control: must extract)",
+        "prose": "Performance issue: app/controllers/dashboard_controller.rb:18 iterates `@projects.each` and calls `project.members.count` inside the loop, issuing one COUNT query per project. With hundreds of projects this is an N+1 on the dashboard's hot path. It should preload with `includes(:members)` or use a grouped count.",
+        "expected": {
+            "files": [
+                "app/controllers/dashboard_controller.rb"
+            ]
+        },
+        "dismissed": {
+            "files": []
+        }
+    },
+    {
+        "id": "real-wrong-condition",
+        "checks": "Extracts an off-by-one comparison against the documented rule (control: must extract)",
+        "prose": "lib/discounts.py:22 applies the loyalty discount when `years > 2`, but the docstring on line 15 says customers with 2 or more years qualify. Customers with exactly 2 years lose the discount. The comparison should be `>=`.",
+        "expected": {
+            "files": [
+                "lib/discounts.py"
+            ]
+        },
+        "dismissed": {
+            "files": []
+        }
+    },
+    {
+        "id": "real-missing-await",
+        "checks": "Extracts a missing await that lets a failed write pass silently (control: must extract)",
+        "prose": "src/settings/save.ts:33 calls `repo.update(settings)` without `await` inside a try/catch. The promise rejection escapes the catch, the handler returns 200, and a failed write is reported to the user as saved. It must await the update so the error reaches the catch block.",
+        "expected": {
+            "files": [
+                "src/settings/save.ts"
+            ]
+        },
+        "dismissed": {
+            "files": []
+        }
+    },
+    {
+        "id": "real-wrong-units",
+        "checks": "Extracts a size limit compared in the wrong unit (control: must extract)",
+        "prose": "src/api/upload.js:28 compares `file.size > MAX_SIZE`, but MAX_SIZE is defined in megabytes (`MAX_SIZE = 10`) while `file.size` is in bytes. Every file over 10 bytes is rejected. This is incorrect: MAX_SIZE should be converted to bytes before the comparison.",
+        "expected": {
+            "files": [
+                "src/api/upload.js"
+            ]
+        },
+        "dismissed": {
+            "files": []
+        }
+    },
+    {
+        "id": "mixed-lenses-report-and-dismiss",
+        "checks": "Extracts the defect a lens reports and not the hypothesis another lens dismisses (control: must extract one, not the other)",
+        "prose": "Bug lens — Premise: `parseDate` in src/utils/dates.ts:10 now accepts ISO strings without timezone. Hypothesis: dates without timezone are parsed as local time and shift by a day for users west of UTC. Confirmed: the new branch on line 14 builds `new Date('2024-05-01T00:00')`, which is local time, so users in America/* see the previous day. Verdict: report.\n\nSecurity lens — Hypothesis: the new validation regex in src/utils/patterns.ts:4 could be vulnerable to ReDoS. It is anchored and has no nested quantifiers. Verdict: dismiss.\n\nPerformance lens — nothing relevant.",
+        "expected": {
+            "files": [
+                "src/utils/dates.ts"
+            ]
+        },
+        "dismissed": {
+            "files": [
+                "src/utils/patterns.ts"
+            ]
+        }
+    },
+    {
+        "id": "mixed-real-then-considered",
+        "checks": "Extracts the reported defect and not the bypass the prose considered and rejected (control: must extract one, not the other)",
+        "prose": "src/api/avatar.js:28 compares `file.size > MAX_AVATAR` but MAX_AVATAR is in kilobytes while `file.size` is in bytes, so every avatar over 512 bytes is rejected. This must convert the limit to bytes.\n\nI also wondered whether the MIME check in src/api/mime.js:9 could be bypassed by renaming the file; it uses magic-number sniffing via `fileType.fromBuffer`, not the extension, so it is fine.",
+        "expected": {
+            "files": [
+                "src/api/avatar.js"
+            ]
+        },
+        "dismissed": {
+            "files": [
+                "src/api/mime.js"
+            ]
+        }
+    },
+    {
+        "id": "mixed-dismissed-first",
+        "checks": "Extracts the defect reported after a dismissed one, and not the dismissed one (control: must extract one, not the other)",
+        "prose": "First I checked whether the new filter in jobs/session_scope.rb:5 could select active sessions: it filters `expires_at < Time.current`, which only matches expired rows. Dismissed.\n\nHowever, jobs/cleanup.rb:9 runs `Session.where(...).delete_all` with no batch limit. On a sessions table of millions of rows this is one statement that holds locks and blocks logins for its duration. It should delete in batches (`in_batches(of: 10_000)`).",
+        "expected": {
+            "files": [
+                "jobs/cleanup.rb"
+            ]
+        },
+        "dismissed": {
+            "files": [
+                "jobs/session_scope.rb"
+            ]
+        }
+    },
+    {
+        "id": "mixed-two-dismissed-one-reported",
+        "checks": "Extracts the one reported defect among three hypotheses, two of them dismissed (control: must extract one, not the others)",
+        "prose": "Bug lens — Hypothesis A: the free-shipping threshold in src/cart/threshold.ts:12 uses the subtotal before discounts. Checked: it uses `cart.totalAfterDiscounts`. Verdict: dismiss. Hypothesis B: in src/cart/shipping.ts:47 the weight is summed with `reduce` without an initial value, so an empty cart throws `TypeError: Reduce of empty array with no initial value`, and empty carts do reach it from the estimate widget. Verdict: report.\n\nSecurity lens — Verdict: dismiss.\n\nPerformance lens — Hypothesis: the rate table in src/cart/rates.ts:3 is rebuilt on every call. It is a module-level constant. Verdict: dismiss.",
+        "expected": {
+            "files": [
+                "src/cart/shipping.ts"
+            ]
+        },
+        "dismissed": {
+            "files": [
+                "src/cart/threshold.ts",
+                "src/cart/rates.ts"
+            ]
+        }
+    },
+    {
+        "id": "mixed-question-then-bug",
+        "checks": "Extracts the confirmed defect and not the question the prose answered no (control: must extract one, not the other)",
+        "prose": "Should the webhook handler in src/hooks/verify.ts:20 compare signatures in constant time? It already uses `crypto.timingSafeEqual`, so no timing leak there.\n\nThe real problem is in src/hooks/handler.ts:44: the handler parses `req.body` before calling verify, and on a parse error it returns 500 with the raw body echoed in the message, so any unauthenticated caller can make the service reflect arbitrary content. It should verify first and return a generic 400.",
+        "expected": {
+            "files": [
+                "src/hooks/handler.ts"
+            ]
+        },
+        "dismissed": {
+            "files": [
+                "src/hooks/verify.ts"
+            ]
+        }
+    },
+    {
+        "id": "mixed-two-real-one-dismissed",
+        "checks": "Extracts both reported defects and not the dismissed hypothesis (control: must extract two, not the third)",
+        "prose": "Three things in the export feature.\n\n1. src/export/csv.py:30 writes cell values without escaping, so a value starting with `=` is executed as a formula when the file is opened in a spreadsheet (CSV injection). It should prefix such values with a quote.\n\n2. src/export/job.py:18 loads every row into memory with `list(query)` before writing; exports of a large account will run the worker out of memory. It should stream rows.\n\n3. I considered whether src/export/auth.py:11 lets a member export another team's data, but it filters by `team_id` from the session, not from the request. Not an issue.",
+        "expected": {
+            "files": [
+                "src/export/csv.py",
+                "src/export/job.py"
+            ]
+        },
+        "dismissed": {
+            "files": [
+                "src/export/auth.py"
+            ]
+        }
+    }
+]

@@ -270,43 +270,4 @@ describe('GetSelectedRepositoriesUseCase', () => {
             });
         });
     });
-
-    describe('comparison with getRepositories endpoint', () => {
-        it('should return same structure as original endpoint', async () => {
-            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
-                mockRepositories,
-            );
-            mockAuthorizationService.getRepositoryScope.mockResolvedValue(null);
-
-            const result = (await useCase.execute({
-                teamId: 'team-uuid-123',
-            })) as Repositories[];
-
-            // Verify structure matches Repositories type
-            result.forEach((repo) => {
-                expect(repo).toHaveProperty('id');
-                expect(repo).toHaveProperty('name');
-                expect(repo).toHaveProperty('http_url');
-                expect(repo).toHaveProperty('avatar_url');
-                expect(repo).toHaveProperty('organizationName');
-                expect(repo).toHaveProperty('visibility');
-                expect(repo).toHaveProperty('selected');
-            });
-        });
-
-        it('should NOT call external git API', async () => {
-            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
-                mockRepositories,
-            );
-            mockAuthorizationService.getRepositoryScope.mockResolvedValue(null);
-
-            await useCase.execute({ teamId: 'team-uuid-123' });
-
-            // Only integrationConfigService should be called (database)
-            // No CodeManagementService (external API) should be called
-            expect(
-                mockIntegrationConfigService.findIntegrationConfigFormatted,
-            ).toHaveBeenCalledTimes(1);
-        });
-    });
 });

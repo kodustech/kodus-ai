@@ -1,0 +1,106 @@
+---
+title: "Chutes — 开源模型的无服务器推理"
+description: "了解如何将 Chutes AI(涵盖 DeepSeek、Kimi、GLM、Qwen 等)连接到 Kodus。"
+icon: "cloud-bolt"
+---
+
+## Chutes 工作原理
+
+Chutes AI 是一个面向开源模型的去中心化无服务器计算平台。它在 `https://llm.chutes.ai/v1` 暴露一个 **OpenAI 兼容**的推理端点。用量按 token 从账户余额中扣费。
+
+Kodus 通过与其他提供商相同的 OpenAI 兼容适配器与 Chutes 通信,无需任何代码修改,仅需 BYOK 凭证。
+
+<Info>
+  价格和计费条款会变化。充值前请先在 [chutes.ai/pricing](https://chutes.ai/pricing) 确认。
+</Info>
+
+### 推荐模型
+
+Chutes 使用 HuggingFace 风格的 `org/model` 标识符。许多模型以 `-TEE` 结尾,但某个模型是否运行在可信执行环境(TEE)中,以目录中的 `confidential_compute` 标志为准,而不是名称。以下模型在目录中列出了工具调用和结构化输出支持:
+
+| 模型 ID | 上下文窗口 |
+| -------- | -------------- |
+| `moonshotai/Kimi-K2.7-Code` | 约 262k tokens |
+| `deepseek-ai/DeepSeek-V4-Pro-0813` | 约 1M tokens |
+| `zai-org/GLM-5.3` | 约 1M tokens |
+| `Qwen/Qwen3.5-397B-A17B-TEE` | 约 262k tokens |
+
+目录经常变化。请在 [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models) 查看实时列表,该页面公开,显示每个模型的价格、上下文长度和支持的功能。
+
+## 创建 API 密钥
+
+<Warning>需要拥有已充值余额的 Chutes 账号。</Warning>
+
+1. 在 [chutes.ai/auth/signup](https://chutes.ai/auth/signup) 创建账号。可使用 Google、GitHub 或用户名注册。
+2. 在 Chutes 应用中为余额充值。计费为按量付费,无最低承诺,支付方式列在 [chutes.ai/pricing](https://chutes.ai/pricing)。
+3. 在 Chutes 应用中创建 API 密钥。密钥以 `cpk_` 开头。请像保管密码一样保管它。
+
+## 在 Kodus 中配置 Chutes
+
+### 方式 1 — AI providers 页面(推荐)
+
+按照[连接提供商](/zh/how_to_use/byok#连接提供商)的步骤选择 **Custom → OpenAI-compatible**，然后使用下列值填写表单。
+
+| 字段 | 值 |
+| --- | --- |
+| **Key**(在 **API key** 卡片中) | 您的 Chutes API 密钥 |
+| **Base URL** | `https://llm.chutes.ai/v1` |
+| **Model** | 从列表中选择,或输入 ID,例如 `zai-org/GLM-5.3` |
+| **Max concurrent requests** | 可选;位于 **Advanced (optional)** → **Advanced settings**。留空,或在 Chutes 返回限流错误时设置上限 |
+
+点击 **Test & save**，然后在 [Routing](/zh/how_to_use/code_review/configs/routing) 中选择默认模型和后备模型。
+
+<Note>
+  将另一个提供商的模型设置为 **Fallback model**,这样当 Chutes 返回错误或余额用尽时,审查仍能继续。
+</Note>
+
+### 方式 2 — 自托管(环境变量)
+
+要通过 `.env` 为自托管实例指定一个模型:
+
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="zai-org/GLM-5.3"
+API_LLM_BASE_URL="https://llm.chutes.ai/v1"
+API_LLM_API_KEY="your-chutes-api-key"
+```
+
+按照安装指南[应用模型配置变更](/zh/how_to_deploy/deploy_kodus/generic_vm#应用模型配置变更)。
+
+## 何时选择 Chutes
+
+- **希望在一个端点后使用开源模型**,包括 DeepSeek、Kimi、GLM 和 Qwen。
+- **关注机密计算。** 目录中标记为 `confidential_compute: true` 的模型运行在可信执行环境中,如果您的合规要求需要这点就有用。
+
+如果您更喜欢固定订阅,选择 Synthetic;如果您偏好的模型特别是 GLM 系列,选择 Z.AI。
+
+## 故障排查
+
+<AccordionGroup>
+  <Accordion title="401 / 身份验证错误">
+    - 在 Chutes 仪表板确认密钥有效且账户有余额。
+    - 确保 `.env` 值中没有尾随空格或引号。
+  </Accordion>
+
+  <Accordion title="模型未找到">
+    - Chutes 使用 `org/model` 格式,部分变体以 `-TEE` 结尾。请从 [llm.chutes.ai/v1/models](https://llm.chutes.ai/v1/models) 复制精确的 ID,包括大小写。
+    - 模型会随时间新增和下线。以前可用的模型 ID 可能会从列表中消失。
+  </Accordion>
+
+  <Accordion title="响应慢或限流错误">
+    - 在 **Code review → Routing** 中将另一个提供商的模型设置为 **Fallback model**。
+    - 在 **Advanced (optional)** → **Advanced settings** 下调低 **Max concurrent requests**。
+  </Accordion>
+
+  <Accordion title="连接错误">
+    - 确认您的服务器可以访问 `llm.chutes.ai`。
+    - 查看 API 和 worker 日志获取具体的上游错误。
+  </Accordion>
+</AccordionGroup>
+
+## 相关链接
+
+- [Chutes 定价](https://chutes.ai/pricing)
+- [Chutes API 参考](https://chutes.ai/docs/api-reference/overview)
+- [实时模型目录](https://llm.chutes.ai/v1/models)
+- [BYOK 概述](/zh/how_to_use/byok)

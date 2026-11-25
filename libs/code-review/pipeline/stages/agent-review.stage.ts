@@ -1,25 +1,30 @@
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import * as crypto from 'crypto';
 
 import { createLogger } from '@libs/core/log/logger';
-import { jsonSchema, type EmbeddingModel } from 'ai';
-import { tracedEmbed as embed } from '@libs/llm/llm-call';
+import { type EmbeddingModel } from 'ai';
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { parseFinderSchema } from '@libs/code-review/infrastructure/agents/engine/parse-finder-schema';
+import { normalizeFinderLabels } from '@libs/code-review/infrastructure/agents/engine/normalize-finder-label';
 import {
-    DEDUP_SCHEMA,
-    DEDUP_CONTENT_THRESHOLD,
-    DEDUP_EMBEDDING_LOW,
-    DEDUP_EMBEDDING_HIGH,
-    DEDUP_TIEBREAK_SCHEMA,
-    DEDUP_FOLLOWUP_SCHEMA,
-    applyDedupFollowup,
-    buildDedupFollowupPrompt,
-    buildDedupPrompt,
-    buildTiebreakPrompt,
-    unclassifiedDedupIndices,
-    contentSimilarity,
-    cosineSimilarity,
-    dedupEmbeddingText,
-} from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
+    citedFromPatch,
+    enrichSuggestions,
+} from '@libs/code-review/infrastructure/agents/engine/enrich-suggestions';
+import { enrichDeterministic } from '@libs/code-review/infrastructure/agents/engine/enrich-deterministic';
+import { CATEGORY_LABELS } from '@libs/code-review/infrastructure/agents/engine/finding-labels';
+import {
+    buildDedupTiebreak,
+    deduplicateFindings,
+    embedDedupSuggestion,
+    resolveDedupMerge,
+    summarizeDedupSuggestion,
+    type DedupEmbedCache,
+    type DedupLogMeta,
+    type DedupMergeOptions,
+    type DedupMergeDecision,
+    type DedupTiebreak,
+    type FindingDedupDeps,
+} from '@libs/code-review/infrastructure/agents/engine/finding-dedup';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import {
     fullSuggestionTitle,
@@ -51,10 +56,19 @@ import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-
 import {
     CodeSuggestion,
     FileChange,
+    REJECTED_FIX_STATUS,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
-import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
+import {
+    OrchestratorOutput,
+    ReviewOrchestratorService,
+} from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
 import { buildOrchestratorInput } from './build-orchestrator-input';
+import {
+    SPECIALISTS_STAGE_NAME,
+    SpecialistsTimeline,
+} from './specialists-timeline';
+import { SPECIALISTS_CATEGORY } from '@libs/code-review/infrastructure/agents/collaborators/specialist-agents';
 import type { KnowledgeCodeManagementPort } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 import {
     resolveReviewKnowledge,
@@ -77,8 +91,10 @@ import {
     type CustomAgentCliRun,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { analyzerFindingsToSuggestions } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
-import { preferAnalyzerKeep } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
+import {
+    analyzerFindingsToSuggestions,
+    isAnalyzerSuggestion,
+} from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { normalizeSuggestionSeverity } from '@libs/code-review/infrastructure/agents/engine/normalize-severity';
 import {
     capCustomAgentComments,
@@ -86,26 +102,24 @@ import {
     customAgentSeverityVerdict,
     indexCustomAgents,
     isCustomAgentFinding,
-    keepOwnFindingsApart,
     findingCitation,
-    preferCustomAgentKeep,
     stripCustomAgentFixes,
     type CustomAgentsById,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation';
-import { summarizeCustomAgentRuns } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
+import {
+    CUSTOM_AGENT_RUN_LOG_TOKEN,
+    type ICustomAgentRunLog,
+} from '@libs/code-review/domain/custom-agents/contracts';
+import {
+    summarizeCustomAgentRuns,
+    toCustomAgentRunRecords,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import {
     customAgentSlug,
     ignoredFilesForCustomAgents,
+    selectCustomAgents,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import type { CustomAgentConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
-import {
-    isSameSpot,
-    preferSpecificKeep,
-} from '@libs/code-review/infrastructure/agents/engine/prefer-specific-keep';
-import {
-    bothFromAnalyzers,
-    restatesAnalyzerFinding,
-} from '@libs/code-review/infrastructure/agents/engine/restates-analyzer-finding';
 import { survivesSeverityFilter } from '@libs/code-review/infrastructure/agents/engine/survives-severity-filter';
 import {
     LazyLinkedRepoAccess,
@@ -147,7 +161,7 @@ import {
     CodeReviewPipelineContext,
     resolvedModel,
     resolvedProvider,
-    DedupTraceGroupSummary,
+    usesOrgOwnedKey,
     DedupTraceSuggestionSummary,
     DedupTraceSummary,
 } from '../context/code-review-pipeline.context';
@@ -158,12 +172,11 @@ import {
     getClassification,
     llmErrorLogLevel,
 } from '@libs/llm/error-classifier';
-import { hasManagedModelKey } from '@libs/llm/managed-slot';
-import { LLM } from '@libs/llm/llm';
 import { applyRevisionLinks } from '@libs/code-review/infrastructure/agents/engine/revision-link';
 import { checkRepeats } from '@libs/code-review/infrastructure/agents/engine/repeat-check';
 import {
     mergeKodyRuleFindings,
+    OTHER_LOCATIONS_HEADING,
     otherLocationsToRender,
 } from '@libs/code-review/infrastructure/agents/engine/kody-rules-merge';
 import {
@@ -171,10 +184,12 @@ import {
     type PrDecisionRecord,
 } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { BuildPreviousReviewDecisionsUseCase } from '@libs/code-review/application/use-cases/previousReviewDecisions/build-previous-review-decisions.use-case';
+import { CacheService } from '@libs/core/cache/cache.service';
 import {
-    normalizeEnvelope,
-    LLM_ENVELOPE_TAG,
-} from '@libs/llm/structured-output-repair';
+    executeUltraReview,
+    type UltraReviewHost,
+} from '@libs/ee/ultra-review/ultra-review.executor';
+import type { UltraModel } from '@libs/code-review/domain/ultra-review-state';
 
 /**
  * Extract valid line ranges from a unified diff patch.
@@ -335,6 +350,147 @@ export function snapLinesToDiff(
  * - Agents investigate the codebase using sandbox tools before suggesting
  * - Results are stored in context.fileAnalysisResults for downstream stages
  */
+const INSTRUCTION_INDEX_TTL_MS = 60 * 60 * 1000;
+
+/** A suggestion the generalist finder wrote: not a Kody Rule, analyzer or
+ *  custom agent finding. Only these take the parse schema, the strip and the
+ *  enrichment (#1821). */
+function isFinderSuggestion(s: Partial<CodeSuggestion>): boolean {
+    return (
+        s.label !== 'kody_rules' &&
+        !isAnalyzerSuggestion(s) &&
+        !isCustomAgentFinding(s)
+    );
+}
+
+function isGithubDotCom(cloneUrl: string | undefined): boolean {
+    try {
+        return new URL(cloneUrl ?? '').hostname.toLowerCase() === 'github.com';
+    } catch {
+        return false;
+    }
+}
+
+/** What a review pass hands over instead of publishing (Ultra review). */
+export interface ReviewPassCollected {
+    findings: Partial<CodeSuggestion>[];
+    discarded: Partial<CodeSuggestion>[];
+    customAgentRuns?: OrchestratorOutput['customAgentRuns'];
+    mergedInDedup: Partial<CodeSuggestion>[];
+    dedupTrace?: DedupTraceSummary;
+    /** Whether the category agents finished: an Ultra model's completion. */
+    completion: { completed: boolean; failureReason?: string };
+}
+
+/** How a review pass runs; the defaults are the whole review, published. */
+export interface ReviewPass {
+    scope?: 'all' | 'native' | 'auxiliary';
+    /** The model forced on the pass's agents and later steps. */
+    model?: UltraModel;
+    /** Tells this pass's entries apart on the Pull Requests timeline. */
+    timelineTag?: AgentTimelineTag;
+    /** Takes the pass's findings; the pass then publishes nothing. */
+    collect?: (collected: ReviewPassCollected) => void;
+    /** The agents' loop ended; the later steps (dedup, severity...) follow. */
+    onLoopEnd?: () => void;
+    /**
+     * Fires when the caller gave up on the pass (an Ultra run left behind):
+     * the later steps stop before their next model call.
+     */
+    abandoned?: AbortSignal;
+    /**
+     * What an Ultra review's passes build once between them: they share the
+     * PR's checkout, so a second build would overwrite `.kodus-graph/*` and
+     * re-clone `_linked/<slug>` under a pass already reading them.
+     */
+    shared?: ReviewPassShared;
+}
+
+/** Filled by the first pass that needs each; the others await the same build. */
+export interface ReviewPassShared {
+    callGraph?: Promise<CallGraphBuild>;
+    linkedRepos?: Promise<LinkedRepoGate>;
+}
+
+interface CallGraphBuild {
+    callGraph: string;
+    failed: boolean;
+}
+
+interface LinkedRepoGate {
+    linkedRepoAccess: LinkedRepoAccess | undefined;
+    gateMetadata: CrossRepoGateMetadata | undefined;
+}
+
+/** A pass its caller left behind stops at the next step. */
+class PassAbandonedError extends Error {}
+const throwIfPassAbandoned = (pass: ReviewPass) => {
+    if (pass.abandoned?.aborted) throw new PassAbandonedError('abandoned');
+};
+
+/**
+ * A run's failure reason with no friendly message: it reaches the PR notice of
+ * an Ultra review, so the provider's raw text stays in the logs.
+ */
+const ULTRA_RUN_GENERIC_FAILURE = 'The review stopped on an error.';
+
+/** A run's suffix on its timeline entries: the stage key and the label. */
+export interface AgentTimelineTag {
+    key: string;
+    label: string;
+}
+
+/**
+ * Whether the category agents of a review finished: none failed, ran out of
+ * time or steps, or left findings unverified. A failed lens does not count.
+ */
+export function categoryAgentsCompletion(
+    result: Pick<OrchestratorOutput, 'failures' | 'incomplete' | 'unverified'>,
+    describeError: (error: Error) => string,
+): ReviewPassCollected['completion'] {
+    const failure = (result.failures ?? []).find((f) =>
+        CATEGORY_AGENTS.has(f.agentName),
+    );
+    if (failure) {
+        return {
+            completed: false,
+            failureReason: describeError(failure.error),
+        };
+    }
+    const cut = (result.incomplete ?? []).find((c) =>
+        CATEGORY_AGENTS.has(c.agentName),
+    );
+    if (cut) {
+        return {
+            completed: false,
+            failureReason:
+                cut.finishReason === 'truncated'
+                    ? 'The model provider cut its answer short.'
+                    : cut.finishReason === 'no-result'
+                      ? 'The model ended without submitting a result.'
+                      : 'The review ran out of time or steps.',
+        };
+    }
+    const gap = (result.unverified ?? []).find((g) =>
+        CATEGORY_AGENTS.has(g.agentName),
+    );
+    if (gap) {
+        return {
+            completed: false,
+            failureReason: `${gap.unverifiedCount} finding(s) could not be verified.`,
+        };
+    }
+    return { completed: true };
+}
+
+/** The review's primary agents; Kody Rules and custom agents are auxiliary. */
+const CATEGORY_AGENTS: ReadonlySet<string> = new Set([
+    'generalist',
+    'bug',
+    'security',
+    'performance',
+]);
+
 @Injectable()
 export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContext> {
     readonly stageName = 'AgentReviewStage';
@@ -346,16 +502,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     private summarizeDedupSuggestion(
         suggestion?: Partial<CodeSuggestion>,
     ): DedupTraceSuggestionSummary {
-        return {
-            relevantFile: suggestion?.relevantFile,
-            relevantLinesStart: suggestion?.relevantLinesStart,
-            relevantLinesEnd: suggestion?.relevantLinesEnd,
-            label: suggestion?.label,
-            severity: suggestion?.severity,
-            oneSentenceSummary:
-                suggestion?.oneSentenceSummary ||
-                suggestion?.suggestionContent?.substring(0, 200),
-        };
+        return summarizeDedupSuggestion(suggestion);
     }
 
     private normalizeSeverity(severity?: string): string {
@@ -388,8 +535,128 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // without it the repeat check uses the history loaded for the prompts.
         @Optional()
         private readonly buildPreviousReviewDecisionsUseCase?: BuildPreviousReviewDecisionsUseCase,
+        // Optional so specs that construct the stage manually still compile;
+        // without it the instruction index is listed on every review.
+        @Optional()
+        private readonly cacheService?: CacheService,
+        // Optional so specs that construct the stage manually still compile;
+        // without it the agent page cannot say an agent is failing.
+        @Optional()
+        @Inject(CUSTOM_AGENT_RUN_LOG_TOKEN)
+        private readonly customAgentRunLog?: ICustomAgentRunLog,
     ) {
         super();
+    }
+
+    /** What an Ultra review (libs/ee/ultra-review) runs through. */
+    private ultraReviewHost(): UltraReviewHost {
+        return {
+            reviewPass: (context, pass) => this.reviewPass(context, pass),
+            runContext: (context, model, sandbox, signal) =>
+                this.updateContext(context, (draft) => {
+                    draft.parentSignal = signal;
+                    draft.sandboxHandle = sandbox;
+                    // Every later step of the run (dedup, severity,
+                    // enrichment, formatter) calls the run's model.
+                    draft.codeReviewConfig.byokConfig = model.slot;
+                    draft.codeReviewConfig.resolvedModelSlot = model.slot;
+                    draft.heavy = true;
+                    draft.analyzerFindings = [];
+                    draft.errors = [];
+                    draft.lastReviewError = undefined;
+                }),
+            update: (context, recipe) => this.updateContext(context, recipe),
+            mergeFindings: (findings, prNumber, slot, context, signal) =>
+                this.deduplicateSuggestions(
+                    findings,
+                    prNumber,
+                    slot,
+                    {
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        teamId: context.organizationAndTeamData?.teamId,
+                        pullRequestId: prNumber,
+                        repositoryId: context.repository?.id,
+                    },
+                    signal,
+                ),
+            crossDedupStreams: (
+                nonRules,
+                kodyRules,
+                prNumber,
+                context,
+                signal,
+            ) =>
+                this.crossDedupStreams(
+                    nonRules,
+                    kodyRules,
+                    prNumber,
+                    context,
+                    {
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        teamId: context.organizationAndTeamData?.teamId,
+                        pullRequestId: prNumber,
+                        repositoryId: context.repository?.id,
+                    },
+                    signal,
+                ),
+            customAgentsById: async (context) =>
+                indexCustomAgents(await this.resolveCustomAgents(context)),
+            publishFindings: (context, input) =>
+                this.publishFindings(context, input),
+            recordTimeline: async (context, entry) => {
+                const executionUuid =
+                    context.pipelineMetadata?.lastExecution?.uuid;
+                const filter = executionUuid
+                    ? { uuid: executionUuid }
+                    : {
+                          pullRequestNumber: context.pullRequest?.number,
+                          repositoryId: context.repository?.id,
+                      };
+                const metadata = {
+                    visibility: 'secondary',
+                    label: entry.label,
+                    ...entry.metadata,
+                };
+                try {
+                    // Created in progress, then finished on the entry alone:
+                    // the execution's own status stays the pipeline's.
+                    const created =
+                        await this.automationExecutionService.updateCodeReview(
+                            filter,
+                            { status: AutomationStatus.IN_PROGRESS },
+                            entry.label,
+                            entry.stageName,
+                            metadata,
+                        );
+                    const uuid = created?.stageLog?.uuid;
+                    if (uuid) {
+                        await this.automationExecutionService.updateStageLog(
+                            uuid,
+                            {
+                                status: entry.status,
+                                message: entry.label,
+                                metadata,
+                                finishedAt: new Date(),
+                            },
+                        );
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message: `[ULTRA] Could not write the ${entry.stageName} timeline entry`,
+                        context: this.stageName,
+                        error,
+                        metadata: {
+                            organizationId:
+                                context.organizationAndTeamData?.organizationId,
+                            teamId: context.organizationAndTeamData?.teamId,
+                            prNumber: context.pullRequest?.number,
+                        },
+                    });
+                }
+            },
+        };
     }
 
     /**
@@ -440,16 +707,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             return undefined;
         }
 
-        // The generalist, the only agent that reads them, runs only when at
-        // least one of these categories is on.
+        // The generalist reads them, and runs only when at least one of these
+        // categories is on; a custom agent's quote gate checks rules quoted
+        // from them, so an enabled custom agent needs them too.
         const options = context.codeReviewConfig?.reviewOptions;
+        const customAgentRuns = this.customAgentsToRun(context).length > 0;
         if (
             options?.bug === false &&
             options?.security === false &&
-            options?.performance === false
+            options?.performance === false &&
+            !customAgentRuns
         ) {
             this.logger.warn({
-                message: `[repo-instructions] skipped for PR#${prNumber}: bug, security and performance are all off, so no agent reads them`,
+                message: `[repo-instructions] skipped for PR#${prNumber}: bug, security and performance are all off and no custom agent runs, so no agent reads them`,
                 context: this.stageName,
                 metadata: logMetadata,
             });
@@ -473,10 +743,48 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             return undefined;
         }
         const startedAt = Date.now();
+        // The index is the same for every review against one target-branch
+        // commit, and listing it can take many paged calls (GitLab,
+        // Bitbucket); without the commit it is listed each time.
+        let baseSha: string | undefined = context.pullRequest?.base?.sha;
+        let indexCached = false;
 
         const result = await collectRepoInstructions({
             changedFiles: changedFiles.map((f) => f.filename),
             listFiles: async () => {
+                // GitLab's merge request and note payloads carry no
+                // target-branch commit; one PR lookup costs less than the
+                // paged listing it saves.
+                if (!baseSha && this.cacheService) {
+                    baseSha = await this.codeManagementService
+                        .getPullRequest(
+                            { organizationAndTeamData, repository, prNumber },
+                            context.platformType,
+                        )
+                        .then((pr) => pr?.base?.sha || undefined)
+                        .catch((error) => {
+                            this.logger.warn({
+                                message: `[repo-instructions] PR#${prNumber}: target-branch commit lookup failed, listing without the index cache`,
+                                context: this.stageName,
+                                error,
+                                metadata: logMetadata,
+                            });
+                            return undefined;
+                        });
+                }
+                const indexKey = baseSha
+                    ? `repo-instructions-index:${organizationAndTeamData?.organizationId}:${repository.id}:${ref}:${baseSha}`
+                    : undefined;
+                if (indexKey && this.cacheService) {
+                    const cached =
+                        await this.cacheService.getFromCache<string[]>(
+                            indexKey,
+                        );
+                    if (cached) {
+                        indexCached = true;
+                        return cached;
+                    }
+                }
                 const files =
                     (await this.codeManagementService.getRepositoryAllFiles({
                         organizationAndTeamData,
@@ -487,8 +795,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                 ...AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS,
                             ],
                         },
+                        throwOnError: true,
                     })) ?? [];
-                return files.map((f: { path: string }) => f.path);
+                const paths = files.map((f: { path: string }) => f.path);
+                if (indexKey && this.cacheService) {
+                    await this.cacheService.addToCache(
+                        indexKey,
+                        paths,
+                        INSTRUCTION_INDEX_TTL_MS,
+                    );
+                }
+                return paths;
             },
             readFile: async (path) => {
                 const response =
@@ -520,6 +837,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             metadata: {
                 ...logMetadata,
                 ref,
+                baseSha,
+                indexCached,
                 durationMs: Date.now() - startedAt,
                 indexed: result.indexedCount,
                 listed: result.files.map((f) => f.path),
@@ -580,14 +899,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     async resolveCustomAgents(
         context: CodeReviewPipelineContext,
     ): Promise<CustomAgentConfig[]> {
+        return this.customAgentsToRun(context);
+    }
+
+    private customAgentsToRun(
+        context: CodeReviewPipelineContext,
+    ): CustomAgentConfig[] {
         const configured = context.codeReviewConfig?.customAgents ?? [];
-        const wanted = context.onlyCustomAgent
+        return context.onlyCustomAgent
             ? configured
             : configured.filter((agent) => agent?.enabled);
-        if (!wanted.length) {
-            return [];
-        }
-        return wanted;
     }
 
     /**
@@ -623,6 +944,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     id: run.id,
                     slug: run.slug,
                     status: run.status,
+                    reason: run.reason,
                     kept: run.posted,
                     droppedByChecks: run.droppedByVerify,
                     mergedInDedup: mergedInDedup.filter(
@@ -660,6 +982,37 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     /**
+     * Keeps how each agent that ran ended (ran, failed, incomplete, and why)
+     * so its page can say it is failing. Never blocks or fails the review.
+     */
+    private recordCustomAgentRuns(
+        context: CodeReviewPipelineContext,
+        runs: ReturnType<typeof summarizeCustomAgentRuns>,
+    ): void {
+        const organizationId = context.organizationAndTeamData?.organizationId;
+        const repositoryId = context.repository?.id;
+        const prNumber = context.pullRequest?.number;
+        if (!this.customAgentRunLog || !organizationId || !repositoryId) return;
+        if (typeof prNumber !== 'number') return;
+        const records = toCustomAgentRunRecords({
+            organizationId,
+            repositoryId: String(repositoryId),
+            prNumber,
+            runs,
+            at: new Date(),
+        });
+        if (!records.length) return;
+        void this.customAgentRunLog.record(records).catch((error) =>
+            this.logger.warn({
+                message: `[AGENT] Could not record custom agent runs for PR#${prNumber}`,
+                context: this.stageName,
+                error,
+                metadata: { organizationId, repositoryId, prNumber },
+            }),
+        );
+    }
+
+    /**
      * Skills and docs linked to the main review and to each custom agent,
      * read from the PR's target branch (#2172). See resolveReviewKnowledge.
      */
@@ -670,7 +1023,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     ): Promise<ReviewKnowledge> {
         return resolveReviewKnowledge({
             items: context.codeReviewConfig?.knowledge,
-            customAgents,
+            customAgents: selectCustomAgents(
+                customAgents,
+                context.onlyCustomAgent,
+                context.riskAssessment,
+            ),
             changedFiles,
             baseBranch:
                 context.pullRequest?.base?.ref ||
@@ -686,18 +1043,69 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         });
     }
 
+    /**
+     * Give the review's sandbox lease back once the orchestrator returns: it
+     * is the review's last reader of the checkout, and everything after it
+     * reads the diff the platform returned (#2628). Another holder of the
+     * PR's sandbox, such as a `@kody` reply, keeps it running. Not awaited by
+     * the stage: on the local provider the release deletes the clone, and the
+     * comments must not wait for it; the observer awaits the same release at
+     * pipeline end.
+     */
+    private async releaseSandbox(
+        context: CodeReviewPipelineContext,
+    ): Promise<void> {
+        try {
+            await context.sandboxHandle?.cleanup?.();
+        } catch (error) {
+            this.logger.warn({
+                message: `[AGENT] Could not release the sandbox for PR#${context.pullRequest?.number}; the lease TTL reaper frees it`,
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    prNumber: context.pullRequest?.number,
+                },
+            });
+        }
+    }
+
     protected async executeStage(
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
+        // `@kody -v <slug>` asks one custom agent for one more opinion: the
+        // models' review already ran, so it runs alone as always.
+        if (context.ultra && !context.onlyCustomAgent) {
+            return executeUltraReview(context, this.ultraReviewHost());
+        }
+        return this.reviewPass(context);
+    }
+
+    /**
+     * One review of the PR: the agents, then every step up to the comments.
+     * With no `pass` it is the whole review and publishes; an Ultra review
+     * runs it once per model (`native`, with that model forced, on the PR's
+     * sandbox) and once for Kody Rules and the custom agents (`auxiliary`),
+     * each handing its findings to `collect` instead of publishing.
+     */
+    private async reviewPass(
+        context: CodeReviewPipelineContext,
+        pass: ReviewPass = {},
+    ): Promise<CodeReviewPipelineContext> {
+        const scope = pass.scope ?? 'all';
         const prNumber = context.pullRequest?.number;
         const changedFiles = context.changedFiles ?? [];
         // The ignored files a custom agent names explicitly (#2172), with the
         // content and line numbers FetchChangedFilesStage gave them; they are
         // a review of their own when every changed file is ignored.
-        const ignoredChangedFiles = ignoredFilesForCustomAgents(
-            context,
-            context.ignoredFileChanges,
-        );
+        const ignoredChangedFiles =
+            scope === 'native'
+                ? []
+                : ignoredFilesForCustomAgents(
+                      context,
+                      context.ignoredFileChanges,
+                  );
 
         if (!changedFiles.length && !ignoredChangedFiles.length) {
             return context;
@@ -833,6 +1241,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         (agent) => [customAgentSlug(agent.name), agent.name],
                     ),
                 ),
+                pass.timelineTag,
             );
 
             // Generate call graph context from AST graph in DB (via kodus-graph in E2B sandbox)
@@ -866,50 +1275,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
 
             if (shouldBuildCallGraph) {
-                try {
-                    if (context.sandboxHandle?.run) {
-                        const repo =
-                            await this.repositoryService.findByExternalId(
-                                context.platformType,
-                                String(context.repository?.id || ''),
-                            );
-
-                        if (repo?.astGraphStatus === AstGraphStatus.READY) {
-                            callGraph = await this.graphContext.generateContext(
-                                context.sandboxHandle,
-                                changedFiles,
-                                repo.uuid,
-                            );
-                        } else {
-                            callGraph =
-                                await this.graphContext.generateContextLegacy(
-                                    context.sandboxHandle,
-                                    changedFiles,
-                                    context.sandboxHandle?.baseBranch ||
-                                        context.pullRequest?.base?.ref ||
-                                        context.repository?.defaultBranch,
-                                );
-                        }
-                    }
-                } catch (err) {
-                    // Without a checkout the graph cannot build; that loss is
-                    // already SANDBOX_UNAVAILABLE.
-                    if (hasCheckout) {
-                        stageWarnings.push(
-                            buildCallGraphFailedWarning({
-                                modelName: effectiveModelName || 'unknown',
-                            }),
-                        );
-                    }
-                    this.logger.warn({
-                        message: `[AGENT] Call graph failed for PR#${prNumber}, proceeding without it`,
-                        context: this.stageName,
-                        error: err,
-                        metadata: {
-                            sandboxType: context.sandboxHandle?.type,
-                            hasSandbox: !!context.sandboxHandle?.run,
-                        },
-                    });
+                const built = await (pass.shared
+                    ? (pass.shared.callGraph ??= this.buildCallGraph(context))
+                    : this.buildCallGraph(context));
+                callGraph = built.callGraph;
+                // Without a checkout the graph cannot build; that loss is
+                // already SANDBOX_UNAVAILABLE.
+                if (built.failed && hasCheckout) {
+                    stageWarnings.push(
+                        buildCallGraphFailedWarning({
+                            modelName: effectiveModelName || 'unknown',
+                        }),
+                    );
                 }
             }
 
@@ -922,11 +1299,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // Deterministic boundary gate (#1576): only arm linked-repo tools
             // + prompt when the diff touches boundary surface. Config alone is
             // not enough — pure internal refactors stay single-repo.
-            const { linkedRepoAccess, gateMetadata } =
-                await this.resolveLinkedRepoAccessWithGate(
-                    context,
-                    changedFiles,
-                );
+            const { linkedRepoAccess, gateMetadata } = await (pass.shared
+                ? (pass.shared.linkedRepos ??=
+                      this.resolveLinkedRepoAccessWithGate(
+                          context,
+                          changedFiles,
+                      ))
+                : this.resolveLinkedRepoAccessWithGate(context, changedFiles));
             const crossRepoLost = crossRepoUnavailableWarning({
                 configured:
                     context.codeReviewConfig?.linkedRepositories?.length ?? 0,
@@ -944,7 +1323,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 prNumber,
             );
 
-            const customAgents = await this.resolveCustomAgents(context);
+            const customAgents =
+                scope === 'native'
+                    ? []
+                    : await this.resolveCustomAgents(context);
             const customAgentsById: CustomAgentsById =
                 indexCustomAgents(customAgents);
             const reviewKnowledge = await this.resolveReviewKnowledge(
@@ -953,31 +1335,49 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 changedFiles,
             );
             stageWarnings.push(...reviewKnowledge.warnings);
-            const result = await this.reviewOrchestrator.execute({
-                ...buildOrchestratorInput(context, {
-                    changedFiles,
-                    prNumber,
-                    repositoryId,
-                    reviewOptions,
-                    onAgentProgress,
-                    gitHubToken: await this.resolveGitHubToken(context),
-                    callGraph,
-                    adaptiveProfile,
-                    kodyRules: await this.prepareKodyRulesForReview(context),
-                    linkedRepoAccess,
-                    repoInstructions,
-                }),
-                customAgents,
-                onlyCustomAgent: context.onlyCustomAgent,
-                ignoredChangedFiles,
-                knowledgeByTarget: reviewKnowledge.byTarget,
-                knowledgeReader: reviewKnowledge.reader,
-                customAgentTooling: {
-                    sandbox: context.sandboxHandle,
-                    installedClis: context.customAgentClis?.byAgentId,
-                    onCliRun: (run) => cliRuns.push(run),
-                },
-            });
+            let result: OrchestratorOutput;
+            try {
+                result = await this.reviewOrchestrator.execute({
+                    ...buildOrchestratorInput(context, {
+                        changedFiles,
+                        prNumber,
+                        repositoryId,
+                        reviewOptions,
+                        onAgentProgress,
+                        gitHubToken: await this.resolveGitHubToken(context),
+                        callGraph,
+                        adaptiveProfile,
+                        kodyRules:
+                            scope === 'native'
+                                ? []
+                                : await this.prepareKodyRulesForReview(context),
+                        linkedRepoAccess,
+                        repoInstructions,
+                    }),
+                    ...(pass.model && {
+                        forcedModel: pass.model.slot,
+                        // Each model runs the heavy review: the lenses on.
+                        heavy: true,
+                    }),
+                    ...(scope === 'native' && { analyzerFindings: [] }),
+                    agentScope: scope,
+                    customAgents,
+                    onlyCustomAgent: context.onlyCustomAgent,
+                    ignoredChangedFiles,
+                    knowledgeByTarget: reviewKnowledge.byTarget,
+                    knowledgeReader: reviewKnowledge.reader,
+                    customAgentTooling: {
+                        sandbox: context.sandboxHandle,
+                        installedClis: context.customAgentClis?.byAgentId,
+                        onCliRun: (run) => cliRuns.push(run),
+                    },
+                });
+            } finally {
+                // An Ultra run shares the PR's sandbox with the other runs:
+                // the executor releases it after the last one.
+                if (scope === 'all') void this.releaseSandbox(context);
+            }
+            pass.onLoopEnd?.();
 
             // Snapshot linked-repo metadata after the review so clone status
             // (ready/failed) reflects what the agent actually used. When the
@@ -1002,7 +1402,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             // Emit profile-driven warnings up here at the stage so they
             // surface even when the agent's overhead preflight throws
-            // before its own emission points. These four are decided
+            // before its own emission points. These are decided
             // purely by the resolved profile — no PR-specific condition
             // needed. The agent will re-emit some of them when it runs;
             // dedupReviewWarnings folds the duplicates so the user sees
@@ -1021,9 +1421,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
             if (adaptiveProfile.compactPrompt) {
                 emitStageWarning('PROMPT_COMPACTED');
-            }
-            if (adaptiveProfile.allOptional) {
-                emitStageWarning('HUNK_HEADERS_ONLY');
             }
 
             const durationMs = Date.now() - startTime;
@@ -1053,14 +1450,34 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // critical error and should red-flag the check. Kody-rules is
             // auxiliary: the review still has value from the core agents,
             // so its failure is partial (maps to NEUTRAL on GitHub).
-            const CRITICAL_AGENTS = new Set([
-                'generalist',
-                'bug',
-                'security',
-                'performance',
-            ]);
+            const CRITICAL_AGENTS = CATEGORY_AGENTS;
+            const generalistCompletion = categoryAgentsCompletion(
+                result,
+                (error) =>
+                    (
+                        getClassification(error) ??
+                        classifyLLMError(
+                            error,
+                            resolvedProvider(context, error),
+                        )
+                    ).friendlyMessage || ULTRA_RUN_GENERIC_FAILURE,
+            );
 
-            for (const failure of result.failures || []) {
+            const failures = result.failures ?? [];
+
+            // Classify against the provider that ANSWERED, not the one
+            // resolved before the run. The friendly sentence names the
+            // provider inline ("the key (openai) appears invalid"), so
+            // classifying with the pre-run slot after a cascade puts one
+            // provider in the prose and another in the facts line — the
+            // same never-co-occurred pair, split across two fields.
+            // A classification already attached by byok-model-wrapper is
+            // anchored to the attempt that raised it, so it is preferred.
+            const classifyFailure = (f: (typeof failures)[number]) =>
+                getClassification(f.error) ??
+                classifyLLMError(f.error, resolvedProvider(context, f.error));
+
+            for (const failure of failures) {
                 // A custom agent is auxiliary, like kody-rules: its failure
                 // leaves the review partial, not failed.
                 const severity = CRITICAL_AGENTS.has(failure.agentName)
@@ -1080,6 +1497,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         metadata: {
                             agentName: failure.agentName,
                             category: failure.category,
+                            errorCategory: classifyFailure(failure).category,
+                            orgOwnedKey: usesOrgOwnedKey(
+                                context,
+                                failure.error,
+                            ),
                             prNumber,
                         },
                     });
@@ -1162,23 +1584,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // context for the message. A critical agent with a mapped (non-
             // UNKNOWN) classification wins; fall back to any critical, then
             // any failure.
-            const failures = result.failures ?? [];
-
             if (failures.length > 0) {
-                // Classify against the provider that ANSWERED, not the one
-                // resolved before the run. The friendly sentence names the
-                // provider inline ("the key (openai) appears invalid"), so
-                // classifying with the pre-run slot after a cascade puts one
-                // provider in the prose and another in the facts line — the
-                // same never-co-occurred pair, split across two fields.
-                // A classification already attached by byok-model-wrapper is
-                // anchored to the attempt that raised it, so it is preferred.
-                const classifyFailure = (f: (typeof failures)[number]) =>
-                    getClassification(f.error) ??
-                    classifyLLMError(
-                        f.error,
-                        resolvedProvider(context, f.error),
-                    );
                 const criticalFailures = failures.filter((f) =>
                     CRITICAL_AGENTS.has(f.agentName),
                 );
@@ -1238,6 +1644,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // and an agent-level one for the same (model, window) fold
             // into a single bullet in the user-facing notice.
             const allWarnings = dedupReviewWarnings([
+                // Recorded by earlier stages (e.g. a diff cut at the patch
+                // line limit in FetchChangedFilesStage).
+                ...(context.reviewWarnings ?? []),
                 ...(context.customAgentClis?.warnings ?? []),
                 ...stageWarnings,
                 ...(result.warnings ?? []),
@@ -1294,16 +1703,39 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
+            // After the finder, in order: parse schema, anchoring, label
+            // normalization (#1821). Then the dedup and the rest.
+            const logIds = {
+                organizationId: context.organizationAndTeamData?.organizationId,
+                teamId: context.organizationAndTeamData?.teamId,
+                prNumber,
+            };
+            const parsedSuggestions = this.discardUnparsedFindings(
+                result.suggestions,
+                allDiscarded,
+                logIds,
+            );
+
             const changedFilesByName = new Map(
                 changedFiles.map((f) => [f.filename, f]),
             );
             // A custom agent's findings on an ignored file it names are held
             // to that file's hunks like any other.
-            const validatedSuggestions = this.anchorSuggestionsToDiff(
-                result.suggestions,
+            const anchoredSuggestions = this.anchorSuggestionsToDiff(
+                parsedSuggestions,
                 [...changedFiles, ...ignoredChangedFiles],
                 context.codeReviewConfig?.kodyRules ?? [],
                 allDiscarded,
+                logIds,
+                new Set(changedFiles.map((f) => f.filename)),
+            );
+
+            const validatedSuggestions = this.normalizeSuggestionLabels(
+                anchoredSuggestions,
+                reviewOptions,
+                !!repoInstructions?.files?.length,
+                allDiscarded,
+                logIds,
             );
 
             // Verify/Discover removed — was hurting recall across all models.
@@ -1323,9 +1755,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // against the model's findings instead of arriving as a parallel
             // set of comments on the same lines. Their severity is already on
             // the v2 scale, so they skip normalizeSeverity.
-            const analyzerSuggestions = analyzerFindingsToSuggestions(
-                context.analyzerFindings ?? [],
-            );
+            const analyzerSuggestions =
+                scope === 'native'
+                    ? []
+                    : analyzerFindingsToSuggestions(
+                          context.analyzerFindings ?? [],
+                      );
 
             // #2097: what an earlier comment on this PR already raised is not
             // posted again. Runs on each occurrence, before the dedups below
@@ -1333,25 +1768,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // them, a group was kept or dropped whole by whichever occurrence
             // had the longest text. Also before the severity and formatter
             // passes, so a repeat costs no further model call.
-            const repeatCheck = await this.dropRepeats(
+            throwIfPassAbandoned(pass);
+            const repeatCheck = await this.dropRepeatsOnCitedCode(
                 context,
-                [
-                    ...severityNormalizedNonRules,
-                    ...analyzerSuggestions,
-                    ...kodyRulesWithSeverity,
-                ],
+                severityNormalizedNonRules,
+                [...analyzerSuggestions, ...kodyRulesWithSeverity],
+                [...changedFiles, ...ignoredChangedFiles],
                 kodyRulesById,
+                allDiscarded,
                 telemetryMeta,
             );
-            for (const s of repeatCheck.repeats) {
-                allDiscarded.push({
-                    ...s,
-                    priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
-                    deliveryStatus: DeliveryStatus.NOT_SENT,
-                });
-            }
-            let severityNormalized: Partial<CodeSuggestion>[] =
-                repeatCheck.kept;
+            let severityNormalized = repeatCheck.kept;
 
             // A custom agent's own severity floor and comment limit apply
             // whatever the team's filter is (#2172), and also before dedup:
@@ -1384,6 +1811,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 allDiscarded.push(...capped.overflow);
             }
 
+            throwIfPassAbandoned(pass);
             const dedup = await this.dedupSuggestionStreams(
                 severityNormalized,
                 prNumber,
@@ -1405,11 +1833,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // let the formatter LLM strip or reword the link when it
             // collapses WHAT/WHY/HOW into natural prose.
 
+            throwIfPassAbandoned(pass);
             deduped = await this.reclassifyAndFilterSeverity(
                 deduped,
                 context,
                 allDiscarded,
                 customAgentsById,
+            );
+
+            // Enrichment (#1821): the title, cited code and fix of each finder
+            // suggestion still standing. After the severity step, so only what
+            // reaches the team is enriched; before the title and the formatter,
+            // which read what it writes.
+            throwIfPassAbandoned(pass);
+            deduped = await this.enrichFinderSuggestions(
+                deduped,
+                context,
+                [...changedFiles, ...ignoredChangedFiles],
+                telemetryMeta,
             );
 
             // The agent's fix policy (its floor and limit applied before dedup).
@@ -1471,6 +1912,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // Clean up suggestion text: remove WHAT/WHY/HOW labels, merge into
             // natural prose, then give each comment the shape it needs
             // (format-and-shape-suggestions.ts, also run by evals/format).
+            throwIfPassAbandoned(pass);
             const { formatted, formatTargets, formatError, shapeCounts } =
                 await formatAndShapeSuggestions(deduped, {
                     writingGuidelines,
@@ -1532,6 +1974,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             {
                 const badFixCounts: Partial<Record<BadFixReason, number>> = {};
                 for (const s of deduped) {
+                    // The enrichment chose no code: not an unusable fix.
+                    if (s.fixStatus && s.fixStatus !== 'local') {
+                        continue;
+                    }
+                    // Its enrichment call failed: no fix was proposed, and
+                    // the finding posts as a plain comment.
+                    if (!s.fixStatus && isFinderSuggestion(s)) {
+                        continue;
+                    }
                     const reason = checkFix(
                         s.existingCode,
                         s.improvedCode,
@@ -1542,6 +1993,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     }
                     badFixCounts[reason] = (badFixCounts[reason] ?? 0) + 1;
                     s.improvedCode = '';
+                    if (s.fixStatus === 'local') {
+                        s.fixStatus = REJECTED_FIX_STATUS;
+                    }
                 }
                 const totalBadFix = Object.values(badFixCounts).reduce(
                     (sum: number, n) => sum + (n ?? 0),
@@ -1576,8 +2030,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // The CLI output that names a custom agent finding's file and the
             // team rule it applies, after formatting so the rewrite cannot
             // paraphrase or drop them (#2172).
+            const knowledgeSources = reviewKnowledge.sources;
+            const ruleSources = knowledgeSources?.length
+                ? {
+                      sources: knowledgeSources,
+                      platform: context.platformType,
+                      // Unknown visibility counts as public.
+                      reviewedIsPublic:
+                          reviewKnowledge.reviewedRepository?.visibility !==
+                          'private',
+                  }
+                : undefined;
             for (const s of deduped) {
-                const citation = findingCitation(s, cliRuns);
+                const citation = findingCitation(s, cliRuns, ruleSources);
                 if (!citation) continue;
                 s.suggestionContent = `${s.suggestionContent || ''}${citation}`;
                 s.fullExplanation = `${s.fullExplanation || ''}${citation}`;
@@ -1592,7 +2057,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 const locationsList = otherLocations
                     .map((loc) => `- \`${loc}\``)
                     .join('\n');
-                const otherLocationsSection = `\n\n**Also found in:**\n${locationsList}`;
+                const otherLocationsSection = `\n\n${OTHER_LOCATIONS_HEADING}\n${locationsList}`;
                 s.suggestionContent = `${s.suggestionContent}${otherLocationsSection}`;
                 // llmPrompt is built from fullExplanation below; without the
                 // list an agent working from the prompt fixes only the kept
@@ -1670,247 +2135,31 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // formatter never sees (same reason as the rule link above).
             applyRevisionLinks(deduped, repeatCheck.history);
 
-            // Separate PR-level kody rules (no anchor) from file-level suggestions.
-            // PR-level suggestions go to validSuggestionsByPR → CreatePrLevelCommentsStage.
-            // A file-anchored finding takes the same route: it is about the
-            // file, so there is no line in the diff to hang it on.
-            // A missing relevantFile alone already means it can't be anchored
-            // to a diff position — a lone relevantLinesStart with no
-            // relevantFile used to fall through to file-level grouping keyed
-            // on '', which never matches a real changed file and silently
-            // dropped the finding as DISCARDED_BY_CODE_DIFF.
-            //
-            // A relevantFile that names a file THIS PR TOUCHES but carries no
-            // line also can't be anchored: calculateCommentStartLine (in
-            // comment-builder.utils.ts) returns undefined for a missing
-            // relevantLinesStart, and create-file-comments.stage.ts posts the
-            // comment anyway with start_line/line both undefined — a broken
-            // inline comment, not a discard. Route it PR-level instead, same
-            // as the no-file case.
-            //
-            // A relevantFile naming a file OUTSIDE this PR must NOT take this
-            // branch even with no line citation: it still needs to go through
-            // the file-level branch below so the `changedFiles` guard discards
-            // it (KRC-20) instead of leaking out as an unanchored PR-level
-            // comment. `changedFilesByName` (built above for the diff-snap
-            // step) tells the two cases apart.
-            const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
-                s.label === 'kody_rules' &&
-                (!s.relevantFile ||
-                    s.fileAnchored === true ||
-                    (!s.relevantLinesStart &&
-                        changedFilesByName.has(s.relevantFile)));
-            // Agents set to `single-comment` publish one PR-level comment
-            // gathering their findings instead of inline comments (#2172).
-            const singleComments = collectSingleComments(
+            if (pass.collect) {
+                pass.collect({
+                    findings: deduped,
+                    discarded: allDiscarded,
+                    customAgentRuns: result.customAgentRuns,
+                    mergedInDedup,
+                    dedupTrace,
+                    completion: generalistCompletion,
+                });
+                return context;
+            }
+
+            return this.publishFindings(context, {
                 deduped,
-                customAgentsById,
-            );
-            deduped = singleComments.inline;
-            const customAgentSummaries = summarizeCustomAgentRuns(
-                result.customAgentRuns,
-                [...deduped, ...singleComments.grouped],
-                {
-                    agents: context.codeReviewConfig?.customAgents ?? [],
-                    ignoredFiles: context.ignoredFiles ?? [],
-                    // Deleted files sit in ignoredFiles too; the ignored
-                    // changes hold only the files the ignore paths matched.
-                    removedFiles: (context.ignoredFiles ?? []).filter(
-                        (f) =>
-                            !(context.ignoredFileChanges ?? []).some(
-                                (c) => c.filename === f,
-                            ),
-                    ),
-                },
-            );
-            this.logCustomAgentOutcome(
-                context,
-                customAgentSummaries,
                 allDiscarded,
+                customAgentsById,
+                customAgentRuns: result.customAgentRuns,
                 mergedInDedup,
-            );
-            const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
-            const fileLevelSuggestions = deduped.filter(
-                (s) => !isPrLevelSuggestion(s),
-            );
-
-            // Sort file-level suggestions: kody_rules first, then by severity
-            // (critical > high > medium > low).
-            const severityOrder: Record<string, number> = {
-                critical: 0,
-                high: 1,
-                medium: 2,
-                low: 3,
-            };
-            fileLevelSuggestions.sort((a, b) => {
-                // kody_rules always first within the same file
-                const aIsRule = a.label === 'kody_rules' ? 0 : 1;
-                const bIsRule = b.label === 'kody_rules' ? 0 : 1;
-                if (aIsRule !== bIsRule) {
-                    return aIsRule - bIsRule;
-                }
-                // Then by severity
-                const aSeverity =
-                    severityOrder[this.normalizeSeverity(a.severity)];
-                const bSeverity =
-                    severityOrder[this.normalizeSeverity(b.severity)];
-                return aSeverity - bSeverity;
-            });
-
-            return this.updateContext(context, (draft) => {
-                const byFile = new Map<string, Partial<CodeSuggestion>[]>();
-                for (const s of fileLevelSuggestions) {
-                    const file = s.relevantFile || '';
-                    if (!byFile.has(file)) {
-                        byFile.set(file, []);
-                    }
-                    byFile.get(file)!.push(s);
-                }
-
-                // Build the full set of files we need to emit into
-                // `fileAnalysisResults` — one entry per file that has
-                // EITHER a valid suggestion OR a discarded-by-safeguard
-                // suggestion. Previously we only iterated `byFile`, which
-                // meant files where every suggestion was discarded never
-                // reached `CreateFileCommentsStage` and the fallback
-                // comments for those files silently disappeared from the
-                // review.
-                const discardedByFile = new Map<
-                    string,
-                    Partial<CodeSuggestion>[]
-                >();
-                for (const s of allDiscarded) {
-                    const file = s.relevantFile || '';
-                    if (!file) continue;
-                    if (!discardedByFile.has(file)) {
-                        discardedByFile.set(file, []);
-                    }
-                    discardedByFile.get(file)!.push(s);
-                }
-
-                const allAffectedFiles = new Set<string>([
-                    ...byFile.keys(),
-                    ...discardedByFile.keys(),
-                ]);
-
-                // Keyed once rather than scanned per file: this loop runs over
-                // every affected file and both lists can be large on a wide PR.
-                const changedByName = new Map(
-                    changedFiles.map((f) => [f.filename, f]),
-                );
-                const ignoredByName = new Map(
-                    (context.ignoredFileChanges ?? []).map((f) => [
-                        f.filename,
-                        f,
-                    ]),
-                );
-
-                draft.fileAnalysisResults = [];
-                for (const filename of allAffectedFiles) {
-                    const suggestions = byFile.get(filename) ?? [];
-                    // Analyzer findings legitimately land on files the review
-                    // itself ignores — a lockfile is the common case, since
-                    // ignorePaths hides it from the reviewer while the
-                    // dependency scan still has to report what it introduces.
-                    // Resolving only against changedFiles discarded those.
-                    const file =
-                        changedByName.get(filename) ??
-                        ignoredByName.get(filename);
-                    if (file) {
-                        draft.fileAnalysisResults.push({
-                            validSuggestionsToAnalyze: suggestions,
-                            discardedSuggestionsBySafeGuard:
-                                discardedByFile.get(filename) ?? [],
-                            file,
-                        });
-                    } else if (suggestions.length > 0) {
-                        // Silent drop guard: the agent produced a finding
-                        // for a file that isn't in changedFiles (path
-                        // mismatch, filtered-out test/doc, rename, etc.).
-                        // Previously these disappeared with no trace —
-                        // now we track them as DISCARDED_BY_CODE_DIFF so
-                        // the suggestion still reaches Mongo and can be
-                        // reconciled later.
-                        this.logger.warn({
-                            message: `[AGENT] ${suggestions.length} suggestion(s) dropped — relevantFile "${filename}" not found in changedFiles`,
-                            context: this.stageName,
-                            metadata: {
-                                prNumber,
-                                filename,
-                                suggestionsCount: suggestions.length,
-                                availableFilesSample: changedFiles
-                                    .slice(0, 10)
-                                    .map((f) => f.filename),
-                            },
-                        });
-                        for (const s of suggestions) {
-                            allDiscarded.push({
-                                ...s,
-                                priorityStatus:
-                                    PriorityStatus.DISCARDED_BY_CODE_DIFF,
-                                deliveryStatus: DeliveryStatus.NOT_SENT,
-                            });
-                        }
-                    }
-                    // Files with only discarded suggestions AND no match in
-                    // changedFiles are silently ignored — they can't
-                    // produce a valid comment anchor either way.
-                }
-
-                // PR-level kody rules go to validSuggestionsByPR for CreatePrLevelCommentsStage
-                if (prLevelSuggestions.length > 0) {
-                    if (!draft.validSuggestionsByPR) {
-                        draft.validSuggestionsByPR = [];
-                    }
-                    draft.validSuggestionsByPR.push(
-                        ...prLevelSuggestions.map((s) => ({
-                            id: crypto.randomUUID(),
-                            // Any finding that named a file has to say WHERE,
-                            // since a PR-level comment carries no anchor of
-                            // its own — true whether it's fileAnchored
-                            // (explicitly out-of-hunk) or just missing a
-                            // line. Cite a line only when one is real
-                            // (`!s.relevantLinesStart`, same falsy check
-                            // `isPrLevelSuggestion` uses above): fabricating
-                            // `:1` for a finding that has no line — the
-                            // empty/unparseable-patch case — would point at
-                            // a line that need not exist in the diff at all.
-                            suggestionContent: s.relevantFile
-                                ? s.relevantLinesStart
-                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.suggestionContent || ''}`
-                                    : `\`${s.relevantFile}\` — ${s.suggestionContent || ''}`
-                                : s.suggestionContent || '',
-                            oneSentenceSummary: s.oneSentenceSummary || '',
-                            fullExplanation: s.relevantFile
-                                ? s.relevantLinesStart
-                                    ? `\`${s.relevantFile}:${s.relevantLinesStart}\` — ${s.fullExplanation || s.suggestionContent || ''}`
-                                    : `\`${s.relevantFile}\` — ${s.fullExplanation || s.suggestionContent || ''}`
-                                : s.fullExplanation,
-                            label: (s.label as any) || 'kody_rules',
-                            severity: this.normalizeSeverity(
-                                s.severity,
-                            ) as SeverityLevel,
-                            brokenKodyRulesIds: s.brokenKodyRulesIds,
-                            deliveryStatus: DeliveryStatus.NOT_SENT,
-                        })),
-                    );
-                }
-
-                if (singleComments.prLevel.length > 0) {
-                    if (!draft.validSuggestionsByPR) {
-                        draft.validSuggestionsByPR = [];
-                    }
-                    draft.validSuggestionsByPR.push(...singleComments.prLevel);
-                }
-
-                draft.dedupTrace = dedupTrace;
-                // File-level only: CreateFileCommentsStage posts every entry as
-                // a line comment, and the PR-level ones are already delivered
-                // through validSuggestionsByPR above.
-                draft.validSuggestions = fileLevelSuggestions;
-                draft.discardedSuggestions = allDiscarded;
+                dedupTrace,
+                changedFiles,
+                prNumber,
             });
         } catch (error) {
+            // Left behind by its caller: nothing it would report is read.
+            if (error instanceof PassAbandonedError) return context;
             const durationMs = Date.now() - startTime;
             // Terminal BYOK (suspended key / no credit) → warn: user's provider
             // config, not a Kodus fault. Real fault stays error.
@@ -1933,6 +2182,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     stageError,
                     resolvedProvider(context, stageError),
                 );
+            pass.collect?.({
+                findings: [],
+                discarded: [],
+                mergedInDedup: [],
+                completion: {
+                    completed: false,
+                    failureReason:
+                        classification.friendlyMessage ||
+                        ULTRA_RUN_GENERIC_FAILURE,
+                },
+            });
 
             // Keep going so the end-review comment still gets posted and the
             // check still finalizes — but record the failure as CRITICAL. This
@@ -1950,8 +2210,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     pipelineId: context.pipelineMetadata?.pipelineId,
                     stage: this.stageName,
                     error: stageError,
-                    severity: 'critical',
-                    metadata: { prNumber, durationMs },
+                    // An Ultra review's Kody Rules and custom agents failing
+                    // leave the models' review standing.
+                    severity: scope === 'auxiliary' ? 'partial' : 'critical',
+                    metadata: {
+                        prNumber,
+                        durationMs,
+                        errorCategory: classification.category,
+                        orgOwnedKey: usesOrgOwnedKey(context, stageError),
+                    },
                 });
 
                 if (!draft.lastReviewError) {
@@ -1969,6 +2236,323 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             });
         }
+    }
+
+    /**
+     * Posts the review's findings: a PR-level comment for what has no line in
+     * the diff, a line comment for the rest, and every discarded finding kept
+     * for the record. The last step of a review pass, and of an Ultra review
+     * once its models' findings are merged.
+     */
+    private publishFindings(
+        context: CodeReviewPipelineContext,
+        input: {
+            deduped: Partial<CodeSuggestion>[];
+            allDiscarded: Partial<CodeSuggestion>[];
+            customAgentsById: CustomAgentsById;
+            customAgentRuns: OrchestratorOutput['customAgentRuns'];
+            mergedInDedup: Partial<CodeSuggestion>[];
+            dedupTrace: DedupTraceSummary;
+            changedFiles: FileChange[];
+            prNumber: number;
+        },
+    ): CodeReviewPipelineContext {
+        const {
+            allDiscarded,
+            customAgentsById,
+            customAgentRuns,
+            mergedInDedup,
+            dedupTrace,
+            changedFiles,
+            prNumber,
+        } = input;
+        let deduped = input.deduped;
+        const changedFilesByName = new Map(
+            changedFiles.map((f) => [f.filename, f]),
+        );
+        // Separate PR-level kody rules (no anchor) from file-level suggestions.
+        // PR-level suggestions go to validSuggestionsByPR → CreatePrLevelCommentsStage.
+        // A file-anchored finding takes the same route: it is about the
+        // file, so there is no line in the diff to hang it on.
+        // A missing relevantFile alone already means it can't be anchored
+        // to a diff position — a lone relevantLinesStart with no
+        // relevantFile used to fall through to file-level grouping keyed
+        // on '', which never matches a real changed file and silently
+        // dropped the finding as DISCARDED_BY_CODE_DIFF.
+        //
+        // A relevantFile that names a file THIS PR TOUCHES but carries no
+        // line also can't be anchored: calculateCommentStartLine (in
+        // comment-builder.utils.ts) returns undefined for a missing
+        // relevantLinesStart, and create-file-comments.stage.ts posts the
+        // comment anyway with start_line/line both undefined — a broken
+        // inline comment, not a discard. Route it PR-level instead, same
+        // as the no-file case.
+        //
+        // A relevantFile naming a file OUTSIDE this PR must NOT take this
+        // branch even with no line citation: it still needs to go through
+        // the file-level branch below so the `changedFiles` guard discards
+        // it (KRC-20) instead of leaking out as an unanchored PR-level
+        // comment. `changedFilesByName` (built above for the diff-snap
+        // step) tells the two cases apart.
+        //
+        // A file the PR carries without a patch has no hunk to anchor a
+        // line comment to, and GitHub answers 422 on every attempt. Two
+        // shapes reach this. A diff the host withheld ("diff is too
+        // large") is the first: the analyzers read such a file from a hunk
+        // they recovered, so a lockfile advisory would never reach the PR.
+        // A file moved without a content change is the second: a 100%
+        // similarity rename has no hunks at all, and the host rejects the
+        // comment with "could not be resolved". Route both PR-level,
+        // citing file:line: the first covers analyzer findings, the second
+        // covers anything a model or an analyzer found on that file.
+        const withoutPatch = (f: FileChange) => Boolean(f.filename) && !f.patch;
+        const allChanges = [
+            ...changedFiles,
+            ...(context.ignoredFileChanges ?? []),
+        ];
+        const withheldDiffs = new Set(
+            allChanges.filter(withoutPatch).map((f) => f.filename),
+        );
+        const movedWithoutHunks = new Set(
+            allChanges
+                .filter(
+                    (f) =>
+                        withoutPatch(f) &&
+                        (f.status === 'renamed' || f.status === 'copied'),
+                )
+                .map((f) => f.filename),
+        );
+        const isPrLevelSuggestion = (s: Partial<CodeSuggestion>): boolean =>
+            (!!s.relevantFile &&
+                (isAnalyzerSuggestion(s)
+                    ? withheldDiffs.has(s.relevantFile)
+                    : movedWithoutHunks.has(s.relevantFile))) ||
+            (s.label === 'kody_rules' &&
+                (!s.relevantFile ||
+                    s.fileAnchored === true ||
+                    (!s.relevantLinesStart &&
+                        changedFilesByName.has(s.relevantFile))));
+        // Agents set to `single-comment` publish one PR-level comment
+        // gathering their findings instead of inline comments (#2172).
+        const singleComments = collectSingleComments(deduped, customAgentsById);
+        deduped = singleComments.inline;
+        const customAgentSummaries = summarizeCustomAgentRuns(
+            customAgentRuns,
+            [...deduped, ...singleComments.grouped],
+            {
+                agents: context.codeReviewConfig?.customAgents ?? [],
+                ignoredFiles: context.ignoredFiles ?? [],
+                // Deleted files sit in ignoredFiles too; the ignored
+                // changes hold only the files the ignore paths matched.
+                removedFiles: (context.ignoredFiles ?? []).filter(
+                    (f) =>
+                        !(context.ignoredFileChanges ?? []).some(
+                            (c) => c.filename === f,
+                        ),
+                ),
+            },
+        );
+        this.logCustomAgentOutcome(
+            context,
+            customAgentSummaries,
+            allDiscarded,
+            mergedInDedup,
+        );
+        this.recordCustomAgentRuns(context, customAgentSummaries);
+        const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
+        const fileLevelSuggestions = deduped.filter(
+            (s) => !isPrLevelSuggestion(s),
+        );
+
+        // Sort file-level suggestions: kody_rules first, then by severity
+        // (critical > high > medium > low).
+        const severityOrder: Record<string, number> = {
+            critical: 0,
+            high: 1,
+            medium: 2,
+            low: 3,
+        };
+        fileLevelSuggestions.sort((a, b) => {
+            // kody_rules always first within the same file
+            const aIsRule = a.label === 'kody_rules' ? 0 : 1;
+            const bIsRule = b.label === 'kody_rules' ? 0 : 1;
+            if (aIsRule !== bIsRule) {
+                return aIsRule - bIsRule;
+            }
+            // Then by severity
+            const aSeverity = severityOrder[this.normalizeSeverity(a.severity)];
+            const bSeverity = severityOrder[this.normalizeSeverity(b.severity)];
+            return aSeverity - bSeverity;
+        });
+
+        return this.updateContext(context, (draft) => {
+            const byFile = new Map<string, Partial<CodeSuggestion>[]>();
+            for (const s of fileLevelSuggestions) {
+                const file = s.relevantFile || '';
+                if (!byFile.has(file)) {
+                    byFile.set(file, []);
+                }
+                byFile.get(file)!.push(s);
+            }
+
+            // Build the full set of files we need to emit into
+            // `fileAnalysisResults` — one entry per file that has
+            // EITHER a valid suggestion OR a discarded-by-safeguard
+            // suggestion. Previously we only iterated `byFile`, which
+            // meant files where every suggestion was discarded never
+            // reached `CreateFileCommentsStage` and the fallback
+            // comments for those files silently disappeared from the
+            // review.
+            const discardedByFile = new Map<
+                string,
+                Partial<CodeSuggestion>[]
+            >();
+            for (const s of allDiscarded) {
+                const file = s.relevantFile || '';
+                if (!file) continue;
+                if (!discardedByFile.has(file)) {
+                    discardedByFile.set(file, []);
+                }
+                discardedByFile.get(file)!.push(s);
+            }
+
+            const allAffectedFiles = new Set<string>([
+                ...byFile.keys(),
+                ...discardedByFile.keys(),
+            ]);
+
+            // Keyed once rather than scanned per file: this loop runs over
+            // every affected file and both lists can be large on a wide PR.
+            const changedByName = new Map(
+                changedFiles.map((f) => [f.filename, f]),
+            );
+            const ignoredByName = new Map(
+                (context.ignoredFileChanges ?? []).map((f) => [f.filename, f]),
+            );
+
+            draft.fileAnalysisResults = [];
+            for (const filename of allAffectedFiles) {
+                const suggestions = byFile.get(filename) ?? [];
+                // Analyzer findings legitimately land on files the review
+                // itself ignores — a lockfile is the common case, since
+                // ignorePaths hides it from the reviewer while the
+                // dependency scan still has to report what it introduces.
+                // Resolving only against changedFiles discarded those.
+                const file =
+                    changedByName.get(filename) ?? ignoredByName.get(filename);
+                if (file) {
+                    draft.fileAnalysisResults.push({
+                        validSuggestionsToAnalyze: suggestions,
+                        discardedSuggestionsBySafeGuard:
+                            discardedByFile.get(filename) ?? [],
+                        file,
+                    });
+                } else if (suggestions.length > 0) {
+                    // Silent drop guard: the agent produced a finding
+                    // for a file that isn't in changedFiles (path
+                    // mismatch, filtered-out test/doc, rename, etc.).
+                    // Previously these disappeared with no trace —
+                    // now we track them as DISCARDED_BY_CODE_DIFF so
+                    // the suggestion still reaches Mongo and can be
+                    // reconciled later.
+                    this.logger.warn({
+                        message: `[AGENT] ${suggestions.length} suggestion(s) dropped — relevantFile "${filename}" not found in changedFiles`,
+                        context: this.stageName,
+                        metadata: {
+                            prNumber,
+                            filename,
+                            suggestionsCount: suggestions.length,
+                            availableFilesSample: changedFiles
+                                .slice(0, 10)
+                                .map((f) => f.filename),
+                        },
+                    });
+                    for (const s of suggestions) {
+                        allDiscarded.push({
+                            ...s,
+                            priorityStatus:
+                                PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                            deliveryStatus: DeliveryStatus.NOT_SENT,
+                        });
+                    }
+                }
+                // Files with only discarded suggestions AND no match in
+                // changedFiles are silently ignored — they can't
+                // produce a valid comment anchor either way.
+            }
+
+            // PR-level kody rules go to validSuggestionsByPR for CreatePrLevelCommentsStage
+            if (prLevelSuggestions.length > 0) {
+                if (!draft.validSuggestionsByPR) {
+                    draft.validSuggestionsByPR = [];
+                }
+                // An analyzer body opens with its own title, which the
+                // PR-level comment already shows as its heading, and
+                // continues with a list that cannot follow a dash.
+                const withoutTitle = (text: string, title?: string) =>
+                    title && text.startsWith(title)
+                        ? text.slice(title.length).replace(/^[.:]?\s*/, '')
+                        : text;
+                const cite = (
+                    s: Partial<CodeSuggestion>,
+                    text: string,
+                ): string => {
+                    const where = s.relevantLinesStart
+                        ? `\`${s.relevantFile}:${s.relevantLinesStart}\``
+                        : `\`${s.relevantFile}\``;
+                    return isAnalyzerSuggestion(s)
+                        ? `${where}\n\n${withoutTitle(text, s.oneSentenceSummary)}`
+                        : `${where} — ${text}`;
+                };
+                draft.validSuggestionsByPR.push(
+                    ...prLevelSuggestions.map((s) => ({
+                        id: crypto.randomUUID(),
+                        // Any finding that named a file has to say WHERE,
+                        // since a PR-level comment carries no anchor of
+                        // its own — true whether it's fileAnchored
+                        // (explicitly out-of-hunk) or just missing a
+                        // line. Cite a line only when one is real
+                        // (`!s.relevantLinesStart`, same falsy check
+                        // `isPrLevelSuggestion` uses above): fabricating
+                        // `:1` for a finding that has no line — the
+                        // empty/unparseable-patch case — would point at
+                        // a line that need not exist in the diff at all.
+                        suggestionContent: s.relevantFile
+                            ? cite(s, s.suggestionContent || '')
+                            : s.suggestionContent || '',
+                        oneSentenceSummary: s.oneSentenceSummary || '',
+                        fullExplanation: s.relevantFile
+                            ? cite(
+                                  s,
+                                  s.fullExplanation ||
+                                      s.suggestionContent ||
+                                      '',
+                              )
+                            : s.fullExplanation,
+                        label: (s.label as any) || 'kody_rules',
+                        severity: this.normalizeSeverity(
+                            s.severity,
+                        ) as SeverityLevel,
+                        brokenKodyRulesIds: s.brokenKodyRulesIds,
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
+                    })),
+                );
+            }
+
+            if (singleComments.prLevel.length > 0) {
+                if (!draft.validSuggestionsByPR) {
+                    draft.validSuggestionsByPR = [];
+                }
+                draft.validSuggestionsByPR.push(...singleComments.prLevel);
+            }
+
+            draft.dedupTrace = dedupTrace;
+            // File-level only: CreateFileCommentsStage posts every entry as
+            // a line comment, and the PR-level ones are already delivered
+            // through validSuggestionsByPR above.
+            draft.validSuggestions = fileLevelSuggestions;
+            draft.discardedSuggestions = allDiscarded;
+        });
     }
 
     /**
@@ -2000,6 +2584,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         changedFiles: FileChange[],
         kodyRules: Partial<IKodyRule>[],
         allDiscarded: Partial<CodeSuggestion>[],
+        /** The review's ids, on every log line. */
+        logMeta: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        } = {},
+        /**
+         * Files this PR changes, without the ignored ones. Only these reach the
+         * PR-level routing below, so only these may skip the diff snap.
+         */
+        prChangedFileNames: ReadonlySet<string> = new Set(),
     ): Partial<CodeSuggestion>[] {
         // Snap suggestion line numbers to valid diff ranges before passing downstream.
         // GitHub rejects inline comments on lines that aren't part of the diff.
@@ -2014,7 +2609,41 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         const validatedSuggestions = suggestions
             .map((s) => {
                 const file = changedFilesByName.get(s.relevantFile);
+                // A finding on a file this PR does not change has no hunk to
+                // overlap; the delivery guard would drop it after the dedup and
+                // the severity calls, so it goes now. Kody Rules keep their own
+                // routing (PR-level and file-anchored comments).
+                if (!file && s.label !== 'kody_rules') {
+                    this.logger.log({
+                        message: `[AGENT] Dropped suggestion for ${s.relevantFile}: the file is not changed by this PR`,
+                        context: this.stageName,
+                        metadata: { ...logMeta, relevantFile: s.relevantFile },
+                    });
+                    allDiscarded.push({
+                        ...s,
+                        priorityStatus: PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
+                    });
+                    return null;
+                }
                 if (!file) return s;
+
+                // A Kody Rule finding that names a file this PR changes without
+                // citing lines is a PR-level finding by intent — see
+                // `isPrLevelSuggestion` below. Snapping it to the file's first
+                // hunk here turned a rule about the PR itself into an inline
+                // comment on an unrelated changed line (#2420). The snap is
+                // kept for ignored files: they never reach that routing map,
+                // so leaving them line-less would produce a broken inline
+                // comment instead of a PR-level one.
+                if (
+                    s.label === 'kody_rules' &&
+                    !s.relevantLinesStart &&
+                    prChangedFileNames.has(s.relevantFile)
+                ) {
+                    return s;
+                }
+
                 const validRanges = extractValidDiffLines(file.patch);
                 const snapped = snapLinesToDiff(s, validRanges);
                 if (snapped === null) {
@@ -2022,12 +2651,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         this.logger.log({
                             message: `[AGENT] File-anchored finding for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} sit outside every hunk, but the rule declared it needs context beyond the diff — delivering it as a PR-level comment`,
                             context: this.stageName,
+                            metadata: {
+                                ...logMeta,
+                                relevantFile: s.relevantFile,
+                            },
                         });
                         return { ...s, fileAnchored: true };
                     }
                     this.logger.log({
                         message: `[AGENT] Dropped out-of-diff suggestion for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} do not overlap any changed hunk`,
                         context: this.stageName,
+                        metadata: { ...logMeta, relevantFile: s.relevantFile },
                     });
                     allDiscarded.push({
                         ...s,
@@ -2043,12 +2677,193 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     this.logger.log({
                         message: `[AGENT] Snapped lines for ${s.relevantFile}: ${s.relevantLinesStart}-${s.relevantLinesEnd} → ${snapped.relevantLinesStart}-${snapped.relevantLinesEnd}`,
                         context: this.stageName,
+                        metadata: { ...logMeta, relevantFile: s.relevantFile },
                     });
                 }
                 return snapped;
             })
             .filter((s): s is Partial<CodeSuggestion> => s !== null);
         return validatedSuggestions;
+    }
+
+    /**
+     * Parse schema (#1821): a finder suggestion without the five lean fields
+     * is discarded into `allDiscarded`, before anchoring, so every suggestion
+     * anchored has a file and lines. The mapper already gave it the lean shape
+     * (finding-mapper.ts, leanOutput). Custom agents write the full finding and
+     * keep main's anchoring: one without lines snaps to the first hunk.
+     * Returns what goes on to anchoring, Kody Rules last.
+     */
+    private discardUnparsedFindings(
+        suggestions: Partial<CodeSuggestion>[],
+        allDiscarded: Partial<CodeSuggestion>[],
+        /** The review's ids, on every log line. */
+        logMeta: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        },
+    ): Partial<CodeSuggestion>[] {
+        const finderSuggestions = suggestions.filter(isFinderSuggestion);
+        const parsed = parseFinderSchema(
+            finderSuggestions as Array<Record<string, unknown>>,
+        );
+        const parseDiscarded = new Set(parsed.discarded.map((d) => d.index));
+        for (const d of parsed.discarded) {
+            allDiscarded.push({
+                ...finderSuggestions[d.index],
+                priorityStatus: PriorityStatus.DISCARDED_BY_SCHEMA,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        if (parsed.discarded.length > 0) {
+            this.logger.warn({
+                message: `[PARSE-SCHEMA] PR#${logMeta.prNumber}: discarded ${parsed.discarded.length} finder suggestions missing lean fields`,
+                context: this.stageName,
+                metadata: { ...logMeta, discarded: parsed.discarded },
+            });
+        }
+        const discardedByParse = new Set(
+            finderSuggestions.filter((_, i) => parseDiscarded.has(i)),
+        );
+        return [
+            ...suggestions.filter(
+                (s) => s.label !== 'kody_rules' && !discardedByParse.has(s),
+            ),
+            ...suggestions.filter((s) => s.label === 'kody_rules'),
+        ];
+    }
+
+    /**
+     * Label normalization (#1821): a label off the list becomes `bug`, and a
+     * label the team turned off is discarded into `allDiscarded`, never moved
+     * to one that is on. Kody Rules and custom agents answer to their own
+     * config.
+     */
+    private normalizeSuggestionLabels(
+        suggestions: Partial<CodeSuggestion>[],
+        reviewOptions: ReturnType<
+            typeof resolveAgentReviewSettings
+        >['reviewOptions'],
+        hasRepoInstructions: boolean,
+        allDiscarded: Partial<CodeSuggestion>[],
+        /** The review's ids, on every log line. */
+        logMeta: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        },
+    ): Partial<CodeSuggestion>[] {
+        const labeled = normalizeFinderLabels(suggestions, {
+            allowed: new Set<string>([
+                ...CATEGORY_LABELS.filter((c) => reviewOptions?.[c] !== false),
+                ...(hasRepoInstructions ? ['repo_instruction'] : []),
+            ]),
+            exempt: (s) => s.label === 'kody_rules' || isCustomAgentFinding(s),
+        });
+        for (const s of labeled.discarded) {
+            allDiscarded.push({
+                ...s,
+                priorityStatus: PriorityStatus.DISCARDED_BY_CATEGORY,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        if (labeled.discarded.length > 0) {
+            const byLabel: Record<string, number> = {};
+            for (const s of labeled.discarded) {
+                byLabel[s.label] = (byLabel[s.label] || 0) + 1;
+            }
+            this.logger.log({
+                message: `[LABEL-NORMALIZE] PR#${logMeta.prNumber}: discarded ${labeled.discarded.length} suggestions in categories the team turned off`,
+                context: this.stageName,
+                metadata: { ...logMeta, byLabel },
+            });
+        }
+        if (Object.keys(labeled.replaced).length > 0) {
+            this.logger.warn({
+                message: `[LABEL-NORMALIZE] PR#${logMeta.prNumber}: replaced the label of ${Object.values(labeled.replaced).reduce((a, b) => a + b, 0)} suggestions with bug`,
+                context: this.stageName,
+                metadata: { ...logMeta, replaced: labeled.replaced },
+            });
+        }
+        return labeled.suggestions;
+    }
+
+    /**
+     * The repeat check (#2097) on findings that carry their cited code. The
+     * finder's suggestions carry no code: the cited lines, read from the PR
+     * head as the enrichment reads them, let the check match an earlier
+     * comment on the same code in another file. The code goes on a copy the
+     * check reads; the suggestion itself stays lean, and the enrichment reads
+     * the code again. Repeats go to `allDiscarded`; returns what was kept and
+     * the history read, so the revision links resolve against it.
+     */
+    private async dropRepeatsOnCitedCode(
+        context: CodeReviewPipelineContext,
+        nonRuleSuggestions: Partial<CodeSuggestion>[],
+        otherSuggestions: Partial<CodeSuggestion>[],
+        headFileList: FileChange[],
+        kodyRulesById: ReadonlyMap<string, Partial<IKodyRule>>,
+        allDiscarded: Partial<CodeSuggestion>[],
+        telemetryMeta?: LangfuseTelemetryMetadata,
+    ): Promise<{
+        kept: Partial<CodeSuggestion>[];
+        history: readonly PrDecisionRecord[] | undefined;
+    }> {
+        const headFiles = new Map(headFileList.map((f) => [f.filename, f]));
+        const originalOf = new Map<
+            Partial<CodeSuggestion>,
+            Partial<CodeSuggestion>
+        >();
+        const withCitedCode = nonRuleSuggestions.map((s) => {
+            if (s.existingCode || isCustomAgentFinding(s)) return s;
+            const file = headFiles.get(s.relevantFile);
+            // A review sent as a diff (the CLI's) has no file content:
+            // the cited lines come from the diff's new side.
+            const existingCode =
+                file?.fileContent == null && file?.patch
+                    ? citedFromPatch(
+                          file.patch,
+                          s.relevantLinesStart ?? 1,
+                          s.relevantLinesEnd ?? s.relevantLinesStart ?? 1,
+                      )
+                    : enrichDeterministic(s, file?.fileContent ?? null)
+                          .existingCode;
+            if (!existingCode) return s;
+            const copy = { ...s, existingCode };
+            originalOf.set(copy, s);
+            return copy;
+        });
+        const repeatCheck = await this.dropRepeats(
+            context,
+            [...withCitedCode, ...otherSuggestions],
+            kodyRulesById,
+            telemetryMeta,
+        );
+        for (const s of repeatCheck.repeats) {
+            allDiscarded.push({
+                ...s,
+                priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        for (const s of repeatCheck.withheld) {
+            allDiscarded.push({
+                ...s,
+                priorityStatus: PriorityStatus.WITHHELD_BY_REPEAT_CHECK,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        const kept = repeatCheck.kept.map((s) => {
+            const original = originalOf.get(s);
+            if (!original) return s;
+            // The check links a kept finding to the earlier comment it
+            // revises on the copy; the link goes back with it.
+            return s.revisesSuggestionId
+                ? { ...original, revisesSuggestionId: s.revisesSuggestionId }
+                : original;
+        });
+        return { kept, history: repeatCheck.history };
     }
 
     /**
@@ -2191,6 +3006,34 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             };
         }
 
+        return {
+            deduped: await this.crossDedupStreams(
+                dedupedNonRules,
+                kodyRulesForDedup,
+                prNumber,
+                context,
+                telemetryMeta,
+            ),
+            dedupTrace,
+        };
+    }
+
+    /**
+     * The non-rule findings against the Kody Rule findings: a native finding
+     * a rule finding describes yields to the rule, and a rule finding a custom
+     * agent's describes yields to the agent's. Run after each stream's own
+     * dedup; an Ultra review runs it again once its models are merged.
+     */
+    async crossDedupStreams(
+        nonRules: Partial<CodeSuggestion>[],
+        kodyRulesForDedup: Partial<CodeSuggestion>[],
+        prNumber: number,
+        context: CodeReviewPipelineContext,
+        telemetryMeta: LangfuseTelemetryMetadata | undefined,
+        /** Once it fires, no further model call starts. */
+        signal?: AbortSignal,
+    ): Promise<Partial<CodeSuggestion>[]> {
+        let dedupedNonRules = nonRules;
         // Cross-stream dedup (PR #1527 follow-up): a file-scope Kody Rule and
         // an AI suggestion can flag the same issue on the same file. They are
         // deduped in separate streams above, so both survive. Absorb the
@@ -2206,6 +3049,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     prNumber,
                     context.codeReviewConfig?.byokConfig,
                     telemetryMeta,
+                    signal,
                 ),
             );
             dedupedNonRules = dedupedNonRules.filter(
@@ -2234,6 +3078,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         prNumber,
                         context.codeReviewConfig?.byokConfig,
                         telemetryMeta,
+                        signal,
                     );
             } catch (crossErr) {
                 this.logger.warn({
@@ -2244,10 +3089,48 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }
         }
 
-        return {
-            deduped: [...dedupedNonRules, ...keptKodyRules],
-            dedupTrace,
-        };
+        return [...dedupedNonRules, ...keptKodyRules];
+    }
+
+    /**
+     * The enrichment step (enrich-suggestions.ts) on the finder suggestions;
+     * Kody Rules, analyzer and custom agent findings keep what their own
+     * steps wrote. Called by executeStage; the enrichment eval calls it too.
+     */
+    private async enrichFinderSuggestions(
+        suggestions: Partial<CodeSuggestion>[],
+        context: CodeReviewPipelineContext,
+        changedFiles: FileChange[],
+        telemetryMeta?: LangfuseTelemetryMetadata,
+    ): Promise<Partial<CodeSuggestion>[]> {
+        const prNumber = context.pullRequest?.number;
+        const { suggestions: enriched, counts } = await enrichSuggestions(
+            suggestions,
+            changedFiles,
+            {
+                shouldEnrich: isFinderSuggestion,
+                byokConfig: context.codeReviewConfig?.byokConfig,
+                telemetryMetadata: telemetryMeta,
+                organizationId: context.organizationAndTeamData?.organizationId,
+                usageAttrs: {
+                    prNumber,
+                    ...(context.organizationAndTeamData?.teamId
+                        ? { teamId: context.organizationAndTeamData.teamId }
+                        : {}),
+                },
+            },
+        );
+        this.logger.log({
+            message: `[ENRICH] PR#${prNumber}: enriched ${counts.enriched}, failed ${counts.failed}, skipped ${counts.skipped}`,
+            context: this.stageName,
+            metadata: {
+                organizationId: context.organizationAndTeamData?.organizationId,
+                teamId: context.organizationAndTeamData?.teamId,
+                prNumber,
+                ...counts,
+            },
+        });
+        return enriched;
     }
 
     /**
@@ -2268,7 +3151,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             customAgentsById ??
             indexCustomAgents(await this.resolveCustomAgents(context));
         let deduped = suggestions;
-        // Reclassify severity using dedicated criteria (Gemini Flash)
+        // Reclassify severity with the defined levels (or the team's own criteria).
         // The agent assigns rough severity during investigation; this step
         // applies the definitive criteria (default or client-custom) without
         // biasing the agent's bug-finding behavior.
@@ -2279,6 +3162,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const severityMap = await classifySeverity(
                 deduped.map((s) => ({
                     relevantFile: s.relevantFile || '',
+                    relevantLinesStart: s.relevantLinesStart,
+                    relevantLinesEnd: s.relevantLinesEnd,
                     suggestionContent: s.suggestionContent || '',
                     oneSentenceSummary: s.oneSentenceSummary || '',
                     existingCode: s.existingCode || '',
@@ -2288,11 +3173,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context.codeReviewConfig?.byokConfig,
                 context.organizationAndTeamData?.organizationId,
             );
+            // Findings the classifier left out keep the default (medium).
+            let unclassified = 0;
             for (let i = 0; i < deduped.length; i++) {
-                const classified = severityMap.get(i);
-                if (!classified) {
-                    continue;
-                }
                 const hasKodyRuleSeverity =
                     deduped[i].brokenKodyRulesIds?.length > 0;
                 // A custom agent's severity is the team's call too: its
@@ -2302,16 +3185,35 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 if (hasKodyRuleSeverity || hasCustomAgentSeverity) {
                     continue;
                 }
+                const classified = severityMap.get(i);
+                if (!classified) {
+                    unclassified++;
+                    continue;
+                }
                 deduped[i].severity = classified;
             }
             this.logger.log({
-                message: `[AGENT] Reclassified severity for ${deduped.length} suggestions`,
+                message: `[AGENT] Reclassified severity for ${deduped.length} suggestions (${unclassified} left unclassified, default kept)`,
                 context: this.stageName,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    prNumber: context.pullRequest?.number,
+                    unclassified,
+                },
             });
         } catch (err) {
             this.logger.warn({
                 message: `[AGENT] Severity classification failed, keeping agent-assigned severity: ${err instanceof Error ? err.message : String(err)}`,
                 context: this.stageName,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    prNumber: context.pullRequest?.number,
+                    unclassified: deduped.length,
+                },
             });
         }
 
@@ -2399,174 +3301,67 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         return this.dedupEmbedder;
     }
 
-    private async embedDedupSuggestion(
+    private embedDedupSuggestion(
         suggestion: Partial<CodeSuggestion>,
         key: string,
-        cache: Map<string, number[] | null>,
+        cache: DedupEmbedCache,
+        logMeta?: DedupLogMeta,
     ): Promise<number[] | null> {
-        if (cache.has(key)) {
-            return cache.get(key) ?? null;
-        }
-        let vector: number[] | null = null;
-        try {
-            const text = dedupEmbeddingText(suggestion as any);
-            const embedder = this.getDedupEmbedder();
-            if (text && embedder) {
-                const { embedding } = await embed({
-                    model: embedder,
-                    value: text,
-                });
-                vector = embedding;
-            }
-        } catch (err) {
-            this.logger.warn({
-                message: `[DEDUP-GUARD] embedding unavailable, falling back to the tiebreak`,
+        return embedDedupSuggestion(
+            {
+                logger: this.logger,
                 context: this.stageName,
-                error: err,
-            });
-            vector = null;
-        }
-        cache.set(key, vector);
-        return vector;
+                getEmbedder: () => this.getDedupEmbedder(),
+            },
+            suggestion,
+            key,
+            cache,
+            logMeta,
+        );
     }
 
-    /**
-     * Tiered dedup guard (PR #1527): decide whether to honor a merge.
-     *   1. lexical overlap ≥ threshold → honor (cheap, obvious duplicates);
-     *   2. else semantic cosine of the two descriptions:
-     *        ≥ HIGH → honor, < LOW → veto, in-between → LLM tiebreak (full text).
-     * Without an embedding (no embedder, or the call failed) the tiebreak
-     * decides the model's proposed merges (#2170). A tiebreak failure falls
-     * back to a veto, so a low-overlap merge is never honored blindly.
-     *
-     * `crossStream` mode (Kody-Rule vs suggestion): there is NO prior LLM
-     * grouping to corroborate a match, so the cheap lexical-honor shortcut is
-     * skipped — only a strong semantic signal (embedding-high or a tiebreak yes)
-     * may absorb a suggestion into a rule, keeping false absorptions near zero.
-     */
-    private async resolveDedupMerge(
+    /** Tiered dedup guard (PR #1527), see `finding-dedup.ts#resolveDedupMerge`.
+     * Embeds through `this.embedDedupSuggestion`, so specs can intercept it. */
+    private resolveDedupMerge(
         dup: Partial<CodeSuggestion>,
         keep: Partial<CodeSuggestion>,
         dupKey: string,
         keepKey: string,
-        embedCache: Map<string, number[] | null>,
-        tiebreak: (
-            a: Partial<CodeSuggestion>,
-            b: Partial<CodeSuggestion>,
-        ) => Promise<boolean | null>,
-        opts?: { crossStream?: boolean },
-    ): Promise<{ honor: boolean; reason: string; score: number }> {
-        const lexical = contentSimilarity(dup, keep);
-
-        // Two scanner findings are never duplicates of each other — there is
-        // one suggestion per tool, so the only pair is secrets vs dependencies.
-        // Honoring it would not drop a duplicate; it would drop a whole
-        // category's comment, because the merge keeps only the representative.
-        if (bothFromAnalyzers(dup, keep)) {
-            return {
-                honor: false,
-                reason: 'distinct-analyzers',
-                score: lexical,
-            };
-        }
-
-        if (!opts?.crossStream && lexical >= DEDUP_CONTENT_THRESHOLD) {
-            return { honor: true, reason: 'lexical', score: lexical };
-        }
-
-        const [vecDup, vecKeep] = await Promise.all([
-            this.embedDedupSuggestion(dup, dupKey, embedCache),
-            this.embedDedupSuggestion(keep, keepKey, embedCache),
-        ]);
-        if (!vecDup || !vecKeep) {
-            // A scanner fact the model restated is the duplicate we are most
-            // sure about: it merges without asking. Where embeddings work, the
-            // full guard still decides, so a wide agent finding that merely
-            // overlaps a scanner line is not swallowed.
-            if (restatesAnalyzerFinding(dup, keep)) {
-                return {
-                    honor: true,
-                    reason: 'restates-analyzer (no-embed)',
-                    score: lexical,
-                };
-            }
-            // No embedding (a self-hosted install without the platform OpenAI
-            // key, or a failed call, #2170): the model proposed this merge, so
-            // the tiebreak decides it. The cross-stream pass has no such proposal and
-            // would ask once per suggestion × rule pair: it keeps the veto.
-            if (!opts?.crossStream) {
-                const sameBug = await tiebreak(dup, keep);
-                if (sameBug !== null) {
-                    return {
-                        honor: sameBug,
-                        reason: `llm-tiebreak=${sameBug} (no-embed)`,
-                        score: lexical,
-                    };
-                }
-            }
-            return {
-                honor: false,
-                reason: 'lexical-veto (no-embed)',
-                score: lexical,
-            };
-        }
-
-        const cos = cosineSimilarity(vecDup, vecKeep);
-        if (cos >= DEDUP_EMBEDDING_HIGH) {
-            return { honor: true, reason: 'embedding-high', score: cos };
-        }
-        if (cos < DEDUP_EMBEDDING_LOW) {
-            return { honor: false, reason: 'embedding-low', score: cos };
-        }
-
-        const sameBug = await tiebreak(dup, keep);
-        if (sameBug === null) {
-            return { honor: false, reason: 'tiebreak-error-veto', score: cos };
-        }
-        return {
-            honor: sameBug,
-            reason: `llm-tiebreak=${sameBug}`,
-            score: cos,
-        };
+        embedCache: DedupEmbedCache,
+        tiebreak: DedupTiebreak,
+        opts?: DedupMergeOptions,
+    ): Promise<DedupMergeDecision> {
+        return resolveDedupMerge(
+            {
+                embed: (suggestion, key, cache, logMeta) =>
+                    this.embedDedupSuggestion(suggestion, key, cache, logMeta),
+            },
+            dup,
+            keep,
+            dupKey,
+            keepKey,
+            embedCache,
+            tiebreak,
+            opts,
+        );
     }
 
     /**
      * Build the pairwise "same bug?" tiebreak used by both the within-stream
-     * dedup guard and the cross-stream (Kody-Rule vs suggestion) dedup. Resolves
-     * the secondary model the same way the batch dedup does; any failure returns
-     * null so the caller vetoes (keeps both).
+     * dedup guard and the cross-stream (Kody-Rule vs suggestion) dedup. See
+     * `finding-dedup.ts#buildDedupTiebreak`.
      */
     private buildDedupTiebreak(
         byokConfig: NormalizedModel | undefined,
         telemetryMeta: LangfuseTelemetryMetadata | undefined,
         prNumber: number,
-    ): (
-        a: Partial<CodeSuggestion>,
-        b: Partial<CodeSuggestion>,
-    ) => Promise<boolean | null> {
-        return async (a, b) => {
-            try {
-                // ONE primitive: LLM.run resolves the slot (or managed default),
-                // owns the span + json_schema→json_object fallback, and returns the
-                // parsed object. `runName` reproduces the 'dedup-tiebreak' trace.
-                const out = (await LLM.run({
-                    byokConfig,
-                    schema: jsonSchema(DEDUP_TIEBREAK_SCHEMA as any),
-                    user: buildTiebreakPrompt(a as any, b as any),
-                    runName: 'dedup-tiebreak',
-                    organizationId: telemetryMeta?.organizationId,
-                    telemetryMetadata: telemetryMeta,
-                })) as any;
-                return typeof out?.sameBug === 'boolean' ? out.sameBug : null;
-            } catch (err) {
-                this.logger.warn({
-                    message: `[DEDUP-GUARD] PR#${prNumber}: tiebreak failed, vetoing merge`,
-                    context: this.stageName,
-                    error: err,
-                });
-                return null;
-            }
-        };
+    ): DedupTiebreak {
+        return buildDedupTiebreak(
+            { logger: this.logger, context: this.stageName },
+            byokConfig,
+            telemetryMeta,
+            prNumber,
+        );
     }
 
     /**
@@ -2584,13 +3379,14 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     ): Promise<{
         kept: Partial<CodeSuggestion>[];
         repeats: Partial<CodeSuggestion>[];
+        withheld: Partial<CodeSuggestion>[];
         history: readonly PrDecisionRecord[] | undefined;
     }> {
         const prNumber = context.pullRequest?.number;
         let history: readonly PrDecisionRecord[] | undefined =
             context.previousDecisions;
         if (!history?.length || !findings.length) {
-            return { kept: findings, repeats: [], history };
+            return { kept: findings, repeats: [], withheld: [], history };
         }
 
         const repositoryFullName =
@@ -2628,17 +3424,29 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         const result = await checkRepeats(findings, history, {
             byokConfig: context.codeReviewConfig?.resolvedModelSlot,
             ruleTitleByUuid,
+            teamId: context.organizationAndTeamData.teamId,
             organizationId: context.organizationAndTeamData.organizationId,
             telemetryMetadata: telemetryMeta,
             prNumber,
         });
+        for (const { finding, earlier } of result.revisions) {
+            if (!finding.revisesSuggestionId) {
+                finding.revisesSuggestionId = earlier.suggestionId;
+            }
+        }
 
         this.logger.log({
-            message: `[REPEAT-CHECK] PR#${prNumber}: ${result.repeats.length} not posted, ${result.kept.length} kept (history ${history.length}, model ${result.model})`,
+            message: `[REPEAT-CHECK] PR#${prNumber}: ${result.repeats.length} repeats, ${result.withheld.length} withheld without a verdict, ${result.kept.length} kept, ${result.revisions.length} linked revisions (history ${history.length}, model ${result.model})`,
             context: this.stageName,
             metadata: {
                 organizationId: context.organizationAndTeamData?.organizationId,
                 prNumber,
+                teamId: context.organizationAndTeamData.teamId,
+                withheld: result.withheld.map((finding) => ({
+                    file: finding.relevantFile,
+                    line: finding.relevantLinesStart,
+                    ruleIds: finding.brokenKodyRulesIds,
+                })),
                 repeats: result.repeats.map((r) => ({
                     file: r.finding.relevantFile,
                     line: r.finding.relevantLinesStart,
@@ -2653,6 +3461,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         return {
             kept: result.kept,
             repeats: result.repeats.map((r) => r.finding),
+            withheld: result.withheld,
             history,
         };
     }
@@ -2673,6 +3482,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         prNumber: number,
         byokConfig?: NormalizedModel,
         telemetryMeta?: LangfuseTelemetryMetadata,
+        signal?: AbortSignal,
     ): Promise<Partial<CodeSuggestion>[]> {
         const fileScopedRules = kodyRules.filter((r) => !!r.relevantFile);
         if (!suggestions.length || !fileScopedRules.length) {
@@ -2700,6 +3510,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 if (rule.relevantFile !== s.relevantFile) {
                     continue;
                 }
+                signal?.throwIfAborted();
                 const decision = await this.resolveDedupMerge(
                     s,
                     rule,
@@ -2707,7 +3518,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     `r${ri}`,
                     embedCache,
                     tiebreak,
-                    { crossStream: true },
+                    {
+                        crossStream: true,
+                        // An embedding outage on this path names its org and PR.
+                        logMeta: {
+                            prNumber,
+                            organizationId: telemetryMeta?.organizationId,
+                            teamId: telemetryMeta?.teamId,
+                        },
+                    },
                 );
                 if (decision.honor) {
                     absorbedBy = {
@@ -2731,551 +3550,57 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     /**
-     * Deduplicate suggestions that describe the same issue using LLM.
-     * Groups by file, then asks Gemini Flash which suggestions are duplicates.
+     * Deduplicate suggestions that describe the same issue using LLM
+     * (`finding-dedup.ts#deduplicateFindings`). The callbacks go through this
+     * stage's methods, so a spy or patch on any of them still takes effect.
      */
-    private async deduplicateSuggestions(
+    private deduplicateSuggestions(
         suggestions: Partial<CodeSuggestion>[],
         prNumber: number,
         resolvedSlot?: NormalizedModel,
         telemetryMeta?: LangfuseTelemetryMetadata,
+        signal?: AbortSignal,
     ): Promise<{
         suggestions: Partial<CodeSuggestion>[];
         trace: DedupTraceSummary;
     }> {
-        // The dedup pass runs on the bare resolved model slot (or the managed
-        // default, resolved inside LLM.run).
-        const dedupSlot = resolvedSlot ?? undefined;
-        if (suggestions.length <= 1) {
-            return {
-                suggestions,
-                trace: {
-                    status: 'skipped',
-                    totalClassifiedCount: suggestions.length,
-                    kodyRulesSkippedCount: 0,
-                    nonKodyInputCount: suggestions.length,
-                    nonKodyOutputCount: suggestions.length,
-                    finalOutputCount: suggestions.length,
-                    uniqueCount: suggestions.length,
-                    groupsCount: 0,
-                    removedCount: 0,
-                    unique: suggestions.map((suggestion) =>
-                        this.summarizeDedupSuggestion(suggestion),
-                    ),
-                },
-            };
-        }
+        return deduplicateFindings(
+            this.findingDedupDeps(),
+            suggestions,
+            prNumber,
+            resolvedSlot,
+            telemetryMeta,
+            signal,
+        );
+    }
 
-        try {
-            // Graceful no-model (self-hosted, no key): skip dedup and keep all,
-            // the same everywhere — so dev/CI doesn't fail-loud on a missing key
-            // (LLM.run no longer throws the old NoStructuredFallbackModelError the
-            // catch below keyed off). A model resolves when there's a BYOK slot OR
-            // a managed/env default key is configured — the exact condition the
-            // removed `resolveSecondaryPassModel` (→ getInternalModel) checked.
-            if (!dedupSlot && !hasManagedModelKey()) {
-                this.logger.warn({
-                    message: `[DEDUP] PR#${prNumber}: no secondary model available, keeping all suggestions`,
-                    context: this.stageName,
-                });
-                return {
-                    suggestions,
-                    trace: {
-                        status: 'skipped',
-                        totalClassifiedCount: suggestions.length,
-                        kodyRulesSkippedCount: 0,
-                        nonKodyInputCount: suggestions.length,
-                        nonKodyOutputCount: suggestions.length,
-                        finalOutputCount: suggestions.length,
-                        uniqueCount: suggestions.length,
-                        groupsCount: 0,
-                        removedCount: 0,
-                        unique: suggestions.map((suggestion) =>
-                            this.summarizeDedupSuggestion(suggestion),
-                        ),
-                    },
-                };
-            }
-
-            // ONE primitive: LLM.run resolves the slot (or the managed default),
-            // owns the json_schema→json_object fallback, and records the dedup
-            // usage span ITSELF — agent.name/phase derived from the 'code-review::
-            // dedup' spanName — so the manual recordAgentRunUsage is gone. Returns
-            // the parsed dedup object directly.
-            const dedupOutput = (await LLM.run({
-                byokConfig: resolvedSlot,
-                schema: jsonSchema(DEDUP_SCHEMA as any),
-                user: buildDedupPrompt(suggestions),
-                runName: 'code-review-dedup',
-                spanName: 'code-review::dedup',
-                organizationId: telemetryMeta?.organizationId,
-                telemetryMetadata: telemetryMeta,
-                // Parity with the old recordAgentRunUsage: the dedup span keeps
-                // its type + per-PR/team attribution (the model/credential keys
-                // are derived from the slot inside LLM.run).
-                attrs: {
-                    type: dedupSlot ? 'byok' : 'system',
-                    prNumber,
-                    ...(telemetryMeta?.teamId
-                        ? { teamId: telemetryMeta.teamId }
-                        : {}),
-                },
-            })) as any;
-
-            this.logger.log({
-                message: `[DEDUP-DEBUG] PR#${prNumber}: input=${suggestions.length}, groups=${dedupOutput?.groups?.length ?? 0}, unique=${dedupOutput?.unique?.length ?? 0}`,
-                context: this.stageName,
-            });
-
-            // SHAPE recovery (#1786): a non-strict model may wrap
-            // ({result:{groups,unique}}), rename, stringify, or bare-array the
-            // dedup output — recover the canonical shape before reading, so an
-            // off-schema envelope does not fold into 'keep-all' and ship
-            // duplicate comments.
-            const normalizedDedup = normalizeEnvelope(
-                dedupOutput,
-                'groups',
-                ['duplicateGroups', 'duplicates'],
-                {
-                    onRecover: (reason) =>
-                        this.logger.warn({
-                            message: `${LLM_ENVELOPE_TAG} recovered off-schema dedup output (${reason}) for PR#${prNumber}`,
-                            context: this.stageName,
-                        }),
-                },
-            ) as any;
-
-            // The model ranks `keep` by how a finding reads, which always
-            // favours its own prose over a scanner's, and the longest text over
-            // the one on the defective lines. Re-seat the roles so a
-            // deterministic finding survives the group it was merged into, and
-            // otherwise the finding anchored on the lines at fault. The
-            // follow-up sees the scanner re-seat; the rest runs on the final
-            // groups below.
-            let groups: Array<{
-                keep: number;
-                duplicates: number[];
-            }> = preferAnalyzerKeep(normalizedDedup?.groups || [], suggestions);
-            let unique: number[] = normalizedDedup?.unique || [];
-
-            // A model can stop partway through the list. The left-out
-            // suggestions go back in one short call that sees what was already
-            // decided; any still left out falls to the safety net below.
-            const leftOut =
-                groups.length || unique.length
-                    ? unclassifiedDedupIndices(suggestions.length, groups, unique)
-                    : [];
-            // Kept in the dedup trace: a failed follow-up keeps those
-            // suggestions as they were (a duplicate may reach the PR), the same
-            // way a failed dedup keeps everything, without degrading the review.
-            let followupError: string | undefined;
-            if (leftOut.length > 0) {
-                try {
-                    // The same shape recovery as the first answer (#1786): a
-                    // wrapped, bare-array or stringified answer still counts,
-                    // and one with no assignments fails like a failed call.
-                    const followupOutput = await LLM.run({
-                        byokConfig: resolvedSlot,
-                        schema: jsonSchema(DEDUP_FOLLOWUP_SCHEMA as any),
-                        user: buildDedupFollowupPrompt(
-                            suggestions,
-                            groups,
-                            unique,
-                            leftOut,
-                        ),
-                        runName: 'code-review-dedup-followup',
-                        spanName: 'code-review::dedup',
-                        organizationId: telemetryMeta?.organizationId,
-                        telemetryMetadata: telemetryMeta,
-                        attrs: {
-                            type: dedupSlot ? 'byok' : 'system',
-                            prNumber,
-                            ...(telemetryMeta?.teamId
-                                ? { teamId: telemetryMeta.teamId }
-                                : {}),
-                        },
-                    });
-                    const followup = normalizeEnvelope(
-                        followupOutput,
-                        'assignments',
-                        [],
-                        {
-                            onRecover: (reason) =>
-                                this.logger.warn({
-                                    message: `${LLM_ENVELOPE_TAG} recovered off-schema dedup follow-up output (${reason}) for PR#${prNumber}`,
-                                    context: this.stageName,
-                                }),
-                        },
-                    ) as any;
-                    if (!Array.isArray(followup?.assignments)) {
-                        throw new Error(
-                            'the follow-up answer has no assignments',
-                        );
-                    }
-                    ({ groups, unique } = applyDedupFollowup(
-                        suggestions.length,
-                        groups,
-                        unique,
-                        leftOut,
-                        followup.assignments,
-                    ));
-                    this.logger.log({
-                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: ${leftOut.length} left out, ${unclassifiedDedupIndices(suggestions.length, groups, unique).length} still left out after the follow-up`,
-                        context: this.stageName,
-                    });
-                } catch (error) {
-                    followupError =
-                        error instanceof Error ? error.message : String(error);
-                    this.logger.warn({
-                        message: `[DEDUP-FOLLOWUP] PR#${prNumber}: follow-up for ${leftOut.length} left-out suggestions failed, safety net keeps them`,
-                        context: this.stageName,
-                        error,
-                        metadata: {
-                            organizationId: telemetryMeta?.organizationId,
-                            teamId: telemetryMeta?.teamId,
-                            prNumber,
-                            leftOutCount: leftOut.length,
-                        },
-                    });
-                }
-            }
-
-            // After the follow-up, so a custom agent's finding taken back out
-            // of a group is not sent to it again and stays unique.
-            groups = keepOwnFindingsApart(
-                preferCustomAgentKeep(
-                    preferSpecificKeep(
-                        preferAnalyzerKeep(groups, suggestions),
-                        suggestions,
-                        unique,
-                    ),
-                    suggestions,
+    private findingDedupDeps(): FindingDedupDeps {
+        return {
+            logger: this.logger,
+            context: this.stageName,
+            summarize: (suggestion) =>
+                this.summarizeDedupSuggestion(suggestion),
+            resolveMerge: (
+                dup,
+                keep,
+                dupKey,
+                keepKey,
+                embedCache,
+                tiebreak,
+                opts,
+            ) =>
+                this.resolveDedupMerge(
+                    dup,
+                    keep,
+                    dupKey,
+                    keepKey,
+                    embedCache,
+                    tiebreak,
+                    opts,
                 ),
-                suggestions,
-            );
-
-            // Semantic tier of the content guard (PR #1527): when lexical overlap
-            // is inconclusive we compare description embeddings, and only escalate
-            // the ambiguous band to a focused LLM tiebreak. Embeddings are memoized
-            // per suggestion for this dedup run.
-            const embedCache = new Map<string, number[] | null>();
-            const runTiebreak = this.buildDedupTiebreak(
-                dedupSlot,
-                telemetryMeta,
-                prNumber,
-            );
-
-            // Safety: if LLM returns nothing useful, keep all
-            if (groups.length === 0 && unique.length === 0) {
-                this.logger.warn({
-                    message: `[DEDUP] PR#${prNumber}: LLM returned empty result, keeping all ${suggestions.length} suggestions`,
-                    context: this.stageName,
-                });
-                return {
-                    suggestions,
-                    trace: {
-                        status: 'empty-keep-all',
-                        totalClassifiedCount: suggestions.length,
-                        kodyRulesSkippedCount: 0,
-                        nonKodyInputCount: suggestions.length,
-                        nonKodyOutputCount: suggestions.length,
-                        finalOutputCount: suggestions.length,
-                        uniqueCount: 0,
-                        groupsCount: 0,
-                        removedCount: 0,
-                        unique: suggestions.map((suggestion) =>
-                            this.summarizeDedupSuggestion(suggestion),
-                        ),
-                    },
-                };
-            }
-
-            const result: Partial<CodeSuggestion>[] = [];
-            const uniqueSuggestions: DedupTraceSuggestionSummary[] = [];
-            const groupSummaries: DedupTraceGroupSummary[] = [];
-            const addedIndices = new Set<number>();
-            const classifiedIndices = new Set<number>();
-            const indexToResult = new Map<number, number>();
-
-            // Layer 1: Number.isInteger guard — NaN and non-integer floats rejected immediately
-
-            // Add unique suggestions as-is
-            for (const idx of unique) {
-                if (
-                    Number.isInteger(idx) &&
-                    idx >= 0 &&
-                    idx < suggestions.length
-                ) {
-                    indexToResult.set(idx, result.length);
-                    result.push(suggestions[idx]);
-                    addedIndices.add(idx);
-                    classifiedIndices.add(idx);
-                    uniqueSuggestions.push(
-                        this.summarizeDedupSuggestion(suggestions[idx]),
-                    );
-                }
-            }
-
-            // Process groups
-            for (const group of groups) {
-                const keepIdx = group.keep;
-                const dupIndices = group.duplicates || [];
-
-                if (
-                    !Number.isInteger(keepIdx) ||
-                    keepIdx < 0 ||
-                    keepIdx >= suggestions.length
-                ) {
-                    // Layer 2: keep is invalid — preserve valid duplicates as independent results
-                    for (const dupIdx of dupIndices) {
-                        classifiedIndices.add(dupIdx);
-                        if (
-                            Number.isInteger(dupIdx) &&
-                            dupIdx >= 0 &&
-                            dupIdx < suggestions.length &&
-                            !addedIndices.has(dupIdx)
-                        ) {
-                            indexToResult.set(dupIdx, result.length);
-                            result.push(suggestions[dupIdx]);
-                            addedIndices.add(dupIdx);
-                            uniqueSuggestions.push(
-                                this.summarizeDedupSuggestion(
-                                    suggestions[dupIdx],
-                                ),
-                            );
-                        }
-                    }
-                    continue;
-                }
-
-                // Skip if this keep was already added (malformed groups with overlapping indices)
-                if (addedIndices.has(keepIdx)) {
-                    // Merge duplicate locations into the already-added suggestion
-                    const existingIdx = indexToResult.get(keepIdx);
-                    if (existingIdx !== undefined) {
-                        const locations: string[] = [];
-                        for (const dupIdx of dupIndices) {
-                            if (
-                                Number.isInteger(dupIdx) &&
-                                dupIdx >= 0 &&
-                                dupIdx < suggestions.length
-                            ) {
-                                classifiedIndices.add(dupIdx);
-                                const dup = suggestions[dupIdx];
-                                // This branch absorbs duplicates without ever
-                                // consulting the content guard, so the invariant
-                                // has to be repeated here: two scanner findings
-                                // are different categories, and absorbing one
-                                // drops a whole category's comment.
-                                if (
-                                    bothFromAnalyzers(dup, suggestions[keepIdx])
-                                ) {
-                                    if (!addedIndices.has(dupIdx)) {
-                                        addedIndices.add(dupIdx);
-                                        indexToResult.set(
-                                            dupIdx,
-                                            result.length,
-                                        );
-                                        result.push(dup);
-                                        uniqueSuggestions.push(
-                                            this.summarizeDedupSuggestion(dup),
-                                        );
-                                    }
-                                    continue;
-                                }
-                                // No content guard on this branch, so a
-                                // nested range may be a different bug: only
-                                // the same location is left out of the list.
-                                const loc = `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`;
-                                const keptLoc = `${suggestions[keepIdx].relevantFile}:${suggestions[keepIdx].relevantLinesStart}-${suggestions[keepIdx].relevantLinesEnd}`;
-                                if (loc !== keptLoc) {
-                                    locations.push(loc);
-                                }
-                            }
-                        }
-                        if (locations.length > 0) {
-                            const existing = result[existingIdx];
-                            existing.alsoFoundIn = [
-                                ...new Set([
-                                    ...(existing.alsoFoundIn || []),
-                                    ...locations,
-                                ]),
-                            ];
-                        }
-                    } else {
-                        for (const dupIdx of dupIndices) {
-                            if (
-                                Number.isInteger(dupIdx) &&
-                                dupIdx >= 0 &&
-                                dupIdx < suggestions.length
-                            ) {
-                                classifiedIndices.add(dupIdx);
-                            }
-                        }
-                    }
-                    continue;
-                }
-
-                const kept = { ...suggestions[keepIdx] };
-                addedIndices.add(keepIdx);
-                classifiedIndices.add(keepIdx);
-                const duplicateSummaries: DedupTraceSuggestionSummary[] = [];
-
-                // Collect locations from duplicates that are in DIFFERENT locations
-                const otherLocations: string[] = [];
-                for (const dupIdx of dupIndices) {
-                    if (
-                        !Number.isInteger(dupIdx) ||
-                        dupIdx < 0 ||
-                        dupIdx >= suggestions.length
-                    ) {
-                        continue;
-                    }
-                    // Content guard: only honor the model's merge when the two
-                    // findings actually describe the same thing. A low word-overlap
-                    // "duplicate" is a DIFFERENT bug the model over-merged (distinct
-                    // issues on overlapping lines) — keep it instead of dropping.
-                    const decision = await this.resolveDedupMerge(
-                        suggestions[dupIdx],
-                        suggestions[keepIdx],
-                        `n${dupIdx}`,
-                        `n${keepIdx}`,
-                        embedCache,
-                        runTiebreak,
-                    );
-                    if (!decision.honor) {
-                        // The model grouped these as duplicates but the guard is
-                        // not confident they are the same bug, so we keep both.
-                        // Log it — otherwise this veto is invisible in production
-                        // (the silent-degradation family from PR #1527).
-                        this.logger.log({
-                            message: `[DEDUP-GUARD] PR#${prNumber}: merge of idx ${dupIdx} into ${keepIdx} rejected (${decision.reason}, score=${decision.score.toFixed(3)})`,
-                            context: this.stageName,
-                        });
-                        classifiedIndices.add(dupIdx);
-                        if (!addedIndices.has(dupIdx)) {
-                            addedIndices.add(dupIdx);
-                            indexToResult.set(dupIdx, result.length);
-                            result.push(suggestions[dupIdx]);
-                            uniqueSuggestions.push(
-                                this.summarizeDedupSuggestion(
-                                    suggestions[dupIdx],
-                                ),
-                            );
-                        }
-                        continue;
-                    }
-                    classifiedIndices.add(dupIdx);
-                    const dup = suggestions[dupIdx];
-                    duplicateSummaries.push(this.summarizeDedupSuggestion(dup));
-                    // The content guard above judged these the same bug, so a
-                    // range around or inside the kept one is the same place,
-                    // not another location.
-                    if (!isSameSpot(dup, kept)) {
-                        otherLocations.push(
-                            `${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd}`,
-                        );
-                    }
-
-                    this.logger.log({
-                        message: `[DEDUP-REMOVED] PR#${prNumber} ${dup.relevantFile}:${dup.relevantLinesStart}-${dup.relevantLinesEnd} [${dup.label}/${dup.severity}] "${dup.oneSentenceSummary || dup.suggestionContent?.substring(0, 80)}"`,
-                        context: this.stageName,
-                    });
-                }
-
-                if (otherLocations.length > 0) {
-                    kept.alsoFoundIn = [
-                        ...new Set([
-                            ...(kept.alsoFoundIn || []),
-                            ...otherLocations,
-                        ]),
-                    ];
-                }
-
-                groupSummaries.push({
-                    keep: this.summarizeDedupSuggestion(kept),
-                    duplicates: duplicateSummaries,
-                });
-                indexToResult.set(keepIdx, result.length);
-                result.push(kept);
-            }
-
-            // Layer 3: Safety net — add any suggestions not classified by dedup
-            // (neither in unique nor in any group's keep/duplicates). This handles
-            // malformed LLM output that omits some indices entirely.
-            for (let i = 0; i < suggestions.length; i++) {
-                if (!classifiedIndices.has(i)) {
-                    result.push(suggestions[i]);
-                    uniqueSuggestions.push(
-                        this.summarizeDedupSuggestion(suggestions[i]),
-                    );
-                }
-            }
-
-            const totalRemoved = suggestions.length - result.length;
-            if (totalRemoved > 0) {
-                this.logger.log({
-                    message: `[DEDUP] PR#${prNumber}: ${suggestions.length} → ${result.length} (removed ${totalRemoved} duplicates, ${groups.length} groups merged)`,
-                    context: this.stageName,
-                });
-            }
-
-            return {
-                suggestions: result,
-                trace: {
-                    status: 'success',
-                    totalClassifiedCount: suggestions.length,
-                    kodyRulesSkippedCount: 0,
-                    nonKodyInputCount: suggestions.length,
-                    nonKodyOutputCount: result.length,
-                    finalOutputCount: result.length,
-                    uniqueCount: uniqueSuggestions.length,
-                    groupsCount: groupSummaries.length,
-                    removedCount: totalRemoved,
-                    ...(followupError ? { followupError } : {}),
-                    groups: groupSummaries,
-                    unique: uniqueSuggestions,
-                },
-            };
-        } catch (error) {
-            // Fail loud outside production. An unexpected error here (e.g. the
-            // `googleKey` ReferenceError that shipped on a feature branch) is a
-            // programming bug — left to the graceful 'failed-keep-all' path it
-            // ships silently as duplicate comments. In dev/CI/test we re-throw so
-            // it surfaces at PR time. The operational "no model available" case is
-            // handled BEFORE LLM.run by the `dedupSlot`/managed-key guard above,
-            // so it never reaches this catch.
-            const isProduction =
-                (process.env.API_NODE_ENV || process.env.NODE_ENV) ===
-                'production';
-            if (!isProduction) {
-                throw error;
-            }
-            this.logger.error({
-                message: `[DEDUP] PR#${prNumber}: Failed, keeping all ${suggestions.length} suggestions`,
-                context: this.stageName,
-                error,
-            });
-            return {
-                suggestions,
-                trace: {
-                    status: 'failed-keep-all',
-                    totalClassifiedCount: suggestions.length,
-                    kodyRulesSkippedCount: 0,
-                    nonKodyInputCount: suggestions.length,
-                    nonKodyOutputCount: suggestions.length,
-                    finalOutputCount: suggestions.length,
-                    uniqueCount: suggestions.length,
-                    groupsCount: 0,
-                    removedCount: 0,
-                    errorMessage:
-                        error instanceof Error ? error.message : String(error),
-                    unique: suggestions.map((suggestion) =>
-                        this.summarizeDedupSuggestion(suggestion),
-                    ),
-                },
-            };
-        }
+            buildTiebreak: (byokConfig, telemetryMeta, prNumber) =>
+                this.buildDedupTiebreak(byokConfig, telemetryMeta, prNumber),
+        };
     }
 
     /**
@@ -3288,16 +3613,58 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         prNumber: number | undefined,
         repositoryId: string | undefined,
         customAgentNames?: ReadonlyMap<string, string>,
+        /** An Ultra model's run: its entries keyed and labeled apart. */
+        tag?: AgentTimelineTag,
     ): (event: AgentProgressEvent) => void {
+        const tagged = (label: string) =>
+            tag ? `${label} · ${tag.label}` : label;
         // Track accumulated tool calls per agent for the final entry
         const agentToolCalls = new Map<
             string,
             Array<{ tool: string; args: string }>
         >();
 
+        const filter = executionUuid
+            ? { uuid: executionUuid }
+            : { pullRequestNumber: prNumber, repositoryId };
+        const specialists = new SpecialistsTimeline({
+            create: async (label, metadata) => {
+                const result =
+                    await this.automationExecutionService.updateCodeReview(
+                        filter,
+                        { status: AutomationStatus.IN_PROGRESS },
+                        tagged(label),
+                        tag
+                            ? `${SPECIALISTS_STAGE_NAME}::${tag.key}`
+                            : SPECIALISTS_STAGE_NAME,
+                        { ...metadata, label: tagged(label) },
+                    );
+                return result?.stageLog?.uuid;
+            },
+            update: (uuid, data) =>
+                this.automationExecutionService.updateStageLog(uuid, {
+                    ...data,
+                    message: tagged(data.message),
+                    metadata: {
+                        ...data.metadata,
+                        label: tagged(String(data.metadata?.label ?? '')),
+                    },
+                }),
+        });
+
         return (event: AgentProgressEvent) => {
-            const stageName = this.getAgentStageName(event);
-            const label = this.formatAgentLabel(event, customAgentNames);
+            if (event.agentCategory === SPECIALISTS_CATEGORY) {
+                if (executionUuid || prNumber) {
+                    void specialists.record(event);
+                }
+                return;
+            }
+            const stageName = tag
+                ? `${this.getAgentStageName(event)}::${tag.key}`
+                : this.getAgentStageName(event);
+            const label = tagged(
+                this.formatAgentLabel(event, customAgentNames),
+            );
 
             // Fire-and-forget — don't block the agent loop
             this.writeAgentTrace(
@@ -3554,15 +3921,21 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
     /**
      * Resolve GitHub token for cross-repo file reading (readReference tool).
-     * Uses the same token that was used to clone the repo for the sandbox.
+     * Uses the same token that was used to clone the repo for the sandbox,
+     * and only on a GitHub review: readReference calls api.github.com.
      */
     private async resolveGitHubToken(
         context: CodeReviewPipelineContext,
     ): Promise<string | undefined> {
+        if (context.platformType !== PlatformType.GITHUB) return undefined;
         try {
             if (context.getFreshCloneParams) {
                 const params = await context.getFreshCloneParams();
-                return params?.authToken;
+                // readReference calls api.github.com: a GitHub Enterprise
+                // Server token belongs to its own host.
+                return isGithubDotCom(params?.cloneUrl)
+                    ? params?.authToken
+                    : undefined;
             }
         } catch {
             // Best effort — tool just won't be available
@@ -3599,6 +3972,51 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 },
             });
             return false;
+        }
+    }
+
+    /** The call graph of the changed files, read from the PR's checkout. */
+    private async buildCallGraph(
+        context: CodeReviewPipelineContext,
+    ): Promise<CallGraphBuild> {
+        const changedFiles = context.changedFiles ?? [];
+        try {
+            if (!context.sandboxHandle?.run) {
+                return { callGraph: '', failed: false };
+            }
+            const repo = await this.repositoryService.findByExternalId(
+                context.platformType,
+                String(context.repository?.id || ''),
+            );
+            const baseBranch =
+                context.sandboxHandle?.baseBranch ||
+                context.pullRequest?.base?.ref ||
+                context.repository?.defaultBranch;
+            const callGraph =
+                repo?.astGraphStatus === AstGraphStatus.READY
+                    ? await this.graphContext.generateContext(
+                          context.sandboxHandle,
+                          changedFiles,
+                          repo.uuid,
+                          baseBranch,
+                      )
+                    : await this.graphContext.generateContextLegacy(
+                          context.sandboxHandle,
+                          changedFiles,
+                          baseBranch,
+                      );
+            return { callGraph, failed: false };
+        } catch (err) {
+            this.logger.warn({
+                message: `[AGENT] Call graph failed for PR#${context.pullRequest?.number}, proceeding without it`,
+                context: this.stageName,
+                error: err,
+                metadata: {
+                    sandboxType: context.sandboxHandle?.type,
+                    hasSandbox: !!context.sandboxHandle?.run,
+                },
+            });
+            return { callGraph: '', failed: true };
         }
     }
 

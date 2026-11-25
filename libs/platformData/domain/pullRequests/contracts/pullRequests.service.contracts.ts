@@ -1,3 +1,4 @@
+import type { UpdateSuggestionOptions } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
@@ -22,6 +23,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
     findById(uuid: string): Promise<PullRequestsEntity | null>;
     findOne(
         filter?: Partial<IPullRequests>,
+        projection?: Record<string, 0 | 1>,
     ): Promise<PullRequestsEntity | null>;
     find(filter?: Partial<IPullRequests>): Promise<PullRequestsEntity[]>;
 
@@ -29,6 +31,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         suggestionId: string,
         updateData: Partial<ISuggestion>,
         organizationAndTeamData: OrganizationAndTeamData,
+        options?: UpdateSuggestionOptions,
     ): Promise<PullRequestsEntity | null>;
 
     aggregateAndSaveDataStructure(
@@ -40,6 +43,9 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         platformType: string,
         organizationAndTeamData: OrganizationAndTeamData,
         commits: ICommit[],
+        prLevelSuggestions?: ISuggestionByPR[],
+        /** The review's save: keep the stored status, merged and closedAt. */
+        options?: { keepStoredState?: boolean; filesUnchanged?: boolean },
     ): Promise<IPullRequests | null>;
 
     extractUser(
@@ -57,6 +63,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
 
     addPrLevelSuggestions(
         pullRequestNumber: number,
+        repositoryId: string,
         repositoryName: string,
         prLevelSuggestions: ISuggestionByPR[],
         organizationAndTeamData: OrganizationAndTeamData,
@@ -85,6 +92,29 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         organizationId: string,
         repositoryIds?: string[],
     ): Promise<Array<{ number: number; repositoryId: string }>>;
+    findPullRequestAuthorsOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>>;
+    hasStoredPullRequests(
+        organizationId: string,
+        repositoryIds: string[],
+    ): Promise<boolean>;
+    findPullRequestAuthorLabelsByIds(
+        organizationId: string,
+        userIds: string[],
+    ): Promise<Array<{ id: string; name: string; username: string }>>;
+    // Keys of open PRs, optionally only those with an unresolved delivered
+    // suggestion. `truncated` = more than `limit` exist; the keys are partial.
+    findOpenPullRequestKeys(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: { unresolvedOnly?: boolean; limit: number },
+    ): Promise<{
+        keys: Array<{ number: number; repositoryId: string }>;
+        truncated: boolean;
+    }>;
     findDistinctAuthorsByRepositoryIds(
         organizationId: string,
         repositoryIds: string[] | undefined,
@@ -107,6 +137,15 @@ export interface IPullRequestsService extends IPullRequestsRepository {
             unresolvedOnly?: boolean;
             openOnly?: boolean;
         },
+    ): Promise<number>;
+    /**
+     * Pull requests an author opened in the organization, counting no further
+     * than `limit`: callers that only tell 0, 1 and "more" apart stop there.
+     */
+    countByAuthor(
+        organizationId: string,
+        authorId: string,
+        limit: number,
     ): Promise<number>;
     /** PR numbers of one repository — see the repository contract. */
     findNumbersByRepositoryId(

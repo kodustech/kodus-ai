@@ -5,11 +5,6 @@ import { Request } from 'express';
 
 import { ActiveCodeManagementTeamAutomationsUseCase } from '@libs/automation/application/use-cases/teamAutomation/active-code-manegement-automations.use-case';
 import { ActiveCodeReviewAutomationUseCase } from '@libs/automation/application/use-cases/teamAutomation/active-code-review-automation.use-case';
-import {
-    IRepositoryService,
-    REPOSITORY_SERVICE_TOKEN,
-} from '@libs/code-review/domain/contracts/RepositoryService.contract';
-import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import {
     IIntegrationConfigService,
@@ -18,13 +13,6 @@ import {
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
-import {
-    IJobQueueService,
-    JOB_QUEUE_SERVICE_TOKEN,
-} from '@libs/core/workflow/domain/contracts/job-queue.service.contract';
-import { HandlerType } from '@libs/core/workflow/domain/enums/handler-type.enum';
-import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
-import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
 import {
     IParametersService,
@@ -35,17 +23,10 @@ import {
     TEAM_SERVICE_TOKEN,
 } from '@libs/organization/domain/team/contracts/team.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { BackfillHistoricalPRsUseCase } from '@libs/platformData/application/use-cases/pullRequests/backfill-historical-prs.use-case';
+import { RepositoryConnectionService } from '@libs/platform/application/services/repository-sync/repository-connection.service';
+import { RepositorySelectionConfig } from '@libs/platform/application/services/repository-sync/repository-sync.types';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
-// Orgs with a historical-PR backfill currently in flight. registerRepo
-// is fired on every onboarding save (and can be retried client-side), so
-// without this guard a double-save kicks off two concurrent backfills
-// that each fan out over the same repos and double the provider load —
-// exactly the burst that 429s Bitbucket. In-memory + per-process is
-// enough: the backfill always runs in the API process that handled the
-// HTTP request.
-const backfillInFlight = new Set<string>();
 
 @Injectable()
 export class CreateRepositoriesUseCase implements IUseCase {
@@ -53,19 +34,15 @@ export class CreateRepositoriesUseCase implements IUseCase {
     constructor(
         @Inject(TEAM_SERVICE_TOKEN)
         private readonly teamService: ITeamService,
-        @Inject(JOB_QUEUE_SERVICE_TOKEN)
-        private readonly jobQueueService: IJobQueueService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
         private readonly activeCodeManagementTeamAutomationsUseCase: ActiveCodeManagementTeamAutomationsUseCase,
         private readonly activeCodeReviewAutomationUseCase: ActiveCodeReviewAutomationUseCase,
         private readonly codeManagementService: CodeManagementService,
         private readonly createOrUpdateParametersUseCase: CreateOrUpdateParametersUseCase,
-        private readonly backfillHistoricalPRsUseCase: BackfillHistoricalPRsUseCase,
         @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
         private readonly integrationConfigService: IIntegrationConfigService,
-        @Inject(REPOSITORY_SERVICE_TOKEN)
-        private readonly repositoryService: IRepositoryService,
+        private readonly repositoryConnectionService: RepositoryConnectionService,
         @Inject(REQUEST)
         private readonly request: Request & {
             user: { organization: { uuid: string }; uuid?: string };
@@ -102,6 +79,12 @@ export class CreateRepositoriesUseCase implements IUseCase {
                         teamId,
                     })) ?? []
                 ).map((repo) => String(repo.id)),
+            );
+
+            await this.assertNoRemovalInAllMode(
+                { organizationId, teamId },
+                params,
+                previouslyPersistedRepoIds,
             );
 
             await this.codeManagementService.createOrUpdateIntegrationConfig({
@@ -173,7 +156,6 @@ export class CreateRepositoriesUseCase implements IUseCase {
                 (r: any) => !previouslyPersistedRepoIds.has(String(r.id)),
             );
 
-            const backfillKey = `${organizationId}:${teamId}`;
             if (repositories.length > 0) {
                 if (reposToBackfill.length === 0) {
                     this.logger.log({
@@ -186,47 +168,11 @@ export class CreateRepositoriesUseCase implements IUseCase {
                             totalRepositories: repositories.length,
                         },
                     });
-                } else if (!backfillInFlight.has(backfillKey)) {
-                    // Single-flight: registerRepo fires on every onboarding
-                    // save (and can be retried client-side); without this a
-                    // double-save kicks off two concurrent backfills that each
-                    // fan out over the same repos and double the provider
-                    // load — the burst that 429s Bitbucket.
-                    backfillInFlight.add(backfillKey);
-                    setImmediate(() => {
-                        this.backfillHistoricalPRsUseCase
-                            .execute({
-                                organizationAndTeamData: {
-                                    organizationId,
-                                    teamId,
-                                },
-                                repositories: reposToBackfill.map((r: any) => ({
-                                    id: String(r.id),
-                                    name: r.name,
-                                    fullName:
-                                        r.fullName ||
-                                        r.full_name ||
-                                        `${r.organizationName || ''}/${r.name}`,
-                                    url: r.http_url || '',
-                                })),
-                            })
-                            .catch((error) => {
-                                this.logger.error({
-                                    message: `Error during automatic PR backfill: ${error?.message || String(error)}`,
-                                    context: CreateRepositoriesUseCase.name,
-                                });
-                            })
-                            .finally(() =>
-                                backfillInFlight.delete(backfillKey),
-                            );
-                    });
                 } else {
-                    this.logger.log({
-                        message:
-                            'Skipping PR backfill — one is already in flight for this org/team',
-                        context: CreateRepositoriesUseCase.name,
-                        metadata: { organizationId, teamId },
-                    });
+                    this.repositoryConnectionService.startHistoricalBackfill(
+                        { organizationId, teamId },
+                        reposToBackfill,
+                    );
                 }
 
                 setImmediate(() => {
@@ -268,6 +214,55 @@ export class CreateRepositoriesUseCase implements IUseCase {
         }
     }
 
+    /**
+     * In "review all repositories" mode the sync adds every repository back,
+     * so a save that drops one would silently undo itself. Turning automated
+     * review off for the repository is the way to exclude it.
+     */
+    private async assertNoRemovalInAllMode(
+        organizationAndTeamData: { organizationId: string; teamId: string },
+        params: {
+            type?: string;
+            repositories?: Array<{ id: string | number }>;
+        },
+        previouslyPersistedRepoIds: Set<string>,
+    ): Promise<void> {
+        // A chunked save opens with a partial `replace`, so it counts too: in
+        // this mode the selection only grows.
+        if (params.type === 'append') {
+            return;
+        }
+
+        const selection =
+            await this.integrationConfigService.findIntegrationConfigFormatted<RepositorySelectionConfig>(
+                IntegrationConfigKey.REPOSITORY_SELECTION,
+                organizationAndTeamData,
+            );
+
+        if (selection?.mode !== 'all') {
+            return;
+        }
+
+        const nextIds = new Set(
+            (params.repositories ?? []).map((repo) => String(repo.id)),
+        );
+        const removed = [...previouslyPersistedRepoIds].filter(
+            (id) => !nextIds.has(id),
+        );
+
+        if (removed.length) {
+            this.logger.warn({
+                message:
+                    'Rejected a repository removal while the team reviews all repositories',
+                context: CreateRepositoriesUseCase.name,
+                metadata: { ...organizationAndTeamData, removed },
+            });
+            throw new BadRequestException(
+                'This team reviews every repository automatically, so repositories cannot be removed. Turn off automated review for the repository instead.',
+            );
+        }
+    }
+
     private async enqueueAstGraphBuilds(
         repositories: Array<{
             id: string;
@@ -288,77 +283,30 @@ export class CreateRepositoriesUseCase implements IUseCase {
             message: `[AST-GRAPH] Processing ${repositories.length} repos for AST graph build (platform=${platformType})`,
             context: CreateRepositoriesUseCase.name,
             metadata: {
-                repos: repositories.map((r: any) => ({
-                    id: r.id,
-                    name: r.name,
-                })),
+                repos: repositories.map((r) => ({ id: r.id, name: r.name })),
             },
         });
 
-        for (const repo of repositories) {
+        const registered =
+            await this.repositoryConnectionService.registerRepositoryRecords({
+                organizationAndTeamData: orgTeam,
+                platform: platformType,
+                repositories,
+                actorUserId: this.request?.user?.uuid,
+            });
+
+        for (const { repository, record } of registered) {
             try {
-                const nameAlreadyHasNamespace = (repo.name || '').includes('/');
-                const fullName =
-                    repo.fullName ||
-                    repo.full_name ||
-                    (nameAlreadyHasNamespace
-                        ? repo.name
-                        : `${repo.organizationName || ''}/${repo.name}`);
-
-                const repoRecord = await this.repositoryService.findOrCreate({
-                    integrationConfigId: orgTeam.teamId,
-                    externalId: String(repo.id),
-                    name: repo.name,
-                    fullName,
-                    platform: platformType,
-                    defaultBranch: repo.default_branch,
+                await this.repositoryConnectionService.enqueueAstBuild({
+                    organizationAndTeamData: orgTeam,
+                    record,
+                    cloneUrl: repository.http_url,
                 });
-
-                void this.telemetry.repositoryConnected({
-                    repositoryId: repoRecord.externalId,
-                    name: repoRecord.name,
-                    fullName: repoRecord.fullName,
-                    platform: repoRecord.platform,
-                    organizationId: orgTeam.organizationId,
-                    agentReviewEnabled: true,
-                    actorUserId: this.request?.user?.uuid,
-                });
-
-                // Only enqueue if graph not already ready or building
-                if (
-                    repoRecord.astGraphStatus === AstGraphStatus.PENDING ||
-                    repoRecord.astGraphStatus === AstGraphStatus.FAILED
-                ) {
-                    await this.jobQueueService.enqueue({
-                        correlationId: orgTeam.teamId,
-                        workflowType: WorkflowType.AST_GRAPH_BUILD,
-                        handlerType: HandlerType.SIMPLE_FUNCTION,
-                        payload: {
-                            repositoryId: repoRecord.uuid,
-                            cloneUrl: repo.http_url || '',
-                            defaultBranch: repoRecord.defaultBranch,
-                            fullName: repoRecord.fullName,
-                            platform: repoRecord.platform,
-                            organizationAndTeamData: orgTeam,
-                        },
-                        organizationAndTeamData: orgTeam,
-                        status: JobStatus.PENDING,
-                        priority: 0,
-                        retryCount: 0,
-                        maxRetries: 3,
-                    });
-
-                    this.logger.log({
-                        message: `[AST-GRAPH] Enqueued full build for ${fullName}`,
-                        context: CreateRepositoriesUseCase.name,
-                    });
-                }
             } catch (error) {
                 this.logger.error({
-                    message: `[AST-GRAPH] Failed to enqueue build for repo ${repo.name}: ${error?.message || String(error)}`,
+                    message: `[AST-GRAPH] Failed to enqueue build for repo ${repository.name}: ${error?.message || String(error)}`,
                     context: CreateRepositoriesUseCase.name,
                 });
-                // Continue with other repos — don't let one failure block the rest
             }
         }
     }

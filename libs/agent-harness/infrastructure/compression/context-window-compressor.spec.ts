@@ -11,9 +11,36 @@ import type { AgentMessage } from '@libs/agent-harness/domain/contracts/run-stat
 
 import { ContextWindowCompressor } from './context-window-compressor';
 import { estimateMessagesTokens } from './context-compressor';
+import { estimateTextTokens, estimateValueTokens } from './token-estimator';
+
+// Counts the real tokenizer calls, so a test can see a recount.
+jest.mock('./token-estimator', () => {
+    const actual = jest.requireActual('./token-estimator');
+    return {
+        ...actual,
+        estimateTextTokens: jest.fn(actual.estimateTextTokens),
+        // The uncached path tokenizes through this one instead.
+        estimateValueTokens: jest.fn(actual.estimateValueTokens),
+    };
+});
+const tokenizerCalls = estimateTextTokens as jest.MockedFunction<
+    typeof estimateTextTokens
+>;
+const uncachedCalls = estimateValueTokens as jest.MockedFunction<
+    typeof estimateValueTokens
+>;
 
 function toModel(messages: AgentMessage[]) {
     return messages.map((m) => ({ role: m.role, content: m.content }) as any);
+}
+
+/**
+ * Code-like tool output. Not `'y'.repeat(n)`: the estimator runs tiktoken, and
+ * BPE on one long run of a single character is quadratic.
+ */
+function codeLike(chars: number): string {
+    const line = 'const value = compute(input);\n';
+    return line.repeat(Math.ceil(chars / line.length)).slice(0, chars);
 }
 
 /** A tool-loop window that has already blown well past the given window size. */
@@ -41,7 +68,7 @@ function overflowingWindow(rounds: number, resultChars: number): AgentMessage[] 
                     type: 'tool-result',
                     toolCallId: `c${i}`,
                     toolName: 'readFile',
-                    output: 'y'.repeat(resultChars),
+                    output: codeLike(resultChars),
                 },
             ] as any,
         });
@@ -89,9 +116,11 @@ describe('ContextWindowCompressor', () => {
     it('never returns a window that still overflows, even when soft truncation cannot save enough', () => {
         // Overhead alone eats most of the window → the messages budget is tiny,
         // so the soft pass can't get under it and the hard clamp MUST engage.
+        // (The soft pass lands this window near 6K tokens, so a 4K budget is
+        // what actually forces the clamp.)
         const contextWindow = 20_000;
         const c = new ContextWindowCompressor(contextWindow, {
-            overheadTokens: 10_000,
+            overheadTokens: 15_000,
             safetyMarginTokens: 1_000,
         });
         const msgs = overflowingWindow(25, 6_000);
@@ -100,7 +129,7 @@ describe('ContextWindowCompressor', () => {
         // The old code returned null here (no savings) and shipped the overflow.
         expect(result).not.toBeNull();
 
-        const budget = 20_000 - 10_000 - 1_000; // 9_000
+        const budget = 20_000 - 15_000 - 1_000; // 4_000
         expect(
             estimateMessagesTokens(toModel(result!.messages as AgentMessage[])),
         ).toBeLessThanOrEqual(budget);
@@ -115,5 +144,34 @@ describe('ContextWindowCompressor', () => {
             (m) => m.role === 'tool',
         );
         expect(Array.isArray(toolMsg?.content)).toBe(true);
+    });
+});
+
+describe('ContextWindowCompressor — per-run token counts', () => {
+    const head = (): AgentMessage[] => [
+        { role: 'user', content: 'Review this diff:\n' + codeLike(250_000) },
+    ];
+
+    it("keeps a run's head counted while another run churns its own messages", () => {
+        const runA = new ContextWindowCompressor(200_000);
+        const runB = new ContextWindowCompressor(200_000);
+        runA.maybeCompress(head());
+        // More distinct messages than one run's counts hold: a store shared
+        // between runs would evict runA's head here.
+        // Large messages only (small ones skip the counts); the tokenizer is
+        // stubbed for this churn to keep the test fast.
+        const base = 'x '.repeat(100_001);
+        tokenizerCalls.mockImplementation(() => 1);
+        for (let i = 0; i < 300; i++) {
+            runB.maybeCompress([{ role: 'user', content: `${base}${i}` }]);
+        }
+        tokenizerCalls.mockImplementation(
+            jest.requireActual('./token-estimator').estimateTextTokens,
+        );
+        tokenizerCalls.mockClear();
+        uncachedCalls.mockClear();
+        runA.maybeCompress(head());
+        expect(tokenizerCalls).not.toHaveBeenCalled();
+        expect(uncachedCalls).not.toHaveBeenCalled();
     });
 });

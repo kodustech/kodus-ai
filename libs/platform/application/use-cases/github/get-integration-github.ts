@@ -16,9 +16,8 @@ export class GetIntegrationGithubUseCase implements IUseCase {
         const integration =
             await this.githubService.findOneByInstallId(installId);
 
-        return {
-            status: integration?.installationStatus,
-            organizationName: integration?.organizationName,
-        };
+        // Public endpoint: the status only. The organization name would let
+        // anyone map installation ids to the GitHub organizations behind them.
+        return { status: integration?.installationStatus };
     }
 }

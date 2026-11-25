@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
 import {
     BadRequestException,
@@ -5,13 +6,14 @@ import {
     ForbiddenException,
     Inject,
     Injectable,
+    Optional,
 } from '@nestjs/common';
 
 import { produce } from 'immer';
 import { v4 as uuidv4 } from 'uuid';
 import { DeepPartial } from 'typeorm';
 
-import { createLogger } from '@libs/core/log/logger';
+import { createLogger, extractErrorProps } from '@libs/core/log/logger';
 import {
     CentralizedConfigPrService,
     CentralizedPrMetadata,
@@ -38,6 +40,7 @@ import {
     effectiveStoredCustomAgents,
     maskCliSecrets,
     sealCustomAgentSecrets,
+    storedConfigsAtLevel,
     storedCustomAgentsAtLevel,
 } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import { withDirectoryAgentLists } from '@libs/code-review/domain/custom-agents/directory-cascade';
@@ -55,6 +58,7 @@ import {
     CustomAgentConfig,
     customAgentSlugClashMessage,
     knowledgeLinkProblems,
+    knowledgeSourceProblems,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     CodeReviewParameter,
@@ -114,7 +118,35 @@ import {
 } from '@libs/ee/license/interfaces/license.interface';
 import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
 import { isCustomAgentsPlanAllowed } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import {
+    HEAVY_MODE_SAVE_PLAN_REQUIRED,
+    isHeavyModePlanAllowed,
+} from '@libs/ee/heavy-mode/heavy-mode-plan';
+import {
+    ultraReviewPlanAccess,
+    resolveUltraTrio,
+    ultraTrioRefusal,
+} from '@libs/ee/ultra-review/ultra-review-plan';
+import { ultraSaveRefusalMessage } from '@libs/ee/ultra-review/ultra-review-messages';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { approvalPolicyProviderError } from '@libs/code-review/domain/approval/approval-policy-provider';
+import {
+    migratedReviewSettings,
+    resolveReviewSettings,
+} from '@libs/code-review/domain/approval/migrate-review-settings';
+import { routesForLegacyMode } from '@libs/code-review/domain/review-mode';
+import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
+import { REVIEW_SETTINGS_INHERITABLE_FIELDS } from '@libs/core/infrastructure/config/types/general/risk-assessment';
+
+const INHERITABLE_REVIEW_FIELDS = new Set<string>(
+    REVIEW_SETTINGS_INHERITABLE_FIELDS,
+);
+const LEGACY_REVIEW_FIELDS: Readonly<Record<string, readonly string[]>> = {
+    riskAssessmentActive: ['approvalRiskActive'],
+    riskCriteria: ['approvalRiskInstructions'],
+    approvalPolicies: ['approvalLabels', 'approvalAuthors'],
+};
 
 @Injectable()
 export class UpdateOrCreateCodeReviewParameterUseCase {
@@ -141,6 +173,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
         private readonly telemetry: TelemetryService,
+        @Optional() private readonly codeManagement?: CodeManagementService,
     ) {}
 
     async execute(
@@ -161,6 +194,46 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     > {
         try {
             const { organizationAndTeamData, configValue, repositoryId } = body;
+            if (
+                body.inheritFields !== undefined &&
+                (!Array.isArray(body.inheritFields) ||
+                    (body.inheritFields.length &&
+                        (!repositoryId || repositoryId === 'global')) ||
+                    body.inheritFields.length >
+                        REVIEW_SETTINGS_INHERITABLE_FIELDS.length ||
+                    body.inheritFields.some(
+                        (field) => !INHERITABLE_REVIEW_FIELDS.has(field),
+                    ))
+            )
+                throw new BadRequestException(
+                    'Invalid scoped review settings to inherit.',
+                );
+            if (body.inheritFields?.length) {
+                const aliases = new Set(
+                    body.inheritFields.flatMap(
+                        (field) => LEGACY_REVIEW_FIELDS[field] ?? [],
+                    ),
+                );
+                if (
+                    Object.entries(configValue).some(
+                        ([key, value]) =>
+                            value !== undefined && aliases.has(key),
+                    )
+                )
+                    throw new BadRequestException(
+                        'Do not combine inheritance with legacy review overrides.',
+                    );
+            }
+            // An empty ID explicitly requests inheritance; pairing it with a
+            // legacy model name is still a contradictory write.
+            if (
+                configValue.byokModelId !== undefined &&
+                configValue.byokModel
+            ) {
+                throw new BadRequestException(
+                    'Use byokModelId or byokModel, not both.',
+                );
+            }
             let directoryPath = body.directoryPath;
             let directoryId = body.directoryId;
             let previousFolders: Array<{ path: string }> | undefined;
@@ -223,6 +296,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 configValue,
             );
 
+            // Heavy mode is Teams/Enterprise only: on another plan a save
+            // asking for it is refused, and a kodus-config.yml sync leaves the
+            // review mode as it was so the file's other settings still save.
+            await this.leaveHeavyOutIfPlanNotAllowed(
+                organizationAndTeamData,
+                configValue,
+                body.actor?.source,
+                { repositoryId, directoryId, directoryPaths: resolvedPaths },
+                body.inheritFields,
+            );
+
             if (!body.skipAuthorization) {
                 await this.authorizationService.ensure({
                     user: body.requestUser,
@@ -232,8 +316,34 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 });
             }
 
+            if (configValue.approvalPolicies !== undefined) {
+                const parsed = approvalPoliciesSchema.safeParse(
+                    configValue.approvalPolicies,
+                );
+                if (!parsed.success)
+                    throw new BadRequestException(
+                        'Approval policies are invalid.',
+                    );
+                const needsProvider = parsed.data.some(
+                    (policy) =>
+                        policy.labels?.length || policy.authorTeams?.length,
+                );
+                if (needsProvider) {
+                    const provider =
+                        await this.codeManagement?.getTypeIntegration(
+                            organizationAndTeamData,
+                        );
+                    const error = approvalPolicyProviderError(
+                        parsed.data,
+                        provider,
+                    );
+                    if (error) throw new BadRequestException(error);
+                }
+            }
+
             const codeReviewConfigs = await this.getCodeReviewConfigs(
                 organizationAndTeamData,
+                body.expectedConfigId,
             );
 
             const codeRepositories = await this.getFormattedRepositories(
@@ -282,6 +392,13 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     if (problems.length > 0) {
                         throw new BadRequestException(problems.join('; '));
                     }
+                }
+            }
+
+            if (Array.isArray(configValue?.knowledge)) {
+                const problems = knowledgeSourceProblems(configValue.knowledge);
+                if (problems.length > 0) {
+                    throw new BadRequestException(problems.join('; '));
                 }
             }
 
@@ -595,6 +712,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 body.requestUser,
                 previousFolders,
                 previousRulesFileNames,
+                body.inheritFields,
+                body.expectedConfigId,
             );
 
             if (!directoryId) {
@@ -659,12 +778,21 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
 
     private async getCodeReviewConfigs(
         organizationAndTeamData: OrganizationAndTeamData,
+        expectedConfigId?: string,
     ): Promise<CodeReviewParameter> {
         const codeReviewConfig = await this.parametersService.findByKey(
             ParametersKey.CODE_REVIEW_CONFIG,
             organizationAndTeamData,
         );
 
+        if (
+            expectedConfigId !== undefined &&
+            codeReviewConfig?.uuid !== expectedConfigId
+        ) {
+            throw new ConflictException(
+                'Code review settings changed. Reload them and try again.',
+            );
+        }
         return codeReviewConfig?.configValue;
     }
 
@@ -741,6 +869,175 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         });
     }
 
+    /**
+     * The review modes a plan or the org's models lock: Heavy on a plan
+     * without it, Ultra without the plan or three of the team's own models
+     * set for it. Checked wherever a mode is saved, the review mode and both
+     * risk routes. The trio is checked only on a mode the save changes to:
+     * a field sent with the Ultra this scope already runs leaves the other
+     * settings free to save while a model is unavailable. The plan is checked
+     * on every one. A field the save inherits is not checked: nothing is
+     * stored for it. A save from the web or the API is refused with the
+     * reason (400); a kodus-config.yml sync leaves the locked fields out and
+     * saves the rest.
+     */
+    private async leaveHeavyOutIfPlanNotAllowed(
+        organizationAndTeamData: OrganizationAndTeamData,
+        configValue:
+            CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
+        source: string | undefined,
+        level: {
+            repositoryId?: string;
+            directoryId?: string;
+            directoryPaths?: string[];
+        },
+        inheritFields: string[] = [],
+    ): Promise<void> {
+        if (!configValue) return;
+        const own = (field: string, mode: string | undefined) =>
+            inheritFields.includes(field) ? undefined : mode;
+        const sent = [
+            own('reviewMode', configValue.reviewMode),
+            own(
+                'riskReviewRouting.noRisk',
+                configValue.riskReviewRouting?.noRisk,
+            ),
+            own(
+                'riskReviewRouting.riskFound',
+                configValue.riskReviewRouting?.riskFound,
+            ),
+        ];
+        if (!sent.some((mode) => mode === 'heavy' || mode === 'ultra')) {
+            return;
+        }
+        // The modes this scope runs now: its own, else inherited. Read only
+        // for the trio check.
+        const stored = sent.includes('ultra')
+            ? await this.getCodeReviewConfigs(organizationAndTeamData)
+            : undefined;
+        const chain = [
+            storedConfigsAtLevel(stored, level),
+            storedConfigsAtLevel(stored, { repositoryId: level.repositoryId }),
+            stored?.configs,
+        ];
+        const current = (
+            read: (configs: any) => string | undefined,
+        ): string | undefined =>
+            chain.map((configs) => read(configs)).find((mode) => !!mode);
+        const modes = (): Array<{
+            mode: string | undefined;
+            current: string | undefined;
+            clear: () => void;
+        }> => [
+            {
+                mode: own('reviewMode', configValue.reviewMode),
+                current: current((c) => c?.reviewMode),
+                clear: () => delete configValue.reviewMode,
+            },
+            {
+                mode: own(
+                    'riskReviewRouting.noRisk',
+                    configValue.riskReviewRouting?.noRisk,
+                ),
+                current: current((c) => c?.riskReviewRouting?.noRisk),
+                clear: () => delete configValue.riskReviewRouting!.noRisk,
+            },
+            {
+                mode: own(
+                    'riskReviewRouting.riskFound',
+                    configValue.riskReviewRouting?.riskFound,
+                ),
+                current: current((c) => c?.riskReviewRouting?.riskFound),
+                clear: () => delete configValue.riskReviewRouting!.riskFound,
+            },
+        ];
+        const asks = (mode: 'heavy' | 'ultra') =>
+            modes().some((m) => m.mode === mode);
+        const changesTo = (mode: 'ultra') =>
+            modes().some((m) => m.mode === mode && m.current !== mode);
+
+        const refusals: Array<{
+            mode: 'heavy' | 'ultra';
+            reason: string;
+            /** Refused only where the save changes the mode to it. */
+            changedOnly?: boolean;
+        }> = [];
+        if (
+            asks('heavy') &&
+            !(await isHeavyModePlanAllowed(
+                this.licenseService,
+                organizationAndTeamData,
+                UpdateOrCreateCodeReviewParameterUseCase.name,
+            ))
+        ) {
+            refusals.push({
+                mode: 'heavy',
+                reason: HEAVY_MODE_SAVE_PLAN_REQUIRED,
+            });
+        }
+        if (asks('ultra')) {
+            const planAccess = await ultraReviewPlanAccess(
+                this.licenseService,
+                organizationAndTeamData,
+                UpdateOrCreateCodeReviewParameterUseCase.name,
+            );
+            if (planAccess !== 'allowed') {
+                refusals.push({
+                    mode: 'ultra',
+                    reason: ultraSaveRefusalMessage(
+                        planAccess === 'unknown' ? 'plan_unreadable' : 'plan',
+                    ),
+                });
+            } else if (changesTo('ultra')) {
+                const refusal = ultraTrioRefusal(
+                    resolveUltraTrio(
+                        await this.permissionValidationService.getBYOKConfig(
+                            organizationAndTeamData,
+                        ),
+                        { forSave: true },
+                    ),
+                );
+                if (refusal) {
+                    refusals.push({
+                        mode: 'ultra',
+                        reason: ultraSaveRefusalMessage(refusal),
+                        changedOnly: true,
+                    });
+                }
+            }
+        }
+        if (!refusals.length) return;
+
+        const logMeta = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+            source,
+            modes: refusals.map((r) => r.mode),
+        };
+        if (source !== 'sync') {
+            this.logger.log({
+                message: `Refused a save asking for a locked review mode (${refusals.map((r) => r.mode).join(', ')})`,
+                context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                metadata: logMeta,
+            });
+            // 400, like the other refused saves: the web shows its reason.
+            throw new BadRequestException(refusals[0].reason);
+        }
+
+        const locked = new Set(refusals.map((r) => r.mode));
+        for (const m of modes()) {
+            const refusal = refusals.find((r) => r.mode === m.mode);
+            if (refusal && !(refusal.changedOnly && m.mode === m.current)) {
+                m.clear();
+            }
+        }
+        this.logger.log({
+            message: `Left a locked review mode out of the sync (${[...locked].join(', ')})`,
+            context: UpdateOrCreateCodeReviewParameterUseCase.name,
+            metadata: logMeta,
+        });
+    }
+
     private async keepCustomAgentsIfPlanNotAllowed(
         organizationAndTeamData: OrganizationAndTeamData,
         configValue:
@@ -801,6 +1098,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         const updatedConfigValue = this.stripCustomMessagesFromConfig(
             deepDifference(defaultConfig, sanitizedConfigValue),
         );
+        this.preserveCanonicalReviewChoices(
+            updatedConfigValue,
+            sanitizedConfigValue,
+        );
 
         const centralizedPr = await this.createCentralizedMutationIfEnabled({
             organizationAndTeamData,
@@ -854,6 +1155,55 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         codeReviewConfigs.repositories = updatedRepositories;
     }
 
+    // Canonical choices retain precedence over legacy aliases even when they
+    // equal the raw parent. Only explicit inheritance removes ownership.
+    private preserveCanonicalReviewChoices(
+        delta: ConfigDelta,
+        owned: Pick<
+            ConfigDelta,
+            | 'riskAssessmentActive'
+            | 'approvalPolicies'
+            | 'riskCriteria'
+            | 'riskReviewRouting'
+            | 'reviewMode'
+        >,
+    ) {
+        for (const key of [
+            'riskAssessmentActive',
+            'approvalPolicies',
+            'riskCriteria',
+            'riskReviewRouting',
+            'reviewMode',
+        ] as const) {
+            if (owned[key] !== undefined)
+                Object.assign(delta, { [key]: owned[key] });
+        }
+    }
+
+    private withoutInheritedReviewOverrides(
+        config: object,
+        fields: string[],
+    ): ConfigDelta {
+        const next = { ...config };
+        for (const field of fields) {
+            const [key, leaf] = field.split('.');
+            if (leaf) {
+                next[key] = { ...next[key] };
+                delete next[key][leaf];
+                // An empty canonical routing object inherits both routes without
+                // reactivating the legacy reviewMode-to-route mapping.
+                if (
+                    !Object.keys(next[key]).length &&
+                    key !== 'riskReviewRouting'
+                )
+                    delete next[key];
+            } else delete next[key];
+            for (const alias of LEGACY_REVIEW_FIELDS[field] ?? [])
+                delete next[alias];
+        }
+        return next;
+    }
+
     /** A prompt sent back unchanged is not stored as the team's own text; record when that happens. */
     private logAlignedPromptOverrides(
         alignedPaths: string[],
@@ -892,6 +1242,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             review?: Array<{ fileName: string; content: string }>;
             memories?: Array<{ fileName: string; content: string }>;
         },
+        inheritFields: string[] = [],
+        expectedConfigId?: string,
     ) {
         const resolver = new ConfigResolver(codeReviewConfigs);
 
@@ -943,14 +1295,65 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         // we ignore the previous database state and rebuild the resolved config
         // from the file content plus the parent defaults. This ensures that
         // properties removed from the file are also removed from the database.
+        // Split the legacy default/mode mapping before editing either route.
+        // Restoring or editing one route must leave the other route unchanged.
+        const ownsLegacyMode =
+            oldConfig.reviewMode !== undefined &&
+            oldConfig.riskReviewRouting === undefined;
+        const editsRouting =
+            sanitizedIncomingConfig.riskReviewRouting !== undefined ||
+            inheritFields.some((field) =>
+                field.startsWith('riskReviewRouting.'),
+            );
+        const ancestorRouting =
+            !ownsLegacyMode || !editsRouting || level === ConfigLevel.GLOBAL
+                ? undefined
+                : deepMerge(
+                      codeReviewConfigs.configs ?? {},
+                      ...(level === ConfigLevel.DIRECTORY
+                          ? [repository!.configs ?? {}]
+                          : []),
+                  ).riskReviewRouting;
+        // Each route is seeded with what the legacy mode ran on it, unless
+        // an ancestor sets that route: the scope inherits that one.
+        const legacyRoutes = routesForLegacyMode(oldConfig.reviewMode);
+        const seededRouting =
+            ownsLegacyMode && editsRouting
+                ? {
+                      ...(ancestorRouting?.noRisk === undefined && {
+                          noRisk: legacyRoutes.noRisk,
+                      }),
+                      ...(ancestorRouting?.riskFound === undefined && {
+                          riskFound: legacyRoutes.riskFound,
+                      }),
+                  }
+                : undefined;
+        const oldReviewConfig =
+            seededRouting && Object.keys(seededRouting).length
+                ? { ...oldConfig, riskReviewRouting: seededRouting }
+                : oldConfig;
+        const mergeOldConfig = this.withoutInheritedReviewOverrides(
+            oldReviewConfig,
+            inheritFields,
+        );
+        const mergeIncomingConfig = this.withoutInheritedReviewOverrides(
+            sanitizedIncomingConfig,
+            inheritFields,
+        );
         const newResolvedConfig = this.stripCustomMessagesFromConfig(
             actor?.source === 'sync'
-                ? deepMerge(parentConfig, sanitizedIncomingConfig)
-                : deepMerge(parentConfig, oldConfig, sanitizedIncomingConfig),
+                ? deepMerge(parentConfig, mergeIncomingConfig)
+                : deepMerge(parentConfig, mergeOldConfig, mergeIncomingConfig),
         );
 
         const newDelta = this.stripCustomMessagesFromConfig(
             deepDifference(parentConfig, newResolvedConfig),
+        );
+        this.preserveCanonicalReviewChoices(
+            newDelta,
+            actor?.source === 'sync'
+                ? mergeIncomingConfig
+                : deepMerge(mergeOldConfig, mergeIncomingConfig),
         );
 
         // An empty byok model override means "inherit" — it must never be stored
@@ -963,26 +1366,103 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 delete (newDelta as Record<string, unknown>)[key];
             }
         }
+        if (sanitizedIncomingConfig.byokModelId !== undefined)
+            delete newDelta.byokModel;
+
+        // Changing approval never changes the independent engine seen by the user.
+        // Keep even an explicit false: diffing against an old default could otherwise erase it.
+        if (
+            actor?.source !== 'sync' &&
+            !inheritFields.includes('riskAssessmentActive') &&
+            sanitizedIncomingConfig.pullRequestApprovalActive !== undefined &&
+            sanitizedIncomingConfig.riskAssessmentActive === undefined
+        ) {
+            newDelta.riskAssessmentActive = resolveReviewSettings(
+                getDefaultKodusConfigFile(),
+                codeReviewConfigs.configs ?? {},
+                repository?.configs ?? {},
+                directory?.configs ?? {},
+            ).riskAssessmentActive;
+        }
 
         const pathsChanged = !!previousFolders && previousFolders.length > 0;
+        // A parent edit must not invalidate legacy restrictions in its children.
+        const defaults = getDefaultKodusConfigFile();
+        const globalDelta =
+            level === ConfigLevel.GLOBAL
+                ? newDelta
+                : (codeReviewConfigs.configs ?? {});
+        try {
+            resolveReviewSettings(
+                defaults,
+                globalDelta,
+                ...(level !== ConfigLevel.GLOBAL
+                    ? [
+                          level === ConfigLevel.REPOSITORY
+                              ? newDelta
+                              : (repository!.configs ?? {}),
+                      ]
+                    : []),
+                ...(level === ConfigLevel.DIRECTORY ? [newDelta] : []),
+            );
+            const approvalChanged = [
+                'approvalPolicies',
+                'approvalLabels',
+                'approvalAuthors',
+            ].some((key) => !isDeepStrictEqual(oldConfig[key], newDelta[key]));
+            const repositoriesToValidate = !approvalChanged
+                ? []
+                : level === ConfigLevel.GLOBAL
+                  ? (codeReviewConfigs.repositories ?? [])
+                  : [repository!];
+            for (const childRepo of repositoriesToValidate) {
+                const repoDelta =
+                    level === ConfigLevel.REPOSITORY
+                        ? newDelta
+                        : (childRepo.configs ?? {});
+                resolveReviewSettings(defaults, globalDelta, repoDelta);
+                for (const childDir of level === ConfigLevel.DIRECTORY
+                    ? directory
+                        ? [directory]
+                        : []
+                    : (childRepo.directories ?? [])) {
+                    resolveReviewSettings(
+                        defaults,
+                        globalDelta,
+                        repoDelta,
+                        level === ConfigLevel.DIRECTORY
+                            ? newDelta
+                            : (childDir.configs ?? {}),
+                    );
+                }
+            }
+        } catch (error) {
+            throw new BadRequestException(error.message);
+        }
         const isSelectionOnlyPayload =
+            inheritFields.length === 0 &&
             this.isSelectionOnlyConfigPayload(sanitizedIncomingConfig) &&
             level !== ConfigLevel.GLOBAL &&
             !pathsChanged;
 
-        const centralizedPr = isSelectionOnlyPayload
-            ? null
-            : await this.createCentralizedMutationIfEnabled({
-                  organizationAndTeamData,
-                  actor,
-                  level,
-                  repository,
-                  directory,
-                  oldDelta: oldConfig,
-                  newDelta,
-                  previousFolders,
-                  previousRulesFileNames,
-              });
+        const createCentralizedMutation = () =>
+            isSelectionOnlyPayload
+                ? null
+                : this.createCentralizedMutationIfEnabled({
+                      organizationAndTeamData,
+                      actor,
+                      level,
+                      repository,
+                      directory,
+                      oldDelta: oldConfig,
+                      newDelta,
+                      previousFolders,
+                      previousRulesFileNames,
+                  });
+        let centralizedPr =
+            expectedConfigId === undefined
+                ? await createCentralizedMutation()
+                : null;
 
         // Every UI-triggered change (structural or config) lands in the DB
         // immediately and the centralized PR is best-effort. If the user
@@ -1012,11 +1492,44 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             updater,
         );
 
+        const precondition: [expectedConfigId?: string] =
+            expectedConfigId === undefined ? [] : [expectedConfigId];
         await this.createOrUpdateParametersUseCase.execute(
             ParametersKey.CODE_REVIEW_CONFIG,
             updatedCodeReviewConfigValue,
             organizationAndTeamData,
+            ...precondition,
         );
+        if (expectedConfigId !== undefined) {
+            try {
+                centralizedPr = await createCentralizedMutation();
+            } catch (error) {
+                const { code, status, statusCode } =
+                    error instanceof Error ? extractErrorProps(error) : {};
+                this.logger.warn({
+                    message:
+                        'Saved code review settings, but could not create the centralized config pull request',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    error:
+                        error instanceof Error
+                            ? new Error(error.message)
+                            : undefined,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId,
+                        directoryId,
+                        providerErrorCode:
+                            typeof code === 'string' ? code : undefined,
+                        providerStatus:
+                            typeof status === 'number'
+                                ? status
+                                : typeof statusCode === 'number'
+                                  ? statusCode
+                                  : undefined,
+                    },
+                });
+            }
+        }
 
         await this.logConfigUpdate({
             actor,
@@ -1074,7 +1587,9 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             const before = resolveBefore(id);
             const after = resolveAfter(id);
 
-            if (before.repoInstructionsEnabled !== after.repoInstructionsEnabled) {
+            if (
+                before.repoInstructionsEnabled !== after.repoInstructionsEnabled
+            ) {
                 this.logger.log({
                     message: `Coding-agent instructions in review turned ${after.repoInstructionsEnabled ? 'on' : 'off'} for repository`,
                     context: UpdateOrCreateCodeReviewParameterUseCase.name,
@@ -1233,6 +1748,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             this.hasNoScopedConfigChanges(
                 existingScopedConfigFileContent,
                 configFileContent,
+                params.level === ConfigLevel.GLOBAL,
             )
         ) {
             return {
@@ -1869,7 +2385,28 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     private hasNoScopedConfigChanges(
         existingScopedConfig: Record<string, any> | null | undefined,
         nextScopedConfig: Record<string, any>,
+        globalScope = false,
     ): boolean {
+        if (globalScope) {
+            const defaults = getDefaultKodusConfigFile();
+            const existing = existingScopedConfig ?? {};
+            return this.isDeepEqualIgnoringEmpty(
+                {
+                    ...existing,
+                    ...migratedReviewSettings(
+                        deepMerge(defaults, existing),
+                        existing,
+                    ),
+                },
+                {
+                    ...nextScopedConfig,
+                    ...migratedReviewSettings(
+                        deepMerge(defaults, nextScopedConfig),
+                        nextScopedConfig,
+                    ),
+                },
+            );
+        }
         return this.isDeepEqualIgnoringEmpty(
             existingScopedConfig || {},
             nextScopedConfig || {},

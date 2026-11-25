@@ -1,0 +1,180 @@
+---
+title: "Z.AI (GLM)"
+description: "Z.AI の Developer API を使って GLM モデルを Kodus に接続します。"
+icon: "bolt"
+---
+
+## Z.AI の仕組み
+
+Z.AI は GLM ファミリーのモデルを提供しています。**GLM Coding Plan** は定額のサブスクリプションで、トークン単位の課金ではなく、5 時間と週次のウィンドウごとのクレジットで利用量が制限されます。
+
+Z.AI は、標準の Developer API でトークン従量課金のアクセスも提供しています。
+
+どちらの経路も OpenAI 互換のエンドポイントを公開しているため、Kodus は **OpenAI-compatible** プロバイダーを通じて接続できます。Kodus には専用の **Z.ai** プロバイダーもあり、Z.AI の Anthropic 互換エンドポイント（`https://api.z.ai/api/anthropic`）経由で接続します。
+
+## プランの概要
+
+<Info>
+  **Developer API** を使用する場合は、**Custom** で **OpenAI-compatible** を選択し、`https://api.z.ai/api/paas/v4/` を入力してください。Z.AI は GLM Coding Plan の利用を[対応ツール](https://docs.z.ai/devpack/tool/others#supported-tools)に限定しています。Kodus でサブスクリプションを使う前に、利用資格を Z.AI に確認してください。
+</Info>
+
+### GLM Coding Plan（サブスクリプション）
+
+| ティア | 5 時間のクレジット | 週次のクレジット |
+| ---- | -------------- | -------------- |
+| **Lite** | 2,000 | 10,000 |
+| **Pro**  | 12,000 | 60,000 |
+| **Max**  | 28,000 | 140,000 |
+
+- 5 時間のクレジットは、使用してから 5 時間後にリセットされます。週次のクレジットは契約時に開始し、7 日ごとにリセットされます。月次の上限ではなく、これらの上限を前提に計画してください。
+- プランは月額 $18 から始まります。各ティアの料金は [z.ai/subscribe](https://z.ai/subscribe) に記載されています。
+- 同時実行数の上限はティアによって異なります（Max が最も高く、次に Pro、Lite の順です）。Z.AI のドキュメントには具体的な数値が記載されていません。
+- すべてのプランに GLM-5.3 と GLM-5.3-Flash が含まれます。古い GLM モデルへのリクエストは、これらにルーティングされます。
+- Coding Plan のエンドポイント：`https://api.z.ai/api/anthropic`（Anthropic 互換。Kodus の **Z.ai** プロバイダーが使用するもの）と `https://api.z.ai/api/coding/paas/v4`（OpenAI 互換）。標準の `/api/paas/v4/` エンドポイントは Coding Plan のクォータを消費しません。
+
+### トークン従量課金の Developer API
+
+料金とモデルの提供状況は変更されます。モデルを選ぶ前に [Z.AI の料金ページ](https://docs.z.ai/guides/overview/pricing)で確認してください。標準エンドポイントは `https://api.z.ai/api/paas/v4/`（OpenAI 互換）です。
+
+## APIキーの作成
+
+<Warning>APIキーを作成するには Z.AI アカウントが必要です。</Warning>
+
+<Tabs>
+  <Tab title="Coding Plan の契約者">
+    1. [z.ai](https://z.ai) にサインインします。
+    2. 契約する前に、Kodus での Coding Plan の利用が認められるかを Z.AI に確認します。
+    3. [z.ai/manage-apikey/apikey-list](https://z.ai/manage-apikey/apikey-list) を開き、**Personal Coding Plan** の下で APIキーを作成します。
+
+    <Note>
+      Z.AI は Coding Plan、Team Plan、標準 API のキーをそれぞれ別に管理しており、互換性はありません。Coding Plan のキーは Coding Plan のエンドポイント（`/api/anthropic` と `/api/coding/paas/v4`）で使用してください。標準の `/api/paas/v4/` エンドポイントへの呼び出しは、Coding Plan のクォータではなくアカウント残高に課金されます。
+    </Note>
+  </Tab>
+
+  <Tab title="Developer API（トークン従量課金）">
+    1. [z.ai](https://z.ai) にサインインします。
+    2. [z.ai/manage-apikey/apikey-list](https://z.ai/manage-apikey/apikey-list) を開きます。
+    3. **Standard API Key** の下で APIキーを作成します。
+
+    <Note>
+      標準 APIキーはトークン単位で課金されます。Coding Plan のエンドポイントに送信しても、Coding Plan のクォータは消費されません。
+    </Note>
+  </Tab>
+</Tabs>
+
+## Kodus で Z.AI を設定する
+
+基本の手順は **AI providers** ページで、Kodus Cloud でもセルフホスト環境でも共通です。プロバイダーをプロセスレベルで固定したいセルフホストのユーザーは、代わりに環境変数を使用できます。
+
+### オプション1 — Anthropic エンドポイントを使う Z.ai プロバイダー
+
+**Developer API** を使う場合は、オプション2で OpenAI 互換の接続を設定してください。
+
+<Steps>
+  <Step title="AI providers を開いて Z.ai を選択する">
+    サイドバーで **AI providers** を開きます（Cloud では [app.kodus.io/byok](https://app.kodus.io/byok)、自社環境では `/byok`）。**Providers** タブで **Z.ai** タイルをクリックします（**Connect your first provider** の下、すでにプロバイダーを接続済みの場合は **Add another provider** の後にあります）。
+  </Step>
+
+  <Step title="APIキーを貼り付けてモデルを入力する">
+    **API key** カードに Coding Plan のキーを貼り付け、**Model** にモデル ID（例：`glm-5.3`）を入力します。Kodus は `https://api.z.ai/api/anthropic` エンドポイント（Z.AI が GLM Coding Plan 向けに案内している Anthropic 互換エンドポイント）を自動で入力するため、このタイルにはプランの選択もベース URL のフィールドもありません。特定の OpenAI 互換エンドポイントを使う場合は、後述のオプション2を使用してください。
+  </Step>
+
+  <Step title="同時実行数を設定する（Coding Plan）">
+    Kodus は同時実行数を事前に入力しません。Coding Plan では、**Advanced (optional)** → **Advanced settings** を開き、**Max concurrent requests** を設定します。Z.AI は上限をティアに紐づけており、ドキュメントに具体的な数値がないため、低い値から始め、429 が出ない間は引き上げてください。
+  </Step>
+
+  <Step title="Test & save">
+    **Test & save** をクリックします。Kodus は接続をテストし、成功すると設定を保存します。認証エラーは、キーがエンドポイントと一致していないことを意味します。
+  </Step>
+</Steps>
+
+### 推論の調整（任意）
+
+**Thinking / Reasoning** は **Advanced (optional)** → **Advanced settings** 内にあります。
+
+GLM-5.3 と GLM-5.3-Flash は常に推論を行い、Z.AI は推論をオフにすることをサポートしていません。`thinking.type` は `enabled` のみを受け付け、`disabled` を指定したリクエストは失敗します。**Thinking / Reasoning** が **Off** の場合、Kodus はこれらのモデルに何も送信しません。
+
+GLM-5.3 では、Z.AI は `reasoning_effort` として `low`、`high`、`max`（デフォルトは `max`）を受け付けます。Kodus から設定するには、**OpenAI-compatible**（オプション2）で接続し、**Low**、**Medium**、**High** を選択します。それぞれ `low`、`high`、`max` が送信されます。**Z.ai** タイルでは設定できません。代わりに thinking のバジェットを送信します。
+
+<Note>
+  その他のプロバイダーオプションを送信するには、**Thinking / Reasoning** を **Custom** に切り替えます。Kodus は JSON を現在のプロバイダーの名前空間でラップします。[Custom JSON override](/ja/how_to_use/byok/model_settings#custom-json-override) を参照してください。
+</Note>
+
+### 同時実行数の調整
+
+- **Coding Plan**：Z.AI はティアごとに同時実行数を制限しているため、**Max concurrent requests** を低く設定してください。これより高くすると 429 が返されることがあります。
+- **Developer API**：空欄（上限なし）から始めます。レート制限エラーが出る場合は上限を設定し、少しずつ調整してください。Z.AI の[レート制限](https://docs.z.ai/api-reference/rate-limit)のページを参照してください。
+
+<Note>
+  **Code review → Routing**（**AI providers** の **Configure routing** ボタンから開けます）で、GLM モデルを **Default model** に、OpenAI または Anthropic のモデルを **Fallback model** に設定します。Coding Plan のクレジットを使い切ってもレビューが継続されます。Kodus は自動的にフェイルオーバーします。
+</Note>
+
+### オプション2 — OpenAI 互換エンドポイント
+
+Z.AI の OpenAI 互換エンドポイントのいずれかで接続するには、**AI providers** を開き、**Providers** タブで **Custom** の下にある **OpenAI-compatible** を選択して、次のように入力します。
+
+| フィールド | 値 |
+| --- | --- |
+| **Base URL** | `https://api.z.ai/api/coding/paas/v4`（Coding Plan）<br />`https://api.z.ai/api/paas/v4/`（Developer API） |
+| **Model** | 例：`glm-5.3` または `glm-5.3-flash` |
+| **Key**（**API key** カード内） | Z.AI のキー（上記のベース URL に対応するもの） |
+| **Max concurrent requests**（**Advanced (optional)** → **Advanced settings** 内） | Coding Plan では低い値。Developer API では空欄 |
+
+### オプション3 — セルフホスト（環境変数）
+
+セルフホスト環境で `.env` から 1 つのモデルを指定するには、次のように設定します。
+
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="glm-5.3"
+API_LLM_BASE_URL="https://api.z.ai/api/paas/v4/"
+API_LLM_API_KEY="your-z-ai-api-key"
+```
+
+代わりに Anthropic 互換エンドポイントを使用するには、`API_LLM_PROVIDER=anthropic_compatible` と `API_LLM_BASE_URL="https://api.z.ai/api/anthropic"` を設定します。
+
+インストールガイドに従って[モデルの変更を反映してください](/ja/how_to_deploy/deploy_kodus/generic_vm#モデルの変更を反映する)。
+
+## Coding Plan とトークン従量課金の選び方
+
+- Kodus のレビューでは、トークン従量課金の **Developer API** を使用します。
+- Coding Plan のサブスクリプションを使う場合は、そのクォータを利用する前に用途を Z.AI に確認してください。
+
+## トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="Test が失敗する — キーとエンドポイントが一致していない">
+    - Coding Plan のキーは `/api/anthropic` と `/api/coding/paas/v4` 用です。標準 APIキーは `/api/paas/v4/` 用です。この 2 つに互換性はありません。
+    - **Z.ai** タイルは常に `https://api.z.ai/api/anthropic` を使用します。別のエンドポイントを使うには、その **Base URL** を指定して **OpenAI-compatible** から接続してください。
+    - **OpenAI-compatible** では、**Base URL** がキーの発行元と一致していることを確認します。
+    - Coding Plan でエラー `1113 Insufficient balance` が出る場合は、ベース URL が間違っているか、Z.AI がサポートしていないツールを使っているか、GLM-5.3 や GLM-5.3-Flash 以外のモデルを指定している可能性があります。
+  </Accordion>
+
+  <Accordion title="レビュー時に 429 が返される">
+    - Z.AI はレート制限に達すると HTTP 429 を返します（エラー `1302`）。**Advanced (optional)** → **Advanced settings** の **Max concurrent requests** を下げてください。
+    - Z.AI はティアごとに同時実行数を制限しています。上位のティアほど多く許可されます。
+  </Accordion>
+
+  <Accordion title="Coding Plan のクォータを使い切った">
+    - Z.AI は **5 時間**と**週次**のクレジット上限を適用します。いずれかに達すると、リセットまでの時間とともに HTTP 429（エラー `1308` または `1310`）が返されます。
+    - Z.AI コンソールで残りのクレジットを確認します。
+    - 対処：リセットを待つ、上位のティアにアップグレードする、または **Code review → Routing** で Developer API のキーを **Fallback model** として設定し、不足分を補います。
+  </Accordion>
+
+  <Accordion title="モデルが見つからない">
+    - モデル ID が Z.AI のカタログと一致していることを確認します（例：`glm-5.3` や `glm-5.3-flash`）。Coding Plan では、古い GLM の ID は現行のモデルにルーティングされます。
+    - Coding Plan が対象とするのは GLM-5.3 と GLM-5.3-Flash のみです。それ以外のモデル名は拒否されます。
+  </Accordion>
+
+  <Accordion title="接続エラー（タイムアウト、DNS）">
+    - サーバーから `api.z.ai` に到達できることを確認します。
+    - API とワーカーのログで、上流の正確なエラーを確認します。
+    - アウトバウンド通信が制限されているリージョンにいる場合は、インフラで許可されているリバースプロキシ経由でリクエストをルーティングしてください。
+  </Accordion>
+</AccordionGroup>
+
+## 関連リンク
+
+- [GLM Coding Plan（料金）](https://z.ai/subscribe)
+- [Z.AI 開発者ドキュメント](https://docs.z.ai/devpack/overview)
+- [BYOK の概要](/ja/how_to_use/byok)

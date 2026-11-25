@@ -55,9 +55,14 @@ describe('AgentReviewStage — repo instructions source branch', () => {
             'CLAUDE.md',
         ]);
         expect(
-            codeManagementService.getRepositoryAllFiles.mock.calls[0][0]
-                .filters.branch,
+            codeManagementService.getRepositoryAllFiles.mock.calls[0][0].filters
+                .branch,
         ).toBe('release/2.0');
+        // A listing failure must not look like a repository without the files.
+        expect(
+            codeManagementService.getRepositoryAllFiles.mock.calls[0][0]
+                .throwOnError,
+        ).toBe(true);
         const read =
             codeManagementService.getRepositoryContentFile.mock.calls[0][0];
         expect(read.pullRequest.head.ref).toBe('release/2.0');
@@ -74,7 +79,35 @@ describe('AgentReviewStage — repo instructions source branch', () => {
             'bug, security and performance are all off, so the generalist does not run',
             {
                 repoInstructionsEnabled: true,
-                reviewOptions: { bug: false, security: false, performance: false },
+                reviewOptions: {
+                    bug: false,
+                    security: false,
+                    performance: false,
+                },
+            },
+        ],
+        [
+            'the categories are off and the only custom agent is disabled',
+            {
+                repoInstructionsEnabled: true,
+                reviewOptions: {
+                    bug: false,
+                    security: false,
+                    performance: false,
+                },
+                customAgents: [{ id: 'conventions', enabled: false }],
+            },
+        ],
+        [
+            'the categories are off and the only custom agent was never turned on',
+            {
+                repoInstructionsEnabled: true,
+                reviewOptions: {
+                    bug: false,
+                    security: false,
+                    performance: false,
+                },
+                customAgents: [{ id: 'conventions', name: 'Conventions' }],
             },
         ],
     ])('reads nothing when %s', async (_label, codeReviewConfig) => {
@@ -88,10 +121,76 @@ describe('AgentReviewStage — repo instructions source branch', () => {
         );
 
         expect(result).toBeUndefined();
-        expect(codeManagementService.getRepositoryAllFiles).not.toHaveBeenCalled();
+        expect(
+            codeManagementService.getRepositoryAllFiles,
+        ).not.toHaveBeenCalled();
         expect(
             codeManagementService.getRepositoryContentFile,
         ).not.toHaveBeenCalled();
+    });
+
+    // A custom agent quotes rules from these files (its quote gate checks the
+    // quote against them), so a team running only custom agents still gets them.
+    // `@kody -v <agent>` runs the agent it names even when it is off.
+    it('reads them when the categories are off and @kody -v names a disabled custom agent', async () => {
+        const { stage, codeManagementService } = makeStage();
+
+        const result = await (stage as any).resolveRepoInstructions(
+            {
+                ...context,
+                onlyCustomAgent: 'conventions',
+                codeReviewConfig: {
+                    repoInstructionsEnabled: true,
+                    reviewOptions: {
+                        bug: false,
+                        security: false,
+                        performance: false,
+                    },
+                    customAgents: [
+                        {
+                            id: 'conventions',
+                            name: 'Conventions',
+                            enabled: false,
+                        },
+                    ],
+                },
+            },
+            [{ filename: 'src/a.ts' }],
+            { kind: 'full' },
+            7,
+        );
+
+        expect(result.files.map((f: { path: string }) => f.path)).toEqual([
+            'CLAUDE.md',
+        ]);
+        expect(codeManagementService.getRepositoryAllFiles).toHaveBeenCalled();
+    });
+
+    it('reads them when the categories are off but a custom agent runs', async () => {
+        const { stage, codeManagementService } = makeStage();
+
+        const result = await (stage as any).resolveRepoInstructions(
+            {
+                ...context,
+                codeReviewConfig: {
+                    repoInstructionsEnabled: true,
+                    reviewOptions: {
+                        bug: false,
+                        security: false,
+                        performance: false,
+                    },
+                    customAgents: [{ id: 'conventions', enabled: true }],
+                },
+            },
+            [{ filename: 'src/a.ts' }],
+            { kind: 'full' },
+            7,
+        );
+
+        expect(result.files.map((f: { path: string }) => f.path)).toEqual([
+            'CLAUDE.md',
+        ]);
+        expect(codeManagementService.getRepositoryAllFiles).toHaveBeenCalled();
     });
 
     it.each([
@@ -167,9 +266,150 @@ describe('AgentReviewStage — repo instructions source branch', () => {
         );
 
         expect(result).toBeUndefined();
-        expect(codeManagementService.getRepositoryAllFiles).not.toHaveBeenCalled();
+        expect(
+            codeManagementService.getRepositoryAllFiles,
+        ).not.toHaveBeenCalled();
         expect(
             codeManagementService.getRepositoryContentFile,
         ).not.toHaveBeenCalled();
+    });
+});
+
+// GitLab and Bitbucket list a whole tree in pages; the index of instruction
+// files is the same for every review against one target-branch commit.
+describe('AgentReviewStage — instruction index cache', () => {
+    const makeCachedStage = () => {
+        const store = new Map<string, unknown>();
+        const cacheService = {
+            getFromCache: jest.fn(
+                async (key: string) => store.get(key) ?? null,
+            ),
+            addToCache: jest.fn(async (key: string, value: unknown) => {
+                store.set(key, value);
+            }),
+        };
+        const codeManagementService = {
+            getRepositoryAllFiles: jest
+                .fn()
+                .mockResolvedValue([{ path: 'CLAUDE.md' }]),
+            getRepositoryContentFile: jest.fn().mockResolvedValue({
+                data: { content: 'Amounts are integer cents.' },
+            }),
+            getPullRequest: jest.fn().mockResolvedValue(null),
+        };
+        const stage = new AgentReviewStage(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            codeManagementService as any,
+            undefined,
+            undefined,
+            undefined,
+            cacheService as any,
+        );
+        return { stage, codeManagementService };
+    };
+    const withBase = (sha?: string) => ({
+        ...context,
+        pullRequest: {
+            ...context.pullRequest,
+            base: { ref: 'release/2.0', ...(sha ? { sha } : {}) },
+        },
+    });
+    const resolve = (stage: AgentReviewStage, ctx: unknown) =>
+        (stage as any).resolveRepoInstructions(
+            ctx,
+            [{ filename: 'src/a.ts' }],
+            { kind: 'full' },
+            7,
+        );
+
+    it('lists once per target-branch commit and still reads the files', async () => {
+        const { stage, codeManagementService } = makeCachedStage();
+
+        const first = await resolve(stage, withBase('abc'));
+        const second = await resolve(stage, withBase('abc'));
+        await resolve(stage, withBase('def'));
+
+        expect(second.files).toEqual(first.files);
+        expect(
+            codeManagementService.getRepositoryAllFiles,
+        ).toHaveBeenCalledTimes(2);
+        expect(
+            codeManagementService.getRepositoryContentFile,
+        ).toHaveBeenCalledTimes(3);
+    });
+
+    // GitLab's merge request and note payloads carry no target-branch commit,
+    // so the pipeline's pull request has none; the provider's own PR has it.
+    it('asks the provider for the target-branch commit when the payload has none', async () => {
+        const { stage, codeManagementService } = makeCachedStage();
+        codeManagementService.getPullRequest.mockResolvedValue({
+            base: { ref: 'release/2.0', sha: 'abc' },
+        });
+
+        await resolve(stage, withBase());
+        await resolve(stage, withBase());
+
+        expect(
+            codeManagementService.getRepositoryAllFiles,
+        ).toHaveBeenCalledTimes(1);
+        expect(codeManagementService.getPullRequest.mock.calls[0][0]).toEqual(
+            expect.objectContaining({ prNumber: 7 }),
+        );
+    });
+
+    it('does not ask the provider when the payload has the commit', async () => {
+        const { stage, codeManagementService } = makeCachedStage();
+
+        await resolve(stage, withBase('abc'));
+
+        expect(codeManagementService.getPullRequest).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        [
+            'has no commit for the target branch either',
+            async () => ({ base: {} }),
+        ],
+        [
+            'fails',
+            async () => {
+                throw new Error('502');
+            },
+        ],
+    ])('lists every time when the provider %s', async (_label, impl) => {
+        const { stage, codeManagementService } = makeCachedStage();
+        codeManagementService.getPullRequest.mockImplementation(impl);
+
+        const result = await resolve(stage, withBase());
+        await resolve(stage, withBase());
+
+        expect(result.files.map((f: { path: string }) => f.path)).toEqual([
+            'CLAUDE.md',
+        ]);
+        expect(
+            codeManagementService.getRepositoryAllFiles,
+        ).toHaveBeenCalledTimes(2);
+    });
+
+    it('warns when the provider lookup fails', async () => {
+        const { stage, codeManagementService } = makeCachedStage();
+        codeManagementService.getPullRequest.mockRejectedValue(
+            new Error('502'),
+        );
+        const warn = jest.spyOn((stage as any).logger, 'warn');
+
+        await resolve(stage, withBase());
+
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('commit lookup failed'),
+            }),
+        );
     });
 });

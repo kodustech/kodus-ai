@@ -1,22 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Badge } from "@components/ui/badge";
+import { useMemo, useState } from "react";
+import { SkeletonRows } from "@components/system/page-skeletons";
+import { Button } from "@components/ui/button";
+import { Card, CardContent, CardHeader } from "@components/ui/card";
+import { Heading } from "@components/ui/heading";
 import { Link } from "@components/ui/link";
-import {
-    listModelOverrides,
-    type ListModelOverridesResult,
-} from "@services/organizationParameters/fetch";
+import { listModelOverrides } from "@services/organizationParameters/fetch";
+import { useQuery } from "@tanstack/react-query";
 import {
     BotIcon,
-    Building2Icon,
     ChevronDownIcon,
     ChevronRightIcon,
-    ExternalLinkIcon,
     FolderIcon,
 } from "lucide-react";
-
-import { SkeletonRows } from "@components/system/page-skeletons";
 
 import { providerFromModel } from "../_utils";
 import { groupOverrides } from "./per-repository-overrides";
@@ -45,11 +42,13 @@ const ModelCell = ({
     // back to the raw value so a legacy name-based override still shows readably.
     const info = models?.find((m) => m.id === model);
     return (
-        <span className="flex items-center gap-2">
+        <span className="flex min-w-0 items-center gap-2">
             <ProviderAvatar
                 provider={info?.provider ?? providerFromModel(model)}
             />
-            <span className="text-text-primary text-sm font-medium">
+            <span
+                title={info?.label ?? model}
+                className="text-text-primary truncate text-sm font-medium">
                 {info?.label ?? model}
             </span>
         </span>
@@ -58,10 +57,7 @@ const ModelCell = ({
 
 /**
  * A READ-ONLY mirror of the per-repository / per-folder model overrides set in
- * Code Review Settings. It does not edit anything — it shows what's configured
- * there and links out to the real editor — so the BYOK screen is the one place a
- * user sees every model assignment (org default, per agent, per repository).
- * Renders nothing while there are no repo/folder overrides to mirror.
+ * Routing and custom-agent settings. Each link opens the scope that owns it.
  */
 export const PerRepositoryPanel = ({
     teamId,
@@ -70,30 +66,17 @@ export const PerRepositoryPanel = ({
     teamId?: string;
     models?: PerRepositoryModelInfo[];
 }) => {
-    const [data, setData] = useState<ListModelOverridesResult | null>(null);
-    // `data === null` means both "still fetching" and "came back empty", so an
-    // explicit flag keeps the empty state from flashing "nothing configured"
-    // over rows that are about to arrive.
-    const [loading, setLoading] = useState(!!teamId);
+    const { data, isPending, isError, refetch } = useQuery({
+        queryKey: ["routing-model-overrides", teamId],
+        queryFn: () => listModelOverrides(teamId!),
+        enabled: !!teamId,
+        retry: false,
+        throwOnError: false,
+        staleTime: 15_000,
+    });
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-    useEffect(() => {
-        if (!teamId) {
-            setLoading(false);
-            return;
-        }
-        let alive = true;
-        setLoading(true);
-        void listModelOverrides(teamId)
-            .then((result) => alive && setData(result))
-            .catch(() => alive && setData(null))
-            .finally(() => alive && setLoading(false));
-        return () => {
-            alive = false;
-        };
-    }, [teamId]);
-
-    const repos = useMemo(() => groupOverrides(data), [data]);
+    const repos = useMemo(() => groupOverrides(data ?? null), [data]);
 
     const toggle = (id: string) =>
         setExpanded((prev) => {
@@ -104,154 +87,172 @@ export const PerRepositoryPanel = ({
         });
 
     return (
-        <div className="border-card-lv3/50 bg-card-lv1 flex flex-col gap-3 rounded-xl border p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                    <span className="bg-card-lv2 flex size-9 shrink-0 items-center justify-center rounded-lg text-sky-300">
-                        <Building2Icon className="size-4" />
-                    </span>
-                    <div className="flex flex-col">
-                        <span className="text-text-primary flex items-center gap-2 text-sm font-medium">
-                            Per repository
-                            <Badge variant="helper">Read-only</Badge>
-                        </span>
-                        <span className="text-text-tertiary max-w-prose text-xs">
-                            Models assigned per repository — and per folder for
-                            monorepos — plus the custom agents that pin their
-                            own model. Configure these in Code Review Settings;
-                            this view reflects what&apos;s set there.
-                        </span>
+        <Card
+            color="lv1"
+            role="region"
+            aria-label="Repository overrides"
+            className="scroll-mt-64 md:scroll-mt-32">
+            <CardHeader>
+                <Heading variant="h3">Repository overrides</Heading>
+                <p className="text-text-secondary text-sm">
+                    Models set for repositories, folders and custom agents.
+                </p>
+            </CardHeader>
+            <CardContent>
+                {!teamId ? (
+                    <p className="text-text-secondary text-sm">
+                        Select a team to view overrides.
+                    </p>
+                ) : isPending ? (
+                    <SkeletonRows
+                        rows={3}
+                        className="border-card-lv3/40 overflow-hidden rounded-lg border"
+                    />
+                ) : isError ? (
+                    <div
+                        role="alert"
+                        className="flex flex-wrap items-center gap-3 text-sm">
+                        <p>Could not load repository overrides.</p>
+                        <Button
+                            type="button"
+                            variant="helper"
+                            size="sm"
+                            onClick={() => refetch()}>
+                            Retry
+                        </Button>
                     </div>
-                </div>
-                <Link
-                    href="/settings/code-review"
-                    className="text-primary-light hover:text-primary inline-flex shrink-0 items-center gap-1 text-xs font-medium">
-                    Open Code Review Settings
-                    <ExternalLinkIcon className="size-3.5" />
-                </Link>
-            </div>
-
-            {loading ? (
-                <SkeletonRows
-                    rows={3}
-                    className="border-card-lv3/40 overflow-hidden rounded-lg border"
-                />
-            ) : repos.length === 0 ? (
-                <div className="border-card-lv3/40 text-text-tertiary rounded-lg border border-dashed px-4 py-6 text-center text-sm text-pretty">
-                    No per-repository models yet — every repository uses the
-                    models above. Assign a model to a specific repository,
-                    folder or custom agent in Code Review Settings to see it
-                    here.
-                </div>
-            ) : (
-                <div className="border-card-lv3/40 divide-card-lv3/30 flex flex-col divide-y overflow-hidden rounded-lg border">
-                    {/* Header spine */}
-                    <div className="text-text-tertiary bg-card-lv2/40 hidden grid-cols-[minmax(0,1fr)_16rem] gap-4 px-3 py-2 text-[0.6875rem] font-medium tracking-wide uppercase sm:grid">
-                        <span>Repository / Folder</span>
-                        <span>Model</span>
+                ) : repos.length === 0 ? (
+                    <div className="border-card-lv3/40 text-text-tertiary rounded-lg border border-dashed px-4 py-6 text-center text-sm text-pretty">
+                        No repository overrides. Choose a repository from the
+                        scope menu to set one.
                     </div>
+                ) : (
+                    <div className="border-card-lv3/40 divide-card-lv3/30 flex flex-col divide-y overflow-hidden rounded-lg border">
+                        {/* Header spine */}
+                        <div className="text-text-secondary bg-card-lv2/40 hidden grid-cols-[minmax(0,1fr)_16rem] gap-4 px-3 py-2 text-xs font-medium sm:grid">
+                            <span>Repository / Folder</span>
+                            <span>Model</span>
+                        </div>
 
-                    {repos.map((repo) => {
-                        const isMonorepo = repo.folders.length > 0;
-                        const isOpen = expanded.has(repo.id);
-                        return (
-                            <div key={repo.id} className="flex flex-col">
-                                <div className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,1fr)_16rem] items-center gap-4 px-3 py-2.5">
-                                    <span className="flex min-w-0 items-center gap-2">
-                                        {isMonorepo ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => toggle(repo.id)}
-                                                aria-label={
-                                                    isOpen
-                                                        ? "Collapse"
-                                                        : "Expand"
-                                                }
-                                                className="text-text-tertiary hover:text-text-secondary shrink-0">
-                                                {isOpen ? (
-                                                    <ChevronDownIcon className="size-4" />
-                                                ) : (
-                                                    <ChevronRightIcon className="size-4" />
-                                                )}
-                                            </button>
-                                        ) : (
-                                            <span className="w-4 shrink-0" />
-                                        )}
-                                        <span className="text-text-primary truncate font-mono text-sm">
-                                            {repo.name}
-                                        </span>
-                                        {isMonorepo && (
-                                            <Badge variant="helper">
-                                                Monorepo
-                                            </Badge>
-                                        )}
-                                    </span>
-                                    <ModelCell
-                                        model={repo.model}
-                                        models={models}
-                                    />
-                                </div>
-
-                                {isMonorepo && isOpen && (
-                                    <div className="border-card-lv3/30 flex flex-col border-t">
-                                        {repo.folders.map((f) => (
-                                            <div
-                                                key={f.id}
-                                                className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,1fr)_16rem] items-center gap-4 py-2 pr-3 pl-3">
-                                                <span className="flex min-w-0 items-center gap-2 pl-8">
-                                                    <FolderIcon className="text-text-tertiary size-3.5 shrink-0" />
-                                                    <span className="text-text-secondary truncate font-mono text-sm">
-                                                        {f.name}
-                                                    </span>
-                                                </span>
-                                                <ModelCell
-                                                    model={f.model}
-                                                    models={models}
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {repo.agents.length > 0 && (
-                                    <div className="border-card-lv3/30 flex flex-col border-t">
-                                        {repo.agents.map((a) => (
-                                            <div
-                                                key={a.id}
-                                                className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,1fr)_16rem] items-center gap-4 py-2 pr-3 pl-3">
-                                                <span className="flex min-w-0 items-center gap-2 pl-8">
-                                                    <BotIcon className="text-text-tertiary size-3.5 shrink-0" />
-                                                    {a.href ? (
-                                                        <Link
-                                                            href={a.href}
-                                                            className="text-text-secondary hover:text-text-primary truncate text-sm">
-                                                            {a.agentName}
-                                                        </Link>
+                        {repos.map((repo) => {
+                            const isMonorepo = repo.folders.length > 0;
+                            const isOpen = expanded.has(repo.id);
+                            return (
+                                <div key={repo.id} className="flex flex-col">
+                                    <div className="grid grid-cols-1 items-center gap-4 gap-y-1 px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_16rem]">
+                                        <span className="flex min-w-0 items-center gap-2">
+                                            {isMonorepo ? (
+                                                <Button
+                                                    type="button"
+                                                    variant="cancel"
+                                                    size="icon-sm"
+                                                    onClick={() =>
+                                                        toggle(repo.id)
+                                                    }
+                                                    aria-expanded={isOpen}
+                                                    aria-label={
+                                                        isOpen
+                                                            ? "Collapse"
+                                                            : "Expand"
+                                                    }
+                                                    className="text-text-tertiary hover:text-text-secondary shrink-0">
+                                                    {isOpen ? (
+                                                        <ChevronDownIcon className="size-4" />
                                                     ) : (
-                                                        <span className="text-text-secondary truncate text-sm">
-                                                            {a.agentName}
-                                                        </span>
+                                                        <ChevronRightIcon className="size-4" />
                                                     )}
-                                                    <span className="text-text-tertiary shrink-0 text-xs">
-                                                        custom agent
-                                                        {a.folderName
-                                                            ? ` · ${a.folderName}`
-                                                            : ""}
-                                                    </span>
+                                                </Button>
+                                            ) : (
+                                                <span className="w-4 shrink-0" />
+                                            )}
+                                            {repo.href ? (
+                                                <Link
+                                                    href={repo.href}
+                                                    title={repo.name}
+                                                    className="truncate text-sm">
+                                                    {repo.name}
+                                                </Link>
+                                            ) : (
+                                                <span className="text-text-primary truncate text-sm">
+                                                    {repo.name}
                                                 </span>
-                                                <ModelCell
-                                                    model={a.model}
-                                                    models={models}
-                                                />
-                                            </div>
-                                        ))}
+                                            )}
+                                        </span>
+                                        <ModelCell
+                                            model={repo.model}
+                                            models={models}
+                                        />
                                     </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-        </div>
+
+                                    {isMonorepo && isOpen && (
+                                        <div className="border-card-lv3/30 flex flex-col border-t">
+                                            {repo.folders.map((f) => (
+                                                <div
+                                                    key={f.id}
+                                                    className="grid grid-cols-1 items-center gap-4 gap-y-1 py-2 pr-3 pl-3 sm:grid-cols-[minmax(0,1fr)_16rem]">
+                                                    <span className="flex min-w-0 items-center gap-2 pl-8">
+                                                        <FolderIcon className="text-text-tertiary size-3.5 shrink-0" />
+                                                        {f.href ? (
+                                                            <Link
+                                                                href={f.href}
+                                                                className="truncate text-sm">
+                                                                {f.name}
+                                                            </Link>
+                                                        ) : (
+                                                            <span className="text-text-secondary truncate text-sm">
+                                                                {f.name}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                    <ModelCell
+                                                        model={f.model}
+                                                        models={models}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {repo.agents.length > 0 && (
+                                        <div className="border-card-lv3/30 flex flex-col border-t">
+                                            {repo.agents.map((a) => (
+                                                <div
+                                                    key={a.id}
+                                                    className="grid grid-cols-1 items-center gap-4 gap-y-1 py-2 pr-3 pl-3 sm:grid-cols-[minmax(0,1fr)_16rem]">
+                                                    <span className="flex min-w-0 items-center gap-2 pl-8">
+                                                        <BotIcon className="text-text-tertiary size-3.5 shrink-0" />
+                                                        {a.href ? (
+                                                            <Link
+                                                                href={a.href}
+                                                                className="text-text-secondary hover:text-text-primary truncate text-sm">
+                                                                {a.agentName}
+                                                            </Link>
+                                                        ) : (
+                                                            <span className="text-text-secondary truncate text-sm">
+                                                                {a.agentName}
+                                                            </span>
+                                                        )}
+                                                        <span className="text-text-tertiary min-w-0 truncate text-xs">
+                                                            custom agent
+                                                            {a.folderName
+                                                                ? ` · ${a.folderName}`
+                                                                : ""}
+                                                        </span>
+                                                    </span>
+                                                    <ModelCell
+                                                        model={a.model}
+                                                        models={models}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 };

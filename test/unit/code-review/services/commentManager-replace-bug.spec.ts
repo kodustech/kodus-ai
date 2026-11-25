@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
+import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { MessageTemplateProcessor } from '@libs/code-review/infrastructure/adapters/services/messageTemplateProcessor.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -62,16 +63,17 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
     beforeEach(async () => {
         mockObservabilityService = {
             runAiSdkLLMInSpan: jest.fn().mockImplementation(async () => {
-                return { text: LLM_SUMMARY };
+                return {
+                    text: LLM_SUMMARY,
+                    output: { description: LLM_SUMMARY },
+                };
             }),
         };
         // LLM.run reads observability through the port, not DI — register the mock
         // so the summary call is intercepted (no live model call).
         setLlmObservability(mockObservabilityService as any);
 
-        mockCodeManagementService = {
-            getPullRequestByNumber: jest.fn(),
-        };
+        mockCodeManagementService = {};
 
         mockPermissionValidationService = {
             validateBasicLicense: jest
@@ -83,6 +85,7 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 { provide: MessageTemplateProcessor, useValue: {} },
                 {
@@ -118,9 +121,7 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
             'This is my carefully written PR description that I want to keep.';
 
         // PR body has NO kody markers — user removed them
-        mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
-            body: userRewrittenBody,
-        });
+        const currentPR = { ...mockPullRequest, body: userRewrittenBody };
 
         const files = [makeFile('a.ts', 100)];
 
@@ -131,13 +132,12 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
         };
 
         const result = await service.generateSummaryPR(
-            mockPullRequest,
+            currentPR,
             mockRepository,
             files,
             mockOrganizationAndTeamData as any,
             'en-US',
             summaryConfig as any,
-            undefined, // no byokConfig
             true, // isCommitRun = true
         );
 
@@ -160,9 +160,7 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
         const oldSummary = 'Old summary content.';
         const bodyWithTags = `${userText}\n\n${START_MARKER}\n${oldSummary}\n${END_MARKER}`;
 
-        mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
-            body: bodyWithTags,
-        });
+        const currentPR = { ...mockPullRequest, body: bodyWithTags };
 
         const files = [makeFile('a.ts', 100)];
 
@@ -173,13 +171,12 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
         };
 
         const result = await service.generateSummaryPR(
-            mockPullRequest,
+            currentPR,
             mockRepository,
             files,
             mockOrganizationAndTeamData as any,
             'en-US',
             summaryConfig as any,
-            undefined,
             true, // isCommitRun = true
         );
 
@@ -199,9 +196,7 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
     it('CONCATENATE mode should preserve body when tags are missing', async () => {
         const userBody = 'User wrote this description.';
 
-        mockCodeManagementService.getPullRequestByNumber.mockResolvedValue({
-            body: userBody,
-        });
+        const currentPR = { ...mockPullRequest, body: userBody };
 
         const files = [makeFile('a.ts', 100)];
 
@@ -212,13 +207,12 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
         };
 
         const result = await service.generateSummaryPR(
-            mockPullRequest,
+            currentPR,
             mockRepository,
             files,
             mockOrganizationAndTeamData as any,
             'en-US',
             summaryConfig as any,
-            undefined,
             true, // isCommitRun = true
         );
 

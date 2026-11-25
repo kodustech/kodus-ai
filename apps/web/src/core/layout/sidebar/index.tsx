@@ -716,6 +716,8 @@ const CODE_REVIEW_PAGES: Array<{
     repoOnly?: boolean;
 }> = [
     { href: "general", label: "General", icon: Settings2Icon },
+    { href: "risk", label: "Risk assessment", icon: ShieldIcon },
+    { href: "routing", label: "Routing", icon: Settings2Icon },
     { href: "review-scope", label: "What to review", icon: ScanSearchIcon },
     { href: "kody-rules", label: "Kody Rules", icon: BookOpenCheckIcon },
     {

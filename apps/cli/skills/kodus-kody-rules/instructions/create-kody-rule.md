@@ -26,7 +26,7 @@ Always include the repository id when creating a rule. Use `global` when the use
 Use the following command to save the Kody Rule:
 
 ```
-kodus rules create --title <title> --rule <rule-content> [--repo-id <repository-id>] [--severity <severity-level>] [--scope <scope-level>] [--path <glob-pattern>]
+kodus rules create --title <title> --rule <rule-content> [--repo-id <repository-id>] [--severity <severity-level>] [--scope <scope-level>] [--path <glob-pattern>] [--team <team>]
 ```
 
 If `--repo-id` is omitted, the default repository id is `global`.
@@ -54,3 +54,7 @@ In this case:
 4. **Align with Project Goals**: Ensure that the Kody Rule aligns with the overall goals and requirements of the project. The rule should contribute to producing code that is maintainable, efficient, and meets the user's needs.
 
 5. **Review and Refine**: After drafting the Kody Rule, review it for clarity and completeness. Present it to the user for feedback and refine it as necessary to ensure it effectively guides Kody's code generation process.
+
+## Team
+
+Logged in with more than one team, add `--team <name|id>`. With a team key, the key's team is used and `--team` is ignored.

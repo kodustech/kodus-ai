@@ -14,8 +14,9 @@ import { ReviewResponseMonitorService } from '@libs/core/infrastructure/metrics/
 import { WebhookFailureMonitorService } from '@libs/core/infrastructure/metrics/webhook-failure-monitor.service';
 import { RabbitMQWrapperModule } from '@libs/core/infrastructure/queue/rabbitmq.module';
 import { LangfuseShutdownProvider } from '@libs/core/log/langfuse-shutdown.provider';
-import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { OutboxRelayService } from '@libs/core/workflow/infrastructure/outbox-relay.service';
+import { WorkflowJobRetentionService } from '@libs/core/workflow/infrastructure/workflow-job-retention.service';
+import { isSecurityScanSliceProcess } from '@libs/core/workflow/infrastructure/security-scan-runtime';
 import { WorkflowModule } from '@libs/core/workflow/modules/workflow.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
@@ -27,6 +28,12 @@ import { SharedObservabilityModule } from '@libs/shared/infrastructure/shared-ob
 import { SelfHostedBeaconModule } from '@libs/telemetry/modules/self-hosted-beacon.module';
 import { TelemetryModule } from '@libs/telemetry/modules/telemetry.module';
 import { FeatureGateModule } from '@libs/feature-gate/modules/feature-gate.module';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
+import { LicenseModule } from '@libs/ee/license/license.module';
+import { ParametersModule } from '@libs/organization/modules/parameters.module';
+import { TeamModule } from '@libs/organization/modules/team.module';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
 import { NotificationModule } from '@libs/notifications/modules/notification.module';
 
@@ -38,6 +45,7 @@ import { SelfHostedBeaconCron } from './cron/self-hosted-beacon.cron';
 import { BusinessLogicRecheckCron } from './cron/business-logic-recheck.cron';
 import { OrgReportCron } from './cron/org-report.cron';
 import { RepoReportCron } from './cron/repo-report.cron';
+import { RefreshCodeAreaRiskMapCron } from './cron/refresh-code-area-risk-map.cron';
 import { resolveWorkerRole, type WorkerRole } from './worker-role';
 import { WorkerDrainService } from './worker-drain.service';
 import { WorkerHealthGuardService } from './worker-health-guard.service';
@@ -72,6 +80,46 @@ export class WorkerModule {
             SharedMongoModule.forRoot(),
         ];
 
+        // The modules the job pipeline needs, for either consuming role.
+        const jobImports = [
+            CodebaseModule,
+            CodeReviewFeedbackModule,
+            AutomationModule,
+            PlatformModule,
+            PlatformDataModule,
+            ParametersModule,
+            TeamModule,
+            OrganizationModule,
+            LicenseModule,
+            SandboxModule, // provides SANDBOX_LEASE_MANAGER_TOKEN for OutboxRelayService
+            NotificationModule,
+        ];
+
+        if (role === 'security-scan') {
+            return {
+                module: WorkerModule,
+                imports: [
+                    ...baseImports,
+                    SharedPostgresModule.forRoot({ poolSize: 6 }),
+                    RabbitMQWrapperModule.register({
+                        enableConsumers: !isSecurityScanSliceProcess(),
+                        securityScanOnly: true,
+                    }),
+                    WorkflowModule.register({ type: 'security-scan-worker' }),
+                    ...jobImports,
+                ],
+                providers: [
+                    WorkerDrainService,
+                    WorkerHealthGuardService,
+                    {
+                        provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+                        useClass: ConditionalApprovalAccessService,
+                    },
+                    LangfuseShutdownProvider,
+                ] satisfies Provider[],
+            };
+        }
+
         if (role === 'code-review') {
             return {
                 module: WorkerModule,
@@ -80,12 +128,7 @@ export class WorkerModule {
                     SharedPostgresModule.forRoot({ poolSize: 12 }),
                     RabbitMQWrapperModule.register({ enableConsumers: true }),
                     WorkflowModule.register({ type: 'worker' }),
-                    CodebaseModule,
-                    CodeReviewFeedbackModule,
-                    AutomationModule,
-                    PlatformModule,
-                    SandboxModule, // provides SANDBOX_LEASE_MANAGER_TOKEN for OutboxRelayService
-                    NotificationModule,
+                    ...jobImports,
                     SelfHostedBeaconModule,
                 ],
                 providers: [
@@ -95,7 +138,13 @@ export class WorkerModule {
                     ErrorRateMonitorService,
                     ReviewResponseMonitorService,
                     WebhookFailureMonitorService,
+                    WorkflowJobRetentionService,
                     SelfHostedBeaconCron,
+                    {
+                        provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+                        useClass: ConditionalApprovalAccessService,
+                    },
+                    RefreshCodeAreaRiskMapCron,
                     BusinessLogicRecheckCron,
                     LangfuseShutdownProvider,
                 ] satisfies Provider[],

@@ -13,6 +13,8 @@
  * must keep reaching the model with the matching action named.
  */
 jest.mock('@libs/llm/model-invocation', () => ({
+    // The conversation keeps the answer it declares out of its window.
+    declaredAnswerTokens: async (_slot: unknown, answer: number) => answer,
     resolveModelConfig: () => ({
         model: scriptedModel.current,
         callOptions: {},
@@ -31,6 +33,8 @@ jest.mock('@libs/mcp-server/mcp-adapter', () => ({
                 name: tool.name,
                 description: tool.description,
                 annotations: tool.annotations,
+                _meta: tool._meta,
+                serverName: 'kodus-mcp',
                 inputSchema: { type: 'object', properties: {} },
             })),
         executeTool: async (name: string, args: Record<string, unknown>) => {
@@ -50,6 +54,7 @@ import { MockLanguageModelV3 } from 'ai/test';
 import { ConversationAgentProvider } from '@libs/agents/infrastructure/services/agents/conversation/conversationAgent';
 import { KodyIssuesTools } from '@libs/mcp-server/tools/kodyIssues.tools';
 import { KodyRulesTools } from '@libs/mcp-server/tools/kodyRules.tools';
+import { KODUS_MCP_INTEGRATION_ID } from '@libs/mcp-server/utils/mcp-auth.constants';
 
 import {
     CONFIRMATION_TURN,
@@ -61,10 +66,10 @@ import {
 } from './__test-utils__/kody-thread-scenarios';
 
 /**
- * The REAL Kodus MCP tool definitions — names, descriptions and annotations as
- * the server serves them. Using the real declarations rather than a hand-kept
- * copy is what proves the agent derives its behavior from them: re-annotate a
- * tool at the source and these expectations move with it.
+ * The REAL Kodus MCP tool definitions — names, descriptions, annotations and
+ * `_meta` as the server serves them. Using the real declarations rather than a
+ * hand-kept copy is what proves the agent derives its behavior from them:
+ * re-annotate a tool at the source and these expectations move with it.
  */
 const ORG_MCP_TOOLS = [
     ...new KodyRulesTools({} as never, {} as never, {} as never).getAllTools(),
@@ -179,9 +184,13 @@ function buildProvider(conversationStore?: {
         } as any,
         { resolveTaskSlot: jest.fn().mockResolvedValue(null) } as any,
         {
-            getConnections: jest
-                .fn()
-                .mockResolvedValue([{ name: 'kodus-mcp', type: 'http' }]),
+            getConnections: jest.fn().mockResolvedValue([
+                {
+                    name: 'kodus-mcp',
+                    type: 'http',
+                    integrationId: KODUS_MCP_INTEGRATION_ID,
+                },
+            ]),
         } as any,
         undefined,
         conversationStore as any,
@@ -347,10 +356,14 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
         it('puts the finding the thread answers, with the rule it broke, in front of the agent', async () => {
             const turn = await runTurn(scenarioById('rule-too-broad'));
             const prompt = `${turn.systemPrompt}\n${turn.userPrompt}`;
-            expect(prompt).toContain('Validate the request body before using it.');
+            expect(prompt).toContain(
+                'Validate the request body before using it.',
+            );
             expect(prompt).toContain(SCENARIO_RULE_ID);
             const plain = await runTurn(scenarioById('already-fixed'));
-            expect(`${plain.systemPrompt}\n${plain.userPrompt}`).not.toContain(SCENARIO_RULE_ID);
+            expect(`${plain.systemPrompt}\n${plain.userPrompt}`).not.toContain(
+                SCENARIO_RULE_ID,
+            );
         });
 
         it('instructs the agent to evaluate whether the exchange is worth persisting', async () => {
@@ -457,7 +470,7 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             organizationAndTeamData: ORGANIZATION_AND_TEAM_DATA,
             thread: { id: 'TR-cmc-sandbox' },
             prepareContext: scenarioById('no-durable-signal').prepareContext,
-            sandbox,
+            openSandbox: async () => sandbox,
         } as never);
 
         expect(sandbox.remoteCommands.grep).toHaveBeenCalled();

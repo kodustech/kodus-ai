@@ -9,7 +9,8 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { resolveDashboardRepositoryScope } from './utils/team-repository-scope.util';
-import { isOpenPullRequest } from './utils/pull-request-metrics';
+import { findOpenAwaitingPullRequests } from './utils/open-awaiting-pull-requests.util';
+import { parseRequestedFields } from './utils/requested-fields.util';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
@@ -20,22 +21,42 @@ import {
 } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 
+/**
+ * One number per segment of the Reviews screen. `null` means the number is not
+ * known — it was not asked for, or the query behind it failed — and must be
+ * shown as unavailable. It never stands in for zero: a counter that reads 0
+ * when the count timed out tells the reader there is nothing to look at.
+ */
 export interface PullRequestsFacets {
     // Distinct reviewed PRs (org/team + repo scope), all-time.
-    all: number;
+    all: number | null;
     // Open PRs that still carry an unaddressed delivered suggestion
     // (implementationStatus ≠ implemented).
-    needsAttention: number;
+    needsAttention: number | null;
     // Reviewed PRs whose review errored.
-    errored: number;
+    errored: number | null;
     // PRs Kody was triggered on but skipped and never reviewed — every
     // execution status='skipped' (no license, BYOK, manual/paused cadence,
     // ignored user). Sourced from automation_execution, the table that drives
     // the list, so awaiting = on-screen PRs still waiting for a first review.
-    awaiting: number;
+    awaiting: number | null;
     // Reviewed PRs authored by the current user (0 if identity can't be matched).
-    mine: number;
+    mine: number | null;
 }
+
+export type PullRequestsFacetName = keyof PullRequestsFacets;
+
+export const PULL_REQUESTS_FACET_NAMES: readonly PullRequestsFacetName[] = [
+    'all',
+    'needsAttention',
+    'errored',
+    'awaiting',
+    'mine',
+];
+
+/** `?fields=awaiting,needsAttention` → the facets to compute. */
+export const parsePullRequestsFacetFields = (raw?: string | string[]) =>
+    parseRequestedFields(raw, PULL_REQUESTS_FACET_NAMES);
 
 @Injectable()
 export class GetPullRequestsFacetsUseCase implements IUseCase {
@@ -63,13 +84,28 @@ export class GetPullRequestsFacetsUseCase implements IUseCase {
         // my work. 'team' (default) counts the whole team scope. `all`/`errored`/
         // `awaiting` stay team-wide (they aren't shown in the mine view).
         scope?: 'mine' | 'team';
+        // The facets the caller will actually show. Each one is a scan of
+        // its own (two of them over the team's whole history), so a view that
+        // shows two numbers should not pay for five. Absent → every facet the
+        // scope has a use for: `mine` is only ever shown in the mine view.
+        fields?: PullRequestsFacetName[];
     }): Promise<PullRequestsFacets> {
+        const wanted = new Set<PullRequestsFacetName>(
+            query.fields?.length
+                ? query.fields
+                : PULL_REQUESTS_FACET_NAMES.filter(
+                      (name) => name !== 'mine' || query.scope === 'mine',
+                  ),
+        );
+        const wants = (name: PullRequestsFacetName) => wanted.has(name);
+
+        // Nothing to count: no organization, or no repository in scope.
         const empty: PullRequestsFacets = {
-            all: 0,
-            needsAttention: 0,
-            errored: 0,
-            awaiting: 0,
-            mine: 0,
+            all: wants('all') ? 0 : null,
+            needsAttention: wants('needsAttention') ? 0 : null,
+            errored: wants('errored') ? 0 : null,
+            awaiting: wants('awaiting') ? 0 : null,
+            mine: wants('mine') ? 0 : null,
         };
 
         const organizationId = this.request.user?.organization?.uuid;
@@ -116,11 +152,24 @@ export class GetPullRequestsFacetsUseCase implements IUseCase {
             const needsAttentionAuthor =
                 query.scope === 'mine' && email ? email : undefined;
 
-            const [reviewedKeys, needsAttention, mine, awaitingKeys] =
+            // Each facet settles on its own: one slow or failed count must
+            // not blank the others, and must not be reported as zero.
+            const [reviewed, needsAttention, mine, awaiting] =
                 await Promise.all([
-                    this.automationExecutionService.getDistinctReviewedPullRequestKeys(
-                        { organizationAndTeamData, repositoryIds },
-                    ),
+                    // `all` and `errored` come from the same grouping.
+                    wants('all') || wants('errored')
+                        ? this.settle(
+                              'all/errored',
+                              organizationAndTeamData,
+                              () =>
+                                  this.automationExecutionService.getDistinctReviewedPullRequestKeys(
+                                      {
+                                          organizationAndTeamData,
+                                          repositoryIds,
+                                      },
+                                  ),
+                          )
+                        : null,
                     // Needs attention = open PRs that still carry an unaddressed
                     // delivered suggestion (any severity, implementationStatus ≠
                     // implemented). Actionable "someone needs to look at this",
@@ -128,60 +177,59 @@ export class GetPullRequestsFacetsUseCase implements IUseCase {
                     // resolved PRs too). Scoped to the caller in the "mine" view.
                     // Guard: in the "mine" scope with no resolvable email we'd
                     // otherwise drop authorEmail and count the WHOLE team — so
-                    // return 0 (matching the `mine` facet). Team scope always
+                    // answer 0 (matching the `mine` facet). Team scope always
                     // runs the (team-wide) count.
-                    query.scope !== 'mine' || email
-                        ? this.pullRequestsService.countDeliveredPullRequests(
-                              organizationId,
-                              repositoryIds,
-                              {
-                                  unresolvedOnly: true,
-                                  openOnly: true,
-                                  authorEmail: needsAttentionAuthor,
-                              },
-                          )
-                        : Promise.resolve(0),
-                    email
-                        ? this.pullRequestsService.countDeliveredPullRequests(
-                              organizationId,
-                              repositoryIds,
-                              { authorEmail: email },
-                          )
-                        : Promise.resolve(0),
+                    !wants('needsAttention')
+                        ? null
+                        : query.scope !== 'mine' || email
+                          ? this.settle(
+                                'needsAttention',
+                                organizationAndTeamData,
+                                () =>
+                                    this.pullRequestsService.countDeliveredPullRequests(
+                                        organizationId,
+                                        repositoryIds,
+                                        {
+                                            unresolvedOnly: true,
+                                            openOnly: true,
+                                            authorEmail: needsAttentionAuthor,
+                                        },
+                                    ),
+                            )
+                          : 0,
+                    !wants('mine')
+                        ? null
+                        : email
+                          ? this.settle('mine', organizationAndTeamData, () =>
+                                this.pullRequestsService.countDeliveredPullRequests(
+                                    organizationId,
+                                    repositoryIds,
+                                    { authorEmail: email },
+                                ),
+                            )
+                          : 0,
                     // Awaiting = PRs Kody was triggered on but skipped and never
                     // reviewed (every execution status='skipped': no license,
                     // BYOK, manual/paused cadence, ignored user). Sourced from
                     // automation_execution — the same table that drives the list,
                     // so a PR shows as awaiting iff it's on the screen and unseen.
-                    this.automationExecutionService.getAwaitingReviewPullRequestKeys(
-                        { organizationAndTeamData, repositoryIds },
-                    ),
+                    wants('awaiting')
+                        ? this.settle('awaiting', organizationAndTeamData, () =>
+                              this.countAwaiting(
+                                  organizationAndTeamData,
+                                  repositoryIds,
+                              ),
+                          )
+                        : null,
                 ]);
 
-            const errored = reviewedKeys.filter((k) => k.hasError).length;
-            // Awaiting count = skipped-only PRs that are still OPEN. Hydrate just
-            // the awaiting keys (bounded — usually a handful) instead of scanning
-            // every open PR for the org, and apply the SAME case-insensitive open
-            // predicate the Awaiting list uses so the badge and the list agree.
-            let awaiting = 0;
-            if (awaitingKeys.length) {
-                const awaitingPrs =
-                    (await this.pullRequestsService.findManyByNumbersAndRepositoryIds(
-                        awaitingKeys.map((k) => ({
-                            number: k.pullRequestNumber,
-                            repositoryId: k.repositoryId,
-                        })),
-                        organizationId,
-                    )) ?? [];
-                awaiting = awaitingPrs.filter((pr) =>
-                    isOpenPullRequest(pr),
-                ).length;
-            }
-
             return {
-                all: reviewedKeys.length,
+                all: wants('all') && reviewed ? reviewed.length : null,
                 needsAttention,
-                errored,
+                errored:
+                    wants('errored') && reviewed
+                        ? reviewed.filter((key) => key.hasError).length
+                        : null,
                 awaiting,
                 mine,
             };
@@ -192,7 +240,49 @@ export class GetPullRequestsFacetsUseCase implements IUseCase {
                 error,
                 metadata: { organizationId },
             });
-            return empty;
+            return {
+                all: null,
+                needsAttention: null,
+                errored: null,
+                awaiting: null,
+                mine: null,
+            };
+        }
+    }
+
+    // Awaiting count = skipped-only PRs that are still OPEN — the same PRs the
+    // Awaiting list shows, resolved by the same helper so the badge and the
+    // list agree.
+    private async countAwaiting(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryIds: string[] | undefined,
+    ): Promise<number> {
+        const awaiting = await findOpenAwaitingPullRequests({
+            automationExecutionService: this.automationExecutionService,
+            pullRequestsService: this.pullRequestsService,
+            organizationAndTeamData,
+            repositoryIds,
+        });
+
+        return awaiting.length;
+    }
+
+    /** A facet's value, or `null` — logged — when its query fails. */
+    private async settle<T>(
+        facet: string,
+        organizationAndTeamData: OrganizationAndTeamData,
+        count: () => Promise<T>,
+    ): Promise<T | null> {
+        try {
+            return await count();
+        } catch (error) {
+            this.logger.error({
+                message: 'Error building pull requests facets',
+                context: GetPullRequestsFacetsUseCase.name,
+                error,
+                metadata: { ...organizationAndTeamData, facet },
+            });
+            return null;
         }
     }
 }

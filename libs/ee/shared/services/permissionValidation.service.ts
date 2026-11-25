@@ -45,6 +45,10 @@ export enum PlanType {
 
 export enum ValidationErrorType {
     INVALID_LICENSE = 'INVALID_LICENSE',
+    /** The license read itself failed (billing 5xx, rate limit, timeout).
+     *  Distinct from INVALID_LICENSE: the org may be perfectly licensed, so
+     *  the caller must ask to retry rather than report the trial as ended. */
+    LICENSE_UNAVAILABLE = 'LICENSE_UNAVAILABLE',
     USER_NOT_LICENSED = 'USER_NOT_LICENSED',
     BYOK_REQUIRED = 'BYOK_REQUIRED',
     PLAN_LIMIT_EXCEEDED = 'PLAN_LIMIT_EXCEEDED',
@@ -156,6 +160,51 @@ export class PermissionValidationService {
             },
             subscriptionStatus: validation.subscriptionStatus,
         };
+    }
+
+    /**
+     * The prepaid-credit gate for a slot routed after the prerequisites ran:
+     * a heavy review runs on `codeReviewHeavy`, which can be routed by Kodus
+     * while `codeReview`, the slot the prerequisites gated, is not. Same rules
+     * as that gate, and a failed billing read lets the review run.
+     */
+    async gateKodusCreditsForSlot(
+        slot: NormalizedModel | undefined,
+        organizationAndTeamData: OrganizationAndTeamData,
+        contextName?: string,
+    ): Promise<ValidationResult | null> {
+        if (
+            this.isDevelopment ||
+            !this.isCloud ||
+            !slot ||
+            !isPlatformFundedProvider(slot.provider)
+        ) {
+            return null;
+        }
+        try {
+            const validation =
+                await this.licenseService.validateOrganizationLicense(
+                    organizationAndTeamData,
+                );
+            if (!validation) {
+                return null;
+            }
+            return this.gateKodusCredits(
+                slot,
+                validation,
+                organizationAndTeamData,
+                contextName,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not read the Kodus credit balance; the review runs',
+                context: contextName || PermissionValidationService.name,
+                error,
+                metadata: { organizationAndTeamData, model: slot.model },
+            });
+            return null;
+        }
     }
 
     /**
@@ -328,7 +377,9 @@ export class PermissionValidationService {
 
                 return {
                     allowed: false,
-                    errorType: ValidationErrorType.INVALID_LICENSE,
+                    errorType: validation?.unavailable
+                        ? ValidationErrorType.LICENSE_UNAVAILABLE
+                        : ValidationErrorType.INVALID_LICENSE,
                     metadata: { validation },
                 };
             }

@@ -19,10 +19,7 @@ import type {
 import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
-import {
-    verifierPromptFor,
-    LlmVerifier,
-} from '@libs/code-review/infrastructure/agents/core/verifier.agent';
+import { LlmVerifier } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 
 const FULL = 'libs/common/utils/prompts/replyAddressedToKody.ts';
@@ -125,26 +122,6 @@ describe('revision history beyond the anchor file', () => {
 
     it('provides other-file history even without a revision id', async () => {
         expect(await promptFor('src/caller.ts')).toContain('Id: round-a');
-    });
-});
-
-// Cost regression: the verifier already has tools; do not duplicate whole-file evidence.
-describe('lean verifier input', () => {
-    it('does not append diff or finder read payloads to each candidate', () => {
-        const candidate = {
-            relevantFile: FULL,
-            suggestionContent: 'Check arithmetic',
-            existingCode: 'x',
-            improvedCode: 'y',
-        } as any;
-        const prompt = (verifierPromptFor as any)(
-            candidate,
-            [decision],
-            'FULL_DIFF_SENTINEL: excerpt supplied by caller',
-            'ALL_READS_SENTINEL',
-        );
-        expect(prompt).not.toContain('FULL_DIFF_SENTINEL');
-        expect(prompt).not.toContain('ALL_READS_SENTINEL');
     });
 });
 

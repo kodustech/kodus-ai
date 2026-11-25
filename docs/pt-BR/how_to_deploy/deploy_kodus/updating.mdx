@@ -1,35 +1,54 @@
 ---
 title: "Atualizando"
-description: "Atualize sua instalação do Kodus."
+description: "Atualize sua instalação da Kodus."
 icon: "arrow-up"
 ---
 
 <Note>
-  Versões com telemetria anônima self-hosted vêm habilitadas por padrão e
-  enviam um heartbeat diário para `telemetry.kodus.io` com apenas
-  contadores agregados — nada de código, nomes ou identificadores.
-  Inspecione o que seria enviado com `pnpm run telemetry:preview`, ou defina
-  `KODUS_TELEMETRY_DISABLED=true` para optar por sair. Schema completo e
-  política em [Telemetria Anônima](/pt-BR/how_to_deploy/deploy_kodus/telemetry).
+  Instâncias self-hosted enviam um heartbeat anônimo por dia para `telemetry.kodus.io`, apenas com contadores agregados. Defina `KODUS_TELEMETRY_DISABLED=true` para optar por sair. Veja [Telemetria Anônima](/pt-BR/how_to_deploy/deploy_kodus/telemetry) para saber o que é enviado.
 </Note>
 
-Para atualizar sua instalação do Kodus para a versão mais recente:
+## Docker Compose
 
-```bash
-# Navegue até o diretório de instalação do Kodus
-cd kodus-installer
+Execute estes passos a partir do diretório `kodus-installer`.
 
-# Obtenha as últimas alterações do repositório
-git pull
+Antes do upgrade, faça backup do PostgreSQL, do MongoDB e do arquivo `.env`. Guarde o `API_CRYPTO_KEY` atual junto ao backup para conseguir ler as credenciais criptografadas após a restauração.
 
-# Se estiver fazendo upgrade da versão 1.x, atualize seu .env com as novas variáveis da versão 2.0
-# (RabbitMQ, MCP Manager e webhooks).
+<Steps>
+  <Step title="Atualize o instalador">
+    ```bash
+    git pull
+    ```
 
-# Re-execute o instalador para baixar imagens, iniciar serviços e executar migrações
-./scripts/install.sh
+    Isso mantém `docker-compose.yml`, `.env.example` e a lista de variáveis obrigatórias alinhados com a release. Compare o `.env.example` com o seu `.env` e adicione qualquer variável que estiver faltando.
+  </Step>
+  <Step title="Defina a versão">
+    No `.env`, defina `IMAGE_TAG` com a release que você quer, por exemplo `IMAGE_TAG=2.2.11`. As versões estão listadas na [página de releases do kodus-ai](https://github.com/kodustech/kodus-ai/releases) como _Self-Hosted Release_. Sem `IMAGE_TAG`, o instalador usa `latest`, que o Docker só baixa novamente quando você pede.
+  </Step>
+  <Step title="Baixe as imagens e recrie os contêineres">
+    ```bash
+    ./scripts/validate-env.sh
+    docker compose pull
+    ./scripts/install.sh
+    ```
 
-# Opcional: executar diagnósticos
-./scripts/doctor.sh
-```
+    O contêiner `api` executa as migrações do banco de dados quando inicia.
+  </Step>
+  <Step title="Verifique o resultado">
+    ```bash
+    ./scripts/doctor.sh
+    ```
+  </Step>
+</Steps>
 
+<Warning>
+  Não execute `./scripts/generate-secrets.sh` em uma instalação que já tem dados. Ele substitui todos os segredos do `.env`, incluindo as senhas do banco de dados e `API_CRYPTO_KEY`.
+</Warning>
 
+Seus dados ficam em volumes Docker: `pgdata` (PostgreSQL), `mongodbdata` (MongoDB), `rabbitmq-data-prod` (RabbitMQ) e `log_volume`. O Docker adiciona o nome do projeto Compose como prefixo a todos, exceto `rabbitmq-data-prod`; `docker volume ls` mostra todos eles. `docker compose down` os mantém, e `docker compose down -v` os apaga. Faça backup do PostgreSQL e do MongoDB antes de uma atualização; as migrações não são revertidas.
+
+Se você usa o analytics worker, inicie-o novamente após a atualização com `docker compose --profile analytics up -d worker-analytics`.
+
+## Kubernetes
+
+As versões do chart fixam a release da Kodus. Para migrar para uma nova release, atualize o chart ou defina `imageTag`; o job de migração roda antes de os pods serem substituídos. Veja [Kubernetes & OpenShift](/pt-BR/how_to_deploy/deploy_kodus/kubernetes#upgrade).

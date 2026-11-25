@@ -1,50 +1,52 @@
 ---
-title: "Como ensinar ao AI as convenções de código do seu time"
-description: "Use Memórias para fazer o Kody aprender suas preferências de codificação, decisões arquiteturais e convenções do time através de conversas naturais."
+title: "Como ensinar à IA as convenções de código do seu time"
+description: "Use Memórias para fazer a Kody aprender suas preferências de codificação, decisões arquiteturais e convenções do time por meio de conversas naturais."
 ---
 
-Todo time tem contexto não escrito — preferências tecnológicas, convenções de nomenclatura, decisões arquiteturais, detalhes de migração. Em vez de documentar tudo isso antecipadamente, você pode ensinar o Kody por meio de conversas naturais para que futuras revisões sejam mais relevantes e sugestões repetitivas e ruins desapareçam.
+Todo time tem contexto não escrito — preferências tecnológicas, convenções de nomenclatura, decisões arquiteturais, detalhes de migração. Em vez de documentar tudo isso antecipadamente, você pode ensinar a Kody por meio de conversas naturais para que as revisões futuras sejam mais relevantes e sugestões ruins e repetitivas desapareçam.
 
 ## Como funciona
 
-Quando você fala com o Kody nos comentários de PR, ele detecta quando você está declarando contexto do codebase ou uma preferência do time e salva isso automaticamente como uma **Memória**. As Memórias são então aplicadas como contexto de alta prioridade em todas as futuras revisões de código e conversas.
+Quando você pede à Kody em um comentário de PR para lembrar de algo, ela salva isso como uma **Memória**. Quando você apenas declara contexto do codebase ou uma preferência do time, a Kody se oferece para salvar e salva assim que você disser que sim. As Memórias passam então a ser usadas como contexto de alta prioridade em code reviews e conversas futuras.
 
 ### Ensino explícito
 
-Diga diretamente ao Kody para lembrar algo:
+Diga diretamente à Kody para lembrar de algo:
 
 ```
-@kody remember: este repositório espelha uma API de terceiros, então alguns campos de payload permanecem intencionalmente em snake_case.
-```
-
-```
-@kody please remember: este serviço segue arquitetura hexagonal e mantém adapters nas bordas.
-```
-
-### Aprendizado implícito
-
-Expresse uma preferência naturalmente — o Kody a capta:
-
-```
-@kody este repositório espelha uma API de terceiros, então alguns campos de payload permanecem intencionalmente em snake_case.
+@kody remember: this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
 ```
 
 ```
-@kody neste serviço, os testes normalmente ficam ao lado dos arquivos de implementação, não em uma pasta central de testes.
+@kody please remember: this service follows hexagonal architecture and keeps adapters at the edge.
+```
+
+### Declarando uma convenção
+
+Declare uma convenção, ou explique por que uma sugestão não se aplica, e a Kody se oferece para salvá-la como uma memória. Responda `@kody yes` para salvar. Por exemplo:
+
+```
+@kody this repo mirrors a third-party API, so some payload fields intentionally stay snake_case.
 ```
 
 ```
-@kody o módulo de billing está no meio de uma migração, então prefira mudanças incrementais a refactors amplos.
+@kody in this service, tests usually live next to the implementation files rather than in a central test folder.
 ```
 
-## O que o Kody não salva
+```
+@kody the billing module is mid-migration, so prefer incremental fixes over broad refactors.
+```
 
-O Kody é seletivo sobre o que se torna uma memória:
+<span id="o-que-o-kody-não-salva" aria-hidden="true" />
+
+## O que a Kody não salva
+
+A Kody é seletiva sobre o que vira uma memória:
 
 - Instruções temporárias ("corrija isso agora", "ignore isso por hoje")
 - Perguntas ("qual é o prazo?")
-- Conversas de depuração ("estou vendo um erro")
-- Declarações vagas sem informação acionável
+- Conversa de depuração ("estou vendo um erro")
+- Declarações vagas, sem informação acionável
 - Pedidos com escopo em um único PR ou tarefa
 
 ## Escopos de memória
@@ -53,16 +55,16 @@ Cada memória se aplica em um nível específico:
 
 | Escopo | Exemplo |
 |--------|---------|
-| **Diretório** | "Em `src/components/ui`, sempre use nossos tokens do sistema de design" |
-| **Repositório** | "Este repositório usa arquitetura hexagonal" |
-| **Organização** | "Todos os repositórios usam ESLint flat config" |
+| **Directory** | "Em `src/components/ui`, sempre use os tokens do nosso design system" |
+| **Repository** | "Este repositório usa arquitetura hexagonal" |
+| **Organization** | "Todos os repositórios usam ESLint flat config" |
 
 ## Fluxo de aprovação
 
-Se você quiser revisar as memórias geradas por IA antes que entrem em vigor, abra **Code review → Kody Rules**, clique em **Configuration** e ative **Kody knowledge approval**. As memórias (e as regras geradas pelo Kody) entrarão em estado pendente e aguardarão na seção **Pending review** até você aprová-las (**Approve**) ou descartá-las (**Discard**).
+Se você quiser revisar as memórias que a Kody cria antes que entrem em vigor, abra **Code review → Kody Rules**, clique em **Configuration** e ative **Kody knowledge approval**. As novas memórias (e as regras geradas pela Kody) passam a aguardar na seção **Pending review** até você usar **Approve** ou **Discard**. As memórias que você escreve com **New memory** ficam ativas na hora.
 
 ## Gerenciando memórias
 
-Vá em **Code review → Kody Rules** → aba **Memories** para visualizar, editar ou excluir memórias. Você também pode criar memórias manualmente com **New memory**.
+Vá em **Code review → Kody Rules** → aba **Memories** para ver, editar ou excluir memórias. Você também pode criar memórias manualmente com **New memory**.
 
-Para detalhes, consulte [Regras do Kody — Memórias](/pt-BR/how_to_use/code_review/configs/kody_rules#memórias).
+Para detalhes, consulte [Kody Rules — Memories](/pt-BR/how_to_use/code_review/configs/kody_rules#memórias).

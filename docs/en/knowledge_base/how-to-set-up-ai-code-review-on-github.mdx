@@ -1,30 +1,25 @@
 ---
 title: "How to set up AI code review on GitHub"
-description: "Install and configure Kodus for GitHub repositories to get automated AI code review on every pull request."
+description: "Connect GitHub to Kodus and select repositories for automated review."
 ---
-
-Setting up Kodus on GitHub takes a few minutes. Once connected, every pull request gets reviewed automatically.
 
 ## Steps
 
 1. **Create an account** at [kodus.io](https://kodus.io) or [self-host Kodus](/en/how_to_deploy/deploy_kodus/generic_vm)
-2. **Connect GitHub** — in the **Connect your Git tool** step of onboarding, click **Install Github app** (you can also connect later from **Repositories** in the sidebar)
-3. **Select repositories** — choose which repositories Kodus should review
-4. **Open a PR** — Kodus reviews it automatically and posts comments
-
-## What you get
-
-- Automated reviews on every PR (or on-demand with `@kody start-review`)
-- Comments posted directly in the PR with code suggestions
-- Customizable rules, review categories, and a minimum severity threshold
-- Business logic validation against linked tasks
+2. **Connect GitHub** — in the **Connect your Git tool** step of onboarding, click **Install Github app** (you can also connect later from **Repositories** in the sidebar: click **Github** under **Connect a provider**, then **Go to OAuth** on the **OAuth** tab)
+3. **Select repositories** — choose which repositories Kodus should review, or turn on [Review every repository](/en/how_to_use/code_review/configs/review_all_repositories) on **Repositories**
+4. Open a pull request in a selected repository. See [what Kody posts and how to check its status](/en/how_to_use/code_review/flow).
 
 ## Custom configuration
 
-Drop a `kodus-config.yml` in your repo root to customize behavior per repository. The file overrides web settings once **kodus Config File Overrides Web Preferences** is on for that repository (**Code review → General**).
+Use [kodus-config.yml](/en/how_to_use/code_review/configs/general#kodus-config-yml) to customize review settings per repository.
 
 ## Using a Personal Access Token
 
-For private repositories or organizations with stricter permissions, you may need to configure a GitHub Personal Access Token (PAT). Choose **Connect via token** in onboarding (or the **Token** tab when connecting GitHub on **Repositories**). Reviews are then posted from the token owner's account, and GitHub Checks/PR status aren't available.
+If you can't install the GitHub App, connect with a GitHub Personal Access Token (PAT) instead. Choose **Connect via token** in onboarding (or the **Token** tab when connecting GitHub on **Repositories**). Reviews are then posted from the token owner's account, and GitHub Checks/PR status aren't available. Kodus creates a webhook on each selected repository; see [Creating a Webhook](/en/how_to_deploy/platforms/github/github_webhook) if that fails.
 
-For the full setup guide, see [Quickstart](/en/how_to_use/quickstart) and [GitHub App setup](/en/how_to_deploy/platforms/github/github_app).
+## Self-hosted
+
+Self-hosted Kodus connects with a GitHub App you create yourself, or with a token. **Install Github app** needs the App's credentials in your `.env`: see [GitHub App setup](/en/how_to_deploy/platforms/github/github_app). To let users sign in with GitHub as well, see [GitHub OAuth App](/en/how_to_deploy/platforms/github/github_oauth).
+
+For the full setup guide, see [Quickstart](/en/how_to_use/quickstart).

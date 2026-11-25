@@ -1,54 +1,81 @@
 ---
 title: "概要"
-description: "エンジニアリングチームのパフォーマンスに関する包括的な分析とメトリクス"
+description: "リポジトリのレビューの効果とデリバリーのメトリクスを、1 つのダッシュボードで確認します。"
 ---
 
-## Cockpit アナリティクスとは
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
 
-Cockpit アナリティクスは、生産性、コード品質、デリバリー効率を測定する主要なメトリクスを通じて、エンジニアリングチームのパフォーマンスに関する包括的なインサイトを提供します。これらのメトリクスは改善が必要な領域を特定し、時間をかけて進捗を追跡するのに役立ちます。
+<div className="kodus-feature-badges">
+  <FeatureBadge id="cloud" detail="Kodus Cloud で利用できます。トライアルも対象です。">
+    <Badge icon="cloud" stroke>Teams・Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Cockpit には Enterprise ライセンスと稼働中の Analytics Worker が必要です。">
+    <Badge icon="server" stroke>セルフホスト</Badge>
+  </FeatureBadge>
+</div>
 
-<Warning>
-  Cockpit は有料プランが必要です：**クラウドの Teams または Enterprise**（トライアルを含む）、あるいは**ライセンス済みのセルフホスト Enterprise**。ライセンスのないセルフホスト（Community）と free BYOK プランでは利用できません。その場合、**Cockpit** 項目は南京錠付きでサイドバーに残り、**See plans** ボタン（セルフホストでは **Activate a license**）のあるぼかし表示の **Unlock the Cockpit** プレビューが開きます。セルフホスト Enterprise では [Analytics Worker](/ja/how_to_deploy/deploy_kodus/analytics_worker) の稼働も必要です。
-</Warning>
+Cockpit は 2 つのことを測定します。Kodus のレビューがチームにどれだけ受け入れられているか、そしてチームがどのようにデリバリーしているかです。
+
+Cockpit を開けるのは Owner と Repo Admin です。
+
+セルフホストで Cockpit のデータを収集するには、[Analytics Worker](/ja/how_to_deploy/deploy_kodus/analytics_worker) を設定します。
+
+Cockpit を含まないプランでは、サイドバーから **See plans**（セルフホストの場合は **Activate a license**）付きのロックされたプレビューが開きます。
 
 <Frame caption="リアルタイム分析でチームのパフォーマンスを監視します。">
   <img src="/images/cockpit.png" />
 </Frame>
 
-## 主な機能
-
-- データはデフォルトで 30 分ごとに更新されます（`ANALYTICS_INGESTION_CRON`）
-- クラウドの Teams / Enterprise（トライアルを含む）、またはライセンス済みセルフホスト Enterprise
-- AI 駆動のメトリクス計算
-- DORA およびカスタムメトリクス 8 種類以上
+ターミナルで Cockpit を確認したり、メトリクスを JSON で出力したりするには、[`kodus cockpit`](/ja/how_to_use/cli/commands#kodus-cockpit) を使います。
 
 ## タブ
 
-コックピットは2つのメトリクスタブと、それに続く **Issues** タブに分かれています。
+- **Kodus Review**（デフォルトで開きます）：Kodus のレビューがどれだけ効果的かを示します。実装率、重大度キャリブレーション、ネガティブフィードバック、Kody Rules のヘルスです。[Kodus Review](/ja/how_to_use/cockpit/kodus_review) を参照してください。
+- **Delivered as asked**：タスクに照らしてチェックされたプルリクエスト。[Delivered as asked](#delivered-as-asked) を参照してください。
+- **Productivity**：デリバリーのメトリクス。デプロイ頻度、PR サイクルタイム、バグ比率、PR サイズ、リードタイム内訳、オープン vs クローズの PR 数、開発者別のマージ済み PR、チームの活動量です。
+- **Code hotspots**（ベータ）：1 つのリポジトリのうち、変更が最も多く、長い関数や複雑な関数を含むディレクトリ。[Code hotspots](/ja/how_to_use/cockpit/code_hotspots) を参照してください。
+- **Issues**：[Issues](/ja/how_to_use/issues/overview) の一覧を開きます。タブ名の横にオープン中の issue 数が表示されます。
 
-- **Kodus Review**（デフォルトで開きます） — Kodus のレビューがどれだけ効果的かを示します。実装率、重大度キャリブレーション、ネガティブフィードバック、そして Kody ルールのヘルスです。これは Kodus そのものに関するものであり、あなたが行動を起こす場です。[Kodus Review](/ja/how_to_use/cockpit/kodus_review) を参照してください。
-- **Productivity** — 一般的なデリバリーメトリクスです。デプロイ頻度、リードタイム、PR サイクルタイム、PR サイズ、開発者のアクティビティです。
-- **Issues** — [Issues](/ja/how_to_use/issues/overview) の一覧を開きます。タブ名の横にオープン中の issue 数が表示されます。
-
-ページ上部でリポジトリ（デフォルトは **All repositories**）と日付範囲（デフォルトは **Last 15 days**。プリセットは **Last week**、**Last 15 days**、**Last month**、**Last 3 months**、またはカスタム日付）を選択します。開発者ごとのフィルターはありません。リンクボタン（**Copy link to this view**）は、同じタブ、リポジトリ、範囲を再び開く URL をコピーします。
+ページ上部でリポジトリ（デフォルトは **All repositories**）と日付範囲（デフォルトは **Last 15 days**。プリセットは **Last week**、**Last 15 days**、**Last month**、**Last 3 months**、または最大 93 日間のカスタム範囲）を選択します。開発者ごとのフィルターはありません。**Copy link to this view** は、ページの URL をコピーします。この URL には、今回の閲覧中に選択したタブ、リポジトリ、範囲が含まれます。変更していない項目は、受け取った人自身のデフォルトで開きます。**Code hotspots** タブには専用のリポジトリピッカーがあり、日付範囲はありません。
 
 <Note>
-  Owner は **Organization → Cockpit visibility** から、タブ全体や個別のメトリクスを組織全体に対して非表示にできます —
-  [Cockpit の設定](/ja/how_to_use/cockpit/configuration) を参照してください。
+  Owner は **Organization → Cockpit visibility** から、タブ全体や個別のメトリクスを組織全体に対して非表示にできます。
+  [Cockpit の設定](/ja/how_to_use/cockpit/configuration)を参照してください。
 </Note>
 
-## 主要メトリクスカテゴリ
+## データの取得元
 
-**利用可能なメトリクス:**
-- **Kodus Review:** 実装率（全体、重大度別、カテゴリ別）、ネガティブフィードバック、リポジトリおよび Kody ルールのヘルス
-- **生産性:** デプロイ頻度、リードタイム、PR サイクルタイム
-- **品質:** PR サイズ、コードレビューの有効性
-- **チームパフォーマンス:** コラボレーションパターン、ボトルネックの特定
+Cockpit は、接続されたリポジトリで Kodus が追跡しているプルリクエストを測定します。リポジトリの接続後に Kodus が把握する PR に加え、接続時にインポートされる、過去 2 か月以内のリポジトリあたり最大 10 件の最近の PR が対象です。データはデフォルトで 30 分ごとに更新されます（`ANALYTICS_INGESTION_CRON`）。十分なデータがたまるまでは、その旨がバナーで表示されます。
 
+Productivity のほとんどのメトリクスは、プルリクエストをクローズされた日付で数えます。「クローズ」は、マージされた場合と、マージされずにクローズされた場合の両方を指し、Cockpit は両者を区別しません。
+
+範囲は、最初の日の開始時点から最後の日の開始時点までです。最後の日にクローズされたプルリクエストは、範囲がその日を過ぎた時点で数えられます。Kodus Review タブの **PRs processed** と **Review processing outcomes**、および **Delivered as asked** タブには、最後の日が含まれます。
+
+## Delivered as asked
+
+[Business Logic Validation](/ja/how_to_use/code_review/business_logic_validation) の実行結果をもとに、プルリクエストがタスクの求める内容を実現しているかどうかを示します。リポジトリピッカーと日付範囲に従います。期間中にタスクに照らしてチェックされたプルリクエストがない場合、このタブには代わりに Business Logic の設定へのリンクが表示されます。
+
+| カード | 内容 |
+| --- | --- |
+| **Met their task** | チェックされた PR のうち、タスクを満たしたものの割合と、前の期間からのポイント差 |
+| **Changes not in the task** | タスクが求めていない変更が少なくとも 1 件ある PR の割合 |
+| **Findings accepted** | 開発者が Kody の指摘に同意した頻度 |
+| **Without a readable task** | タスクを参照していない、またはタスクを読み取れなかった PR の割合 |
+
+カードの下の **By who wrote the code** では、コーディングエージェントごと（名前別）、**People**、**Not identified** について、タスクを満たした PR の割合を示します。コミットの作成者と `Co-Authored-By` トレーラーから読み取ります。**Most often missed** には、PR が最も見落としがちだった要件のトピックが一覧表示されます。チームが複数ある場合は、表で数値をチームごとに分けて表示します。
+
+## メールレポート
+
+クラウドでは、Kodus は同じデータから 2 種類のレポートをメールで送信します。どちらも、レビューのアクティビティがなかった場合は送信されません。
+
+- **Org report**：前の暦月の月次サマリー。毎月 1 日に Owner へ送信されます。
+- **Repo report**：毎月 1 日と 16 日に Repo Admin へ送信されるダイジェスト。割り当てられたリポジトリごとに 1 つのセクションがあり、直前の 15 日間が対象です。
+
+各メールには、同じ範囲の Cockpit へのリンクが含まれます。誰が受け取るかは、[Notifications](/ja/how_to_use/organization/notifications) の **Cockpit** で選択します。
 
 ## 開発者マッチングの仕組み
 
-Cockpit の開発者別チャート（**PRs Merged By Developer**、**Team Activity**）は、各プルリクエストを**Git プロバイダー上の作成者のユーザー名**に紐づけます。これは以下と異なる場合があります:
+Cockpit の開発者別チャート（**PRs Merged By Developer**、**Team Activity**）は、各プルリクエストを**Git プロバイダー上の作成者のユーザー名**に紐づけます。これは以下と異なる場合があります：
 - GitHub/GitLab の表示名
 - メールアドレス
 - Kodus ワークスペースアカウント

@@ -334,6 +334,12 @@ export class ParametersController {
                     ...body.organizationAndTeamData,
                     organizationId,
                 },
+                actor: {
+                    source: 'web',
+                    organizationId,
+                    userId: this.request?.user?.uuid,
+                    userEmail: this.request?.user?.email,
+                },
             }),
         );
     }
@@ -483,9 +489,10 @@ export class ParametersController {
     @Post('/preview-pr-summary')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
-        checkPermissions({
+        checkRepoPermissions({
             action: Action.Read,
             resource: ResourceType.CodeReviewSettings,
+            repo: { key: { body: 'repository.id' } },
         }),
     )
     @ApiOperation({

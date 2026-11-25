@@ -18,7 +18,26 @@ export const COMMENT_MANAGER_SERVICE_TOKEN = Symbol.for(
     'CommentManagerService',
 );
 
+export interface ApprovalReasonOptions {
+    /** Update Kody's earlier reason note, but never open one. */
+    onlyIfPresent?: boolean;
+    /** Supplied only after this run successfully submitted the approval. */
+    confirmedApproval?: {
+        headSha: string;
+        baseSha: string;
+        occurredAt?: string;
+    };
+}
+
 export interface ICommentManagerService {
+    postApprovalReason(
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+        repository: { name: string; id: string },
+        reason: string,
+        kind: 'approve' | 'hold',
+        options?: ApprovalReasonOptions,
+    ): Promise<void>;
     createInitialComment(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
@@ -28,6 +47,7 @@ export interface ICommentManagerService {
         platformType: string,
         codeReviewConfig?: CodeReviewConfig,
         pullRequestMessages?: IPullRequestMessages,
+        previousGitlabNote?: { commentId: number; noteId: number },
     ): Promise<{ commentId: number; noteId: number; threadId?: number }>;
 
     processEndReviewMessageTemplate(
@@ -42,6 +62,7 @@ export interface ICommentManagerService {
     ): Promise<string>;
 
     generateSummaryPR(
+        /** Read from the code host just before the call: its `body` is the description the summary keeps or replaces. */
         pullRequest: any,
         repository: { name: string; id: string },
         changedFiles: Partial<FileChange>[],
@@ -76,6 +97,8 @@ export interface ICommentManagerService {
         linkedRepositoriesMetadata?: import('@libs/ee/linked-repositories').LinkedRepositoriesReviewMetadata,
         reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
         singleAgentRun?: boolean,
+        approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
+        extraLine?: string,
     ): Promise<void>;
 
     updateSummarizationInPR(
@@ -155,5 +178,7 @@ export interface ICommentManagerService {
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
         reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
+        approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
+        extraLine?: string,
     ): Promise<void>;
 }

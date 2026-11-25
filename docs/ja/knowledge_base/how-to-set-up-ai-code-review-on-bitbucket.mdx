@@ -1,0 +1,24 @@
+---
+title: "Bitbucket で AI コードレビューをセットアップする方法"
+description: "Bitbucket を Kodus に接続し、自動レビューの対象となるリポジトリを選びます。"
+---
+
+Kodus は、API トークンで Bitbucket に接続し、リポジトリの Webhook を通じて Pull Request のイベントを受信します。Bitbucket Cloud がサポートされており、Bitbucket Data Center は alpha です。Data Center では、オープン中の Pull Request へのプッシュではレビューが開始されません。`@kody start-review` とコメントしてください。
+
+## 手順
+
+1. [kodus.io](https://kodus.io) で**アカウントを作成**するか、[Kodus をセルフホスト](/ja/how_to_deploy/deploy_kodus/generic_vm)します
+2. **Bitbucket に接続** — オンボーディングの **Connect your Git tool** ステップで **Bitbucket** タブを開き、**Connect via token** をクリックして、Bitbucket のユーザー名、メールアドレス、API トークンを入力します（後からサイドバーの **Repositories** で、**Connect a provider** の下の **Bitbucket** をクリックして接続することもできます）。Bitbucket Data Center の場合は、**Bitbucket Data Center** をオンにして、ベース URL、ユーザー名、**Basic auth password** を入力します
+3. **リポジトリを選択** — Kodus がレビューする Bitbucket リポジトリを選択するか、**Repositories** で [Review every repository](/ja/how_to_use/code_review/configs/review_all_repositories) をオンにします
+4. **Webhook** — 選択を保存すると、Kodus が Pull Request の Webhook を自動的に作成します。そのためには、リポジトリへの管理者アクセスが必要です。Bitbucket Cloud ではトークンに `read:webhook:bitbucket` と `write:webhook:bitbucket` も必要で、Data Center では **Repository admin** 権限が必要です。作成されなかった場合は、**Repositories** にそのリポジトリが理由とともに一覧表示されます。[Bitbucket の Webhook](/ja/how_to_deploy/platforms/bitbucket/bitbucket_webhook) ガイドに従って手動で Webhook を追加してください
+5. 選択したリポジトリでプルリクエストを開きます。[Kody が投稿する内容とステータスの確認方法](/ja/how_to_use/code_review/flow)を参照してください。
+
+## カスタム設定
+
+リポジトリごとのレビュー設定は [kodus-config.yml](/ja/how_to_use/code_review/configs/general#kodus-config-yml) でカスタマイズできます。
+
+## レート制限
+
+Bitbucket Cloud は、1 時間あたりに許可される API リクエスト数を制限しています。Kodus の各プロセス（API、ワーカー、Webhook）は、同じ認証情報で行う Bitbucket Cloud への呼び出しの間に少なくとも 400 ms 待機し（`BITBUCKET_RATE_GATE_MIN_INTERVAL_MS`）、`429` レスポンスを最大 4 回まで再試行します。その際 `Retry-After` に従います（`BITBUCKET_RATE_GATE_429_MAX_RETRIES`）。この間隔はプロセスごとのため、ワーカーが複数ある場合は実効レートが増加します。お使いの Bitbucket が厳しくスロットリングする場合は、この値を引き上げてください。
+
+完全なセットアップガイドについては、[Bitbucket API トークン](/ja/how_to_use/code_review/general_config/bitbucket_pat)と [Bitbucket の Webhook](/ja/how_to_deploy/platforms/bitbucket/bitbucket_webhook) を参照してください。

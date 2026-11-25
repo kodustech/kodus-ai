@@ -34,21 +34,26 @@ monorepo/
 └── infra/            → Terraform/IaC rules
 ```
 
-## Step 2 — Create directory-level configs
+## Step 2 — Create directory scopes
 
-In the sidebar, open the scope picker at the top of the **Code review** group and choose **Add repository configuration**. In **Create repository settings**, **Select the target repository** (the monorepo), then **Select the target directories** (one or more package folders) and click **Create settings**. Each directory appears indented under the repository in the scope picker — pick it to configure it.
+Pick the monorepo in the scope picker at the top of the **Code review** group, open the picker again and choose **Add directory scope**. Under **Select directories**, pick one or more package folders that share review settings, then click **Add directory scope**. Each directory scope appears indented under the repository in the picker — pick it to configure it.
 
-Each directory can have its own:
+Each directory scope can have its own:
 - **Kody Rules** (file-level and PR-level)
 - **What to review** (which categories to enable, and the minimum severity to post)
+- **Custom agents**, added to the repository's
 - **Ignored files** (on **General**)
+
+A pull request uses a directory's settings when it touches that configured directory and no other configured one. See [Directory-Level Settings](/en/how_to_use/code_review/configs/directory_level) for how a pull request picks its settings.
 
 ## Step 3 — Write targeted rules
 
-### Frontend rules (scope: `apps/web/`)
+On **Code review → Kody Rules**, **Review Rules** tab, click **New rule**. A rule created at a directory scope has no **Path**, so it applies to every file of a pull request reviewed with that directory scope's settings. A pull request that touches two or more directory scopes, or none, is reviewed with the repository's settings, and then the rules of **every** directory scope apply to all its files. Write directory rules so they still hold there, for example by naming the folder in the instructions. See [Rule Inheritance](/en/how_to_use/code_review/configs/rules_inheritance). To target part of a package, create the rule at the repository scope with a **Path** glob.
+
+### Frontend rule (scope: the monorepo, with a path)
 
 ```
-Name: React components must use design system tokens
+Rule name: React components must use design system tokens
 Execution mode: Per file
 Path: apps/web/src/components/**/*.tsx
 Severity: High
@@ -58,24 +63,23 @@ Instructions:
   Flag any hex color, pixel value, or font-size not from the token file.
 ```
 
-### Backend rules (scope: `apps/api/`)
+### Backend rule (scope: the `apps/api/` directory)
 
 ```
-Name: Domain layer must not import from infrastructure
+Rule name: Domain layer must not import from infrastructure
 Execution mode: Per file
-Path: apps/api/src/domain/**/*.ts
 Severity: Critical
 Instructions:
-  Check fileDiff for any import from "../infrastructure",
-  "../../infrastructure", or any path containing "/infrastructure/".
-  Domain modules must only depend on other domain modules
-  and shared interfaces.
+  In files under apps/api/src/domain, check fileDiff for any import from
+  "../infrastructure", "../../infrastructure", or any path containing
+  "/infrastructure/". Domain modules must only depend on other
+  domain modules and shared interfaces.
 ```
 
-### Shared library rules (scope: `libs/shared/`)
+### Shared library rule (scope: the `libs/shared/` directory)
 
 ```
-Name: Public API changes require changeset
+Rule name: Public API changes require changeset
 Execution mode: Per PR
 Severity: High
 Instructions:
@@ -107,9 +111,11 @@ High-traffic packages might need stricter filters. Pick the directory in the sco
 - **libs/shared/** — **Low/All** (stability matters)
 - **infra/** — **High** (fewer but critical)
 
+The threshold applies to Kody Rules only when **Apply the threshold to Kody Rules** is on.
+
 ## Step 6 — Ignore generated paths
 
-Add monorepo-specific ignores to avoid noise:
+Add monorepo-specific ignores to avoid noise: in **Code review → General → Review scope**, click **Edit** under **Ignored files**, or set them in `kodus-config.yml` (read only when **Prefer kodus-config.yml settings** is on for the repository):
 
 ```yaml
 ignorePaths:
@@ -125,6 +131,6 @@ ignorePaths:
 
 - Start with 2-3 rules per directory and expand based on what your team actually flags in reviews
 - Use rule inheritance — org-level rules cover security, repo-level covers conventions, directory-level covers architecture
-- If a rule fires too often in one package but is valid elsewhere, exclude that directory from the rule rather than weakening it
+- If a rule fires too often in one package, narrow its **Path** or rewrite it at the scope where it was created.
 
-For more on directory configs, see [Directory-Level Configuration](/en/how_to_use/code_review/configs/directory_level). For rule inheritance, see [Rules Inheritance](/en/how_to_use/code_review/configs/rules_inheritance).
+For more on directory scopes, see [Directory-Level Settings](/en/how_to_use/code_review/configs/directory_level). For rule inheritance, see [Rules Inheritance](/en/how_to_use/code_review/configs/rules_inheritance).

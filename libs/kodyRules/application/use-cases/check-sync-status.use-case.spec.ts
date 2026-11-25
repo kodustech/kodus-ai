@@ -21,6 +21,13 @@ function build(opts: {
     const request = {
         user: { organization: { uuid: 'org-1' } },
     } as any;
+    const store = new Map<string, unknown>();
+    const cacheService = {
+        getFromCache: jest.fn(async (key: string) => store.get(key)),
+        addToCache: jest.fn(async (key: string, value: unknown) => {
+            store.set(key, value);
+        }),
+    } as any;
     const kodyRulesService = {
         findByOrganizationId:
             opts.orgRules instanceof Error
@@ -38,8 +45,10 @@ function build(opts: {
             findRules,
             kodyRulesService,
             request,
+            cacheService,
         ),
         findRules,
+        kodyRulesService,
     };
 }
 
@@ -136,6 +145,28 @@ describe('CheckSyncStatusUseCase — removedOnboardingImports', () => {
         const res = await useCase.execute('team-1', 'global');
 
         expect(res.removedOnboardingImports).toBe(2);
+    });
+
+    // A restore runs outside the API, so the count is never served from the
+    // cache that holds the generator flag.
+    it('reports the count as it is now while the generator flag is cached', async () => {
+        const { useCase, findRules, kodyRulesService } = build({
+            repoConfig: repo({}),
+            orgRules: [removed(), removed()],
+        });
+
+        const first = await useCase.execute('team-1', 'repo-1');
+        kodyRulesService.findByOrganizationId.mockResolvedValue({
+            rules: [removed()],
+        });
+        const second = await useCase.execute('team-1', 'repo-1');
+
+        expect(first.removedOnboardingImports).toBe(2);
+        expect(second.removedOnboardingImports).toBe(1);
+        expect(second.kodyRulesGeneratorEnabledFirstTime).toBe(
+            first.kodyRulesGeneratorEnabledFirstTime,
+        );
+        expect(findRules.execute).toHaveBeenCalledTimes(1);
     });
 
     it('is 0 when the rules cannot be read', async () => {

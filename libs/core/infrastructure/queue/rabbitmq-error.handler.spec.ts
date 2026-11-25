@@ -3,6 +3,7 @@ import {
     RabbitMQErrorHandler,
 } from './rabbitmq-error.handler';
 import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
+import { ClaimConflictError } from '@libs/core/workflow/domain/errors/claim-conflict.error';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -128,13 +129,34 @@ describe('RabbitMQErrorHandler', () => {
         const channel = { ack: jest.fn() };
         const msg = makeMessage();
 
+        // The consumer callback does not await this handler, so a throw here
+        // only surfaces as an unhandled rejection; the unacked delivery is
+        // what makes the broker redeliver it.
         await expect(
             handler.handle(channel, msg, new Error('processor failed'), {
                 dlqRoutingKey: 'workflow.job.failed',
             }),
-        ).rejects.toThrow('may be lost');
+        ).resolves.toBeUndefined();
 
         expect(channel.ack).not.toHaveBeenCalled();
+    });
+
+    it('finishes without raising when the connection drops after the retry was published', async () => {
+        const { handler, amqpConnection } = makeHandler();
+        const channel = {
+            ack: jest.fn(() => {
+                throw new Error('Channel closed');
+            }),
+        };
+        const msg = makeMessage();
+
+        await expect(
+            handler.handle(channel, msg, new Error('Channel closed'), {
+                dlqRoutingKey: 'workflow.job.failed',
+            }),
+        ).resolves.toBeUndefined();
+
+        expect(amqpConnection.publish).toHaveBeenCalledTimes(1);
     });
 
     // Covers H8-H11 — RATE_LIMITED delay handling.
@@ -242,6 +264,109 @@ describe('RabbitMQErrorHandler', () => {
                 msg.content,
                 expect.any(Object),
             );
+        });
+    });
+
+    describe('claim conflict', () => {
+        it('requeues without incrementing retry count', async () => {
+            const { handler, amqpConnection } = makeHandler({ maxRetries: 2 });
+            const channel = { ack: jest.fn() };
+            const msg = makeMessage({ 'x-retry-count': 2 });
+
+            await handler.handle(channel, msg, new ClaimConflictError(), {
+                dlqRoutingKey: 'workflow.job.failed',
+            });
+
+            expect(amqpConnection.publish).toHaveBeenCalledWith(
+                'workflow.exchange.delayed',
+                'workflow.jobs.created.CODE_REVIEW',
+                msg.content,
+                expect.objectContaining({
+                    persistent: true,
+                    headers: expect.objectContaining({
+                        'x-retry-count': 2,
+                        'x-delay': 20_000,
+                    }),
+                }),
+            );
+            expect(channel.ack).toHaveBeenCalledWith(msg);
+        });
+
+        it('does not send a held claim to the DLQ even at max retries', async () => {
+            const { handler, amqpConnection } = makeHandler({ maxRetries: 0 });
+            const channel = { ack: jest.fn() };
+            const msg = makeMessage({ 'x-retry-count': 99 });
+
+            await handler.handle(channel, msg, new ClaimConflictError());
+
+            expect(amqpConnection.publish).toHaveBeenCalledWith(
+                'workflow.exchange.delayed',
+                expect.any(String),
+                msg.content,
+                expect.any(Object),
+            );
+            expect(amqpConnection.publish.mock.calls[0][0]).not.toMatch(/dlx$/);
+        });
+
+        it('returns stopped work as a fresh copy on its own exchange, then acks', async () => {
+            const { handler, amqpConnection } = makeHandler({ maxRetries: 0 });
+            const channel = { ack: jest.fn(), nack: jest.fn() };
+            const msg = makeMessage({
+                'x-retry-count': 99,
+                'x-delay': 20_000,
+                'x-delivery-count': 3,
+            });
+            msg.fields.exchange = 'workflow.exchange.delayed';
+
+            await handler.handle(
+                channel,
+                msg,
+                new ClaimConflictError('slice aborted', undefined, {
+                    returnToQueue: true,
+                }),
+                { dlqRoutingKey: 'workflow.job.failed' },
+            );
+
+            expect(amqpConnection.publish).toHaveBeenCalledTimes(1);
+            const [exchange, routingKey, content, options] =
+                amqpConnection.publish.mock.calls[0];
+            expect(exchange).toBe('workflow.exchange');
+            expect(routingKey).toBe('workflow.jobs.created.CODE_REVIEW');
+            expect(content).toBe(msg.content);
+            expect(options).toMatchObject({
+                messageId: 'message-1',
+                persistent: true,
+            });
+            expect(options.headers).toEqual({ 'x-retry-count': 99 });
+            expect(channel.ack).toHaveBeenCalledWith(msg);
+            expect(channel.nack).not.toHaveBeenCalled();
+        });
+
+        it('leaves the original unacked when the fresh copy is not confirmed', async () => {
+            const { handler, amqpConnection } = makeHandler({
+                publish: jest
+                    .fn()
+                    .mockRejectedValue(new Error('Channel closed')),
+            });
+            const channel = { ack: jest.fn(), nack: jest.fn() };
+
+            await expect(
+                handler.handle(
+                    channel,
+                    makeMessage(),
+                    new ClaimConflictError('slice aborted', undefined, {
+                        returnToQueue: true,
+                    }),
+                ),
+            ).resolves.toBeUndefined();
+            expect(amqpConnection.publish).toHaveBeenCalledWith(
+                'workflow.exchange',
+                'workflow.jobs.created.CODE_REVIEW',
+                expect.anything(),
+                expect.anything(),
+            );
+            expect(channel.ack).not.toHaveBeenCalled();
+            expect(channel.nack).not.toHaveBeenCalled();
         });
     });
 

@@ -11,6 +11,7 @@ import {
     maskKey,
     modelLabelFor,
     providerFromModel,
+    visibleModelLabels,
 } from './_utils';
 
 describe('BYOK topbar visibility', () => {
@@ -251,6 +252,48 @@ describe('groupModelsByProvider', () => {
         };
         expect(() => groupModelsByProvider(noRouting)).not.toThrow();
         expect(groupModelsByProvider(noRouting)[0].models).toHaveLength(1);
+    });
+});
+
+describe('visibleModelLabels', () => {
+    it('names a pinned model and its alias by their ids, and keeps a label nobody else has', () => {
+        const labels = visibleModelLabels({
+            version: 2,
+            credentials: [{ id: 'c1', provider: 'together' }],
+            models: [
+                {
+                    id: 'a',
+                    credentialId: 'c1',
+                    model: 'deepseek-ai/DeepSeek-V4.1-Flash',
+                },
+                {
+                    id: 'b',
+                    credentialId: 'c1',
+                    model: 'deepseek-ai/DeepSeek-V4.1-Flash-1017',
+                },
+                { id: 'c', credentialId: 'c1', model: 'kimi-k2.6' },
+            ],
+        });
+        expect([...labels]).toEqual([
+            ['a', 'DeepSeek V4.1 Flash (deepseek-ai/DeepSeek-V4.1-Flash)'],
+            ['b', 'DeepSeek V4.1 Flash (deepseek-ai/DeepSeek-V4.1-Flash-1017)'],
+            ['c', 'Kimi K2.6'],
+        ]);
+    });
+
+    it('does not let the hidden Kodus default add an id to the only shown model', () => {
+        const labels = visibleModelLabels({
+            version: 2,
+            credentials: [
+                { id: 'c1', provider: 'fireworks' },
+                { id: 'c-env', provider: 'openai_compatible', managed: true },
+            ],
+            models: [
+                { id: 'b', credentialId: 'c1', model: 'deepseek-v4-flash-0731' },
+                { id: 'env', credentialId: 'c-env', model: 'deepseek-v4-flash' },
+            ],
+        });
+        expect([...labels]).toEqual([['b', 'Deepseek V4 Flash']]);
     });
 });
 

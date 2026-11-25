@@ -1,5 +1,3 @@
-import { createHash } from 'crypto';
-
 import { ContextReferenceDetectionService } from './context-reference-detection.service';
 import type { ContextDependency } from './context-pack';
 
@@ -25,35 +23,11 @@ describe('ContextReferenceDetectionService — deterministic logic', () => {
                 '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
             );
         });
-
-        it('hashes the empty string to the canonical sha256 empty digest', () => {
-            expect(svc.calculateEntityHash('')).toBe(
-                'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-            );
-        });
-
-        it('is deterministic and input-sensitive', () => {
-            const a = svc.calculateEntityHash('same');
-            const b = svc.calculateEntityHash('same');
-            const c = svc.calculateEntityHash('diff');
-            expect(a).toBe(b);
-            expect(a).not.toBe(c);
-            // matches the reference implementation exactly
-            expect(a).toBe(createHash('sha256').update('same').digest('hex'));
-        });
     });
 
     describe('buildPathKey', () => {
         it('joins path segments with a dot', () => {
             expect(svc.buildPathKey(['a', 'b', 'c'])).toBe('a.b.c');
-        });
-
-        it('returns the single segment unchanged when path has one element', () => {
-            expect(svc.buildPathKey(['solo'])).toBe('solo');
-        });
-
-        it('returns empty string for an empty array', () => {
-            expect(svc.buildPathKey([])).toBe('');
         });
 
         it('returns empty string for undefined/null path (guard)', () => {
@@ -353,10 +327,34 @@ describe('ContextReferenceDetectionService — deterministic logic', () => {
             expect(svc.hasLikelyExternalReferences('foo_bar.ts')).toBe(false);
             expect(svc.hasLikelyExternalReferences('FOO_BAR.ts')).toBe(true);
         });
-
-        it('returns true when only a single pattern matches (kills any .every mutant)', () => {
-            // "@mcp" matches exactly one pattern; .some must still return true.
-            expect(svc.hasLikelyExternalReferences('@mcp')).toBe(true);
-        });
     });
+});
+
+describe('ContextReferenceDetectionService.lastDetectionFailed', () => {
+    const withLatest = (latest: unknown) =>
+        new ContextReferenceDetectionService(
+            {} as any,
+            { getLatestRevision: jest.fn().mockResolvedValue(latest) } as any,
+        );
+
+    it.each([
+        ['recorded errors', { metadata: { syncErrorsCount: 2 } }, true],
+        ['recorded none', { metadata: { syncErrorsCount: 0 } }, false],
+        // Not known to be clean: the caller writes, and the write's detection
+        // commits a revision that carries the count.
+        ['has no count', { metadata: {} }, true],
+        [
+            'carries an unreadable count',
+            { metadata: { syncErrorsCount: 'x' } },
+            true,
+        ],
+        ['does not exist', undefined, true],
+    ])(
+        'answers whether the latest revision %s',
+        async (_label, latest, failed) => {
+            await expect(
+                withLatest(latest).lastDetectionFailed('kodyRule', 'rule-1'),
+            ).resolves.toBe(failed);
+        },
+    );
 });

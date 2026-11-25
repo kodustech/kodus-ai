@@ -9,6 +9,7 @@ import type {
 import { referenceLabel, selectReferences } from './task-references';
 import { createLogger } from '@libs/core/log/logger';
 
+import { TrackerConnectionError } from './trackers/mcp-tool-session';
 import type { TaskTracker, TrackerReadContext } from './trackers/tracker';
 
 /** A PR that states more tasks than this is a release or a merge, not one task's work. */
@@ -58,8 +59,11 @@ export async function resolveTasks(
         { reference: TaskReference; tracker: TaskTracker } | undefined;
     for (const reference of selected) {
         const capable = trackers.filter((t) => t.canRead(reference));
-        const missed: Array<{ tracker: TaskTracker; lookup: TrackerLookup }> =
-            [];
+        const missed: Array<{
+            tracker: TaskTracker;
+            lookup: TrackerLookup;
+            attempt: ResolutionAttempt;
+        }> = [];
         let hit: TrackerLookup | undefined;
         let hitBy: TaskTracker | undefined;
         for (const tracker of capable) {
@@ -67,13 +71,14 @@ export async function resolveTasks(
                 reference,
                 await tracker.read(reference, context),
             );
-            attempts.push(attemptOf(reference, tracker, lookup));
+            const attempt = attemptOf(reference, tracker, lookup);
+            attempts.push(attempt);
             if (lookup.status === 'found') {
                 hit = lookup;
                 hitBy = tracker;
                 break;
             }
-            missed.push({ tracker, lookup });
+            missed.push({ tracker, lookup, attempt });
         }
         // A record read without its description: the answer's shape moved,
         // and the agent may read it whole. Its title-only read stands if not.
@@ -108,7 +113,8 @@ export async function resolveTasks(
             if (second.status !== 'found') {
                 // The agent got answers and the task isn't there: a miss
                 // the typo check reads, not a tracker that is down.
-                attempts.push(attemptOf(reference, miss.tracker, second));
+                miss.attempt = attemptOf(reference, miss.tracker, second);
+                attempts.push(miss.attempt);
                 miss.lookup = second;
                 continue;
             }
@@ -134,23 +140,31 @@ export async function resolveTasks(
             found.push({ reference, task });
             continue;
         }
-        const missingFrom: TaskTracker[] = [];
-        for (const { tracker, lookup } of missed) {
+        const missingFrom: Array<{
+            tracker: TaskTracker;
+            unread: boolean;
+            attempt: ResolutionAttempt;
+        }> = [];
+        for (const { tracker, lookup, attempt } of missed) {
             // A tracker set up so it can't read a task is not one that can.
             readable ||= !(lookup.status === 'error' && lookup.setup);
             if (lookup.status === 'error') {
                 failed ||= !lookup.setup;
             } else {
-                missingFrom.push(tracker);
+                missingFrom.push({
+                    tracker,
+                    unread: lookup.status === 'not_found' && !!lookup.unread,
+                    attempt,
+                });
             }
         }
         // `SAA-999` where SAA is a Linear team is a typo worth telling the
         // author about; `UTF-8` is not (UC-14, UC-21).
-        for (const tracker of missingFrom) {
+        for (const { tracker, unread, attempt } of missingFrom) {
             if (looksIntended) {
                 break;
             }
-            looksIntended =
+            const owns =
                 (await tracker
                     .ownsReference?.(reference, context)
                     .catch((error) => {
@@ -161,9 +175,22 @@ export async function resolveTasks(
                         );
                         return undefined;
                     })) ?? false;
-            if (looksIntended) {
-                intended = { reference, tracker };
+            if (!owns) {
+                continue;
             }
+            if (unread) {
+                // The key is this tracker's, yet it answered in a shape
+                // nothing could read and no agent read it either: no proof
+                // the task is missing, so not a typo to tell the author. Its
+                // read is a failed one, so the screen and the unavailable
+                // message name this tracker.
+                failed = true;
+                attempt.status = 'error';
+                attempt.message = `${tracker.name} answered in a form Kody couldn't read`;
+                continue;
+            }
+            looksIntended = true;
+            intended = { reference, tracker };
         }
     }
 
@@ -254,29 +281,77 @@ async function withoutStrayKeys(
     trackers: TaskTracker[],
     context: TrackerReadContext,
 ): Promise<TaskReference[]> {
+    // A tracker whose connection failed fails for every key: it is asked once
+    // per run, not once per word of the PR that looks like a key (up to 201
+    // warnings a run in production). Any other failure (one team lookup that
+    // errored) stays about that key, so a version string is still dropped.
+    const firstAsk = new Map<TaskTracker, Promise<unknown>>();
+    const unreachable = new Set<TaskTracker>();
+    const failures = new Map<TaskTracker, { error: unknown; keys: string[] }>();
+    const recordFailure = (
+        tracker: TaskTracker,
+        reference: TaskReference,
+        error: unknown,
+    ) => {
+        const entry = failures.get(tracker);
+        if (entry) {
+            entry.keys.push(referenceLabel(reference));
+        } else {
+            failures.set(tracker, {
+                error,
+                keys: [referenceLabel(reference)],
+            });
+        }
+    };
+    const owns = async (
+        tracker: TaskTracker,
+        reference: TaskReference,
+    ): Promise<boolean | undefined> => {
+        const earlier = firstAsk.get(tracker);
+        if (earlier) {
+            await earlier;
+        }
+        if (unreachable.has(tracker)) {
+            recordFailure(tracker, reference, undefined);
+            return true;
+        }
+        const ask = tracker.ownsReference?.(reference, context);
+        if (!ask) {
+            return undefined;
+        }
+        const settled = ask.catch((error) => {
+            if (error instanceof TrackerConnectionError) {
+                unreachable.add(tracker);
+            }
+            recordFailure(tracker, reference, error);
+            return true;
+        });
+        if (!earlier) {
+            firstAsk.set(tracker, settled);
+        }
+        return settled;
+    };
     const keep = await Promise.all(
         references.map(async (reference) => {
             if (reference.kind !== 'key' || !reference.loose) {
                 return true;
             }
             for (const tracker of trackers) {
-                const owns = await tracker
-                    .ownsReference?.(reference, context)
-                    .catch((error) => {
-                        warn(
-                            `${tracker.name} could not list its keys for ${referenceLabel(reference)}`,
-                            context,
-                            error,
-                        );
-                        return true;
-                    });
-                if (owns) {
+                if (await owns(tracker, reference)) {
                     return true;
                 }
             }
             return false;
         }),
     );
+    for (const [tracker, { error, keys }] of failures) {
+        warn(
+            `${tracker.name} could not list its keys; kept ${keys.length} unchecked: ${keys.slice(0, 5).join(', ')}${keys.length > 5 ? ', …' : ''}`,
+            context,
+            error,
+            { tracker: tracker.name, keptKeys: keys.length },
+        );
+    }
     return references.filter((_, i) => keep[i]);
 }
 
@@ -284,6 +359,7 @@ function warn(
     message: string,
     context: TrackerReadContext,
     error: unknown,
+    extra: Record<string, unknown> = {},
 ): void {
     logger.warn({
         message: `[BUSINESS-LOGIC] ${message}`,
@@ -291,7 +367,10 @@ function warn(
         error: error instanceof Error ? error : undefined,
         metadata: {
             organizationId: context.organizationAndTeamData?.organizationId,
+            teamId: context.organizationAndTeamData?.teamId,
+            repository: context.repository?.name,
             reason: error instanceof Error ? error.message : String(error),
+            ...extra,
         },
     });
 }

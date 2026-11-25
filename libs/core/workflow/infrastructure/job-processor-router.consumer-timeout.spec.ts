@@ -19,6 +19,38 @@ import * as path from 'path';
 
 import { CODE_REVIEW_PROCESS_TIMEOUT_MS } from './job-processor-router.service';
 
+// Only the exported constant is under test. The router's processor imports
+// pull in the whole code-review DI graph, which was nearly all of this
+// suite's runtime, so they are stubbed with empty classes.
+jest.mock(
+    '@libs/automation/webhook-processing/webhook-processing-job.processor',
+    () => ({ WebhookProcessingJobProcessorService: class {} }),
+);
+jest.mock(
+    '@libs/code-review/workflow/code-review-job-processor.service',
+    () => ({
+        CodeReviewJobProcessorService: class {},
+    }),
+);
+jest.mock(
+    '@libs/code-review/workflow/implementation-verification.processor',
+    () => ({
+        ImplementationVerificationProcessor: class {},
+    }),
+);
+jest.mock('@libs/code-review/workflow/ast-graph-build-job.processor', () => ({
+    AstGraphBuildJobProcessor: class {},
+}));
+jest.mock(
+    '@libs/code-review/workflow/ast-graph-incremental-job.processor',
+    () => ({
+        AstGraphIncrementalJobProcessor: class {},
+    }),
+);
+jest.mock('@libs/cli-review/workflow/cli-review-job-processor.service', () => ({
+    CliReviewJobProcessorService: class {},
+}));
+
 /** Headroom the app needs to finish its cleanup chain before the broker acts. */
 const REQUIRED_CLEANUP_MARGIN_MS = 5 * 60 * 1000;
 
@@ -54,9 +86,7 @@ function readShippedConsumerTimeoutMs(): number {
     const raw = fs.readFileSync(confPath, 'utf8');
     const match = raw.match(/^\s*consumer_timeout\s*=\s*(\d+)\s*$/m);
 
-    return match
-        ? Number(match[1])
-        : RABBITMQ_DEFAULT_CONSUMER_TIMEOUT_MS;
+    return match ? Number(match[1]) : RABBITMQ_DEFAULT_CONSUMER_TIMEOUT_MS;
 }
 
 describe('broker consumer_timeout vs app CODE_REVIEW budget', () => {

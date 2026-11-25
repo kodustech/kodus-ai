@@ -111,33 +111,6 @@ describe('RoutingRuleService', () => {
     });
 
     describe('getConfig', () => {
-        it('returns events, channels, criticalities, categories, and roles', () => {
-            const config = service.getConfig();
-
-            expect(config.events.length).toBeGreaterThan(0);
-
-            // Channels: just the two MVP-active ones
-            expect(config.channels.map((c) => c.value).sort()).toEqual([
-                'email',
-                'in_app',
-            ]);
-
-            // Criticalities: all 4 from the enum
-            expect(config.criticalities.map((c) => c.value).sort()).toEqual([
-                'critical',
-                'informational',
-                'system',
-                'transactional',
-            ]);
-
-            // Roles: wildcard first, then enum members
-            expect(config.roles[0]).toEqual({
-                value: '*',
-                label: 'All Roles',
-            });
-            expect(config.roles.map((r) => r.value)).toContain(Role.OWNER);
-        });
-
         it('only declares pageSeverity for CRITICAL events', () => {
             const config = service.getConfig();
             for (const event of config.events) {

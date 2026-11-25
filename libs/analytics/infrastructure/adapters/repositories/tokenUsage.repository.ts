@@ -1,3 +1,4 @@
+import { ROUTING_TASKS } from '@libs/core/log/token-usage-tu';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -20,6 +21,7 @@ import {
 import { ObservabilityTelemetryModel } from './schemas/observabilityTelemetry.model';
 import { PricingResolver } from '@libs/analytics/application/use-cases/usage/pricing-resolver';
 import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
+import { ANALYTICS_READ_PREFERENCE } from '@libs/core/infrastructure/database/mongo/read-preference';
 
 type RawAggRow = {
     model: string;
@@ -62,17 +64,9 @@ const TASK_FALLBACK = '';
  * READ, without waiting for the backfill. `areaField` is the already-fallback'd
  * area expression. Keep the branches in sync with routeFromArea.
  */
-// Valid routing tasks — mirror of ROUTING_TASKS in token-usage-tu.ts (LlmTask).
+// Share the write path’s routing task allowlist.
 // A `tu.route` outside this set (stale tier string, garbage) is NOT trusted.
-export const READ_ROUTING_TASKS = [
-    'codeReview',
-    'kodyRulesReview',
-    'ruleGeneration',
-    'businessValidation',
-    'prSummary',
-    'conversation',
-    'customAgent',
-];
+export const READ_ROUTING_TASKS = [...ROUTING_TASKS];
 
 const taskExpr = (areaField: unknown) => ({
     $cond: [
@@ -159,7 +153,10 @@ export class TokenUsageRepository implements ITokenUsageRepository {
      * Reads only index fields → the pipeline stays covered. The exact per-model
      * tier is derived from the bracket afterwards in `_withTiers`.
      */
-    private _bracketExpr(distinct: number[], input = '$attributes.tu.input'): any {
+    private _bracketExpr(
+        distinct: number[],
+        input = '$attributes.tu.input',
+    ): any {
         // `$literal`, not a bare 0: in a `$project` (the overview `$facet`
         // path) a plain 0 is read as field EXCLUSION and crashes the mixed
         // projection. `$literal` forces the VALUE 0 (bracket 0 = default
@@ -279,7 +276,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
     ): Record<string, any> {
         const match: Record<string, any> = {
             'attributes.organizationId': query.organizationId,
-            timestamp: { $gte: query.start, $lte: query.end },
+            'timestamp': { $gte: query.start, $lte: query.end },
             ...(query.byok
                 ? { 'attributes.tu.isByok': true }
                 : { 'attributes.tu.sys': false }),
@@ -394,6 +391,8 @@ export class TokenUsageRepository implements ITokenUsageRepository {
             // The $group stages hold one entry per (model, bracket, keys)
             // group; let them spill on a huge window instead of failing.
             .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS, allowDiskUse: true })
+            // Token usage screens and spend: seconds behind is fine.
+            .read(ANALYTICS_READ_PREFERENCE)
             .exec();
         return this._withTiers(rows, thresholds, distinct);
     }
@@ -489,7 +488,13 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 {
                     $match: {
                         ...this._tuMatch(query),
-                        'attributes.tu.credentialId': { $nin: ['', null] },
+                        // A non-empty string. Same rows as `$nin: ['', null]`
+                        // (tu.credentialId is always a string, '' when there
+                        // is none), but a range the partial index
+                        // `tu_cred_byok_v1` can prove, so the pairs come from
+                        // the index instead of fetching every span of the
+                        // month.
+                        'attributes.tu.credentialId': { $gt: '' },
                     },
                 },
                 {
@@ -509,6 +514,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 },
             ] as any)
             .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .read(ANALYTICS_READ_PREFERENCE)
             .exec();
     }
 
@@ -692,7 +698,9 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 tier: this._bracketExpr(distinct),
                 pr: '$attributes.prNumber',
                 area: { $ifNull: ['$attributes.tu.area', AREA_FALLBACK] },
-                task: taskExpr({ $ifNull: ['$attributes.tu.area', AREA_FALLBACK] }),
+                task: taskExpr({
+                    $ifNull: ['$attributes.tu.area', AREA_FALLBACK],
+                }),
                 date: {
                     $dateToString: {
                         format: '%Y-%m-%d',
@@ -755,7 +763,10 @@ export class TokenUsageRepository implements ITokenUsageRepository {
             {
                 $facet: {
                     byModel: groupProject({}, {}),
-                    daily: groupProject({ date: '$date' }, { date: '$_id.date' }),
+                    daily: groupProject(
+                        { date: '$date' },
+                        { date: '$_id.date' },
+                    ),
                     byPr: [
                         prPresent,
                         ...groupProject({ pr: '$pr' }, { prNumber: '$_id.pr' }),
@@ -806,6 +817,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 taskModelSpan: RawSpanRow[];
             }>(pipeline)
             .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .read(ANALYTICS_READ_PREFERENCE)
             .exec();
 
         const rows = facet ?? {

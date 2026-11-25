@@ -1,0 +1,12 @@
+diff --git a/libs/code-review/infrastructure/agents/knowledge/base-branch-reader.ts b/libs/code-review/infrastructure/agents/knowledge/base-branch-reader.ts
+index a6970b96e..97d1c4e37 100644
+--- a/libs/code-review/infrastructure/agents/knowledge/base-branch-reader.ts
++++ b/libs/code-review/infrastructure/agents/knowledge/base-branch-reader.ts
+@@ -547,7 +547,6 @@ export async function resolveKnowledgeRepositories(params: {
+             continue;
+         }
+         const readAt =
+-            ref ||
+             (await params.codeManagement
+                 .getDefaultBranch?.({
+                     organizationAndTeamData: params.organizationAndTeamData,

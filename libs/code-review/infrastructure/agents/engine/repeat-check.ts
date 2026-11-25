@@ -18,6 +18,12 @@
  * runs.
  */
 import { jsonSchema } from 'ai';
+import pLimit from 'p-limit';
+import {
+    classifyLLMError,
+    isAbortOrHardTimeout,
+    LlmErrorCategory,
+} from '@libs/llm/error-classifier';
 
 import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
@@ -55,11 +61,15 @@ export interface RepeatCheckResult<T> {
     kept: T[];
     /** Not posted: an earlier comment already raised them. */
     repeats: RepeatOf<T>[];
-    /** `failed` keeps every finding the model had to judge. */
+    /** Plausible repeats without a verdict. These did not become comments. */
+    withheld: T[];
+    /** Kept findings the model identified as caused by an earlier suggestion. */
+    revisions: Array<{ finding: T; earlier: PrDecisionRecord }>;
     model: 'not-needed' | 'ok' | 'failed' | 'no-model';
 }
 
 export interface RepeatCheckOptions {
+    teamId?: string;
     organizationId: string;
     byokConfig?: NormalizedModel;
     /** Renders a rule finding's or entry's rule by title. */
@@ -83,11 +93,14 @@ const MIN_CODE_MATCH = 8;
 const MIN_TEXT_SIMILARITY = 0.15;
 const MAX_SIMILAR_CANDIDATES = 4;
 const REPEAT_CHECK_TIMEOUT_MS = 120_000;
+const RETRY_BATCH_SIZE = 3;
+const RETRY_TIMEOUT_MS = 25_000;
 
 const normalizePath = (path?: string) =>
     (path || '').trim().replace(/^\.?\//, '');
 
-const normalizeCode = (code?: string) => (code || '').replace(/\s+/g, ' ').trim();
+const normalizeCode = (code?: string) =>
+    (code || '').replace(/\s+/g, ' ').trim();
 
 const clip = (text: string, max: number) =>
     text.length > max ? `${text.slice(0, max)}…` : text;
@@ -189,7 +202,7 @@ export const REPEAT_CHECK_SCHEMA = {
                     earlierId: {
                         type: ['string', 'null'],
                         description:
-                            'The id of the <Earlier> comment the verdict is about, one of that finding\'s own; null for different_problem.',
+                            "The id of the <Earlier> comment the verdict is about, one of that finding's own; null for different_problem.",
                     },
                 },
                 required: ['finding', 'verdict', 'earlierId'],
@@ -250,7 +263,7 @@ export function buildRepeatCheckPrompt(
             `<Finding n="${n}">`,
             `Where: ${locationOf(finding)}`,
             `Kind: ${kindOf(finding, ruleTitleByUuid)}`,
-            `Finding: ${clip(finding.oneSentenceSummary || finding.suggestionContent || '', MAX_TEXT)}`,
+            `Finding: ${clip(finding.suggestionContent?.trim() || finding.oneSentenceSummary || '', MAX_TEXT)}`,
             finding.existingCode
                 ? `Code it points at:\n${clip(finding.existingCode, MAX_CODE)}`
                 : '',
@@ -269,40 +282,98 @@ Give every finding one verdict:
 - caused_by_earlier: a new problem that exists because the change an earlier comment asked for was made, or a finding that asks to undo that change. Give the comment's id.
 - different_problem: anything else. earlierId is null.
 
-Compare the code each one points at. A finding about different code is never the same occurrence, however alike the words.
+Compare the failure each comment describes. If the earlier fix worked but now causes a different failure in a consumer, use caused_by_earlier even when both comments point to the same line. Compare the code each one points at. A finding about different code is never the same occurrence, however alike the words.
+For PR-level comments, compare the behavior, resource or change each comment asks about. A shared rule is not enough; the comments must raise the same problem about the same subject.
 
 ${blocks.join('\n\n')}`;
 }
 
-function parseRepeats(
+function parseVerdicts(
     output: unknown,
     batch: Array<{ finding: unknown; candidates: PrDecisionRecord[] }>,
-): Map<number, PrDecisionRecord> {
-    const matches = new Map<number, PrDecisionRecord>();
+): {
+    repeats: Map<number, PrDecisionRecord>;
+    revisions: Map<number, PrDecisionRecord>;
+    decided: Set<number>;
+} {
+    const repeats = new Map<number, PrDecisionRecord>();
+    const revisions = new Map<number, PrDecisionRecord>();
+    const decided = new Set<number>();
     // A non-strict model may wrap, stringify or bare-array the answer (#1786).
     const verdicts = (
         normalizeEnvelope(output, 'verdicts', ['results', 'findings'], {
             liftEmptyArray: true,
         }) as { verdicts?: unknown }
     )?.verdicts;
-    if (!Array.isArray(verdicts)) return matches;
+    if (!Array.isArray(verdicts)) return { repeats, revisions, decided };
     for (const entry of verdicts) {
-        const e = entry as { finding?: unknown; verdict?: unknown; earlierId?: unknown };
-        if (e?.verdict !== 'same_occurrence') continue;
+        const e = entry as {
+            finding?: unknown;
+            verdict?: unknown;
+            earlierId?: unknown;
+        };
+        if (
+            typeof e?.finding !== 'number' &&
+            (typeof e?.finding !== 'string' || !/^\d+$/.test(e.finding))
+        )
+            continue;
         const n = Number(e.finding);
         if (!Number.isInteger(n) || n < 0 || n >= batch.length) continue;
+        if (e.verdict === 'different_problem' || e.verdict === 'new_place') {
+            decided.add(n);
+            continue;
+        }
         // Only an id offered for THAT finding counts.
         const id = String(e.earlierId ?? '');
         const earlier = batch[n].candidates.find((c) => c.suggestionId === id);
-        if (earlier && !matches.has(n)) matches.set(n, earlier);
+        if (!earlier) continue;
+        if (e.verdict === 'same_occurrence') {
+            decided.add(n);
+            if (!repeats.has(n)) repeats.set(n, earlier);
+            revisions.delete(n);
+        } else if (e.verdict === 'caused_by_earlier') {
+            decided.add(n);
+            if (!repeats.has(n) && !revisions.has(n)) revisions.set(n, earlier);
+        }
     }
-    return matches;
+    return { repeats, revisions, decided };
+}
+
+/** Without a verdict, hold only a likely repost. The same rule in a different
+ * place, or a different problem on the same file, still gets a comment. */
+function plausibleRepeat(
+    finding: RepeatCheckFinding,
+    earlier: PrDecisionRecord,
+): boolean {
+    if (isRule(finding) !== isRule(earlier)) return false;
+    const file = normalizePath(finding.relevantFile);
+    if (file !== normalizePath(earlier.relevantFile)) return false;
+    if (!file) {
+        // PR-level history has no source anchor. A paraphrase needs a model
+        // verdict: changing a single target can turn it into a new finding.
+        const claim = finding.suggestionContent?.trim();
+        return (
+            isRule(finding) &&
+            sharesRule(finding, earlier) &&
+            !!claim &&
+            claim === earlier.suggestionContent?.trim()
+        );
+    }
+    const start = finding.relevantLinesStart;
+    const oldStart = earlier.relevantLinesStart;
+    return (
+        start != null &&
+        oldStart != null &&
+        start <= (earlier.relevantLinesEnd ?? oldStart) &&
+        oldStart <= (finding.relevantLinesEnd ?? start) &&
+        contentSimilarity(finding, earlier) >= 0.4
+    );
 }
 
 /**
  * Splits `findings` into what to post and what an earlier comment already
- * raised. Fails open: a model error or a missing model keeps the findings
- * the model had to judge; the code matches still hold.
+ * raised. Retries unresolved comparisons once in smaller batches. If still
+ * undecided, a plausible repeat is withheld and tracked separately.
  */
 export async function checkRepeats<T extends RepeatCheckFinding>(
     findings: T[],
@@ -312,6 +383,8 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
     const result: RepeatCheckResult<T> = {
         kept: [],
         repeats: [],
+        withheld: [],
+        revisions: [],
         model: 'not-needed',
     };
     if (!history?.length || !findings.length) {
@@ -329,6 +402,7 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
     }
 
     const matchOf = new Map<T, RepeatOf<T>>();
+    const revisionOf = new Map<T, PrDecisionRecord>();
     const toJudge: Array<{ finding: T; candidates: PrDecisionRecord[] }> = [];
     for (const finding of findings) {
         const candidates = repeatCandidates(finding, history);
@@ -345,17 +419,19 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
         }
     }
 
+    const unresolved = new Set(toJudge);
     if (toJudge.length) {
         if (!options.byokConfig && !hasManagedModelKey()) {
             result.model = 'no-model';
         } else {
-            const batches: (typeof toJudge)[] = [];
-            for (let i = 0; i < toJudge.length; i += BATCH_SIZE) {
-                batches.push(toJudge.slice(i, i + BATCH_SIZE));
-            }
-            const outcomes = await Promise.allSettled(
-                batches.map((batch) =>
-                    LLM.run({
+            const scheduleBatch = pLimit(4);
+            const retryable = new Set(toJudge);
+            const judgeBatch = async (
+                batch: typeof toJudge,
+                timeoutMs: number,
+            ) => {
+                try {
+                    const output = await LLM.run({
                         byokConfig: options.byokConfig,
                         schema: jsonSchema(REPEAT_CHECK_SCHEMA as any),
                         user: buildRepeatCheckPrompt(
@@ -364,47 +440,104 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
                         ),
                         runName: 'code-review-repeat-check',
                         spanName: 'code-review::repeat-check',
-                        timeoutMs: REPEAT_CHECK_TIMEOUT_MS,
+                        timeoutMs,
                         organizationId: options.organizationId,
                         telemetryMetadata: options.telemetryMetadata,
                         attrs: {
                             type: options.byokConfig ? 'byok' : 'system',
+                            retry: timeoutMs === RETRY_TIMEOUT_MS,
                             ...(options.prNumber != null
                                 ? { prNumber: options.prNumber }
                                 : {}),
                         },
-                    }),
-                ),
-            );
-            result.model = 'ok';
-            outcomes.forEach((outcome, b) => {
-                if (outcome.status === 'rejected') {
-                    result.model = 'failed';
+                    });
+                    const verdicts = parseVerdicts(output, batch);
+                    for (const [n, earlier] of verdicts.repeats) {
+                        const { finding } = batch[n];
+                        matchOf.set(finding, { finding, earlier, by: 'model' });
+                    }
+                    for (const [n, earlier] of verdicts.revisions) {
+                        revisionOf.set(batch[n].finding, earlier);
+                    }
+                    for (const n of verdicts.decided)
+                        unresolved.delete(batch[n]);
+                } catch (error) {
+                    const { category } = classifyLLMError(error);
+                    if (
+                        !isAbortOrHardTimeout(error) &&
+                        category !== LlmErrorCategory.TRANSIENT &&
+                        category !== LlmErrorCategory.RATE_LIMIT
+                    ) {
+                        for (const entry of batch) retryable.delete(entry);
+                    }
                     logger.warn({
-                        message: `[REPEAT-CHECK] PR#${options.prNumber}: model call failed, posting the ${batches[b].length} finding(s) it had to judge`,
+                        message: `[REPEAT-CHECK] PR#${options.prNumber}: no verdict for ${batch.length} finding(s)`,
                         context: 'RepeatCheck',
-                        error: outcome.reason,
+                        error,
                         metadata: {
                             organizationId: options.organizationId,
                             prNumber: options.prNumber,
-                            batchSize: batches[b].length,
+                            teamId: options.teamId,
+                            batchSize: batch.length,
+                            timeoutMs,
                         },
                     });
-                    return;
                 }
-                const matches = parseRepeats(outcome.value, batches[b]);
-                for (const [n, earlier] of matches) {
-                    const { finding } = batches[b][n];
-                    matchOf.set(finding, { finding, earlier, by: 'model' });
+            };
+            const judge = async (
+                entries: typeof toJudge,
+                size: number,
+                timeoutMs: number,
+            ) => {
+                const jobs: Promise<void>[] = [];
+                for (let i = 0; i < entries.length; i += size) {
+                    const batch = entries.slice(i, i + size);
+                    jobs.push(
+                        scheduleBatch(() => judgeBatch(batch, timeoutMs)),
+                    );
                 }
-            });
+                await Promise.all(jobs);
+            };
+            await judge(toJudge, BATCH_SIZE, REPEAT_CHECK_TIMEOUT_MS);
+            const retry = [...unresolved].filter((entry) =>
+                retryable.has(entry),
+            );
+            if (retry.length) {
+                await judge(retry, RETRY_BATCH_SIZE, RETRY_TIMEOUT_MS);
+                logger.log({
+                    message: '[REPEAT-CHECK] retry completed',
+                    context: 'RepeatCheck',
+                    metadata: {
+                        organizationId: options.organizationId,
+                        teamId: options.teamId,
+                        prNumber: options.prNumber,
+                        attempted: retry.length,
+                        decided: retry.filter((entry) => !unresolved.has(entry))
+                            .length,
+                        timeoutMs: RETRY_TIMEOUT_MS,
+                    },
+                });
+            }
+            result.model = unresolved.size ? 'failed' : 'ok';
         }
     }
 
+    const withheld = new Set(
+        (result.model === 'failed' ? [...unresolved] : [])
+            .filter(({ finding, candidates }) =>
+                candidates.some((earlier) => plausibleRepeat(finding, earlier)),
+            )
+            .map(({ finding }) => finding),
+    );
     for (const finding of findings) {
         const match = matchOf.get(finding);
         if (match) result.repeats.push(match);
-        else result.kept.push(finding);
+        else if (withheld.has(finding)) result.withheld.push(finding);
+        else {
+            result.kept.push(finding);
+            const earlier = revisionOf.get(finding);
+            if (earlier) result.revisions.push({ finding, earlier });
+        }
     }
     return result;
 }

@@ -1,0 +1,125 @@
+---
+title: "Synthetic — Assinatura de Taxa Fixa para Modelos de Codificação Open-Source"
+description: "Aprenda como conectar a API por assinatura do Synthetic.new — que inclui Kimi, DeepSeek, Qwen, GLM e mais — à Kodus."
+icon: "infinity"
+---
+
+## Como o Synthetic funciona
+
+O Synthetic é um serviço por assinatura que serve LLMs open-source por uma API **compatível com OpenAI** (e compatível com Anthropic). Em vez de pagar por token, você paga um **preço mensal fixo** e usa um limite semanal de créditos que cobre todos os modelos da plataforma.
+
+A Kodus acessa o Synthetic pelo endpoint compatível com OpenAI, então não há alterações de adaptador — apenas credenciais BYOK.
+
+## Visão geral dos planos
+
+<Info>
+  Preços e limites mudam. Confirme em [synthetic.new/pricing](https://synthetic.new/pricing) e [synthetic.new/rate-limits](https://synthetic.new/rate-limits) antes de escolher um plano.
+</Info>
+
+### Assinatura (recomendada para revisão de código)
+
+| Plano | Preço |
+| ----- | ----- |
+| **Go** | $9/mês |
+| **Standard** | $30/mês |
+| **Big** | $90/mês |
+
+- O uso do plano é um limite semanal de créditos, não uma cobrança por token. Os créditos se regeneram gradualmente ao longo da semana em vez de zerar em um dia fixo, e planos maiores têm limites maiores. Os números estão na [página de rate limits](https://synthetic.new/rate-limits).
+- Uma assinatura cobre todos os modelos. Cada modelo consome uma quantidade diferente de créditos, então modelos mais baratos esticam mais o limite. Escolha um alterando o campo `model`.
+
+### Modelos recomendados
+
+O Synthetic expõe modelos usando um prefixo no estilo HuggingFace (`hf:org/model`). Estes são modelos always-on, incluídos em todas as assinaturas, e o catálogo lista tool calling e saídas estruturadas para cada um:
+
+| ID do modelo | Janela de contexto |
+| ------------ | ------------------ |
+| `hf:zai-org/GLM-5.3` | 512k tokens |
+| `hf:moonshotai/Kimi-K3.1-Pro` | 512k tokens |
+| `hf:deepseek-ai/DeepSeek-V4.1-Flash-1017` | 512k tokens |
+| `hf:Qwen/Qwen3.8-27B` | 256k tokens |
+| `hf:openai/gpt-oss-120b` | 128k tokens |
+
+O catálogo muda com frequência. A lista ao vivo em [api.synthetic.new/openai/v1/models](https://api.synthetic.new/openai/v1/models) é pública.
+
+## Criando uma Chave de API
+
+1. Vá para [synthetic.new](https://synthetic.new) e cadastre-se ou faça login.
+2. Assine um plano em [synthetic.new/pricing](https://synthetic.new/pricing).
+3. Copie sua chave de API. O Synthetic a mostra na [documentação da API](https://dev.synthetic.new/docs/api/getting-started) enquanto você está logado.
+
+<span id="configurar-o-synthetic-no-kodus" aria-hidden="true" />
+
+## Configurar o Synthetic na Kodus
+
+### Opção 1 — Página AI providers (recomendado)
+
+Siga [Conectar um provedor](/pt-BR/how_to_use/byok#conectar-um-provedor) e escolha **Custom → OpenAI-compatible**. Preencha o formulário com estes valores.
+
+| Campo | Valor |
+| --- | --- |
+| **Base URL** | `https://api.synthetic.new/openai/v1` |
+| **Model** | ex.: `hf:zai-org/GLM-5.3` (use o prefixo `hf:` e o caminho completo do HuggingFace) |
+| **Key** (no card **API key**) | sua chave de API do Synthetic |
+
+Clique em **Test & save** e escolha os modelos padrão e de fallback em [Modos e modelos de revisão](/pt-BR/how_to_use/code_review/configs/routing).
+
+<Tip>
+  O Synthetic usa apenas limites semanais de créditos, sem limites separados de 5 horas ou mensais. Deixe **Max concurrent requests** (em **Advanced (optional)** → **Advanced settings**) vazio e defina um valor apenas se você vir erros 429.
+</Tip>
+
+<Note>
+  Em **Code review → Routing** (o botão **Configure routing** em **AI providers**), defina o Synthetic como **Default model** e um modelo da OpenAI ou Anthropic como **Fallback model**. Quando o Synthetic falha, por exemplo quando seus créditos acabam, a Kodus executa a chamada novamente no fallback.
+</Note>
+
+### Opção 2 — Self-hosted (variáveis de ambiente)
+
+Para dar a uma instância self-hosted um modelo via `.env`:
+
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="hf:zai-org/GLM-5.3"
+API_LLM_BASE_URL="https://api.synthetic.new/openai/v1"
+API_LLM_API_KEY="your-synthetic-api-key"
+```
+
+Siga o guia de instalação para [aplicar a mudança de modelo](/pt-BR/how_to_deploy/deploy_kodus/generic_vm#aplicar-mudanças-no-modelo).
+
+## Quando escolher o Synthetic
+
+- **Seu modelo principal é open-source** (Kimi, DeepSeek, Qwen, GLM) e você quer uma fatura mensal fixa em vez de lidar com o gasto de tokens de cada provedor.
+- **Seu tráfego é em picos.** O Synthetic não penaliza o uso em rajadas: você pode gastar o limite semanal em uma única sessão e os créditos se regeneram depois.
+
+Escolha pay-per-token (Moonshot, Fireworks, Together, Groq) se quiser pagar apenas pelos tokens que usar, ou outra assinatura (Z.AI GLM Coding Plan) se quiser especificamente a família GLM.
+
+## Solução de problemas
+
+<AccordionGroup>
+  <Accordion title="429 Too Many Requests">
+    - Seus créditos semanais podem ter acabado. Confira seu uso na sua [página de cobrança do Synthetic](https://synthetic.new/billing) e nos [rate limits](https://synthetic.new/rate-limits).
+    - Os créditos se regeneram gradualmente, então espere um pouco, diminua **Max concurrent requests** no modelo (**AI providers** → **Edit model**) ou migre para um plano maior.
+    - Defina um **Fallback model** em **Code review → Routing** para que as revisões continuem funcionando enquanto você está com rate limit.
+  </Accordion>
+
+  <Accordion title="Erros 401 / autenticação">
+    - Confirme que a chave está ativa e que a assinatura está vigente no painel do Synthetic.
+    - Certifique-se de que não há espaços em excesso ou aspas no valor do `.env`.
+  </Accordion>
+
+  <Accordion title="Modelo não encontrado">
+    - O Synthetic usa o formato `hf:org/model`, e o prefixo `hf:` é obrigatório.
+    - Confira em [api.synthetic.new/openai/v1/models](https://api.synthetic.new/openai/v1/models). O Synthetic retira modelos mais antigos de circulação, então um ID fixado pode começar a retornar 404.
+  </Accordion>
+
+  <Accordion title="Erros de conexão">
+    - Confirme que seu servidor pode alcançar `api.synthetic.new`.
+    - Revise os logs da API e do worker para o erro upstream exato.
+  </Accordion>
+</AccordionGroup>
+
+## Relacionados
+
+- [Preços do Synthetic](https://synthetic.new/pricing)
+- [Rate limits do Synthetic](https://synthetic.new/rate-limits)
+- [Documentação da API do Synthetic](https://dev.synthetic.new/docs/api/getting-started)
+- [Catálogo de modelos do Synthetic](https://dev.synthetic.new/docs/openai/models)
+- [Visão geral do BYOK](/pt-BR/how_to_use/byok)

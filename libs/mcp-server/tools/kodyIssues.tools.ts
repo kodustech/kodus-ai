@@ -17,7 +17,10 @@ import {
 } from '@libs/issues/domain/contracts/issues.service.contract';
 import { IIssue } from '@libs/issues/domain/interfaces/issues.interface';
 
-import { McpToolDefinition } from '../types/mcp-tool.interface';
+import {
+    McpToolDefinition,
+    PROACTIVE_HINT_META_KEY,
+} from '../types/mcp-tool.interface';
 import { wrapToolHandler } from '../utils/mcp-protocol.utils';
 
 @Injectable()
@@ -78,7 +81,9 @@ export class KodyIssuesTools {
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
-                proactiveHint:
+            },
+            _meta: {
+                [PROACTIVE_HINT_META_KEY]:
                     'the developer agrees the finding is real but out of scope for this PR — track it instead of losing it',
             },
             description: 'Create a new Kody Issue manually via MCP',
@@ -251,12 +256,17 @@ export class KodyIssuesTools {
                 data: z.array(z.looseObject({})),
             }),
             execute: wrapToolHandler(async (args: InputType) => {
-                // The input says `repositoryName`; documents store it as
-                // `repository.name`. Passing args straight through matched
-                // nothing and forced a collection scan on every call.
-                const { repositoryName, ...rest } = args;
+                // Build the filter from the fields this tool declares. The
+                // input says `repositoryName` where documents store
+                // `repository.name`; the authorizer pins `teamId` onto
+                // team-key calls and no issue document carries it, so a spread
+                // filter returned nothing (#2388).
+                const { organizationId, repositoryName, severity, label } =
+                    args;
                 const issues = await this.issuesService.findByFilters({
-                    ...rest,
+                    organizationId,
+                    ...(severity && { severity }),
+                    ...(label && { label }),
                     ...(repositoryName && {
                         'repository.name': repositoryName,
                     }),
@@ -313,7 +323,9 @@ export class KodyIssuesTools {
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
-                proactiveHint:
+            },
+            _meta: {
+                [PROACTIVE_HINT_META_KEY]:
                     'the developer says a tracked issue is already fixed or no longer relevant',
             },
             description: 'Update issue status',
@@ -354,7 +366,9 @@ export class KodyIssuesTools {
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
-                proactiveHint:
+            },
+            _meta: {
+                [PROACTIVE_HINT_META_KEY]:
                     'the developer says a finding is filed under the wrong category',
             },
             description: 'Update issue category/label',

@@ -73,6 +73,11 @@ export type TrackerFixture = {
     tasks: TrackerTask[];
     /** The server answers every request with 503 (outage, expired token). */
     unavailable?: boolean;
+    /**
+     * The read tool answers with this text as ordinary content, no `isError`:
+     * a server that reports its failures as text, for a task that exists.
+     */
+    errorAsText?: string;
 };
 
 export type ResolutionFixture = {

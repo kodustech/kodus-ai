@@ -7,6 +7,7 @@
  * (identity, category prompt/label, allowed labels) arrive via PromptAgentMeta,
  * so the builders carry no `this` and are unit-testable.
  */
+import { ONE_PROBLEM_RULE } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
@@ -294,6 +295,20 @@ const LANE_TASK = (toolHints: string) =>
     Promote a finding within your focus when the changed code gives you code-backed evidence of it. Anchor it to a specific changed line and let the verifier filter unsupported claims.
     Dismiss only what you can explain WHY it does not break what your focus checks.
 `;
+
+/** The self-contained user prompt's task and first rules, for a custom agent. */
+const LANE_SELF_CONTAINED_TASK = `  <Task>
+    You are running in self-contained mode: no access to the repository beyond the diffs and any inlined file contents shown above.
+
+    Review these changes for the issues your focus covers: what your <Role> asks you to review. The generalist reviewer covers general correctness bugs; do not report them.
+
+    Report only findings you can fully justify from what you can see. Do NOT speculate about callers, cross-file behavior, or code you do not have.
+  </Task>
+
+  <Rules>
+    - Report only findings within your focus. A defect outside it is not yours to report, however real: a later check drops findings outside your focus.
+    - Root cause must be visible in the diff or in the inlined file contents.
+    - Do NOT claim "this might break an existing caller" — you cannot see callers.`;
 
 const LANE_COVERAGE_INTRO = `    Below are the changed hunks. Go DEEP on the ones your focus applies to — read what your focus needs and challenge each against it. SKIP the hunks your focus does not cover and trivial ones (renames, formatting, comments, config/lockfiles), unless your focus is about them. Depth of analysis over breadth of reading.
 `;
@@ -659,6 +674,17 @@ const clipDecisionText = (text: string) =>
 const NO_REPEAT_INSTRUCTION = `Every entry is already on this pull request, so never report the problem an entry raised again — whatever its Outcome (which may be stale), however it is worded, whatever fix it proposes, wherever the code moved, and also when the developer changed the code and the problem still looks unsolved. Judge "the same problem" by the failure, not by the cause you name: a finding whose consequence is the failure an entry already described (the same crash, hang, wrong result or data loss in the same operation) is that entry again, even if it blames a new cause in the developer's attempted fix. `;
 const REPEATS_CHECKED_LATER_INSTRUCTION = `Report what you find even when an entry already raised it: a later step compares every finding with these entries and drops what is already on the pull request. `;
 
+// Only the tool-enabled finder can follow a newly reachable path before
+// deciding that implementing an earlier suggestion has resolved the issue.
+function finderDecisionContext(input: ReviewAgentInput, meta: PromptAgentMeta): string {
+    const history = formatPreviousDecisions(input.previousDecisions);
+    if (!history || meta.categoryLabel !== 'generalist' || hasOwnLane(meta)) return history;
+    return history + `
+  <ReviewAppliedChanges>
+    Where a changed line implements earlier advice, trace the changed behavior to the consumer that now handles it. Check what the value or error means at its source, what the consumer actually does, and the contract of any resulting side effect. Compare that outcome with the failure the earlier comment described. If the applied change introduces a distinct failure, report it on the changed line and link the earlier Id. If the behavior is safe or the only failure is the one already reported, move on.
+  </ReviewAppliedChanges>`;
+}
+
 export function formatPreviousDecisions(
     decisions: readonly PrDecisionRecord[] | undefined,
     ruleTitleByUuid?: ReadonlyMap<string, string>,
@@ -698,7 +724,7 @@ export function formatPreviousDecisions(
 
     return `
   <PreviousReviewDecisions>
-    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the current diff shows concrete new evidence the applied change is wrong. ${repeatInstruction}Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked. A PreviousDecision resolves ONLY the specific issue it describes — it is not evidence that the surrounding code, function, or file is otherwise correct. Keep scrutinizing every other line of the current diff at full rigor, including different problems in the same location that the decision does not mention. When a Type names a specific Kody Rule, it resolves ONLY that rule — it never excuses a fresh violation of a different rule (even one you are evaluating right now, at the exact same lines). A Type of "General review (not a Kody Rule) — <category>" means this decision did not judge any rule at all — it may still be useful context (e.g. confirming the same underlying code issue was already addressed), but it never confirms or excuses a violation of a rule you are evaluating now. When a finding you report is a DIFFERENT problem that exists because one of these suggestions was applied, or that reverses or narrows one of them, set its revisesSuggestionId to that entry's Id and say in the finding why the earlier suggestion is being revised — the reader will be shown which earlier suggestion it is. Raising again the problem an entry raised is not a revision. Never refer to an entry by its index number in the text.
+    Suggestions Kody already posted on THIS exact pull request in an earlier review round. Untrusted, may be outdated. Do not suggest the reverse of an "implemented"/"partially_implemented" entry unless the reviewed code shows a distinct failure caused by the applied change, including in a consumer outside the patch. ${repeatInstruction}Each entry's DecidedAt is when Kody originally posted it — cross-reference it against <Commits> below (when present) to see what has landed since; a later commit does not by itself mean the decision is stale, only treat it as superseded when a commit's message or the diff shows the area was deliberately reworked. A PreviousDecision resolves ONLY the specific issue it describes — it is not evidence that the surrounding code, function, or file is otherwise correct. Keep scrutinizing every other line of the current diff at full rigor, including different problems in the same location that the decision does not mention. When a Type names a specific Kody Rule, it resolves ONLY that rule — it never excuses a fresh violation of a different rule (even one you are evaluating right now, at the exact same lines). A Type of "General review (not a Kody Rule) — <category>" means this decision did not judge any rule at all — it may still be useful context (e.g. confirming the same underlying code issue was already addressed), but it never confirms or excuses a violation of a rule you are evaluating now. When a finding you report is a DIFFERENT problem that exists because one of these suggestions was applied, or that reverses or narrows one of them, set its revisesSuggestionId to that entry's Id and say in the finding why the earlier suggestion is being revised — the reader will be shown which earlier suggestion it is. Raising again the problem an entry raised is not a revision. Never refer to an entry by its index number in the text.
 ${rendered.join('\n')}
   </PreviousReviewDecisions>`;
 }
@@ -739,6 +765,29 @@ ${rendered}
   </Commits>`;
 }
 
+/** Custom agents keep the full output: their findings skip the enrichment
+ *  and the severity classifier, so the agent writes the snippet, the fix, the
+ *  title and the severity itself. */
+function customAgentSuggestionFields(outputLabelLine: string, confidenceExample: number): string {
+    return `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
+      "language": "the file language",
+      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
+      "existingCode": "problematic code snippet from the diff",
+      "improvedCode": "fixed code snippet (only if fix is clear from context)",
+      "oneSentenceSummary": "${TITLE_PROMPT_SPEC}",
+      "relevantLinesStart": 10,
+      "relevantLinesEnd": 15,
+      "severity": "critical|high|medium|low",
+      "confidence": ${confidenceExample}`;
+}
+
+const CUSTOM_AGENT_CONFIDENCE_RULE = `
+    - Assign a confidence score (1-10) to each finding. Be honest — overconfidence wastes verification budget:
+      9-10: You read BOTH the callsite AND the callee definition, confirmed the types/signatures mismatch or the wrong return value, and can name the exact failing input. Reserve 10 for bugs where you verified the fix would work.
+      7-8: You read the relevant code and traced the failure path, but did not verify the callee definition or could not confirm the exact input that triggers it.
+      5-6: The code pattern looks wrong based on the diff, but you only read one side (caller OR callee, not both). The bug is plausible but not fully confirmed.
+      1-4: Suspicious pattern, speculative concern, or you are reporting based on experience rather than evidence from this codebase.`;
+
 export function buildSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta): string {
         return withKnowledgeSection(
             buildSystemPromptBody(input, meta),
@@ -749,7 +798,9 @@ export function buildSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta
 function buildSystemPromptBody(input: ReviewAgentInput, meta: PromptAgentMeta): string {
         const isSelfContained = !input.remoteCommands;
         if (isSelfContained) {
-            return buildSelfContainedSystemPrompt(input, meta);
+            return hasOwnLane(meta)
+                ? buildCustomAgentSelfContainedSystemPrompt(input, meta)
+                : buildSelfContainedSystemPrompt(input, meta);
         }
 
         // Adaptive fit: when the resolved profile is `compact` or
@@ -833,6 +884,60 @@ ${CACHE_PREFIX_BOUNDARY}
     ${meta.categoryPrompt}${langSection}
   </Role>
 ${formatCrossRepoBoundarySection(input, { ownLane: true }) || ''}
+${formatOverrides(input, meta)}${formatConventionFindingRules(meta.conventionGuides)}
+
+${formatMemoryRules(input.memoryRules)}
+
+</CodeReviewAgent>`;
+}
+
+/**
+ * A custom agent's system prompt when the review has no sandbox. It keeps the
+ * agent's lane: the generalist's self-contained prompt hunts null
+ * dereferences and off-by-ones, which the verifier then drops as outside the
+ * agent's focus, and its Workflow is the generalist's.
+ */
+function buildCustomAgentSelfContainedSystemPrompt(
+    input: ReviewAgentInput,
+    meta: PromptAgentMeta,
+): string {
+    const langLabel = resolveLanguageLabel(input.languageResultPrompt);
+    const langSection = langLabel
+        ? `\n  <Language>Write ALL review comments, summaries, and reasoning in ${langLabel}. This is mandatory — do not fall back to English.</Language>`
+        : '';
+
+    return `<CodeReviewAgent mode="self-contained">
+  <Date>${new Date().toLocaleDateString('en-GB')}</Date>
+${LANE_MINDSET}
+
+  <Workflow>
+    This run cannot read the repository: there is no readFile, grep or listDir. You see the diffs and any inlined file contents. The other tools you are given still work: the team's systems and your guides. Use them as your focus asks, and cite what they return.
+
+    PHASE 1 — READ
+      Read your focus in <Role> below, then every diff. Note which changed code your focus applies to; the rest is not yours to review.
+
+    PHASE 2 — CHALLENGE (within your focus, within the visible code and what your tools return)
+      For each changed unit your focus applies to, ask: "Does this change break what my focus checks, and in which concrete case visible here?"
+      Do NOT ask questions about the repository you cannot answer from the visible code.
+
+    PHASE 3 — RESPOND
+      Every finding must cite exact changed lines from the diff.
+      Assign confidence honestly: 7+ only when the problem is obvious from the shown lines, 3-5 when you suspect it but cannot fully prove it, below 3 for speculation (do NOT report below 5).
+
+    FORBIDDEN:
+      - Claiming what a caller, a dependency or another file does: you cannot see them.
+      - Any finding whose proof would require reading a repository file that is not inlined below.
+  </Workflow>
+
+  <Scope>
+    Root cause must be in lines added or modified by this change.
+    relevantFile/relevantLinesStart/relevantLinesEnd must point to the changed lines.
+  </Scope>
+
+  <Role>
+    You are ${meta.identity.name}, ${meta.identity.description}
+    ${meta.categoryPrompt}${langSection}
+  </Role>
 ${formatOverrides(input, meta)}${formatConventionFindingRules(meta.conventionGuides)}
 
 ${formatMemoryRules(input.memoryRules)}
@@ -936,9 +1041,7 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
         const traceDecisionsSection = formatTraceDecisions(
             input.traceDecisions,
         );
-        const previousDecisionsSection = formatPreviousDecisions(
-            input.previousDecisions,
-        );
+        const previousDecisionsSection = finderDecisionContext(input, meta);
         const commitsSection = formatCommits(input.commits);
         const diffsSection = formatDiffs(input.changedFiles);
         // The callGraph string from kodus-graph already starts with <CallGraph>
@@ -973,10 +1076,9 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
     - Do not suppress a concrete performance issue just because it is not a correctness bug. If the primary failure mode is scale, query count, cache blowup, unbounded loading, async fanout, or blocking I/O, label it as performance.
     - Do not suppress a concrete security issue just because the code also has a bug. If the primary failure mode is exploitability, authorization bypass, trust-boundary failure, or unsafe input reaching a sink, label it as security.`
             : '';
-        const outputLabelLine = mixedLabelMode
-            ? `"label": "${allowedSuggestionLabels.join('|')}",
-      `
-            : '';
+        // label is required by the submitResult schema, so it is always shown.
+        const outputLabelLine = `"label": "${allowedSuggestionLabels.join('|')}",
+      `;
 
         const taskDescriptions: Record<string, string> = {
             bug: 'real bugs introduced, exposed, or made worse by these changes',
@@ -992,6 +1094,15 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
                 ? `real ${allowedSuggestionLabels.join(', ')} issues introduced, exposed, or made worse by these changes`
                 : (taskDescriptions[categoryLabel] ??
                   'issues introduced by these changes');
+
+        // Each finding carries only what finding the bug needs; fix, snippets,
+        // severity and confidence are added by a later enrichment stage.
+        const suggestionFields = hasOwnLane(meta)
+            ? customAgentSuggestionFields(outputLabelLine, 8)
+            : `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
+      "relevantLinesStart": 10,
+      "relevantLinesEnd": 15,
+      "suggestionContent": "the ONE problem: what is wrong and why it matters"`;
 
         // A custom agent kept to its lane gets the same task and rules scoped
         // to its focus; every other agent gets the defect hunt verbatim.
@@ -1051,11 +1162,7 @@ ${coverageIntro}${coverageTargets ? `${coverageTargets}\n` : ''}
     - Root cause must be in lines added or modified by this PR.
 ${findingRules}    ${mixedLabelRules}
     ${mixedLabelLensRules}
-    - Assign a confidence score (1-10) to each finding. Be honest — overconfidence wastes verification budget:
-      9-10: You read BOTH the callsite AND the callee definition, confirmed the types/signatures mismatch or the wrong return value, and can name the exact failing input. Reserve 10 for bugs where you verified the fix would work.
-      7-8: You read the relevant code and traced the failure path, but did not verify the callee definition or could not confirm the exact input that triggers it.
-      5-6: The code pattern looks wrong based on the diff, but you only read one side (caller OR callee, not both). The bug is plausible but not fully confirmed.
-      1-4: Suspicious pattern, speculative concern, or you are reporting based on experience rather than evidence from this codebase.
+    - ${ONE_PROBLEM_RULE}${hasOwnLane(meta) ? CUSTOM_AGENT_CONFIDENCE_RULE : ''}
     - Return only the JSON object inside markdown fences, no extra text.
   </Rules>
 
@@ -1067,16 +1174,7 @@ ${findingRules}    ${mixedLabelRules}
   "reasoning": "For each changed function: what you challenged, what callers you found, why you reported or dismissed. Example: 'Challenged CreateDevice: what if two requests pass count check simultaneously? Grepped TagDevice(, found caller at impl.go:155. No lock or unique constraint — race condition. Reported.'",
   "suggestions": [
     {
-      ${outputLabelLine}"relevantFile": "path/to/file.ext",
-      "language": "the file language",
-      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
-      "existingCode": "problematic code snippet from the diff",
-      "improvedCode": "fixed code snippet (only if fix is clear from context)",
-      "oneSentenceSummary": "${TITLE_PROMPT_SPEC}",
-      "relevantLinesStart": 10,
-      "relevantLinesEnd": 15,
-      "severity": "critical|high|medium|low",
-      "confidence": 8
+${suggestionFields}
     }
   ]
 }
@@ -1107,9 +1205,7 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
         const traceDecisionsSection = formatTraceDecisions(
             input.traceDecisions,
         );
-        const previousDecisionsSection = formatPreviousDecisions(
-            input.previousDecisions,
-        );
+        const previousDecisionsSection = finderDecisionContext(input, meta);
         const commitsSection = formatCommits(input.commits);
         const diffsSection = formatDiffs(input.changedFiles);
         const callGraphSection = input.callGraph
@@ -1155,7 +1251,7 @@ ${compactTask}${compactCoverage}${coverageTargets ?? ''}</CoverageContract>
   <Rules>
     - Root cause must be in lines added or modified by this PR.
 ${compactThreshold}    - "Looks correct" is not a dismissal — explain why it cannot fail.
-    - Assign confidence 1–10. Be honest: ≥9 only when both caller and callee read; ≤4 = speculative, do not report below 5.
+    - ${ONE_PROBLEM_RULE}${lane ? CUSTOM_AGENT_CONFIDENCE_RULE : ''}
     - Submit via the submitResult tool; do not print free-form JSON.
   </Rules>
 </ReviewTask>`;
@@ -1216,7 +1312,6 @@ export function buildSelfContainedSystemPrompt(input: ReviewAgentInput, meta: Pr
 
     PHASE 3 — RESPOND
       Return a JSON object with your findings. Every finding must cite exact line numbers from the diff.
-      Assign confidence honestly: 7+ only when the defect is obvious from the shown lines, 3-5 when you suspect it but cannot fully prove it, below 3 for speculation (do NOT report below 5).
 
     FORBIDDEN:
       - Claiming a caller passes wrong data (you cannot see callers).
@@ -1265,12 +1360,10 @@ export function buildSelfContainedUserPrompt(input: ReviewAgentInput, meta: Prom
         );
 
         const categoryLabel = meta.categoryLabel;
-        const mixedLabelMode = meta.supportsMixed;
         const allowedSuggestionLabels = meta.allowedLabels;
-        const outputLabelLine = mixedLabelMode
-            ? `"label": "${allowedSuggestionLabels.join('|')}",
-      `
-            : '';
+        // label is required by the submitResult schema, so it is always shown.
+        const outputLabelLine = `"label": "${allowedSuggestionLabels.join('|')}",
+      `;
 
         const taskDescriptions: Record<string, string> = {
             bug: 'real bugs introduced, exposed, or made worse by these changes',
@@ -1296,7 +1389,7 @@ ${diffsSection}
   </Diffs>
 ${fileContentsSection}
 
-  <Task>
+${hasOwnLane(meta) ? LANE_SELF_CONTAINED_TASK : `  <Task>
     You are running in self-contained mode. You have NO tools and NO access to the repository beyond the diffs and any inlined file contents shown above.
 
     Review these changes for ${taskDescription} that are self-evident from the diff alone.
@@ -1309,10 +1402,10 @@ ${fileContentsSection}
     - Do NOT claim "function X might be called from somewhere that passes null" — you cannot verify that.
     - Do NOT claim "this might break an existing caller" — you cannot see callers.
     - DO report: null/undefined dereferences with no guard in the changed code, off-by-one errors, inverted conditions, missing await, hardcoded secrets, obvious injection paths, resource leaks in the changed function, missing error handling around risky operations, typos in identifiers that are local to the shown code.
-    - DO NOT report: generic performance theories, missing CSRF/rate-limiting, speculative race conditions without a visible shared-state violation, suggestions that require knowing how the code is used elsewhere.
+    - DO NOT report: generic performance theories, missing CSRF/rate-limiting, speculative race conditions without a visible shared-state violation, suggestions that require knowing how the code is used elsewhere.`}
     - Every finding must pass this test: "Can I point to the exact lines in the diff and explain the failure path using only what is visible here?"
     - If in doubt, do NOT report it.
-    - Assign a confidence score (1-10). In self-contained mode, confidence above 7 is rare — reserve it for defects that are obvious from the shown lines alone.
+    - ${ONE_PROBLEM_RULE}${hasOwnLane(meta) ? '\n    - Assign a confidence score (1-10). In self-contained mode, confidence above 7 is rare — reserve it for defects that are obvious from the shown lines alone.' : ''}
     - Return only the JSON object inside markdown fences, no extra text.
   </Rules>
 
@@ -1324,16 +1417,10 @@ ${fileContentsSection}
   "reasoning": "What you checked and why. Example: 'Looked at auth.ts line 42: new code dereferences user.email without checking if user is null. Parameter comes from an unchecked path in the same function. Reported.'",
   "suggestions": [
     {
-      ${outputLabelLine}"relevantFile": "path/to/file.ext",
-      "language": "the file language",
-      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact visible from the diff. HOW: concrete fix if clear.",
-      "existingCode": "problematic code snippet from the diff",
-      "improvedCode": "fixed code snippet",
-      "oneSentenceSummary": "${TITLE_PROMPT_SPEC}",
+${hasOwnLane(meta) ? customAgentSuggestionFields(outputLabelLine, 6) : `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
-      "severity": "critical|high|medium|low",
-      "confidence": 6
+      "suggestionContent": "the ONE problem: what is wrong and why it matters"`}
     }
   ]
 }
@@ -1370,12 +1457,27 @@ function formatInlineFileContents(files: FileChange[]): string {
         return `\n\n  <FileContents>\n${blocks}\n  </FileContents>`;
     }
 
+const MAX_PR_BODY_CHARS = 500;
+
+/**
+ * First `max` UTF-16 units of `text`, one fewer when the cut would split a
+ * surrogate pair: a lone high surrogate (half an emoji) makes providers that
+ * validate UTF-16 reject the whole request (#2429).
+ */
+function truncateKeepingSurrogatePairs(text: string, max: number): string {
+    if (text.length <= max) return text;
+    const last = text.charCodeAt(max - 1);
+    const end = last >= 0xd800 && last <= 0xdbff ? max - 1 : max;
+    return text.slice(0, end);
+}
+
 function formatPRContext(prTitle?: string, prBody?: string): string {
         if (!prTitle && !prBody) return '';
 
         const parts: string[] = [];
         if (prTitle) parts.push(`Title: ${prTitle}`);
-        if (prBody) parts.push(prBody.substring(0, 500));
+        if (prBody)
+            parts.push(truncateKeepingSurrogatePairs(prBody, MAX_PR_BODY_CHARS));
 
         return `\n  <PRContext>${parts.join('\n')}</PRContext>`;
     }
@@ -1462,9 +1564,8 @@ function formatOverrides(input: ReviewAgentInput, meta: PromptAgentMeta): string
             }
         }
 
-        // Severity classification is handled by a separate post-processing step (classify-severity.ts)
-        // to avoid biasing the agent's investigation. The agent assigns a rough severity but
-        // the final classification uses dedicated criteria (default or client-custom).
+        // The finder does not assign severity; a later stage does, with dedicated
+        // criteria (default or client-custom).
 
         const savedGenerationMain = resolvePromptOverrideText(
             input.generationMain ?? input.v2PromptOverrides?.generation?.main,

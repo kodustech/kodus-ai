@@ -1,9 +1,6 @@
-import {
-    createCipheriv,
-    createDecipheriv,
-    hkdfSync,
-    randomBytes,
-} from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+
+import { deriveCryptoKey } from '@libs/common/utils/sealed-token';
 
 /**
  * Encryption of custom agent CLI secrets at rest (#2172): AES-256-GCM, so a
@@ -39,21 +36,7 @@ export class CliSecretUnreadableError extends Error {
     }
 }
 
-let cachedKey: { material: string; key: Buffer } | undefined;
-
-function cliSecretKey(): Buffer {
-    const material = process.env.API_CRYPTO_KEY ?? '';
-    if (cachedKey?.material === material) return cachedKey.key;
-    const ikm = Buffer.from(material, 'hex');
-    if (ikm.length !== 32) {
-        throw new Error('API_CRYPTO_KEY must be 32 bytes in hexadecimal.');
-    }
-    const key = Buffer.from(
-        hkdfSync('sha256', ikm, Buffer.alloc(0), KEY_LABEL, 32),
-    );
-    cachedKey = { material, key };
-    return key;
-}
+const cliSecretKey = (): Buffer => deriveCryptoKey(KEY_LABEL);
 
 const slotData = (slot: CliSecretSlot) =>
     Buffer.from(

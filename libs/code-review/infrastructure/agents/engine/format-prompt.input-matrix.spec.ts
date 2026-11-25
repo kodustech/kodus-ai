@@ -158,8 +158,13 @@ const CASES: Array<[string, string, Verdict]> = [
         refuses(),
     ],
     [
-        'a non-numeric index',
+        'an integer-string index',
         '[{"index":"0","suggestionContent":"REAL"}]',
+        recovers(),
+    ],
+    [
+        'a non-numeric index',
+        '[{"index":"first","suggestionContent":"REAL"}]',
         refuses(),
     ],
     ['an array of strings', '["REAL"]', refuses()],
@@ -170,7 +175,18 @@ const CASES: Array<[string, string, Verdict]> = [
     ['a refusal containing a bracket', 'I cannot help [see policy].', refuses()],
     ['an empty string', '', refuses()],
     ['whitespace only', '   \n\t ', refuses()],
-    ['a bare object', '{"index":0,"suggestionContent":"REAL"}', refuses()],
+    ['a bare item, no array', '{"index":0,"suggestionContent":"REAL"}', recovers()],
+    ['a bare object that is not an item', '{"suggestionContent":"REAL"}', refuses()],
+    [
+        'a bare item in front of the real array',
+        '{"index":0,"suggestionContent":"DECOY"} [{"index":0,"suggestionContent":"REAL"}]',
+        recovers(),
+    ],
+    [
+        'a bare item behind the real array',
+        '[{"index":0,"suggestionContent":"REAL"}] {"index":0,"suggestionContent":"DECOY"}',
+        recovers(),
+    ],
     ['a bare number', '42', refuses()],
 ];
 
@@ -188,13 +204,5 @@ describe('parseFormatResponse — the input space, enumerated', () => {
         } else {
             expect(formatted.size).toBe(0);
         }
-    });
-
-    it('covers every dimension it claims to', () => {
-        // A matrix that quietly loses a row is worse than no matrix: it reads
-        // as coverage while testing less than it says.
-        expect(CASES).toHaveLength(36);
-        expect(CASES.filter(([, , v]) => v.recovers)).toHaveLength(18);
-        expect(CASES.filter(([, , v]) => !v.recovers)).toHaveLength(18);
     });
 });

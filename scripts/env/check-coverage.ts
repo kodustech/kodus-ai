@@ -40,6 +40,13 @@ const ALLOWLIST: Array<{ pattern: RegExp; reason: string }> = [
         reason: 'apps/cli (standalone CLI tool, not the main runtime)',
     },
     {
+        // A misspelling of KODUS_LICENSE_KEY that our own provisioning once
+        // used. The self-hosted doctor reads it only to tell the admin the
+        // license sits under the wrong name; it must never be a real var.
+        pattern: /^API_KODUS_LICENSE_KEY$/,
+        reason: 'wrong name the self-hosted doctor detects (not runtime config)',
+    },
+    {
         // *_TEST_* vars are read by scripts/dev/test-emails.ts and similar
         // local test helpers, not by the runtime.
         pattern: /_TEST_/,
@@ -104,6 +111,12 @@ function grepStrongUsages(): Set<string> {
         '--exclude-dir=.claude',
         '--exclude-dir=.cursor',
         '--exclude-dir=.vscode',
+        // Local scratch space (gitignored): may hold clones of other repos or
+        // old checkouts of this one, with env names this branch never reads.
+        '--exclude-dir=.tmp',
+        // Local planning notes and generated graphs (gitignored): they quote env
+        // names from other branches and docs, not code this branch reads.
+        '--exclude-dir=.planning',
         // Nested git worktrees (Claude Code / manual `git worktree`) hold
         // checkouts of OTHER branches — older code using since-renamed env
         // names (e.g. API_OPENROUTER_KEY → API_OPEN_ROUTER_API_KEY,

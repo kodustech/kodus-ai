@@ -1,74 +1,47 @@
 ---
 title: "Generación Automática de Reglas"
-description: "Kody puede generar automáticamente reglas personalizadas analizando el historial de revisiones de código de tu equipo. Deja que aprenda de tus revisiones pasadas para crear estándares de codificación personalizados."
+description: "Kody redacta Kody Rules a partir de los comentarios que tus revisores dejan en los pull requests, y sigue aprendiendo cada semana."
 ---
 
-<Warning>
-  **Requiere al menos 3 meses de historial de revisiones de Kody en el repositorio.** Esta función deriva reglas de las revisiones pasadas de Kody en tus PRs, por lo que los repositorios que acaban de incorporarse no producirán sugerencias útiles. Si recientemente comenzaste a usar Kody, vuelve después de unos meses de revisiones reales.
-</Warning>
+Kody lee los comentarios de revisión que tu equipo escribió en los pull requests del repositorio, abiertos o cerrados, encuentra los estándares que los revisores repiten una y otra vez y los redacta como [Kody Rules](/es/how_to_use/code_review/configs/kody_rules). Tiene en cuenta tus reglas existentes para no repetirlas.
 
-## Resumen Rápido
+- Aprende de los comentarios de tus revisores de más de 100 caracteres. Se excluyen los comentarios de bots y de la propia Kody.
+- Se ejecuta por repositorio.
+- Las reglas generadas muestran el origen **Kody-generated** y se aplican a todos los archivos hasta que definas una ruta.
+- Las reglas generadas están activas de inmediato, o esperan en **Pending review** cuando **Kody knowledge approval** está activado.
 
-- **Generación Automática**: Kody analiza tu historial de revisiones para crear nuevas reglas
-- **Basado en Datos**: Usa 3 meses de datos de revisión para obtener insights inteligentes
-- **Sugerencias Inteligentes**: Genera reglas basadas en patrones reales del equipo
-- **Aprobación Opcional**: Las reglas generadas están activas por defecto; activa **Kody knowledge approval** para revisar cada una antes de que tenga efecto
-- **Aprendizaje Continuo**: Actualizaciones semanales de reglas a medida que tu equipo evoluciona
+## Activarla
 
-<Frame caption="Generate from past reviews y Kody knowledge approval en el panel Configuration de Kody Rules">
-  <img src="/images/sync-rules.png" alt="Kody Rules Configuration sheet" />
-</Frame>
+1. En la barra lateral, elige **Global** o un repositorio en el selector de alcance en la parte superior del grupo **Code review** y luego abre **Kody Rules**.
+2. Haz clic en **Configuration** para abrir el panel lateral.
+3. Activa **Generate from past reviews**.
+4. Opcionalmente, usa el selector de revisores debajo del interruptor (**Learning from all reviewers** por defecto) para excluir a los desarrolladores de cuyos comentarios de revisión Kody no debe aprender. Lista a los miembros actuales y a los autores recientes de pull requests, y muestra **Excluding N reviewers** una vez que aplicas una selección.
 
-## Cómo Funciona
+El ajuste sigue la jerarquía habitual: **Global** es el valor por defecto de cada repositorio, y un repositorio puede definir su propio valor. No se aplica por directorio.
 
-### 1. Activar la Generación de Reglas
+A los workspaces nuevos se les pregunta durante el onboarding, en el paso **Kody learns from your past reviews**. Está desactivado a menos que lo actives, y guarda la elección a nivel Global.
 
-La generación de reglas se configura por repositorio:
+## Cuándo se ejecuta
 
-1. En la barra lateral, elige el repositorio en el selector de alcance en la parte superior del grupo **Code review** y luego abre **Kody Rules**
-2. Haz clic en **Configuration** para abrir el panel lateral
-3. Activa **Generate from past reviews**
-4. Opcionalmente, usa el selector de revisores debajo del interruptor (**Learning from all reviewers** por defecto) para excluir a los desarrolladores de cuyos comentarios de revisión Kody no debe aprender
+- **Primera vez para un repositorio:** Kody lee los comentarios de revisión de los últimos **3 meses**. Activar el interruptor a nivel de repositorio lo inicia de inmediato y puede tardar unos minutos. Activarlo a nivel Global no inicia nada en ese momento: los repositorios que lo siguen se procesan en la siguiente ejecución semanal. Esta primera pasada solo ocurre mientras el repositorio aún no tiene reglas generadas.
+- **Después:** una vez por semana, Kody lee los comentarios de la última semana. El horario por defecto es el sábado a las 00:00, hora de São Paulo (`America/Sao_Paulo`); las instancias autoalojadas pueden cambiarlo con `API_CRON_KODY_LEARNING`.
 
-### 2. Proceso de Análisis
+No hay una cantidad mínima de historial. Un repositorio sin comentarios de revisores en la ventana no produce reglas.
 
-La primera vez que activas **Generate from past reviews** para un repositorio, Kody:
+Cuando se crean nuevas reglas, Kody notifica a tu equipo con sus títulos.
 
-- **Escanea el Historial de Revisiones**: Analiza los PRs cerrados de los últimos 3 meses en tu repositorio
-- **Identifica Patrones**: Descubre temas comunes de feedback y preferencias de codificación
-- **Extrae Estándares**: Convierte patrones de revisión en reglas accionables
-- **Genera Reglas**: Crea reglas personalizadas adaptadas al estilo de tu equipo
+## Requisitos del modelo
 
-Esto puede tardar unos minutos. Luego, las reglas generadas aparecen en la página **Kody Rules** del repositorio.
+En la nube, fuera del trial, la generación usa tu propia clave de modelo, así que **BYOK** debe estar configurado; sin él no se genera nada. Durante el trial, Kodus provee el modelo. Las instancias autoalojadas usan el modelo configurado para el despliegue. Consulta [BYOK](/es/how_to_use/byok).
 
-### 3. Revisar las Reglas Generadas
+## Revisar lo que Kody generó
 
-Las reglas generadas se listan con el origen **Kody-generated** (usa **Filters → Origin → Kody-generated** para ver solo esas). Abre cualquiera de ellas para editarla, pausarla o eliminarla como cualquier otra regla.
+Las reglas generadas se listan con el origen **Kody-generated**. Usa **Filters → Origin → Kody-generated** para ver solo esas. Abre cualquiera de ellas para editarla, pausarla o eliminarla como cualquier otra regla.
 
-### 4. Aprobar Reglas Antes de que Tengan Efecto
+Para aprobar las reglas antes de que tengan efecto, activa **Kody knowledge approval** en el mismo panel **Configuration**. Las nuevas reglas generadas llegan entonces a **Pending review** en la parte superior de la página, donde usas **Approve** en las que encajan con tu equipo y **Discard** en el resto. Solo se aplican las reglas aprobadas. Consulta [Approval](/es/how_to_use/code_review/configs/kody_rules#aprobación).
 
 <Warning>
-  Por defecto, las reglas generadas están **activas en cuanto se crean** y se
-  aplican en la siguiente revisión de código.
+  Sin aprobación, las reglas generadas están activas en cuanto se crean y se aplican en la siguiente revisión de código.
 </Warning>
 
-Para revisar las reglas generadas antes de que tengan efecto, activa **Kody knowledge approval** en el mismo panel **Configuration**. Con la aprobación activada:
-
-- **Revisión Pendiente**: Las nuevas reglas generadas llegan a la sección **Pending review** en la parte superior de la página de Kody Rules en lugar de aplicarse
-- **Elige Selectivamente**: Usa **Approve** en las reglas que coincidan con las necesidades de tu equipo y **Discard** en el resto
-- **Activación**: Solo las reglas aprobadas se aplican durante las revisiones de código
-
-## Aprendizaje Continuo
-
-Después de la configuración inicial, Kody mantiene un ciclo de aprendizaje continuo:
-
-- **Actualizaciones Semanales**: Kody genera nuevas sugerencias de reglas cada semana
-- **Estándares en Evolución**: Las sugerencias de reglas se adaptan a medida que evoluciona el estilo de codificación de tu equipo
-- **Precisión Refinada**: Las sugerencias se vuelven más precisas con el tiempo
-- **Revisiones Regulares**: Nuevas reglas aparecen semanalmente (en **Pending review** cuando la aprobación está activada)
-
-## Requisitos
-
-- **Datos Mínimos**: Al menos 3 meses de historial de revisiones en el repositorio
-- **Revisiones Activas**: Actividad regular de revisión de código para una mejor detección de patrones
-- **Acceso al Repositorio**: Permisos adecuados para modificar las reglas del repositorio
+Una regla que los desarrolladores siguen ignorando o votando negativamente puede pausarse automáticamente; consulta [Pausar reglas ignoradas y ruidosas](/es/how_to_use/code_review/configs/kody_rules#pause-ignored-and-noisy-rules).

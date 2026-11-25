@@ -16,6 +16,7 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
     private readonly _title: string;
     private readonly _status: string;
     private readonly _merged: boolean;
+    private readonly _heavy?: boolean;
     private readonly _number: number;
     private readonly _url: string;
     private readonly _baseBranchRef: string;
@@ -45,6 +46,7 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
     private readonly _syncedEmbeddedSuggestions: boolean;
     private readonly _syncedWithIssues: boolean;
     private readonly _isDraft: boolean;
+    private readonly _approvalReasonDeliveryFailure: IPullRequests['approvalReasonDeliveryFailure'];
 
     constructor(pullRequest: IPullRequests) {
         this._uuid = pullRequest.uuid;
@@ -53,6 +55,7 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
         this._title = pullRequest.title;
         this._status = pullRequest.status;
         this._merged = pullRequest.merged;
+        this._heavy = pullRequest.heavy;
         this._number = pullRequest.number;
         this._url = pullRequest.url;
         this._baseBranchRef = pullRequest.baseBranchRef;
@@ -78,6 +81,8 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
         this._syncedEmbeddedSuggestions = pullRequest.syncedEmbeddedSuggestions;
         this._syncedWithIssues = pullRequest.syncedWithIssues;
         this._isDraft = pullRequest.isDraft ?? false;
+        this._approvalReasonDeliveryFailure =
+            pullRequest.approvalReasonDeliveryFailure;
     }
 
     toJson(): IPullRequests {
@@ -86,6 +91,7 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
             title: this._title,
             status: this._status,
             merged: this._merged,
+            heavy: this._heavy,
             number: this._number,
             url: this._url,
             baseBranchRef: this._baseBranchRef,
@@ -109,6 +115,7 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
             syncedEmbeddedSuggestions: this._syncedEmbeddedSuggestions,
             syncedWithIssues: this._syncedWithIssues,
             isDraft: this._isDraft,
+            approvalReasonDeliveryFailure: this._approvalReasonDeliveryFailure,
         };
     }
 
@@ -120,6 +127,7 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
             title: this._title,
             status: this._status,
             merged: this._merged,
+            heavy: this._heavy,
             number: this._number,
             url: this._url,
             baseBranchRef: this._baseBranchRef,
@@ -141,6 +149,7 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
             syncedEmbeddedSuggestions: this._syncedEmbeddedSuggestions,
             syncedWithIssues: this._syncedWithIssues,
             isDraft: this._isDraft,
+            approvalReasonDeliveryFailure: this._approvalReasonDeliveryFailure,
         };
     }
 
@@ -170,6 +179,10 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
 
     get merged(): boolean {
         return this._merged;
+    }
+
+    get heavy(): boolean | undefined {
+        return this._heavy;
     }
 
     get number(): number {
@@ -254,5 +267,9 @@ export class PullRequestsEntity implements Entity<IPullRequests> {
 
     get isDraft(): boolean {
         return this._isDraft;
+    }
+
+    get approvalReasonDeliveryFailure(): IPullRequests['approvalReasonDeliveryFailure'] {
+        return this._approvalReasonDeliveryFailure;
     }
 }

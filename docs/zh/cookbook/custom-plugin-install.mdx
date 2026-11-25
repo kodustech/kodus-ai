@@ -1,84 +1,91 @@
 ---
 title: "安装自定义 MCP 插件"
-description: "将任何自定义模型上下文协议插件连接到 Kodus 的分步说明。"
+description: "将你自己的 Model Context Protocol 服务器连接到 Kodus 的分步说明。"
 icon: "plug"
 ---
 
-## 为什么自定义插件很重要
+## 为什么使用自定义插件
 
-自定义 MCP 插件让您的团队基于内部系统——知识库、事件仪表板、策略引擎等等。安装后,每次 Kody 交互都可以使用实时数据调用这些工具,因此审查者不再需要将截图或过时的片段复制到拉取请求中。
-
-本指南展示了我们为任何自定义插件推荐的主观流程,无论是简单的只读端点(如 Kodus Docs MCP)还是具有身份验证的更高级管道。
+自定义插件让 Kody 在 pull request 上回答问题时，可以读取你的内部系统，例如知识库、事故仪表板或策略引擎。审阅者不必再把截图和过时的片段粘贴到评论中。
 
 <Callout icon="globe">
-  Kodus **仅支持远程 MCP 服务器**——这意味着插件必须可从 Kodus 的基础设施访问。
+  Kodus **仅支持远程 MCP 服务器**。服务器必须能从 Kodus 的基础设施访问：不支持 `localhost`，也不支持桌面端 MCP 端点。
 </Callout>
 
----
+## 准备插件信息
 
-## 准备您的插件信息
-
-在打开插件目录之前收集这些详细信息:
+在打开 Plugins 页面之前，先收集以下信息：
 
 | 字段 | 为什么重要 |
 | ----- | -------------- |
-| **公共 URL** | 托管 MCP 清单的端点(例如 `https://acme-internal-tools.com/mcp`)。 |
-| **协议** | MCP 实现类型(HTTP 或 SSE)。 |
-| **托管** | 必须是可从 Kodus 访问的远程服务器(无 localhost 或桌面 MCP 端点)。 |
-| **身份验证** | 插件是否需要 API 密钥、OAuth 或对您的工作区 IP 开放。 |
-| **描述/标志** | 帮助其他工程师在浏览目录时了解插件的作用。 |
+| **URL** | MCP 端点，例如 `https://acme-internal-tools.com/mcp`。 |
+| **Protocol** | **HTTP** 或 **SSE**。 |
+| **Authorization** | **None**、**Bearer Token**、**Basic Auth**、**API Key**（以及它所在的 header）或 **OAuth 2.0**（client ID，或动态客户端注册）。 |
+| **Description and logo** | 可选。帮助团队成员识别该插件。 |
 
-寻找要尝试的远程 MCP 服务器?
+想找一些远程 MCP 服务器来试试？
 
-- [Smithery.ai](https://smithery.ai/) 策划可部署的 MCP 服务,以及一个您可以指向自己基础设施的简单启动器。
-- [Awesome Remote MCP Servers](https://github.com/sylviangth/awesome-remote-mcp-servers) 列出了跨文档搜索、安全扫描器和工作流机器人的社区维护端点。
+- [Smithery.ai](https://smithery.ai/) 整理了可部署的 MCP 服务。
+- [Awesome Remote MCP Servers](https://github.com/sylviangth/awesome-remote-mcp-servers) 列出了社区维护的端点。
 
 ## 在 Kodus 中安装插件
 
-<Frame caption="在 Plugins 中，点击 Add Custom Plugin 卡片上的 Add Plugin 会打开此表单">
-  <img src="/images/custom-plugin.png" alt="Add Custom Plugin form" />
+<Frame caption="Plugins → Add Custom Plugin 卡片 → Add Plugin 会打开此表单">
+  <img src="/images/custom-plugin.png" alt="Add Custom Plugin 表单" />
 </Frame>
 
-1. 在 Kodus 工作区的侧边栏中,打开 **Plugins**(Beta)。
-2. 在 **Add Custom Plugin** 卡片上,点击 **Add Plugin**。
-3. 填写表单:
+<Steps>
+  <Step title="打开表单">
+    在侧边栏中打开 **Plugins**。在 **Add Custom Plugin** 卡片上，点击 **Add Plugin**。
+  </Step>
+  <Step title="填写表单">
+    ```text
+    Plugin Name: Descriptive label (for example "Security Runbooks MCP")
+    Description: What data it exposes (optional)
+    Logo URL: Optional
+    URL: https://your-domain.com/mcp
+    Protocol: HTTP or SSE
+    Authorization: None, Bearer Token, Basic Auth, API Key or OAuth 2.0
+    Custom Headers: Any extra header your server needs (optional)
+    ```
 
-   ```text
-   插件名称:描述性标签(例如,"安全运行手册 MCP")
-   描述:它公开的数据/操作
-   标志 URL:可选,但有助于识别
-   URL: https://your-domain.com/mcp
-   协议: HTTP 或 SSE
-   授权/标头:如果您的 MCP 主机需要它们(例如 API 密钥、OAuth 等)(可选)
-   ```
+    点击 **Create Plugin**。
+  </Step>
+  <Step title="选择其工具并安装">
+    插件会打开。使用 OAuth 2.0 时，先点击 **Authenticate with** 该插件。在 **Selected tools** 下，只保留 Kody 需要的工具，然后点击 **Install plugin**。已安装的插件在其卡片上显示 **Installed**。
+  </Step>
+</Steps>
 
-4. 点击**创建插件**。一旦它出现在列表中,整个工作区就可以立即使用它。
+如果 **Selected tools** 显示 0 of 0，说明 Kodus 无法列出该服务器的工具。打开该插件，点击 **Edit Plugin**，检查 URL、协议和授权。
 
 <Warning>
-  自定义插件以与工作区相同的权限运行。仅安装您的组织信任和监控的端点。
+  Kody 可以调用你选择的任何工具。只安装你的组织信任的端点，并且只选择 Kody 需要的工具。
 </Warning>
 
 ## 验证连接
 
-1. 打开启用了 Kody 的任何拉取请求。
-2. 提及 `@kody` 并包含一个强制插件响应的问题。
+1. 在启用了 Kody 的仓库中打开一个 pull request。
+2. 用 `@kody` 评论一个只有该插件能回答的问题：
 
    ```
-   @kody 您能从我们的 MCP 获取部署检查清单并确认是否需要功能标志吗?
+   @kody can you fetch the deployment checklist from our MCP and confirm whether feature flags are required?
    ```
 
-3. 查看 Kody 的回复:它应包含您的新插件返回的数据。如果没有,请在 **Plugins** 页面上确认插件的 URL、协议和授权。
+3. 查看 Kody 的回复。其中应包含插件返回的数据。如果没有，请在 **Plugins** 页面打开该插件，检查其 URL、协议和授权。
 
 <Info>
-  Kodus Docs MCP (`https://docs.kodus.io/mcp`) 是一个快速的健全性测试——您可以先安装它以确保您的工作区可以访问外部主机。
+  如果想在不搭建服务器的情况下演练整个流程，可以把 `https://docs.kodus.io/mcp` 添加为自定义插件：协议选 **HTTP**，授权选 **None**。
 </Info>
 
----
+## 在自定义 agent 中使用
+
+在 agent 页面的 **Tools → Plugins** 下打开已安装的插件后，自定义 agent 就能从该插件读取数据。只提供读取类工具。请参阅[技能、文档和工具](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools#plugins-mcp)。
 
 ## 快速检查清单
 
-- [ ] 插件清单已托管且可访问。
-- [ ] 身份验证模型(如果有)已记录和测试。
-- [ ] 通过**添加自定义插件**使用正确的 URL + 标头安装插件。
-- [ ] 示例 PR 证明 Kody 可以调用插件。
-- [ ] 所有者知道如何监控和更新集成。
+- [ ] 服务器可通过 HTTP 或 SSE 从 Kodus 访问。
+- [ ] 其授权方式与你选择的方法相符。
+- [ ] **Selected tools** 列出了工具，且只选中 Kody 需要的那些。
+- [ ] 插件显示 **Installed**。
+- [ ] 在 pull request 上发表的测试评论返回了来自该插件的数据。
+- [ ] 有人负责监控和更新该集成。

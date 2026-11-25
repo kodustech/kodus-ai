@@ -1,0 +1,248 @@
+---
+title: "BYOK の対応プロバイダー"
+sidebarTitle: "プロバイダー"
+description: "Kimi、GLM、OpenRouter の固定を含め、対応する各プロバイダーのキーの取得方法と接続方法を説明します。"
+---
+
+プロバイダーを選択して、キーの取得方法と入力内容を確認してください。モデルは **AI providers** ページで追加します。[プロバイダーを接続する](/ja/how_to_use/byok#プロバイダーを接続する)を参照してください。
+
+## 対応プロバイダー
+
+<Tabs>
+  <Tab title="OpenAI">
+    **適したケース：** 最新の GPT モデルと、安定したパフォーマンスが必要な場合。
+
+    **APIキーの取得：**
+    1. [OpenAI API Keys](https://platform.openai.com/api-keys) にアクセスします
+    2. Kodus 用に新しいキーを作成します
+    3. 請求情報を追加します
+
+    **独自のゲートウェイ経由の場合：** OpenAI へのトラフィックが、Responses API を提供する OpenAI プロトコルのゲートウェイを経由する場合は、任意の **Base URL** にそのアドレスを設定し、ゲートウェイが求めるキーを使用します。OpenAI 自身のモデル ID を使用すると、レビューは OpenAI のキーを直接使う場合と同じように、Responses API、厳密な構造化出力、設定した reasoning レベルで実行されます。
+
+    - `https://your-gateway.example.com/v1` のように、API バージョンを含めてください。Kodus は `<Base URL>/responses` を呼び出し、`<Base URL>/models` からモデルを一覧取得します。
+    - ゲートウェイがチャット補完のみを提供する場合は、代わりに **OpenAI-compatible** として接続してください。
+    - Kodus がそこにキーを送信するため、URL は `https://` を使用し、パブリックなアドレスに解決される必要があります。セルフホスト環境のプライベートネットワーク上にあるゲートウェイはサポートされていません。
+    - リクエストは `store: false` で送信されるため、ゲートウェイにも OpenAI にもリクエストの保存は求められません。
+    - OpenAI 自身のモデル ID（例：`gpt-5.4`）を使用してください。ゲートウェイが名前を変更したモデルは reasoning モデルとして認識されないため、reasoning レベルは送信されません。
+    - ここではサポートされないもの：キーに加えて独自のヘッダーが必要なゲートウェイ（Portkey、Cloudflare AI Gateway）と、独自の **Azure OpenAI** プロバイダーがある Azure OpenAI。
+  </Tab>
+
+  <Tab title="Google Gemini">
+    **適したケース：** 大きなコンテキスト（100万トークン）でのレビューと、競争力のある価格を求める場合。
+
+    **APIキーの取得：**
+    1. [Google AI Studio](https://aistudio.google.com/app/apikey) にアクセスします
+    2. 新しいキーを作成します
+    3. Google Cloud Console で課金を有効にします
+  </Tab>
+
+  <Tab title="Anthropic Claude">
+    **適したケース：** 繊細な分析と、アダプティブな拡張思考が必要な場合。
+
+    **APIキーの取得：**
+    1. [Anthropic Console](https://console.anthropic.com/) にアクセスします
+    2. アカウントを作成してキーを生成します
+    3. クレジットを追加します
+  </Tab>
+
+  <Tab title="Novita AI">
+    **適したケース：** オープンソースやホスト型のモデル（Llama、DeepSeek、Kimi）を競争力のある価格で利用したい場合。
+
+    **APIキーの取得：**
+    1. [Novita AI](https://novita.ai/) にサインアップします
+    2. API 設定に移動します
+    3. キーを生成します
+
+    <Card title="Novita セットアップガイド" icon="rocket" href="/ja/cookbook/novita">
+      スクリーンショット付きの詳細なセットアップ手順。
+    </Card>
+  </Tab>
+
+  <Tab title="OpenRouter">
+    **適したケース：** 多数のモデルを 1 つの請求関係にまとめたい場合。
+
+    **APIキーの取得：**
+    1. [OpenRouter](https://openrouter.ai/) でアカウントを作成します
+    2. クレジットを追加します
+    3. 設定でキーを生成します
+
+    <Warning>
+      OpenRouter はデフォルトでリクエストごとに異なる上流プロバイダーにルーティングするため、呼び出しごとに品質やレイテンシにばらつきが生じることがあります。Advanced settings → OpenRouter routing で**特定の上流プロバイダーを固定**すると、動作を安定させられます。[OpenRouter のプロバイダーを固定する](#openrouter-のプロバイダーを固定する)を参照してください。
+    </Warning>
+  </Tab>
+
+  <Tab title="Google Vertex AI">
+    <Info>**ベータ版。** 単一のキーが一般的な方式よりも、認証の手順が複雑です。</Info>
+
+    **適したケース：** すでに Google Cloud を利用していて、既存の GCP の課金、IAM、データレジデンシーの保証のもとで Gemini（または Claude）を利用したいチーム。
+
+    **設定方法：**
+    1. 接続フローで **Google Vertex AI**（Custom の下）を選択します。
+    2. サービスアカウントの JSON ファイルの**内容**を Service Account JSON
+       フィールドに貼り付けます（base64 エンコードでも可）。Kodus は JSON から
+       `project_id` を自動的に抽出します。
+    3. **Region** — グローバルエンドポイントを使用する場合は空欄のままにします（推奨）。
+       データレジデンシーの要件がある場合にのみ、リージョン（例：`us-east5`）を固定してください。
+
+    サービスアカウントには、そのプロジェクトで Vertex AI の prediction API を呼び出す権限が必要です。Test は*実際に設定されたモデル*を確認するため、利用できないモデルやリージョンは Test の時点で失敗します。
+  </Tab>
+
+  <Tab title="Amazon Bedrock">
+    <Info>**ベータ版。** 単一のキーが一般的な方式よりも、認証の手順が複雑です。</Info>
+
+    **適したケース：** AWS に標準化していて、AWS アカウント経由でモデルの請求を受けたいチーム。
+
+    **設定方法：**
+    1. 接続フローで **Amazon Bedrock**（Custom の下）を選択します。
+    2. **Bedrock API key**（ベアラートークン）を指定します。詳しくは
+       [Bedrock APIキーの生成方法](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys-generate.html)を参照してください。
+    3. **Region**（例：`us-east-1`、`us-west-2`、`eu-central-1`）を設定します。
+
+    <Accordion title="応用：代わりに IAM ユーザーの認証情報を使用する">
+      チームがまだ Bedrock APIキーに移行していない場合は、**Advanced — use IAM user
+      credentials instead** を展開し、静的なアクセスキー ID とシークレットを指定します（STS の一時的な認証情報の場合は
+      セッショントークンも）。IAM プリンシパルには `bedrock:InvokeModel` が必要です。
+
+      APIキーが優先されます。ベアラートークンが設定されている場合、IAM のフィールドは無視されます。
+    </Accordion>
+  </Tab>
+
+  <Tab title="Azure OpenAI">
+    **適したケース：** 自社の Azure リソースで OpenAI モデルを実行しているチーム。
+
+    **設定方法：**
+    1. 接続フローで **Azure OpenAI**（Custom の下）を選択します。
+    2. **API key** と **Resource endpoint**（例：`https://your-resource.openai.azure.com/openai`）を入力します。
+    3. モデル ID として**デプロイ名**を入力します。Kodus は推論用のキーでは Azure のデプロイを一覧取得できません。
+  </Tab>
+
+  <Tab title="OpenAI-compatible">
+    **適したケース：** 専門的なプロバイダー（Moonshot、Z.ai、Fireworks、Together、Groq、DeepSeek）や、セルフホストのエンドポイント。
+
+    **設定方法：**
+    1. 接続フローで **OpenAI-compatible**（Custom の下）を選択します。
+    2. ベース URL（例：`https://api.moonshot.ai/v1`、`https://api.z.ai/api/paas/v4/`、`https://api.fireworks.ai/inference/v1`）を入力します。
+    3. キーとモデル ID を指定します。
+
+    <Note>
+      モデル ID はプロバイダーごとに異なり、深いパスを使用するものもあります（例：Fireworks の `accounts/fireworks/models/kimi-k2p7-code`）。プロバイダーのダッシュボードから ID を正確にコピーしてください。Test は実際のリクエストを送信するため、誤った ID はすぐに失敗します。
+    </Note>
+
+    <CardGroup cols={2}>
+      <Card title="Z.ai (GLM) ガイド" href="/ja/cookbook/z-ai" icon="bolt">
+        Coding Plan の詳細を含む、Z.ai の完全なセットアップ手順。
+      </Card>
+      <Card title="Moonshot (Kimi) ガイド" href="/ja/cookbook/moonshot" icon="moon">
+        Kimi と Kimi Code Plan のセットアップ手順。
+      </Card>
+      <Card title="Fireworks AI" href="/ja/cookbook/fireworks" icon="fire">
+        Fireworks 向けのセットアップ手順。
+      </Card>
+      <Card title="Together AI" href="/ja/cookbook/together" icon="handshake">
+        Together AI のセットアップ手順。
+      </Card>
+    </CardGroup>
+  </Tab>
+
+  <Tab title="Anthropic-compatible">
+    **適したケース：** OpenAI ではなく Anthropic Messages API に対応しているエンドポイント。
+    Kimi のコーディングプランのエンドポイントなども含まれます。
+
+    **設定方法：**
+    1. 接続フローで **Anthropic-compatible**（Custom の下）を選択します。
+    2. ベース URL、キー、モデル ID を入力します。
+
+    <Note>
+      ベース URL は、プロバイダーのドキュメントに記載されている形式のまま貼り付けてください。末尾の
+      `/v1` の有無は問いません（例：`https://api.kimi.com/coding` または `https://api.kimi.com/coding/v1`）。2 つの Anthropic SDK のパスでは `/v1`
+      を付ける位置の扱いが異なるため、Kodus が内部で正規化します。既知のブランドでは、キーのみを指定して接続すると、
+      エンドポイントが自動的に解決されます。
+    </Note>
+  </Tab>
+</Tabs>
+
+## Kimi（Moonshot）と GLM（Z.ai）を接続する
+
+Moonshot と Z.ai はそれぞれ、トークン従量課金の Developer API とは**別のエンドポイント**でサブスクリプションプランを提供しています。各プランは独自のキーを持つ別のアカウントです。お持ちのキーに対応するベース URL を選択してください。
+
+**Moonshot** タイルは Developer API の Anthropic 互換エンドポイント（`https://api.moonshot.ai/anthropic`）を使用します。**Z.ai** タイルは Z.AI が GLM Coding Plan 向けに案内している `https://api.z.ai/api/anthropic` を使用します。Z.AI の Developer API を使用する場合は、**Custom** で **OpenAI-compatible** を選択し、`https://api.z.ai/api/paas/v4/` を入力してください。Kimi Code Plan のキーを使う場合は、**Custom** で互換プロバイダーを選択し、表のベース URL を入力してください。
+
+<Tabs>
+  <Tab title="Kimi (Moonshot AI)">
+    | プラン | エンドポイント | キーの取得元 | 適したケース |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.moonshot.ai/v1`（OpenAI 互換）または `https://api.moonshot.ai/anthropic`（Anthropic 互換） | [platform.kimi.ai](https://platform.kimi.ai/console/api-keys) | トークン従量課金で、同時実行数はチャージのティアに応じて増えます |
+    | **Kimi Code Plan** | `https://api.kimi.ai/coding/v1` （海外）<br />`https://api.kimi.com/coding/v1` （中国） | [kimi.com/code](https://www.kimi.com/code) | コーディング専用のエンドポイントを使うサブスクリプション |
+
+    <Info>
+      Kimi Code Plan では、上限を低い値から始めてアカウントに合わせて調整してください。[同時実行数の調整](/ja/cookbook/moonshot#同時実行数の調整)を参照してください。Kimi K2.7 Code は常に reasoning を行います。Kodus は temperature フィールドを非表示にし、リクエストからも省略します。[Temperature](/ja/how_to_use/byok/model_settings#temperature) を参照してください。
+    </Info>
+  </Tab>
+
+  <Tab title="GLM (Z.ai)">
+    | プラン | エンドポイント | キーの取得元 | 適したケース |
+    | --- | --- | --- | --- |
+    | **Developer API** | `https://api.z.ai/api/paas/v4/` | [z.ai/manage-apikey](https://z.ai/manage-apikey/apikey-list) | 負荷の変動が大きいワークロード、トークン従量課金 |
+    | **Coding Plan** | `https://api.z.ai/api/coding/paas/v4` | [z.ai/subscribe](https://z.ai/subscribe) | チームの量が予測しやすく、月額定額にしたい場合 |
+
+    <Warning>
+      Kodus でレビューを実行するには、**Developer API** のキーを使用してください。Z.AI は GLM Coding Plan の利用を[対応ツール](https://docs.z.ai/devpack/tool/others#supported-tools)に限定しています。Kodus でサブスクリプションを使う前に、利用資格を Z.AI に確認してください。
+    </Warning>
+  </Tab>
+</Tabs>
+
+## OpenRouter のプロバイダーを固定する
+
+OpenRouter はルーターです。モデル（例：`moonshotai/kimi-k2`）をリクエストすると、複数ある上流プロバイダー（Moonshot 直接、Together、Groq、Fireworks、Novita など）のいずれかに呼び出しを転送します。呼び出しごとに別のバックエンドに振り分けられる可能性があります。便利な反面、気づきにくいばらつきが生じます。
+
+- **品質のばらつき** — 上流ごとに精度（FP8、INT4、フル精度）が異なり、同一のプロンプトでも出力に微妙な違いが出ます
+- **ツール呼び出しの不整合** — バックエンドによっては関数呼び出しの扱いが異なり、不正なツール使用につながります
+- **reasoning 形式のばらつき** — ある上流は `reasoning_effort` に従い、別の上流は `thinking.enabled` のみに従い、さらに別の上流はどちらも無視します
+- **レイテンシの変動** — ルーティングが変わると、p50 が呼び出しごとに 800ms から 4s に跳ね上がることがあります
+- **レート制限の想定外の発生** — 明示的に選んでいないバックエンドでクォータに達します
+
+### 固定の方法
+
+BYOK プロバイダーが **OpenRouter** の場合、Advanced settings パネルに **OpenRouter routing** セクションが表示され、2 つのフィールドがあります。
+
+- **Pin providers (in order)** — 上流プロバイダー名のカンマ区切りリスト（例：`moonshot, together`）。OpenRouter は順番に試し、最初に利用可能なものを使用します。
+- **Allow fallbacks** — オフの場合、固定したプロバイダーがどれも利用できないとリクエストは即座に失敗します。オン（デフォルト）の場合、OpenRouter はそのモデルを提供する他の上流にフォールバックできます。
+
+<Tip>
+  **安定した**構成にするには、プロバイダーを 1 つに固定し、フォールバックをオフにします（`Pin: moonshot`、`Allow fallbacks: off`）。リクエストは常に同じ上流に送られるか、明確に失敗するため、気づかないうちに品質が変わることはありません。その代わり、その上流がダウンした場合の冗長性はまったくありません。障害を吸収するために、別のプロバイダー（例：Anthropic）の **Fallback model** と組み合わせてください。
+</Tip>
+
+<Warning>
+  上流の名前は OpenRouter のカタログと一致している必要があります。[openrouter.ai/docs/features/provider-routing](https://openrouter.ai/docs/features/provider-routing) のプロバイダータグを確認してください。一般的な値には `moonshot`、`together`、`groq`、`fireworks`、`novita` があります。
+</Warning>
+
+内部的には、Kodus は次の内容を Vercel AI SDK の呼び出しに渡します。
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot", "together"],
+      "allow_fallbacks": false
+    }
+  }
+}
+```
+
+### 応用：生の JSON オーバーライド
+
+`order` と `allow_fallbacks` 以外のフィールド（例：`ignore`、`data_collection`、`require_parameters`）が必要な場合は、Advanced settings で **Thinking / Reasoning** を **Custom** に切り替え（[Custom JSON override](/ja/how_to_use/byok/model_settings#custom-json-override)）、ルーティングのペイロード全体を貼り付けます。reasoning の設定とあわせて `providerOptions` にマージされます。
+
+```json
+{
+  "openrouter": {
+    "provider": {
+      "order": ["moonshot"],
+      "allow_fallbacks": false,
+      "ignore": ["deepinfra"],
+      "data_collection": "deny"
+    },
+    "reasoning": { "effort": "medium" }
+  }
+}
+```

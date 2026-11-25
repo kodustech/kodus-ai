@@ -3,9 +3,9 @@ import { CreateOrUpdateKodyRulesUseCase } from './create-or-update.use-case';
 /**
  * Deterministic-logic tests for CreateOrUpdateKodyRulesUseCase.
  *
- * The three methods under test are pure and side-effect free, so the class is
+ * The methods under test are pure and side-effect free, so the class is
  * constructed with inert stub dependencies ({} as any) — none of them are
- * touched by getInheritanceOnlyToggledIds / isInternalSyncActor / normalizeError.
+ * touched by getInheritanceOnlyToggledIds / isInternalSyncActor.
  * Private methods are reached via (instance as any).
  */
 function makeUseCase(): CreateOrUpdateKodyRulesUseCase {
@@ -215,47 +215,52 @@ describe('CreateOrUpdateKodyRulesUseCase — isInternalSyncActor', () => {
             false,
         );
     });
-
-    it('is false when both fields differ', () => {
-        expect(call({ userId: 'alice', userEmail: 'alice@kodus.io' })).toBe(
-            false,
-        );
-    });
 });
 
-describe('CreateOrUpdateKodyRulesUseCase — normalizeError', () => {
-    let useCase: CreateOrUpdateKodyRulesUseCase;
-    const call = (error: unknown) =>
-        (useCase as any).normalizeError(error) as Error;
-    beforeEach(() => {
-        useCase = makeUseCase();
-    });
+describe('CreateOrUpdateKodyRulesUseCase — detector compile on save', () => {
+    it('passes the stored compileAttempt and contextNeed to compileAndSave so unchanged rules are skipped', async () => {
+        const compileAttempt = {
+            sourceHash: 'hash-1',
+            attemptedAt: new Date('2026-01-01'),
+            declineReason: 'not mechanical',
+        };
+        const contextNeed = { need: 'none', promptVersion: 1 };
+        const stored = {
+            uuid: 'rule-1',
+            detector: undefined,
+            compileAttempt,
+            contextNeed,
+        };
+        const compileAndSave = jest.fn().mockResolvedValue({});
+        const useCase = new CreateOrUpdateKodyRulesUseCase(
+            {
+                createOrUpdate: jest.fn().mockResolvedValue(stored),
+            } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            { compileAndSave } as any,
+            { kodyRuleChanged: jest.fn() } as any,
+        );
 
-    it('returns the same Error instance untouched', () => {
-        const err = new Error('original');
-        expect(call(err)).toBe(err);
-    });
+        await useCase.execute(
+            {
+                uuid: 'rule-1',
+                title: 't',
+                rule: 'r',
+                repositoryId: 'repo-1',
+            } as any,
+            'org-1',
+            { userId: 'kody', userEmail: 'kody@kodus.io' },
+        );
 
-    it('preserves Error subclass instances by identity', () => {
-        const err = new TypeError('typed');
-        expect(call(err)).toBe(err);
-    });
-
-    it('wraps a string into an Error with that exact message', () => {
-        const result = call('boom');
-        expect(result).toBeInstanceOf(Error);
-        expect(result.message).toBe('boom');
-    });
-
-    it('stringifies a number payload', () => {
-        expect(call(42).message).toBe('42');
-    });
-
-    it('stringifies null as "null"', () => {
-        expect(call(null).message).toBe('null');
-    });
-
-    it('stringifies a plain object as "[object Object]"', () => {
-        expect(call({}).message).toBe('[object Object]');
+        expect(compileAndSave).toHaveBeenCalledTimes(1);
+        expect(compileAndSave.mock.calls[0][2]).toMatchObject({
+            uuid: 'rule-1',
+            compileAttempt,
+            contextNeed,
+        });
     });
 });

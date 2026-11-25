@@ -60,6 +60,16 @@ describe('ForceTextFinalizePolicy', () => {
         expect(p.prepareStep(view(1, 5)).emit).toBeUndefined();
     });
 
+    it('takes the tools away only on the last step with noToolsOnLastStep', () => {
+        const noTools = new ForceTextFinalizePolicy({
+            answerDescription: 'your final JSON verdict',
+            noToolsOnLastStep: true,
+        });
+        expect(noTools.prepareStep(view(4, 5)).activeTools).toEqual([]);
+        expect(noTools.prepareStep(view(3, 5)).activeTools).toBeUndefined();
+        expect(noTools.prepareStep(view(3, 5)).injectNote).toBeDefined();
+    });
+
     it('honours a custom window', () => {
         const last = new ForceTextFinalizePolicy({
             answerDescription: 'the verdict',

@@ -63,6 +63,29 @@ function omitDeletionHunks(patchLines: string[]): string {
     return addedPatched.join('\n');
 }
 
+// Maximum number of lines to process to prevent DoS attacks
+export const MAX_PATCH_LINES = 50000;
+
+/** Lines in a patch split on '\n'. A final newline ends the last line, it
+ *  does not start another, so the '' that `split` leaves after it is not
+ *  counted: a 50,000-line patch ending in '\n' is not over the limit. */
+function patchLineCount(lines: string[]): number {
+    return lines.length > 1 && lines[lines.length - 1] === ''
+        ? lines.length - 1
+        : lines.length;
+}
+
+/** True when the converters below drop the end of `patch` (#2206). */
+export function exceedsPatchLineLimit(patch: string | undefined): boolean {
+    return !!patch && patchLineCount(patch.split('\n')) > MAX_PATCH_LINES;
+}
+
+/** Ends a diff cut at MAX_PATCH_LINES, so the reader knows the rest is not
+ *  shown. Matches no diff line form (`@@`, `+`, `-`, numbered). */
+function patchLineLimitNote(totalLines: number): string {
+    return `... (diff truncated: first ${MAX_PATCH_LINES} of ${totalLines} lines shown; the rest of this file's changes are not in this diff)`;
+}
+
 /**
  * Convert a patch to hunks with line numbers.
  * Uses __new hunk__ / __old hunk__ format with line numbers on new hunk only.
@@ -70,15 +93,13 @@ function omitDeletionHunks(patchLines: string[]): string {
  * @param file The file being processed.
  * @returns The converted patch.
  */
-// Maximum number of lines to process to prevent DoS attacks
-const MAX_PATCH_LINES = 50000;
-
 export function convertToHunksWithLinesNumbers(
     patch: string,
     file: { filename?: string },
 ): string {
     let patchWithLinesStr = `\n\n## file: '${file.filename.trim()}'\n`;
-    const patchLines = patch.split('\n').slice(0, MAX_PATCH_LINES);
+    const allPatchLines = patch.split('\n');
+    const patchLines = allPatchLines.slice(0, MAX_PATCH_LINES);
     const RE_HUNK_HEADER =
         /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@[ ]?(.*)/;
 
@@ -184,6 +205,12 @@ export function convertToHunksWithLinesNumbers(
         }
     }
 
+    const totalLines = patchLineCount(allPatchLines);
+    if (totalLines > MAX_PATCH_LINES) {
+        patchWithLinesStr =
+            patchWithLinesStr.trimEnd() + '\n' + patchLineLimitNote(totalLines);
+    }
+
     return patchWithLinesStr.trim();
 }
 
@@ -211,7 +238,8 @@ export function convertToUnifiedDiffWithLineNumbers(
 ): string {
     if (!patch) return '';
 
-    const lines = patch.split('\n').slice(0, MAX_PATCH_LINES);
+    const allLines = patch.split('\n');
+    const lines = allLines.slice(0, MAX_PATCH_LINES);
     const RE_HUNK_HEADER =
         /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@[ ]?(.*)/;
     const result: string[] = [`## file: '${file.filename?.trim()}'`];
@@ -239,6 +267,11 @@ export function convertToUnifiedDiffWithLineNumbers(
             result.push(`${String(newLine).padStart(6)} ${line}`);
             newLine++;
         }
+    }
+
+    const totalLines = patchLineCount(allLines);
+    if (totalLines > MAX_PATCH_LINES) {
+        result.push(patchLineLimitNote(totalLines));
     }
 
     return result.join('\n');

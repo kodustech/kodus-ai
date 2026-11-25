@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
+import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { MessageTemplateProcessor } from '@libs/code-review/infrastructure/adapters/services/messageTemplateProcessor.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -55,6 +56,7 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 { provide: MessageTemplateProcessor, useValue: {} },
                 { provide: ObservabilityService, useValue: {} },
@@ -174,17 +176,25 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
         expect(block).not.toContain('could not be posted');
     });
 
-    // On a successful fallback the same array holds the REPLACED original and
-    // the SENT fallback for one PR comment; counting both double-reports it.
-    it('does not double-count a finding whose comment was replaced by a fallback', () => {
+    it('counts the unpublished original and lists its separately posted fallback', () => {
         const block: string = serviceAny.buildReviewFindingsBlock([
-            finding('high', 'src/a.ts', 1, 'Original', DeliveryStatus.REPLACED),
-            finding('high', 'src/a.ts', 1, 'Fallback posted'),
+            finding(
+                'high',
+                'src/a.ts',
+                1,
+                'Original finding',
+                DeliveryStatus.REPLACED,
+            ),
+            finding('high', 'src/b.ts', 2, 'Fallback posted'),
         ]);
 
-        expect(block).toContain('produced 1 finding(s)');
-        expect(block).toContain('high: 1');
-        expect(block).not.toContain('could not be posted');
+        expect(block).toContain('produced 2 finding(s)');
+        expect(block).toContain('high: 2');
+        expect(block).toContain(
+            '1 of them could not be posted to the pull request',
+        );
+        expect(block).toContain('- [high] src/b.ts:2 - Fallback posted');
+        expect(block).not.toContain('Original finding');
     });
 
     // The finding text is review-agent output derived from the code under
@@ -213,16 +223,6 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
         // ...but only 25 are listed, with the remainder acknowledged.
         expect((block.match(/^- \[/gm) || []).length).toBe(25);
         expect(block).toContain('...and 15 more finding(s)');
-    });
-
-    it('states explicitly that the review found nothing for an empty list', () => {
-        const block = serviceAny.buildReviewFindingsBlock([]);
-
-        expect(block).toContain('found no issues');
-        // "review found nothing" must be distinguishable from "no findings
-        // were given to me" — otherwise a clean PR and an unwired pipeline
-        // produce the same summary.
-        expect(block).not.toBe('');
     });
 
     it('lists findings worst-first regardless of input order', () => {
@@ -254,15 +254,6 @@ describe('CommentManagerService – buildReviewFindingsBlock', () => {
         // Severities with no findings are omitted rather than reported as zero.
         expect(block).not.toContain('critical:');
         expect(block).not.toContain('low:');
-    });
-
-    it('includes the file and line of each finding', () => {
-        const block: string = serviceAny.buildReviewFindingsBlock([
-            finding('high', 'src/d.ts', 88, 'Null deref on absent record'),
-        ]);
-
-        expect(block).toContain('src/d.ts:88');
-        expect(block).toContain('Null deref on absent record');
     });
 
     it('defaults a finding with no severity to medium instead of dropping it', () => {

@@ -7,18 +7,17 @@
 // stores, production's sandbox. What it wrote is read from those stores, so a
 // write counts only when it went through production's gate and tools.
 //
-//   node evals/thread-actions/run.js [--model=<id>] [--kind=rule|memory] [--gate] [--output=<result.json>] [--limit=N] [--concurrency=N] [--show]
+//   node evals/thread-actions/run.js [--model=<id>] [--kind=rule|memory] [--metric=writes|offers] [--gate] [--output=<result.json>] [--limit=N] [--concurrency=N] [--show]
 //
-// --kind   the cases of one action: Kody Rules (stage thread-rule) or memories (thread-memory)
-// --show   prints each reply; --show=prompt also the prompt
-//
-// The number the gate reads counts the write checks: the memory or rule lands
-// when the developer asks for it (and nothing else does), and nothing is
-// written in any other thread. Whether the reply offers the action is reported
-// beside it (`reported`), never gated: production's MCP client drops the
-// tools' proactiveHint (MCP SDK 1.29.0 ToolAnnotationsSchema, at
-// libs/mcp-server/mcp-adapter/client.ts listTools), so the prompt never carries
-// the offers block. Those checks are the proof for that fix.
+// --kind    the cases of one action: Kody Rules (stage thread-rule) or memories (thread-memory)
+// --metric  what the gate reads (default writes). writes: the memory or rule
+//           lands when the developer asks for it (and nothing else does), and
+//           nothing is written in any other thread. offers (stages
+//           thread-rule-offers, thread-memory-offers): the reply offers the
+//           action when the thread calls for it and not otherwise, judged on
+//           the reply, over the threads that do not ask Kody to act. The other
+//           number is reported beside it (`reported`), never gated.
+// --show    prints each reply; --show=prompt also the prompt
 //
 // Exit: 0 pass, 1 below the floor (--gate), 2 did not measure (evals/README.md).
 const crypto = require('crypto');
@@ -43,9 +42,14 @@ if (KIND && !['rule', 'memory'].includes(KIND)) {
     console.error(`--kind is rule or memory, not ${KIND}`);
     process.exit(2);
 }
+const OFFERS = (args.metric || 'writes') === 'offers';
+if (!['writes', 'offers'].includes(args.metric || 'writes')) {
+    console.error(`--metric is writes or offers, not ${args.metric}`);
+    process.exit(2);
+}
 const TARGETS = require('./targets.json').models || {};
-const TARGET = (TARGETS[MODEL] || {})[KIND || 'all'] || {};
-const cases = CASES.filter((c) => !KIND || kindOf(c) === KIND).slice(0, args.limit ? Number(args.limit) : undefined);
+const TARGET = (TARGETS[MODEL] || {})[`${KIND || 'all'}${OFFERS ? '-offers' : ''}`] || {};
+const cases = CASES.filter((c) => (!KIND || kindOf(c) === KIND) && (!OFFERS || !c.expect.act)).slice(0, args.limit ? Number(args.limit) : undefined);
 
 // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
 if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
@@ -110,13 +114,14 @@ async function runCase(c, i, judgeKey, kodus) {
               { what: `writes nothing else (${writes})`, ok: written.count === 1 },
           ]
         : [{ what: `writes nothing nobody asked for (intent: ${decision?.intent ?? 'none'}, ${writes})`, ok: decision?.intent !== 'act' && written.count === 0 }];
-    // Reported, not gated: whether the reply offers the action.
+    // Whether the reply offers the action: only where Kody was not asked to act.
     let offer = null;
     if (!c.expect.act) {
         const offered = await assertsClaim(judgeKey, OFFER_CLAIM[c.kind], reply);
         const want = Boolean(c.expect.offer);
         offer = { what: `${want ? 'offers' : 'does not offer'} the ${c.kind} action (intent: ${decision?.intent ?? 'none'}${decision?.tool ? `, ${decision.tool}` : ''})`, ok: offered === want };
     }
+    if (OFFERS) return { hits: offer.ok ? 1 : 0, total: 1, detail: [offer], writes: detail, reply: reply.slice(0, 4000) };
     return { hits: detail.filter((d) => d.ok).length, total: detail.length, detail, offer, reply: reply.slice(0, 4000) };
 }
 
@@ -148,17 +153,19 @@ async function main() {
 
     const hits = results.reduce((n, r) => n + r.hits, 0);
     const total = results.reduce((n, r) => n + r.total, 0);
-    const offers = results.map((r) => r.offer).filter(Boolean);
-    const offersRight = offers.filter((o) => o.ok).length;
+    // The checks the gate does not read: the offers, or in offers mode the writes.
+    const other = results.flatMap((r) => (OFFERS ? r.writes || [] : r.offer ? [r.offer] : []));
+    const otherRight = other.filter((o) => o.ok).length;
+    const names = { writes: 'of write checks right', offers: 'of offer checks right' };
     const result = {
         eval: 'thread-actions',
         question: evalQuestion('evals/thread-actions'),
         model: MODEL,
         judge: JUDGE_MODEL,
-        kind: KIND || 'all',
+        kind: `${KIND || 'all'}${OFFERS ? '-offers' : ''}`,
         runs: 1,
-        metric: { name: 'of write checks right', value: total ? hits / total : null, floor: TARGET.floor ?? null, baseline: TARGET.observed ?? null },
-        reported: { name: 'of offer checks right (not gated)', value: offers.length ? offersRight / offers.length : null, hits: offersRight, total: offers.length },
+        metric: { name: names[OFFERS ? 'offers' : 'writes'], value: total ? hits / total : null, floor: TARGET.floor ?? null, baseline: TARGET.observed ?? null },
+        reported: { name: `${names[OFFERS ? 'writes' : 'offers']} (not gated)`, value: other.length ? otherRight / other.length : null, hits: otherRight, total: other.length },
         cases: results,
         tokens: tokensUsed(),
         infra: { errored, total: cases.length },
@@ -168,10 +175,11 @@ async function main() {
         fs.writeFileSync(args.output, `${JSON.stringify(result, null, 2)}\n`);
     }
     for (const r of results) {
-        const failed = [...(r.detail || []), ...(r.offer ? [r.offer] : [])].filter((d) => !d.ok);
+        const failed = [...(r.detail || []), ...(r.offer ? [r.offer] : []), ...(r.writes || [])].filter((d) => !d.ok);
         console.log(`  ${r.unmeasured ? 'N/A ' : failed.length ? 'MISS' : 'ok  '} ${r.id}${failed.length ? `: ${failed.map((d) => d.what).join(' · ')}` : ''}`);
     }
-    console.log(`thread-actions${KIND ? ` (${KIND})` : ''}: ${hits}/${total} write checks right · offers ${offersRight}/${offers.length} (not gated; judge ${JUDGE_MODEL}) · ${errored} of ${cases.length} cases did not measure`);
+    const [gated, notGated] = OFFERS ? ['offer', 'write'] : ['write', 'offer'];
+    console.log(`thread-actions${KIND ? ` (${KIND})` : ''}: ${hits}/${total} ${gated} checks right · ${notGated} checks ${otherRight}/${other.length} (not gated) · judge ${JUDGE_MODEL} · ${errored} of ${cases.length} cases did not measure`);
     if (errored > cases.length * 0.05) {
         console.error(`not measured: ${errored} of ${cases.length} cases failed to run (see above)`);
         return 2;
@@ -182,7 +190,7 @@ async function main() {
         return 2;
     }
     if (args.gate && result.metric.floor === null) {
-        console.error(`not measured: no floor for ${MODEL} (${KIND || 'all'}) in evals/thread-actions/targets.json, so --gate cannot judge it`);
+        console.error(`not measured: no floor for ${MODEL} (${result.kind}) in evals/thread-actions/targets.json, so --gate cannot judge it`);
         return 2;
     }
     if (args.gate && result.metric.value < result.metric.floor) {

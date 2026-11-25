@@ -2,14 +2,14 @@ import type { ReviewIssue, ReviewResult, Severity } from '../types/review.js';
 
 function getSeverityEmoji(severity: Severity): string {
     switch (severity) {
+        case 'critical':
+            return '🔴';
         case 'error':
             return '🔴';
         case 'warning':
             return '🟡';
         case 'info':
             return '🔵';
-        default:
-            return '⚪';
     }
 }
 
@@ -53,6 +53,9 @@ class MarkdownFormatter {
         lines.push(`- **Duration:** ${result.duration}ms`);
         lines.push('');
 
+        const criticalCount = result.issues.filter(
+            (i) => i.severity === 'critical',
+        ).length;
         const errorCount = result.issues.filter(
             (i) => i.severity === 'error',
         ).length;
@@ -65,6 +68,7 @@ class MarkdownFormatter {
 
         lines.push('| Severity | Count |');
         lines.push('|----------|-------|');
+        lines.push(`| 🔴 Critical | ${criticalCount} |`);
         lines.push(`| 🔴 Errors | ${errorCount} |`);
         lines.push(`| 🟡 Warnings | ${warningCount} |`);
         lines.push(`| 🔵 Info | ${infoCount} |`);
@@ -74,6 +78,9 @@ class MarkdownFormatter {
             lines.push('## Issues');
             lines.push('');
 
+            const criticalIssues = result.issues.filter(
+                (i) => i.severity === 'critical',
+            );
             const errorIssues = result.issues.filter(
                 (i) => i.severity === 'error',
             );
@@ -83,6 +90,14 @@ class MarkdownFormatter {
             const infoIssues = result.issues.filter(
                 (i) => i.severity === 'info',
             );
+
+            if (criticalIssues.length > 0) {
+                criticalIssues.forEach((issue) => {
+                    lines.push(formatIssue(issue));
+                    lines.push('---');
+                    lines.push('');
+                });
+            }
 
             if (errorIssues.length > 0) {
                 errorIssues.forEach((issue) => {

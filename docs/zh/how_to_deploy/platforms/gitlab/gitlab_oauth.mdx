@@ -1,10 +1,15 @@
 ---
-title: 创建 GitLab OAuth App（GitLab 登录）
-description: "创建为 Kodus 用户启用「Sign in with GitLab」的 GitLab OAuth App —— 与用于代码审查的 webhook 集成相互独立。"
+title: GitLab OAuth App
+description: "创建支持 \"Sign in with GitLab\" 以及用于代码审查的 OAuth 连接的 GitLab 应用，包括需要设置的重定向 URI、scopes 和环境变量。"
 icon: gitlab
 ---
 
-如果您希望用户通过 GitLab 登录 Kodus，请使用此方式。这与用于代码审查自动化的 GitLab Webhook 集成是分开的。
+一个 GitLab 应用在 Kodus 中涵盖两件事：
+
+- 登录页面上的 **Sign in with GitLab**。
+- **Connect your Git tool** 步骤中的 **Install Gitlab app**，或在 **Repositories** 上连接 GitLab 时 **OAuth** 选项卡中的 **Go to OAuth**。两者都使用 OAuth 连接 GitLab 以进行代码审查。
+
+如果用户使用电子邮件登录，并通过[个人或群组访问令牌](/zh/how_to_use/code_review/general_config/gitlab_pat)连接 GitLab，请跳过本页。令牌连接不需要 OAuth 应用。
 
 ## 先决条件
 
@@ -12,48 +17,60 @@ icon: gitlab
 
 ## 步骤 1：创建 OAuth App
 
-1. 在 GitLab 中，转到 **用户设置** > **应用程序**
+1. 在 GitLab 中，转到 **User Settings** > **Applications**
 2. 点击 **New application**
-3. 填写应用名称和重定向 URL
+3. 填写应用名称
 
-## 步骤 2：配置回调 URL
+## 步骤 2：配置重定向 URI
 
-将 **Redirect URI** 设置为：
+在 **Redirect URI** 中添加这两个 URI，每行一个：
 
 ```
 WEB_DOMAIN/api/auth/callback/gitlab
+WEB_DOMAIN/setup/gitlab
 ```
 
-确保 URL 与您的实际域名和协议（http/https）一致。
+第一个用于完成 **Sign in with GitLab**。第二个用于在您通过 OAuth 连接 GitLab 后从 GitLab 返回。请确保它们与您的实际 Web 域名和协议（http/https）一致。
 
 ## 步骤 3：配置权限范围
 
-在 GitLab 中设置与以下一致的 scopes：
+选择这些 scopes：
+
+- `api`
+- `read_user`
+- `read_repository`
+
+每个流程会请求各自的 scopes：
+
+- **Sign in with GitLab** 仅请求 `read_user`。
+- **Install Gitlab app** 和 **Go to OAuth** 请求 `WEB_GITLAB_SCOPES` 中的 scopes（步骤 4）。
+
+Kody 需要 `api` 来发布审查评论，以及创建、编辑和删除 webhook。`read_api` 可以读取，但不能发布。
+
+<Warning>
+  `.env.schema` 将 `WEB_GITLAB_SCOPES` 默认设为 `read_api read_user read_repository`。使用该值建立的连接可以读取您的仓库，但无法发布评论或管理 webhook。请设置步骤 4 中所示的值。
+</Warning>
+
+## 步骤 4：将凭据添加到 .env
+
+从 GitLab 复制 **Application ID** 和 **Secret**。这两个值要填入两组变量，因为 Web 应用和 API 各自读取自己的变量：
 
 ```
-WEB_GITLAB_SCOPES="read_api read_user read_repository"
-```
+# Sign in with GitLab
+WEB_OAUTH_GITLAB_CLIENT_ID="your_application_id_here"
+WEB_OAUTH_GITLAB_CLIENT_SECRET="your_secret_here"
 
-## 步骤 4：将凭据写入 .env
-
-创建完成后，从 GitLab 复制凭据并写入 Kodus 环境变量：
-
-```
-WEB_OAUTH_GITLAB_CLIENT_ID="your_client_id_here"
-WEB_OAUTH_GITLAB_CLIENT_SECRET="your_client_secret_here"
-WEB_GITLAB_SCOPES="read_api read_user read_repository"
+# Connect GitLab with OAuth
+GLOBAL_GITLAB_CLIENT_ID="your_application_id_here"
+GLOBAL_GITLAB_CLIENT_SECRET="your_secret_here"
+GLOBAL_GITLAB_REDIRECT_URL="WEB_DOMAIN/setup/gitlab"
+WEB_GITLAB_SCOPES="api read_user read_repository"
 WEB_GITLAB_OAUTH_URL="https://gitlab.com/oauth/authorize"
+API_GITLAB_TOKEN_URL="https://gitlab.com/oauth/token"
 ```
 
-如果您使用自托管 GitLab，请将 OAuth URL 替换为您的实例域名（例如 `https://gitlab.yourdomain.com/oauth/authorize`）。
+对于自托管 GitLab，请将 `WEB_GITLAB_OAUTH_URL` 和 `API_GITLAB_TOKEN_URL` 中的主机替换为您的实例域名（例如 `https://gitlab.yourdomain.com/oauth/authorize` 和 `https://gitlab.yourdomain.com/oauth/token`）。
 
-## 环境变量摘要
+如果您只使用两者之一，则只设置对应的变量。
 
-```bash
-WEB_OAUTH_GITLAB_CLIENT_ID="your_client_id_here"
-WEB_OAUTH_GITLAB_CLIENT_SECRET="your_client_secret_here"
-WEB_GITLAB_SCOPES="read_api read_user read_repository"
-WEB_GITLAB_OAUTH_URL="https://gitlab.com/oauth/authorize"
-```
-
-重启 Web 应用以生效。
+重启 Web 应用和 API 以生效。

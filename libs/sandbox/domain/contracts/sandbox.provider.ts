@@ -27,6 +27,13 @@ export interface CreateSandboxParams {
     unifiedDiff?: string;
     /** Arbitrary key-value tags forwarded to the sandbox provider (e.g. E2B metadata for filtering/monitoring). */
     sandboxMetadata?: Record<string, string>;
+    /**
+     * The organization and team the sandbox works for. Decides whether it
+     * needs the fixed egress IP (SandboxEgressPolicyService); without them
+     * it keeps the fixed IP. Never sent to the sandbox provider.
+     */
+    organizationId?: string;
+    teamId?: string;
 }
 
 export interface SandboxRunOptions {
@@ -39,6 +46,23 @@ export interface SandboxRunResult {
     stdout: string;
     stderr?: string;
     exitCode: number;
+}
+
+/**
+ * How one lease used its sandbox: when it was handed out, when its holder
+ * started its first command and finished its last one, and when the lease
+ * went back. `stopAt` is set only when that release left the sandbox with no
+ * holder: the stop it scheduled (E2B pauses and the idle-kill cron kills it; a
+ * local checkout is deleted at once). A holder that joins before then cancels
+ * it, and the sandbox runs on that holder's time.
+ */
+export interface SandboxUsage {
+    consumer: string;
+    acquiredAt: Date;
+    firstUsedAt?: Date;
+    lastUsedAt?: Date;
+    releasedAt?: Date;
+    stopAt?: Date;
 }
 
 export interface SandboxInstance {
@@ -82,6 +106,11 @@ export interface SandboxInstance {
         content: string,
         opts?: { timeoutMs?: number },
     ): Promise<void>;
+    /**
+     * This lease's use of the sandbox so far. Set by the lease manager on the
+     * instances it hands out; absent on the null sandbox.
+     */
+    usage?(): SandboxUsage;
 }
 
 export interface ISandboxProvider {

@@ -25,7 +25,7 @@ import {
 
 const DEFAULT_LANGUAGE = 'en-US';
 const PARSER_FALLBACK_FRAGMENT = 'error parsing validation result';
-const MAX_OUTPUT_TOKENS = 20_000;
+import { analyzerRequestedTokens } from './model-window';
 /** Verify passes per validation; requirements past this keep the analyzer's state. */
 const MAX_VERIFIED_CLAIMS = 8;
 
@@ -171,18 +171,21 @@ export class IntentJudge {
                             { role: 'user', content: prompt },
                         ],
                         {
-                            maxTokens: MAX_OUTPUT_TOKENS,
+                            maxTokens: analyzerRequestedTokens(this.model),
                             submitResultTool: true,
+                            // The limit must stop the model call, not only the
+                            // wait: an abandoned call kept running (and billing)
+                            // to the 30-minute agent ceiling.
+                            timeoutMs: this.policy.analyzerTimeoutMs,
                         },
                         'businessRulesAnalyzer',
                     ),
                     this.policy.analyzerTimeoutMs,
                 );
                 // The result tool is the contract; text is the fallback for a
-                // model that answered without calling it.
-                const parsed = parseBusinessRulesValidationResult(
-                    result.structured ?? result.content,
-                );
+                // model that answered without calling it, or whose call
+                // carried nothing usable while its text held the verdict.
+                const parsed = parseAnalyzerAnswer(result);
                 if (!isParserFallback(parsed) || attempt === attempts) {
                     return parsed;
                 }
@@ -317,7 +320,12 @@ export class IntentJudge {
     /** One completion on the harness: no tools, or just the result tool. */
     private async complete(
         messages: Message[],
-        options: { maxTokens?: number; submitResultTool?: boolean },
+        options: {
+            maxTokens?: number;
+            submitResultTool?: boolean;
+            /** Aborts the model call; defaults to the agent ceiling. */
+            timeoutMs?: number;
+        },
         phase: string,
     ): Promise<{ content: string; structured?: unknown }> {
         const system = messages.find((m) => m.role === 'system')?.content;
@@ -348,6 +356,7 @@ export class IntentJudge {
 
         const { ctx, cleanup } = createAgentRunContext({
             parentSignal: this.telemetry.signal,
+            timeoutMs: options.timeoutMs,
             runId: `business-rules:${phase}`,
         });
         try {
@@ -384,15 +393,13 @@ export class IntentJudge {
     ): Promise<T> {
         let timer: NodeJS.Timeout | undefined;
         const timeout = new Promise<never>((_, reject) => {
-            timer = setTimeout(
-                () =>
-                    reject(
-                        new Error(
-                            `Timeout after ${timeoutMs}ms in business-rules analyzer`,
-                        ),
+            timer = setTimeout(() => {
+                reject(
+                    new Error(
+                        `Timeout after ${timeoutMs}ms in business-rules analyzer`,
                     ),
-                timeoutMs,
-            );
+                );
+            }, timeoutMs);
         });
         try {
             return await Promise.race([promise, timeout]);
@@ -400,6 +407,28 @@ export class IntentJudge {
             clearTimeout(timer);
         }
     }
+}
+
+function parseAnalyzerAnswer(answer: {
+    content: string;
+    structured?: unknown;
+}): ValidationResult {
+    if (answer.structured === undefined) {
+        return parseBusinessRulesValidationResult(answer.content);
+    }
+    const fromTool = parseBusinessRulesValidationResult(answer.structured);
+    if (!isParserFallback(fromTool) || !answer.content.trim()) {
+        return fromTool;
+    }
+    // Only a text that carries a verdict replaces the unusable call: the
+    // requirements, a status, or a stated need for more information. Chatter
+    // keeps the parse failure visible.
+    const fromText = parseBusinessRulesValidationResult(answer.content);
+    const carriesVerdict =
+        !!fromText.requirements ||
+        !!fromText.status ||
+        (fromText.needsMoreInfo && !isParserFallback(fromText));
+    return carriesVerdict ? fromText : fromTool;
 }
 
 function isParserFallback(result: ValidationResult): boolean {

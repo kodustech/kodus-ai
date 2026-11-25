@@ -7,7 +7,11 @@ import {
 
 import { decryptCliSecret } from '@libs/code-review/domain/custom-agents/cli-secret-cipher';
 import { CLI_SECRET_MASK } from '@libs/code-review/domain/custom-agents/cli-secrets';
-import { CUSTOM_AGENTS_PLAN_REQUIRED } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import {
+    CUSTOM_AGENTS_BETA_REQUIRED,
+    CUSTOM_AGENTS_PLAN_REQUIRED,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import { environment } from '@libs/ee/configs/environment';
 
 import {
     GetCustomAgentsStatusUseCase,
@@ -18,6 +22,16 @@ import {
     TRY_RUN_STALE_MS,
     TryCustomAgentUseCase,
 } from './try-custom-agent.use-case';
+
+// Custom agents read the install's mode. Pinned to Cloud here, as CI runs;
+// the self-hosted cases below switch it.
+jest.mock('@libs/ee/configs/environment', () => {
+    const actual = jest.requireActual('@libs/ee/configs/environment');
+    return {
+        ...actual,
+        environment: { ...actual.environment, API_CLOUD_MODE: true },
+    };
+});
 
 const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
 
@@ -76,6 +90,81 @@ describe('ResolveCustomAgentUseCase', () => {
     const codeManagementService = {
         getDefaultBranch: jest.fn().mockResolvedValue('main'),
     };
+
+    it('says the files could not be listed when the listing fails, not that the repository has none', async () => {
+        const knowledgeReader = {
+            resolve: jest.fn().mockResolvedValue([]),
+            discover: jest
+                .fn()
+                .mockRejectedValue(new Error('429 rate limited')),
+        };
+        const useCase = new ResolveCustomAgentUseCase(
+            parametersService(storedConfig()) as any,
+            codeManagementService as any,
+            knowledgeReader,
+        );
+
+        const report = await useCase.execute({
+            organizationAndTeamData,
+            repositoryId: 'repo-1',
+            knowledge: [],
+            discover: true,
+        });
+
+        expect(report.knowledge).toMatchObject({
+            status: 'ok',
+            candidates: [],
+            discoveredIn: {
+                branch: 'main',
+                available: false,
+                reason: 'Could not list the files of ledger on main.',
+            },
+        });
+    });
+
+    it('leaves out an item whose repository is not text and checks the others', async () => {
+        const knowledgeReader = {
+            resolve: jest.fn(async ({ items }: any) =>
+                items.map((item: any) => ({
+                    path: item.path,
+                    kind: item.kind,
+                    found: true,
+                    issues: [],
+                    tokens: 10,
+                })),
+            ),
+            discover: jest.fn().mockResolvedValue([]),
+        };
+        const useCase = new ResolveCustomAgentUseCase(
+            parametersService(storedConfig()) as any,
+            codeManagementService as any,
+            knowledgeReader,
+        );
+
+        const report = await useCase.execute({
+            organizationAndTeamData,
+            repositoryId: 'repo-1',
+            knowledge: [
+                {
+                    path: 'docs/ledger.md',
+                    kind: 'doc',
+                    linkedTo: [{ agentId: 'ledger-agent' }],
+                },
+                {
+                    path: 'docs/odd.md',
+                    kind: 'doc',
+                    repository: 42 as unknown as string,
+                    linkedTo: [{ agentId: 'ledger-agent' }],
+                },
+            ],
+        });
+
+        expect(report.knowledge.status).toBe('ok');
+        const items =
+            report.knowledge.status === 'ok' ? report.knowledge.items : [];
+        expect(items.map((item) => item.path)).toEqual(['docs/ledger.md']);
+        expect(items[0]).toMatchObject({ found: true });
+    });
 
     it('checks the knowledge against the default branch and flags Kody Rules sources', async () => {
         const knowledgeReader = {
@@ -153,6 +242,441 @@ describe('ResolveCustomAgentUseCase', () => {
         expect(report.knowledge.candidates).toEqual([
             { path: 'AGENTS.md', kind: 'doc', kodyRuleSource: true },
         ]);
+    });
+
+    describe('skills and docs of another repository (#2329)', () => {
+        const RULES = 'acme-ledger/ledger-rules';
+        const listing = [
+            {
+                id: 'repo-1',
+                name: 'ledger',
+                full_name: 'acme-ledger/ledger',
+                default_branch: 'main',
+                selected: true,
+                visibility: 'public',
+            },
+            {
+                id: 'repo-9',
+                name: 'ledger-rules',
+                full_name: RULES,
+                default_branch: 'trunk',
+                selected: true,
+                visibility: 'private',
+            },
+        ];
+        const cm = {
+            // The provider answers each repository's own default branch.
+            getDefaultBranch: jest.fn(async ({ repository }) =>
+                // Not the listing's `trunk`: the provider's answer wins.
+                repository.id === 'repo-9' ? 'release' : 'main',
+            ),
+            getRepositories: jest.fn().mockResolvedValue(listing),
+        };
+        const reader = () => ({
+            resolve: jest.fn(async ({ items }) =>
+                items.map((item: { path: string; kind: string }) => ({
+                    ...item,
+                    found: true,
+                    issues: [],
+                    tokens: 10,
+                })),
+            ),
+            discover: jest
+                .fn()
+                .mockResolvedValue([
+                    { path: 'stack/ledger/rules/postings.md', kind: 'doc' },
+                ]),
+        });
+
+        it('checks each repository on its own branch and names where each item lives', async () => {
+            const knowledgeReader = reader();
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(
+                    storedConfig({
+                        // The linked repository's own ref steers code
+                        // context, not skills and docs: they read at the
+                        // item's ref, else the provider's default branch.
+                        linkedRepositories: [
+                            { repository: RULES, ref: 'main' },
+                        ],
+                    }),
+                ) as any,
+                cm as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [
+                    {
+                        path: 'docs/ledger.md',
+                        kind: 'doc',
+                        linkedTo: ['main-review'],
+                    },
+                    {
+                        path: 'stack/ledger/rules/postings.md',
+                        kind: 'doc',
+                        repository: RULES,
+                        linkedTo: ['main-review'],
+                    },
+                    {
+                        path: 'rules.md',
+                        kind: 'doc',
+                        repository: 'someone-else/rules',
+                        linkedTo: ['main-review'],
+                    },
+                ],
+                discover: true,
+                source: { repository: RULES },
+                listConnected: true,
+            });
+
+            expect(knowledgeReader.resolve).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: {
+                        id: 'repo-9',
+                        name: 'ledger-rules',
+                        branch: 'release',
+                    },
+                    items: [
+                        { path: 'stack/ledger/rules/postings.md', kind: 'doc' },
+                    ],
+                }),
+            );
+            expect(knowledgeReader.discover).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: {
+                        id: 'repo-9',
+                        name: 'ledger-rules',
+                        branch: 'release',
+                    },
+                }),
+            );
+            if (report.knowledge.status !== 'ok')
+                throw new Error('expected ok');
+            expect(
+                report.knowledge.items.map((item) => [
+                    item.repository,
+                    item.path,
+                    item.found,
+                    item.branch,
+                ]),
+            ).toEqual([
+                [undefined, 'docs/ledger.md', true, 'main'],
+                [RULES, 'stack/ledger/rules/postings.md', true, 'release'],
+                ['someone-else/rules', 'rules.md', false, undefined],
+            ]);
+            expect(report.knowledge.items[2].issues).toEqual([
+                {
+                    severity: 'error',
+                    message:
+                        'someone-else/rules is not connected to Kodus; select it in Git settings.',
+                },
+            ]);
+            expect(report.knowledge.discoveredIn).toEqual({
+                repository: RULES,
+                branch: 'release',
+                visibility: 'private',
+                available: true,
+            });
+            expect(report.knowledge.candidates).toEqual([
+                {
+                    path: 'stack/ledger/rules/postings.md',
+                    kind: 'doc',
+                    kodyRuleSource: false,
+                },
+            ]);
+            expect(report.knowledge.linkedRepositories).toEqual([RULES]);
+            expect(report.knowledge.connectedRepositories).toEqual([RULES]);
+            expect(report.knowledge.repositoryVisibility).toBe('public');
+        });
+
+        it('shows and reads the plain branch name when the provider answers a full ref (Azure)', async () => {
+            const knowledgeReader = reader();
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                {
+                    ...cm,
+                    getDefaultBranch: jest.fn(async () => 'refs/heads/release'),
+                } as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: RULES },
+            });
+
+            expect(report.repository.branch).toBe('release');
+            expect(knowledgeReader.discover).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: expect.objectContaining({
+                        id: 'repo-9',
+                        branch: 'release',
+                    }),
+                }),
+            );
+        });
+
+        it("falls back to the listing's default branch when the provider cannot say", async () => {
+            const knowledgeReader = reader();
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                {
+                    ...cm,
+                    // The reviewed repository answers; the rules one fails.
+                    getDefaultBranch: jest.fn(async ({ repository }) => {
+                        if (repository.id === 'repo-9') throw new Error('500');
+                        return 'main';
+                    }),
+                } as any,
+                knowledgeReader,
+            );
+
+            await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: RULES },
+            });
+
+            expect(knowledgeReader.discover).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: {
+                        id: 'repo-9',
+                        name: 'ledger-rules',
+                        branch: 'trunk',
+                    },
+                }),
+            );
+        });
+
+        it('lists this repository when the source is not a string, instead of failing the check', async () => {
+            const knowledgeReader = reader();
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                cm as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: 12, ref: ['v3'] } as any,
+            });
+
+            expect(report.knowledge.status).toBe('ok');
+            expect(knowledgeReader.discover).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: expect.objectContaining({ id: 'repo-1' }),
+                }),
+            );
+        });
+
+        it('does not list the integration repositories on a plain draft check', async () => {
+            const lister = {
+                ...cm,
+                getRepositories: jest.fn().mockResolvedValue(listing),
+            };
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                lister as any,
+                reader(),
+            );
+
+            await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [
+                    {
+                        path: 'docs/ledger.md',
+                        kind: 'doc',
+                        linkedTo: ['main-review'],
+                    },
+                ],
+                discover: true,
+            });
+
+            expect(lister.getRepositories).not.toHaveBeenCalled();
+        });
+
+        it('lists the repositories once for edits in a row, and again after a failure', async () => {
+            const lister = {
+                ...cm,
+                getRepositories: jest
+                    .fn()
+                    .mockRejectedValueOnce(new Error('503'))
+                    .mockResolvedValue(listing),
+            };
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                lister as any,
+                reader(),
+            );
+            const check = () =>
+                useCase.execute({
+                    organizationAndTeamData,
+                    repositoryId: 'repo-1',
+                    knowledge: [
+                        {
+                            path: 'stack/ledger/rules/postings.md',
+                            kind: 'doc',
+                            repository: RULES,
+                            linkedTo: [],
+                        },
+                    ],
+                });
+
+            await check();
+            await check();
+            await check();
+
+            // The failed listing is not kept; the next one is, for the edit
+            // after it.
+            expect(lister.getRepositories).toHaveBeenCalledTimes(2);
+        });
+
+        it('finds a Bitbucket or Azure repository listed without a full name', async () => {
+            const knowledgeReader = reader();
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                {
+                    ...cm,
+                    getRepositories: jest.fn().mockResolvedValue([
+                        {
+                            id: 'repo-9',
+                            name: 'ledger-rules',
+                            organizationName: 'acme-ledger',
+                            default_branch: 'main',
+                            selected: true,
+                        },
+                    ]),
+                } as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: RULES },
+                listConnected: true,
+            });
+
+            if (report.knowledge.status !== 'ok')
+                throw new Error('expected ok');
+            expect(report.knowledge.discoveredIn?.available).toBe(true);
+            expect(report.knowledge.connectedRepositories).toEqual([RULES]);
+        });
+
+        it('offers and reads only repositories connected to Kodus', async () => {
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                {
+                    ...cm,
+                    getRepositories: jest.fn().mockResolvedValue([
+                        ...listing,
+                        {
+                            id: 'repo-7',
+                            name: 'unconnected-rules',
+                            full_name: 'acme-ledger/unconnected-rules',
+                            default_branch: 'main',
+                            selected: false,
+                        },
+                    ]),
+                } as any,
+                reader(),
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: 'acme-ledger/unconnected-rules' },
+                listConnected: true,
+            });
+
+            if (report.knowledge.status !== 'ok')
+                throw new Error('expected ok');
+            expect(report.knowledge.connectedRepositories).toEqual([RULES]);
+            expect(report.knowledge.discoveredIn).toMatchObject({
+                available: false,
+                reason: 'acme-ledger/unconnected-rules is not connected to Kodus; select it in Git settings.',
+            });
+        });
+
+        it('says the repositories could not be listed, not that they are unreachable', async () => {
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                {
+                    ...cm,
+                    getRepositories: jest
+                        .fn()
+                        .mockRejectedValue(new Error('503')),
+                } as any,
+                reader(),
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [
+                    {
+                        path: 'stack/ledger/rules/postings.md',
+                        kind: 'doc',
+                        repository: RULES,
+                        linkedTo: ['main-review'],
+                    },
+                ],
+                listConnected: true,
+            });
+
+            if (report.knowledge.status !== 'ok')
+                throw new Error('expected ok');
+            expect(report.knowledge.listingFailed).toBe(true);
+            expect(report.knowledge.connectedRepositories).toEqual([]);
+            expect(report.knowledge.items[0].issues).toEqual([
+                {
+                    severity: 'error',
+                    message: `Could not list this team's repositories, so ${RULES} was not checked. Try again.`,
+                },
+            ]);
+        });
+
+        it('says when the repository to list is not reachable', async () => {
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                cm as any,
+                reader(),
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: 'someone-else/rules', ref: 'v1' },
+            });
+
+            if (report.knowledge.status !== 'ok')
+                throw new Error('expected ok');
+            expect(report.knowledge.discoveredIn).toEqual({
+                repository: 'someone-else/rules',
+                branch: 'v1',
+                available: false,
+                reason: 'someone-else/rules is not connected to Kodus; select it in Git settings.',
+            });
+            expect(report.knowledge.candidates).toEqual([]);
+        });
     });
 
     describe('ast-grep rule file path', () => {
@@ -665,6 +1189,56 @@ describe('TryCustomAgentUseCase', () => {
         expect(runner.runCustomAgentOnPullRequest).not.toHaveBeenCalled();
     });
 
+    // Custom agents are a beta feature: a self-hosted install runs them only
+    // with BETA_FEATURES=true, whatever its plan (#2425).
+    describe('on a self-hosted install', () => {
+        const betaFeatures = process.env.BETA_FEATURES;
+        const tryIt = (runner: { runCustomAgentOnPullRequest: jest.Mock }) =>
+            new TryCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                licenseService(TEAMS) as any,
+                runner,
+            ).execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                prUrl: 'https://git.example.test/ledger/pull/7',
+                agent: ledgerAgent(),
+            });
+
+        beforeEach(() => {
+            environment.API_CLOUD_MODE = false;
+            delete process.env.BETA_FEATURES;
+        });
+
+        afterEach(() => {
+            environment.API_CLOUD_MODE = true;
+            if (betaFeatures === undefined) {
+                delete process.env.BETA_FEATURES;
+            } else {
+                process.env.BETA_FEATURES = betaFeatures;
+            }
+        });
+
+        it.each([
+            ['unset', undefined],
+            ['false', 'false'],
+        ])(
+            'refuses with BETA_FEATURES %s without running the agent',
+            async (_name, value) => {
+                if (value !== undefined) process.env.BETA_FEATURES = value;
+                const runner = { runCustomAgentOnPullRequest: jest.fn() };
+
+                const run = tryIt(runner);
+
+                await expect(run).rejects.toBeInstanceOf(ForbiddenException);
+                await expect(run).rejects.toThrow(CUSTOM_AGENTS_BETA_REQUIRED);
+                expect(
+                    runner.runCustomAgentOnPullRequest,
+                ).not.toHaveBeenCalled();
+            },
+        );
+    });
+
     it('runs on a trial', async () => {
         const runner = {
             runCustomAgentOnPullRequest: jest.fn().mockResolvedValue(trace),
@@ -935,29 +1509,22 @@ describe('GetCustomAgentsStatusUseCase', () => {
     });
 
     it('reads file and PR-level findings of the repository over 30 days', async () => {
-        const aggregate = jest
-            .fn()
-            .mockReturnValueOnce({
-                toArray: async () => [
-                    {
-                        agentId: 'ledger-agent',
-                        prNumber: 7,
-                        deliveryStatus: 'sent',
-                    },
-                ],
-            })
-            .mockReturnValueOnce({
-                toArray: async () => [
-                    {
-                        agentId: 'ledger-agent',
-                        prNumber: 8,
-                        deliveryStatus: 'sent',
-                    },
-                ],
-            });
-        const useCase = new GetCustomAgentsStatusUseCase({
-            getNativeCollection: () => ({ aggregate }),
-        } as any);
+        const repository = {
+            findCustomAgentSuggestionRows: jest.fn(async () => [
+                {
+                    agentId: 'ledger-agent',
+                    prNumber: 7,
+                    deliveryStatus: 'sent',
+                },
+                {
+                    agentId: 'ledger-agent',
+                    prNumber: 8,
+                    deliveryStatus: 'sent',
+                },
+            ]),
+            findUnfollowedCustomAgentCitations: jest.fn(async () => []),
+        };
+        const useCase = new GetCustomAgentsStatusUseCase(repository as any);
 
         const result = await useCase.execute({
             organizationId: 'org-1',
@@ -974,27 +1541,16 @@ describe('GetCustomAgentsStatusUseCase', () => {
                 dropped: 0,
             },
         ]);
-        // Mongo groups the findings per agent, PR and status, so the rows
-        // read into memory are bounded by those, not by finding volume.
-        const pipeline = aggregate.mock.calls[0][0];
-        expect(pipeline.find((stage) => stage.$group)).toEqual({
-            $group: expect.objectContaining({
-                _id: {
-                    agentId: expect.any(String),
-                    prNumber: expect.any(String),
-                    deliveryStatus: expect.any(String),
-                    priorityStatus: expect.any(String),
-                },
-                count: { $sum: 1 },
-            }),
-        });
-        expect(aggregate.mock.calls[0][1]).toEqual({ allowDiskUse: true });
-        const [firstMatch] = aggregate.mock.calls[0][0];
-        expect(firstMatch.$match).toEqual({
-            'organizationId': 'org-1',
-            'repository.id': 'repo-1',
-            'updatedAt': { $gte: new Date('2026-09-17T00:00:00Z') },
-            'files.suggestions.customAgent.id': { $exists: true },
-        });
+        const scope = {
+            organizationId: 'org-1',
+            repositoryId: 'repo-1',
+            since: new Date('2026-09-17T00:00:00Z'),
+        };
+        expect(repository.findCustomAgentSuggestionRows).toHaveBeenCalledWith(
+            scope,
+        );
+        expect(
+            repository.findUnfollowedCustomAgentCitations,
+        ).toHaveBeenCalledWith(scope);
     });
 });

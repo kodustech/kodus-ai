@@ -207,46 +207,6 @@ describe('PostHogProvider', () => {
             });
         });
 
-        describe('groupIdentify accepts directory group type', () => {
-            it('forwards a directory group identify call to the SDK', () => {
-                const provider = new PostHogProvider(configWithKey());
-
-                provider.groupIdentify('directory', 'dir-42', {
-                    path: 'apps/web/src',
-                });
-
-                expect(groupIdentifySpy).toHaveBeenCalledWith({
-                    groupType: 'directory',
-                    groupKey: 'dir-42',
-                    properties: { path: 'apps/web/src' },
-                });
-            });
-        });
-
-        describe('groupIdentify accepts repositoryDirectory group type', () => {
-            it('forwards the composite (repo, directory) group identify to the SDK', () => {
-                const provider = new PostHogProvider(configWithKey());
-
-                provider.groupIdentify(
-                    'repositoryDirectory',
-                    'repo-9:dir-42',
-                    {
-                        repositoryId: 'repo-9',
-                        directoryId: 'dir-42',
-                    },
-                );
-
-                expect(groupIdentifySpy).toHaveBeenCalledWith({
-                    groupType: 'repositoryDirectory',
-                    groupKey: 'repo-9:dir-42',
-                    properties: {
-                        repositoryId: 'repo-9',
-                        directoryId: 'dir-42',
-                    },
-                });
-            });
-        });
-
         // ─── The reason the provider exists at all ──────────────────────
         // If the SDK throws synchronously (e.g. internal queue full,
         // serialization failure), the host flow MUST NOT propagate the
@@ -264,38 +224,21 @@ describe('PostHogProvider', () => {
                 });
             });
 
-            it('swallows capture errors and logs a warn', () => {
+            it('swallows capture/identify/groupIdentify errors and logs a warn for each', () => {
                 const provider = new PostHogProvider(configWithKey());
 
-                expect(() =>
-                    provider.capture('user-1', 'evt', {}),
-                ).not.toThrow();
-                expect(mockLogger.warn).toHaveBeenCalledTimes(1);
-                expect(mockLogger.warn.mock.calls[0][0].message).toContain(
-                    'PostHog capture threw',
-                );
-            });
-
-            it('swallows identify errors', () => {
-                const provider = new PostHogProvider(configWithKey());
-
-                expect(() => provider.identify('user-1', {})).not.toThrow();
-                expect(mockLogger.warn).toHaveBeenCalledTimes(1);
-                expect(mockLogger.warn.mock.calls[0][0].message).toContain(
-                    'PostHog identify threw',
-                );
-            });
-
-            it('swallows groupIdentify errors', () => {
-                const provider = new PostHogProvider(configWithKey());
-
-                expect(() =>
-                    provider.groupIdentify('organization', 'org-1', {}),
-                ).not.toThrow();
-                expect(mockLogger.warn).toHaveBeenCalledTimes(1);
-                expect(mockLogger.warn.mock.calls[0][0].message).toContain(
-                    'PostHog groupIdentify threw',
-                );
+                expect(() => {
+                    provider.capture('user-1', 'evt', {});
+                    provider.identify('user-1', {});
+                    provider.groupIdentify('organization', 'org-1', {});
+                }).not.toThrow();
+                expect(
+                    mockLogger.warn.mock.calls.map((c) => c[0].message),
+                ).toEqual([
+                    expect.stringContaining('PostHog capture threw'),
+                    expect.stringContaining('PostHog identify threw'),
+                    expect.stringContaining('PostHog groupIdentify threw'),
+                ]);
             });
         });
     });

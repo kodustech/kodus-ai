@@ -1,51 +1,57 @@
 ---
 title: "Token de Acesso do Forgejo"
-description: "Gere o token de acesso do Forgejo que o Kody precisa para ler seus repositórios e publicar comentários de revisão."
+description: "Gere o token de acesso do Forgejo que a Kody precisa para ler seus repositórios e publicar comentários de revisão."
 ---
 
 <Note>
-  O suporte para Forgejo é mantido pela comunidade.
+  O suporte ao Forgejo é mantido pela comunidade.
 </Note>
 
 ## Introdução
 
-Para habilitar Kody a realizar code reviews automáticos no Forgejo, você precisa gerar um **Token de Acesso**. Esse token permite que Kody acesse seus repositórios, pull requests, webhooks, issues etc., com as permissões específicas listadas abaixo.
+Para habilitar a Kody a realizar code reviews automáticos no Forgejo, você precisa gerar um **Access Token**. Esse token permite que a Kody acesse seus repositórios, pull requests, webhooks, issues etc., com as permissões específicas listadas abaixo.
 
 ---
 
-## Gerando o Token de Acesso no Forgejo
+## Gerando o Access Token no Forgejo
 
-1. Acesse seu Forgejo e clique no ícone de avatar no canto superior direito
+1. Acesse sua instância do Forgejo e clique no ícone de avatar no canto superior direito
 2. Selecione **Settings**
 3. Navegue até **Applications**
-4. Na seção **Generate New Token**, dê um nome ao token (por exemplo `kodus_code_review`)
+4. Em **Generate New Token**, dê um nome ao token (por exemplo `kodus_code_review`)
 5. Selecione as permissões necessárias (veja abaixo)
 6. Clique em **Generate Token**
-7. **Copie** o token imediatamente e armazene-o com segurança — após a criação você não poderá visualizá-lo novamente
+7. **Copie** o token imediatamente e guarde-o com segurança — você não poderá vê-lo de novo depois de fechar a página
 
 ---
 
-## Permissões Necessárias para Kody
+## Permissões necessárias para a Kody
 
-O token deve incluir **todas** as seguintes permissões para funcionalidade completa com Kody:
+O token deve incluir **todas** as permissões a seguir para o funcionamento completo com a Kody:
 
 | Categoria | Nível | Finalidade |
 |-----------|-------|------------|
-| `repository` | **Ler e Escrever** | Acessar código, branches, arquivos, criar comentários em PRs e gerenciar webhooks |
-| `issue` | **Ler e Escrever** | Visualizar e modificar issues, labels e milestones |
-| `notification` | **Ler** | Visualizar notificações |
-| `user` | **Ler** | Ler informações básicas do usuário |
+| `repository` | **Read & Write** | Acessar código, branches e arquivos, criar comentários em PRs, gerenciar webhooks |
+| `issue` | **Read & Write** | Ler e publicar comentários e reações em pull requests |
+| `organization` | **Read** | Listar as organizações a que o usuário do token pertence e seus repositórios |
+| `user` | **Read** | Ler informações básicas do usuário, necessárias para a autenticação |
+
+O usuário do token também precisa ser **admin de cada repositório** que a Kody revisa. O Forgejo só permite que um admin do repositório crie webhooks e dispense revisões; sem isso, a Kody não consegue registrar o webhook automaticamente nem retirar a própria aprovação quando uma revisão posterior a segura.
 
 ---
 
-## Adicionando o Token ao Kody
+<span id="adicionando-o-token-ao-kody" aria-hidden="true" />
 
-Cole o token gerado no Kodus: durante o onboarding (**Connect your Git tool** → aba **Forgejo** → **Connect via token**), ou depois, na barra lateral, em **Repositories** → **Connect a provider** → **Forgejo**. Preencha **Forgejo Instance URL** e **Personal Access Token** e clique em **Validate and save**.
+## Adicionando o Token à Kody
+
+Cole o token gerado na Kodus: durante o onboarding (**Connect your Git tool** → aba **Forgejo** → **Connect via token**), ou depois, na barra lateral, em **Repositories** → **Connect a provider** → **Forgejo**. Preencha **Forgejo Instance URL** e **Personal Access Token** e clique em **Validate and save**.
+
+Para trocar um token depois, clique em **Update token** no card **Forgejo** em **Repositories**, cole o novo token e clique em **Update token**.
 
 ---
 
-## Notas Importantes
+## Notas importantes
 
-- O token será **exibido apenas uma vez** após a criação. Salve-o com segurança.
+- O token é **exibido apenas uma vez** depois da criação. Guarde-o com segurança.
 - Se o token for comprometido, revogue-o imediatamente e crie um novo.
 - Audite periodicamente os tokens e suas permissões para confirmar que ainda são necessários.

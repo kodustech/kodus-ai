@@ -143,7 +143,12 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
     it('cleans up the leased sandbox on completion', async () => {
         await processor.process('job-1');
 
-        expect(sandbox.cleanup).toHaveBeenCalledTimes(1);
+        // Single-use graph sandbox: the final release stops compute now,
+        // instead of leaving it warm for the 5-minute default (#2626).
+        expect(leaseManager.release).toHaveBeenCalledWith('lease-1', {
+            idleMs: 0,
+        });
+        expect(sandbox.cleanup).not.toHaveBeenCalled();
     });
 
     it('still cleans up the leased sandbox when the build fails after acquire', async () => {
@@ -151,6 +156,41 @@ describe('AstGraphBuildJobProcessor — sandbox creation via lease manager', () 
 
         await processor.process('job-1');
 
-        expect(sandbox.cleanup).toHaveBeenCalledTimes(1);
+        // Single-use graph sandbox: the final release stops compute now,
+        // instead of leaving it warm for the 5-minute default (#2626).
+        expect(leaseManager.release).toHaveBeenCalledWith('lease-1', {
+            idleMs: 0,
+        });
+        expect(sandbox.cleanup).not.toHaveBeenCalled();
+    });
+
+    // The build runs clone + many /contents reads + indexing, any of which
+    // can stall on a retry-after; without the race the worker slot stayed
+    // held past the router timeout.
+    describe('AbortSignal', () => {
+        it('unblocks when the signal fires mid-work', async () => {
+            repositoryService.findById.mockImplementation(
+                () => new Promise(() => {}),
+            );
+            const controller = new AbortController();
+            const work = processor.process('job-1', controller.signal);
+
+            await new Promise((r) => setTimeout(r, 20));
+            expect(repositoryService.findById).toHaveBeenCalledTimes(1);
+
+            controller.abort();
+
+            await expect(work).resolves.toBeUndefined();
+        });
+
+        it('does not start when the signal is already aborted', async () => {
+            const controller = new AbortController();
+            controller.abort();
+
+            await expect(
+                processor.process('job-1', controller.signal),
+            ).rejects.toThrow(/aborted before start/);
+            expect(repositoryService.findById).not.toHaveBeenCalled();
+        });
     });
 });

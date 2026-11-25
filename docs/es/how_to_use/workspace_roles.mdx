@@ -4,141 +4,131 @@ description: "Aprende sobre el control de acceso basado en roles (RBAC) en los e
 ---
 
 <Note>
-**Miembros del Espacio de Trabajo vs. Licencias de PR**: Estos son completamente separados y no se afectan mutuamente.
+**Miembros del Espacio de Trabajo vs. Licencias de PR**: Son completamente independientes y no se afectan entre sí.
 
-- **Miembros del Espacio de Trabajo**: Administradores que configuran los ajustes de Kodus (ilimitados)
+- **Miembros del Espacio de Trabajo**: Personas con una cuenta de Kodus en el workspace. Cada una tiene un rol que define su acceso, y todos los planes permiten miembros ilimitados.
 - **Licencias de PR**: Desarrolladores de tu organización de Git que reciben revisiones de Kody (según tu plan)
 </Note>
 
 ## Comprender las Licencias de PR
 
-Las licencias de PR se detectan automáticamente desde tus repositorios de Git en función de los desarrolladores que abrieron PRs en los últimos meses.
+La pestaña **PR licenses** lista a las personas que pueden abrir pull requests en los repositorios que revisa Kody: los miembros de tu organización de Git, más los autores recientes de PRs, con los bots marcados. Allí se les asignan las licencias, y tu plan decide cuántos asientos existen. Consulta [Asignación automática de licencias](/es/how_to_use/auto_license_assignment).
 
-**¿Por qué no aparece un desarrollador?** Si un desarrollador no aparece en tu recuento de licencias de PR, significa que Kody no está instalado en un repositorio donde ese desarrollador ha abierto PRs.
+**¿Por qué no aparece un desarrollador?** La lista viene de tu plataforma de código. Haz clic en **Refresh members** para recargarla. Si la persona sigue sin aparecer, usa **Assign by git ID** para asignarle un asiento directamente. Si tu plataforma de código no responde, la pestaña lo indica y la limpieza automática de asientos se pausa.
 
-**Ejemplo:** Puedes tener 1 administrador del espacio de trabajo gestionando la configuración, mientras 20 desarrolladores reciben revisiones automatizadas. Todos los planes incluyen PRs ilimitados — tu plan solo determina qué desarrolladores obtienen acceso a revisiones.
+**Ejemplo:** Puedes tener 1 administrador del espacio de trabajo gestionando los ajustes, mientras 20 desarrolladores reciben revisiones automatizadas. Todos los planes incluyen PRs ilimitados; en un plan de pago, una licencia decide a qué desarrolladores se revisa.
 
 ## Descripción General
 
-Los espacios de trabajo de Kodus admiten el **Control de Acceso Basado en Roles (RBAC)**, lo que te permite gestionar los permisos de usuario y los niveles de acceso dentro de tu organización. Cada miembro del espacio de trabajo puede tener asignado uno de cuatro roles distintos, cada uno con permisos y capacidades específicas.
+Los espacios de trabajo de Kodus admiten el **Control de Acceso Basado en Roles (RBAC)**, lo que te permite gestionar los permisos de usuario y los niveles de acceso dentro de tu organización. Cada miembro del espacio de trabajo tiene uno de cuatro roles, cada uno con permisos específicos.
 
 ## Roles Disponibles
 
-Cada rol proporciona diferentes niveles de acceso y capacidades dentro del espacio de trabajo:
+Cada rol ofrece distintos niveles de acceso y capacidades dentro del espacio de trabajo:
 
 ### Propietario (Owner)
 
-**Acceso administrativo completo** al espacio de trabajo y todos sus recursos. Puede ver, editar y eliminar todas las configuraciones en todos los repositorios.
+**Acceso administrativo completo** al espacio de trabajo y a todos sus recursos. Puede ver, editar y eliminar todas las configuraciones en todos los repositorios.
 
 
 
 ### Gerente de Facturación (Billing Manager)
 
-**Acceso a la gestión financiera y de facturación** con acceso a la gestión de facturación/suscripción y acceso de visualización a la mayoría de las configuraciones, pero sin acceso de edición a la configuración de revisión de código.
+Acceso a la **gestión financiera y de facturación**. Gestiona el plan y la facturación, y puede ver las licencias de desarrollador, los ajustes de code review, las Kody Rules, los repositorios, los plugins, el uso de tokens y los registros de actividad, pero no puede editarlos. Sin acceso a los pull requests, Cockpit ni las revisiones de la CLI.
 
 ### Administrador de Repositorio (Repository Admin)
 
-**Acceso a la gestión de repositorios**. Ve todas las configuraciones, pull requests, issues, cockpit y plugins de toda la organización (solo lectura) y puede editar las configuraciones de revisión de código y las Kody Rules para los repositorios que tiene asignados.
+Acceso a la **gestión de repositorios**. Ve todas las configuraciones, pull requests, issues, Cockpit, plugins y el uso de tokens de toda la organización (solo lectura), y puede editar las configuraciones de code review, las Kody Rules y los issues de los repositorios que tiene asignados. Se muestra como **Repo Admin** en la app.
 
 ### Colaborador (Contributor)
 
-**Acceso de solo lectura** a toda la organización. Los Contributors pueden ver las configuraciones, las Kody Rules, los pull requests y los issues en todos los repositorios — sin necesidad de asignación a repositorios — pero no pueden editar nada. El cockpit, el uso de tokens, la facturación y la gestión de usuarios permanecen exclusivos de los administradores.
+**Acceso de solo lectura** a toda la organización. Los Contributors pueden ver las configuraciones, las Kody Rules, los pull requests y los issues en todos los repositorios (sin necesidad de asignación de repositorios), pero no pueden editar nada. Cockpit, el uso de tokens, la facturación y la gestión de usuarios siguen siendo exclusivos de los administradores.
 
 ## Matriz de Permisos por Rol
 
-Aquí hay un desglose detallado de lo que puede hacer cada rol, basado en la matriz de permisos real:
+Lo que puede hacer cada rol:
 
 <Snippet file="rbac-matrix-generated.mdx" />
 
 ## Gestionar Miembros del Espacio de Trabajo
 
-Los miembros del espacio de trabajo se gestionan en la pestaña **Workspace members** de **Organization → Subscription** — no hay una página de miembros separada. Solo los **Owners** pueden invitar miembros, cambiar roles o eliminar miembros.
+Los miembros del espacio de trabajo se gestionan en la pestaña **Workspace members** de **Organization → Subscription**; no hay una página de miembros aparte. Solo los **Owners** pueden invitar miembros, cambiar roles o eliminar miembros.
 
 ### Agregar Nuevos Miembros
 
 1. En la barra lateral, abre **Organization → Subscription** y elige la pestaña **Workspace members**
 2. Haz clic en **Invite member**
-3. En **Workspace member invitation**, escribe el correo electrónico del miembro y haz clic en **Add to invite list** (repite para más personas)
+3. En **Workspace member invitation**, escribe el email del miembro y haz clic en **Add to invite list** (repite para más personas)
 4. Haz clic en **Send invites**
 5. Los miembros invitados entran como **Contributor**; cambia su rol después (ver más abajo)
 
-### Unión Automática para Miembros del Espacio de Trabajo
+### Auto-Join para Miembros del Espacio de Trabajo
 
-Habilita la unión automática para permitir que los usuarios con dominios de correo electrónico coincidentes se unan a tu espacio de trabajo automáticamente.
+Habilita auto-join para permitir que los usuarios con dominios de email coincidentes se unan a tu espacio de trabajo automáticamente.
 
 **Cómo habilitarlo:**
 1. Ve a **Organization → General** ([app.kodus.io/organization/general](https://app.kodus.io/organization/general))
 2. En **Auto Join**, activa **Enable Auto Join**, ingresa tu dominio y guarda
-3. Actualmente funciona solo con el dominio de correo electrónico de tu cuenta registrada
+3. Actualmente funciona solo con el dominio de email de tu cuenta registrada
 4. ¿Necesitas un dominio diferente? Contáctanos en la comunidad
 
 **Cómo funciona:**
-- Los usuarios que se registran con tu dominio de correo electrónico pueden elegir unirse a tu organización
-- Deben confirmar su correo electrónico después de elegir unirse
-- Todos los usuarios de unión automática entran con el rol **Contributor** (acceso de solo lectura a toda la organización)
-- Como Propietario, ajusta su rol si necesitan permisos de edición
+- Los usuarios que se registran con tu dominio de email pueden elegir unirse a tu organización
+- En Kodus Cloud, deben confirmar su email después de elegir unirse
+- Todos los usuarios de auto-join entran con el rol **Contributor** (acceso de solo lectura a toda la organización)
+- Como Owner, ajusta su rol si necesitan permisos de edición
 
-### Cambiar Roles de Miembros
+### Cambiar los Roles de los Miembros
 
 1. Ve a **Organization → Subscription → Workspace members**
-2. Encuentra al miembro cuyo rol deseas cambiar
+2. Encuentra al miembro cuyo rol quieres cambiar
 3. Abre el selector en su columna **Role**
 4. Selecciona el nuevo rol (**Owner**, **Billing Manager**, **Repo Admin** o **Contributor**)
-5. El cambio surte efecto inmediatamente
+5. El cambio surte efecto de inmediato
+
+No puedes cambiar tu propio rol. Los cambios de rol y las eliminaciones de miembros notifican a los Owners de la organización.
 
 Para un **Repository Admin**, asigna los repositorios que puede editar con el botón **+** junto a su rol, que abre **Assign repositories**.
 
 ### Eliminar Miembros
 
-1. En **Organization → Subscription → Workspace members**, localiza al miembro a eliminar
+1. En **Organization → Subscription → Workspace members**, localiza al miembro que quieres eliminar
 2. Abre el menú **Actions** (tres puntos) en su fila
 3. Selecciona **Delete**
-4. Confirma con **Remove** en el cuadro de diálogo
+4. Confirma con **Remove** en el diálogo
 
 El mismo menú tiene **Approve** para los miembros marcados como **Needs approval** y **Copy invite link** para volver a compartir el enlace de invitación de un miembro.
 
 ## Consideraciones de Seguridad
 
-1. **Principio de Menor Privilegio**: Siempre asigna el rol con los permisos mínimos necesarios
-2. **Auditorías Regulares**: Revisa periódicamente los roles de los miembros y ajusta según sea necesario
+1. **Principio de Menor Privilegio**: Asigna siempre el rol con los permisos mínimos necesarios
+2. **Auditorías Regulares**: Revisa periódicamente los roles de los miembros y ajústalos según sea necesario
 3. **Revisiones de Acceso**: Realiza revisiones trimestrales del acceso y los permisos del espacio de trabajo
-4. **Revocación Inmediata**: Elimina el acceso inmediatamente cuando un miembro abandone la organización
+4. **Revocación Inmediata**: Elimina el acceso de inmediato cuando un miembro deje la organización
 
 ## Solución de Problemas
 
 <AccordionGroup>
   <Accordion title="No puedo invitar nuevos miembros al espacio de trabajo">
-    **Soluciones:**
-    - Verifica que tengas el rol de Propietario — solo los Owners pueden invitar miembros
-    - Comprueba si tu espacio de trabajo ha alcanzado algún límite del sistema
-    - Asegúrate de que tienes los permisos correctos en tu cuenta
+    Solo los Owners pueden invitar miembros. Si eres Owner y **Invite member** está deshabilitado, comprueba tu rol en **Organization → Subscription → Workspace members**.
   </Accordion>
 
-  <Accordion title="Un miembro no puede editar las configuraciones de revisión de código">
-    **Soluciones:**
-    - Confirma que el miembro tiene el rol de Administrador de Repositorio o Propietario para el repositorio específico
-    - Para un Administrador de Repositorio, comprueba que el repositorio le esté asignado (**Assign repositories** en la columna **Role** de **Workspace members**)
-    - Verifica que la asignación de rol del miembro sea correcta
+  <Accordion title="Un miembro no puede editar las configuraciones de code review">
+    - Confirma que el miembro sea Repo Admin u Owner. Los Billing Managers y Contributors pueden ver los ajustes pero no editarlos.
+    - Para un Repo Admin, comprueba que el repositorio le esté asignado (**Assign repositories** en la columna **Role** de **Workspace members**).
   </Accordion>
 
   <Accordion title="La información de facturación no es visible para un miembro del equipo">
-    **Soluciones:**
-    - Asegúrate de que el miembro tenga el rol de Propietario o Gerente de Facturación
-    - Comprueba si las funciones de facturación están habilitadas para tu espacio de trabajo
-    - Verifica que el acceso del miembro no haya sido restringido
+    **Organization → Subscription** es visible solo para los Owners y Billing Managers. Los Repo Admins y Contributors no la ven.
   </Accordion>
 
-  <Accordion title="Un miembro no puede acceder a las funciones de cockpit">
-    **Soluciones:**
-    - Confirma que el miembro tiene el rol de Administrador de Repositorio o Propietario (el cockpit no es visible para Contributors ni Billing Managers)
-    - Verifica que la asignación de rol del miembro sea correcta
+  <Accordion title="Un miembro no puede acceder a Cockpit">
+    Cockpit es visible para los Repo Admins y Owners, no para los Contributors ni los Billing Managers. Cockpit también necesita un plan Teams o Enterprise; consulta [Planes y Licencias](/es/how_to_use/pricing).
   </Accordion>
 
   <Accordion title="Un desarrollador no aparece en las licencias de PR">
-    **Soluciones:**
-    - Verifica que Kody esté instalado en los repositorios donde este desarrollador abre PRs
-    - Comprueba si el desarrollador ha abierto PRs en los últimos meses
-    - Recuerda: las licencias de PR provienen de la actividad de Git, no de los miembros del espacio de trabajo
-    - Asegúrate de que el webhook del repositorio esté correctamente configurado
+    - Haz clic en **Refresh members** en la pestaña **PR licenses**, y comprueba que el desarrollador pertenezca a tu organización de Git o haya abierto PRs recientemente en un repositorio que revisa Kody.
+    - Usa **Assign by git ID** para asignar un asiento a alguien que no aparece en la lista.
+    - Recuerda: las licencias de PR provienen de tu proveedor de Git, no de los miembros del espacio de trabajo.
   </Accordion>
 </AccordionGroup>

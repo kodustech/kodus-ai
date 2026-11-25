@@ -13,8 +13,16 @@ const run = {
     comment: { id: 501 },
     trackers: ['Linear'],
     unseenFiles: [],
-    references: [],
-    attempts: [],
+    references: [
+        {
+            kind: 'key',
+            id: 'SAA-96',
+            raw: 'SAA-96',
+            source: 'title',
+            intent: 'closes',
+        },
+    ],
+    attempts: [{ reference: 'SAA-96', tracker: 'Linear', status: 'found' }],
     door: 'auto',
     createdAt: new Date(),
     tasks: [
@@ -134,6 +142,38 @@ describe('BusinessLogicReplies', () => {
         for (const message of [
             'why is the null check missing in foo.ts?',
             'SAA-961 is a different task',
+        ]) {
+            const { replies, service } = build({ intent: 'other' });
+            await replies.handle({
+                request,
+                sender: { login: 'nina' },
+                message,
+            });
+            expect(service.classifyReply).not.toHaveBeenCalled();
+        }
+    });
+
+    it('reads a reply that names an open finding by the state the comment shows it in', async () => {
+        // The comment labels rows MISSING, PARTIAL…; "AC #2 MISSING is
+        // wrong" answers it even without the task id or a quote.
+        for (const message of [
+            '@kody AC #2 MISSING is wrong: the drag handle takes arrow keys',
+            '@kody the MISSING row is covered in useDrag.ts',
+        ]) {
+            const { replies, service } = build({ intent: 'other' });
+            await replies.handle({
+                request,
+                sender: { login: 'nina' },
+                message,
+            });
+            expect(service.classifyReply).toHaveBeenCalled();
+        }
+    });
+
+    it('leaves a state label no open finding is in, or a constant, to the chat', async () => {
+        for (const message of [
+            '@kody why is it PARTIAL?',
+            '@kody where does MISSING_FIELD come from?',
         ]) {
             const { replies, service } = build({ intent: 'other' });
             await replies.handle({
@@ -292,6 +332,10 @@ describe('BusinessLogicReplies', () => {
             movedTo: 'SAA-102',
         });
         expect(published.result.outcome.passed).toBe(true);
+        // The run it answers is carried, so the next re-check compares with
+        // the same lookups and says "same result" when nothing moved (#2423).
+        expect(published.result.attempts).toEqual(run.attempts);
+        expect(published.result.references).toEqual(run.references);
         expect(result).toMatchObject({
             handled: true,
             reply: expect.stringContaining('Nothing is left to merge'),

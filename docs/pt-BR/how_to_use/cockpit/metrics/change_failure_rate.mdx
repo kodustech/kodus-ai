@@ -1,68 +1,51 @@
 ---
 title: "Taxa de Bugs"
-description: "Meça a porcentagem de PRs que são correções de bugs (também conhecido como Taxa de Falha de Mudança)"
+description: "Meça a porcentagem de pull requests fechados que são correções de bugs"
 ---
 
 ## O que é Taxa de Bugs
 
-A Taxa de Bugs mede a porcentagem de Pull Requests que são correções de bugs ou melhorias em relação ao número total de PRs. Essa métrica ajuda a entender quanto do esforço de desenvolvimento é gasto corrigindo problemas versus construindo novos recursos. Ela também pode ser lida como "Taxa de Falha de Mudança" — a taxa na qual as mudanças resultam em falhas.
+A Taxa de Bugs (Bug Ratio) é a porcentagem de pull requests fechados que são correções de bugs. Mostra quanto da sua entrega vai para corrigir problemas em vez de construir funcionalidades.
+
+No Cockpit, é o card **Bug Ratio** na aba **Productivity**. Não é a change failure rate do DORA: ela conta PRs de correção de bug, não deploys que falharam.
 
 ## Como Calculamos
 
-Identificamos automaticamente quais PRs são correções de bugs usando modelos de linguagem de IA (LLM) que analisam os nomes e descrições dos Pull Requests. O sistema então calcula a porcentagem de trabalho relacionado a bugs em relação à sua atividade total de PRs.
+Um job em segundo plano pede a um modelo de IA que classifique cada pull request **somente pelo título** como **Bug Fix**, **Feature**, **Refactor** ou **Test**. A descrição do PR, as labels e o diff não são usados, e não há nada a configurar.
 
-**O que rastreamos:**
-- PRs identificados como correções de bugs por análise de IA
-- Número total de PRs no período
-- A porcentagem de trabalho relacionado a bugs
-
-**Como é calculado:**
 ```
-Taxa de Bugs = (PRs de Correção de Bugs) ÷ (Total de PRs) × 100
+Bug Ratio = (PRs classified as Bug Fix) ÷ (PRs closed in the range) × 100
 ```
 
-Por exemplo, se 3 de 15 PRs são identificados como correções de bugs, sua taxa de bugs é 20%.
+O intervalo é o intervalo de datas selecionado no topo do Cockpit, e um PR fechado é um PR mergeado ou fechado sem merge. Um PR que ainda não foi classificado conta no total, mas não como correção de bug. Por exemplo, se 3 de 15 PRs são classificados como correções de bug, sua Taxa de Bugs é 20%.
 
-**Como identificamos correções de bugs:**
-Usamos modelos de linguagem avançados para analisar títulos de PR e classificá-los automaticamente. A IA procura padrões como:
-- "Fix bug in..." ou "Bug fix for..."
-- "Resolve issue with..." ou "Fix problem in..."
-- "Patch for..." ou "Hotfix:..."
+Quando a taxa é 0% tanto no intervalo selecionado quanto no período anterior, o card mostra **Once we have enough data, your metrics will appear here.** em vez de 0%.
 
-## Por que é Importante
+## Lendo o card
 
-A Taxa de Bugs é um indicador-chave do foco de desenvolvimento e da qualidade do código da sua equipe. Entender essa taxa ajuda a:
+O card mostra a porcentagem, um badge de nível e o valor do período anterior de mesma duração, com a variação percentual (quanto menor, melhor). O rodapé diz "Last 2 weeks was …" qualquer que seja o intervalo selecionado; o número é do período anterior. Passe o mouse sobre o badge para ver os níveis:
 
-- **Foco de Desenvolvimento**: Ver quanto tempo é gasto corrigindo versus construindo
-- **Qualidade de Código**: Identificar se está gastando muito tempo em bugs
-- **Melhoria de Processo**: Entender se o processo de desenvolvimento precisa de otimização
-- **Planejamento de Recursos**: Planejar quanto esforço alocar para correções de bugs
+| Bug Ratio | Nível |
+| --- | --- |
+| Menos de 5% | Elite |
+| 5% a 10% | High |
+| 10% a 20% | Fair |
+| Mais de 20% | Need focus |
+
+## Por que os Títulos dos PRs Importam
+
+Como só o título é lido, um título descritivo dá uma taxa mais precisa.
+
+| Bons títulos de correção de bug | Títulos vagos |
+| --- | --- |
+| "Fix: User login fails with invalid credentials" | "Fix stuff" |
+| "Resolve issue: API returns 500 error for large requests" | "Update code" |
+| "Patch: Fix null pointer exception in user service" | "Improve performance" |
 
 ## Como Melhorar
 
-- Implemente estratégias abrangentes de testes (unitários, integração, E2E)
-- Use ferramentas automatizadas (linters, analisadores estáticos) em pré-produção
-- Garanta revisões de código completas para todas as alterações
+- Teste mais nos níveis unitário, de integração e end-to-end
+- Use linters e analisadores estáticos antes da produção
 - Divida grandes funcionalidades em partes menores e testáveis
 - Use feature flags para implantações mais seguras
 - Realize revisões pós-incidente para prevenir recorrências
-
-## Boas Práticas para Nomenclatura de PRs
-
-Para ajudar a IA a identificar correções de bugs com precisão, considere estas convenções de nomenclatura:
-
-### Bons Nomes para PRs de Correção de Bugs
-- "Fix: User login fails with invalid credentials"
-- "Bug fix: Memory leak in data processing module"
-- "Resolve issue: API returns 500 error for large requests"
-- "Patch: Fix null pointer exception in user service"
-
-### Evite Nomes Vagos
-- "Fix stuff" ou "Bug fix"
-- "Update code" ou "Improve performance"
-- "Fix things" ou "Resolve issues"
-
-### Funcionalidade vs Correção de Bug
-- **Correção de Bug**: "Fix: Payment validation fails for expired cards"
-- **Funcionalidade**: "Add: New payment method support"
-- **Melhoria**: "Enhance: Payment validation error messages"

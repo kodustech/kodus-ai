@@ -1,4 +1,5 @@
 import type { BusinessValidationOutcome } from '@libs/agents/business-validation/business-validation.types';
+import { buildRun } from '@libs/agents/business-validation/runs/run-mapping';
 import { DEFAULT_BUSINESS_LOGIC_SETTINGS } from '@libs/agents/business-validation/settings';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
@@ -134,6 +135,7 @@ describe('BusinessLogicPublisher', () => {
         await first.publisher.publish({ request, result });
         expect(first.pullRequests.addPrLevelSuggestions).toHaveBeenCalledWith(
             47,
+            'repo-1',
             'notes',
             [
                 expect.objectContaining({
@@ -332,6 +334,40 @@ describe('BusinessLogicPublisher', () => {
             expect.objectContaining({ commentId: 501 }),
             PlatformType.GITHUB,
         );
+    });
+
+    it('says whether a re-check changed the result it edits the comment with (#2423)', async () => {
+        const result = (state: 'met' | 'missing') => ({
+            outcome: validated(state),
+            references: [],
+            attempts: [],
+            trackers: [],
+        });
+        const recheck = async (
+            before: 'met' | 'missing',
+            now: 'met' | 'missing',
+        ) => {
+            const { publisher } = build({
+                comment: {
+                    ...buildRun(request, result(before)),
+                    comment: { id: 501 },
+                },
+            });
+            return publisher.publish({
+                request: { ...request, door: 'command' },
+                result: result(now),
+                trigger: 'command',
+            });
+        };
+
+        await expect(recheck('missing', 'missing')).resolves.toMatchObject({
+            comment: 'updated',
+            changed: false,
+        });
+        await expect(recheck('missing', 'met')).resolves.toMatchObject({
+            comment: 'updated',
+            changed: true,
+        });
     });
 
     it('lists the commits checked before this one, oldest first, one line per commit', async () => {

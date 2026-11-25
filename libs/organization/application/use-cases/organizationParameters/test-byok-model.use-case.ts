@@ -31,6 +31,9 @@ export interface TestByokModelInput {
     // the key, which flows through the connection probe with the caller's OWN key.
     awsRegion?: string;
     vertexLocation?: string;
+    // The saved credential to test when the provider has more than one (two
+    // OpenAI-compatible gateways). Omitted → the provider's only credential.
+    credentialId?: string;
 }
 
 /**
@@ -70,8 +73,19 @@ export class TestByokModelUseCase {
             this.organizationParametersService,
             input.provider,
             input.organizationAndTeamData,
+            input.credentialId,
         );
         if (!slot) {
+            this.logger.warn({
+                message: 'BYOK model test found no saved credential to probe',
+                context: TestByokModelUseCase.name,
+                metadata: {
+                    provider: input.provider,
+                    credentialId: input.credentialId,
+                    organizationId:
+                        input.organizationAndTeamData?.organizationId,
+                },
+            });
             throw new BadRequestException(
                 `No saved BYOK credentials found for provider "${input.provider}". Configure it in BYOK settings first.`,
             );
@@ -99,7 +113,12 @@ export class TestByokModelUseCase {
         const catalog = changedSetting
             ? null
             : await this.getModelsByProviderUseCase
-                  .execute(input.provider, input.organizationAndTeamData)
+                  .execute(
+                      input.provider,
+                      input.organizationAndTeamData,
+                      undefined,
+                      input.credentialId,
+                  )
                   .catch((error) => {
                       // A listing failure is an EXPECTED fallback (provider not
                       // enumerable), not a hard error — but trace it so a silently
@@ -111,6 +130,7 @@ export class TestByokModelUseCase {
                           error,
                           metadata: {
                               provider: input.provider,
+                              credentialId: input.credentialId,
                               organizationId:
                                   input.organizationAndTeamData?.organizationId,
                               organizationAndTeamData:

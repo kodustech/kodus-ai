@@ -9,6 +9,7 @@ import {
     GEN_AI,
 } from '../types';
 import { createLogger, deepSanitize } from '@libs/core/log/logger';
+import { mongoAppName } from '@libs/core/infrastructure/database/mongo/mongo-app-name';
 import {
     LogLevel,
     MongoDBExporterConfig,
@@ -68,6 +69,8 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
     private healthCheckTimer: NodeJS.Timeout | null = null;
 
     private isFlushingLogs = false;
+    private activeLogFlush: Promise<void> | null = null;
+    private activeTelemetryFlush: Promise<void> | null = null;
     private isFlushingTelemetry = false;
 
     // Write-Ahead Log (WAL) for critical spans
@@ -517,8 +520,12 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             const { MongoClient: mongoClient } = await import('mongodb');
 
             this.client = new mongoClient(this.config.connectionString, {
-                maxPoolSize: 20, // Aumentado para alto volume
-                minPoolSize: 5, // Pool mínimo sempre ativo
+                appName: mongoAppName('exporter'),
+                // One batched insertMany every few seconds per process: a few
+                // connections are plenty, and none needs to stay open idle
+                // (minPoolSize holds per replica-set member).
+                maxPoolSize: 5,
+                minPoolSize: 0,
                 serverSelectionTimeoutMS: 3000, // Mais rápido
                 connectTimeoutMS: 5000, // Timeout menor
                 socketTimeoutMS: 30000, // Evita conexões travadas
@@ -666,14 +673,16 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
                 // Ignore general index creation errors
             }
 
-            // Telemetry indexes
-            await this.collections.telemetry.createIndex({ timestamp: 1 });
+            // Telemetry keeps only `correlationId`: the per-execution lookups
+            // (traceability.ts, scripts/analyze-pr-performance.cli.ts) read
+            // spans by it, and no compound has it as a prefix. The other
+            // single-field indexes this created on every boot (timestamp,
+            // tenantId, name, agentName, toolName, phase) serve no read: Token
+            // Usage reads through the tu_cover_* compounds the migrations build
+            // (database/mongo/token-usage/ensure-indexes.ts), and a dropped
+            // index came back, rebuilt over the whole collection, on the next
+            // deploy of every service.
             await this.collections.telemetry.createIndex({ correlationId: 1 });
-            await this.collections.telemetry.createIndex({ tenantId: 1 });
-            await this.collections.telemetry.createIndex({ name: 1 });
-            await this.collections.telemetry.createIndex({ agentName: 1 });
-            await this.collections.telemetry.createIndex({ toolName: 1 });
-            await this.collections.telemetry.createIndex({ phase: 1 });
 
             this.logger.log({
                 message: 'Performance indexes created successfully',
@@ -898,9 +907,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         // "Executing Query", "Execution context set"). info/warn/error still
         // persist for audit.
         const minLevel = process.env.API_LOG_LEVEL || 'info';
-        if (
-            (LOG_LEVEL_RANK[level] ?? 1) < (LOG_LEVEL_RANK[minLevel] ?? 1)
-        ) {
+        if ((LOG_LEVEL_RANK[level] ?? 1) < (LOG_LEVEL_RANK[minLevel] ?? 1)) {
             return;
         }
 
@@ -916,7 +923,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         const normalizedContext: Record<string, any> = {
             ...(context || {}),
         };
-        const orgTeam = (context as any)?.organizationAndTeamData;
+        const orgTeam = this.organizationAndTeamDataOf(context);
         if (orgTeam && typeof orgTeam === 'object') {
             if (!normalizedContext.organizationId && orgTeam.organizationId) {
                 normalizedContext.organizationId = orgTeam.organizationId;
@@ -968,8 +975,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         // unrelated" and "we do not know whether these lines are related",
         // which are opposite conclusions to draw from the same query.
         const providedCorrelationId = normalizedContext?.correlationId as
-            | string
-            | undefined;
+            string | undefined;
         const correlationId = providedCorrelationId || randomUUID();
 
         // Ensure tenantId exists in metadata (common requirement).
@@ -1052,6 +1058,29 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         }
     }
 
+    /**
+     * The organization/team pair reaches the exporter in one of two shapes.
+     * `SimpleLogger` flattens the log call's `metadata` into the processor
+     * context, so a service that logs `metadata: { params }` arrives here as
+     * `{ params }`; other callers set the pair at the top level. Reading only
+     * the top level stored `organizationId: "unknown"` for 61% of the error
+     * rows, including the ~28,600 Bitbucket Cloud and Azure Repos rows that
+     * carried it inside `params` (#2639).
+     *
+     * The shallowest shape wins, so an explicit pair is never overridden by a
+     * payload.
+     */
+    private organizationAndTeamDataOf(context?: LogContext): any {
+        const candidates = [
+            (context as any)?.organizationAndTeamData,
+            (context as any)?.params?.organizationAndTeamData,
+        ];
+
+        return candidates.find(
+            (candidate) => candidate && typeof candidate === 'object',
+        );
+    }
+
     process(
         level: LogLevel,
         message: string,
@@ -1086,9 +1115,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         const agentName = item.attributes[AGENT.NAME] as string;
         const toolName = item.attributes[TOOL.NAME] as string;
         const phase = item.attributes['agent.phase'] as
-            | 'think'
-            | 'act'
-            | 'observe';
+            'think' | 'act' | 'observe';
 
         const telemetryItem: MongoDBTelemetryItem = {
             timestamp: new Date(item.startTime),
@@ -1428,9 +1455,26 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
     }
 
     /**
-     * Flush logs para MongoDB
+     * Flush logs para MongoDB. A call made while a flush is writing gets that
+     * flush's promise, so a caller that awaits it (dispose) waits for the
+     * write instead of returning before it lands.
      */
-    private async flushLogs(): Promise<void> {
+    private flushLogs(): Promise<void> {
+        if (this.activeLogFlush) {
+            return this.activeLogFlush;
+        }
+        // Cleared only by the flush it holds: a call made from inside
+        // writeLogs before the field is set must not clear the running one.
+        const running = this.writeLogs().finally(() => {
+            if (this.activeLogFlush === running) {
+                this.activeLogFlush = null;
+            }
+        });
+        this.activeLogFlush = running;
+        return running;
+    }
+
+    private async writeLogs(): Promise<void> {
         if (!this.config.enableObservability) {
             return;
         }
@@ -1469,10 +1513,8 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             });
         }
 
-        const {
-            accepted: flushableLogs,
-            droppedCount: oversizedCount,
-        } = this.dropOversizedLogItems(sanitizedLogs);
+        const { accepted: flushableLogs, droppedCount: oversizedCount } =
+            this.dropOversizedLogItems(sanitizedLogs);
         if (oversizedCount > 0) {
             this.logger.warn({
                 message: `Dropping ${oversizedCount} oversized log entr${oversizedCount === 1 ? 'y' : 'ies'} from flush batch (exceeded BSON safety threshold)`,
@@ -1532,7 +1574,10 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
                         error: error as Error,
                     });
 
-                    await this.handleConnectionError(error as Error, 'flushLogs');
+                    await this.handleConnectionError(
+                        error as Error,
+                        'flushLogs',
+                    );
 
                     const uncommitted = this.extractRebufferable(error, batch);
                     if (this.isNonRetryableLogWriteError(error)) {
@@ -1633,7 +1678,21 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
     /**
      * Flush telemetry para MongoDB (Dual Buffer: Crítico + Normal)
      */
-    private async flushTelemetry(): Promise<void> {
+    /** Same contract as flushLogs. */
+    private flushTelemetry(): Promise<void> {
+        if (this.activeTelemetryFlush) {
+            return this.activeTelemetryFlush;
+        }
+        const running = this.writeTelemetry().finally(() => {
+            if (this.activeTelemetryFlush === running) {
+                this.activeTelemetryFlush = null;
+            }
+        });
+        this.activeTelemetryFlush = running;
+        return running;
+    }
+
+    private async writeTelemetry(): Promise<void> {
         if (!this.config.enableObservability) {
             return;
         }
@@ -1871,6 +1930,9 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
      * Flush todos os buffers
      */
     async flush(): Promise<void> {
+        await Promise.allSettled([this.flushLogs(), this.flushTelemetry()]);
+        // A flush already running when this was called only wrote what it
+        // had taken; what was buffered during its write goes now.
         await Promise.allSettled([this.flushLogs(), this.flushTelemetry()]);
     }
 

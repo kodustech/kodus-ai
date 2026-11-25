@@ -13,6 +13,7 @@
  * on a transient (5xx/network) blip; it never touches a 2nd model.
  * (Reliability caveat accepted 2026-07-29; resilience is re-addressed in Phase 5.)
  */
+import { reportUsage, reportUsageFromError } from '@libs/llm/usage-meter';
 import {
     Output,
     NoObjectGeneratedError,
@@ -52,8 +53,11 @@ import {
     isJsonSchemaUnsupportedError,
     type ByokModelOptions,
 } from '@libs/llm/byok-to-vercel';
-import { resolveModelConfig } from '@libs/llm/model-invocation';
-import { resolveEnvProvider } from '@libs/llm/managed-slot';
+import {
+    declaredAnswerTokens,
+    resolveModelConfig,
+} from '@libs/llm/model-invocation';
+import { declaredEnvModel, resolveEnvProvider } from '@libs/llm/managed-slot';
 import { agentModelIdentity } from '@libs/llm/model-identity';
 import {
     tracedGenerateText,
@@ -70,15 +74,62 @@ import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
 import {
     classifyLLMError,
     isAbortOrHardTimeout,
+    LlmErrorCategory,
+    markRetriesExhausted,
 } from '@libs/llm/error-classifier';
 import {
+    RATE_LIMIT_RETRY_DELAY_MS,
     RETRYABLE_CATEGORY,
     jitteredBackoffMs,
     sleep,
 } from '@libs/llm/retry-policy';
 import { getLlmObservability } from '@libs/llm/llm-observability';
+import { abortedInFlightAttrs } from '@libs/llm/aborted-in-flight';
+import {
+    applyOneShotCache,
+    resolvePrefixCacheHint,
+    type OneShotPromptCache,
+} from '@libs/llm/one-shot-cache';
 
 const logger = createLogger('StructuredReviewCall');
+
+const AUTO_CACHE_LOG_INTERVAL_MS = 60 * 60 * 1000;
+const autoCacheLoggedAt = new Map<string, number>();
+/** Caller attrs that identify where a call came from; nothing free-form. */
+const AUTO_CACHE_LOG_ATTRS = [
+    'teamId',
+    'repositoryId',
+    'prNumber',
+    'agentName',
+] as const;
+
+/** A slot whose custom provider options turn on Anthropic's automatic cache
+ *  makes every call write its whole prompt; a call carrying its own marker
+ *  drops it. Logged once an hour per org and run, not once per call. */
+function logAutomaticCacheDropped(
+    runName: string,
+    organizationId: string | undefined,
+    callerContext: Record<string, unknown>,
+) {
+    const key = `${organizationId ?? '-'}:${runName}`;
+    const now = Date.now();
+    const last = autoCacheLoggedAt.get(key);
+    if (last !== undefined && now - last < AUTO_CACHE_LOG_INTERVAL_MS) return;
+    autoCacheLoggedAt.set(key, now);
+    logger.log({
+        message: `[prompt-cache] dropped an automatic cacheControl from the provider options of ${runName}; the call carries its own breakpoint`,
+        context: 'runReviewCall',
+        metadata: {
+            ...Object.fromEntries(
+                AUTO_CACHE_LOG_ATTRS.filter(
+                    (k) => callerContext[k] !== undefined,
+                ).map((k) => [k, callerContext[k]]),
+            ),
+            runName,
+            organizationId,
+        },
+    });
+}
 
 /** Fields shared by every review call (structured or plain-text). `byokConfig`
  *  is the bare resolved slot; `buildModelFromSlot`/`getModelName` take it directly. */
@@ -136,6 +187,10 @@ export interface BaseReviewCallParams {
      *  a bare `[]` for "no violations" at scale (#1786 / prod audit 2026-09) —
      *  turning a shard error (and a false "rules not applied") into a clean pass. */
     recoverEnvelopeShape?: boolean;
+    /** What this call shares with sibling calls issued around the same time
+     *  (one-shot-cache.ts). Marked with the provider's cache marker when it
+     *  takes one; absent → the request is sent exactly as before. */
+    promptCache?: OneShotPromptCache;
 }
 
 export interface StructuredReviewCallParams<
@@ -230,17 +285,53 @@ function askProviderModule<T>(
 }
 
 /**
+ * The answer a structured call on this slot declares, for the window to hold:
+ * the slot's own `maxOutputTokens` (else what the provider is sent with none),
+ * with reasoning resolved as this executor does it (`none` by default, off
+ * under a `suppress-thinking` plan). `LLM.run` re-sends the call to the
+ * fallback, so the larger of the two. Undefined when neither declares one.
+ */
+export async function structuredCallAnswerTokens(
+    slot: NormalizedModel | undefined,
+): Promise<number | undefined> {
+    const declaredBy = (model: NormalizedModel | undefined) =>
+        declaredAnswerTokens(
+            model,
+            model?.maxOutputTokens && model.maxOutputTokens > 0
+                ? model.maxOutputTokens
+                : undefined,
+            {
+                reasoningEffortDefault: 'none',
+                suppressReasoning:
+                    resolveStructuredPlan(model) === 'suppress-thinking',
+            },
+        );
+    const answers = (
+        await Promise.all([
+            declaredBy(slot),
+            ...(slot?.fallback
+                ? [declaredBy(slot.fallback as NormalizedModel)]
+                : []),
+        ])
+    ).filter((tokens): tokens is number => tokens !== undefined);
+    return answers.length ? Math.max(...answers) : undefined;
+}
+
+/**
  * Resolve the structured-call plan for a slot — a pure lookup over the provider's
  * `capabilities().structuredOutput` + `reasoningTraits()`. No slot (managed/env
- * default) → 'as-is' (the Fireworks default is a response_format model). All the
+ * default) → 'as-is' (the Fireworks default is a response_format model), unless
+ * the env model's provider is declared. All the
  * per-model knowledge lives in the provider module; this is the single read.
  */
 function resolveStructuredPlan(
     slot: NormalizedModel | undefined,
     organizationId?: string,
 ): StructuredCallPlan {
+    // A declared env model is planned like the BYOK slot of the same provider:
+    // an always-thinking Kimi refuses the forced tool_choice an 'as-is' plan sends.
     return askProviderModule(
-        slot,
+        slot ?? (declaredEnvModel() as NormalizedModel | undefined),
         'as-is',
         (mod, s) =>
             planStructuredCall(
@@ -352,6 +443,7 @@ async function runReviewCall<T>(
         maxOutputTokens: maxOutputTokensOverride,
         providerOptions: providerOptionsOverride,
         suppressReasoning: callerSuppressReasoning,
+        promptCache,
     } = params;
 
     const mainSlot = byokConfig;
@@ -386,7 +478,8 @@ async function runReviewCall<T>(
     // on forced tool_choice + thinking), or the caller asked because the work
     // itself does not benefit from reasoning.
     const suppressReasoning =
-        structuredPlan === 'suppress-thinking' || callerSuppressReasoning === true;
+        structuredPlan === 'suppress-thinking' ||
+        callerSuppressReasoning === true;
 
     const buildInvocation = (structuredOutputs: boolean) =>
         resolveModelConfig(mainSlot, {
@@ -466,6 +559,15 @@ async function runReviewCall<T>(
         ...(organizationId ? { organizationId } : {}),
     };
 
+    // Resolved once: every attempt below runs the same model.
+    const cacheHint = promptCache
+        ? resolvePrefixCacheHint({
+              provider: mainSlot?.provider as string | undefined,
+              model: mainSlot?.model ?? mainModelName,
+              baseURL: mainSlot?.baseURL,
+          })
+        : undefined;
+
     const call = (
         model: LanguageModel,
         modelName: string,
@@ -481,11 +583,33 @@ async function runReviewCall<T>(
             prompt?: string;
         },
     ): Promise<T> => {
+        // Cap hung provider calls at `timeoutMs` (default 10min) instead of the
+        // 30min agent-level fallback; also feeds the BYOK limiter cancellation.
+        // Kept here so a span can tell an abort from any other failure (#2389).
+        const signal = timeoutSignal(timeoutMs ?? LLM_CALL_TIMEOUT_MS);
+        const cached = applyOneShotCache({
+            system: systemOverride ?? system,
+            prompt: override?.prompt ?? user,
+            cache: promptCache,
+            hint: cacheHint,
+            providerOptions: providerOptionsOverride ?? providerOptions,
+        });
+        if (cached.droppedAutoCache) {
+            logAutomaticCacheDropped(runName, organizationId, attrs ?? {});
+        }
+        const cacheAttrs = {
+            ...(cached.marked.length
+                ? { promptCacheMarked: cached.marked.join(',') }
+                : {}),
+            ...(cached.skipped ? { promptCacheSkipped: cached.skipped } : {}),
+            ...(cached.droppedAutoCache
+                ? { promptCacheAutoDropped: true }
+                : {}),
+        };
         const exec = () =>
             tracedGenerateText({
                 model: model as any,
-                system: systemOverride ?? system,
-                prompt: override?.prompt ?? user,
+                ...cached.args,
                 // Output mode: structured spreads `output: Output.object`, text
                 // spreads nothing (plain generateText → r.text).
                 ...(override?.outputArgs ?? mode.outputArgs),
@@ -503,14 +627,13 @@ async function runReviewCall<T>(
                 // Provider-specific reasoning/thinking + OpenRouter routing (the
                 // other SDK channel; empty when the slot sets none). A caller
                 // override (e.g. Gemini thinking off) replaces the slot-derived one.
-                providerOptions: providerOptionsOverride ?? providerOptions,
+                // A cache marker may add its request-level options here.
+                providerOptions: cached.providerOptions,
                 // Pin the AI SDK's OWN retry to 0 (ai@7 defaults to 2) so it can't
                 // stack under the app-level D-00c re-issue and the wrapper catch.
                 maxRetries: 0,
-                // Cap hung provider calls at `timeoutMs` (default 10min) instead of
-                // the 30min agent-level fallback; also feeds the BYOK limiter
-                // cancellation. A secondary pass may pass a shorter budget.
-                abortSignal: timeoutSignal(timeoutMs ?? LLM_CALL_TIMEOUT_MS),
+                // A secondary pass may pass a shorter budget (see `signal`).
+                abortSignal: signal,
                 ...toAiSdkTelemetryArgs(
                     buildLangfuseTelemetry(
                         runName,
@@ -541,14 +664,30 @@ async function runReviewCall<T>(
                   // Every review call builds its SDK telemetry (falling back
                   // to the org id), so every one is traced.
                   traced: true,
-                  attrs: extraAttrs
-                      ? { ...spanAttrs, ...extraAttrs }
-                      : spanAttrs,
+                  attrs: { ...spanAttrs, ...(extraAttrs ?? {}), ...cacheAttrs },
                   exec,
+                  // The one request was out when the deadline aborted it: its
+                  // input is the known gap, never billed (#2389).
+                  attrsOnError: () =>
+                      abortedInFlightAttrs(
+                          signal,
+                          () =>
+                              `${systemOverride ?? system}\n${override?.prompt ?? user}`,
+                      ),
               })
             : exec();
 
-        return run.then((r: any) => (override?.extract ?? mode.extract)(r));
+        return run.then(
+            (r: any) => {
+                reportUsage(r?.usage, { modelName, runName });
+                return (override?.extract ?? mode.extract)(r);
+            },
+            (error: unknown) => {
+                // A failed parse was still answered and billed.
+                reportUsageFromError(error, { modelName, runName });
+                throw error;
+            },
+        );
     };
 
     // ONE re-issue in json_object mode with the schema written INTO the prompt —
@@ -566,6 +705,35 @@ async function runReviewCall<T>(
     // call after a parse failure (the same prompt formats differently on a
     // non-zero temperature), but it is a retry, not a recovery: the SCHEMA-
     // rejection branch below no longer routes here for them.
+    // A 429 gets one re-issue after a longer wait, never an instant re-fire.
+    // A second 429 means the limit is not a passing burst (a spent plan window
+    // answers 429 for hours), so it is marked exhausted and the model failover
+    // moves the call to the org's fallback. A slot in cooldown is never
+    // re-issued into; its 429 is marked at once, the fallback is its own slot.
+    const slotInCooldown = () =>
+        !!getLimiterForSlot({
+            slot: mainSlot,
+            organizationId,
+        })?.isInCooldown();
+    const reissueAfterRateLimit = async (
+        err: unknown,
+        reissue: () => Promise<T>,
+    ): Promise<T> => {
+        if (slotInCooldown()) throw markRetriesExhausted(err);
+        await sleep(jitteredBackoffMs(1, RATE_LIMIT_RETRY_DELAY_MS));
+        try {
+            return await reissue();
+        } catch (retryErr) {
+            if (
+                classifyLLMError(retryErr).category ===
+                LlmErrorCategory.RATE_LIMIT
+            ) {
+                throw markRetriesExhausted(retryErr);
+            }
+            throw retryErr;
+        }
+    };
+
     const reissueDowngraded = async (reason: string): Promise<T> => {
         const downgraded = buildInvocation(false);
         const downgradedSystem = withJsonContract(system, mode.schemaForPrompt);
@@ -593,6 +761,12 @@ async function runReviewCall<T>(
                 });
                 return repaired;
             }
+            // Already the second request: a 429 here goes to the fallback.
+            if (
+                classifyLLMError(err).category === LlmErrorCategory.RATE_LIMIT
+            ) {
+                throw markRetriesExhausted(err);
+            }
             throw err;
         }
     };
@@ -607,27 +781,39 @@ async function runReviewCall<T>(
     if (structuredPlan === 'reroute-json') {
         const inv = buildInvocation(false);
         const reroutedSystem = withJsonContract(system, mode.schemaForPrompt);
-        return call(
-            inv.model,
-            inv.modelName,
-            reroutedSystem,
-            { structuredReroute: 'thinking-forced-tool_choice' },
-            {
-                outputArgs: {}, // plain generateText — no Output.object, no tool_choice
-                extract: async (r: any) => {
-                    const value = await repairAndValidate<T>(
-                        mode.validatingSchema,
-                        (r?.text ?? '') as string,
-                    );
-                    if (value === undefined) {
-                        throw new Error(
-                            `[structured-output] reroute-json produced no valid object for ${runName}`,
+        const reroute = () =>
+            call(
+                inv.model,
+                inv.modelName,
+                reroutedSystem,
+                { structuredReroute: 'thinking-forced-tool_choice' },
+                {
+                    outputArgs: {}, // plain generateText — no Output.object, no tool_choice
+                    extract: async (r: any) => {
+                        const value = await repairAndValidate<T>(
+                            mode.validatingSchema,
+                            (r?.text ?? '') as string,
                         );
-                    }
-                    return value;
+                        if (value === undefined) {
+                            throw new Error(
+                                `[structured-output] reroute-json produced no valid object for ${runName}`,
+                            );
+                        }
+                        return value;
+                    },
                 },
-            },
-        );
+            );
+        try {
+            return await reroute();
+        } catch (err) {
+            // Single-shot otherwise; only a 429 earns the re-issue.
+            if (
+                classifyLLMError(err).category !== LlmErrorCategory.RATE_LIMIT
+            ) {
+                throw err;
+            }
+            return await reissueAfterRateLimit(err, reroute);
+        }
     }
 
     try {
@@ -734,9 +920,14 @@ async function runReviewCall<T>(
                 mode.validatingSchema != null &&
                 haveBadValue
             ) {
-                const shaped = normalizeEnvelope(badValue, mode.envelopeKey, [], {
-                    liftEmptyArray: true,
-                });
+                const shaped = normalizeEnvelope(
+                    badValue,
+                    mode.envelopeKey,
+                    [],
+                    {
+                        liftEmptyArray: true,
+                    },
+                );
                 if (shaped !== badValue) {
                     const wireSchema = asSchema(mode.validatingSchema as any);
                     const check =
@@ -780,25 +971,43 @@ async function runReviewCall<T>(
         // Cooldown-aware: after a classified RATE_LIMIT the wrapper armed the
         // slot's limiter with cooldownMs. Never re-issue into a cooling slot
         // (arm-then-honor) — an immediate re-fire would just hammer the
-        // rate-limited provider. The caller backs off instead.
-        if (
-            getLimiterForSlot({
-                slot: mainSlot,
-                organizationId,
-            })?.isInCooldown()
-        ) {
+        // rate-limited provider.
+        if (category === LlmErrorCategory.RATE_LIMIT) {
+            return await reissueAfterRateLimit(err, () =>
+                call(
+                    mainModel,
+                    mainModelName,
+                    mainSystem,
+                    undefined,
+                    schemaOnlyInPrompt
+                        ? { prompt: withJsonUserHint(user) }
+                        : undefined,
+                ),
+            );
+        }
+        if (slotInCooldown()) {
             throw err;
         }
 
         // The ONE bounded same-model re-issue: a transient (5xx / network) blip.
-        // A RATE_LIMIT (429) is NOT re-fired immediately — it backs off via the
-        // limiter cooldown rather than an instant same-model retry. Full-jitter
-        // backoff first (shared policy) so N parallel shards hitting the same blip
-        // don't re-fire in lockstep — the thundering-herd the immediate re-issue
-        // caused. One re-issue only; a re-issue failure still propagates.
+        // Full-jitter backoff first (shared policy) so N parallel shards hitting
+        // the same blip don't re-fire in lockstep — the thundering-herd the
+        // immediate re-issue caused. One re-issue only; a re-issue failure
+        // still propagates, and a 429 on it goes to the fallback like the
+        // other re-issues' do.
         if (category === RETRYABLE_CATEGORY) {
             await sleep(jitteredBackoffMs(1));
-            return await call(mainModel, mainModelName, mainSystem);
+            try {
+                return await call(mainModel, mainModelName, mainSystem);
+            } catch (retryErr) {
+                if (
+                    classifyLLMError(retryErr).category ===
+                    LlmErrorCategory.RATE_LIMIT
+                ) {
+                    throw markRetriesExhausted(retryErr);
+                }
+                throw retryErr;
+            }
         }
         throw err;
     }
@@ -847,7 +1056,8 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
     // envelope-key derivation below.
     const jsonForm =
         wireSchema && typeof wireSchema === 'object'
-            ? ((wireSchema as { jsonSchema?: unknown }).jsonSchema ?? wireSchema)
+            ? ((wireSchema as { jsonSchema?: unknown }).jsonSchema ??
+              wireSchema)
             : undefined;
 
     // Stringify the wire JSON schema so the json_object fallback can put the
@@ -867,8 +1077,7 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
     // re-ask still runs).
     let envelopeKey: string | undefined;
     const jf = jsonForm as
-        | { required?: unknown; properties?: unknown }
-        | undefined;
+        { required?: unknown; properties?: unknown } | undefined;
     if (jf && typeof jf === 'object') {
         const required = Array.isArray(jf.required) ? jf.required : [];
         if (typeof required[0] === 'string') {

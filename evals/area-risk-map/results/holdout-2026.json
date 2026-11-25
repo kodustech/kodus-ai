@@ -1,0 +1,4251 @@
+{
+  "eval": "area-risk-map",
+  "question": "Does the map's bug-evidence ranking put directories changed by later PRs linked to bug-labeled issues in its top 20%, compared with ranking the same areas by churn?",
+  "model": "none",
+  "runs": 1,
+  "metric": {
+    "name": "later linked bugfix PR directory recall at top 20%",
+    "value": 0.566150178784267,
+    "floor": null,
+    "baseline": 0.5613825983313468
+  },
+  "cases": [
+    {
+      "id": "ansible/ansible#84594",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 1,
+        "known": true,
+        "files": 13
+      }
+    },
+    {
+      "id": "ansible/ansible#85610",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "ansible/ansible#85669",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 7,
+      "detail": [
+        {
+          "what": "bug evidence 1/7; churn 1/7; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 1,
+        "known": true,
+        "files": 11
+      }
+    },
+    {
+      "id": "ansible/ansible#85799",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#85857",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 7,
+      "detail": [
+        {
+          "what": "bug evidence 2/7; churn 2/7; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 8
+      }
+    },
+    {
+      "id": "ansible/ansible#85881",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#86143",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#86170",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "ansible/ansible#86175",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 1/2; churn 1/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 1,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "ansible/ansible#86183",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 9,
+      "detail": [
+        {
+          "what": "bug evidence 3/9; churn 3/9; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 3,
+        "known": true,
+        "files": 12
+      }
+    },
+    {
+      "id": "ansible/ansible#86341",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#86345",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 6
+      }
+    },
+    {
+      "id": "ansible/ansible#86348",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 6
+      }
+    },
+    {
+      "id": "ansible/ansible#86402",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "ansible/ansible#86403",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "ansible/ansible#86415",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#86473",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 6,
+      "detail": [
+        {
+          "what": "bug evidence 2/6; churn 2/6; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 6
+      }
+    },
+    {
+      "id": "ansible/ansible#86493",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "ansible/ansible#86516",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#86553",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#86561",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 9,
+      "detail": [
+        {
+          "what": "bug evidence 1/9; churn 1/9; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 1,
+        "known": true,
+        "files": 11
+      }
+    },
+    {
+      "id": "ansible/ansible#86581",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "ansible/ansible#86608",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "ansible/ansible#86612",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#86613",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#86619",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 7,
+      "detail": [
+        {
+          "what": "bug evidence 3/7; churn 3/7; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 3,
+        "known": true,
+        "files": 10
+      }
+    },
+    {
+      "id": "ansible/ansible#86640",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 0,
+      "total": 1,
+      "detail": [
+        {
+          "what": "bug evidence 0/1; churn 0/1; known area false",
+          "ok": false
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 0,
+        "known": false,
+        "files": 3
+      }
+    },
+    {
+      "id": "ansible/ansible#86671",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#86692",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#86705",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 3,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#86727",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "ansible/ansible#86732",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "ansible/ansible#86757",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 5,
+      "total": 13,
+      "detail": [
+        {
+          "what": "bug evidence 5/13; churn 5/13; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 5,
+        "known": true,
+        "files": 41
+      }
+    },
+    {
+      "id": "ansible/ansible#86768",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 4,
+      "total": 5,
+      "detail": [
+        {
+          "what": "bug evidence 4/5; churn 4/5; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 4,
+        "known": true,
+        "files": 6
+      }
+    },
+    {
+      "id": "ansible/ansible#86810",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "ansible/ansible#86860",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "ansible/ansible#86885",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 3/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 3,
+        "known": true,
+        "files": 7
+      }
+    },
+    {
+      "id": "ansible/ansible#86909",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "ansible/ansible#86922",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "ansible/ansible#86939",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 1/4; churn 1/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 1,
+        "known": true,
+        "files": 6
+      }
+    },
+    {
+      "id": "ansible/ansible#87000",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 2/2; churn 2/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "ansible/ansible#87037",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 1,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "ansible/ansible#87056",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "ansible/ansible#87087",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 2/2; churn 2/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "ansible/ansible#87184",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 5,
+      "detail": [
+        {
+          "what": "bug evidence 2/5; churn 2/5; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "ansible/ansible#87546",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "ansible/ansible",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#18348",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 0,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 0/3; churn 0/3; known area true",
+          "ok": false
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 0,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#18505",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 0,
+      "total": 6,
+      "detail": [
+        {
+          "what": "bug evidence 0/6; churn 0/6; known area true",
+          "ok": false
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 0,
+        "known": true,
+        "files": 14
+      }
+    },
+    {
+      "id": "astropy/astropy#19023",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19025",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 3/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 3,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "astropy/astropy#19142",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 1/4; churn 1/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "astropy/astropy#19189",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19199",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 4,
+      "total": 8,
+      "detail": [
+        {
+          "what": "bug evidence 4/8; churn 4/8; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 4,
+        "known": true,
+        "files": 10
+      }
+    },
+    {
+      "id": "astropy/astropy#19279",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 1,
+      "detail": [
+        {
+          "what": "bug evidence 1/1; churn 1/1; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "astropy/astropy#19294",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 6,
+      "detail": [
+        {
+          "what": "bug evidence 2/6; churn 2/6; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 2,
+        "known": true,
+        "files": 6
+      }
+    },
+    {
+      "id": "astropy/astropy#19330",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 2/2; churn 2/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 2,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "astropy/astropy#19360",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19363",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19367",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19372",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 0,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 0/3; churn 0/3; known area true",
+          "ok": false
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 0,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19438",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 1/4; churn 1/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "astropy/astropy#19446",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 1,
+      "detail": [
+        {
+          "what": "bug evidence 1/1; churn 1/1; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 1
+      }
+    },
+    {
+      "id": "astropy/astropy#19447",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 1,
+      "detail": [
+        {
+          "what": "bug evidence 1/1; churn 1/1; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 1
+      }
+    },
+    {
+      "id": "astropy/astropy#19453",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 1,
+      "detail": [
+        {
+          "what": "bug evidence 1/1; churn 1/1; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 1
+      }
+    },
+    {
+      "id": "astropy/astropy#19456",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 1,
+      "detail": [
+        {
+          "what": "bug evidence 1/1; churn 1/1; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 1
+      }
+    },
+    {
+      "id": "astropy/astropy#19466",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19575",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 14,
+      "detail": [
+        {
+          "what": "bug evidence 3/14; churn 2/14; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 2,
+        "known": true,
+        "files": 19
+      }
+    },
+    {
+      "id": "astropy/astropy#19592",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "astropy/astropy#19657",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19712",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 0,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 0/2; churn 0/2; known area true",
+          "ok": false
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 0,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "astropy/astropy#19720",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 1/2; churn 1/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19738",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "astropy/astropy#19782",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 1/2; churn 1/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "astropy/astropy#19829",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 0,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 0/3; churn 0/3; known area true",
+          "ok": false
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 0,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19903",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19912",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19939",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#19959",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 2/2; churn 2/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 2,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "astropy/astropy#19979",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 1/4; churn 1/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "astropy/astropy#20393",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 0,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 0/3; churn 0/3; known area true",
+          "ok": false
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 0,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#20418",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#20422",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#20456",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "astropy/astropy#20496",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 0,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 0/3; churn 0/3; known area true",
+          "ok": false
+        }
+      ],
+      "metadata": {
+        "repository": "astropy/astropy",
+        "churnHits": 0,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#61637",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#63522",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#63613",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 8
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#63659",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#63887",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#63908",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 1/4; churn 1/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#63925",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 4,
+      "total": 5,
+      "detail": [
+        {
+          "what": "bug evidence 4/5; churn 3/5; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#63945",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#63961",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#63974",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#63975",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#63979",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64035",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64081",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 5,
+      "detail": [
+        {
+          "what": "bug evidence 2/5; churn 3/5; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64092",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64113",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64133",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 3/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64270",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64339",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64386",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64448",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64569",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64571",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64631",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64639",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 7,
+      "detail": [
+        {
+          "what": "bug evidence 2/7; churn 1/7; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 7
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64712",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64755",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64767",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64788",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64789",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64790",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64792",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64796",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 5,
+      "detail": [
+        {
+          "what": "bug evidence 3/5; churn 3/5; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64797",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 5,
+      "detail": [
+        {
+          "what": "bug evidence 2/5; churn 2/5; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 6
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64798",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 5,
+      "total": 10,
+      "detail": [
+        {
+          "what": "bug evidence 5/10; churn 6/10; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 6,
+        "known": true,
+        "files": 14
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64803",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 4/4; churn 4/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 4,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64804",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 1/4; churn 1/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64806",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 3/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64809",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 3/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64814",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64817",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64846",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 7,
+      "detail": [
+        {
+          "what": "bug evidence 2/7; churn 1/7; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 7
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64852",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64853",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64856",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64951",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64952",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 1/2; churn 1/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64953",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64956",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 3/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64972",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#64988",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65011",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65012",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65022",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 7,
+      "detail": [
+        {
+          "what": "bug evidence 3/7; churn 3/7; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 7
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65024",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65038",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65041",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 3/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65066",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65101",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65113",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65133",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 6,
+      "detail": [
+        {
+          "what": "bug evidence 3/6; churn 3/6; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 14
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65141",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65147",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 3/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65170",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65188",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 5,
+      "detail": [
+        {
+          "what": "bug evidence 2/5; churn 2/5; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65217",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65221",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65229",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 3/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65230",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65234",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 5,
+      "detail": [
+        {
+          "what": "bug evidence 2/5; churn 2/5; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 7
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65235",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65239",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65241",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65244",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65255",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65264",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65268",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 5,
+      "total": 14,
+      "detail": [
+        {
+          "what": "bug evidence 5/14; churn 6/14; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 6,
+        "known": true,
+        "files": 19
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65273",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 1/2; churn 1/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65301",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65332",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65342",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65360",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 0,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 0/2; churn 0/2; known area true",
+          "ok": false
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 0,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65400",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 0,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 0/2; churn 0/2; known area true",
+          "ok": false
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 0,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65413",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65435",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65437",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65438",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65551",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 3/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65576",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65577",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 4,
+      "total": 5,
+      "detail": [
+        {
+          "what": "bug evidence 4/5; churn 4/5; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 4,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65601",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 5,
+      "detail": [
+        {
+          "what": "bug evidence 3/5; churn 3/5; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65602",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 2/2; churn 2/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65603",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65656",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65686",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 1/2; churn 1/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65780",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65781",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65782",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65785",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65786",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65787",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65788",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65790",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65793",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65794",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65836",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65864",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65902",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65937",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65939",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65942",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65943",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65946",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 4/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#65957",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#66001",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#66003",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#66016",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#66029",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 5,
+      "detail": [
+        {
+          "what": "bug evidence 2/5; churn 2/5; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 6
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#66070",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69115",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 1/4; churn 1/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69116",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69118",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69123",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69131",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69132",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69134",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69408",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 9,
+      "detail": [
+        {
+          "what": "bug evidence 3/9; churn 3/9; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 9
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69415",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 1/2; churn 1/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69427",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 1/4; churn 1/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 5
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69437",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69449",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69450",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 4/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69453",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 4/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69463",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 3/3; churn 3/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69473",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69478",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69489",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 1/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69490",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69494",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69496",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 6,
+      "detail": [
+        {
+          "what": "bug evidence 3/6; churn 3/6; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 7
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69507",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 1/2; churn 1/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69624",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 2/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69627",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 1/4; churn 1/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69640",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 6
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69668",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 1/2; churn 1/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69719",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69780",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "bug evidence 1/2; churn 1/2; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 1,
+        "known": true,
+        "files": 2
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69781",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 2,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 2/4; churn 2/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 4
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69784",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 1,
+      "total": 3,
+      "detail": [
+        {
+          "what": "bug evidence 1/3; churn 2/3; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 2,
+        "known": true,
+        "files": 3
+      }
+    },
+    {
+      "id": "pandas-dev/pandas#69840",
+      "checks": "What share of directories touched by this linked bugfix PR appear in the prior top 20%?",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "bug evidence 3/4; churn 3/4; known area true",
+          "ok": true
+        }
+      ],
+      "metadata": {
+        "repository": "pandas-dev/pandas",
+        "churnHits": 3,
+        "known": true,
+        "files": 4
+      }
+    }
+  ],
+  "tokens": {
+    "in": 0,
+    "out": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "calls": 0,
+    "ms": 0,
+    "callMs": []
+  },
+  "infra": {
+    "errored": 0,
+    "total": 234
+  },
+  "temporal": {
+    "set": "holdout-2026",
+    "historyWindow": [
+      "2025-07-01T00:00:00Z",
+      "2026-01-01T00:00:00Z"
+    ],
+    "targetsStart": "2026-01-01T00:00:00Z",
+    "knownAreaCases": 233,
+    "source": "GitHub Search and pull files API",
+    "historySampled": true,
+    "targetEvidence": "linked bug-labeled issue"
+  }
+}

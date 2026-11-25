@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { estimateTokens } from '@libs/code-review/infrastructure/adapters/services/utils/token-estimator';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
+import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { MessageTemplateProcessor } from '@libs/code-review/infrastructure/adapters/services/messageTemplateProcessor.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -34,16 +35,28 @@ jest.mock('@libs/core/log/logger', () => ({
  * token" file measured a few dozen and nothing in this file ever exceeded a
  * budget again.
  *
- * Varied text tokenizes the way a real patch does, and the loop grows it until
- * the tokenizer agrees, so the fixture means what its name says regardless of
- * what the estimator does next.
+ * Varied text tokenizes the way a real patch does, and the patch is the fewest
+ * repeats of `unit` the tokenizer agrees reach `patchTokens`, so the fixture
+ * means what its name says regardless of what the estimator does next. Found by
+ * binary search: growing one unit at a time re-tokenized the whole patch on
+ * every step and made this suite take ~11s.
  */
 function makeFile(filename: string, patchTokens: number): Partial<FileChange> {
     const unit = `const ${filename.replace(/\W/g, '_')} = compute(value, index); // note\n`;
-    let patch = '';
-    while (estimateTokens(patch) < patchTokens) {
-        patch += unit;
+    let hi = 1;
+    while (estimateTokens(unit.repeat(hi)) < patchTokens) {
+        hi *= 2;
     }
+    let lo = 0;
+    while (lo < hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (estimateTokens(unit.repeat(mid)) < patchTokens) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    const patch = unit.repeat(lo);
     return {
         filename,
         patch,
@@ -68,6 +81,7 @@ describe('CommentManagerService – chunkChangedFilesForSummary', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 { provide: MessageTemplateProcessor, useValue: {} },
                 { provide: ObservabilityService, useValue: {} },
@@ -289,21 +303,38 @@ describe('CommentManagerService – chunkChangedFilesForSummary', () => {
     // -----------------------------------------------------------------
 
     describe('edge cases', () => {
-        it('should return all files best-effort when budget is consumed by fixed parts', () => {
-            // Very large prompt, tiny maxInputTokens
-            const hugePrompt = 'x'.repeat(10000); // ≈ 2857 tokens
+        it('should return null when the fixed parts alone use the budget (#2233)', () => {
+            // Very large prompt, tiny maxInputTokens: no call can fit, and
+            // sending the files anyway is a request the provider rejects.
+            const hugePrompt = 'x'.repeat(10000);
             const files = [makeFile('a.ts', 100)];
 
             const result = serviceAny.chunkChangedFilesForSummary(
                 files,
                 hugePrompt,
                 SHORT_PREFIX,
-                1000, // effectiveBudget = 900, but fixedTokens ≈ 2907 > 900
+                1000,
             );
 
-            // availableTokens <= 0 → return all files best-effort
-            expect(result).toHaveLength(1);
-            expect(result[0]).toBe(files);
+            expect(result).toBeNull();
+        });
+
+        it('should return null when a file does not fit even without its patch', () => {
+            const result = serviceAny.chunkChangedFilesForSummary(
+                [
+                    makeFile('a.ts', 100),
+                    {
+                        filename: 'x'.repeat(20_000),
+                        patch: '+ y',
+                        status: 'added',
+                    },
+                ],
+                SHORT_PROMPT,
+                SHORT_PREFIX,
+                3000,
+            );
+
+            expect(result).toBeNull();
         });
 
         it('should handle empty changedFiles array', () => {
@@ -393,6 +424,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         title: 'Test PR',
         head: { ref: 'feature-branch', repo: { fullName: 'org/repo' } },
         base: { ref: 'main' },
+        body: 'Existing PR description',
     };
 
     const defaultSummaryConfig = {
@@ -418,29 +450,40 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         llmCallCount = 0;
 
         mockObservabilityService = {
-            runAiSdkLLMInSpan: jest.fn().mockImplementation(async ({ runName }) => {
-                llmCallCount++;
-                if (runName.includes('consolidation')) {
-                    return { text: 'Consolidated summary of all changes.' };
-                }
-                if (runName.includes('chunk')) {
-                    const chunkNum = runName.match(/chunk_(\d+)/)?.[1] || '?';
+            runAiSdkLLMInSpan: jest
+                .fn()
+                .mockImplementation(async ({ runName }) => {
+                    llmCallCount++;
+                    if (runName.includes('consolidation')) {
+                        return {
+                            text: 'Consolidated summary of all changes.',
+                            output: {
+                                description:
+                                    'Consolidated summary of all changes.',
+                            },
+                        };
+                    }
+                    if (runName.includes('chunk')) {
+                        const chunkNum =
+                            runName.match(/chunk_(\d+)/)?.[1] || '?';
+                        return {
+                            text: `Partial summary for chunk ${chunkNum}.`,
+                            output: {
+                                description: `Partial summary for chunk ${chunkNum}.`,
+                            },
+                        };
+                    }
                     return {
-                        text: `Partial summary for chunk ${chunkNum}.`,
+                        text: 'Full PR summary generated.',
+                        output: { description: 'Full PR summary generated.' },
                     };
-                }
-                return { text: 'Full PR summary generated.' };
-            }),
+                }),
         };
         // LLM.run reads observability through the port, not DI — register the mock
         // so every summary call is intercepted (no live model call).
         setLlmObservability(mockObservabilityService as any);
 
-        mockCodeManagementService = {
-            getPullRequestByNumber: jest.fn().mockResolvedValue({
-                body: 'Existing PR description',
-            }),
-        };
+        mockCodeManagementService = {};
 
         mockPermissionValidationService = {
             validateBasicLicense: jest
@@ -456,6 +499,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 { provide: MessageTemplateProcessor, useValue: {} },
                 {
@@ -494,10 +538,14 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
             expect(result).toContain('Full PR summary generated.');
             expect(llmCallCount).toBe(1);
             const prompt = promptSpy.mock.calls[0][0] as any;
-            expect(prompt.userPrompt).toContain('generate a precise description');
-            expect(prompt.userPrompt).toContain(defaultSummaryConfig.customInstructions);
+            expect(prompt.userPrompt).toContain(
+                'generate a precise description',
+            );
+            expect(prompt.userPrompt).toContain(
+                defaultSummaryConfig.customInstructions,
+            );
             expect(prompt.userPrompt).toContain('<changedFilesContext>');
-            expect(prompt.systemPrompt).toContain('not questions');
+            expect(prompt.systemPrompt).toContain('no questions');
         });
     });
 
@@ -553,14 +601,20 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
             expect(runNames).toContain('generateSummaryPR_chunk_2');
             expect(runNames).toContain('generateSummaryPR_consolidation');
             for (const [prompt] of promptSpy.mock.calls as any) {
-                expect(prompt.userPrompt).toContain('generate a precise description');
-                expect(prompt.userPrompt).toContain(defaultSummaryConfig.customInstructions);
-                expect(prompt.systemPrompt).toContain('not questions');
+                expect(prompt.userPrompt).toContain(
+                    'generate a precise description',
+                );
+                expect(prompt.userPrompt).toContain(
+                    defaultSummaryConfig.customInstructions,
+                );
+                expect(prompt.systemPrompt).toContain('no questions');
             }
             const consolidation = (promptSpy.mock.calls as any).find(
                 ([prompt]: any) => prompt.runName.endsWith('_consolidation'),
             )[0];
-            expect(consolidation.userPrompt).toContain('Merge them into a single');
+            expect(consolidation.userPrompt).toContain(
+                'Merge them into a single',
+            );
             expect(consolidation.userPrompt).toContain('<partialSummary');
         });
     });
@@ -605,15 +659,27 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                     if (runName.includes('consolidation')) {
                         return {
                             text: 'Consolidated from partial summaries.',
+                            output: {
+                                description:
+                                    'Consolidated from partial summaries.',
+                            },
                         };
                     }
                     if (runName === 'generateSummaryPR_chunk_2') {
                         return { text: null }; // empty chunk
                     }
                     if (runName.includes('chunk')) {
-                        return { text: 'Partial summary for chunk.' };
+                        return {
+                            text: 'Partial summary for chunk.',
+                            output: {
+                                description: 'Partial summary for chunk.',
+                            },
+                        };
                     }
-                    return { text: 'Full summary.' };
+                    return {
+                        text: 'Full summary.',
+                        output: { description: 'Full summary.' },
+                    };
                 },
             );
 

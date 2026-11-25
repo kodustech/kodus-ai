@@ -14,6 +14,9 @@ export type RepositoryHookState =
     // GitHub App installs receive events through the app-level webhook, so a
     // missing repository hook is expected there.
     | 'app-level'
+    // A hook points at Kodus, but carries a token this install rejects (Azure
+    // Repos, after CODE_MANAGEMENT_SECRET or the webhook token changed).
+    | 'stale'
     | 'unknown';
 
 export type RepositoryAccessDiagnosis = {
@@ -32,7 +35,7 @@ export const UNKNOWN_REPOSITORY_ACCESS: RepositoryAccessDiagnosis = {
 
 // Octokit sets `status`, axios `response.status`, gitbeaker v43
 // `cause.response.status`.
-function providerErrorStatus(error: any): number | undefined {
+export function providerErrorStatus(error: any): number | undefined {
     const status =
         error?.status ??
         error?.response?.status ??

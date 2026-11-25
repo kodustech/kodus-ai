@@ -55,10 +55,6 @@ describe('ForgejoChecksService', () => {
         } as unknown as Parameters<typeof ForgejoChecksService>[0]);
     });
 
-    it('should be defined', () => {
-        expect(service).toBeDefined();
-    });
-
     describe('createCheckRun', () => {
         it('should post a pending commit status with Kodus Code Review context', async () => {
             const result = await service.createCheckRun({

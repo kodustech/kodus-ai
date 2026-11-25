@@ -1,42 +1,50 @@
 ---
 title: 创建 Webhook
-description: "当自动注册未发生时,手动创建 Bitbucket webhook,并只勾选 Kodus 实际消费的 pull request 触发器。"
+description: "当自动注册未发生时，手动创建 Bitbucket webhook，并选择 Kodus 实际消费的 pull request 触发器。"
 icon: webhook
 ---
 
-Kodus 通常会自动创建 webhook。如果没有发生，请按照以下步骤手动设置：
+当您保存仓库选择时，Kodus 通常会自动创建 webhook。这需要仓库的管理员权限：在 Bitbucket Cloud 上，API 令牌还需要 `read:webhook:bitbucket` 和 `write:webhook:bitbucket` 范围；在 Bitbucket Data Center 上，则需要 **Repository admin** 权限。如果自动创建没有发生，**Repositories** 页面会列出该仓库及原因，您可以手动设置 webhook：
 
 <Note>
-  Webhook URL 必须指向 Webhooks 服务（端口 3332）。仅当反向代理将 `/.../webhook` 路径转发到 Webhooks 服务时，才能使用 API 域名。
+  Webhook URL 必须能到达 Webhooks 服务（端口 3332）。仅当反向代理将 `/.../webhook` 路径转发到 webhooks 服务时，才能使用 API 域名。
 </Note>
+
+## Bitbucket Cloud
 
 1. 导航到您的 Bitbucket 仓库
-2. 单击左侧边栏中的"仓库设置"
-3. 选择"Webhooks"
-4. 单击"添加 webhook"
+2. 单击左侧边栏中的 "Repository settings"
+3. 选择 "Webhooks"
+4. 单击 "Add webhook"
 5. 是时候配置您的 webhook 了：
 
-   - **标题**：Kodus 代码审查
-   - **URL**：输入您想要接收通知的 URL，即您在 `.env` 文件中的 `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` 下放置的 URL
-   - **状态**：活动
-   - **SSL/TLS**：勾选启用 SSL 验证
-   - **触发器**：选择这些事件：
-        - 拉取请求(Pull Request)
-            - 已创建(Created)
-            - 已更新(Updated)
-            - 已合并(Merged)
-            - 已拒绝(Declined)
-            - 评论已创建(Comment created)
+   - **Title**：Kodus Code Review
+   - **URL**：您在 `.env` 文件中 `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` 下填写的 URL（以 `/bitbucket/webhook` 结尾）
+   - **Status**：Active
+   - **SSL/TLS**：勾选 Enable SSL verification
+   - **Triggers**：选择这些事件：
+        - Pull Request
+            - Created
+            - Updated
+            - Merged
+            - Declined
+            - Comment created
 
-6. 单击"保存"
+6. 单击 "Save"
 
-就是这样！您已成功设置 webhook 以在 Bitbucket 仓库中进行代码审查。
+## Bitbucket Data Center
+
+Bitbucket Data Center 的支持处于 alpha 阶段。打开仓库，进入 **Repository settings** > **Webhooks**，并创建一个 webhook，设置如下：
+
+- **URL**：与上面相同的 `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` 值
+- **Events**：pull request 事件 `pr:opened`、`pr:modified`、`pr:comment:added`、`pr:merged` 和 `pr:declined`
 
 <Note>
-  Kodus 只消费 Pull Request 事件 —— `created`、`updated`、`merged`、`declined` 和
-  `comment created`。仓库、工单和构建状态触发器在到达后即被丢弃,不勾选它们
-  可以减少 webhook 流量。
-
-  在 Bitbucket Data Center 上,对应的事件是 `pr:opened`、`pr:modified`、
-  `pr:reviewer:updated`、`pr:comment:added`、`pr:merged` 和 `pr:declined`。
+  Kodus 只消费 pull request 事件：在 Cloud 上为 `created`、`updated`、`merged`、`declined` 和 `comment created`，在 Data Center 上为上面列出的五个事件。Repository、Issue 和构建状态触发器在到达后即被丢弃，因此不勾选它们可以减少 webhook 流量。Data Center 上的自动注册还会订阅 `pr:reviewer:updated`，Kodus 会接收并忽略它。
 </Note>
+
+### 向已打开的 pull request 推送
+
+在 Data Center 上，向已打开的 pull request 推送新提交会以 `pr:from_ref_updated` 的形式到达。Kodus 不订阅它并会将其丢弃，因此推送不会启动审查。当标题、描述、目标分支或草稿状态发生变化时，会触发 `pr:modified`。除非最新提交对 Kodus 来说是新的，或者 pull request 退出草稿状态，否则 Kodus 会忽略它。要审查新提交，请在 pull request 上评论 `@kody start-review`。
+
+在 Cloud 上，Kodus 以相同的方式处理 `pullrequest:updated`：仅当最新提交对 Kodus 来说是新的，或者 pull request 退出草稿状态时，才会启动审查。

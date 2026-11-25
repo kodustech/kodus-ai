@@ -1,0 +1,34 @@
+{
+ "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "items": [
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#opa-01",
+   "defectStatement": "The organization/BROKER_PUBLIC restriction added to the shared getLoginPredicate() also filters IdentityProviderBean's already-linked federated providers. With organizations disabled, an otherwise eligible linked provider with an organizationId and BROKER_PUBLIC other than true is incorrectly omitted from the login page.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Restore visibility of otherwise eligible already-linked providers when organizations are disabled, regardless of BROKER_PUBLIC.",
+    "Preserve rejection of null, disabled, link-only, and hide-on-login providers.",
+    "Preserve login-cache invalidation when an organization provider's BROKER_PUBLIC changes its login eligibility.",
+    "Preserve organization-specific visibility restrictions where they apply."
+   ],
+   "exampleFix": null,
+   "notes": "Simply deleting the added clause breaks cache invalidation for BROKER_PUBLIC transitions: the update logic would consider both versions eligible and skip invalidation. Separate the cache predicate and update its callers, or change IdentityProviderBean's predicate outside the anchor. Those callers are absent from the frozen code."
+  },
+  {
+   "issueId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02",
+   "defectStatement": "Both cleanup registrations target the literal provider alias \"alias\" instead of the providers created as idp-alias-0 through idp-alias-20. Consequently, cleanup does not remove the created providers that remain after the test, leaking test state.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Register cleanup against each actual provider alias created by the loop.",
+    "Register cleanup against idp-alias-20 for the additional provider.",
+    "Preserve provider setup, organization associations, and cache assertions."
+   ],
+   "exampleFix": "            getCleanup().addCleanup(testRealm().identityProviders().get(\"idp-alias-\" + i)::remove);\n        }\n\n        String orgaId = testRealm().organizations().getAll().get(0).getId();\n        for (int i = 10; i < 20; i++) {\n            testRealm().organizations().get(orgaId).identityProviders().addIdentityProvider(\"idp-alias-\" + i);\n        }\n\n        getTestingClient().server(TEST_REALM_NAME).run((RunOnServer) session -> {\n            RealmModel realm = session.getContext().getRealm();\n            RealmCacheSession realmCache = (RealmCacheSession) session.getProvider(CacheRealmProvider.class);\n\n            // check all caches for login don't exist yet\n            for (FetchMode fetchMode : IdentityProviderStorageProvider.FetchMode.values()) {\n                String cachedKey = cacheKeyForLogin(realm, fetchMode);\n                IdentityProviderListQuery identityProviderListQuery = realmCache.getCache().get(cachedKey, IdentityProviderListQuery.class);\n                assertNull(identityProviderListQuery);\n            }\n\n            // perform some login IDP searches and ensure they are cached.\n            session.identityProviders().getForLogin(FetchMode.REALM_ONLY, null);\n            IdentityProviderListQuery identityProviderListQuery = realmCache.getCache().get(cacheKeyForLogin(realm, FetchMode.REALM_ONLY), IdentityProviderListQuery.class);\n            assertNotNull(identityProviderListQuery);\n            assertEquals(5, identityProviderListQuery.getIDPs(\"\").size());\n\n            session.identityProviders().getForLogin(FetchMode.ORG_ONLY, orgaId);\n            identityProviderListQuery = realmCache.getCache().get(cacheKeyForLogin(realm, FetchMode.ORG_ONLY), IdentityProviderListQuery.class);\n            assertNotNull(identityProviderListQuery);\n            assertEquals(5, identityProviderListQuery.getIDPs(orgaId).size());\n\n            session.identityProviders().getForLogin(FetchMode.ALL, orgaId);\n            identityProviderListQuery = realmCache.getCache().get(cacheKeyForLogin(realm, FetchMode.ALL), IdentityProviderListQuery.class);\n            assertNotNull(identityProviderListQuery);\n            assertEquals(10, identityProviderListQuery.getIDPs(orgaId).size());\n        });\n\n        // 1- add/remove IDPs that are not available for login - none of these operations should invalidate the login caches.\n        IdentityProviderRepresentation idpRep = new IdentityProviderRepresentation();\n        idpRep.setAlias(\"idp-alias-\" + 20);\n        idpRep.setEnabled(true);\n        idpRep.setHideOnLogin(true); // this will make the new IDP not available for login.\n        idpRep.setDisplayName(\"Broker \" + 20);\n        idpRep.setProviderId(\"keycloak-oidc\");\n        testRealm().identityProviders().create(idpRep).close();\n        getCleanup().addCleanup(testRealm().identityProviders().get(\"idp-alias-20\")::remove);",
+   "notes": "Using idpRep.getAlias() in each bound method reference is also valid. The finding's NullPointerException claim is inaccurate: the client returns a resource proxy, and cleanup suppresses removal exceptions, including missing-provider errors. This also tolerates idp-alias-1 having already been removed by the test."
+  }
+ ]
+}

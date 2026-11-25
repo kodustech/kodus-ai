@@ -1,0 +1,20 @@
+{
+ "caseId": "feat-2fa-backup-codes-cal-com",
+ "items": [
+  {
+   "issueId": "feat-2fa-backup-codes-cal-com#01",
+   "defectStatement": "A nonempty totpCode skips password verification, but the backup-code branch takes precedence and never validates that TOTP value. Supplying an email, a valid backup code, and a dummy totpCode therefore authenticates without the account password.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Prevent a request containing both backupCode and totpCode from authenticating without password verification.",
+    "Reject invalid authentication before consuming a backup code.",
+    "Preserve password-authenticated backup-code login and consumption of the accepted code.",
+    "Preserve the existing TOTP-only validation path."
+   ],
+   "exampleFix": "      if (user.twoFactorEnabled && credentials.backupCode) {\n        if (credentials.totpCode) {\n          throw new Error(ErrorCode.IncorrectEmailPassword);\n        }\n\n        if (!process.env.CALENDSO_ENCRYPTION_KEY) {\n          console.error(\"Missing encryption key; cannot proceed with backup code login.\");\n          throw new Error(ErrorCode.InternalServerError);\n        }\n\n        if (!user.backupCodes) throw new Error(ErrorCode.MissingBackupCodes);\n\n        const backupCodes = JSON.parse(\n          symmetricDecrypt(user.backupCodes, process.env.CALENDSO_ENCRYPTION_KEY)\n        );\n\n        // check if user-supplied code matches one\n        const index = backupCodes.indexOf(credentials.backupCode.replaceAll(\"-\", \"\"));\n        if (index === -1) throw new Error(ErrorCode.IncorrectBackupCode);\n\n        // delete verified backup code and re-encrypt remaining\n        backupCodes[index] = null;\n        await prisma.user.update({\n          where: {\n            id: user.id,\n          },\n          data: {\n            backupCodes: symmetricEncrypt(JSON.stringify(backupCodes), process.env.CALENDSO_ENCRYPTION_KEY),\n          },\n        });\n      } else if (user.twoFactorEnabled) {",
+   "notes": "Rejecting simultaneous factor inputs fixes the bypass entirely within the anchor. Alternatively, require successful password verification in the backup-code branch, including when totpCode is supplied; reject missing stored passwords in that verification path."
+  }
+ ]
+}

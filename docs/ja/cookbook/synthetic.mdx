@@ -1,0 +1,123 @@
+---
+title: "Synthetic — オープンソースのコーディングモデル向け定額サブスクリプション"
+description: "Kimi、DeepSeek、Qwen、GLM などをまとめて利用できる Synthetic.new のサブスクリプション型 API を Kodus に接続する方法を説明します。"
+icon: "infinity"
+---
+
+## Synthetic の仕組み
+
+Synthetic は、オープンソースの LLM を **OpenAI 互換**（および Anthropic 互換）の API で提供するサブスクリプションサービスです。トークン単位の課金ではなく**月額の定額料金**を支払い、プラットフォーム上のすべてのモデルで共通の週次クレジット上限の範囲内で利用します。
+
+Kodus は OpenAI 互換エンドポイントを通じて Synthetic に接続するため、アダプターの変更は不要で、必要なのは BYOK の認証情報だけです。
+
+## プランの概要
+
+<Info>
+  料金や制限は変更されます。プランを選ぶ前に、[synthetic.new/pricing](https://synthetic.new/pricing) と [synthetic.new/rate-limits](https://synthetic.new/rate-limits) で確認してください。
+</Info>
+
+### サブスクリプション（コードレビューに推奨）
+
+| プラン | 料金 |
+| ---- | ----- |
+| **Go** | $9/月 |
+| **Standard** | $30/月 |
+| **Big** | $90/月 |
+
+- プランの利用量は週次のクレジット上限で管理され、トークン単位の請求ではありません。クレジットは決まった曜日にリセットされるのではなく、1 週間をかけて徐々に回復します。上位のプランほど上限が高くなります。具体的な数値は[レート制限のページ](https://synthetic.new/rate-limits)に記載されています。
+- 1 つのサブスクリプションですべてのモデルを利用できます。モデルごとに消費するクレジット量が異なるため、安価なモデルほど上限を長く使えます。モデルは `model` フィールドを変更して選択します。
+
+### 推奨モデル
+
+Synthetic は HuggingFace 形式のプレフィックス（`hf:org/model`）でモデルを公開しています。次のモデルは常時稼働しており、すべてのサブスクリプションに含まれます。カタログ上で、各モデルがツール呼び出しと構造化出力に対応していることが示されています。
+
+| モデル ID | コンテキストウィンドウ |
+| -------- | -------------- |
+| `hf:zai-org/GLM-5.3` | 512k トークン |
+| `hf:moonshotai/Kimi-K3.1-Pro` | 512k トークン |
+| `hf:deepseek-ai/DeepSeek-V4.1-Flash-1017` | 512k トークン |
+| `hf:Qwen/Qwen3.8-27B` | 256k トークン |
+| `hf:openai/gpt-oss-120b` | 128k トークン |
+
+カタログは頻繁に更新されます。最新の一覧は [api.synthetic.new/openai/v1/models](https://api.synthetic.new/openai/v1/models) で公開されています。
+
+## APIキーの作成
+
+1. [synthetic.new](https://synthetic.new) にアクセスし、サインアップまたはログインします。
+2. [synthetic.new/pricing](https://synthetic.new/pricing) でプランに登録します。
+3. APIキーをコピーします。ログイン中は、Synthetic の [API ドキュメント](https://dev.synthetic.new/docs/api/getting-started)にキーが表示されます。
+
+## Kodus で Synthetic を設定する
+
+### オプション1 — AI providers ページ（推奨）
+
+[プロバイダーを接続する](/ja/how_to_use/byok#プロバイダーを接続する)の手順に従い、**Custom → OpenAI-compatible** を選びます。フォームには次の値を指定します。
+
+| フィールド | 値 |
+| --- | --- |
+| **Base URL** | `https://api.synthetic.new/openai/v1` |
+| **Model** | 例：`hf:zai-org/GLM-5.3`（`hf:` プレフィックスと HuggingFace の完全なパスを使用） |
+| **Key**（**API key** カード内） | Synthetic の APIキー |
+
+**Test & save** をクリックし、[Routing](/ja/how_to_use/code_review/configs/routing) でデフォルトモデルとフォールバックモデルを選びます。
+
+<Tip>
+  Synthetic は週次のクレジット上限のみで、5 時間単位や月単位の個別の制限はありません。**Max concurrent requests**（**Advanced (optional)** → **Advanced settings** 内）は空欄のままにし、429 が出る場合にのみ設定してください。
+</Tip>
+
+<Note>
+  **Code review → Routing**（**AI providers** の **Configure routing** ボタンから開けます）で、Synthetic を **Default model** に、OpenAI または Anthropic のモデルを **Fallback model** に設定します。クレジットが尽きるなどして Synthetic が失敗した場合、Kodus はフォールバックで呼び出しを再実行します。
+</Note>
+
+### オプション2 — セルフホスト（環境変数）
+
+セルフホスト環境で `.env` から 1 つのモデルを指定するには、次のように設定します。
+
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="hf:zai-org/GLM-5.3"
+API_LLM_BASE_URL="https://api.synthetic.new/openai/v1"
+API_LLM_API_KEY="your-synthetic-api-key"
+```
+
+インストールガイドに従って[モデルの変更を反映してください](/ja/how_to_deploy/deploy_kodus/generic_vm#モデルの変更を反映する)。
+
+## Synthetic を選ぶ場合
+
+- **メインのモデルがオープンソース**（Kimi、DeepSeek、Qwen、GLM）で、プロバイダーごとのトークン支出を管理する代わりに、月額定額の請求にまとめたい場合。
+- **トラフィックの変動が大きい場合。** Synthetic にはバースト利用へのペナルティがありません。週次の上限を 1 回のセッションで使い切っても、その後クレジットが回復します。
+
+使ったトークン分だけ支払いたい場合は、従量課金の Moonshot、Fireworks、Together、Groq を選択してください。GLM ファミリーを特に使いたい場合は、別のサブスクリプションである Z.AI GLM Coding Plan を選択してください。
+
+## トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="429 Too Many Requests">
+    - 週次クレジットを使い切った可能性があります。[Synthetic の請求ページ](https://synthetic.new/billing)で使用状況を、[レート制限](https://synthetic.new/rate-limits)で上限を確認してください。
+    - クレジットは徐々に回復するため、しばらく待つか、モデルの **Max concurrent requests** を下げる（**AI providers** → **Edit model**）か、上位のプランに移行してください。
+    - レート制限中もレビューが継続されるよう、**Code review → Routing** で **Fallback model** を設定します。
+  </Accordion>
+
+  <Accordion title="401 / 認証エラー">
+    - Synthetic ダッシュボードで、キーが有効でサブスクリプションが最新であることを確認します。
+    - `.env` の値に末尾のスペースや引用符が含まれていないことを確認します。
+  </Accordion>
+
+  <Accordion title="モデルが見つからない">
+    - Synthetic は `hf:org/model` 形式を使用し、`hf:` プレフィックスは必須です。
+    - [api.synthetic.new/openai/v1/models](https://api.synthetic.new/openai/v1/models) と照合してください。Synthetic は古いモデルを順次提供終了するため、固定した ID が 404 を返すようになることがあります。
+  </Accordion>
+
+  <Accordion title="接続エラー">
+    - サーバーから `api.synthetic.new` に到達できることを確認します。
+    - API とワーカーのログで、上流の正確なエラーを確認します。
+  </Accordion>
+</AccordionGroup>
+
+## 関連リンク
+
+- [Synthetic の料金](https://synthetic.new/pricing)
+- [Synthetic のレート制限](https://synthetic.new/rate-limits)
+- [Synthetic API ドキュメント](https://dev.synthetic.new/docs/api/getting-started)
+- [Synthetic モデルカタログ](https://dev.synthetic.new/docs/openai/models)
+- [BYOK の概要](/ja/how_to_use/byok)

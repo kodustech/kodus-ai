@@ -1,7 +1,12 @@
 import { MCPServerConfig } from '../mcp-adapter';
-import { KODUS_MCP_TOKEN_AUDIENCE } from '../utils/mcp-auth.constants';
+import {
+    KODUS_ISSUES_INTEGRATION_ID,
+    KODUS_MCP_INTEGRATION_ID,
+    KODUS_MCP_TOKEN_AUDIENCE,
+} from '../utils/mcp-auth.constants';
 import { createLogger } from '@libs/core/log/logger';
 import { TransportType } from '../mcp-adapter';
+import { credentialFingerprint } from '../credential-fingerprint';
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
@@ -132,13 +137,16 @@ interface MCPIntegrationOAuth2 extends MCPIntegrationBase {
     tokenExpiry?: number;
 }
 
-export const KODUS_MCP_INTEGRATION_ID = 'kd_mcp_oTUrzqsaxTg';
-export const KODUS_ISSUES_INTEGRATION_ID = 'kodus-issues-default';
+export { KODUS_ISSUES_INTEGRATION_ID, KODUS_MCP_INTEGRATION_ID };
+
+const REJECTION_REPORT_WINDOW_MS = 10 * 60_000;
 
 @Injectable()
 export class MCPManagerService {
     private readonly logger = createLogger(MCPManagerService.name);
     private axiosMCPManagerService: AxiosMCPManagerService;
+    /** Refusals already reported, by org:integration:fingerprint → when. */
+    private readonly reportedRejections = new Map<string, number>();
 
     constructor(
         private readonly jwt: JwtService,
@@ -431,10 +439,14 @@ export class MCPManagerService {
             type = integration.protocol;
         }
 
+        // The credential the manager issued for this connection, named so a
+        // refusal can be reported against it.
+        let issuedCredential: string | undefined;
         if (connection.provider === 'kodusmcp') {
             const config = await this.fetchKodusMcpConnectionConfig(connection);
             if (config?.headers) {
                 headers = { ...headers, ...config.headers };
+                issuedCredential = credentialFingerprint(config.headers);
             }
         }
 
@@ -448,6 +460,8 @@ export class MCPManagerService {
                   ? () => this.getKodusIssuesMcpEndpoint()
                   : undefined;
         if (firstPartyUrl) {
+            // Signed here, not issued by the manager.
+            issuedCredential = undefined;
             if (connection.organizationId !== callerOrganizationId)
                 throw new Error('Kodus MCP connection organization mismatch');
             url = firstPartyUrl();
@@ -478,7 +492,73 @@ export class MCPManagerService {
             // by skills to match required MCPs by capability (not display name).
             category: connection.category ?? null,
             integrationId: connection.integrationId,
+            ...(issuedCredential
+                ? {
+                      onCredentialRejected: () =>
+                          void this.reportRejectedCredential(
+                              connection,
+                              issuedCredential!,
+                          ),
+                  }
+                : {}),
         };
+    }
+
+    /**
+     * The MCP server refused a credential the manager issued (revoked, or
+     * rotated elsewhere, before its stated expiry). The manager refreshes it,
+     * or expires the connection so reviews stop sending it and the plugin
+     * page asks to reconnect. Once per credential per window: every review of
+     * the organization meets the same refusal.
+     */
+    private async reportRejectedCredential(
+        connection: MCPItem,
+        fingerprint: string,
+    ): Promise<void> {
+        const key = `${connection.organizationId}:${connection.integrationId}:${fingerprint}`;
+        const now = Date.now();
+        const last = this.reportedRejections.get(key);
+        if (last !== undefined && now - last < REJECTION_REPORT_WINDOW_MS)
+            return;
+        this.reportedRejections.set(key, now);
+        for (const [k, at] of this.reportedRejections) {
+            if (now - at >= REJECTION_REPORT_WINDOW_MS)
+                this.reportedRejections.delete(k);
+        }
+
+        try {
+            const result = (await this.axiosMCPManagerService.post(
+                `mcp/integration/kodusmcp/${connection.integrationId}/credential-rejected`,
+                { fingerprint },
+                {
+                    headers: this.getAuthHeaders({
+                        organizationId: connection.organizationId,
+                    }),
+                },
+            )) as { outcome?: string } | undefined;
+            this.logger.warn({
+                message: `MCP server refused the ${connection.appName} credential; MCP Manager: ${result?.outcome ?? 'no outcome'}`,
+                context: MCPManagerService.name,
+                metadata: {
+                    organizationId: connection.organizationId,
+                    integrationId: connection.integrationId,
+                    outcome: result?.outcome,
+                },
+            });
+        } catch (error) {
+            // Not delivered: the next review that meets the refusal tries again.
+            if (this.reportedRejections.get(key) === now)
+                this.reportedRejections.delete(key);
+            this.logger.warn({
+                message: 'Failed to report a refused MCP credential',
+                context: MCPManagerService.name,
+                error,
+                metadata: {
+                    organizationId: connection.organizationId,
+                    integrationId: connection.integrationId,
+                },
+            });
+        }
     }
 
     // Same resolution the mcp-manager applies to the managed `/mcp/issues`

@@ -169,79 +169,7 @@ describe('SavePullRequestUseCase', () => {
                 ).not.toHaveBeenCalled();
             });
 
-            it('should fetch from API when action is "synchronize"', async () => {
-                const params = {
-                    payload: {
-                        action: 'synchronize',
-                        pull_request: mockPullRequest,
-                        repository: mockRepository,
-                        sender: { id: 'user-1' },
-                    },
-                    platformType: PlatformType.GITHUB,
-                    event: 'pull_request',
-                };
-
-                await useCase.execute(params);
-
-                expect(
-                    mockCodeManagementService.getFilesByPullRequestId,
-                ).toHaveBeenCalled();
-                expect(
-                    mockCodeManagementService.getCommitsForPullRequestForCodeReview,
-                ).toHaveBeenCalled();
-                expect(
-                    mockPullRequestsRepository.findByNumberAndRepositoryId,
-                ).not.toHaveBeenCalled();
-            });
-
-            it('should fetch from API when Forgejo action is "synchronized"', async () => {
-                const params = {
-                    payload: {
-                        action: 'synchronized',
-                        pull_request: mockPullRequest,
-                        repository: mockRepository,
-                        sender: { id: 'user-1' },
-                    },
-                    platformType: PlatformType.FORGEJO,
-                    event: 'pull_request',
-                };
-
-                await useCase.execute(params);
-
-                expect(
-                    mockCodeManagementService.getFilesByPullRequestId,
-                ).toHaveBeenCalled();
-                expect(
-                    mockCodeManagementService.getCommitsForPullRequestForCodeReview,
-                ).toHaveBeenCalled();
-                expect(
-                    mockPullRequestsRepository.findByNumberAndRepositoryId,
-                ).not.toHaveBeenCalled();
-            });
-
-            it('should fetch from API when action is "ready_for_review"', async () => {
-                const params = {
-                    payload: {
-                        action: 'ready_for_review',
-                        pull_request: mockPullRequest,
-                        repository: mockRepository,
-                        sender: { id: 'user-1' },
-                    },
-                    platformType: PlatformType.GITHUB,
-                    event: 'pull_request',
-                };
-
-                await useCase.execute(params);
-
-                expect(
-                    mockCodeManagementService.getFilesByPullRequestId,
-                ).toHaveBeenCalled();
-                expect(
-                    mockCodeManagementService.getCommitsForPullRequestForCodeReview,
-                ).toHaveBeenCalled();
-            });
-
-            it('should use cached data from DB when action is "closed" and PR exists', async () => {
+            it('keeps the stored files and commits when action is "closed" and the PR exists', async () => {
                 mockPullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
                     mockExistingPR,
                 );
@@ -265,29 +193,18 @@ describe('SavePullRequestUseCase', () => {
                 expect(
                     mockCodeManagementService.getCommitsForPullRequestForCodeReview,
                 ).not.toHaveBeenCalled();
-                expect(
-                    mockPullRequestsRepository.findByNumberAndRepositoryId,
-                ).toHaveBeenCalledWith(
-                    mockPullRequest.number,
-                    mockRepository.id.toString(),
-                    mockOrganizationAndTeamData,
-                );
-                // Verify files are mapped from DB format to API format
+                // No files to write: the save leaves the stored ones as they
+                // are instead of re-saving a copy read back from the database.
                 const callArgs =
                     mockPullRequestsService.aggregateAndSaveDataStructure.mock
                         .calls[0];
-                const filesArg = callArgs[2];
-                const commitsArg = callArgs[7];
-
-                expect(filesArg).toHaveLength(2);
-                expect(filesArg[0].filename).toBe('file1.ts');
-                expect(filesArg[0].additions).toBe(10);
-                expect(filesArg[0].deletions).toBe(5);
-                expect(filesArg[1].filename).toBe('file2.ts');
-                expect(filesArg[1].additions).toBe(20);
-                expect(filesArg[1].deletions).toBe(10);
-
-                expect(commitsArg).toEqual(mockApiCommits);
+                expect(callArgs[2]).toEqual([]);
+                expect(callArgs[7]).toEqual([]);
+                expect(callArgs[9]).toEqual({ filesUnchanged: true });
+                // Nothing is read back from the database either.
+                expect(
+                    mockPullRequestsRepository.findByNumberAndRepositoryId,
+                ).not.toHaveBeenCalled();
             });
 
             it('should use empty arrays when action is "closed" and PR does not exist in DB', async () => {
@@ -325,36 +242,9 @@ describe('SavePullRequestUseCase', () => {
                     expect.anything(),
                     expect.anything(),
                     [],
+                    undefined,
+                    { filesUnchanged: true },
                 );
-            });
-
-            it('should use cached data from DB when action is "assigned"', async () => {
-                mockPullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
-                    mockExistingPR,
-                );
-
-                const params = {
-                    payload: {
-                        action: 'assigned',
-                        pull_request: mockPullRequest,
-                        repository: mockRepository,
-                        sender: { id: 'user-1' },
-                    },
-                    platformType: PlatformType.GITHUB,
-                    event: 'pull_request',
-                };
-
-                await useCase.execute(params);
-
-                expect(
-                    mockCodeManagementService.getFilesByPullRequestId,
-                ).not.toHaveBeenCalled();
-                expect(
-                    mockCodeManagementService.getCommitsForPullRequestForCodeReview,
-                ).not.toHaveBeenCalled();
-                expect(
-                    mockPullRequestsRepository.findByNumberAndRepositoryId,
-                ).toHaveBeenCalled();
             });
         });
 
@@ -413,34 +303,7 @@ describe('SavePullRequestUseCase', () => {
                 ).toHaveBeenCalled();
             });
 
-            it('should fetch from API when GitLab action is "update" with new commit', async () => {
-                const params = {
-                    payload: {
-                        object_attributes: {
-                            ...gitlabMR,
-                            action: 'update',
-                            oldrev: 'old-sha-123',
-                            last_commit: { id: 'new-sha-456' },
-                        },
-                        project: gitlabProject,
-                        repository: gitlabRepository,
-                        user: { id: 'user-1', username: 'testuser' },
-                    },
-                    platformType: PlatformType.GITLAB,
-                    event: 'Merge Request Hook',
-                };
-
-                await useCase.execute(params);
-
-                expect(
-                    mockCodeManagementService.getFilesByPullRequestId,
-                ).toHaveBeenCalled();
-                expect(
-                    mockCodeManagementService.getCommitsForPullRequestForCodeReview,
-                ).toHaveBeenCalled();
-            });
-
-            it('should use cached data when GitLab action is "close"', async () => {
+            it('keeps the stored files and commits when GitLab action is "close"', async () => {
                 mockPullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
                     mockExistingPR,
                 );
@@ -468,69 +331,11 @@ describe('SavePullRequestUseCase', () => {
                     mockCodeManagementService.getCommitsForPullRequestForCodeReview,
                 ).not.toHaveBeenCalled();
                 expect(
+                    mockPullRequestsService.aggregateAndSaveDataStructure.mock
+                        .calls[0][9],
+                ).toEqual({ filesUnchanged: true });
+                expect(
                     mockPullRequestsRepository.findByNumberAndRepositoryId,
-                ).toHaveBeenCalled();
-            });
-
-            it('should use cached data when GitLab action is "merge"', async () => {
-                mockPullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
-                    mockExistingPR,
-                );
-
-                const params = {
-                    payload: {
-                        object_attributes: {
-                            ...gitlabMR,
-                            action: 'merge',
-                        },
-                        project: gitlabProject,
-                        repository: gitlabRepository,
-                        user: { id: 'user-1', username: 'testuser' },
-                    },
-                    platformType: PlatformType.GITLAB,
-                    event: 'Merge Request Hook',
-                };
-
-                await useCase.execute(params);
-
-                expect(
-                    mockCodeManagementService.getFilesByPullRequestId,
-                ).not.toHaveBeenCalled();
-                expect(
-                    mockCodeManagementService.getCommitsForPullRequestForCodeReview,
-                ).not.toHaveBeenCalled();
-            });
-
-            it('should use cached data when GitLab action is "update" without new commit (description change)', async () => {
-                mockPullRequestsRepository.findByNumberAndRepositoryId.mockResolvedValue(
-                    mockExistingPR,
-                );
-
-                const params = {
-                    payload: {
-                        object_attributes: {
-                            ...gitlabMR,
-                            action: 'update',
-                            // No oldrev or same commit = not a new commit
-                        },
-                        changes: {
-                            description: { previous: 'old', current: 'new' },
-                        },
-                        project: gitlabProject,
-                        repository: gitlabRepository,
-                        user: { id: 'user-1', username: 'testuser' },
-                    },
-                    platformType: PlatformType.GITLAB,
-                    event: 'Merge Request Hook',
-                };
-
-                await useCase.execute(params);
-
-                expect(
-                    mockCodeManagementService.getFilesByPullRequestId,
-                ).not.toHaveBeenCalled();
-                expect(
-                    mockCodeManagementService.getCommitsForPullRequestForCodeReview,
                 ).not.toHaveBeenCalled();
             });
         });

@@ -43,10 +43,12 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
         };
 
         mockLicenseService = {
-            getAllUsersWithLicense: jest.fn().mockResolvedValue([
-                { git_id: 'still-here' },
-                { git_id: 'left-the-company' },
-            ]),
+            getAllUsersWithLicense: jest
+                .fn()
+                .mockResolvedValue([
+                    { git_id: 'still-here' },
+                    { git_id: 'left-the-company' },
+                ]),
             unassignLicenses: jest
                 .fn()
                 .mockImplementation((_org, gitIds) =>
@@ -104,6 +106,19 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
             });
             expect(mockLicenseService.unassignLicenses).not.toHaveBeenCalled();
         });
+
+        it('asks for a fresh list that must include pull request authors, checked against the seats it revokes from', async () => {
+            await useCase.execute({ organizationAndTeamData });
+
+            expect(mockMemberListService.fetch).toHaveBeenCalledWith(
+                organizationAndTeamData,
+                expect.objectContaining({
+                    requireAuthors: true,
+                    skipCache: true,
+                    seatHolderIds: ['still-here', 'left-the-company'],
+                }),
+            );
+        });
     });
 
     describe('preview', () => {
@@ -146,7 +161,9 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
                 revoked: ['left-the-company'],
                 failed: [],
             });
-            expect(mockLicenseService.unassignLicenses).toHaveBeenCalledTimes(1);
+            expect(mockLicenseService.unassignLicenses).toHaveBeenCalledTimes(
+                1,
+            );
             // The provider must reach the billing service, which 400s a user
             // entry without a gitTool.
             expect(mockLicenseService.unassignLicenses).toHaveBeenCalledWith(
@@ -167,7 +184,9 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
 
             await useCase.execute({ organizationAndTeamData });
 
-            expect(mockLicenseService.unassignLicenses).toHaveBeenCalledTimes(1);
+            expect(mockLicenseService.unassignLicenses).toHaveBeenCalledTimes(
+                1,
+            );
             expect(mockLicenseService.unassignLicenses).toHaveBeenCalledWith(
                 organizationAndTeamData,
                 ['gone-a', 'gone-b', 'gone-c'],
@@ -215,7 +234,9 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
             });
 
             expect(result.revoked).toEqual(['gone-b']);
-            expect(mockLicenseService.unassignLicenses).toHaveBeenCalledTimes(1);
+            expect(mockLicenseService.unassignLicenses).toHaveBeenCalledTimes(
+                1,
+            );
         });
 
         it('ignores requested git ids that are still org members', async () => {

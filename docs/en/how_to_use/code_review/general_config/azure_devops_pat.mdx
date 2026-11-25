@@ -9,33 +9,35 @@ To enable Kody to perform automatic Code Reviews, you need to generate a Persona
 
 ## Generating the PAT (Personal Access Token)
 
-You can access the PAT settings directly using this link: [Azure DevOps PATs](https://dev.azure.com/).
+You can open the PAT settings directly at `https://dev.azure.com/<organization>/_usersSettings/tokens`.
 
 Follow these steps to set up the token correctly:
 
-1. **Access Azure DevOps and go to your security settings:**
+1. **Access Azure DevOps and go to your token settings:**
 
-   - Go to [Azure DevOps](https://dev.azure.com/) and sign in.
-   - Click on your profile picture in the top-right corner.
-   - Select **"Security"** from the dropdown.
+   - Sign in to your organization at `https://dev.azure.com/<organization>`.
+   - Open **User settings** (the icon next to your profile picture in the top-right corner).
+   - Select **Personal access tokens**.
 
 2. **Create a new PAT:**
 
-   - Under the **Personal Access Tokens** section, click on **"New Token"**.
+   - Click **+ New Token**.
 
 3. **Set up the new token with the following specifications:**
 
    - **Name:** Choose an easily identifiable name, such as `kody_code_review`.
-   - **Organization:** Select your target organization.
+   - **Organization:** Select your target organization, not **All accessible organizations**. Azure DevOps is retiring tokens scoped to all organizations.
    - **Expiration:** Choose an appropriate expiration time (e.g., 90 or 180 days).
-   - **Scopes:** Select the following permissions:
+   - **Scopes:** Select the following permissions, named as in Microsoft's [scope list](https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/oauth#available-scopes):
 
-     - **Analytics:** Read
-     - **Code:** Read & Write
-     - **Graph:** Read
-     - **Identities and Groups:** Read
-     - **Project and Team:** Read
-     - **User Profile:** Read
+     | Scope | Id | Kody uses it to |
+     | --- | --- | --- |
+     | **Code (read and write)** | `vso.code_write` | Read repositories and pull requests, post review comments, and create the service hooks that deliver pull request events. |
+     | **Project and team (read)** | `vso.project` | List projects, teams and team members. |
+     | **Analytics (read)** | `vso.analytics` | Read repository language metrics. |
+     | **Graph (read)** | `vso.graph` | Look up organization users. |
+     | **Identity (read)** | `vso.identity` | Read identities and groups. |
+     | **User profile (read)** | `vso.profile` | Read the profile of the token owner. |
 
 4. **Click Create.**
 
@@ -45,9 +47,13 @@ Copy the generated token and store it securely, as you’ll need it to configure
   Write access to Code is required for Kody to post comments and manage pull request feedback.
 </Note>
 
+<Note>
+  Kody creates one service hook subscription per pull request event and repository. Microsoft's [Create Subscription](https://learn.microsoft.com/en-us/rest/api/azure/devops/hooks/subscriptions/create?view=azure-devops-rest-7.1) endpoint accepts `vso.code` for these events, and **Code (read and write)** includes it, so the token needs no separate service hooks scope. The token owner also needs the **Edit subscriptions** permission on the project. Project Administrators have it.
+</Note>
+
 ## Adding the Token to Kody
 
-After generating the token, paste it into Kodus: during onboarding (**Connect your Git tool** → **Azure Repos** tab → **Connect via token**), or later in the sidebar under **Repositories** → **Connect a provider** → **Azure Repos**. Fill in **Organization name** and **Personal Access Token**, then click **Validate and save**.
+After generating the token, paste it into Kodus: during onboarding (**Connect your Git tool** → **Azure Repos** tab → **Connect via token**), or later in the sidebar under **Repositories** → **Connect a provider** → **Azure Repos**. Fill in **Organization name** (the name in `dev.azure.com/<organization>`) and **Personal Access Token**, then click **Validate and save**. Kodus connects to Azure DevOps Services at `dev.azure.com`.
 
 ## Troubleshooting: Kody isn't reviewing PRs in Azure DevOps
 
@@ -55,7 +61,7 @@ If Kody is connected but **nothing happens on new pull requests** — no reactio
 
 ### 1. Check the PAT scopes
 
-Open the PAT in Azure DevOps and confirm every scope listed under [Generating the PAT](#generating-the-pat-personal-access-token) is enabled. The one most often missed is **Code: Read & Write** — without **Write**, Kody can read your repositories but cannot post review comments, so the reviews "run silently".
+Open the PAT in Azure DevOps and confirm every scope listed under [Generating the PAT](#generating-the-pat-personal-access-token) is enabled. The one most often missed is **Code (read and write)**. With only **Code (read)**, Kody can read your repositories but cannot post review comments, so the reviews "run silently".
 
 If the PAT was created before a scope was added, Azure DevOps won't retroactively add it. Create a new PAT with the full scope list and reconnect with it (**Repositories** → **Reset** on the provider card → **Just reset the integration**, then connect Azure Repos again with the new token).
 

@@ -1,6 +1,4 @@
 import {
-    buildCodeReviewSettingsScopeKey,
-    buildCodeReviewSettingsHydrationKey,
     mergeFormattedCodeReviewConfigForScope,
     shouldHydrateCodeReviewForm,
     shouldResetCodeReviewFormForScopeChange,
@@ -82,15 +80,6 @@ describe('code review settings shell helpers', () => {
             ],
         }) as any;
 
-    it('builds a stable scope key from team, repository and directory', () => {
-        expect(
-            buildCodeReviewSettingsScopeKey('team-1', 'global', undefined),
-        ).toBe('team-1::global::root');
-        expect(
-            buildCodeReviewSettingsScopeKey('team-1', 'repo-1', 'dir-1'),
-        ).toBe('team-1::repo-1::dir-1');
-    });
-
     it('resets only when the scope key changes', () => {
         expect(
             shouldResetCodeReviewFormForScopeChange(
@@ -104,15 +93,6 @@ describe('code review settings shell helpers', () => {
                 'team-1::repo-1::root',
             ),
         ).toBe(true);
-    });
-
-    it('builds a hydration key from scope and language', () => {
-        expect(
-            buildCodeReviewSettingsHydrationKey(
-                'team-1::global::root',
-                'english',
-            ),
-        ).toBe('team-1::global::root::english');
     });
 
     it('hydrates only when the scope-language baseline changes', () => {

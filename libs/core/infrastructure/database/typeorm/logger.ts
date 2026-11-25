@@ -1,5 +1,5 @@
 import { Logger as ITypeORMLogger } from 'typeorm';
-import { createLogger } from '@libs/core/log/logger';
+import { createLogger, describeBoundValues } from '@libs/core/log/logger';
 
 export class TypeOrmCustomLogger implements ITypeORMLogger {
     private readonly logger = createLogger('TypeORM');
@@ -16,7 +16,7 @@ export class TypeOrmCustomLogger implements ITypeORMLogger {
         this.logger.debug({
             message: 'Executing Query',
             context: 'TypeORM',
-            metadata: { query, parameters },
+            metadata: { query, parameters: describeBoundValues(parameters) },
         });
     }
 
@@ -25,7 +25,7 @@ export class TypeOrmCustomLogger implements ITypeORMLogger {
             message: 'Query Execution Failed',
             context: 'TypeORM',
             error: error instanceof Error ? error : new Error(error),
-            metadata: { query, parameters },
+            metadata: { query, parameters: describeBoundValues(parameters) },
         });
     }
 
@@ -36,7 +36,7 @@ export class TypeOrmCustomLogger implements ITypeORMLogger {
             metadata: {
                 executionTimeMs: time,
                 query,
-                parameters,
+                parameters: describeBoundValues(parameters),
             },
         });
     }

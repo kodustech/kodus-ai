@@ -1,11 +1,24 @@
 ---
 title: "シングルサインオン"
-description: "Kodus への安全で効率的なアクセスのためにシングルサインオン（SSO）を有効にします。"
+description: "Kodus への安全で効率的なアクセスのために、シングルサインオン（SSO）を有効にします。"
 ---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="enterprise" detail="Kodus Cloud の Enterprise または有効なトライアルで利用できます。">
+    <Badge icon="shield-check" stroke>Enterprise</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="Enterprise ライセンスが必要です。">
+    <Badge icon="server" stroke>セルフホスト</Badge>
+  </FeatureBadge>
+</div>
 
 ## 概要
 
-シングルサインオン（SSO）を使用すると、単一のアイデンティティプロバイダーを通じて Kodus へのアクセスを管理し、認証を効率化してセキュリティを強化できます。
+シングルサインオン（SSO）を使用すると、チームは SAML 2.0 を通じて、アイデンティティプロバイダーから Kodus にサインインできます。
+
+Owner が **Organization → SSO** で SAML SSO を設定します。
 
 ## はじめに
 
@@ -17,7 +30,7 @@ description: "Kodus への安全で効率的なアクセスのためにシング
     </Step>
 
     <Step title="IdP の設定を入力">
-        **SAML SSO Configuration** で、IdP の設定（**IDP Issuer**、**SSO URL**、**X.509 Certificate**）を入力します。これらは手動で入力するか、IdP の **Metadata URL (optional)**（その後 **Fetch**）またはメタデータ XML ファイル（**Upload Metadata XML File**）を提供することで入力できます。
+        **SAML SSO Configuration** で、**Enable SAML SSO** をオンにして設定を表示し、IdP の設定（**IDP Issuer**、**SSO URL**、**X.509 Certificate**）を入力します。これらは手動で入力するか、IdP の **Metadata URL (optional)**（その後 **Fetch**）またはメタデータ XML ファイル（**Upload Metadata XML File**）を提供することで入力できます。
 
         <Info>
             これらの値は通常、IdP のドキュメントまたは管理コンソールで確認できます。
@@ -35,11 +48,11 @@ description: "Kodus への安全で効率的なアクセスのためにシング
     </Step>
 
     <Step title="ドメインを検証">
-        **Allowed Domains** にメールドメインを追加し、それぞれで **Verify** をクリックします。**Verify Enterprise Domain** で、そのドメインのメールアドレスを入力すると検証リンクが届きます（セルフホストインスタンスでは即座に検証されます）。SSO を有効にするには、各ドメインが **Verified** と表示されている必要があります。
+        **Allowed Domains** にメールドメインを追加し（gmail.com などのパブリックドメインは使用できません）、それぞれで **Verify** をクリックします。**Verify Enterprise Domain** で、そのドメインのメールアドレスを入力すると検証リンクが届きます（セルフホストインスタンスでは即座に検証されます）。SSO を有効にするには、各ドメインが **Verified** と表示されている必要があります。
     </Step>
 
     <Step title="SSO をテストして有効化">
-        **Test connection** をクリックし、IdP でのログインを完了します。テストが成功したら、**Enable SAML SSO** をオンにして **Save settings** をクリックします。IdP に関連付けられたメールドメインでログインしようとすると、**Continue with SSO** が表示されます。
+        **Test connection** をクリックし、IdP でのログインを完了します。SSO を有効として保存できるのは、テストが成功した後だけです。そのため、IdP の設定やドメインを変更した後は、もう一度テストを実行してください。テストが成功したら、**Enable SAML SSO** をオンにして **Save settings** をクリックします。
     </Step>
 
 </Steps>
@@ -52,3 +65,9 @@ IdP から Kodus ユーザーへの以下の属性をマッピングして、ユ
 
 -   名（First Name）、`firstName` にマッピング
 -   姓（Last Name）、`lastName` にマッピング
+
+## サインイン
+
+サインインページでメールアドレスを入力します。そのドメインで SSO が有効になっている場合、Kodus はパスワードを求める代わりに **Continue with SSO** を表示し、IdP に移動します。
+
+誰かが SSO で初めてサインインすると、Kodus はメール確認のステップなしで、**Contributor** ロールでその人のアカウントを組織内に作成します。オーナーは、後から **Organization → Subscription → Workspace members** でロールを変更できます。[ワークスペースロール](/ja/how_to_use/workspace_roles) を参照してください。

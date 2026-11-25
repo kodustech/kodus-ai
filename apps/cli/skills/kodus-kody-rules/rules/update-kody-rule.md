@@ -31,7 +31,7 @@ When updating an existing Kody Rule, it's important to ensure that the changes a
 Use the following command to save the updated Kody Rule:
 
 ```
-kodus rules update --uuid <uuid> [--repo-id <repository-id>] [--title <title>] [--rule <rule-content>] [--severity <severity-level>] [--scope <scope-level>] [--path <glob-pattern>]
+kodus rules update --uuid <uuid> [--repo-id <repository-id>] [--title <title>] [--rule <rule-content>] [--severity <severity-level>] [--scope <scope-level>] [--path <glob-pattern>] [--team <team>]
 ```
 
 8. **Communicate the updated Kody Rule**: Inform the user about the updated Kody Rule and how the changes will affect future code generation.
@@ -53,3 +53,7 @@ In this case, report PR details and clarify the update is pending until PR merge
 4. **Align with Project Goals**: Ensure that the updated Kody Rule continues to align with the overall goals and requirements of the project. The updated rule should contribute to producing code that meets the user's expectations and project requirements.
 
 5. **Review and Refine**: After drafting the updated Kody Rule, review it for clarity and completeness. Present it to the user for feedback and refine it as necessary to ensure it effectively guides Kody's code generation process.
+
+## Team
+
+Logged in with more than one team, add `--team <name|id>`. With a team key, the key's team is used and `--team` is ignored.

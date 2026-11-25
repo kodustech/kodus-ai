@@ -12,6 +12,11 @@ import {
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
+import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import {
+    Action,
+    ResourceType,
+} from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { enrichRulesWithContextReferences } from './utils/enrich-rules-with-context-references.util';
 
 @Injectable()
@@ -28,6 +33,7 @@ export class FindByOrganizationIdKodyRulesUseCase {
         private readonly kodyRulesService: IKodyRulesService,
         @Inject(CONTEXT_REFERENCE_SERVICE_TOKEN)
         private readonly contextReferenceService: IContextReferenceService,
+        private readonly authorizationService: AuthorizationService,
     ) {}
 
     async execute() {
@@ -50,11 +56,28 @@ export class FindByOrganizationIdKodyRulesUseCase {
             // must not surface on the Kody Rules screen. APPLIED is also
             // hidden to match find-rules-in-organization-by-filter, which is
             // the other listing endpoint the UI uses.
-            const visibleRules = (existing.rules || []).filter(
+            let visibleRules = (existing.rules || []).filter(
                 (rule) =>
                     rule.status !== KodyRulesStatus.DELETED &&
                     rule.status !== KodyRulesStatus.APPLIED,
             );
+
+            // A repo-scoped member sees the org-level (global) rules and the
+            // rules of their own repositories, as in
+            // find-rules-in-organization-by-filter.
+            const allowedRepoScope =
+                await this.authorizationService.getRepositoryScope({
+                    user: this.request.user,
+                    action: Action.Read,
+                    resource: ResourceType.KodyRules,
+                });
+            if (Array.isArray(allowedRepoScope)) {
+                const allowed = new Set([...allowedRepoScope, 'global']);
+                visibleRules = visibleRules.filter(
+                    (rule) =>
+                        !rule.repositoryId || allowed.has(rule.repositoryId),
+                );
+            }
 
             const enrichedRulesArray = await enrichRulesWithContextReferences(
                 visibleRules,

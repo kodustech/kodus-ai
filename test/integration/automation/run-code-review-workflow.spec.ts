@@ -254,4 +254,40 @@ describe('Code Review Workflow Logic Integrity (No AST)', () => {
 
         console.log('✅ Fluxo inicial do UseCase validado');
     });
+
+    // Moved from pr-persistence.spec.ts: the execution must still be handed to
+    // the strategy (which persists it) when business validation fails.
+    it('should persist execution intent even if business validation fails', async () => {
+        jest.spyOn(githubService, 'getPullRequest').mockResolvedValue({
+            number: 123,
+            title: 'Test PR',
+            user: { login: 'tester' },
+            head: { sha: 'sha123', ref: 'feature' },
+            base: { ref: 'main' },
+            repository: { id: 1, name: 'repo', owner: { login: 'owner' } },
+        } as any);
+        mockPermissionValidationService.validateExecutionPermissions.mockResolvedValueOnce(
+            { allowed: false, errorType: 'BILLING_ERROR' },
+        );
+
+        await useCase.execute({
+            codeManagementPayload: {
+                action: 'opened',
+                repository: {
+                    id: 1,
+                    name: 'repo',
+                    owner: { login: 'owner' },
+                    full_name: 'owner/repo',
+                },
+                issue: { number: 123 },
+                sender: { login: 'tester' },
+            },
+            event: 'pull_request.opened',
+            platformType: PlatformType.GITHUB,
+            organizationAndTeamData: {} as any,
+            teamAutomationId: 'test-automation-id',
+        } as any);
+
+        expect(mockExecuteAutomationService.executeStrategy).toHaveBeenCalled();
+    });
 });

@@ -6,9 +6,13 @@ import { NotificationService } from '@libs/notifications/application/notificatio
 import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-author-recipient.resolver';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { COMMENT_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CommentManagerService.contract';
 
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { RequestChangesOrApproveStage } from './finish-process-review.stage';
+import { OwnChangeRequestService } from '../services/own-change-request.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -27,12 +31,17 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             | 'approvePullRequest'
             | 'getReviewStatusByPullRequest'
             | 'requestChangesPullRequest'
+            | 'createIssueComment'
+            | 'dismissOwnPullRequestApprovals'
+            | 'getPullRequest'
         >
     >;
     let notificationService: jest.Mocked<Pick<NotificationService, 'emit'>>;
     let prAuthorResolver: jest.Mocked<
         Pick<PrAuthorRecipientResolver, 'resolve'>
     >;
+    let commentManager: { postApprovalReason: jest.Mock };
+    let ownChangeRequest: { record: jest.Mock };
 
     // Frozen by DEFAULT — production hands every stage after the first
     // produce() a deep-frozen context. See test/fixtures/frozen-pipeline-context.ts.
@@ -60,20 +69,35 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
 
     beforeEach(async () => {
         codeManagement = {
+            getPullRequest: jest.fn().mockResolvedValue({
+                head: { sha: 'head' },
+                base: { sha: 'base' },
+            }),
             approvePullRequest: jest.fn().mockResolvedValue(undefined),
             getReviewStatusByPullRequest: jest
                 .fn()
                 .mockResolvedValue(PullRequestReviewState.PENDING),
             requestChangesPullRequest: jest.fn().mockResolvedValue(undefined),
+            createIssueComment: jest.fn().mockResolvedValue(undefined),
+            dismissOwnPullRequestApprovals: jest.fn().mockResolvedValue(1),
         };
         notificationService = { emit: jest.fn().mockResolvedValue(undefined) };
         prAuthorResolver = { resolve: jest.fn() };
+        commentManager = {
+            postApprovalReason: jest.fn().mockResolvedValue(undefined),
+        };
+        ownChangeRequest = { record: jest.fn().mockResolvedValue(undefined) };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 RequestChangesOrApproveStage,
                 { provide: CodeManagementService, useValue: codeManagement },
+                {
+                    provide: COMMENT_MANAGER_SERVICE_TOKEN,
+                    useValue: commentManager,
+                },
                 { provide: NotificationService, useValue: notificationService },
+                { provide: OwnChangeRequestService, useValue: ownChangeRequest },
                 {
                     provide: PrAuthorRecipientResolver,
                     useValue: prAuthorResolver,
@@ -82,6 +106,140 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
         }).compile();
 
         stage = module.get(RequestChangesOrApproveStage);
+    });
+
+    const namedContext = (over: Record<string, unknown> = {}) =>
+        makeContext({
+            codeReviewConfig: {
+                pullRequestApprovalActive: true,
+                approvalPolicies: [
+                    { id: 'all', name: 'All clean PRs', enabled: true },
+                ],
+            },
+            approvalDecision: {
+                kind: 'approve',
+                reason: 'Approved by policy “All clean PRs”.',
+                reviewedHeadSha: 'head',
+                reviewedBaseSha: 'base',
+                matchedPolicy: { id: 'all', name: 'All clean PRs' },
+            },
+            ...over,
+        });
+
+    it('always explains a named policy no-match without withdrawing a prior approval for a policy edit', async () => {
+        await (stage as any).executeStage(
+            namedContext({
+                approvalDecision: {
+                    kind: 'out-of-scope',
+                    reason: 'No approval policy matched.',
+                },
+            }),
+        );
+        expect(
+            codeManagement.dismissOwnPullRequestApprovals,
+        ).not.toHaveBeenCalled();
+        expect(commentManager.postApprovalReason).toHaveBeenCalledWith(
+            expect.anything(),
+            42,
+            expect.anything(),
+            'No approval policy matched.',
+            'hold',
+            { onlyIfPresent: false },
+        );
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+    });
+
+    it('cannot approve PR-level findings through an unrestricted named policy', async () => {
+        await (stage as any).executeStage(
+            namedContext({ prLevelCommentResults: [{}] }),
+        );
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+    });
+
+    it('never falls back to generic approval when a named policy decision is missing', async () => {
+        await (stage as any).executeStage(
+            namedContext({ approvalDecision: undefined }),
+        );
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+    });
+
+    it('approves the exact head that the policy checked and publishes its name', async () => {
+        await (stage as any).executeStage(namedContext());
+        expect(codeManagement.approvePullRequest).toHaveBeenCalledWith(
+            expect.objectContaining({ headSha: 'head' }),
+        );
+        expect(commentManager.postApprovalReason).toHaveBeenCalledWith(
+            expect.anything(),
+            42,
+            expect.anything(),
+            expect.stringContaining('All clean PRs'),
+            'approve',
+            {
+                confirmedApproval: {
+                    headSha: 'head',
+                    baseSha: 'base',
+                    occurredAt: expect.any(String),
+                },
+            },
+        );
+    });
+
+    it.each(['head', 'base'])(
+        'refuses approval when the %s changes before the final provider call',
+        async (field) => {
+            codeManagement.getPullRequest.mockResolvedValue({
+                head: { sha: 'head' },
+                base: { sha: 'base' },
+                [field]: { sha: 'new' },
+            } as any);
+            const result = await (stage as any).executeStage(namedContext());
+            expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+            expect(result.approvalDecision.kind).toBe('hold');
+            expect(commentManager.postApprovalReason).toHaveBeenCalledWith(
+                expect.anything(),
+                42,
+                expect.anything(),
+                expect.stringContaining('could not be confirmed'),
+                'hold',
+            );
+        },
+    );
+
+    it('does not attribute an existing host approval to this run', async () => {
+        codeManagement.getReviewStatusByPullRequest.mockResolvedValue(
+            PullRequestReviewState.APPROVED,
+        );
+        const result = await (stage as any).executeStage(namedContext());
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+        expect(result.approvalDecision.kind).toBe('hold');
+        expect(commentManager.postApprovalReason).not.toHaveBeenCalled();
+        expect(notificationService.emit).not.toHaveBeenCalled();
+    });
+
+    it('publishes a risk or review hold after the decision, including a degraded run', async () => {
+        await (stage as any).executeStage(
+            namedContext({
+                approvalDecision: {
+                    kind: 'hold',
+                    reason: 'Risk assessment is unavailable for the current PR head.',
+                },
+                errors: [
+                    {
+                        stage: 'Review',
+                        severity: 'partial',
+                        error: new Error('Review failure'),
+                    },
+                ],
+            }),
+        );
+        expect(commentManager.postApprovalReason).toHaveBeenCalledWith(
+            expect.anything(),
+            42,
+            expect.anything(),
+            expect.stringContaining('Risk assessment is unavailable'),
+            'hold',
+        );
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
     });
 
     it('emits review.auto_approved when the PR is auto-approved AND the author resolves', async () => {
@@ -128,6 +286,270 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
 
         expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
         expect(notificationService.emit).not.toHaveBeenCalled();
+    });
+
+    it('keeps legacy approval eligibility when only a PR-level comment exists', async () => {
+        await stage.execute(
+            makeContext({ prLevelCommentResults: [{}] as any }),
+        );
+
+        expect(codeManagement.approvePullRequest).toHaveBeenCalled();
+    });
+
+    it('posts the reason after a conditional approval when end-review messages are off', async () => {
+        await stage.execute(
+            makeContext({
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    approvalAuthors: ['alex'],
+                } as any,
+                approvalDecision: {
+                    kind: 'approve',
+                    reason: 'Clean review.\nPlease deploy now.',
+                },
+                pullRequestMessagesConfig: {
+                    endReviewMessage: {
+                        status: PullRequestMessageStatus.OFF,
+                    },
+                } as any,
+            }),
+        );
+
+        expect(commentManager.postApprovalReason).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            }),
+            42,
+            expect.objectContaining({ id: 'repo-1' }),
+            'Clean review.\nPlease deploy now.',
+            'approve',
+            undefined,
+        );
+    });
+
+    it('records a partial failure with review identifiers when the approval reason cannot be posted', async () => {
+        const publicationError = new Error('comment write failed');
+        commentManager.postApprovalReason.mockRejectedValueOnce(
+            publicationError,
+        );
+
+        const result = await stage.execute(
+            makeContext({
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    approvalAuthors: ['alex'],
+                } as any,
+                approvalDecision: {
+                    kind: 'approve',
+                    reason: 'Clean review and allowed author.',
+                },
+                pullRequestMessagesConfig: {
+                    endReviewMessage: {
+                        status: PullRequestMessageStatus.OFF,
+                    },
+                } as any,
+            }),
+        );
+
+        expect(result.errors).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    substage: 'approval-reason-publication',
+                    severity: 'partial',
+                    error: publicationError,
+                }),
+            ]),
+        );
+        expect((stage as any).logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                    repositoryId: 'repo-1',
+                    prNumber: 42,
+                },
+            }),
+        );
+        expect(codeManagement.approvePullRequest).toHaveBeenCalled();
+    });
+
+    it.each([
+        PlatformType.GITLAB,
+        PlatformType.FORGEJO,
+        PlatformType.AZURE_REPOS,
+    ])(
+        'asks %s to dismiss Kody approvals when a new review holds approval',
+        async (platformType) => {
+            await stage.execute(
+                makeContext({
+                    platformType,
+                    approvalDecision: {
+                        kind: 'hold',
+                        reason: 'Sensitive path changed.',
+                    },
+                }),
+            );
+
+            expect(
+                codeManagement.dismissOwnPullRequestApprovals,
+            ).toHaveBeenCalledWith(expect.objectContaining({ prNumber: 42 }));
+            expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+        },
+    );
+
+    it('dismisses Kody approvals when a new GitHub review holds approval', async () => {
+        await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'hold',
+                    reason: 'Sensitive path changed.',
+                },
+            }),
+        );
+
+        expect(
+            codeManagement.dismissOwnPullRequestApprovals,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prNumber: 42,
+                reason: 'Sensitive path changed.',
+            }),
+        );
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+    });
+
+    it('dismisses an earlier Kody approval when a new review is outside the approval scope', async () => {
+        await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'out-of-scope',
+                    reason: 'The PR does not carry a configured approval label.',
+                },
+            }),
+        );
+
+        expect(
+            codeManagement.dismissOwnPullRequestApprovals,
+        ).toHaveBeenCalled();
+        expect(commentManager.postApprovalReason).toHaveBeenCalledWith(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            42,
+            { id: 'repo-1', name: 'acme/api' },
+            'The PR does not carry a configured approval label.',
+            'hold',
+            { onlyIfPresent: false },
+        );
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+    });
+
+    it('only updates an earlier reason note for an out-of-scope PR with no prior approval', async () => {
+        codeManagement.dismissOwnPullRequestApprovals.mockResolvedValueOnce(0);
+
+        await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'out-of-scope',
+                    reason: 'The PR does not carry a configured approval label.',
+                },
+            }),
+        );
+
+        // No note is opened for a PR that never had one; a stale hold reason
+        // from an earlier review is brought up to date.
+        expect(commentManager.postApprovalReason).toHaveBeenCalledWith(
+            expect.anything(),
+            42,
+            expect.anything(),
+            'The PR does not carry a configured approval label.',
+            'hold',
+            { onlyIfPresent: true },
+        );
+    });
+
+    it('does not mark the review partial when refreshing an old note fails', async () => {
+        codeManagement.dismissOwnPullRequestApprovals.mockResolvedValueOnce(0);
+        commentManager.postApprovalReason.mockRejectedValueOnce(
+            new Error('Comment lookup timed out'),
+        );
+
+        const result = await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'out-of-scope',
+                    reason: 'The PR does not carry a configured approval label.',
+                },
+            }),
+        );
+
+        expect(result.errors ?? []).toEqual([]);
+    });
+
+    it('records a failed status comment after dismissing an out-of-scope approval', async () => {
+        commentManager.postApprovalReason.mockRejectedValueOnce(
+            new Error('Comment update failed'),
+        );
+
+        const result = await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'out-of-scope',
+                    reason: 'The PR does not carry a configured approval label.',
+                },
+            }),
+        );
+
+        expect(
+            codeManagement.dismissOwnPullRequestApprovals,
+        ).toHaveBeenCalled();
+        expect(result.errors).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    substage: 'approval-reason-publication',
+                    severity: 'partial',
+                }),
+            ]),
+        );
+    });
+
+    it('records a failed dismissal so an old GitHub approval is not silent', async () => {
+        codeManagement.dismissOwnPullRequestApprovals.mockRejectedValueOnce(
+            new Error('GitHub denied dismissal'),
+        );
+        const result = await stage.execute(
+            makeContext({
+                platformType: PlatformType.GITHUB,
+                approvalDecision: {
+                    kind: 'hold',
+                    reason: 'Sensitive path changed.',
+                },
+            }),
+        );
+
+        expect(result.errors).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ substage: 'dismiss-prior-approval' }),
+            ]),
+        );
+    });
+
+    it('holds when a configured policy has no decision', async () => {
+        await stage.execute(
+            makeContext({
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    isRequestChangesActive: false,
+                    approvalRiskActive: true,
+                } as any,
+            }),
+        );
+
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
     });
 
     it('does not emit when PR is already in APPROVED state', async () => {
@@ -262,4 +684,125 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
 
         expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
     });
+
+    it('does not approve a PR reviewed only by agents naming ignored files', async () => {
+        await stage.execute(
+            makeContext({
+                changedFiles: [],
+                ignoredFileChanges: [
+                    { filename: 'package.json', status: 'modified' },
+                ],
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    customAgents: [
+                        {
+                            id: 'agent',
+                            name: 'Dependencies',
+                            enabled: true,
+                            scope: { include: ['package.json'] },
+                        },
+                    ],
+                },
+            }),
+        );
+        expect(codeManagement.approvePullRequest).not.toHaveBeenCalled();
+    });
+
+    // The request leaves later without an approval only if it was recorded
+    // with the comments behind it.
+    describe('requesting changes', () => {
+        const finding = (severity: string, commentId?: number) => ({
+            comment: { suggestion: { severity } },
+            codeReviewFeedbackData: commentId ? { commentId } : undefined,
+        });
+        const requestChanges = (lineComments: object[]) =>
+            (stage as any).executeStage(
+                makeContext({
+                    codeReviewConfig: {
+                        pullRequestApprovalActive: false,
+                        isRequestChangesActive: true,
+                    },
+                    lineComments,
+                }),
+            );
+
+        it('records the request with the comments of its critical findings only', async () => {
+            codeManagement.requestChangesPullRequest.mockResolvedValue({
+                summaryCommentId: 'discussion-9',
+            });
+
+            await requestChanges([
+                finding('critical', 101),
+                finding('Critical', 102),
+                finding('high', 103),
+            ]);
+
+            expect(
+                codeManagement.requestChangesPullRequest,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                codeManagement.requestChangesPullRequest,
+            ).toHaveBeenCalledWith({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                prNumber: 42,
+                repository: { id: 'repo-1', name: 'acme/api' },
+                criticalComments: [
+                    finding('critical', 101),
+                    finding('Critical', 102),
+                ],
+            });
+            expect(ownChangeRequest.record).toHaveBeenCalledWith({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                repository: { id: 'repo-1', name: 'acme/api' },
+                prNumber: 42,
+                commentIds: ['101', '102'],
+                summaryCommentId: 'discussion-9',
+            });
+        });
+
+        it('records only the comments that were posted, on a host that hands back no summary', async () => {
+            // The default host answers nothing (GitHub, Bitbucket, Forgejo).
+            await requestChanges([
+                finding('critical', 101),
+                finding('critical'),
+                {
+                    comment: { suggestion: { severity: 'critical' } },
+                    codeReviewFeedbackData: { commentId: null },
+                },
+            ]);
+
+            expect(ownChangeRequest.record).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    commentIds: ['101'],
+                    summaryCommentId: undefined,
+                }),
+            );
+        });
+
+        it('records nothing when the host refused the request', async () => {
+            codeManagement.requestChangesPullRequest.mockRejectedValue(
+                new Error('403'),
+            );
+
+            await requestChanges([finding('critical', 101)]);
+
+            expect(ownChangeRequest.record).not.toHaveBeenCalled();
+        });
+
+        it('requests and records nothing without a critical finding', async () => {
+            await requestChanges([finding('high', 103)]);
+
+            expect(
+                codeManagement.requestChangesPullRequest,
+            ).not.toHaveBeenCalled();
+            expect(ownChangeRequest.record).not.toHaveBeenCalled();
+        });
+    });
 });
+

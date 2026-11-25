@@ -297,30 +297,41 @@ export type CustomAgentConfigLevel = {
 };
 
 /**
- * The agents stored at exactly one config level: the global config when no
+ * The config stored at exactly one level: the global config when no
  * repository is named, the repository's own config, or one directory group's
  * config. Nothing is inherited from a parent level.
  */
-export function storedCustomAgentsAtLevel(
-    configValue: CodeReviewConfigValueLike | undefined,
+export function storedConfigsAtLevel<C extends ConfigsLike>(
+    configValue:
+        | {
+              configs?: C;
+              repositories?: Array<
+                  Omit<RepositoryLike, 'configs' | 'directories'> & {
+                      configs?: C;
+                      directories?: Array<
+                          Omit<DirectoryLike, 'configs'> & { configs?: C }
+                      >;
+                  }
+              >;
+          }
+        | undefined,
     level: CustomAgentConfigLevel,
-): AgentLike[] {
+): C | undefined {
     const repositoryId =
         level.repositoryId && level.repositoryId !== 'global'
             ? level.repositoryId
             : undefined;
-    if (!repositoryId) return agentsOf(configValue?.configs);
+    if (!repositoryId) return configValue?.configs;
 
     const repository = configValue?.repositories?.find(
         (repo) => repo?.id === repositoryId,
     );
-    if (!repository) return [];
+    if (!repository) return undefined;
 
     if (level.directoryId) {
-        return agentsOf(
-            repository.directories?.find((dir) => dir?.id === level.directoryId)
-                ?.configs,
-        );
+        return repository.directories?.find(
+            (dir) => dir?.id === level.directoryId,
+        )?.configs;
     }
 
     const paths = level.directoryPaths?.filter(Boolean) ?? [];
@@ -332,10 +343,18 @@ export function storedCustomAgentsAtLevel(
                 paths.every((path) => folders.includes(path))
             );
         });
-        return agentsOf(group?.configs);
+        return group?.configs;
     }
 
-    return agentsOf(repository.configs);
+    return repository.configs;
+}
+
+/** The agents stored at exactly one config level (`storedConfigsAtLevel`). */
+export function storedCustomAgentsAtLevel(
+    configValue: CodeReviewConfigValueLike | undefined,
+    level: CustomAgentConfigLevel,
+): AgentLike[] {
+    return agentsOf(storedConfigsAtLevel(configValue, level));
 }
 
 /**

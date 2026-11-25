@@ -9,45 +9,51 @@ description: "生成 Kody 读取代码库并发布审查评论所需的 Azure De
 
 ## 生成 PAT(个人访问令牌)
 
-您可以直接使用此链接访问 PAT 设置: [Azure DevOps PATs](https://dev.azure.com/)。
+您可以直接打开 PAT 设置页面:`https://dev.azure.com/<organization>/_usersSettings/tokens`。
 
 按照以下步骤正确设置令牌:
 
-1. **访问 Azure DevOps 并进入您的安全设置:**
+1. **访问 Azure DevOps 并进入您的令牌设置:**
 
-   - 转到 [Azure DevOps](https://dev.azure.com/) 并登录。
-   - 点击右上角的个人资料图片。
-   - 从下拉菜单中选择**"安全"**。
+   - 在 `https://dev.azure.com/<organization>` 登录您的组织。
+   - 打开 **User settings**(右上角个人资料图片旁边的图标)。
+   - 选择 **Personal access tokens**。
 
 2. **创建新 PAT:**
 
-   - 在**个人访问令牌**部分下,点击**"新令牌"**。
+   - 点击 **+ New Token**。
 
 3. **使用以下规格设置新令牌:**
 
-   - **名称:**选择一个容易识别的名称,例如 `kody_code_review`。
-   - **组织:**选择您的目标组织。
-   - **到期时间:**选择适当的到期时间(例如,90 或 180 天)。
-   - **范围:**选择以下权限:
+   - **Name:** 选择一个容易识别的名称,例如 `kody_code_review`。
+   - **Organization:** 选择您的目标组织,不要选择 **All accessible organizations**。Azure DevOps 正在淘汰适用于所有组织的令牌。
+   - **Expiration:** 选择适当的到期时间(例如,90 或 180 天)。
+   - **Scopes:** 选择以下权限,名称与 Microsoft 的[范围列表](https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/oauth#available-scopes)一致:
 
-     - **分析:**读
-     - **代码:**读和写
-     - **图:**读
-     - **身份和组:**读
-     - **项目和团队:**读
-     - **用户配置文件:**读
+     | Scope | Id | Kody 用它来 |
+     | --- | --- | --- |
+     | **Code (read and write)** | `vso.code_write` | 读取代码库和拉取请求、发布审查评论,并创建用于投递拉取请求事件的 service hooks。 |
+     | **Project and team (read)** | `vso.project` | 列出项目、团队和团队成员。 |
+     | **Analytics (read)** | `vso.analytics` | 读取代码库的语言指标。 |
+     | **Graph (read)** | `vso.graph` | 查询组织用户。 |
+     | **Identity (read)** | `vso.identity` | 读取身份和组。 |
+     | **User profile (read)** | `vso.profile` | 读取令牌拥有者的个人资料。 |
 
-4. **点击创建。**
+4. **点击 Create。**
 
 复制生成的令牌并安全存储,因为您需要它来配置 Kody。
 
 <Note>
-  需要对代码的写访问权限,以便 Kody 发布评论和管理拉取请求反馈。
+  需要对 Code 的写访问权限,以便 Kody 发布评论和管理拉取请求反馈。
+</Note>
+
+<Note>
+  Kody 会为每个拉取请求事件和每个代码库创建一个 service hook 订阅。Microsoft 的 [Create Subscription](https://learn.microsoft.com/en-us/rest/api/azure/devops/hooks/subscriptions/create?view=azure-devops-rest-7.1) 接口对这些事件接受 `vso.code`,而 **Code (read and write)** 已包含它,因此令牌不需要单独的 service hooks 范围。令牌拥有者还需要在项目上拥有 **Edit subscriptions** 权限,Project Administrators 默认拥有该权限。
 </Note>
 
 ## 将令牌添加到 Kody
 
-生成令牌后,将其粘贴到 Kodus 中:在入门引导期间(**Connect your Git tool** → **Azure Repos** 标签页 → **Connect via token**),或之后在侧边栏的 **Repositories** → **Connect a provider** → **Azure Repos** 中。填写 **Organization name** 和 **Personal Access Token**,然后点击 **Validate and save**。
+生成令牌后,将其粘贴到 Kodus 中:在入门引导期间(**Connect your Git tool** → **Azure Repos** 标签页 → **Connect via token**),或之后在侧边栏的 **Repositories** → **Connect a provider** → **Azure Repos** 中。填写 **Organization name**(`dev.azure.com/<organization>` 中的名称)和 **Personal Access Token**,然后点击 **Validate and save**。Kodus 连接到位于 `dev.azure.com` 的 Azure DevOps Services。
 
 ## 故障排查:Kody 没有在 Azure DevOps 中审查 PR
 
@@ -55,9 +61,9 @@ description: "生成 Kody 读取代码库并发布审查评论所需的 Azure De
 
 ### 1. 检查 PAT 范围
 
-在 Azure DevOps 中打开 PAT,确认[生成 PAT](#生成-pat个人访问令牌) 下列出的每个范围都已启用。最常被遗漏的是 **Code:读和写** — 没有**写**权限,Kody 可以读取您的代码库但无法发布审查评论,所以审查"静默运行"。
+在 Azure DevOps 中打开 PAT,确认[生成 PAT](#生成-pat-个人访问令牌) 下列出的每个范围都已启用。最常被遗漏的是 **Code (read and write)**。如果只有 **Code (read)**,Kody 可以读取您的代码库但无法发布审查评论,所以审查"静默运行"。
 
-如果 PAT 在某个范围添加之前就已创建,Azure DevOps 不会追加添加该范围。请使用完整的范围列表创建新的 PAT,并用它重新连接(**Repositories** → 提供商卡片上的 **Reset** → **Just reset the integration**,然后使用新令牌再次连接 Azure Repos)。
+如果 PAT 在某个范围添加之前就已创建,Azure DevOps 不会追溯添加该范围。请使用完整的范围列表创建新的 PAT,并用它重新连接(**Repositories** → 提供商卡片上的 **Reset** → **Just reset the integration**,然后使用新令牌再次连接 Azure Repos)。
 
 ### 2. 检查用户的项目权限
 
@@ -71,17 +77,17 @@ PAT 继承创建它的 Azure DevOps 用户的权限。如果该用户无权访�
 
 如果上述任何一项对用户失败,Kody 也做不到。在重试前授予该用户代码库上的 **Contribute** 和 **Contribute to pull requests** 权限。
 
-### 3. 最后手段:将用户添加到项目集合管理员
+### 3. 最后手段:将用户添加到 Project Collection Administrators
 
-一些 Azure DevOps 组织强制执行更严格的组织级策略,即使权限正确的用户也无法通过 PAT 发布 PR 评论。如果步骤 1 和 2 看起来都对,但 Kody 仍然不发布任何内容,请将 PAT 拥有者添加到**项目集合管理员**组:
+一些 Azure DevOps 组织强制执行更严格的组织级策略,即使权限正确的用户也无法通过 PAT 发布 PR 评论。如果步骤 1 和 2 看起来都对,但 Kody 仍然不发布任何内容,请将 PAT 拥有者添加到 **Project Collection Administrators** 组:
 
-1. 打开**组织设置** → **权限**(左侧边栏)。
-2. 单击**项目集合管理员**组。
-3. 打开**成员**选项卡 → 单击**添加**。
+1. 打开 **Organization Settings** → **Permissions**(左侧边栏)。
+2. 点击 **Project Collection Administrators** 组。
+3. 打开 **Members** 选项卡 → 点击 **Add**。
 4. 添加生成 Kodus PAT 的用户。
 
 <Warning>
-  **项目集合管理员是高权限组** — 它授予对整个 Azure DevOps 组织的管理控制权。将其作为诊断手段来确认问题与权限有关,一旦确认,请与您的 Azure DevOps 管理员合作,只授予 PAT 拥有者所需的具体权限(通常是相关项目上的 Contribute + Contribute to pull requests),而不是让其保持为 PCA。
+  **Project Collection Administrators 是高权限组** — 它授予对整个 Azure DevOps 组织的管理控制权。将其作为诊断手段来确认问题与权限有关,一旦确认,请与您的 Azure DevOps 管理员合作,只授予 PAT 拥有者所需的具体权限(通常是相关项目上的 Contribute + Contribute to pull requests),而不是让其保持为 PCA。
 </Warning>
 
 权限到位后,Kody 应该在下一个 PR 事件时开始反应和发布审查。无需重启。

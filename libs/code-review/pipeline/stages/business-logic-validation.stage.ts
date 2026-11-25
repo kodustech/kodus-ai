@@ -133,6 +133,13 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 message: `[BUSINESS-LOGIC] Validation failed for PR#${context.pullRequest?.number}: ${message}`,
                 context: this.stageName,
                 error,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    repositoryId: context.repository?.id,
+                    prNumber: context.pullRequest?.number,
+                },
             });
             const pipelineError: PipelineError = {
                 stage: this.stageName,
@@ -153,13 +160,15 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
 
     /**
      * The task is judged against the whole PR. After a push the review reads
-     * only the files since its last commit; judged on those, everything the
-     * earlier commits delivered would read as missing.
+     * only the files since its last commit, and after a rebase only what the
+     * rebase changed; judged on those, everything the earlier commits
+     * delivered would read as missing.
      */
     private async wholePullRequest(context: CodeReviewPipelineContext) {
         const incremental =
             !context.pipelineMetadata?.forceFullRerun &&
-            !!context.lastExecution?.lastAnalyzedCommit;
+            (!!context.lastExecution?.lastAnalyzedCommit ||
+                !!context.rebaseInterdiffFiles);
         if (!incremental || !this.pullRequests) {
             return context.changedFiles;
         }

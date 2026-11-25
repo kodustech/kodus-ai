@@ -10,7 +10,11 @@ import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side"
 
 import { isPlatformFundedProvider } from "../../_data/platform-funded";
 import type { BYOKConfig, BYOKCredential, BYOKModelConfig } from "../../_types";
-import { groupModelsByProvider, hasVisibleModels } from "../../_utils";
+import {
+    groupModelsByProvider,
+    hasVisibleModels,
+    visibleModelLabels,
+} from "../../_utils";
 import { ConnectProviderFlow } from "../connect-provider-flow";
 import { FirstRunCard } from "../first-run-card";
 import { ModelRow, type CatalogPricing } from "../model-row";
@@ -53,6 +57,7 @@ export const ModelsTab = ({
     const router = useRouter();
     const [view, setView] = useState<View>({ mode: "list" });
 
+    const labels = visibleModelLabels(config);
     const groups = groupModelsByProvider(config).filter(
         (g) => g.models.length > 0,
     );
@@ -150,6 +155,7 @@ export const ModelsTab = ({
                             <ModelRow
                                 key={model.id}
                                 model={model}
+                                label={labels.get(model.id) ?? model.model}
                                 config={config}
                                 cost={costByModelId?.[model.id]}
                                 periodLabel={periodLabel}
@@ -182,7 +188,7 @@ export const ModelsTab = ({
                                     // another provider"), where discovery guidance
                                     // earns its place.
                                     router.push(
-                                        `/byok/manual?provider=${encodeURIComponent(credential.provider)}`,
+                                        `/byok/manual?provider=${encodeURIComponent(credential.provider)}&credential=${encodeURIComponent(credential.id)}`,
                                     )
                                 }>
                                 Add model

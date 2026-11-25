@@ -1,10 +1,12 @@
 ---
 title: Webhookの作成
-description: "自動登録が行われなかった場合に GitHub の Webhook を手動で作成し、Kodus が利用する 3 つのイベントを選択する手順。"
+description: "自動登録が行われなかった場合に、トークンによるインテグレーション用のGitHub Webhookを手動で作成し、Kodusが利用する3つのイベントを選択する手順。"
 icon: webhook
 ---
 
-Kodusは通常、Webhookを自動的に作成します。それが行われなかった場合は、以下の手順に従って手動で設定してください：
+パーソナルアクセストークンを使用する場合、Kodusはリポジトリの選択を保存する際に、各リポジトリにWebhookを作成します。これにはリポジトリのWebhookへの読み取りと書き込みのアクセスが必要です。classicトークンでは`admin:repo_hook`、fine-grainedトークンでは**Webhooks: Read and write**です。トークンにこの権限がない場合、**Repositories**にそのリポジトリが理由とともに表示されるので、次の手順でWebhookを手動で作成できます。
+
+GitHub Appの場合、リポジトリごとのWebhookはありません。イベントはAppのWebhookから届きます。[GitHub Appの作成](/ja/how_to_deploy/platforms/github/github_app)を参照してください。
 
 <Note>
   WebhookのURLはWebhooksサービス（ポート3332）に到達できる必要があります。APIドメインを使用するのは、リバースプロキシが`/.../webhook`パスをWebhooksサービスにルーティングする場合のみ機能します。
@@ -16,13 +18,13 @@ Kodusは通常、Webhookを自動的に作成します。それが行われな�
 4. 「Add webhook」をクリック
 5. Webhookを設定します：
 
-   - **Payload URL**: `.env`ファイルのURLを入力：`API_GITHUB_CODE_MANAGEMENT_WEBHOOK`
+   - **Payload URL**: `.env`ファイルのURLを入力：`API_GITHUB_CODE_MANAGEMENT_WEBHOOK`（末尾は`/github/webhook`）
    - **Content type**: `application/json`
    - **Secret**: 空欄のまま
    - **SSL verification**: SSL検証を有効にする
    - **Which events would you like to trigger this webhook?**: 個別のイベントを選択する
    - 以下のボックスにチェックを入れます：
-     - Issue comment
+     - Issue comments
      - Pull request review comments
      - Pull requests
 
@@ -31,6 +33,5 @@ Kodusは通常、Webhookを自動的に作成します。それが行われな�
 GitHubリポジトリのコードレビュー用Webhookのセットアップが完了しました。
 
 <Note>
-  Kodus が利用するのはこの 3 つのイベントだけです。それ以外（pushes、pull request reviews、
-  review threads）を選んでも、届いた時点で破棄されるトラフィックが増えるだけです。
+  トークンによるインテグレーションで利用するのは、これらのイベントだけです。Kodusはpush、プルリクエストのレビュー、レビュースレッドなど、それ以外を無視するため、選択してもトラフィックが増えるだけです。
 </Note>

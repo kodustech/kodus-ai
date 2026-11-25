@@ -1,0 +1,77 @@
+---
+title: "BYOK のトラブルシューティングと FAQ"
+sidebarTitle: "トラブルシューティング"
+description: "Test のエラー、レート制限、予期しないコストを解決し、BYOK に関するよくある質問に回答します。"
+---
+
+プロバイダーの接続やそのプロバイダーでのレビュー実行時に発生するエラーの対処法と、よくある質問への回答をまとめています。
+
+## トラブルシューティング
+
+<AccordionGroup>
+  <Accordion title="Test をクリックすると「Invalid API key」と表示される">
+    - キーは、余分なスペース、引用符、末尾の改行を含めずにコピーしてください。
+    - 課金が有効で、アカウントにクレジットがあることを確認します。
+    - GLM Coding Plan / Kimi Code Plan のキーの場合は、**ベース URL** がプランに対応していることを確認してください。サブスクリプションのキーは Developer API のエンドポイントでは動作せず、その逆も同様です。
+  </Accordion>
+
+  <Accordion title="Test をクリックすると「Model not found」と表示される">
+    - Test はモデルに実際のリクエストを送信するため、誤ったモデル ID やスペルミスのあるモデル ID はここで失敗します。これは想定どおりの動作であり、レビュー時に失敗するよりも望ましいことです。
+    - プロバイダーのダッシュボードから、モデル ID を正確にコピーしてください。プロバイダーによっては、深いパス（例：Fireworks の `accounts/fireworks/models/kimi-k2p7-code`）を使用したり、バージョンの表記が異なったり（`k2p7` と `k2.7`）します。
+  </Accordion>
+
+  <Accordion title="Test をクリックすると「Endpoint not found」と表示される">
+    - ベース URL がプロバイダーのものと完全に一致していることを確認します（プロバイダーによっては末尾のスラッシュが重要です）。
+    - OpenAI-compatible のプロバイダーでは、エンドポイントは通常 `{baseURL}/chat/completions` です（Kodus がパスを追加します）。そのため、ベース URL はパスを付けずに貼り付けてください。`/chat/completions`、`/messages`、`/responses` で終わる URL は拒否され、代わりに使用すべきアドレスがメッセージに表示されます。
+    - バージョンのない OpenAI または OpenAI-compatible の URL で `404` が返される場合は、通常 `/v1` が必要です。メッセージに修正後の URL が提案されます。
+    - URL は `https://` を使用し、パブリックなアドレスに解決される必要があります。プライベートまたは予約済みのアドレスに解決される URL は拒否されます。
+  </Accordion>
+
+  <Accordion title="設定した temperature や reasoning が Test で拒否される">
+    - 一部のモデルは temperature を固定していたり、常に reasoning を行ったりします（Kimi `k2p7-code`/`k3`、GLM-5.3。Claude 4.7 以降/GPT-5 は temperature を完全に廃止しています）。Test は設定したチューニングをモデルのルールに照らして検証し、具体的なメッセージを返します。その指示に従ってください（temperature を未設定にするか、必要な値を使用します。常に reasoning を行うモデルでは reasoning を Off にしないでください）。[Temperature](/ja/how_to_use/byok/model_settings#temperature) を参照してください。
+  </Accordion>
+
+  <Accordion title="「Rate limited」または「Too much concurrency」と表示される">
+    - Advanced settings の **Max concurrent requests** を下げます。
+    - GLM Coding Plan の利用が承認されている場合は、プランの上限を Z.AI に確認してください。[同時実行数の調整](/ja/cookbook/z-ai#同時実行数の調整)を参照してください。
+    - Kimi Code Plan で同時リクエスト数の上限エラーが出たら、設定値を下げてください。[同時実行数の調整](/ja/cookbook/moonshot#同時実行数の調整)を参照してください。
+  </Accordion>
+
+  <Accordion title="セルフホストの環境変数が表示されない">
+    - Kodus が環境変数で設定されている場合、モデルが接続されていない間、**AI providers** ページには **Kodus is currently using an LLM configured via environment variables** と、モデルとプロバイダー（プロバイダーが `API_LLM_PROVIDER` で設定されたものか推測されたものかを含む）が表示されます。キーが表示されることはありません。
+    - モデルを接続して保存すると、環境変数の設定が上書きされます。
+  </Accordion>
+
+  <Accordion title="コストが高い、または予期しない">
+    - reasoning はトークンを増やします。コストが急増している場合は、**Thinking / Reasoning** を Medium から Low に下げるか、軽いタスクを **Code review → Routing** の **Other task models** でより安価なモデルにルーティングしてください。
+    - 各モデル、PR、レビュー、開発者にかかったコストは[トークン使用量](/ja/how_to_use/organization/token_usage)で確認できます。モデルごとの内訳はプロバイダーのダッシュボードで確認し、**Budget** タブで支出アラート付きの月次予算を設定してください（アラートのみです。ハードキャップはプロバイダー側で設定してください）。
+  </Accordion>
+</AccordionGroup>
+
+## よくある質問
+
+<AccordionGroup>
+  <Accordion title="プロバイダーはいつでも切り替えられますか？">
+    はい。変更は次のレビューから反映されます。再デプロイは不要です。
+  </Accordion>
+
+  <Accordion title="APIキーのクレジットがなくなるとどうなりますか？">
+    Fallback model が設定されている場合、レビューはそちらに切り替わります。設定されていない場合、レビューは失敗してエラーが返されます。フォールバックを設定してください。
+  </Accordion>
+
+  <Accordion title="デフォルト / フォールバックの仕組みはどうなっていますか？">
+    Routing で別のモデルを選択しない限り、すべてのタスクはデフォルトモデルを使用します。タスクのモデルが、別のモデルなら解決できる原因（無効または期限切れのキー、クレジット不足、プロバイダー自身のリトライ後のプロバイダーのダウン）で失敗した場合、Kody は Fallback model で 1 回だけ再試行します。待てば解消するレート制限、モデルにとって大きすぎるプロンプト、タイムアウトでは、モデルは切り替わりません。課金されるのは、実際に呼び出しを処理したプロバイダー分のみです。
+  </Accordion>
+
+  <Accordion title="タスクごとに別のモデルを使えますか？">
+    はい。そのための機能が **Code review → Routing** です。コードレビューには強力なモデル、要約やチャットには安価なモデルというように、タスクごとにモデルを選択できます。ルーティングを意味のあるものにするには、接続済みのモデルが少なくとも 2 つ必要です。
+  </Accordion>
+
+  <Accordion title="APIキーは安全に保管されていますか？">
+    はい。キーは保存時と転送時の両方で暗号化され、平文でログに記録されることはありません。BYOK のステータスエンドポイントが生のキーを返すこともありません。
+  </Accordion>
+
+  <Accordion title="セルフホストの LLM（Ollama、vLLM など）を使えますか？">
+    はい。**OpenAI-compatible** プロバイダー（Custom の下）を使用します。エンドポイントのベース URL、そのエンドポイントが公開しているモデル ID、プレースホルダーの APIキーを入力してください（ほとんどのセルフホストのランタイムはキーのヘッダーを無視しますが、指定は必須です）。**AI providers** ページが受け付けるのは、パブリックなアドレスに解決される `https://` の URL のみです。そのため、`localhost` やプライベートネットワークのアドレスは拒否されます。セルフホストの Kodus では、プライベートネットワーク上のエンドポイントを環境変数で設定してください。[インストール](/ja/how_to_deploy/deploy_kodus/generic_vm)を参照してください。
+  </Accordion>
+</AccordionGroup>

@@ -101,6 +101,8 @@ export const createCodeManagementIntegration = ({
     installationId,
     host = "",
     code = "",
+    githubCode,
+    githubState,
     token = "",
     username = "",
     email = "",
@@ -112,6 +114,9 @@ export const createCodeManagementIntegration = ({
     host?: string;
     code?: any;
     installationId?: any;
+    /** GitHub's authorization of the user for linking `installationId`. */
+    githubCode?: string;
+    githubState?: string;
     token?: string;
     username?: string;
     email?: string;
@@ -132,6 +137,8 @@ export const createCodeManagementIntegration = ({
         };
     }>(CODE_MANAGEMENT_API_PATHS.CREATE_AUTH_INTEGRATION, {
         code: authCode,
+        githubCode,
+        githubState,
         integrationType,
         organizationAndTeamData,
         authMode,

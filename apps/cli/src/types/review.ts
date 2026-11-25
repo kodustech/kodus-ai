@@ -40,6 +40,9 @@ export interface ReviewResult {
     issues: ReviewIssue[];
     filesAnalyzed: number;
     duration: number;
+    /** What the review did differently from what was asked (e.g. a `--heavy`
+     *  the plan runs Balanced), for callers that read no spinner. */
+    notices?: string[];
 }
 
 export interface ApiFileSuggestion {
@@ -96,7 +99,25 @@ export interface BusinessValidationResponse {
     command: string;
     repositoryName?: string;
     taskReference?: string;
+    /** One line per requirement, then the status. */
     result: string;
+    /** The same verdict, structured. Absent on servers older than the requirement-level verdict. */
+    verdict?: BusinessValidationVerdict;
+}
+
+/** Per task, the requirements with their state, evidence and action, plus changes not in the task. */
+export interface BusinessValidationVerdict {
+    status:
+        | 'compliant'
+        | 'issues_found'
+        | 'skipped'
+        | 'task_too_thin'
+        | 'task_missing'
+        | 'task_required';
+    passed: boolean;
+    reason?: string;
+    message?: string;
+    tasks: Array<Record<string, unknown>>;
 }
 
 export interface ReviewConfig {
@@ -113,6 +134,10 @@ export interface ReviewConfig {
     fast?: boolean;
     /** Free-text steering directive (`--focus`); sanitized + capped server-side. */
     focus?: string;
+    /** `--heavy` / `--balanced`: the review mode asked for, over the one set in
+     *  settings. */
+    heavy?: boolean;
+    balanced?: boolean;
     files?: FileContent[];
 }
 

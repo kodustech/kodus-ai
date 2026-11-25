@@ -1,0 +1,177 @@
+---
+title: "Moonshot (Kimi)"
+description: "通过 Moonshot 开发者 API 或 Kimi Code Plan,将 Moonshot AI 的 Kimi 模型连接到 Kodus。"
+icon: "moon"
+---
+
+## Moonshot 工作原理
+
+Moonshot AI 发布 **Kimi** 系列模型(K3.1 Pro、K3 以及更早的 K2 系列)。其 API 同时兼容 OpenAI 和 Anthropic。Kodus 提供专用的 **Moonshot** 提供商,通过 Anthropic 兼容端点(`https://api.moonshot.ai/anthropic`)连接。您也可以通过 **OpenAI-compatible** 提供商使用 Kimi。
+
+Moonshot 提供**两条路径**使用 Kimi 模型,各自有独立的端点和密钥:
+
+- **开发者 API**(`platform.kimi.ai`):按 token 付费。速率限制取决于您的累计充值额。
+- **Kimi Code Plan**(`kimi.com/code`):Kimi 会员,带**专用编码端点**。用量受滚动 5 小时速率窗口和月度配额限制。
+
+<Note>
+  Kimi Code 随 Kimi 会员提供:当前套餐为 Plus 及以上,旧版套餐为 Andante 及以上。其密钥与开发者 API 密钥相互独立。
+</Note>
+
+Moonshot 还运营一个中国平台 `platform.kimi.com`(`platform.moonshot.cn` 会重定向到此),base URL 为 `https://api.moonshot.cn/v1`。`platform.kimi.ai` 的密钥与中国平台的密钥相互独立。
+
+## 方案概览
+
+### Kimi Code Plan(订阅)
+
+| 属性 | 值 |
+| --- | --- |
+| **端点** | `https://api.kimi.ai/coding/v1`(海外)<br />`https://api.kimi.com/coding/v1`(中国) |
+| **模型** | `k3.1-pro`、`k3`、`k3-256k`。这些 ID 与开发者 API 不同,可用哪些取决于您的套餐。参见 [Kimi Code 文档](https://www.kimi.com/code/docs/en/)。 |
+| **限制** | 滚动 5 小时速率窗口和月度配额。参见[会员权益](https://www.kimi.com/code/docs/en/kimi-code/membership.html)。 |
+| **计费** | 会员订阅 |
+| **密钥来源** | [Kimi Code Console](https://www.kimi.com/code/console) |
+
+### 开发者 API(按 token 付费)
+
+<Info>
+  Moonshot 在 [platform.kimi.ai/docs/pricing/chat](https://platform.kimi.ai/docs/pricing/chat) 发布价格,在 [platform.kimi.ai/docs/pricing/limits](https://platform.kimi.ai/docs/pricing/limits) 发布速率限制。选择模型前请先查看。
+</Info>
+
+| 模型 | 上下文窗口 | 说明 |
+| ----- | -------------- | ----- |
+| **Kimi K3.1 Pro**(`kimi-k3.1-pro`) | 1,048,576 tokens | 最新旗舰。 |
+| **Kimi K3**(`kimi-k3`) | 1,048,576 tokens | 上一代旗舰。 |
+| **Kimi K2 系列** | 262,144 tokens | 自 2026 年 10 月 31 日起不再向新注册用户开放。所有 K2 模型计划在 2026 年 12 月底前下线。 |
+
+开发者 API 端点:`https://api.moonshot.ai/v1`(OpenAI 兼容)和 `https://api.moonshot.ai/anthropic`(Anthropic 兼容)。并发数、每分钟请求数和每分钟 token 数取决于您的累计充值额。
+
+## 创建 API 密钥
+
+<Warning>创建 API 密钥需要 Moonshot 账号。</Warning>
+
+<Tabs>
+  <Tab title="Kimi Code Plan 订阅者">
+    1. 访问 [kimi.com/code](https://www.kimi.com/code) 并订阅包含 Kimi Code 的会员。
+    2. 打开 [Kimi Code Console](https://www.kimi.com/code/console)。
+    3. 点击 **Create API Key**,输入名称并确认。复制密钥:控制台不会再次显示它。
+
+    <Note>
+      Kimi Code 密钥适用于 Kimi Code 端点。将开发者 API 的密钥或 base URL 用于 Kimi Code 会返回 401。
+    </Note>
+  </Tab>
+
+  <Tab title="开发者 API(按 token 付费)">
+    1. 在 [platform.kimi.ai](https://platform.kimi.ai) 登录,中国平台则在 [platform.kimi.com](https://platform.kimi.com) 登录。
+    2. 为账户充值。在 `platform.kimi.ai` 上,开始使用 API 的最低充值额为 $1。
+    3. 打开 [platform.kimi.ai/console/api-keys](https://platform.kimi.ai/console/api-keys) 并创建密钥。为其起一个描述性名称(例如 `kodus-prod`)并复制。
+
+    <Note>
+      `platform.kimi.ai` 的密钥适用于 `api.moonshot.ai`。它们与中国平台的密钥相互独立,后者适用于 `api.moonshot.cn`。
+    </Note>
+  </Tab>
+</Tabs>
+
+## 在 Kodus 中配置 Moonshot
+
+主要流程是 **AI providers** 页面,在 Kodus Cloud 和自托管实例上相同。偏好在进程级别固定提供商的自托管用户,可以改用环境变量。
+
+### 方式 1 — Moonshot 提供商(开发者 API 推荐)
+
+<Steps>
+  <Step title="打开 AI providers 并选择 Moonshot">
+    在侧边栏中打开 **AI providers**(Cloud 上为 [app.kodus.io/byok](https://app.kodus.io/byok),自托管实例上为 `/byok`)。在 **Providers** 选项卡上,点击 **Moonshot** 磁贴(位于 **Connect your first provider** 下方;如果已连接过提供商,则位于 **Add another provider**)。
+  </Step>
+
+  <Step title="粘贴 API 密钥并选择模型">
+    在 **API key** 卡片中粘贴来自 [platform.kimi.ai](https://platform.kimi.ai/console/api-keys) 的开发者 API 密钥。随后 **Model** 选择器会加载 Moonshot 的模型。选择一个(例如 `kimi-k3.1-pro`),或选择 **Type model manually**。Kodus 会为您填入 `https://api.moonshot.ai/anthropic` 端点。此磁贴没有套餐选择器,也没有 base URL 字段,因此 Kimi Code Plan 密钥或中国平台请使用下面的方式 2。
+  </Step>
+
+  <Step title="Test & save">
+    点击 **Test & save**。Kodus 会测试连接,成功后保存配置。401 表示密钥有误,或属于其他平台。
+  </Step>
+</Steps>
+
+### 推理
+
+Kimi K3.1 Pro 和 K3 始终进行推理。Moonshot 的 API 没有关闭它的设置,并且说明不要为它们发送 `thinking` 参数。请将 **Advanced (optional)** 下的 **Thinking / Reasoning** 保持默认值,不要通过 **Custom** 添加 `thinking` 块。**Test & save** 会拒绝这些模型的 **Off**。参见[思考模型](https://platform.kimi.ai/docs/guide/use-thinking-models)。
+
+### 调整并发
+
+- **Kimi Code Plan**:Moonshot 在 [Kimi Code 介绍](https://www.kimi.com/resources/kimi-code-introduction)中提到最多支持 30 个并发请求。实际适用的上限可能因账号而异。先将 **Advanced (optional)** 中的 **Max concurrent requests** 设为较低的值，再逐步调高。如果 API 提示达到并发上限，请调低该值。
+- **开发者 API**:留空(不设上限)。您的限制取决于累计充值额。如果审查期间看到 429 错误,请设置它。
+
+<Note>
+  在 **Code review → Routing** 下,将 **Default model** 设置为 Kimi,并选择另一个提供商的模型作为 **Fallback model**。Kodus 会在备用模型上重新运行一次失败的调用。参见[路由](/zh/how_to_use/byok#路由:哪个模型运行哪个任务)。
+</Note>
+
+### 方式 2 — OpenAI 兼容端点
+
+对于 Kimi Code Plan、中国平台或 Moonshot 的 OpenAI 兼容端点,打开 **AI providers**,在 **Providers** 选项卡上选择 **Custom** 下的 **OpenAI-compatible**,并填写:
+
+| 字段 | 值 |
+| --- | --- |
+| **Base URL** | `https://api.moonshot.ai/v1`(开发者 API)<br />`https://api.kimi.ai/coding/v1`(Kimi Code Plan,海外)<br />`https://api.kimi.com/coding/v1`(Kimi Code Plan,中国)<br />`https://api.moonshot.cn/v1`(中国平台) |
+| **Model** | 开发者 API 和中国平台使用 `kimi-k3.1-pro` 或 `kimi-k3`<br />Kimi Code 使用 `k3.1-pro` 或 `k3` |
+| **API key** | 您的 Moonshot 或 Kimi Code 密钥(与上面的 base URL 对应) |
+| **Max concurrent requests**(位于 **Advanced (optional)** 下) | Kimi Code Plan 上设为较低值,在审查运行时没有 429 错误的情况下逐步调高;开发者 API 上留空 |
+
+### 方式 3 — 自托管(环境变量)
+
+要通过 `.env` 为自托管实例指定一个模型:
+
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="kimi-k3.1-pro"
+API_LLM_BASE_URL="https://api.moonshot.ai/v1"    # or https://api.kimi.ai/coding/v1 for Kimi Code Plan (model k3.1-pro)
+API_LLM_API_KEY="your-moonshot-or-kimi-code-api-key"
+```
+
+要改用 Anthropic 兼容端点,请设置 `API_LLM_PROVIDER=anthropic_compatible` 和 `API_LLM_BASE_URL="https://api.moonshot.ai/anthropic"`。
+
+按照安装指南[应用模型配置变更](/zh/how_to_deploy/deploy_kodus/generic_vm#应用模型配置变更)。
+
+## 在 Kimi Code Plan、开发者 API 和聚合平台之间选择
+
+- **Kimi Code Plan**:固定费率会员,使用专用编码端点,带滚动 5 小时速率窗口和月度配额。最适合稳定的 PR 量。通过第三方工具使用 Kimi Code 密钥前,请查看 Moonshot 的条款,并参见[订阅与编码套餐](/zh/how_to_use/byok#订阅与编码套餐)。
+- **Moonshot 开发者 API**:按 token 付费,速率限制取决于累计充值额。最适合突发型工作负载。
+- **OpenRouter**:跨多个提供商的统一计费关系。OpenRouter 不对推理价格加价,但在购买额度时收取费用;参见其 [FAQ](https://openrouter.ai/docs/faq)。当 Kimi 只是混合提供商配置中的一个模型时选择它。
+
+## 故障排查
+
+<AccordionGroup>
+  <Accordion title="Test 后出现 401 — 密钥与端点不匹配">
+    - Kimi Code 密钥适用于 Kimi Code 端点。将开发者 API 的密钥或 base URL 用于 Kimi Code 会返回 401。
+    - `platform.kimi.ai` 的密钥适用于 `api.moonshot.ai`(`/v1` 和 `/anthropic`)。
+    - `platform.kimi.com` 的密钥适用于 `api.moonshot.cn/v1`。
+    - **Moonshot** 磁贴始终使用 `https://api.moonshot.ai/anthropic`,因此需要 `platform.kimi.ai` 的密钥。Kimi Code 或中国平台的密钥请通过 **OpenAI-compatible** 并填写匹配的 **Base URL** 连接。
+  </Accordion>
+
+  <Accordion title="429 错误和余额不足">
+    - 在开发者 API 上,余额耗尽会返回带有 `exceeded_current_quota_error` 的 429。请在控制台为账户充值。
+    - 429 也可能是速率限制(并发数、每分钟请求数或每分钟 token 数)或引擎过载。速率限制请调低 **Max concurrent requests**;充值无法解决引擎过载。
+    - 当达到 5 小时窗口、月度配额或并发限制时,Kimi Code 会返回 429。参见 Moonshot 的 [Kimi Code 错误参考](https://www.kimi.com/code/docs/en/kimi-code/error-reference)和[开发者 API 错误码](https://platform.kimi.ai/docs/api/errors)。
+  </Accordion>
+
+  <Accordion title="模型未找到">
+    - 开发者 API 的 ID 为 `kimi-k3.1-pro` 和 `kimi-k3`。Kimi Code 的 ID 为 `k3.1-pro`、`k3` 和 `k3-256k`。
+    - 在 [platform.kimi.ai/docs/models](https://platform.kimi.ai/docs/models) 查看当前的开发者 API 列表。较旧的模型会下线。
+  </Accordion>
+
+  <Accordion title="响应慢">
+    - Kimi K3.1 Pro 和 K3 始终进行推理,且无法关闭推理,因此响应可能需要一些时间。
+    - 在开发者 API 上,Moonshot 列出了 `kimi-k3.1-pro-highspeed`,它是 K3.1 Pro 的更快变体。
+  </Accordion>
+
+  <Accordion title="区域 / 连接性">
+    - 开发者 API 密钥与其所属平台绑定:`platform.kimi.ai` 对应 `api.moonshot.ai`,`platform.kimi.com` 对应 `api.moonshot.cn`。
+    - Kimi Code 有独立的端点:`api.kimi.ai/coding/v1`(海外)和 `api.kimi.com/coding/v1`(中国)。
+    - 确认您的 Kodus 部署允许对所选端点发起出站 HTTPS 连接。
+  </Accordion>
+</AccordionGroup>
+
+## 相关链接
+
+- [Kimi API 平台](https://platform.kimi.ai)
+- [Kimi Code Plan](https://www.kimi.com/code)
+- [Kimi API 文档](https://platform.kimi.ai/docs)
+- [BYOK 概述](/zh/how_to_use/byok)

@@ -1,0 +1,113 @@
+---
+title: "Aprovação automática"
+description: "Aprove PRs limpos com políticas nomeadas e uma decisão registrada."
+tag: "beta"
+---
+
+import { FeatureBadge } from "/snippets/feature-badge.jsx";
+
+<div className="kodus-feature-badges">
+  <FeatureBadge id="all-plans" detail="A aprovação automática básica de PRs está disponível em todos os planos.">
+    <Badge icon="layer-group" stroke>Todos os planos</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="policies" detail="As políticas de aprovação e o Human approval estão em beta na Kodus Cloud para Teams e Enterprise, incluindo o trial. O workspace precisa ter acesso ao beta.">
+    <Badge icon="flask" color="orange" stroke>Políticas · Beta</Badge>
+  </FeatureBadge>
+  <FeatureBadge id="self-hosted" detail="As políticas e o Human approval requerem uma licença Enterprise e BETA_FEATURES=true.">
+    <Badge icon="server" stroke>Self-hosted</Badge>
+  </FeatureBadge>
+</div>
+
+Quando uma revisão está limpa, a Kody envia uma aprovação de review ao seu provedor Git. Ela nunca faz o merge do PR.
+
+## Ative a aprovação automática
+
+Abra **Code review → General**, ative **Automatic PR approval** e clique em **Save settings**. Em workspaces com políticas de aprovação, o PR também precisa atender a uma política ativa.
+
+## Políticas de aprovação
+
+Cada política tem um nome, uma chave liga/desliga e condições opcionais. Todas as condições de uma política precisam ser atendidas. Qualquer política ativada pode autorizar a aprovação; a primeira que corresponder, na ordem salva, é registrada no PR.
+
+Novas políticas começam **desligadas**. Uma política sem condições cobre **All clean PRs**, exibido tanto no editor quanto na lista. Adicionar ou editar uma política não liga a aprovação automática.
+
+As políticas suportam escopo Global, Repository e Directory. Elas valem para o PR completo, incluindo arquivos pulados pela revisão incremental ou ignorados nos comentários da revisão.
+
+### Aprove PRs que só alteram documentação
+
+Use este exemplo quando quiser que a Kody aprove PRs sem pendências que só mexem em arquivos de `docs/`.
+
+1. Em **Code review → General**, encontre **Approval policies** e clique em **Add policy**.
+2. Dê o nome `Documentation only`. Em **Add condition**, escolha **Changed files**. Em **Included files**, clique em **Add files**, digite `docs/**` e pressione Enter.
+3. Clique em **Apply** e ative a nova política. Ative **Automatic PR approval** e clique em **Save settings**.
+
+Um PR sem pendências que só altere arquivos em `docs/` pode atender a essa política. Se também alterar código da aplicação, precisa atender a outra política.
+
+### Condições da política
+
+| Condição | Requisito |
+| --- | --- |
+| PR labels | Pelo menos um dos labels listados precisa corresponder. Condições de label não estão disponíveis no Bitbucket e no Azure Repos. |
+| PR author | Quem abriu o PR precisa ser um username ou bot listado, ou um membro verificado de um time do provedor listado. Isso não verifica todos os autores de commit. |
+| Included files | Todo caminho alterado precisa corresponder a um padrão incluído. Vazio significa todos os arquivos. |
+| Excluded files | Qualquer caminho correspondente faz a política ser pulada. |
+| Changed lines | Adições mais remoções precisam ficar dentro do limite. Arquivos escolhidos, como `yarn.lock`, podem ser excluídos dessa contagem. |
+| Eligibility instruction | A Kody precisa confirmar que o PR atende à instrução. Ela roda depois das outras condições, usando o modelo da revisão. |
+
+Usernames e labels são comparados sem diferenciar maiúsculas de minúsculas. A participação em times é verificada de novo a cada avaliação. Times do GitHub, grupos do GitLab e times do Azure DevOps são suportados; uma participação indisponível nunca conta como correspondência. Seletores de time sem suporte são rejeitados ao salvar.
+
+Um arquivo renomeado conta tanto pelo caminho antigo quanto pelo novo. Contagens de linhas desconhecidas ou de arquivos binários não podem satisfazer um limite de linhas, a menos que o arquivo seja explicitamente excluído dessa contagem. Use o editor de padrões de arquivo para validar a sintaxe glob e testar um caminho de exemplo.
+
+Se uma eligibility instruction falhar, expirar ou não tiver evidências, essa política não pode aprovar. Outra política ativada ainda pode corresponder.
+
+## Requisitos que valem para toda política
+
+- A revisão precisa terminar sem falhas bloqueantes ou achados não resolvidos. Uma falha apenas na narrativa do resumo do PR não invalida uma revisão limpa já entregue.
+- Se a [avaliação de risco](/pt-BR/how_to_use/code_review/configs/risk) estiver ligada, um risco encontrado ou uma avaliação indisponível bloqueia todas as políticas.
+- Arquivos listados em **Human approval** sempre bloqueiam a aprovação automática, independentemente das políticas.
+- O head e a base do PR ainda precisam corresponder ao snapshot revisado. Uma revisão mais nova que falhou ou ficou incompleta impede o reaproveitamento de um resultado limpo mais antigo.
+
+Quando a avaliação de risco está desligada, os requisitos de revisão limpa e de política continuam valendo. Não existe bypass de risco por política.
+
+A Kody pode reconsiderar um PR já revisado quando um label muda ou quando comentários de linha entregues são resolvidos. Achados no nível do PR exigem uma nova revisão limpa. Uma execução apenas de custom agent nunca aprova o PR inteiro.
+
+## Comentário de decisão
+
+Quando a Kody aprova sob uma política, ou segura a aprovação, ela posta um comentário de decisão no PR e o mantém atualizado. O comentário nomeia a política correspondente ou explica as condições que falharam. Eligibility instructions privadas e o raciocínio livre do modelo não são publicados.
+
+Se a Kody não conseguir confirmar que o comentário apareceu no PR, o PR na lista de [Pull requests](/pt-BR/how_to_use/reviews/pull_requests) mostra **Approval note unverified**, e o tooltip dá o motivo da tentativa de postar. Confira os comentários do PR e as permissões da integração do repositório.
+
+Alterar ou desativar uma política não retira uma aprovação que já está no provedor. Uma revisão posterior que segure a aprovação, por exemplo porque deixou de estar limpa ou porque um risco foi encontrado, descarta a aprovação anterior da Kody e diz o motivo.
+
+## YAML
+
+Ative **Prefer kodus-config.yml settings** em **Code review → General** (escopo de repositório) antes de usar arquivos de configuração do repositório.
+
+```yaml
+pullRequestApprovalActive: true
+approvalSensitivePaths:
+  - 'src/payments/**'
+approvalPolicies:
+  - id: docs
+    name: Documentation
+    enabled: true
+    includedFiles:
+      - 'docs/**'
+  - id: dependency-updates
+    name: Dependency updates
+    enabled: false
+    authors:
+      - 'dependabot[bot]'
+    authorTeams:
+      - 'platform'
+    includedFiles:
+      - 'package.json'
+      - 'yarn.lock'
+    maxChangedLines: 150
+    lineCountExcludedFiles:
+      - 'yarn.lock'
+    instruction: 'Only dependency updates that keep the same major version.'
+```
+
+`approvalSensitivePaths` é a lista de **Human approval**. `authors` aceita usernames e bots, `authorTeams` aceita times do provedor e `labels` aceita labels de PR. Mantenha os IDs das políticas estáveis e os nomes distintos. Você pode ter até 50 políticas, e uma eligibility instruction pode ter até 4.000 caracteres. Uma lista vazia explícita desativa todas as políticas. Uma aprovação irrestrita existente é resolvida para uma única **Existing approval policy** ativada, preservando a chave geral.
+
+Os legados `approvalLabels` e `approvalAuthors` ainda delimitam essa política migrada. Se um arquivo de maior prioridade usar filtros legados com uma nova lista de políticas que não tem política migrada, atualize o arquivo para `approvalPolicies`; a Kody rejeita a configuração ambígua em vez de ignorar uma restrição.

@@ -1,0 +1,123 @@
+---
+title: "Synthetic — 开源编码模型的固定费率订阅"
+description: "了解如何将 Synthetic.new 基于订阅的 API(涵盖 Kimi、DeepSeek、Qwen、GLM 等)连接到 Kodus。"
+icon: "infinity"
+---
+
+## Synthetic 工作原理
+
+Synthetic 是一项订阅服务,通过 **OpenAI 兼容**(同时兼容 Anthropic)的 API 提供开源 LLM。您无需按 token 付费,而是支付**固定月费**,并在覆盖平台上所有模型的每周额度限制内使用。
+
+Kodus 通过 OpenAI 兼容端点连接 Synthetic,无需修改适配器,仅需 BYOK 凭证。
+
+## 方案概览
+
+<Info>
+  价格和限制会变化。选择套餐前请先在 [synthetic.new/pricing](https://synthetic.new/pricing) 和 [synthetic.new/rate-limits](https://synthetic.new/rate-limits) 确认。
+</Info>
+
+### 订阅(代码审查推荐)
+
+| 套餐 | 价格 |
+| ---- | ----- |
+| **Go** | $9/月 |
+| **Standard** | $30/月 |
+| **Big** | $90/月 |
+
+- 套餐用量是每周额度限制,而不是按 token 计费的账单。额度在一周内逐步恢复,而不是在固定日期重置,套餐越大限制越高。具体数字见[速率限制页面](https://synthetic.new/rate-limits)。
+- 一份订阅覆盖所有模型。不同模型消耗的额度不同,因此更便宜的模型能让限制用得更久。通过修改 `model` 字段来选择模型。
+
+### 推荐模型
+
+Synthetic 使用 HuggingFace 风格的前缀(`hf:org/model`)暴露模型。这些是始终在线的模型,包含在每个订阅中,目录中列出了每个模型的工具调用和结构化输出支持:
+
+| 模型 ID | 上下文窗口 |
+| -------- | -------------- |
+| `hf:zai-org/GLM-5.3` | 512k tokens |
+| `hf:moonshotai/Kimi-K3.1-Pro` | 512k tokens |
+| `hf:deepseek-ai/DeepSeek-V4.1-Flash-1017` | 512k tokens |
+| `hf:Qwen/Qwen3.8-27B` | 256k tokens |
+| `hf:openai/gpt-oss-120b` | 128k tokens |
+
+目录经常变化。[api.synthetic.new/openai/v1/models](https://api.synthetic.new/openai/v1/models) 上的实时列表是公开的。
+
+## 创建 API 密钥
+
+1. 访问 [synthetic.new](https://synthetic.new) 注册或登录。
+2. 在 [synthetic.new/pricing](https://synthetic.new/pricing) 订阅一个套餐。
+3. 复制您的 API 密钥。登录状态下,Synthetic 会在其 [API 文档](https://dev.synthetic.new/docs/api/getting-started)中显示它。
+
+## 在 Kodus 中配置 Synthetic
+
+### 方式 1 — AI providers 页面(推荐)
+
+按照[连接提供商](/zh/how_to_use/byok#连接提供商)的步骤选择 **Custom → OpenAI-compatible**，然后使用下列值填写表单。
+
+| 字段 | 值 |
+| --- | --- |
+| **Base URL** | `https://api.synthetic.new/openai/v1` |
+| **Model** | 例如 `hf:zai-org/GLM-5.3`(使用 `hf:` 前缀和完整的 HuggingFace 路径) |
+| **Key**(在 **API key** 卡片中) | 您的 Synthetic API 密钥 |
+
+点击 **Test & save**，然后在 [Routing](/zh/how_to_use/code_review/configs/routing) 中选择默认模型和后备模型。
+
+<Tip>
+  Synthetic 只使用每周额度限制,没有单独的 5 小时或月度限制。将 **Max concurrent requests**(位于 **Advanced (optional)** → **Advanced settings** 下)留空,仅在看到 429 时才设置它。
+</Tip>
+
+<Note>
+  在 **Code review → Routing**(**AI providers** 上的 **Configure routing** 按钮)中,将 Synthetic 设置为 **Default model**,并将 OpenAI 或 Anthropic 模型设置为 **Fallback model**。当 Synthetic 失败时,例如额度用尽,Kodus 会在备用模型上重新运行该调用。
+</Note>
+
+### 方式 2 — 自托管(环境变量)
+
+要通过 `.env` 为自托管实例指定一个模型:
+
+```env
+API_LLM_PROVIDER=openai_compatible
+API_LLM_PROVIDER_MODEL="hf:zai-org/GLM-5.3"
+API_LLM_BASE_URL="https://api.synthetic.new/openai/v1"
+API_LLM_API_KEY="your-synthetic-api-key"
+```
+
+按照安装指南[应用模型配置变更](/zh/how_to_deploy/deploy_kodus/generic_vm#应用模型配置变更)。
+
+## 何时选择 Synthetic
+
+- **您的主力模型是开源模型**(Kimi、DeepSeek、Qwen、GLM),并且希望获得固定的月度账单,而不必在各提供商之间分别核算 token 支出。
+- **您的流量具有突发性。** Synthetic 对突发使用没有惩罚:您可以在一次会话中用完每周限制,之后额度会逐步恢复。
+
+如果您只想为实际使用的 token 付费,请改选按 token 付费的方案(Moonshot、Fireworks、Together、Groq);如果您特别想要 GLM 系列,请选择另一种订阅(Z.AI GLM Coding Plan)。
+
+## 故障排查
+
+<AccordionGroup>
+  <Accordion title="429 Too Many Requests">
+    - 您的每周额度可能已用完。请在 [Synthetic 账单页面](https://synthetic.new/billing)和[速率限制](https://synthetic.new/rate-limits)查看用量。
+    - 额度会逐步恢复,因此请稍等片刻、调低模型上的 **Max concurrent requests**(**AI providers** → **Edit model**),或升级到更大的套餐。
+    - 在 **Code review → Routing** 上设置 **Fallback model**,这样在被限流期间审查仍能继续。
+  </Accordion>
+
+  <Accordion title="401 / 身份验证错误">
+    - 在 Synthetic 仪表板确认密钥有效且订阅未过期。
+    - 确保 `.env` 值中没有尾随空格或引号。
+  </Accordion>
+
+  <Accordion title="模型未找到">
+    - Synthetic 使用 `hf:org/model` 格式,`hf:` 前缀是必需的。
+    - 请对照 [api.synthetic.new/openai/v1/models](https://api.synthetic.new/openai/v1/models) 核对。Synthetic 会淘汰较旧的模型,因此固定的 ID 可能开始返回 404。
+  </Accordion>
+
+  <Accordion title="连接错误">
+    - 确认您的服务器可以访问 `api.synthetic.new`。
+    - 查看 API 和 worker 日志获取具体的上游错误。
+  </Accordion>
+</AccordionGroup>
+
+## 相关链接
+
+- [Synthetic 定价](https://synthetic.new/pricing)
+- [Synthetic 速率限制](https://synthetic.new/rate-limits)
+- [Synthetic API 文档](https://dev.synthetic.new/docs/api/getting-started)
+- [Synthetic 模型目录](https://dev.synthetic.new/docs/openai/models)
+- [BYOK 概述](/zh/how_to_use/byok)

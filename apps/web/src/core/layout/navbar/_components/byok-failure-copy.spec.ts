@@ -20,6 +20,13 @@ describe("byokFailureCopy", () => {
         expect(`${title} ${body}`).not.toMatch(/free/i);
     });
 
+    it("names a refused request without blaming the key or billing (#1687)", () => {
+        const { title, body } = byokFailureCopy("OpenAI", "REQUEST_REJECTED");
+        expect(`${title} ${body}`).not.toMatch(billing);
+        expect(`${title} ${body}`).not.toMatch(/\bkey\b/i);
+        expect(title).toMatch(/refusing requests/i);
+    });
+
     it("does not guess a cause when the error was not classified", () => {
         for (const category of [undefined, "UNKNOWN", "TRANSIENT"]) {
             const { title, body } = byokFailureCopy("OpenRouter", category);
@@ -76,6 +83,23 @@ describe("byokFailureCopy", () => {
         expect(byokFailureCopy("OpenAI", "QUOTA_EXCEEDED").body).toMatch(
             /balance|credit|quota/i,
         );
+    });
+
+    // Vercel AI Gateway with Region Pinning on: the model has no provider in
+    // the pinned region. Notifications sent before the classifier knew this
+    // wording carry only the sentence, so the copy reads it too.
+    it("points at the region pin when the gateway can route the model nowhere", () => {
+        const { title, body } = byokFailureCopy(
+            "Vercel AI Gateway",
+            "MODEL_NOT_FOUND",
+            {
+                providerMessage:
+                    "No provider for openai/gpt-5-mini can serve any of the team's pinned inference regions (eu).",
+            },
+        );
+        expect(title).toMatch(/no allowed provider/i);
+        expect(body).toMatch(/region/i);
+        expect(`${title} ${body}`).not.toMatch(/check the model id/i);
     });
 
     it("blames the key only when the provider rejected it", () => {

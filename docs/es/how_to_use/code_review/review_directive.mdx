@@ -1,89 +1,142 @@
 ---
 title: "Dirigir una Revisión (Enfoque)"
-description: "Dirige la atención de Kody hacia un área específica del pull request con una directiva de revisión puntual, mediante comentario en el PR o CLI"
+description: "Dirige la atención de Kody hacia un área específica de un pull request con una directiva de revisión puntual, mediante un comentario en el PR o la CLI"
 ---
 
-Una **directiva de revisión** te permite indicarle a Kody dónde concentrar su análisis más profundo en una revisión concreta. En lugar de cambiar la configuración, adjuntas una instrucción breve al lanzar la revisión — por ejemplo, "enfócate en la lógica de auth y sesión" — y Kody dedica su análisis más riguroso al código modificado que coincide.
+Una **directiva de revisión** te permite indicarle a Kody dónde concentrar su análisis más profundo en una única revisión. En lugar de cambiar cualquier configuración, adjuntas una instrucción breve al lanzar la revisión (por ejemplo, "focus on the auth and session logic") y Kody dedica su análisis más riguroso al código modificado que coincide.
 
 <Note>
-  Una directiva es **efímera**: se aplica solo a esa ejecución de revisión. No se guarda en tu configuración ni afecta a revisiones futuras. Para cambiar el comportamiento de Kody de forma permanente, usa las instrucciones por categoría y la personalidad de Kody ([Instructions & Personality](/es/how_to_use/code_review/configs/custom_prompts), antes Custom Prompts) o [Kody Rules](/es/how_to_use/code_review/configs/kody_rules).
+  Una directiva es **efímera**: se aplica solo a esa ejecución de revisión. No se guarda en tus ajustes ni afecta a revisiones futuras. Para cambiar el comportamiento de Kody de forma permanente, usa en su lugar las instrucciones por categoría y la personalidad de Kody ([Instructions & Personality](/es/how_to_use/code_review/configs/custom_prompts)) o las [Kody Rules](/es/how_to_use/code_review/configs/kody_rules).
 </Note>
 
-## Cuándo Usarla
+## Cuándo usarla
 
-- Un PR toca muchos archivos pero te importa más un área de riesgo (auth, pagos, una migración).
-- Quieres que Kody rastree los callers y callees de un cambio específico y lo cuestione con más rigor.
-- Estás relanzando una revisión y quieres dirigir la atención sin editar ninguna configuración.
+- Un PR toca muchos archivos, pero te importa más un área de riesgo (auth, pagos, una migración).
+- Quieres que Kody rastree los llamadores y los llamados de un cambio específico y lo cuestione con más rigor.
+- Estás volviendo a ejecutar una revisión y quieres dirigir la atención sin editar ninguna configuración.
 
-## Prioridad, No Filtro
+## Prioridad, no filtro
 
 Esto es lo más importante de entender:
 
 <Warning>
-  Una directiva establece **prioridad, no un filtro**. Kody prioriza el área de enfoque, pero sigue reportando cualquier bug, problema de seguridad o de rendimiento concreto que detecte en **otras partes** del diff. Nunca suprime hallazgos fuera del enfoque ni aprueba el resto del PR sin revisarlo.
+  Una directiva establece una **prioridad, no un filtro**. Kody prioriza el área de enfoque, pero sigue reportando cualquier bug, problema de seguridad o de rendimiento concreto que note en **otras partes** del diff. Nunca suprime hallazgos fuera del enfoque, y nunca aprueba el resto del PR sin revisarlo.
 </Warning>
 
-Usa una directiva para decir *"mira aquí con más atención"* — no *"mira solo aquí."*
+Usa una directiva para decir *"mira aquí con más atención"*, no *"mira solo aquí"*.
 
-## Cómo Activarla
+## Cómo activarla
 
 <Tabs>
   <Tab title="Comentario en PR / MR">
-    Escribe tu texto de enfoque justo después del comando de revisión en un comentario del pull request:
+    Agrega tu texto de enfoque justo después del comando de revisión en un comentario del pull request:
 
     ```text
-    @kody review enfócate en la lógica de auth y sesión
+    @kody review focus on the auth and session logic
     ```
 
     También puedes usar `start-review` y combinarlo con `--force`:
 
     ```text
-    @kody start-review enfócate en la nueva migración de base de datos
-    @kody review --force enfócate en el manejo de errores del parser del webhook
+    @kody start-review focus on the new database migration
+    @kody review --force focus on error handling in the webhook parser
     ```
 
     <Note>
-      `--force` vuelve a ejecutar la review incluso cuando Kody normalmente la omitiría ("sin commits nuevos desde la última review"). Úsalo — con o sin directiva de enfoque — para obtener un nuevo análisis después de corregir lo que hizo fallar la ejecución anterior, o para aplicar configuraciones actualizadas a un PR ya revisado.
+      `--force` vuelve a ejecutar la revisión incluso cuando Kody normalmente la omitiría ("no new commits since the last review"). Úsalo, con o sin directiva de enfoque, para obtener una nueva pasada después de corregir lo que hizo fallar la ejecución anterior, o para aplicar ajustes actualizados a un PR ya revisado.
     </Note>
 
     <Note>
-      Solo se usa la **primera línea** después del comando como directiva. Todo lo que esté en líneas posteriores se ignora, así que mantén el enfoque en una sola línea.
+      Solo se usa como directiva la **primera línea** después del comando. Todo lo que esté en líneas posteriores se ignora, así que mantén tu enfoque en una sola línea.
     </Note>
 
     Funciona en GitHub, GitLab, Azure DevOps, Bitbucket y Forgejo.
   </Tab>
   <Tab title="CLI">
-    Pasa la opción `--focus` al ejecutar una revisión:
+    Pasa el flag `--focus` al ejecutar una revisión:
 
     ```bash
-    kodus review --focus "la lógica de auth y sesión"
+    kodus review --focus "the auth and session logic"
     ```
 
     Consulta la [referencia de comandos de la CLI](/es/how_to_use/cli/commands) para ver toda la superficie de comandos.
   </Tab>
 </Tabs>
 
-## Cómo Escribir una Buena Directiva
+## Heavy mode
 
-- **Sé específico sobre el área, no sobre el veredicto.** "enfócate en la concurrencia del consumidor de la cola" funciona mejor que "encuentra bugs".
-- **Nombra el código, no el resultado.** Apunta a un módulo, flujo o preocupación ("la lógica de retry", "el SQL en el servicio de reportes").
-- **Sé breve.** Las directivas tienen un límite de **500 caracteres**; solo se lee la primera línea del comentario.
+<Badge color="yellow" size="sm">Beta</Badge>
+
+Teams y Enterprise, incluido el trial del workspace en Cloud. El autoalojamiento admite una licencia válida de Teams o Enterprise. En la CLI, usa un workspace autenticado. Las revisiones de prueba anónimas se ejecutan en Balanced.
+
+Una directiva de enfoque le dice a Kody *dónde* mirar con más atención. `--heavy` le dice que mire de forma *más amplia*: junto a la revisión habitual, nueve revisores especialistas leen cada uno el diff completo en busca de un único tipo de defecto:
+
+- código que dice una cosa y hace otra (nombres, mediciones, resultados)
+- texto que llega a una persona (mensajes, comentarios, traducciones) y no concuerda con el código
+- estado inválido, invariantes rotas y condiciones de carrera
+- suposiciones de límites, índices y orden
+- secretos e identidad: comparaciones, normalización, valores de respaldo
+- un contrato modificado para el que no se actualizó a un llamador
+- tests que seguirían pasando si el comportamiento que cubren se rompiera
+- datos que se filtran en respuestas, logs y mensajes de error
+- dos archivos modificados que no concuerdan entre sí
+
+Cada hallazgo de un especialista pasa por la misma verificación que los de la revisión principal antes de que se publique nada, y luego por la deduplicación y la severidad habituales, así que una suposición que no se sostiene se descarta como cualquier otra.
+
+### Heavy por defecto, o para una revisión
+
+**Code review → Routing** elige cómo se ejecutan las revisiones de un repositorio: **Balanced** (el valor por defecto, solo la revisión principal) o **Heavy**. Con la [evaluación de riesgo](/es/how_to_use/code_review/configs/risk) activada, el resultado del riesgo elige el modo de las revisiones de pull requests. El ajuste se aplica a las revisiones automáticas, a `@kody review` y a `kodus review`; `kodus review` toma el modo solo del ajuste, no del resultado del riesgo. Un flag en un comando lo anula para esa revisión:
+
+```text
+@kody review --heavy
+@kody review --heavy focus on the payment reconciliation logic
+@kody review --balanced
+kodus review --heavy
+kodus review --balanced
+```
+
+`--heavy` ejecuta una revisión heavy en un repositorio configurado como Balanced; `--balanced` ejecuta una revisión balanced en un repositorio configurado como Heavy. Si un comando lleva ambos, gana `--heavy`.
+
+Cualquiera de los dos flags puede ir en cualquier posición de la línea de comandos, antes o después de tu texto de enfoque, y en ambos casos se elimina de la directiva, así que `@kody review focus on the retry logic --heavy` se enfoca en "the retry logic".
+
+Los flags se combinan en cualquier orden: `@kody review --heavy --force` ejecuta una revisión heavy forzada. En un pull request que Kody ya revisó, un flag que pide un modo distinto al que usó la última revisión revisa todo el pull request, no solo los commits desde entonces.
+
+El guion es obligatorio: un `heavy` o `balanced` suelto se lee como texto de la directiva, así que `@kody review heavy checkout path` se enfoca en "heavy checkout path" en vez de activar el flag.
+
+### Qué esperar
+
+- Si tu plan no incluye Heavy, la revisión se ejecuta en Balanced y Kody avisa del cambio.
+- **Tus categorías siguen aplicándose.** Los especialistas de una categoría que desactivaste no se ejecutan: siete son de Bug y dos de Security. Las Kody Rules y los agentes personalizados se ejecutan como siempre.
+- **Se ejecuta en el modelo Heavy.** En el ámbito Global, **Code review → Routing** tiene un **Heavy model** y un **Balanced model**. Sin un Heavy model definido, una revisión heavy usa el modelo por defecto de la organización. Un **Code review model override** en un repositorio o directorio ejecuta ambos modos.
+- **Cuesta más y tarda más.** En nuestra evaluación con 30 pull requests, frente a Balanced con el mismo modelo, una revisión heavy tardó hasta cerca del doble y costó unas 2,5 veces más en modelo por pull request. Encontró cerca de un problema real más cada dos pull requests, y publicó cerca de un comentario más por pull request que no era un problema real. Con tu propia clave de modelo (BYOK) el costo adicional va a la factura de tu proveedor, y un proveedor con un límite de concurrencia bajo puede encolar las llamadas.
+- **Sin acceso al repositorio** (sin sandbox), los especialistas leen solo el diff, como hace la revisión principal en ese caso.
+- Consulta la [lista de pull requests](/es/how_to_use/reviews/pull_requests) para ver las insignias de modo de revisión y la etapa **Specialist Agents** en la línea de tiempo.
+
+<Tip>
+  Configura Heavy como el modo de revisión de los repositorios donde que se escape algo sale caro (un servicio de pagos, un módulo de auth), o pídelo con `--heavy` en un único cambio arriesgado.
+</Tip>
+
+## Cómo escribir una buena directiva
+
+- **Sé específico sobre el área, no sobre el veredicto.** "focus on concurrency in the queue consumer" funciona mejor que "find bugs".
+- **Nombra el código, no el resultado.** Apunta a un módulo, un flujo o una preocupación ("the retry logic", "the SQL in the reports service").
+- **Sé breve.** Las directivas tienen un límite de **500 caracteres**; solo se lee la primera línea de un comentario.
 
 <AccordionGroup>
   <Accordion title="Buenos ejemplos">
-    - `@kody review enfócate en el flujo de autenticación y refresh de token`
-    - `@kody review enfócate en el nuevo manejo del webhook de Stripe`
-    - `kodus review --focus "condiciones de carrera en el worker en segundo plano"`
+    - `@kody review focus on the authentication and token-refresh flow`
+    - `@kody review focus on the new Stripe webhook handling`
+    - `kodus review --focus "race conditions in the background worker"`
   </Accordion>
   <Accordion title="Ejemplos débiles">
-    - `@kody review por favor sé exhaustivo` — no hay área que priorizar.
-    - `@kody review comenta solo en el archivo X` — una directiva no es un filtro; usa [Ignored files](/es/how_to_use/code_review/configs/general) para acotar archivos.
+    - `@kody review please be thorough` — no hay un área que priorizar.
+    - `@kody review only comment on file X` — una directiva no es un filtro; usa [Ignored files](/es/how_to_use/code_review/configs/general) para acotar los archivos.
   </Accordion>
 </AccordionGroup>
 
-## Notas y Límites
+## Notas y límites
 
 - **Longitud:** las directivas se truncan en 500 caracteres.
-- **Solo la primera línea:** en comentarios de PR, solo la primera línea tras el comando se convierte en la directiva.
-- **No confiable por diseño:** como cualquiera que pueda comentar el PR puede aportar una directiva, el texto se sanea antes de usarse (se eliminan caracteres de control y los signos de menor/mayor). Esto no cambia tu enfoque — solo evita que el texto manipule el prompt interno de Kody.
-- **No persistente:** no se escribe nada en la configuración de tu repositorio u organización.
+- **Solo la primera línea:** en los comentarios de PR, solo la primera línea después del comando se convierte en la directiva.
+- **No confiable por diseño:** como cualquiera que pueda comentar en el PR puede aportar una directiva, el texto se sanea antes de usarse (se eliminan los caracteres de control y los signos de menor y mayor). Esto no cambia tu enfoque: solo evita que el texto manipule el prompt interno de Kody.
+- **No persistente:** no se escribe nada en los ajustes de tu repositorio ni de tu organización.

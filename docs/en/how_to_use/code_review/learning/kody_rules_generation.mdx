@@ -1,74 +1,47 @@
 ---
 title: "Automatic Rules Generation"
-description: "Kody can automatically generate custom rules by analyzing your team's code review history. Let her learn from your past reviews to create personalized coding standards."
+description: "Kody drafts Kody Rules from the comments your reviewers leave on pull requests, then keeps learning every week."
 ---
 
-<Warning>
-  **Requires at least 3 months of Kody review history on the repository.** This feature derives rules from Kody's past reviews on your PRs, so repositories that have just onboarded won't produce useful suggestions. If you recently started using Kody, come back after a few months of real reviews.
-</Warning>
+Kody reads the review comments your team wrote on the repository's pull requests, open or closed, finds the standards reviewers keep repeating, and drafts them as [Kody Rules](/en/how_to_use/code_review/configs/kody_rules). It takes your existing rules into account so it does not repeat them.
 
-## Quick Overview
+- It learns from your reviewers' comments longer than 100 characters. Comments by bots and by Kody itself are left out.
+- It runs per repository.
+- Generated rules show the **Kody-generated** origin and apply to all files until you set a path.
+- Generated rules are active right away, or wait in **Pending review** when **Kody knowledge approval** is on.
 
-- **Auto-Generation**: Kody analyzes your review history to create new rules
-- **Data-Driven**: Uses 3 months of review data for intelligent insights
-- **Smart Suggestions**: Generates rules based on actual team patterns
-- **Optional Approval**: Generated rules are active by default; turn on **Kody knowledge approval** to review each one before it takes effect
-- **Continuous Learning**: Weekly rule updates as your team evolves
+## Turn it on
 
-<Frame caption="Generate from past reviews and Kody knowledge approval in the Kody Rules Configuration sheet">
-  <img src="/images/sync-rules.png" alt="Kody Rules Configuration sheet" />
-</Frame>
+1. In the sidebar, pick **Global** or a repository in the scope picker at the top of the **Code review** group, then open **Kody Rules**.
+2. Click **Configuration** to open the side sheet.
+3. Turn on **Generate from past reviews**.
+4. Optionally use the reviewer picker below the toggle (**Learning from all reviewers** by default) to exclude developers whose review comments Kody should not learn from. It lists the current members and recent pull request authors, and shows **Excluding N reviewers** once you apply a selection.
 
-## How It Works
+The setting follows the usual hierarchy: **Global** is the default for every repository, and a repository can set its own value. It does not apply per directory.
 
-### 1. Turning On Rules Generation
+New workspaces are asked during onboarding, in the step **Kody learns from your past reviews**. It is off unless you turn it on, and it saves the choice at Global level.
 
-Rules generation is set per repository:
+## When it runs
 
-1. In the sidebar, pick the repository in the scope picker at the top of the **Code review** group, then open **Kody Rules**
-2. Click **Configuration** to open the side sheet
-3. Turn on **Generate from past reviews**
-4. Optionally, use the reviewer picker below the toggle (**Learning from all reviewers** by default) to exclude developers whose review comments Kody should not learn from
+- **First time for a repository:** Kody reads the review comments of the last **3 months**. Turning the toggle on at repository level starts this right away and it can take a few minutes. Turning it on at Global level starts nothing at that moment: repositories that follow it are picked up by the next weekly run. This first pass only happens while the repository has no generated rules yet.
+- **After that:** once a week, Kody reads the comments of the last week. The default schedule is Saturday at 00:00, São Paulo time (`America/Sao_Paulo`); self-hosted instances can change it with `API_CRON_KODY_LEARNING`.
 
-### 2. Analysis Process
+There is no minimum amount of history. A repository with no reviewer comments in the window produces no rules.
 
-The first time you turn on **Generate from past reviews** for a repository, Kody will:
+When new rules are created, Kody notifies your team with their titles.
 
-- **Scan Review History**: Analyzes the last 3 months of closed PRs in your repository
-- **Identify Patterns**: Discovers common feedback themes and coding preferences
-- **Extract Standards**: Converts review patterns into actionable rules
-- **Generate Rules**: Creates custom rules tailored to your team's style
+## Model requirements
 
-This may take a few minutes. Generated rules then appear on the repository's **Kody Rules** page.
+On the cloud, outside the trial, generation uses your own model key, so **BYOK** must be configured; without it nothing is generated. During the trial Kodus provides the model. Self-hosted instances use the model configured for the deployment. See [BYOK](/en/how_to_use/byok).
 
-### 3. Reviewing Generated Rules
+## Review what Kody generated
 
-Generated rules are listed with the **Kody-generated** origin (use **Filters → Origin → Kody-generated** to see only them). Open any of them to edit, pause, or delete it like any other rule.
+Generated rules are listed with the **Kody-generated** origin. Use **Filters → Origin → Kody-generated** to see only them. Open any of them to edit, pause or delete it like any other rule.
 
-### 4. Approving Rules Before They Take Effect
+To approve rules before they take effect, turn on **Kody knowledge approval** in the same **Configuration** sheet. New generated rules then land in **Pending review** at the top of the page, where you **Approve** the ones that fit your team and **Discard** the rest. Only approved rules are enforced. See [Approval](/en/how_to_use/code_review/configs/kody_rules#approval).
 
 <Warning>
-  By default, generated rules are **active as soon as they are created** and are
-  enforced on the next code review.
+  Without approval, generated rules are active as soon as they are created and are enforced on the next code review.
 </Warning>
 
-To review generated rules before they take effect, turn on **Kody knowledge approval** in the same **Configuration** sheet. With approval on:
-
-- **Pending Review**: New generated rules land in the **Pending review** section at the top of the Kody Rules page instead of being enforced
-- **Choose Selectively**: **Approve** the rules that match your team's needs and **Discard** the rest
-- **Activation**: Only approved rules are enforced during code reviews
-
-## Continuous Learning
-
-After the initial setup, Kody maintains an ongoing learning cycle:
-
-- **Weekly Updates**: Kody generates new rule suggestions every week
-- **Evolving Standards**: Rule suggestions adapt as your team's coding style evolves
-- **Refined Accuracy**: Suggestions become more precise over time
-- **Regular Reviews**: New rules appear weekly (in **Pending review** when approval is on)
-
-## Requirements
-
-- **Minimum Data**: At least 3 months of review history in the repository
-- **Active Reviews**: Regular code review activity for better pattern detection
-- **Repository Access**: Proper permissions to modify repository rules
+A rule that developers keep ignoring or downvoting can be paused automatically; see [Pause ignored and noisy rules](/en/how_to_use/code_review/configs/kody_rules#pause-ignored-and-noisy-rules).

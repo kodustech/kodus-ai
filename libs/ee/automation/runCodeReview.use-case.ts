@@ -231,6 +231,18 @@ export class RunCodeReviewAutomationUseCase implements IUseCase {
                 action,
                 triggerCommentId: sanitizedPayload?.triggerCommentId,
                 reviewDirective: sanitizedPayload?.reviewDirective,
+                requestedReviewMode:
+                    sanitizedPayload?.requestedReviewMode === 'heavy' ||
+                    sanitizedPayload?.requestedReviewMode === 'balanced' ||
+                    sanitizedPayload?.requestedReviewMode === 'ultra'
+                        ? sanitizedPayload.requestedReviewMode
+                        : undefined,
+                requestedReviewModeAccess:
+                    sanitizedPayload?.requestedReviewModeAccess === 'write' ||
+                    sanitizedPayload?.requestedReviewModeAccess === 'none' ||
+                    sanitizedPayload?.requestedReviewModeAccess === 'unknown'
+                        ? sanitizedPayload.requestedReviewModeAccess
+                        : undefined,
                 onlyCustomAgent:
                     typeof sanitizedPayload?.onlyCustomAgent === 'string'
                         ? sanitizedPayload.onlyCustomAgent

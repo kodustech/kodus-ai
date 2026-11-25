@@ -5,74 +5,49 @@ description: "Break down your development cycle into coding, pickup, and review 
 
 ## What is Lead Time Breakdown
 
-Lead Time Breakdown gives you a detailed view of your development process by breaking down the total cycle time into three key phases: coding time, pickup time, and review time. This helps you identify exactly where bottlenecks occur in your workflow.
+Lead Time Breakdown splits the time from a PR's first commit to its close into three phases: coding time, pickup time, and review time. It shows where your workflow slows down.
+
+In the Cockpit, it's the **Lead Time Breakdown** chart on the **Productivity** tab: one stacked bar per week, with **Coding Time**, **Pickup Time** and **Review Time** in hours. Click a name under the chart to hide or show that phase.
 
 ## How We Calculate It
 
-We automatically track the time spent in each phase of your development process, from first commit to PR merge.
-
-**What We Track:**
-- **Coding Time**: Active development time (first commit to last commit)
-- **Pickup Time**: Time between last commit and creating the PR
-- **Review Time**: Time from PR creation to merge
-
-**What We Don't Count:**
-- Time before first commit (planning, design)
-- Time after merge (deployment, etc.)
-- Failed or abandoned PRs
-
-**How It's Calculated:**
 ```
 Coding Time = (Last Commit Time) - (First Commit Time)
-Pickup Time = (PR Opened Time) - (Last Commit Time)  
+Pickup Time = (PR Opened Time) - (Last Commit Time)
 Review Time = (PR Closed Time) - (PR Opened Time)
 ```
 
-We use the 75th percentile (P75) for each phase to filter out outliers and show you typical performance.
+- **Coding Time**: from the first to the last commit of the PR, including commits pushed after the PR was opened.
+- **Pickup Time**: from the last commit until the PR is opened. It is negative for a PR that got new commits after it was opened.
+- **Review Time**: from the PR being opened until it is closed, merged or not.
+
+For each week, each phase is the 75th percentile (P75) across the PRs closed that week, so unusually long outliers don't skew it. A PR whose value for a phase is exactly zero, such as the coding time of a single-commit PR, is left out of that phase's P75. Only commits made up to 30 days before the PR was opened count, because older commits on a rebased branch usually belong to other work. A PR with no commit data is left out.
+
+Time before the first commit (planning, design) and after the close (deployment) isn't counted.
 
 ## Why It Matters
 
 Understanding where time is spent helps you optimize the right part of your process:
 
-- **Coding Time**: Shows development efficiency
-- **Pickup Time**: Reveals workflow bottlenecks
-- **Review Time**: Indicates review process effectiveness
+- **Coding Time**: shows development efficiency
+- **Pickup Time**: reveals workflow bottlenecks between finishing code and asking for review
+- **Review Time**: indicates review process effectiveness
 
 ## How to Improve
 
 ### Reduce Coding Time
-- **Clear Requirements**: Ensure developers understand what to build
-- **Smaller Features**: Break large changes into manageable pieces
-- **Pair Programming**: Collaborate to solve complex problems faster
-- **Code Reuse**: Leverage existing patterns and components
+- Make requirements clear before work starts
+- Break large features into manageable pieces
+- Pair on complex problems
 
 ### Reduce Pickup Time
-- **Immediate PR Creation**: Create PRs right after finishing code
-- **Workflow Automation**: Use tools to streamline PR creation
-- **Clear Definition of Done**: Know exactly when code is ready
-- **Reduce Context Switching**: Focus on completing one task at a time
+- Open the PR right after finishing the code
+- Automate PR creation and setup
+- Define when code is ready for review
 
 ### Reduce Review Time
-- **Review Guidelines**: Set clear expectations for reviewers
-- **Automated Checks**: Use tools to catch issues before review
-- **Review Rotation**: Distribute review workload across the team
-- **Quick Responses**: Respond promptly to review comments
-
-## Common Bottlenecks
-
-### Coding Time
-- **Unclear Requirements**: Developers don't know what to build
-- **Complex Features**: Changes that are too large or complex
-- **Technical Debt**: Working around existing code issues
-- **Dependencies**: Waiting for other components or services
-
-### Pickup Time
-- **Workflow Inefficiency**: Manual steps that slow down the process
-- **Context Switching**: Moving between multiple tasks
-- **Lack of Automation**: Manual PR creation and setup
-
-### Review Time
-- **Large PRs**: Changes that are too big to review quickly
-- **Reviewer Availability**: Not enough people available to review
-- **Unclear Changes**: PRs that are hard to understand
-- **Review Backlog**: Too many PRs waiting for review
+- Set clear expectations for reviewers
+- Use automated checks to catch issues before review
+- Spread review load across the team
+- Respond promptly to review comments
+- Keep PRs small

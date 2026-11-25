@@ -27,6 +27,7 @@ export class OAuthLoginUseCase implements IUseCase {
         email: string,
         providerRefreshToken: string,
         authProvider: AuthProvider,
+        firstTouch?: Record<string, unknown>,
     ) {
         try {
             // Authenticate the caller against the OAuth provider itself: the
@@ -48,6 +49,7 @@ export class OAuthLoginUseCase implements IUseCase {
                     email: verifiedEmail,
                     name: verified.name || name,
                     password: randomBytes(32).toString('base64').slice(0, 32),
+                    firstTouch,
                 });
             }
 

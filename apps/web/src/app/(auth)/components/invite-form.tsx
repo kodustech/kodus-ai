@@ -55,7 +55,8 @@ const formSchema = z
 export const AcceptInviteForm = (props: {
     email: string;
     organizationName: string;
-    inviteId: string;
+    /** The sealed invitation from the invite link. */
+    inviteToken: string;
 }) => {
     const searchParams = useSearchParams();
     const callbackUrl = searchParams.get("callbackUrl");
@@ -109,7 +110,7 @@ export const AcceptInviteForm = (props: {
         const register = await completeUserInvitation({
             name,
             password,
-            uuid: props.inviteId,
+            token: props.inviteToken,
         }).catch(() => undefined);
 
         if (register?.data?.statusCode !== 201) {

@@ -1,12 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 
 import { CoreDocument } from '@libs/core/infrastructure/repositories/model/mongodb';
+import { RELEASE_INDEX } from '@libs/core/infrastructure/database/mongo/release-indexes/release-index-definitions';
 
 export type KodusCreditChargeStatus =
-    | 'pending'
-    | 'debited'
-    | 'unpriced'
-    | 'failed';
+    'pending' | 'debited' | 'unpriced' | 'failed';
 
 /**
  * The metering journal for "Kodus as the provider": one row per LLM-usage span
@@ -93,6 +91,14 @@ KodusCreditChargeModelSchema.index(
 KodusCreditChargeModelSchema.index(
     { organizationId: 1, spanAt: -1 },
     { background: true },
+);
+// listCharges for one PR: without it the read walked the organization's
+// (organizationId, spanAt) entries until it found `limit` charges of that PR.
+// Partial: only charges that carry a PR number enter it.
+// Defined in release-index-definitions.ts, which the index migration builds too.
+KodusCreditChargeModelSchema.index(
+    RELEASE_INDEX.creditChargesByPr.key,
+    RELEASE_INDEX.creditChargesByPr.options,
 );
 
 /**

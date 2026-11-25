@@ -18,6 +18,19 @@ import {
 
 jest.setTimeout(60_000);
 
+// A tracker waits RETRY_DELAY_MS (1s, trackers/tracker.ts) before its second
+// read; the outage cases spent 4s of wall clock on it. Fire that wait at once:
+// the case still sees both reads (`toolsCalled`).
+const realSetTimeout = global.setTimeout;
+beforeAll(() => {
+    jest.spyOn(global, 'setTimeout').mockImplementation(((
+        fn: (...args: unknown[]) => void,
+        ms?: number,
+        ...args: unknown[]
+    ) => realSetTimeout(fn, ms === 1_000 ? 0 : ms, ...args)) as never);
+});
+afterAll(() => jest.restoreAllMocks());
+
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
 const STRICT = process.env.BR_RESOLUTION_STRICT === '1';
 

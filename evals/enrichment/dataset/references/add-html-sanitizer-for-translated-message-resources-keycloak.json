@@ -1,0 +1,19 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#06",
+   "defectStatement": "In verifySafeHtml(), common-prefix and common-suffix lengths are computed independently, allowing them to overlap. The resulting substring end index can precede its start index, throwing StringIndexOutOfBoundsException and aborting verification instead of reporting the illegal HTML.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Keep substring bounds valid for both strings, including empty strings and overlapping common prefixes and suffixes.",
+    "Retain the differing content in the diagnostic when removing shared context.",
+    "Continue adding an illegal-HTML diagnostic containing the key, file, and original versus sanitized content."
+   ],
+   "exampleFix": "                int start = 0;\n                while (start < sanitized.length() && start < value.length() && value.charAt(start) == sanitized.charAt(start)) {\n                    start++;\n                }\n                int end = 0;\n                while (end < sanitized.length() - start && end < value.length() - start && value.charAt(value.length() - end - 1) == sanitized.charAt(sanitized.length() - end - 1)) {\n                    end++;\n                }\n\n                messages.add(\"Illegal HTML in key \" + key + \" for file \" + file + \": '\" + value.substring(start, value.length() - end) + \"' vs. '\" + sanitized.substring(start, sanitized.length() - end) + \"'\");",
+   "notes": "The end index need not be negative to fail; being less than start is sufficient. Independently clamping each substring as suggested can hide the difference (both excerpts become empty for \"aaa\" versus \"aa\"). Reporting the complete strings is also a valid fix."
+  }
+ ]
+}

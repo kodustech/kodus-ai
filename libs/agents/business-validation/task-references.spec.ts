@@ -49,6 +49,41 @@ describe('extractTaskReferences', () => {
         ).toEqual([]);
     });
 
+    it('reads a GitLab issue by its work item URL', () => {
+        // GitLab 18 and 19 render an issue at `…/-/work_items/<iid>`, and
+        // pasting that link is how an MR author cites the task.
+        const refs = extractTaskReferences({
+            body: 'Closes https://gitlab.com/acme/shop/-/work_items/17',
+        });
+
+        expect(refs.map((r) => `${r.kind}:${r.id}`)).toEqual(['git_issue:17']);
+        expect(refs[0]).toMatchObject({
+            repository: { owner: 'acme', name: 'shop' },
+        });
+    });
+
+    it('reads a GitLab work item URL in a nested group', () => {
+        const refs = extractTaskReferences({
+            body: 'See https://gitlab.example.com/hopsweep/sub/kodus-sandbox/-/work_items/17',
+        });
+
+        expect(refs[0]).toMatchObject({
+            kind: 'git_issue',
+            id: '17',
+            repository: { owner: 'hopsweep/sub', name: 'kodus-sandbox' },
+        });
+    });
+
+    it('does not take a group work item for a repository issue', () => {
+        // Group-level work items (epics) share the URL shape but belong to a
+        // group, so there is no repository to read an issue from.
+        expect(
+            ids({
+                body: 'Epic https://gitlab.com/groups/acme/-/work_items/5',
+            }),
+        ).toEqual([]);
+    });
+
     it('skips a URL with a malformed escape and still reads the rest', () => {
         expect(
             ids({
@@ -76,6 +111,35 @@ describe('extractTaskReferences', () => {
             ['work_item', '27', undefined],
             ['page', '1a2b3c4d5e6f708192a3b4c5d6e7f809', undefined],
         ]);
+    });
+
+    it("reads a Jira Server or Data Center link on the company's own host", () => {
+        const refs = extractTaskReferences({
+            body: [
+                'Implements https://tracker.acme.com/browse/PAY-123',
+                'and https://acme.com/jira/browse/OPS-9.',
+                'Board: https://tracker.acme.com/projects/PAY/issues/PAY-124',
+            ].join('\n'),
+        });
+        expect(
+            refs.map((r) => [r.kind, r.id, 'host' in r ? r.host : undefined]),
+        ).toEqual([
+            ['key', 'PAY-123', undefined],
+            ['key', 'OPS-9', undefined],
+            ['key', 'PAY-124', undefined],
+        ]);
+    });
+
+    it("reads no task from a link that only shares a word with a Jira path, or a Git host's own /browse/", () => {
+        expect(
+            ids({
+                body: [
+                    'https://docs.acme.com/browse/catalog and https://acme.com/projects/web/issues',
+                    'https://bitbucket.org/acme/web/browse/PAY-123',
+                    'https://bitbucket.acme.com/projects/PAY/repos/web/browse/PAY-123',
+                ].join('\n'),
+            }),
+        ).toEqual([]);
     });
 
     it('reads Azure Boards AB# references', () => {
