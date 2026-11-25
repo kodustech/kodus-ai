@@ -13,10 +13,7 @@ import {
 import { environment } from '@libs/ee/configs/environment';
 import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import {
-    KODUS_CREDITS_EXHAUSTED_COMMENT,
-    kodyCommentBody,
-} from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
+import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 import { PlatformType } from '@libs/core/domain/enums';
 
 // Custom agents read the install's mode. Pinned to Cloud here, as CI runs;
@@ -1633,10 +1630,7 @@ describe('ValidateConfigStage — Kodus credits on the routed model', () => {
         expect(createIssueComment).toHaveBeenCalledWith(
             expect.objectContaining({
                 prNumber: 3,
-                body: kodyCommentBody(
-                    KODUS_CREDITS_EXHAUSTED_COMMENT,
-                    'github' as PlatformType,
-                ),
+                body: `${KODUS_CREDITS_EXHAUSTED_COMMENT}\n\n<!-- kody-codereview -->`,
             }),
         );
     });
