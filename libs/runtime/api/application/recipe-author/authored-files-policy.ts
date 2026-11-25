@@ -9,7 +9,7 @@ import { redactPatterns } from '@libs/runtime/redaction';
 import { SECRET_NAME } from '@libs/runtime/run/recipe-inference';
 
 import { sanitiseAuthoredCompose } from './authored-compose-sanitiser';
-import { addLocalhostForward } from './authored-dockerfile-e2e';
+import { addLocalhostForward, isSuiteRunnerDockerfile } from './authored-dockerfile-e2e';
 import { addFirebaseEmulatorFetch, firebaseEmulatorsOf } from './authored-dockerfile-firebase';
 import { declareMirrorBuildArgs } from './authored-dockerfile-mirror';
 import { checkAuthoredRecipe, type AuthoredRecipeCheck } from './authored-recipe-policy';
@@ -1509,7 +1509,8 @@ export async function checkAuthoredSubmission(
                 f = { path: f.path, content: d.content };
             }
             const context = buildContexts.get(f.path);
-            const emulators = read && context !== undefined ? await firebaseEmulatorsOf(read, context, evidence) : null;
+            // The suite's container runs no emulator: it reaches the firebase service through localhost (addLocalhostForward).
+            const emulators = read && context !== undefined && !isSuiteRunnerDockerfile(f.content) ? await firebaseEmulatorsOf(read, context, evidence) : null;
             if (emulators) {
                 const fb = addFirebaseEmulatorFetch(f.path, f.content, emulators);
                 if (fb.changes.length && fits(fb.content)) {

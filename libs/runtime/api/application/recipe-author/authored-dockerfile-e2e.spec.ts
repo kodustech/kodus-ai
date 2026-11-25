@@ -118,6 +118,18 @@ describe('a submission with a Cypress suite service', () => {
         expect(appendSuiteBlock(RECIPE, evidence).recipe).not.toMatch(/service: e2e/);
     });
 
+    // kr-mono on dev: the suite's image got the Firebase emulator fetch too, downloading a jar it never runs.
+    it("fetches no Firebase emulator into the suite's container, in a repository that runs them", async () => {
+        const firebase = {
+            ...REPO,
+            'firebase.json': JSON.stringify({ emulators: { firestore: { port: 8080 } } }),
+            'package.json': JSON.stringify({ name: 'shop', scripts: { emulators: 'firebase emulators:start' }, devDependencies: { cypress: '13.17.0', 'firebase-tools': '13.29.1' } }),
+        };
+        const r = await checkAuthoredSubmission(RECIPE, files, async (p) => p in firebase, async (p) => firebase[p] ?? null);
+        expect(r.errors).toEqual([]);
+        expect(r.files!.find((f) => f.path === '.kodus/Dockerfile.e2e')!.content).not.toContain('kodus-fetch-firebase-emulators');
+    });
+
     it('names no suite service when the e2e service is not built from the Cypress image', () => {
         expect(suiteServiceOf([{ path: '.kodus/Dockerfile.e2e', content: 'FROM node:22\n' }, { path: '.kodus/compose.yaml', content: COMPOSE }])).toBeUndefined();
         expect(suiteServiceOf(undefined)).toBeUndefined();
