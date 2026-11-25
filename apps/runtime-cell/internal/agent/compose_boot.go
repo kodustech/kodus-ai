@@ -124,7 +124,7 @@ func (a *Agent) upRequest(c *claims.Claim, workload driver.MachineRef, file []by
 // sharedImagesOf is a claim's sharedImages for its builds: none for a setup,
 // which builds what the environment keeps and never takes another cell's image.
 func sharedImagesOf(acq protocol.ClaimAcquireBody) []driver.SharedImage {
-	if acq.Consumer == protocol.ConsumerSetup || len(acq.SharedImages) == 0 {
+	if acq.Consumer == protocol.ConsumerSetup || skipsBake(acq) || len(acq.SharedImages) == 0 {
 		return nil
 	}
 	out := make([]driver.SharedImage, 0, len(acq.SharedImages))

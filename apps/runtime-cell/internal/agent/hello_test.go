@@ -30,7 +30,7 @@ func TestHelloAdvertisesFeaturesAndTheDriversMaxClaimSize(t *testing.T) {
 			if !reflect.DeepEqual(hello.Features, []string{
 				protocol.FeatureSeedsCache, protocol.FeatureClaimSize, protocol.FeatureEgressAllow, protocol.FeaturePoolMachineSize, protocol.FeatureAuthoredFiles, protocol.FeatureReadyBuildSteps, protocol.FeatureBootPhases, protocol.FeatureCellMemory,
 				protocol.FeatureTimedRequests, protocol.FeatureServiceLogs, protocol.FeatureDBEffects, protocol.FeatureOutboundCalls, protocol.FeatureExecCast, protocol.FeatureBrowser, protocol.FeatureCanaries, protocol.FeatureSecrets,
-				protocol.FeatureReadyStart, protocol.FeatureTraceContext, protocol.FeatureEgressTiers, protocol.FeatureRunIdentity, protocol.FeatureSuite,
+				protocol.FeatureReadyStart, protocol.FeatureTraceContext, protocol.FeatureEgressTiers, protocol.FeatureRunIdentity, protocol.FeatureSuite, protocol.FeatureSkipBake,
 			}) {
 				t.Fatalf("features %v", hello.Features)
 			}
@@ -87,10 +87,10 @@ func TestHelloNamesExercisedLinesOnlyWhenOnAndATrimmedHelloLeavesItOut(t *testin
 		t.Fatalf("not named when on: %v", got)
 	}
 	limit := olderHubFeatureLimit
-	// suite is the newest feature, so it goes first (a hub that old never sends a suite claim): one more than exercisedLines.
-	olderHubFeatureLimit = len(got) - 2
+	// skipBake and suite are the newest features, so they go first (a hub that old never sends their fields): two more than exercisedLines.
+	olderHubFeatureLimit = len(got) - 3
 	t.Cleanup(func() { olderHubFeatureLimit = limit })
-	if trimmed := h.a.hello(true).Features; len(trimmed) != len(got)-2 || slices.Contains(trimmed, protocol.FeatureExercisedLines) || slices.Contains(trimmed, protocol.FeatureSuite) {
+	if trimmed := h.a.hello(true).Features; len(trimmed) != len(got)-3 || slices.Contains(trimmed, protocol.FeatureExercisedLines) || slices.Contains(trimmed, protocol.FeatureSuite) || slices.Contains(trimmed, protocol.FeatureSkipBake) {
 		t.Fatalf("trimmed hello %v", trimmed)
 	}
 	if again := h.a.Hello().Features; !slices.Contains(again, protocol.FeatureExercisedLines) {
@@ -115,9 +115,9 @@ func TestHelloNamesBakeShareOnlyWhenTheDriverSharesAndATrimmedHelloLeavesItOut(t
 		t.Fatalf("not named by a driver that shares: %v", got)
 	}
 	limit := olderHubFeatureLimit
-	olderHubFeatureLimit = len(got) - 3
+	olderHubFeatureLimit = len(got) - 4
 	t.Cleanup(func() { olderHubFeatureLimit = limit })
-	if trimmed := h.a.hello(true).Features; len(trimmed) != len(got)-3 || slices.Contains(trimmed, protocol.FeatureBakeShare) || slices.Contains(trimmed, protocol.FeatureExercisedLines) {
+	if trimmed := h.a.hello(true).Features; len(trimmed) != len(got)-4 || slices.Contains(trimmed, protocol.FeatureBakeShare) || slices.Contains(trimmed, protocol.FeatureExercisedLines) {
 		t.Fatalf("trimmed hello %v", trimmed)
 	}
 }

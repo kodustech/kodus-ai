@@ -64,6 +64,9 @@ func (a *Agent) acquireWith(tctx context.Context, claimID string, acq protocol.C
 	if acq.SeedsCache != nil && *acq.SeedsCache && (acq.Consumer != protocol.ConsumerSetup || acq.Side == protocol.SidePr) {
 		return nack("seeds_cache_refused", "only a setup claim that is not a PR can seed the build cache (S-52)")
 	}
+	if skipsBake(acq) && (acq.Consumer == protocol.ConsumerSetup || acq.Side != protocol.SideBase) {
+		return nack("skip_bake_refused", "only a base claim that is not a setup can skip the bake")
+	}
 	run := ""
 	if acq.RunID != nil {
 		run = *acq.RunID
@@ -72,7 +75,8 @@ func (a *Agent) acquireWith(tctx context.Context, claimID string, acq protocol.C
 	// claim: a machine made for it and a pool machine it adopts carry that
 	// image, and every step result names it, so a Run can check its base and
 	// PR ran on the same bake. Before any bake here it stays "latest".
-	if acq.ImageID == latestImage && acq.Consumer != protocol.ConsumerSetup {
+	// A claim that skips the bake keeps it unresolved: it builds from the recipe, as on a cell with no bake.
+	if acq.ImageID == latestImage && acq.Consumer != protocol.ConsumerSetup && !skipsBake(acq) {
 		if id := a.origin.Latest(acq.OrgID, acq.EnvironmentID); id != "" {
 			acq.ImageID = id
 		}

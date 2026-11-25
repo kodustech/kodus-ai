@@ -225,8 +225,8 @@ func TestAHelloPastAnOlderHubsFeatureLimitIsSentTrimmedOnceAfterItsRefusal(t *te
 	h := newHarness(t, func(cfg *Config) { cfg.ExercisedLines = true })
 	full := h.a.Hello().Features
 	// The harness names fewer than a production cell: the older hub's
-	// limit is brought down to two below what it names (suite, the newest, and exercisedLines).
-	limit, older := olderHubFeatureLimit, len(full)-2
+	// limit is brought down to three below what it names (skipBake and suite, the newest, and exercisedLines).
+	limit, older := olderHubFeatureLimit, len(full)-3
 	olderHubFeatureLimit = older
 	t.Cleanup(func() { olderHubFeatureLimit = limit })
 	if !slices.Contains(full, protocol.FeatureExercisedLines) {

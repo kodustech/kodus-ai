@@ -27,13 +27,24 @@ func poolRequest(acq protocol.ClaimAcquireBody, hard time.Time) pool.Request {
 	}
 }
 
+// skipsBake is whether the claim builds from the recipe and takes no bake and no pool machine.
+func skipsBake(acq protocol.ClaimAcquireBody) bool {
+	return acq.SkipBake != nil && *acq.SkipBake
+}
+
 // takePoolMachine hands the claim a ready pool machine, when one fits.
 func (a *Agent) takePoolMachine(acq protocol.ClaimAcquireBody, hard time.Time) (driver.PoolMachine, bool) {
+	if skipsBake(acq) {
+		return driver.PoolMachine{}, false
+	}
 	return a.pool.Take(poolRequest(acq, hard))
 }
 
 // hasPoolMachine reports whether takePoolMachine would find one now.
 func (a *Agent) hasPoolMachine(acq protocol.ClaimAcquireBody, hard time.Time) bool {
+	if skipsBake(acq) {
+		return false
+	}
 	if acq.Consumer == protocol.ConsumerSandbox {
 		return a.takesBlankSandbox(acq) && a.sandboxPool.has(a.sandboxSizeOf(acq), hard)
 	}
