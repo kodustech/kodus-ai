@@ -41,13 +41,16 @@ type memDocker struct {
 	// stallBuild, when set, makes every RunBuild print its output and then
 	// hang until its context ends, as a builder whose disk stalled.
 	stallBuild bool
-	mu          sync.Mutex
-	seq         int
-	containers  map[string]dockercli.Container // by name
-	networks    map[string]map[string]string   // name -> labels
-	subnets     map[string]string              // name -> subnet
-	builds      []dockercli.BuildRun           // every build run, in order
-	images      map[string]bool                // loaded image tags
+	// unloaded are images a restored disk has not loaded yet: ImagePresent
+	// answers false for them.
+	unloaded   map[string]bool
+	mu         sync.Mutex
+	seq        int
+	containers map[string]dockercli.Container // by name
+	networks   map[string]map[string]string   // name -> labels
+	subnets    map[string]string              // name -> subnet
+	builds     []dockercli.BuildRun           // every build run, in order
+	images     map[string]bool                // loaded image tags
 	// layers is each image's one layer, by tag: what its build wrote (the
 	// build's tag), copied by a tag, saved by SaveImage, read back by a load
 	// of a docker save archive.
@@ -727,6 +730,14 @@ func (m *memDocker) ImageID(_ context.Context, ref string) (string, error) {
 		return id, nil
 	}
 	return "", errors.New("no such image")
+}
+
+// ImagePresent answers false for a ref in unloaded (an image a restored disk
+// has not loaded yet), true for anything else.
+func (m *memDocker) ImagePresent(_ context.Context, ref string) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return !m.unloaded[ref], nil
 }
 
 func (m *memDocker) ImageLabels(context.Context, string) (map[string]string, error) {

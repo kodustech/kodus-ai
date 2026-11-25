@@ -85,6 +85,9 @@ type inventoryPort interface {
 	// ImageID is a local image's content id (sha256:<64 hex>), what tool
 	// layers are keyed on (toollayers.go).
 	ImageID(ctx context.Context, ref string) (string, error)
+	// ImagePresent says whether the daemon holds ref now, without pulling it
+	// (awaitDiskImages).
+	ImagePresent(ctx context.Context, ref string) (bool, error)
 }
 
 // dataPort is what copies and removes a claim's data volumes (data.go,

@@ -369,8 +369,8 @@ type testHooks struct {
 	// (watchBuildStall); zero: the defaults.
 	buildStallAfter time.Duration
 	buildStallEvery time.Duration
-	// adoptPollEvery and adoptWait replace how often and how long an adopted
-	// catalog's images are waited for (awaitAdoptedImages); zero: the defaults.
+	// adoptPollEvery and adoptWait replace how often and how long a restored
+	// disk's images are waited for (awaitDiskImages); zero: the defaults.
 	adoptPollEvery time.Duration
 	adoptWait      time.Duration
 }

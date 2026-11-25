@@ -16,9 +16,9 @@ import (
 const (
 	maxBakeArtifacts    = 128
 	labelBakeGeneration = "kodus.bake-generation"
-	// adoptWait bounds how long a host that adopted a template's catalog
-	// waits at start for the images that catalog names, and adoptPollEvery
-	// how often it looks (awaitAdoptedImages).
+	// adoptWait bounds how long a cell waits at start for the images its
+	// disk should hold (the cell's own and an adopted catalog's), and
+	// adoptPollEvery how often it looks (awaitDiskImages).
 	adoptWait      = 3 * time.Minute
 	adoptPollEvery = 2 * time.Second
 )
@@ -215,10 +215,9 @@ func (d *Driver) RecoverBakes(ctx context.Context) ([]driver.RecoveredBake, erro
 	if len(holders) > 0 {
 		return nil, errors.New("dockergvisor: reap surviving holders before bake recovery")
 	}
-	if _, adopted := c.Adopted(); adopted {
-		if err := d.awaitAdoptedImages(ctx, c); err != nil {
-			return nil, err
-		}
+	_, adopted := c.Adopted()
+	if err := d.awaitDiskImages(ctx, c, adopted); err != nil {
+		return nil, err
 	}
 	if err := d.pruneGenerations(ctx); err != nil {
 		return nil, fmt.Errorf("dockergvisor: pending bake cleanup: %w", err)
@@ -256,26 +255,33 @@ func (d *Driver) RecoverBakes(ctx context.Context) ([]driver.RecoveredBake, erro
 	return out, nil
 }
 
-// awaitAdoptedImages waits, up to adoptWait, until docker lists every image
-// the adopted catalog names. A host provider may report the host running and
-// start the cell while it still loads the disk's images: boat restores a
-// template's docker images by loading each one after the host is usable, and
-// on dev the bake's image came 51 s after the cell started. Without the wait
-// recovery finds the images missing, retires the bake and removes it, and the
-// Run builds its environment again. Images that never come are not an error:
-// recovery then retires the generation as any other with missing artifacts.
-func (d *Driver) awaitAdoptedImages(ctx context.Context, c *bakecatalog.Catalog) error {
+// awaitDiskImages waits, up to adoptWait, until docker holds the cell's own
+// images every boot runs (ownImages) and, on a host that adopted a
+// template's catalog, every image the catalog names. A host provider may
+// report the host running and start the cell while it still loads the disk's
+// images: boat restores a disk's docker images by loading each one after the
+// host is usable. On dev the bake's image came 51 s after the cell started,
+// and a suite host took its first claim before the builder's image was back,
+// so its first build failed builder_failed ("No such image"). Without the
+// wait recovery retires a bake whose images are still loading, and a claim
+// builds on a builder that is not there. Images that never come are not an
+// error: a bake without them is retired as any generation with missing
+// artifacts, and a build without the builder fails as the platform's.
+func (d *Driver) awaitDiskImages(ctx context.Context, c *bakecatalog.Catalog, adopted bool) error {
 	want := map[string][]string{}
-	if err := c.Each(func(g bakecatalog.Generation, _ bool) error {
-		if repo, ok := bakeRepo(g.Cell, g.Org, g.Environment); ok {
-			for _, ref := range g.Images {
-				want[repo] = append(want[repo], ref)
+	if adopted {
+		if err := c.Each(func(g bakecatalog.Generation, _ bool) error {
+			if repo, ok := bakeRepo(g.Cell, g.Org, g.Environment); ok {
+				for _, ref := range g.Images {
+					want[repo] = append(want[repo], ref)
+				}
 			}
+			return nil
+		}); err != nil {
+			return err
 		}
-		return nil
-	}); err != nil {
-		return err
 	}
+	own := d.ownImages()
 	wait, every := adoptWait, adoptPollEvery
 	if d.hooks != nil && d.hooks.adoptWait > 0 {
 		wait = d.hooks.adoptWait
@@ -288,7 +294,16 @@ func (d *Driver) awaitAdoptedImages(ctx context.Context, c *bakecatalog.Catalog)
 	defer deadline.Stop()
 	logged := false
 	for {
-		missing := 0
+		missingOwn, missingBake := 0, 0
+		for _, ref := range own {
+			present, err := d.d.ImagePresent(ctx, ref)
+			if err != nil {
+				return err
+			}
+			if !present {
+				missingOwn++
+			}
+		}
 		for repo, refs := range want {
 			have, err := d.d.ImageRefs(ctx, repo)
 			if err != nil {
@@ -300,29 +315,50 @@ func (d *Driver) awaitAdoptedImages(ctx context.Context, c *bakecatalog.Catalog)
 			}
 			for _, r := range refs {
 				if !listed[r] {
-					missing++
+					missingBake++
 				}
 			}
 		}
-		if missing == 0 {
+		if missingOwn+missingBake == 0 {
 			if logged {
-				d.log().Info("bake.adopt.images_loaded", "waitedMs", time.Since(start).Milliseconds())
+				d.log().Info("disk.images.loaded", "waitedMs", time.Since(start).Milliseconds())
 			}
 			return nil
 		}
 		if !logged {
-			d.log().Info("bake.adopt.waiting_for_images", "missing", missing, "maxWaitMs", wait.Milliseconds())
+			d.log().Info("disk.images.waiting", "missingCell", missingOwn, "missingBake", missingBake, "maxWaitMs", wait.Milliseconds())
 			logged = true
 		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-deadline.C:
-			d.log().Warn("bake.adopt.images_missing", "missing", missing, "waitedMs", time.Since(start).Milliseconds())
+			d.log().Warn("disk.images.missing", "missingCell", missingOwn, "missingBake", missingBake, "waitedMs", time.Since(start).Milliseconds())
 			return nil
 		case <-time.After(every):
 		}
 	}
+}
+
+// ownImages are the cell's images every boot runs: the holder, the observer,
+// the builder and, with the registry transfer, the registry. The cell's
+// preflight expects them on the host. The sandbox, browser and helper images
+// are left out: a host may lack them on purpose, and a wait for them would
+// hold every start for nothing.
+func (d *Driver) ownImages() []string {
+	refs := []string{d.cfg.HolderImage, d.cfg.ObserverImage, d.cfg.BuilderImage}
+	if d.registryMode() {
+		refs = append(refs, d.cfg.RegistryImage)
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, ref := range refs {
+		if ref != "" && !seen[ref] {
+			seen[ref] = true
+			out = append(out, ref)
+		}
+	}
+	return out
 }
 
 // pruneGenerations retires what is no longer current, held or awaited, and

@@ -761,6 +761,54 @@ func TestAHostMadeFromATemplateWaitsForTheDiskToLoadTheBakeImages(t *testing.T) 
 	}
 }
 
+// A suite host restored from a boat disk took its first claim while boat was
+// still loading the disk's images, and its first build failed builder_failed:
+// "No such image" for the cell's own builder. A cell waits at start for the
+// images every boot runs, on any host and whether or not it adopted a catalog.
+func TestACellWaitsAtStartForItsOwnBuilderImageToLoad(t *testing.T) {
+	d, docker := bakeDriver(t)
+	builder := d.cfg.BuilderImage
+	docker.mu.Lock()
+	docker.unloaded = map[string]bool{builder: true}
+	docker.mu.Unlock()
+	h := d.hooksForTest()
+	h.adoptPollEvery, h.adoptWait = 5*time.Millisecond, 5*time.Second
+	loaded := make(chan struct{})
+	go func() {
+		defer close(loaded)
+		time.Sleep(50 * time.Millisecond)
+		docker.mu.Lock()
+		delete(docker.unloaded, builder)
+		docker.mu.Unlock()
+	}()
+	if _, err := d.RecoverBakes(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-loaded:
+	default:
+		t.Fatal("the cell started before its builder image was loaded")
+	}
+}
+
+// An image that never comes holds the start no longer than the bound: the
+// cell starts, and a build without its builder fails as the platform's.
+func TestACellStopsWaitingForItsOwnImagesAtTheBound(t *testing.T) {
+	d, docker := bakeDriver(t)
+	docker.mu.Lock()
+	docker.unloaded = map[string]bool{d.cfg.BuilderImage: true}
+	docker.mu.Unlock()
+	h := d.hooksForTest()
+	h.adoptPollEvery, h.adoptWait = 5*time.Millisecond, 30*time.Millisecond
+	start := time.Now()
+	if _, err := d.RecoverBakes(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if waited := time.Since(start); waited > 2*time.Second {
+		t.Fatalf("waited %s for an image that never came", waited)
+	}
+}
+
 // Images that never come are not waited for past the bound: the bake is
 // retired as any generation with missing artifacts, and the cell starts.
 func TestAHostMadeFromATemplateStopsWaitingForImagesThatNeverCome(t *testing.T) {

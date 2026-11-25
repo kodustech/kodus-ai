@@ -24,6 +24,18 @@ func (c CLI) ImageLabels(ctx context.Context, ref string) (map[string]string, er
 	return labels, nil
 }
 
+// ImagePresent says whether the daemon holds ref now. It never pulls: an
+// image the daemon does not have is false, any other failure an error.
+func (c CLI) ImagePresent(ctx context.Context, ref string) (bool, error) {
+	if _, err := c.run(ctx, nil, "image", "inspect", "--format", "{{.Id}}", ref); err != nil {
+		if NoSuchImage(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // ImageID is a local image's content id (sha256:<64 hex>), which names its
 // bytes whatever tag or digest reference pointed at it. It never pulls.
 func (c CLI) ImageID(ctx context.Context, ref string) (string, error) {

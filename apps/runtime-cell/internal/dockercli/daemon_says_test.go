@@ -106,3 +106,25 @@ func TestRemoveGivesUpOnARemovalThatNeverEnds(t *testing.T) {
 		t.Fatal("a removal still in progress was taken as done")
 	}
 }
+
+// An image the daemon does not hold yet is absent, not a failure: the cell
+// waits for it at start. A daemon that cannot answer is still a failure.
+func TestImagePresentTellsAMissingImageFromAFailedDaemon(t *testing.T) {
+	answer := func(stderr string) CLI {
+		return CLI{Run: func(context.Context, []byte, string, ...string) ([]byte, error) {
+			if stderr == "" {
+				return []byte("sha256:" + "a"), nil
+			}
+			return nil, &ExitError{Command: "docker image inspect", Code: 1, Stderr: stderr}
+		}}
+	}
+	if ok, err := answer("").ImagePresent(context.Background(), "b@sha256:1"); !ok || err != nil {
+		t.Fatalf("a held image: %v %v", ok, err)
+	}
+	if ok, err := answer("Error response from daemon: No such image: b@sha256:1").ImagePresent(context.Background(), "b@sha256:1"); ok || err != nil {
+		t.Fatalf("a missing image: %v %v", ok, err)
+	}
+	if _, err := answer("Cannot connect to the Docker daemon").ImagePresent(context.Background(), "b@sha256:1"); err == nil {
+		t.Fatal("an unreachable daemon was taken as a missing image")
+	}
+}
