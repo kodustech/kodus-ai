@@ -243,17 +243,24 @@ function introducedIdentifiers(earlier: PrDecisionRecord): string[] {
 /** A finding on the code an applied suggestion added, wherever the finding
  *  is anchored: it names what the change introduced, or cites its lines. */
 function touchesAppliedCode(
-    finding: RepeatCheckFinding,
+    names: FindingNames,
     earlier: PrDecisionRecord,
 ): boolean {
     const added = introducedIdentifiers(earlier);
     if (!added.length) return false;
-    const named = identifiers(
-        `${finding.suggestionContent ?? ''} ${finding.oneSentenceSummary ?? ''}`,
+    return added.some(
+        (name) => names.named.has(name) || names.inCode.has(name),
     );
-    const inCode = codeIdentifiers(finding.existingCode, finding.relevantFile);
-    return added.some((name) => named.has(name) || inCode.has(name));
 }
+
+type FindingNames = { named: Set<string>; inCode: Set<string> };
+
+const findingNames = (finding: RepeatCheckFinding): FindingNames => ({
+    named: identifiers(
+        `${finding.suggestionContent ?? ''} ${finding.oneSentenceSummary ?? ''}`,
+    ),
+    inCode: codeIdentifiers(finding.existingCode, finding.relevantFile),
+});
 
 /** Earlier comments that could be the same occurrence: the one the finder
  *  linked, same file, same rule anywhere (code moves between files), the same
@@ -280,10 +287,11 @@ export function repeatCandidates(
                     normalizeCode(earlier.existingCode) === code)),
     );
     linked.forEach((earlier) => taken.add(earlier));
+    const names = findingNames(finding);
     const onAppliedCode = comparable
         .filter(
             (earlier) =>
-                !taken.has(earlier) && touchesAppliedCode(finding, earlier),
+                !taken.has(earlier) && touchesAppliedCode(names, earlier),
         )
         .slice(0, MAX_APPLIED_CANDIDATES);
     onAppliedCode.forEach((earlier) => taken.add(earlier));
