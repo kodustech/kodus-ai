@@ -4,7 +4,9 @@ import { AnalyticsWarehouseModule } from '@libs/ee/analytics-warehouse';
 import { EmailModule } from '@libs/common/email/email.module';
 import { LicenseModule } from '@libs/ee/license/license.module';
 import { UserModule } from '@libs/identity/modules/user.module';
-import { PermissionsModule } from '@libs/identity/modules/permissions.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import { UserConnectionAccessModel } from '@libs/identity/infrastructure/adapters/repositories/schemas/userConnectionAccess.model';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
 import { TeamModule } from '@libs/organization/modules/team.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
@@ -53,9 +55,11 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         forwardRef(() => TeamModule),
         forwardRef(() => ParametersModule),
         forwardRef(() => IntegrationConfigModule),
-        forwardRef(() => PermissionsModule),
+        TypeOrmModule.forFeature([UserConnectionAccessModel]),
     ],
     providers: [
+        // Repo digests follow the Git connections an admin is granted.
+        ConnectionAccessService,
         CockpitSourceResolver,
         CockpitHealthService,
         CockpitValidationService,

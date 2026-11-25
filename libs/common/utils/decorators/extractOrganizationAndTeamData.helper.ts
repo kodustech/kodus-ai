@@ -38,6 +38,13 @@ export function extractOrganizationAndTeamData(
         if ('teamId' in foundArg.organizationAndTeamData) {
             result.teamId = foundArg.organizationAndTeamData.teamId;
         }
+        // The Git connection the call is for, so checks run against it.
+        if (foundArg.organizationAndTeamData.integrationId) {
+            result.integrationId =
+                foundArg.organizationAndTeamData.integrationId;
+        }
+    } else if (foundArg.integrationId && 'teamId' in foundArg) {
+        result.integrationId = foundArg.integrationId;
     }
 
     return Object.keys(result).length > 0 ? result : undefined;

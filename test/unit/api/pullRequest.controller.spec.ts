@@ -23,6 +23,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adapters/services/automationExecution.service';
 import { PolicyGuard } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import { INTEGRATION_CONFIG_SERVICE_TOKEN } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 
@@ -196,6 +197,15 @@ function buildProviders(eventEmitter: any) {
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EventEmitter2, useValue: eventEmitter },
+        // The team key's workspace lists the pull requests' repository.
+        {
+            provide: INTEGRATION_CONFIG_SERVICE_TOKEN,
+            useValue: {
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'repo-123', name: 'repo' }]),
+            },
+        },
         // Org-wide member: no repository restriction.
         {
             provide: AuthorizationService,
@@ -1089,6 +1099,8 @@ describe('PullRequestController', () => {
  * and the org filter. The bridge's own delivery mechanics are covered in
  * test/unit/core/cross-process-events.bridge.spec.ts.
  */
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
 describe('SSE /pull-requests/executions/events (#1500)', () => {
     /** Mirrors BRIDGED_FLAG in cross-process-events.bridge.ts (not exported). */
     const BRIDGED_FLAG = '__kodusBridged';
@@ -1136,10 +1148,12 @@ describe('SSE /pull-requests/executions/events (#1500)', () => {
         emitter.removeAllListeners();
     });
 
-    it('delivers a non-ping frame when a bridged execution update arrives', () => {
+    it('delivers a non-ping frame when a bridged execution update arrives', async () => {
         const { frames, stop } = collectFrames();
 
         emitter.emit(PR_EXECUTION_UPDATED_EVENT, bridgedExecutionUpdate());
+        // The stream checks the caller's repository scope first.
+        await settle();
         stop();
 
         expect(frames).toHaveLength(1);
@@ -1154,32 +1168,36 @@ describe('SSE /pull-requests/executions/events (#1500)', () => {
         });
     });
 
-    it('delivers updates emitted in-process too (single-process topology)', () => {
+    it('delivers updates emitted in-process too (single-process topology)', async () => {
         const { frames, stop } = collectFrames();
 
         // Same payload without the bridge marker: what an API-local emit
         // looks like when API and worker run in one process.
         const { [BRIDGED_FLAG]: _flag, ...local } = bridgedExecutionUpdate();
         emitter.emit(PR_EXECUTION_UPDATED_EVENT, local);
+        // The stream checks the caller's repository scope first.
+        await settle();
         stop();
 
         expect(frames).toHaveLength(1);
         expect(frames[0].data.type).toBe('execution_updated');
     });
 
-    it('does not leak executions from other organizations', () => {
+    it('does not leak executions from other organizations', async () => {
         const { frames, stop } = collectFrames();
 
         emitter.emit(
             PR_EXECUTION_UPDATED_EVENT,
             bridgedExecutionUpdate({ organizationId: 'other-org-uuid' }),
         );
+        // The stream checks the caller's repository scope first.
+        await settle();
         stop();
 
         expect(frames).toHaveLength(0);
     });
 
-    it('forwards every status transition, not just the first', () => {
+    it('forwards every status transition, not just the first', async () => {
         const { frames, stop } = collectFrames();
 
         emitter.emit(
@@ -1190,6 +1208,8 @@ describe('SSE /pull-requests/executions/events (#1500)', () => {
             PR_EXECUTION_UPDATED_EVENT,
             bridgedExecutionUpdate({ status: 'success' }),
         );
+        // The stream checks the caller's repository scope first.
+        await settle();
         stop();
 
         expect(frames.map((f) => f.data.status)).toEqual([
@@ -1198,11 +1218,13 @@ describe('SSE /pull-requests/executions/events (#1500)', () => {
         ]);
     });
 
-    it('stops streaming after application shutdown', () => {
+    it('stops streaming after application shutdown', async () => {
         const { frames, stop } = collectFrames();
 
         sseController.onApplicationShutdown();
         emitter.emit(PR_EXECUTION_UPDATED_EVENT, bridgedExecutionUpdate());
+        // The stream checks the caller's repository scope first.
+        await settle();
         stop();
 
         expect(frames).toHaveLength(0);

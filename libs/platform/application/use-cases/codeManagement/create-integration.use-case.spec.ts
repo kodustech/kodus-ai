@@ -303,6 +303,23 @@ describe('CreateIntegrationUseCase — connections', () => {
             );
         });
 
+        it('records nothing for a centralized config that was never set up', async () => {
+            const { useCase, parametersService } = build({
+                workspaceConnections: [{ uuid: 'gh-a' }],
+                centralized: { enabled: false, repository: null },
+            });
+
+            await useCase.execute({
+                integrationType: 'gitlab',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(
+                parametersService.createOrUpdateConfig,
+            ).not.toHaveBeenCalled();
+        });
+
         it('leaves a centralized config already recorded on a connection alone', async () => {
             const { useCase, parametersService } = build({
                 workspaceConnections: [{ uuid: 'gh-a' }],

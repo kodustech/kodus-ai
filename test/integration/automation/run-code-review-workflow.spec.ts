@@ -83,6 +83,11 @@ describe('Code Review Workflow Logic Integrity (No AST)', () => {
     const mockIntegrationService = {
         findOne: jest.fn(),
         getPlatformAuthDetails: jest.fn(),
+        resolveCodeManagementConnection: jest.fn().mockResolvedValue({
+            integration: { uuid: 'int-uuid', platform: PlatformType.GITHUB },
+            platform: PlatformType.GITHUB,
+            ambiguous: false,
+        }),
     };
     const mockAuthIntegrationService = { update: jest.fn() };
     const mockMCPManagerService = { createKodusMCPIntegration: jest.fn() };

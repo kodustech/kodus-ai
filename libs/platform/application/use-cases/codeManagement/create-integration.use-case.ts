@@ -286,7 +286,8 @@ export class CreateIntegrationUseCase implements IUseCase {
             organizationAndTeamData,
         );
         const configValue = parameter?.configValue;
-        if (!configValue || configValue.integrationId) return;
+        // A config never set up, or cleared, belongs to no connection.
+        if (!configValue?.repository?.id || configValue.integrationId) return;
         await this.parametersService.createOrUpdateConfig(
             ParametersKey.CENTRALIZED_CONFIG,
             configValue,

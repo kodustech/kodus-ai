@@ -2061,7 +2061,8 @@ export class GitlabService implements Omit<
 
         const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
-        const repositories = integrationConfig.configValue;
+        // A connection with no repositories saved yet has no members to list.
+        const repositories = integrationConfig?.configValue ?? [];
         const users = [];
         const batchSize = 10;
 

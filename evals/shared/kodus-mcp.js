@@ -143,9 +143,17 @@ async function startKodusMcp({ storedConfig = null } = {}) {
 
     const rowOf = (rows) => async (filter) => (rows.find((r) => matches(r, filter)) ? copy(rows.find((r) => matches(r, filter))) : null);
     const teamRepository = repository('team repository', { findOne: rowOf(db.teams) });
-    const integrationRepository = repository('integration repository', { findOne: rowOf(db.integrations) });
+    const rowsOf = (rows) => async (filter) => rows.filter((r) => matches(r, filter)).map(copy);
+    const integrationRepository = repository('integration repository', {
+        findOne: rowOf(db.integrations),
+        // The workspace's Git connections, which calls are routed among.
+        find: rowsOf(db.integrations),
+    });
     const integrationConfigRepository = repository('integration config repository', {
         findOne: rowOf(db.integrationConfigs),
+        // One config per Git connection of the team, with its connection.
+        findAllOfTeamByConfigKey: async (configKey, organizationAndTeamData) =>
+            rowsOf(db.integrationConfigs)({ configKey, integration: { organization: { uuid: organizationAndTeamData.organizationId } }, team: { uuid: organizationAndTeamData.teamId } }),
         findOneIntegrationConfigWithIntegrations: async (configKey, organizationAndTeamData) =>
             rowOf(db.integrationConfigs)({ configKey, integration: { organization: { uuid: organizationAndTeamData.organizationId } }, team: { uuid: organizationAndTeamData.teamId } }),
     });
