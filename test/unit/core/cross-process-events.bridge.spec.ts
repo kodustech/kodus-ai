@@ -534,6 +534,13 @@ describe('CrossProcessEventsBridge', () => {
     describe('LISTEN self-test', () => {
         const nonceOf = (query: jest.Mock, call: number) =>
             query.mock.calls[call][1][1] as string;
+        // Advances fake time in small steps until the query ran `calls`
+        // times, so the retried probe is still waiting for its NOTIFY.
+        const untilCalls = async (query: jest.Mock, calls: number) => {
+            for (let i = 0; i < 240 && query.mock.calls.length < calls; i++) {
+                await jest.advanceTimersByTimeAsync(500);
+            }
+        };
 
         it("a self-test that fails after a reconnect leaves the new connection's probe and status alone", async () => {
             let failOld!: (error: Error) => void;
@@ -571,6 +578,88 @@ describe('CrossProcessEventsBridge', () => {
             expect(CrossProcessEventsBridge.listenStatus().status).toBe(
                 'delivering',
             );
+        });
+
+        it('a self-test whose NOTIFY cannot be sent tries again and reports delivery once the pool answers', async () => {
+            jest.useFakeTimers();
+            try {
+                // Right after a Postgres restart the LISTEN connection is
+                // back while the pool (PgBouncer) still refuses logins.
+                const query = jest
+                    .fn()
+                    .mockRejectedValueOnce(
+                        new Error('server login has been failing'),
+                    )
+                    .mockResolvedValueOnce([]);
+                const { bridge } = makeBridge(query);
+                const client = {};
+                (bridge as any).client = client;
+
+                await (bridge as any).verifyListenDelivery(client);
+                expect(CrossProcessEventsBridge.listenStatus().status).toBe(
+                    'unknown',
+                );
+
+                await untilCalls(query, 2);
+                expect(query).toHaveBeenCalledTimes(2);
+                (bridge as any).pendingProbe(nonceOf(query, 1));
+                await jest.advanceTimersByTimeAsync(0);
+
+                expect(CrossProcessEventsBridge.listenStatus().status).toBe(
+                    'delivering',
+                );
+            } finally {
+                jest.useRealTimers();
+            }
+        });
+
+        it('a failed self-test stops trying once its connection was replaced', async () => {
+            jest.useFakeTimers();
+            try {
+                const query = jest
+                    .fn()
+                    .mockRejectedValue(new Error('pool closed'));
+                const { bridge } = makeBridge(query);
+                const oldClient = {};
+                (bridge as any).client = oldClient;
+
+                await (bridge as any).verifyListenDelivery(oldClient);
+                (bridge as any).client = {};
+                await jest.advanceTimersByTimeAsync(120_000);
+
+                expect(query).toHaveBeenCalledTimes(1);
+            } finally {
+                jest.useRealTimers();
+            }
+        });
+
+        it("a pending retry of the old connection does not hold back the new connection's retry", async () => {
+            jest.useFakeTimers();
+            try {
+                const query = jest
+                    .fn()
+                    .mockRejectedValueOnce(new Error('pool closed'))
+                    .mockRejectedValueOnce(new Error('pool closed'))
+                    .mockResolvedValueOnce([]);
+                const { bridge } = makeBridge(query);
+                const oldClient = {};
+                const newClient = {};
+                (bridge as any).client = oldClient;
+                await (bridge as any).verifyListenDelivery(oldClient);
+                (bridge as any).client = newClient;
+                await (bridge as any).verifyListenDelivery(newClient);
+
+                await untilCalls(query, 3);
+                expect(query).toHaveBeenCalledTimes(3);
+                (bridge as any).pendingProbe(nonceOf(query, 2));
+                await jest.advanceTimersByTimeAsync(0);
+
+                expect(CrossProcessEventsBridge.listenStatus().status).toBe(
+                    'delivering',
+                );
+            } finally {
+                jest.useRealTimers();
+            }
         });
 
         it('the self-test deadline starts when the NOTIFY is sent, not while it waits for a pool connection', async () => {

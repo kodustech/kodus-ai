@@ -22,6 +22,14 @@ const PG_TABLE = 'kodus_cross_process_events';
  */
 const PROBE_PREFIX = 'probe:';
 const LISTEN_PROBE_TIMEOUT_MS = 5_000;
+/**
+ * A self-test whose NOTIFY could not be sent is tried again, from 2s doubling
+ * up to 60s. After a Postgres restart the LISTEN connection (direct) is often
+ * back before the pool is: PgBouncer keeps refusing logins for its
+ * `server_login_retry` (15s by default).
+ */
+const LISTEN_PROBE_RETRY_MIN_MS = 2_000;
+const LISTEN_PROBE_RETRY_MAX_MS = 60_000;
 
 /**
  * Whether NOTIFYs reach this process's LISTEN connection, as last measured:
@@ -395,6 +403,10 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
         if (this.forwardFlushTimer) {
             clearTimeout(this.forwardFlushTimer);
             this.forwardFlushTimer = null;
+        }
+        if (this.probeRetryTimer) {
+            clearTimeout(this.probeRetryTimer);
+            this.probeRetryTimer = null;
         }
         // Drain any pending flush before the pool goes away —
         // otherwise the flush lands on a closed pool and throws.
@@ -1109,6 +1121,7 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
             await client.query(`LISTEN ${PG_CHANNEL}`);
             this.client = client;
             this.reconnectDelayMs = 1_000;
+            this.probeRetryDelayMs = LISTEN_PROBE_RETRY_MIN_MS;
             this.logger.log({
                 message: `Listening on ${PG_CHANNEL} (cross-process event bridge: ${FORWARDED_EVENTS.join(', ')})`,
                 context: CrossProcessEventsBridge.name,
@@ -1172,14 +1185,17 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
                 connection: this.listenTarget,
                 checkedAt: new Date().toISOString(),
             };
+            const retryInMs = this.retryListenProbe(client);
             this.logger.warn({
                 message:
-                    'Could not run the cross-process LISTEN self-test — delivery unverified',
+                    'Could not run the cross-process LISTEN self-test — delivery unverified, trying again',
                 context: CrossProcessEventsBridge.name,
                 error,
+                metadata: { retryInMs },
             });
             return;
         }
+        this.probeRetryDelayMs = LISTEN_PROBE_RETRY_MIN_MS;
 
         // The deadline starts once the NOTIFY is sent: time spent waiting
         // for a pool connection is not delivery time.
@@ -1215,6 +1231,24 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
                 probeTimeoutMs: LISTEN_PROBE_TIMEOUT_MS,
             },
         });
+    }
+
+    private probeRetryDelayMs = LISTEN_PROBE_RETRY_MIN_MS;
+    private probeRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** Runs the self-test of `client` again later, while it is still the connection. */
+    private retryListenProbe(client: Client): number {
+        const delay = this.probeRetryDelayMs;
+        // One retry at a time, always for the latest failing probe.
+        if (this.probeRetryTimer) clearTimeout(this.probeRetryTimer);
+        this.probeRetryDelayMs = Math.min(delay * 2, LISTEN_PROBE_RETRY_MAX_MS);
+        this.probeRetryTimer = setTimeout(() => {
+            this.probeRetryTimer = null;
+            if (this.stopped || this.client !== client) return;
+            void this.verifyListenDelivery(client);
+        }, delay);
+        this.probeRetryTimer.unref?.();
+        return delay;
     }
 
     private reconnectPending = false;
