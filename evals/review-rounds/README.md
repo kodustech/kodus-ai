@@ -148,6 +148,7 @@ which vendors this repository's own public history in `fixtures/kodus-2011/`.
 | R24 | kodus-ai#2667 round 2 replayed: the applied per-label `needsId` and round 1's three answered comments | the per-entry reversal → `not_deliver`; `-heavy` through heavy mode; `-unanswered` with no thread answered, so only the reversal verdict holds it |
 | R25 | the R21 point with its thread read from the host: Kody conceded (`-kody-conceded`) or the developer said it will be fixed later (`-will-fix-later`) | the re-raise → `not_deliver` |
 | R26 | an applied suggestion that opened a CORS suffix bypass with credentials | the hole → `deliver`, even though its fix narrows the change; `-control` with no history |
+| R27 | the answered missing-await point, moved into a new `guard.ts` helper (other file, other lines) | the moved check → `not_deliver`; `-control` with no history → `deliver` |
 
 K5–K12 and R15–R17 reproduce repost shapes from a production sample (500
 later-round comments, 2026-10-05→12, #2114) with invented code; the volumes are

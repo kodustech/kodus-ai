@@ -309,6 +309,74 @@ const authThreadCase = (replyBody) => ({
 });
 
 // ---------------------------------------------------------------------------
+// The answered point comes back in another file: this round moves the same
+// unawaited check out of deleteDoc into a new guard helper, so it sits on
+// other lines of another file than the comment the developer answered.
+// ---------------------------------------------------------------------------
+const guardRepo = {
+    ...authRepo,
+    'src/docs/guard.ts': lines(
+        "import { canDelete, type Db } from './delete';",
+        "import { ForbiddenError } from './errors';",
+        '',
+        'export async function assertCanDelete(db: Db, userId: string, docId: string): Promise<void> {',
+        '    if (!canDelete(db, userId, docId)) throw new ForbiddenError(`user ${userId} cannot delete ${docId}`);',
+        '}',
+    ),
+    'src/docs/delete.ts': lines(
+        "import { assertCanDelete } from './guard';",
+        '',
+        'export interface Db {',
+        '    docs: { delete(id: string): Promise<void>; ownerOf(id: string): Promise<string | null> };',
+        '}',
+        '',
+        'export async function canDelete(db: Db, userId: string, docId: string): Promise<boolean> {',
+        '    return (await db.docs.ownerOf(docId)) === userId;',
+        '}',
+        '',
+        'export async function deleteDoc(db: Db, userId: string, docId: string): Promise<void> {',
+        '    await assertCanDelete(db, userId, docId);',
+        '    await db.docs.delete(docId);',
+        '}',
+    ),
+};
+const guardDiff = [
+    patch('src/docs/guard.ts', 1, [
+        "+import { canDelete, type Db } from './delete';",
+        "+import { ForbiddenError } from './errors';",
+        '+',
+        '+export async function assertCanDelete(db: Db, userId: string, docId: string): Promise<void> {',
+        '+    if (!canDelete(db, userId, docId)) throw new ForbiddenError(`user ${userId} cannot delete ${docId}`);',
+        '+}',
+    ]),
+    patch('src/docs/delete.ts', 1, [
+        "-import { ForbiddenError } from './errors';",
+        "+import { assertCanDelete } from './guard';",
+        ' ',
+        ' export interface Db {',
+        '     docs: { delete(id: string): Promise<void>; ownerOf(id: string): Promise<string | null> };',
+        ' }',
+        ' ',
+        ' export async function canDelete(db: Db, userId: string, docId: string): Promise<boolean> {',
+        '     return (await db.docs.ownerOf(docId)) === userId;',
+        ' }',
+        ' ',
+        ' export async function deleteDoc(db: Db, userId: string, docId: string): Promise<void> {',
+        '-    if (!canDelete(db, userId, docId)) throw new ForbiddenError(`user ${userId} cannot delete ${docId}`);',
+        '+    await assertCanDelete(db, userId, docId);',
+        '     await db.docs.delete(docId);',
+        ' }',
+    ]),
+];
+const movedAwaitClaim = (id, expect) => ({
+    id,
+    golden: 'assertCanDelete (src/docs/guard.ts) calls the async canDelete without await, so `!canDelete(...)` negates a Promise (always truthy) and the ownership check never refuses: any user can delete any document; it should await canDelete.',
+    truth: 'true',
+    premise: 'diff',
+    expect,
+});
+
+// ---------------------------------------------------------------------------
 // A security hole the applied suggestion opened: posted even though its fix
 // narrows the change. Round A asked to accept every subdomain of example.com;
 // the applied endsWith check also accepts evilexample.com, on a CORS policy
@@ -428,6 +496,13 @@ const contradictionCases = [
         ...authThreadCase('Good catch, I will fix this in a follow-up PR.'),
         claims: [missingAwaitClaim('missing-await-after-will-fix', 'not_deliver')],
     },
+    // The answered point, moved to another file of the same change.
+    {
+        id: 'R27-answered-point-moved-file', family: 'rounds', repo: guardRepo, changedFiles: guardDiff, sandbox: 'alive',
+        ...authThreadCase('Known: deleteDoc is only reachable from the admin route, which checks ownership first. Leaving it.'),
+        claims: [movedAwaitClaim('moved-await-after-reply', 'not_deliver')],
+    },
+    { id: 'R27-control', family: 'control', repo: guardRepo, changedFiles: guardDiff, sandbox: 'alive', claims: [movedAwaitClaim('moved-await-control', 'deliver')] },
     // A security hole the applied change opened is posted, linked or not.
     {
         id: 'R26-security-hole-from-applied', family: 'rounds', repo: corsRepo, changedFiles: corsDiff, sandbox: 'alive',

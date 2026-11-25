@@ -19,8 +19,8 @@
         "applied-advice": ["R2", "R8", "R18", "R19", "R1", "R7", "R12", "R13"],
         "repeat-boundaries": ["B1", "B2", "B3"],
         "hallucinations-2528": ["H1", "H2", "H3", "H4"],
-        "controlled": ["K2", "R20-reversal-of-applied-host-filter", "R20-check-timeout", "R21-reraise-after-reply", "R22-cross-file-reversal", "R22-check-timeout", "R23-kodus2663-round2", "R24-kodus2667-unanswered", "R25-kody-conceded", "R25-will-fix-later", "R26-security-hole-from-applied", "R2", "R8", "R11"],
-        "full": ["K2", "R20-reversal-of-applied-host-filter", "R20-check-timeout", "R21-reraise-after-reply", "R22-cross-file-reversal", "R22-check-timeout", "R23-kodus2663-round2", "R24-kodus2667-unanswered", "R25-kody-conceded", "R25-will-fix-later", "R26-security-hole-from-applied", "R2", "R8", "R11", "R20-heavy", "R21-heavy", "R21-check-parse-error", "R23-kodus2663-round2-heavy", "R24-kodus2667-round2", "R24-kodus2667-round2-heavy", "R3", "R12"],
+        "controlled": ["K2", "R20-reversal-of-applied-host-filter", "R20-check-timeout", "R21-reraise-after-reply", "R22-cross-file-reversal", "R22-check-timeout", "R23-kodus2663-round2", "R24-kodus2667-unanswered", "R25-kody-conceded", "R25-will-fix-later", "R26-security-hole-from-applied", "R27-answered-point-moved-file", "R2", "R8", "R11"],
+        "full": ["K2", "R20-reversal-of-applied-host-filter", "R20-check-timeout", "R21-reraise-after-reply", "R22-cross-file-reversal", "R22-check-timeout", "R23-kodus2663-round2", "R24-kodus2667-unanswered", "R25-kody-conceded", "R25-will-fix-later", "R26-security-hole-from-applied", "R27-answered-point-moved-file", "R2", "R8", "R11", "R20-heavy", "R21-heavy", "R21-check-parse-error", "R23-kodus2663-round2-heavy", "R24-kodus2667-round2", "R24-kodus2667-round2-heavy", "R3", "R12"],
         "nightly": [
             "K4",
             "R1",
