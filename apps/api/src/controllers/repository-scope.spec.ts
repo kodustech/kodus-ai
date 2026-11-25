@@ -387,3 +387,41 @@ describe('workspace scope — suggestions with a team CLI key', () => {
         expect(execute).toHaveBeenCalled();
     });
 });
+
+describe('repository scope — execution events stream', () => {
+    it('streams only the executions of repositories in the scope', async () => {
+        const { EventEmitter2 } = await import('@nestjs/event-emitter');
+        const { Subject, firstValueFrom, filter, take, toArray } =
+            await import('rxjs');
+        const eventEmitter = new EventEmitter2();
+        const controller = make(PullRequestController, {
+            eventEmitter,
+            shutdown$: new Subject<void>(),
+        });
+
+        const received = firstValueFrom(
+            controller.executionEvents().pipe(
+                filter((event: any) => event.data.type === 'execution_updated'),
+                take(2),
+                toArray(),
+            ),
+        );
+        await flush();
+        for (const [executionUuid, repositoryId] of [
+            ['e-other', OTHER],
+            ['e-mine', ALLOWED],
+            ['e-signal', undefined],
+        ]) {
+            eventEmitter.emit('pr-execution.updated', {
+                organizationId: 'org-1',
+                executionUuid,
+                repositoryId,
+                status: 'success',
+            });
+        }
+
+        expect(
+            (await received).map((event: any) => event.data.executionUuid),
+        ).toEqual(['e-mine', 'e-signal']);
+    });
+});

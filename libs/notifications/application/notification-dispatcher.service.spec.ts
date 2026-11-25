@@ -281,6 +281,105 @@ describe('NotificationDispatcherService', () => {
             );
         });
 
+        it("leaves out members who cannot read the event's repository", async () => {
+            const t = makeDispatcher();
+            const connectionAccess = {
+                restrictionFor: jest.fn(async (user: { uuid: string }) =>
+                    user.uuid === 'c-1'
+                        ? {
+                              connectionIds: new Set(['gh-a']),
+                              repositoryIds: new Set(['repo-gh']),
+                              allowsRepository: ({ id }: { id?: unknown }) =>
+                                  id === 'repo-gh',
+                          }
+                        : null,
+                ),
+            };
+            const dispatcher = new NotificationDispatcherService(
+                [t.emailAdapter, t.inAppAdapter],
+                t.deliveryRepo,
+                t.routingRuleRepo,
+                t.usersService as unknown as IUsersService,
+                t.sseService,
+                t.metricsCollector as unknown as MetricsCollectorService,
+                connectionAccess as any,
+            );
+            t.usersService.find.mockResolvedValueOnce([
+                { uuid: 'owner-1', email: 'o@a.com', role: 'owner' } as any,
+                { uuid: 'c-1', email: 'c@a.com', role: 'contributor' } as any,
+            ]);
+            t.routingRuleRepo.findByOrganization.mockResolvedValueOnce([
+                {
+                    event: SPEND_THRESHOLD,
+                    role: '*',
+                    channels: { email: true, in_app: false },
+                } as any,
+            ]);
+
+            await dispatcher.dispatch(
+                baseMessage({
+                    event: SPEND_THRESHOLD,
+                    payload: thresholdPayload,
+                    recipients: [],
+                    repository: { id: 'repo-gl', name: 'group/api' },
+                }),
+            );
+
+            expect(
+                t.emailAdapter.deliver.mock.calls.map(
+                    ([delivery]) => delivery.userEmail,
+                ),
+            ).toEqual(['o@a.com']);
+        });
+
+        it("reads the event's repository from the payload when the envelope does not name it", async () => {
+            const t = makeDispatcher();
+            const dispatcher = new NotificationDispatcherService(
+                [t.emailAdapter, t.inAppAdapter],
+                t.deliveryRepo,
+                t.routingRuleRepo,
+                t.usersService as unknown as IUsersService,
+                t.sseService,
+                t.metricsCollector as unknown as MetricsCollectorService,
+                {
+                    restrictionFor: jest.fn(async (user: { uuid: string }) =>
+                        user.uuid === 'c-1'
+                            ? {
+                                  connectionIds: new Set(),
+                                  repositoryIds: new Set(),
+                                  allowsRepository: () => false,
+                              }
+                            : null,
+                    ),
+                } as any,
+            );
+            t.usersService.find.mockResolvedValueOnce([
+                { uuid: 'owner-1', email: 'o@a.com', role: 'owner' } as any,
+                { uuid: 'c-1', email: 'c@a.com', role: 'contributor' } as any,
+            ]);
+            t.routingRuleRepo.findByOrganization.mockResolvedValueOnce([
+                {
+                    event: SPEND_THRESHOLD,
+                    role: '*',
+                    channels: { email: true, in_app: false },
+                } as any,
+            ]);
+
+            await dispatcher.dispatch(
+                baseMessage({
+                    event: SPEND_THRESHOLD,
+                    payload: { ...thresholdPayload, repoName: 'group/api' },
+                    recipients: [],
+                }),
+            );
+
+            expect(
+                t.emailAdapter.deliver.mock.calls.map(
+                    ([delivery]) => delivery.userEmail,
+                ),
+            ).toEqual(['o@a.com']);
+        });
+
         it('applies a "*" rule to every role (literal all-roles baseline)', async () => {
             const t = makeDispatcher();
             t.usersService.find.mockResolvedValueOnce([

@@ -51,8 +51,15 @@ import { REQUEST } from '@nestjs/core';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { fromEvent, interval, merge, Subject } from 'rxjs';
-import { filter, map, takeUntil } from 'rxjs/operators';
+import { from, fromEvent, interval, merge, Subject } from 'rxjs';
+import {
+    filter,
+    map,
+    mergeMap,
+    shareReplay,
+    take,
+    takeUntil,
+} from 'rxjs/operators';
 import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adapters/services/automationExecution.service';
 import { BackfillPRsDto } from '../dtos/backfill-prs.dto';
 import { EnrichedPullRequestsQueryDto } from '@libs/code-review/dtos/dashboard/enriched-pull-requests-query.dto';
@@ -350,11 +357,33 @@ export class PullRequestController implements OnApplicationShutdown {
             );
         }
 
+        // A member who reads only some repositories (assignment, or the
+        // Git connections they are granted) hears only about those.
+        const scope$ = from(
+            this.authorizationService.getRepositoryScope({
+                user: this.request.user,
+                action: Action.Read,
+                resource: ResourceType.PullRequests,
+            }),
+        ).pipe(shareReplay(1));
+
         const events$ = fromEvent(
             this.eventEmitter,
             PR_EXECUTION_UPDATED_EVENT,
         ).pipe(
             filter((event: any) => event?.organizationId === organizationId),
+            mergeMap((event: any) =>
+                scope$.pipe(
+                    take(1),
+                    filter(
+                        (scope) =>
+                            scope === null ||
+                            event?.repositoryId == null ||
+                            scope.includes(String(event.repositoryId)),
+                    ),
+                    map(() => event),
+                ),
+            ),
             map((event: any) => ({
                 data: {
                     type: 'execution_updated',

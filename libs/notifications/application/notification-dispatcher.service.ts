@@ -4,6 +4,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import {
     IUsersService,
     USER_SERVICE_TOKEN,
@@ -44,6 +45,11 @@ export interface NotificationMessage {
     /** Explicit recipients chosen by the emitter. Always an array on the wire. */
     recipients: NotificationRecipient[];
     correlationId: string;
+    /**
+     * The repository the event is about. The config-driven audience then
+     * reaches only members who can read it.
+     */
+    repository?: { id?: string; name?: string };
 }
 
 interface ResolvedRecipient {
@@ -76,6 +82,19 @@ interface ResolvedRecipient {
  * 2. For each user: resolve routing rule → determine channels
  * 3. For each channel: create delivery record → call adapter → update status
  */
+
+/** The repository an event payload names, under the fields emitters use. */
+const repositoryOfPayload = (
+    payload: Record<string, unknown>,
+): { id?: string; name?: string } | undefined => {
+    const id = payload?.repositoryId;
+    const name = payload?.repoName;
+    if (typeof id !== 'string' && typeof name !== 'string') return undefined;
+    return {
+        ...(typeof id === 'string' && id ? { id } : {}),
+        ...(typeof name === 'string' && name ? { name } : {}),
+    };
+};
 @Injectable()
 export class NotificationDispatcherService {
     private readonly logger = createLogger(
@@ -95,6 +114,8 @@ export class NotificationDispatcherService {
         private readonly sseService: NotificationSseService,
         @Optional()
         private readonly metricsCollector?: MetricsCollectorService,
+        @Optional()
+        private readonly connectionAccess?: ConnectionAccessService,
     ) {
         this.adapterMap = new Map(
             adapters
@@ -144,7 +165,11 @@ export class NotificationDispatcherService {
               )
             : [];
         const audience = defaults.defaultRoles
-            ? await this.resolveAllOrgMembers(organizationId)
+            ? await this.readersOf(
+                  await this.resolveAllOrgMembers(organizationId),
+                  organizationId,
+                  message.repository ?? repositoryOfPayload(payload),
+              )
             : [];
         const recipients = this.dedupeByUser([...directed, ...audience]);
 
@@ -678,6 +703,32 @@ export class NotificationDispatcherService {
             email: u.email,
             role: u.role ?? role,
         }));
+    }
+
+    /**
+     * Members who can read the event's repository: one granted only some Git
+     * connections hears about their repositories only.
+     */
+    private async readersOf(
+        members: ResolvedRecipient[],
+        organizationId: string,
+        repository?: { id?: string; name?: string },
+    ): Promise<ResolvedRecipient[]> {
+        if (!this.connectionAccess || (!repository?.id && !repository?.name)) {
+            return members;
+        }
+        const readers: ResolvedRecipient[] = [];
+        for (const member of members) {
+            const restriction = await this.connectionAccess.restrictionFor({
+                uuid: member.userId,
+                role: member.role,
+                organization: { uuid: organizationId },
+            });
+            if (!restriction || restriction.allowsRepository(repository)) {
+                readers.push(member);
+            }
+        }
+        return readers;
     }
 
     private async resolveAllOrgMembers(

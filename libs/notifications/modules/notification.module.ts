@@ -1,8 +1,10 @@
 import { CronShutdownService } from '@libs/core/infrastructure/services/cron-run-gate';
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+
+import { PermissionsModule } from '@libs/identity/modules/permissions.module';
 
 // Domain models
 import { NotificationDeliveryModel } from '../infrastructure/repositories/schemas/notification-delivery.model';
@@ -65,6 +67,8 @@ import { WorkflowCoreModule } from '@libs/core/workflow/modules/workflow-core.mo
     imports: [
         ConfigModule,
         UserCoreModule,
+        // Narrows repository events to members who can read the repository.
+        forwardRef(() => PermissionsModule),
         // GlobalCacheModule is @Global, but the webhooks app doesn't
         // pull it in via any other path. Importing it here keeps
         // NotificationModule self-sufficient — ByokErrorCounter and

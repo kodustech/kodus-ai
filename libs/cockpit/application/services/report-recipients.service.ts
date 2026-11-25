@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
@@ -6,6 +6,7 @@ import {
     IUsersService,
     USER_SERVICE_TOKEN,
 } from '@libs/identity/domain/user/contracts/user.service.contract';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 
 import {
     COCKPIT_REVIEW_ANALYTICS_SERVICE_TOKEN,
@@ -30,6 +31,8 @@ export class ReportRecipientsService implements IReportRecipientsService {
         private readonly usersService: IUsersService,
         @Inject(COCKPIT_REVIEW_ANALYTICS_SERVICE_TOKEN)
         private readonly review: ICockpitReviewAnalyticsService,
+        @Optional()
+        private readonly connectionAccess?: ConnectionAccessService,
     ) {}
 
     async getOwners(organizationId: string): Promise<ReportRecipient[]> {
@@ -68,7 +71,17 @@ export class ReportRecipientsService implements IReportRecipientsService {
             const assignedIds: string[] =
                 (user.permissions as any)?.permissions?.assignedRepositoryIds ??
                 [];
+            // Only repositories of the Git connections the admin is granted.
+            const restriction = await this.connectionAccess?.restrictionFor({
+                uuid: user.uuid,
+                role: user.role,
+                organization: { uuid: organizationId },
+            });
             const repositories = assignedIds
+                .filter(
+                    (id) =>
+                        !restriction || restriction.allowsRepository({ id }),
+                )
                 .map((id) => repoNames.get(id))
                 .filter((name): name is string => Boolean(name));
 
