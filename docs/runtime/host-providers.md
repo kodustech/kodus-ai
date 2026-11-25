@@ -649,7 +649,8 @@ counts. A generation whose images or volumes are gone is retired at start (`bake
 failing it. At start a Run host from a template logs `bake.catalog.adopted from=<template cell> org=<org> kept=N
 retired=M`, then recovers the bakes of its org as any restarted cell does, and its first claim boots from them.
 Before it checks them it waits, up to 3 minutes, for docker to list every image the catalog names and the cell's own
-images every boot runs (holder, observer, builder, and the registry with that transfer; `disk.images.waiting
+images every boot runs that only the disk can hold (holder, observer, builder, and the registry with that transfer,
+when named by content id `sha256:<hex>`; one named by repository and digest is docker's to pull; `disk.images.waiting
 missingCell=N missingBake=M`, then `disk.images.loaded` or `disk.images.missing`): boat reports the host usable and
 starts the cell while it still loads the disk's docker images one by one, and a 2 GB bake image came 51 s after the
 cell started. Without the wait the bake was retired and removed and the Run built its environment again. Every cell

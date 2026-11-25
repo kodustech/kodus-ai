@@ -340,11 +340,14 @@ func (d *Driver) awaitDiskImages(ctx context.Context, c *bakecatalog.Catalog, ad
 	}
 }
 
-// ownImages are the cell's images every boot runs: the holder, the observer,
-// the builder and, with the registry transfer, the registry. The cell's
-// preflight expects them on the host. The sandbox, browser and helper images
-// are left out: a host may lack them on purpose, and a wait for them would
-// hold every start for nothing.
+// ownImages are the cell's images every boot runs (the holder, the
+// observer, the builder and, with the registry transfer, the registry) that
+// only the disk can hold: those named by content id (sha256:<hex>), which no
+// registry serves. One named by repository and digest is pulled by docker the
+// first time it runs, and on dev a holder named so was reported missing for
+// the whole wait while the host had it, holding every start 3 minutes. The
+// sandbox, browser and helper images are left out: a host may lack them on
+// purpose.
 func (d *Driver) ownImages() []string {
 	refs := []string{d.cfg.HolderImage, d.cfg.ObserverImage, d.cfg.BuilderImage}
 	if d.registryMode() {
@@ -353,7 +356,7 @@ func (d *Driver) ownImages() []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, ref := range refs {
-		if ref != "" && !seen[ref] {
+		if strings.HasPrefix(ref, "sha256:") && !seen[ref] {
 			seen[ref] = true
 			out = append(out, ref)
 		}

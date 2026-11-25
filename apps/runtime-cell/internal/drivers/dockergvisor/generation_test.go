@@ -767,7 +767,8 @@ func TestAHostMadeFromATemplateWaitsForTheDiskToLoadTheBakeImages(t *testing.T) 
 // images every boot runs, on any host and whether or not it adopted a catalog.
 func TestACellWaitsAtStartForItsOwnBuilderImageToLoad(t *testing.T) {
 	d, docker := bakeDriver(t)
-	builder := d.cfg.BuilderImage
+	builder := "sha256:" + strings.Repeat("b", 64)
+	d.cfg.BuilderImage = builder
 	docker.mu.Lock()
 	docker.unloaded = map[string]bool{builder: true}
 	docker.mu.Unlock()
@@ -795,6 +796,7 @@ func TestACellWaitsAtStartForItsOwnBuilderImageToLoad(t *testing.T) {
 // cell starts, and a build without its builder fails as the platform's.
 func TestACellStopsWaitingForItsOwnImagesAtTheBound(t *testing.T) {
 	d, docker := bakeDriver(t)
+	d.cfg.BuilderImage = "sha256:" + strings.Repeat("b", 64)
 	docker.mu.Lock()
 	docker.unloaded = map[string]bool{d.cfg.BuilderImage: true}
 	docker.mu.Unlock()
@@ -806,6 +808,25 @@ func TestACellStopsWaitingForItsOwnImagesAtTheBound(t *testing.T) {
 	}
 	if waited := time.Since(start); waited > 2*time.Second {
 		t.Fatalf("waited %s for an image that never came", waited)
+	}
+}
+
+// A holder named by repository and digest is docker's to pull when it runs:
+// the cell does not hold its start for it, even while docker says it has none.
+func TestACellDoesNotWaitForAnImageARegistryServes(t *testing.T) {
+	d, docker := bakeDriver(t)
+	d.cfg.HolderImage = "docker.io/library/alpine:3.20@sha256:" + strings.Repeat("a", 64)
+	docker.mu.Lock()
+	docker.unloaded = map[string]bool{d.cfg.HolderImage: true}
+	docker.mu.Unlock()
+	h := d.hooksForTest()
+	h.adoptPollEvery, h.adoptWait = 5*time.Millisecond, 5*time.Second
+	start := time.Now()
+	if _, err := d.RecoverBakes(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if waited := time.Since(start); waited > time.Second {
+		t.Fatalf("the start waited %s for an image docker pulls itself", waited)
 	}
 }
 
