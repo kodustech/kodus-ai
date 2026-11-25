@@ -5201,7 +5201,8 @@ export class BitbucketCloudService implements Omit<
                     repo_slug: `{${repository.id}}`,
                     workspace: `{${workspace}}`,
                     pull_request_id: prNumber,
-                    pagelen: 50,
+                    // Bitbucket's largest page: half the requests on a long PR.
+                    pagelen: 100,
                 })
                 .then((res) => this.getPaginatedResults(bitbucketAPI, res));
 
