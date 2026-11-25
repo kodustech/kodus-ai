@@ -56,7 +56,7 @@ function unquoteGitPath(raw: string): string {
         if (/^[0-7]{3}$/.test(octal)) {
             bytes.push(parseInt(octal, 8));
             i += 3;
-        } else if (next !== undefined && next in C_ESCAPES) {
+        } else if (next !== undefined && Object.hasOwn(C_ESCAPES, next)) {
             bytes.push(C_ESCAPES[next]);
             i += 1;
         } else {
@@ -174,10 +174,12 @@ export function createGroupedFileResolver(
         }
     }
 
-    const preferCanonical =
+    const hasLegacyOnlyPath =
         groupings?.some((g) =>
-            g.files.some((p) => byCanonical.has(p) && !byLegacyHeader.has(p)),
+            g.files.some((p) => byLegacyHeader.has(p) && !byCanonical.has(p)),
         ) ?? false;
+    const preferCanonical =
+        (groupings?.length ?? 0) > 0 && !hasLegacyOnlyPath;
 
     return (rawPath) =>
         preferCanonical

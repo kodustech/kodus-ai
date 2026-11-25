@@ -256,5 +256,14 @@ describe("parseUnifiedDiff with real Git quoted and unquoted diffs", () => {
         expect(resolve("missing.txt")).toBeUndefined();
         expect(resolve("caf\\303\\251.txt")?.path).toBe("café.txt");
         expect(resolve("caf\\\\303\\\\251.txt")?.path).toBe("caf\\303\\251.txt");
+
+        // Canonical-only subset containing just the ambiguous literal path must
+        // resolve to the literal file instead of falling back to byLegacyHeader.
+        const resolveCanonicalSubset = createGroupedFileResolver(files, diff, [
+            { files: ["caf\\303\\251.txt"] },
+        ]);
+        expect(resolveCanonicalSubset("caf\\303\\251.txt")?.path).toBe(
+            "caf\\303\\251.txt",
+        );
     });
 });
