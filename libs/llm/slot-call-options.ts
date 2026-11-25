@@ -17,7 +17,15 @@ import type { NormalizedModel } from './byok-config';
  */
 export interface SlotCallOptions {
     temperature?: number;
+    /** Set by the slot owner (user BYOK config). Wins over any caller-supplied cap. */
     maxOutputTokens?: number;
+    /**
+     * Injected large default for Anthropic-wire providers whose model id is
+     * unknown to @ai-sdk/anthropic (the SDK silently floors those at 4096).
+     * Ranks below both the slot's own maxOutputTokens AND any per-agent caller cap,
+     * so a caller can override it with a smaller ceiling without fighting the slot.
+     */
+    defaultMaxOutputTokens?: number;
 }
 
 /**
@@ -72,7 +80,7 @@ export function resolveSlotCallOptions(
         ANTHROPIC_WIRE_PROVIDERS.has((slot?.provider as string) ?? '') &&
         !/^claude-/i.test(slot?.model ?? '')
     ) {
-        options.maxOutputTokens = 32_768;
+        options.defaultMaxOutputTokens = 32_768;
     }
 
     return options;

@@ -29,11 +29,12 @@ describe('resolveSlotCallOptions — the single slot→call-tuning mapping', () 
         ).toEqual({ temperature: 0 });
     });
 
-    // @ai-sdk/anthropic returns maxOutputTokens:4096 for unknown model ids.
-    // anthropic_compatible slots whose model is not a Claude id (Kimi, GLM,
-    // DeepSeek, MiniMax, …) must receive an explicit default so the model can
-    // use its own ceiling rather than the SDK's 4096 floor.
-    it('injects a large default maxOutputTokens for anthropic_compatible non-Claude ids', () => {
+    // @ai-sdk/anthropic caps output at 4096 for any model id it does not recognise.
+    // For Anthropic-wire providers with non-Claude ids (Kimi, GLM, DeepSeek, ...),
+    // we inject a large FALLBACK via defaultMaxOutputTokens. It ranks below both the
+    // slot's own maxOutputTokens and any per-agent caller cap, so agents can still
+    // set a smaller ceiling without fighting the slot.
+    it('injects a large defaultMaxOutputTokens (not maxOutputTokens) for anthropic_compatible non-Claude ids', () => {
         for (const model of [
             'kimi-k2.7-code',
             'kimi-k2.6',
@@ -45,7 +46,8 @@ describe('resolveSlotCallOptions — the single slot→call-tuning mapping', () 
                 provider: 'anthropic_compatible',
                 model,
             } as any);
-            expect(result.maxOutputTokens).toBeGreaterThan(4096);
+            expect(result.defaultMaxOutputTokens).toBeGreaterThan(4096);
+            expect(result.maxOutputTokens).toBeUndefined();
         }
     });
 
@@ -62,6 +64,7 @@ describe('resolveSlotCallOptions — the single slot→call-tuning mapping', () 
                 model,
             } as any);
             expect(result.maxOutputTokens).toBeUndefined();
+            expect(result.defaultMaxOutputTokens).toBeUndefined();
         }
     });
 
@@ -72,7 +75,7 @@ describe('resolveSlotCallOptions — the single slot→call-tuning mapping', () 
             provider: 'anthropic_compatible',
             model: 'claude_3_haiku',
         } as any);
-        expect(result.maxOutputTokens).toBeGreaterThan(4096);
+        expect(result.defaultMaxOutputTokens).toBeGreaterThan(4096);
     });
 
     it('injects a default for brand slots (moonshot/zai) with non-Claude model ids', () => {
@@ -86,7 +89,7 @@ describe('resolveSlotCallOptions — the single slot→call-tuning mapping', () 
             ['zai', 'glm-4-flash'],
         ]) {
             const result = resolveSlotCallOptions({ provider, model } as any);
-            expect(result.maxOutputTokens).toBeGreaterThan(4096);
+            expect(result.defaultMaxOutputTokens).toBeGreaterThan(4096);
         }
     });
 
@@ -98,16 +101,16 @@ describe('resolveSlotCallOptions — the single slot→call-tuning mapping', () 
             provider: 'anthropic_compatible',
             model: 'kimi-k2.7-code',
         } as any);
-        expect(result.maxOutputTokens).toBeGreaterThan(4096);
+        expect(result.defaultMaxOutputTokens).toBeGreaterThan(4096);
     });
 
     it('honours an explicit maxOutputTokens over the default on anthropic_compatible', () => {
-        expect(
-            resolveSlotCallOptions({
-                provider: 'anthropic_compatible',
-                model: 'kimi-k2.7-code',
-                maxOutputTokens: 8000,
-            } as any),
-        ).toMatchObject({ maxOutputTokens: 8000 });
+        const result = resolveSlotCallOptions({
+            provider: 'anthropic_compatible',
+            model: 'kimi-k2.7-code',
+            maxOutputTokens: 8000,
+        } as any);
+        expect(result.maxOutputTokens).toBe(8000);
+        expect(result.defaultMaxOutputTokens).toBeUndefined();
     });
 });
