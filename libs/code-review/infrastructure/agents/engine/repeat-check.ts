@@ -215,17 +215,22 @@ const identifiers = (text?: string) =>
         ) ?? [],
     );
 
-const codeIdentifiers = (code?: string) =>
-    identifiers(code ? withoutCommentsOrStrings(code) : '');
+// Rust is the only language whose quotes the literal stripper reads apart:
+// a lifetime's ' would open a string.
+const languageOf = (file?: string) =>
+    /\.rs$/i.test(file ?? '') ? 'rust' : undefined;
+
+const codeIdentifiers = (code?: string, file?: string) =>
+    identifiers(code ? withoutCommentsOrStrings(code, languageOf(file)) : '');
 
 /** What an applied suggestion added: its code's identifiers that the code it
  *  pointed at did not have. */
 function introducedIdentifiers(earlier: PrDecisionRecord): string[] {
     if (!applied(earlier) || !earlier.improvedCode) return [];
-    const before = codeIdentifiers(earlier.existingCode);
-    return [...codeIdentifiers(earlier.improvedCode)].filter(
-        (name) => !before.has(name) && !COMMON_IDENTIFIERS.has(name),
-    );
+    const before = codeIdentifiers(earlier.existingCode, earlier.relevantFile);
+    return [
+        ...codeIdentifiers(earlier.improvedCode, earlier.relevantFile),
+    ].filter((name) => !before.has(name) && !COMMON_IDENTIFIERS.has(name));
 }
 
 /** A finding on the code an applied suggestion added, wherever the finding
@@ -239,7 +244,7 @@ function touchesAppliedCode(
     const named = identifiers(
         `${finding.suggestionContent ?? ''} ${finding.oneSentenceSummary ?? ''}`,
     );
-    const inCode = codeIdentifiers(finding.existingCode);
+    const inCode = codeIdentifiers(finding.existingCode, finding.relevantFile);
     return added.some((name) => named.has(name) || inCode.has(name));
 }
 
@@ -504,10 +509,11 @@ function heldWithoutVerdict(
 ): boolean {
     // Only on the earlier comment's file: a linked finding elsewhere is most
     // often a real failure in a consumer, which an unjudged drop would lose.
+    const file = normalizePath(finding.relevantFile);
     if (
         linkedByFinder(finding, earlier) &&
-        normalizePath(finding.relevantFile) ===
-            normalizePath(earlier.relevantFile)
+        !!file &&
+        file === normalizePath(earlier.relevantFile)
     )
         return true;
     if (earlier.answered && sameLines(finding, earlier)) return true;

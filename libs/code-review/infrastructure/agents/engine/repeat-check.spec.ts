@@ -214,6 +214,27 @@ describe('repeatCandidates', () => {
         expect(repeatCandidates(finding, [applied])).toEqual([]);
     });
 
+    it('reads a Rust change past its lifetimes', () => {
+        const applied = earlier({
+            suggestionId: 'first-or-none',
+            relevantFile: 'src/items.rs',
+            outcome: 'implemented',
+            existingCode: 'fn first(xs: &[Item]) -> &Item { &xs[0] }',
+            improvedCode:
+                "fn first<'a>(xs: NonEmpty<'a, Item>) -> &'a Item { xs.head() }",
+            suggestionContent: 'Require a non-empty input.',
+        });
+        const finding: RepeatCheckFinding = {
+            label: 'bug',
+            relevantFile: 'src/report.rs',
+            suggestionContent:
+                'The report builds a NonEmpty from user input, which fails the request.',
+        };
+        expect(
+            repeatCandidates(finding, [applied]).map((c) => c.suggestionId),
+        ).toEqual(['first-or-none']);
+    });
+
     it("a rule finding's link is not trusted: rule reposts carry it too", () => {
         expect(
             repeatCandidates(
@@ -866,6 +887,27 @@ describe('checkRepeats', () => {
         expect(runSpy).toHaveBeenCalledTimes(2);
         expect(result.kept).toEqual(hold ? [] : [candidate]);
         expect(result.withheld).toEqual(hold ? [candidate] : []);
+    });
+
+    it('on timeout, posts a PR-level finding linked to a PR-level comment', async () => {
+        const old = earlier({
+            suggestionId: 'pr-level-old',
+            relevantFile: undefined,
+            label: 'bug',
+            suggestionContent: 'The migration has no rollback.',
+        });
+        const candidate = {
+            label: 'bug',
+            revisesSuggestionId: 'pr-level-old',
+            suggestionContent: 'The release notes omit the new env flag.',
+        };
+        runSpy.mockRejectedValue(new DOMException('timed out', 'TimeoutError'));
+        const result = await checkRepeats([candidate], [old], {
+            organizationId: 'org-1',
+            byokConfig: slot,
+        });
+        expect(result.kept).toEqual([candidate]);
+        expect(result.withheld).toEqual([]);
     });
 
     it('retries only missing verdicts and lets an explicit new-place verdict through', async () => {
