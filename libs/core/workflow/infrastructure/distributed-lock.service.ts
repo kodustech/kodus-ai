@@ -82,17 +82,20 @@ export class DistributedLock {
         if (ttl) {
             // The database already ends the lease at the max hold; this
             // releases it promptly and says so.
-            this.ttlTimer = setTimeout(() => {
-                if (!this.released) {
-                    this.logger.warn({
-                        message:
-                            'Distributed lock reached its max hold time while still held — releasing it',
-                        context: DistributedLock.name,
-                        metadata: { key, holder, ttl },
-                    });
-                    this.release().catch(() => undefined);
-                }
-            }, Math.max(0, ttl - (Date.now() - grantedAt)));
+            this.ttlTimer = setTimeout(
+                () => {
+                    if (!this.released) {
+                        this.logger.warn({
+                            message:
+                                'Distributed lock reached its max hold time while still held — releasing it',
+                            context: DistributedLock.name,
+                            metadata: { key, holder, ttl },
+                        });
+                        this.release().catch(() => undefined);
+                    }
+                },
+                Math.max(0, ttl - (Date.now() - grantedAt)),
+            );
             this.ttlTimer.unref?.();
         }
     }
@@ -357,6 +360,18 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
             });
             throw error;
         }
+    }
+
+    /**
+     * Takes `key` for `holdMs` and lets it run out: nothing renews or
+     * releases it. True when this caller took it. For "once per window"
+     * across processes, such as one run per cron tick.
+     *
+     * @throws when the database cannot be reached
+     */
+    async claim(key: string, holdMs: number): Promise<boolean> {
+        const holder = `${hostname()}:${process.pid}:${randomUUID()}`;
+        return this.repository.tryAcquire(key, holder, holdMs, holdMs);
     }
 
     /**

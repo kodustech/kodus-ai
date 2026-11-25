@@ -208,6 +208,22 @@ const targets = [
                 await repository.release(key, 'alive');
             });
 
+            it('a claim goes to one of the instances racing for it, and opens again once its hold runs out', async () => {
+                const key = uniqueKey('claim');
+                const won = await Promise.all(
+                    [instanceA, instanceB, observer].map((svc) =>
+                        svc.claim(key, 60_000),
+                    ),
+                );
+                expect(won.filter(Boolean)).toHaveLength(1);
+                // Nothing renews or releases a claim.
+                expect(await instanceA.claim(key, 60_000)).toBe(false);
+
+                await expireLease(key);
+
+                expect(await instanceB.claim(key, 60_000)).toBe(true);
+            });
+
             it('renewing keeps a lease alive, but never past its max hold', async () => {
                 const key = uniqueKey('max-hold');
                 expect(

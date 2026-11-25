@@ -1,7 +1,13 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 
-import { CronRunGate, gatedCron } from './cron-run-gate';
+import {
+    CronRunGate,
+    CronShutdownService,
+    cronRunGate,
+    gatedCron,
+    GatedCron,
+} from './cron-run-gate';
 
 /**
  * A cron run that outlives shutdown kept querying after TypeORM closed its
@@ -121,6 +127,126 @@ describe('CronRunGate', () => {
 
             release();
             await stopping;
+        });
+    });
+
+    /**
+     * Every replica schedules the same crons. The cron's own lock only
+     * keeps two runs from overlapping: a replica whose tick fired a moment
+     * after another one released ran the same tick again (twice the
+     * monthly report email with two workers).
+     */
+    describe('once per tick across processes', () => {
+        /** A shared claim store, the way the lease table is to replicas. */
+        const claims = () => {
+            let now = 0;
+            const until = new Map<string, number>();
+            const asked: Array<{ cron: string; holdMs: number }> = [];
+            return {
+                asked,
+                advance: (ms: number) => (now += ms),
+                claim: async (cron: string, holdMs: number) => {
+                    asked.push({ cron, holdMs });
+                    if ((until.get(cron) ?? -1) > now) return false;
+                    until.set(cron, now + holdMs);
+                    return true;
+                },
+            };
+        };
+        const replica = (
+            claim: (cron: string, holdMs: number) => Promise<boolean>,
+            work: jest.Mock,
+            cronTime = '*/5 * * * *',
+        ) => {
+            const gate = new CronRunGate();
+            gate.claimTicksWith(claim);
+            class Report {
+                @gatedCron(gate, cronTime, { name: 'report' })
+                async send() {
+                    return work();
+                }
+            }
+            return { gate, job: new Report() };
+        };
+
+        it('runs a tick on one replica: the one that fires second skips it, and both run the next tick', async () => {
+            const store = claims();
+            const work = jest.fn();
+            const a = replica(store.claim, work);
+            const b = replica(store.claim, work);
+
+            await a.job.send();
+            store.advance(2_000); // b's clock fires a moment later
+            await b.job.send();
+            expect(work).toHaveBeenCalledTimes(1);
+
+            store.advance(5 * 60_000 - 2_000);
+            await b.job.send();
+            await a.job.send();
+            expect(work).toHaveBeenCalledTimes(2);
+        });
+
+        it('names the tick by class and method, and holds it for half the gap between ticks, at most an hour', async () => {
+            const store = claims();
+            await replica(store.claim, jest.fn()).job.send();
+            await replica(store.claim, jest.fn(), '*/30 * * * * *').job.send();
+            await replica(store.claim, jest.fn(), '17 3 * * *').job.send();
+
+            expect(store.asked).toEqual([
+                { cron: 'Report.send', holdMs: 150_000 },
+                { cron: 'Report.send', holdMs: 15_000 },
+                { cron: 'Report.send', holdMs: 60 * 60_000 },
+            ]);
+        });
+
+        it('runs the tick when the claim cannot be made, as every replica did before claims', async () => {
+            const work = jest.fn();
+            const { job } = replica(async () => {
+                throw new Error('connect ECONNREFUSED');
+            }, work);
+
+            await job.send();
+
+            expect(work).toHaveBeenCalledTimes(1);
+        });
+
+        it('every app claims @GatedCron ticks on the lease table once it boots', async () => {
+            const claim = jest.fn(async () => false);
+            const work = jest.fn();
+            class Digest {
+                @GatedCron('0 6 * * *')
+                async send() {
+                    return work();
+                }
+            }
+            try {
+                new CronShutdownService({ claim } as any).onModuleInit();
+                await new Digest().send();
+            } finally {
+                cronRunGate.claimTicksWith(null);
+            }
+
+            expect(claim).toHaveBeenCalledWith(
+                'CRON_TICK:Digest.send',
+                60 * 60_000,
+            );
+            expect(work).not.toHaveBeenCalled();
+        });
+
+        it('starts no run when shutdown began while the claim was in flight', async () => {
+            let grant!: (won: boolean) => void;
+            const work = jest.fn();
+            const { gate, job } = replica(
+                () => new Promise<boolean>((r) => (grant = r)),
+                work,
+            );
+
+            const run = job.send();
+            await gate.stop(10);
+            grant(true);
+            await run;
+
+            expect(work).not.toHaveBeenCalled();
         });
     });
 
