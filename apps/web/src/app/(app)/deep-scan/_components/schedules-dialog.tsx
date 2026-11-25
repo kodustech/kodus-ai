@@ -11,6 +11,7 @@ import {
     DropdownMenuTrigger,
 } from "@components/ui/dropdown-menu";
 import { Input } from "@components/ui/input";
+import { Link } from "@components/ui/link";
 import {
     Select,
     SelectContent,
@@ -357,7 +358,7 @@ const ScheduleRow = ({
                         ? `Next ${whenUtc(next)} · ${formatDistanceToNow(next, { addSuffix: true })}`
                         : "No run until it is turned back on"}
                     {s.exportTo &&
-                        ` · files new findings ${labelOf(SEVERITY_FROM, s.exportTo.minSeverity) ?? ""} in ${destination}`}
+                        ` · opens a ticket in ${destination} for each new finding ${labelOf(SEVERITY_FROM, s.exportTo.minSeverity) ?? ""}`}
                 </p>
                 {s.lastError && (
                     <p className="text-danger text-xs">
@@ -603,38 +604,20 @@ const Composer = ({
             </div>
 
             <div className={line}>
-                <span>File new findings</span>
-                {exportTo !== NO_EXPORT && (
-                    <Slot
-                        label="Lowest severity to file"
-                        value={minSeverity}
-                        disabled={saving}
-                        onChange={(v) =>
-                            setMinSeverity(v as ScanExportTarget["minSeverity"])
-                        }>
-                        {(
-                            Object.keys(SEVERITY_FROM) as Array<
-                                ScanExportTarget["minSeverity"]
-                            >
-                        ).map((severity) => (
-                            <SelectItem key={severity} value={severity}>
-                                {SEVERITY_FROM[severity]}
-                            </SelectItem>
-                        ))}
-                    </Slot>
-                )}
-                <span>in</span>
+                <span>After each run,</span>
                 <Slot
-                    label="Plugin to file findings in"
+                    label="Open tickets for new findings"
                     value={exportTo}
                     disabled={saving}
                     onChange={setExportTo}>
-                    <SelectItem value={NO_EXPORT}>nowhere</SelectItem>
+                    <SelectItem value={NO_EXPORT}>
+                        {"don't open tickets"}
+                    </SelectItem>
                     {destinations.map((d) => (
                         <SelectItem
                             key={d.integrationId}
                             value={d.integrationId}>
-                            {d.name}
+                            open a ticket in {d.name}
                         </SelectItem>
                     ))}
                     {exportTo !== NO_EXPORT &&
@@ -642,25 +625,54 @@ const Composer = ({
                             (d) => d.integrationId === exportTo,
                         ) && (
                             <SelectItem value={exportTo}>
-                                a plugin no longer connected
+                                open a ticket in a plugin no longer connected
                             </SelectItem>
                         )}
                 </Slot>
                 {exportTo !== NO_EXPORT && (
-                    <span className="inline-block w-40">
-                        <Input
-                            size="md"
-                            aria-label="Where in that plugin (optional)"
-                            placeholder="where: team SEC"
-                            value={note}
-                            maxLength={300}
+                    <>
+                        <span>for each new finding</span>
+                        <Slot
+                            label="Lowest severity to open a ticket for"
+                            value={minSeverity}
                             disabled={saving}
-                            className="h-8 px-3"
-                            onChange={(ev) => setNote(ev.target.value)}
-                        />
-                    </span>
+                            onChange={(v) =>
+                                setMinSeverity(
+                                    v as ScanExportTarget["minSeverity"],
+                                )
+                            }>
+                            {(
+                                Object.keys(SEVERITY_FROM) as Array<
+                                    ScanExportTarget["minSeverity"]
+                                >
+                            ).map((severity) => (
+                                <SelectItem key={severity} value={severity}>
+                                    {SEVERITY_FROM[severity]}
+                                </SelectItem>
+                            ))}
+                        </Slot>
+                        <span className="inline-block w-44">
+                            <Input
+                                size="md"
+                                aria-label="Where in that tool (optional)"
+                                placeholder="where: team SEC"
+                                value={note}
+                                maxLength={300}
+                                disabled={saving}
+                                className="h-8 px-3"
+                                onChange={(ev) => setNote(ev.target.value)}
+                            />
+                        </span>
+                    </>
                 )}
             </div>
+            {destinations.length === 0 && (
+                <p className="text-text-tertiary text-xs">
+                    To open tickets automatically, connect a plugin with a tool
+                    that creates them (like <code>create_issue</code>) in{" "}
+                    <Link href="/settings/plugins">Plugins</Link>.
+                </p>
+            )}
 
             {limitError && <p className="text-danger text-xs">{limitError}</p>}
             {error && (
