@@ -287,11 +287,11 @@ it('preserves unknown risk and hold while recording an assessment failure as par
     );
 });
 
-it.each(['medium', 'high'])(
-    'treats a valid %s judgment as a successful assessment that holds approval',
-    async (level) => {
+it.each([[['kodus-security']], [['kodus-data', 'kodus-ci-build']]])(
+    'treats matched rules %j as a successful assessment that holds approval',
+    async (matchedRules) => {
         (LLM.run as jest.Mock).mockResolvedValueOnce({
-            level,
+            matchedRules,
             reason: 'A person should review this change.',
         });
         const result = await stage.execute(
@@ -351,7 +351,7 @@ it('skips risk assessment for an author outside the approval scope', async () =>
 
 it('judges an in-scope PR with the review model and records the map version', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'low',
+        matchedRules: [],
         reason: 'Limited change with focused tests.',
     });
     areaMaps.read.mockResolvedValue({
@@ -376,7 +376,7 @@ it('judges an in-scope PR with the review model and records the map version', as
 
 it('passes positive evidence and coverage from an unfinished history scan', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'medium',
+        matchedRules: ['kodus-shared-contract'],
         reason: 'The change needs human review.',
     });
     areaMaps.read.mockResolvedValue({
@@ -404,7 +404,7 @@ it('passes positive evidence and coverage from an unfinished history scan', asyn
 
 it('passes capped historical coverage into the risk judgment', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'low',
+        matchedRules: [],
         reason: 'Small isolated change.',
     });
     areaMaps.read.mockResolvedValue({
@@ -478,7 +478,7 @@ it('holds when the complete PR diff cannot be loaded', async () => {
 
 it('saves risk outside label scope so a later label can be checked by the cron', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'medium',
+        matchedRules: ['kodus-shared-contract'],
         reason: 'The change affects authentication behavior.',
     });
     const result = await stage.execute(

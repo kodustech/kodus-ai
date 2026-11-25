@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { CHANGE_RISK_PROMPT } from './change-risk-prompt';
+import { DEFAULT_RISK_CRITERIA } from './default-risk-criteria';
 import {
     riskCriteriaSchema,
     type RiskCriterion,
@@ -42,8 +43,9 @@ export function prRiskConfigurationKey(input: {
     return createHash('sha256')
         .update(
             JSON.stringify({
-                version: 12,
+                version: 13,
                 prompt: CHANGE_RISK_PROMPT,
+                defaults: DEFAULT_RISK_CRITERIA,
                 criteria: riskCriteriaSchema.parse(input.criteria ?? []),
                 language: input.language ?? 'en-US',
                 model: identity(input.modelSlot),

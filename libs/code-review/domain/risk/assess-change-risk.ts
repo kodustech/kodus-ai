@@ -22,6 +22,8 @@ export interface ChangeRiskAssessment {
     reason: string;
     reviewedHeadSha: string;
     areaMapVersion?: string;
+    /** The risk rules the change fell under, by id and name. */
+    matchedRules?: Array<{ id: string; name: string }>;
     failure?: {
         category: string;
         errorName: string;
@@ -31,10 +33,20 @@ export interface ChangeRiskAssessment {
 }
 
 export const approvalRiskOutputSchema = z.object({
-    level: z.enum(['low', 'medium', 'high']),
+    /** Ids of the risk rules the change falls under; none means low risk. */
+    matchedRules: z.array(z.string()),
     // Length alone must not discard a valid risk judgment.
     reason: z.string().min(8),
 });
+
+/** One rule the model judges the change against. */
+export interface RiskRule {
+    id: string;
+    name: string;
+    instructions: string;
+    /** A rule with file filters applies only to these changed paths. */
+    files?: string[];
+}
 
 const MAX_REASON_CHARS = 2_000;
 const MAX_AREA_FILES = 100;
@@ -106,7 +118,8 @@ export async function assessChangeRisk(input: {
     body?: string;
     headSha: string;
     files: FileChange[];
-    teamInstructions?: string;
+    /** What this team treats as needing a person: defaults and its own. */
+    rules: RiskRule[];
     language?: string;
     areaMap?: CodeAreaRiskMap | null;
     modelSlot?: NormalizedModel;
@@ -177,7 +190,12 @@ export async function assessChangeRisk(input: {
         const user = JSON.stringify({
             title: input.title,
             body: input.body ?? '',
-            teamRiskInstructions: input.teamInstructions ?? '',
+            riskRules: input.rules.map((rule) => ({
+                id: rule.id,
+                name: rule.name,
+                instructions: rule.instructions,
+                ...(rule.files ? { appliesToFiles: rule.files } : {}),
+            })),
             reviewLanguage: input.language ?? 'en-US',
             fileCount: input.files.length,
             diffWasTruncated: false,
@@ -254,8 +272,17 @@ export async function assessChangeRisk(input: {
         ) {
             throw new Error('Empty approval risk judgment');
         }
+        // An id the model made up still counts as risk; only known rules are
+        // named on the PR.
+        const byId = new Map(input.rules.map((rule) => [rule.id, rule]));
+        const matched = [...new Set(result.matchedRules)];
+        const matchedRules = matched.flatMap((id) => {
+            const rule = byId.get(id);
+            return rule ? [{ id: rule.id, name: rule.name }] : [];
+        });
         return {
-            level: result.level,
+            level: matched.length ? 'medium' : 'low',
+            ...(matchedRules.length ? { matchedRules } : {}),
             // Bound persisted/published text after validation, preserving the judgment.
             reason:
                 result.reason.trim().length > MAX_REASON_CHARS

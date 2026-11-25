@@ -8,7 +8,8 @@ import type { RiskCriterion } from '@libs/core/infrastructure/config/types/gener
 import type { CodeAreaRiskMap } from '@libs/platformData/domain/code-area-risk/build-area-risk-map';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { assessChangeRisk } from './assess-change-risk';
+import { assessChangeRisk, type RiskRule } from './assess-change-risk';
+import { effectiveRiskCriteria } from './default-risk-criteria';
 import { approvalPathsOf } from '../approval/approval-decision';
 import type { RiskAssessmentResult, RiskSnapshot } from './risk-assessment';
 
@@ -47,6 +48,28 @@ export function applicableRiskCriteria(
                 ? [{ ...criterion, matchingPaths }]
                 : [];
         });
+}
+
+/**
+ * The rules a PR is judged against: the Kodus defaults with the team's
+ * overrides, then its own rules, each enabled and matching a changed file. A
+ * rule with file filters names the changed paths it applies to.
+ */
+export function riskRulesFor(
+    criteria: readonly RiskCriterion[] | undefined,
+    files: FileChange[],
+): RiskRule[] {
+    return applicableRiskCriteria(effectiveRiskCriteria(criteria), files).map(
+        (criterion) => ({
+            id: criterion.id,
+            name: criterion.name!,
+            instructions: criterion.instructions!,
+            ...(criterion.includedFiles?.length ||
+            criterion.excludedFiles?.length
+                ? { files: criterion.matchingPaths }
+                : {}),
+        }),
+    );
 }
 
 /** Secrets never enter the persisted identity. A model/config/diff change invalidates reuse. */
@@ -94,14 +117,6 @@ export async function assessPrRisk(
     if (!input.headSha || !input.baseSha || !input.files.length) {
         return unavailable('Kody could not verify the complete PR snapshot.');
     }
-    const criteria = applicableRiskCriteria(input.criteria, input.files);
-    const teamInstructions = criteria
-        .map((criterion) =>
-            criterion.id === 'legacy-risk'
-                ? criterion.instructions
-                : `${criterion.name} (files: ${criterion.matchingPaths.join(', ')}):\n${criterion.instructions}`,
-        )
-        .join('\n\n');
     const result = await assessChangeRisk({
         organizationId: input.organizationId,
         prNumber: input.prNumber,
@@ -109,7 +124,7 @@ export async function assessPrRisk(
         body: input.body,
         headSha: input.headSha,
         files: input.files,
-        teamInstructions,
+        rules: riskRulesFor(input.criteria, input.files),
         language: input.language,
         areaMap: input.areaMap,
         modelSlot: input.modelSlot,
@@ -128,6 +143,7 @@ export async function assessPrRisk(
         status: 'assessed',
         riskIdentified: result.level !== 'low',
         reason: result.reason,
+        ...(result.matchedRules?.length ? { rules: result.matchedRules } : {}),
         snapshot,
         areaMapVersion: result.areaMapVersion,
     };

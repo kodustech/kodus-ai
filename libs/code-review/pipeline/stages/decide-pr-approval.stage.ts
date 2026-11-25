@@ -22,6 +22,7 @@ import {
     type ApprovalRiskAssessment,
 } from '@libs/code-review/domain/approval/approval-decision';
 import { assessApprovalRisk } from '@libs/code-review/domain/approval/assess-approval-risk';
+import { riskRulesFor } from '@libs/code-review/domain/risk/assess-pr-risk';
 import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { riskApprovalVeto } from '@libs/code-review/domain/risk/risk-assessment';
 import {
@@ -287,7 +288,21 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                 body: pullRequest.body,
                 headSha,
                 files: fullFiles,
-                teamInstructions: policy.riskInstructions,
+                // The defaults, with the old free-text instruction as the
+                // team's own rule, as the shared assessment migrates it.
+                rules: riskRulesFor(
+                    policy.riskInstructions?.trim()
+                        ? [
+                              {
+                                  id: 'legacy-risk',
+                                  name: 'Team context',
+                                  enabled: true,
+                                  instructions: policy.riskInstructions.trim(),
+                              },
+                          ]
+                        : [],
+                    fullFiles,
+                ),
                 language: config.languageResultPrompt,
                 areaMap,
                 modelSlot: config.resolvedModelSlot,

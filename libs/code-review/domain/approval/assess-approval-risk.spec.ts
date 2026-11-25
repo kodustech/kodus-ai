@@ -24,7 +24,13 @@ const input = {
             patch: '@@ -1 +1 @@\n-old\n+new',
         },
     ] as any,
-    teamInstructions: 'Treat auth changes as consequential.',
+    rules: [
+        {
+            id: 'auth',
+            name: 'Authentication',
+            instructions: 'Treat auth changes as consequential.',
+        },
+    ],
 };
 
 beforeEach(() => {
@@ -53,7 +59,7 @@ it.each([
             tokens: 2048,
         });
         jest.mocked(LLM.run).mockResolvedValue({
-            level: 'low',
+            matchedRules: [],
             reason: 'The provider accepted the complete input.',
         } as any);
 
@@ -76,7 +82,7 @@ it.each([
     async (model, repetitions) => {
         const body = 'documentation '.repeat(repetitions);
         jest.mocked(LLM.run).mockResolvedValue({
-            level: 'low',
+            matchedRules: [],
             reason: 'The provider accepted the complete input.',
         } as any);
 
@@ -97,7 +103,7 @@ it.each([
 
 it('enforces trusted model windows while leaving routing aliases to the provider', async () => {
     jest.mocked(LLM.run).mockResolvedValue({
-        level: 'low',
+        matchedRules: [],
         reason: 'The provider accepted the complete input.',
     } as any);
     for (const [model, repetitions] of [
@@ -165,16 +171,20 @@ it('classifies provider overflow after deferring a partial model match', async (
     });
 });
 
-it.each(['title', 'body', 'teamInstructions'])(
+it.each(['title', 'body', 'rules'])(
     'checks the complete prompt when %s exceeds the configured model input window',
     async (field) => {
         jest.mocked(LLM.run).mockResolvedValue({
-            level: 'low',
+            matchedRules: [],
             reason: 'The patch alone looks harmless.',
         } as any);
+        const long = 'documentation '.repeat(5000);
         const result = await assessApprovalRisk({
             ...input,
-            [field]: 'documentation '.repeat(5000),
+            [field]:
+                field === 'rules'
+                    ? [{ id: 'docs', name: 'Docs', instructions: long }]
+                    : long,
             modelSlot: {
                 provider: 'openai',
                 model: 'gpt-4o-mini',
@@ -197,7 +207,7 @@ it.each([
     'uses the configured %i-token input window for the same complete diff',
     async (maxInputTokens, level, calls) => {
         jest.mocked(LLM.run).mockResolvedValue({
-            level: 'low',
+            matchedRules: [],
             reason: 'The complete documentation diff preserves behavior.',
         } as any);
         const result = await assessApprovalRisk({
@@ -225,7 +235,7 @@ it.each([
 
 it('does not substitute a fixed input ceiling for an unknown model window', async () => {
     jest.mocked(LLM.run).mockResolvedValue({
-        level: 'low',
+        matchedRules: [],
         reason: 'The configured provider accepted the complete input.',
     } as any);
     const body = 'documentation '.repeat(200_000);
@@ -259,7 +269,7 @@ it.each([1, 51])(
             patch: `@@ -0,0 +1,2 @@\n+${padding}\n+end-of-file-${index}`,
         }));
         jest.mocked(LLM.run).mockResolvedValue({
-            level: 'low',
+            matchedRules: [],
             reason: 'The complete documentation diff preserves behavior.',
         } as any);
 
@@ -278,11 +288,14 @@ it.each([1, 51])(
     },
 );
 
-it.each(['low', 'medium', 'high'])(
+it.each([
+    ['low', []],
+    ['medium', ['auth']],
+])(
     'bounds a long %s rationale without invalidating its judgment',
-    async (level) => {
+    async (level, matchedRules) => {
         (LLM.run as jest.Mock).mockImplementationOnce(async ({ schema }) =>
-            schema.parse({ level, reason: 'x'.repeat(10_000) }),
+            schema.parse({ matchedRules, reason: 'x'.repeat(10_000) }),
         );
         const result = await assessApprovalRisk(input);
         expect(result.level).toBe(level);
@@ -337,10 +350,11 @@ it.each([507, 510, 563, 691])(
             'x',
         );
         (LLM.run as jest.Mock).mockImplementationOnce(async ({ schema }) =>
-            schema.parse({ level: 'high', reason }),
+            schema.parse({ matchedRules: ['auth'], reason }),
         );
         expect(await assessApprovalRisk(input)).toMatchObject({
-            level: 'high',
+            level: 'medium',
+            matchedRules: [{ id: 'auth', name: 'Authentication' }],
             reason,
             reviewedHeadSha: input.headSha,
         });
@@ -349,9 +363,10 @@ it.each([507, 510, 563, 691])(
 );
 
 it.each([
-    { level: 'safe', reason: 'A sufficiently long explanation.' },
-    { level: 'low' },
-    { level: 'low', reason: '        ' },
+    { level: 'low', reason: 'A sufficiently long explanation.' },
+    { matchedRules: [] },
+    { matchedRules: [], reason: '        ' },
+    { matchedRules: 'auth', reason: 'A sufficiently long explanation.' },
 ])('keeps invalid output unknown: %j', async (output) => {
     (LLM.run as jest.Mock).mockImplementationOnce(async ({ schema }) =>
         schema.parse(output),
@@ -364,7 +379,7 @@ it.each([
 
 it('uses the production model slot and includes area evidence and coverage', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'medium',
+        matchedRules: ['kodus-shared-contract'],
         reason: 'Authentication flow needs a human review.',
     });
     const areaMap = {
@@ -399,6 +414,7 @@ it('uses the production model slot and includes area evidence and coverage', asy
         modelSlot: { provider: 'openai', model: 'gpt-test' } as any,
     });
 
+    // An id the model made up still counts as risk, but is never named.
     expect(result).toEqual({
         level: 'medium',
         reason: 'Authentication flow needs a human review.',
@@ -443,7 +459,7 @@ it('holds unshown code on the legacy approval path without asking the model', as
 
 it('lists an unshown asset out of band on the legacy approval path', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
-        level: 'low',
+        matchedRules: [],
         reason: 'Only a logo was added.',
     });
     const result = await assessApprovalRisk({

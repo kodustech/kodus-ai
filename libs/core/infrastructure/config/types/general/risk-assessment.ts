@@ -11,15 +11,30 @@ export const REVIEW_SETTINGS_INHERITABLE_FIELDS = [
     'riskReviewRouting.riskFound',
 ] as const;
 
-/** Team guidance supplements Kody's assessment; file filters scope guidance. */
-export const riskCriterionSchema = z.object({
-    id: z.string().trim().min(1).max(100),
-    name: z.string().trim().min(1).max(120),
-    enabled: z.boolean(),
-    instructions: z.string().trim().min(1).max(4000),
-    includedFiles: filePatternListSchema.optional(),
-    excludedFiles: filePatternListSchema.optional(),
-});
+/** Kodus' default risk rules carry this id prefix. */
+export const DEFAULT_RISK_CRITERION_PREFIX = 'kodus-';
+
+/**
+ * A risk rule: what the team treats as needing a person, scoped by file
+ * filters. An entry whose id is a Kodus default's overrides that default, so
+ * it may carry only what changes (`enabled: false` turns it off); a team's own
+ * rule needs a name and instructions.
+ */
+export const riskCriterionSchema = z
+    .object({
+        id: z.string().trim().min(1).max(100),
+        name: z.string().trim().min(1).max(120).optional(),
+        enabled: z.boolean(),
+        instructions: z.string().trim().min(1).max(4000).optional(),
+        includedFiles: filePatternListSchema.optional(),
+        excludedFiles: filePatternListSchema.optional(),
+    })
+    .refine(
+        (criterion) =>
+            criterion.id.startsWith(DEFAULT_RISK_CRITERION_PREFIX) ||
+            (!!criterion.name && !!criterion.instructions),
+        'A team risk rule needs a name and instructions.',
+    );
 
 export type RiskCriterion = z.infer<typeof riskCriterionSchema>;
 

@@ -189,3 +189,27 @@ describe('shared PR risk contract', () => {
         },
     );
 });
+
+describe('the hold names the rules that matched', () => {
+    const withRules = (rules: Array<{ id: string; name: string }>) => ({
+        ...assessed(true),
+        rules,
+    });
+
+    it.each([
+        [
+            [{ id: 'kodus-money', name: 'Money, billing and licensing' }],
+            'Risk rule: Money, billing and licensing.',
+        ],
+        [
+            [
+                { id: 'kodus-data', name: 'Stored data and migrations' },
+                { id: 'fiscal', name: 'Fiscal *XML* @team' },
+            ],
+            'Risk rules: Stored data and migrations, Fiscal \\*XML\\* @\u200bteam.',
+        ],
+        [[], 'Risk was identified in this PR.'],
+    ])('for %j', (rules, reason) => {
+        expect(riskApprovalVeto(true, withRules(rules), current)).toBe(reason);
+    });
+});
