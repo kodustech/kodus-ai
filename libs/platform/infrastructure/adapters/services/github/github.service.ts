@@ -5536,8 +5536,11 @@ This is an experimental feature that generates committable changes. Review the d
                     answered.add(id),
                 );
 
-                hasNextPage = !!reviewThreads?.pageInfo?.hasNextPage;
-                variables.cursor = reviewThreads?.pageInfo?.endCursor ?? null;
+                const endCursor = reviewThreads?.pageInfo?.endCursor ?? null;
+                // Without a cursor the next request would read the first page again.
+                hasNextPage =
+                    !!reviewThreads?.pageInfo?.hasNextPage && !!endCursor;
+                variables.cursor = endCursor;
             }
 
             return answered;

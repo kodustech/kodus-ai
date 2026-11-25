@@ -64,6 +64,24 @@ describe('GithubService.getAnsweredReviewThreadRootIds', () => {
         });
     });
 
+    it('stops when a page reports more without a cursor', async () => {
+        const graphql = jest.fn().mockResolvedValue({
+            repository: {
+                pullRequest: {
+                    reviewThreads: {
+                        nodes: [thread('1001', 2)],
+                        pageInfo: { hasNextPage: true, endCursor: null },
+                    },
+                },
+            },
+        });
+
+        await expect(
+            build(graphql).getAnsweredReviewThreadRootIds(params),
+        ).resolves.toEqual(new Set(['1001']));
+        expect(graphql).toHaveBeenCalledTimes(1);
+    });
+
     it('matches a numeric suggestion.comment.id once stringified', async () => {
         const graphql = jest
             .fn()
