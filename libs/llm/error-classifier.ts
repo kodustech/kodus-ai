@@ -134,7 +134,10 @@ export function classifyLLMError(
         extractErrorText(err).toLowerCase() || rawMessage.toLowerCase();
     const httpStatus = extractHttpStatus(err);
 
-    let category = matchByHttpStatus(httpStatus, lower);
+    let category =
+        httpStatus === undefined && refusedByAddressGuard(err)
+            ? LlmErrorCategory.CONFIG_INVALID
+            : matchByHttpStatus(httpStatus, lower);
     if (category === LlmErrorCategory.UNKNOWN) {
         category = matchByMessage(lower);
     }
@@ -494,14 +497,50 @@ function looksLikeModelAccessDenied(lower: string): boolean {
     );
 }
 
+/**
+ * The gateway address check refused to connect (gateway-address-guard.ts): the
+ * base URL is the org's to fix, and retrying or cascading to another model would
+ * not change where it points. Read from the error itself, never from a body: the
+ * refusal carries its code (`EBYOK_GATEWAY_ADDRESS`) on the cause fetch wraps it
+ * in ("fetch failed", which reads as transient), and a cause rebuilt across
+ * realms keeps at least its own sentence. A provider that answered (a status)
+ * was reached, so no answer of its own can say this.
+ */
+function refusedByAddressGuard(err: unknown): boolean {
+    const seen = new Set<object>();
+    const walk = (e: unknown, depth: number): boolean => {
+        if (!e || typeof e !== 'object' || depth > 5 || seen.has(e)) {
+            return false;
+        }
+        seen.add(e);
+        const node = e as {
+            code?: unknown;
+            name?: unknown;
+            message?: unknown;
+            cause?: unknown;
+            lastError?: unknown;
+            errors?: unknown;
+        };
+        if (
+            node.code === 'EBYOK_GATEWAY_ADDRESS' ||
+            node.name === 'GatewayAddressRefusedError' ||
+            /\bhost "[^"]*" resolves to a private or reserved address\b.*the call was not sent/.test(
+                String(node.message ?? ''),
+            )
+        ) {
+            return true;
+        }
+        return (
+            walk(node.cause, depth + 1) ||
+            walk(node.lastError, depth + 1) ||
+            (Array.isArray(node.errors) &&
+                node.errors.some((m) => walk(m, depth + 1)))
+        );
+    };
+    return walk(err, 0);
+}
+
 function matchByMessage(lower: string): LlmErrorCategory {
-    // The gateway address check refused to connect (gateway-address-guard.ts):
-    // the base URL is the org's to fix, and retrying or cascading to another
-    // model would not change where it points. Ahead of "fetch failed", which
-    // the refusal is wrapped in and which reads as transient.
-    if (lower.includes('resolves to a private or reserved address')) {
-        return LlmErrorCategory.CONFIG_INVALID;
-    }
     // Same vocabulary the 429 branch uses -- see looksLikeQuota.
     if (looksLikeQuota(lower)) {
         return LlmErrorCategory.QUOTA_EXCEEDED;

@@ -884,6 +884,12 @@ export class McpService {
         // gives no URL (the first-party Kodus MCP, re-pinned to the platform's
         // configuration when it connects) takes the one it was created with.
         const resolvedMcpUrl = integration?.baseUrl || mcpUrl || '';
+        if (integration?.baseUrl && mcpUrl && mcpUrl !== integration.baseUrl) {
+            this.logger.warn(
+                'Ignored a managed MCP URL sent in the request body; the catalog URL is used',
+                { organizationId, integrationId },
+            );
+        }
 
         // Create new connection
         const newConnection = this.connectionRepository.create({

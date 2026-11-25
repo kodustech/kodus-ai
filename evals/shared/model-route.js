@@ -10,6 +10,7 @@
 // The route reads production's TypeScript (libs/llm), so the hooks load here,
 // whoever requires this first.
 require('ts-node/register/transpile-only');
+const { allowLoopback } = require('./loopback-allowance');
 require('tsconfig-paths/register');
 const path = require('path');
 
@@ -56,27 +57,9 @@ const BYOK_PROVIDER = {
  * (libs/llm/resolve-model-slot.ts): Bedrock authenticates with an encrypted
  * bearer token and a region in `settings`, never `apiKey`.
  */
-// The engine refuses a BYOK base URL on a private or loopback address unless
-// the install's operator allows it (libs/llm/gateway-address-guard.ts). A local
-// scripted server (fake-llm-server.js) is the eval's own: it is allowed the way
-// an operator allows a gateway, by exact host and port, and only for loopback,
-// so a route can never open anything else.
-function allowLoopbackGateway(baseURL) {
-    let url;
-    try {
-        url = new URL(baseURL);
-    } catch {
-        return;
-    }
-    if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) return;
-    const entry = `${url.hostname}:${url.port || (url.protocol === 'http:' ? 80 : 443)}`;
-    const current = (process.env.API_ALLOWED_PRIVATE_HOSTS || '').split(/[\s,]+/).filter(Boolean);
-    if (!current.includes(entry)) process.env.API_ALLOWED_PRIVATE_HOSTS = [...current, entry].join(',');
-}
-
 function credentialOf(id, provider, m, encrypt) {
     const bedrock = provider === 'amazon_bedrock';
-    if (m.baseURL) allowLoopbackGateway(m.baseURL);
+    if (m.baseURL) allowLoopback(m.baseURL);
     return {
         id,
         provider,

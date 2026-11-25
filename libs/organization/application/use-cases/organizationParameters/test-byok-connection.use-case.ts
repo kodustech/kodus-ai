@@ -121,7 +121,9 @@ export async function assertSafeOpenAICompatibleUrl(
     for (const { address } of addresses) {
         if (refuses(address)) {
             throw new BadRequestException(
-                `baseURL resolves to a private or reserved address (${address}). Point it at a public provider endpoint.${allowanceHint(address)}`,
+                // The address is named only when the org typed it: what a
+                // name resolved to on the platform's network stays there.
+                `baseURL resolves to a private or reserved address${literal ? ` (${address})` : ''}. Point it at a public provider endpoint.${allowanceHint(address)}`,
             );
         }
     }

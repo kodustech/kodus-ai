@@ -989,3 +989,33 @@ describe('REQUEST_REJECTED (#1687)', () => {
         );
     });
 });
+
+describe('classifyLLMError: the address guard refusal is read from the error, not a body', () => {
+    it('a 400 whose body quotes the refusal sentence keeps its status category', () => {
+        const err = Object.assign(new Error('Bad Request'), {
+            name: 'AI_APICallError',
+            statusCode: 400,
+            responseBody: JSON.stringify({
+                error: {
+                    message:
+                        'messages[0]: the diff says BYOK base URL host "x" resolves to a private or reserved address; the call was not sent.',
+                },
+            }),
+        });
+        expect(classifyLLMError(err).category).not.toBe(
+            LlmErrorCategory.CONFIG_INVALID,
+        );
+    });
+
+    it('a status-less failure whose cause carries the guard code is CONFIG_INVALID', () => {
+        const refusal = Object.assign(new Error('refused'), {
+            code: 'EBYOK_GATEWAY_ADDRESS',
+        });
+        const err = Object.assign(new TypeError('fetch failed'), {
+            cause: refusal,
+        });
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.CONFIG_INVALID,
+        );
+    });
+});

@@ -186,7 +186,7 @@ describe('a clone is pinned to the address that was judged', () => {
                 resolver('10.4.0.9'),
             ),
         ).rejects.toThrow(
-            /resolves to a private or reserved address \(10\.4\.0\.9\)/,
+            /gitlab\.attacker\.test" resolves to a private or reserved address;/,
         );
     });
 

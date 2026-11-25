@@ -41,7 +41,7 @@ function scriptedResolver(...script: Answer[][]) {
 function expectRefused(err: any): void {
     expect(err?.message).toBe('fetch failed');
     expect(String(err?.cause?.message)).toMatch(
-        /private or reserved address \(.+\); the call was not sent/,
+        /private or reserved address(?: \(.+\))?; the call was not sent/,
     );
 }
 
@@ -67,7 +67,7 @@ describe('gatewayLookup', () => {
         const { err } = await lookupOnce(gatewayLookup(resolve), { all: true });
         expect(err).toBeInstanceOf(GatewayAddressRefusedError);
         expect(err.message).toMatch(
-            /gateway\.example\.test.*private or reserved address \(10\.0\.0\.5\)/,
+            /gateway\.example\.test.*private or reserved address; the call was not sent/,
         );
     });
 
@@ -478,5 +478,21 @@ describe('the operator allowance at call time', () => {
         const out = await call(`http://llm.internal:${gatewayPort}/redirect`);
         expectRefused(out.err);
         expect(reached).toEqual(['gateway GET /redirect']);
+    });
+});
+
+describe('a refusal names the address only when the org typed it', () => {
+    it('a name: what it resolved to on the platform network is not echoed', () => {
+        const err = new GatewayAddressRefusedError('internal.svc', '10.0.3.7');
+        expect(err.message).not.toContain('10.0.3.7');
+        expect(err.address).toBe('10.0.3.7');
+    });
+
+    it('an IP literal: the org typed it, so it is named', () => {
+        const err = new GatewayAddressRefusedError(
+            '169.254.169.254',
+            '169.254.169.254',
+        );
+        expect(err.message).toContain('(169.254.169.254)');
     });
 });

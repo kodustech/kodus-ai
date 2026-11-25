@@ -94,6 +94,13 @@ describe('an org MCP server URL is dialed through the address check', () => {
             resolvesTo('127.0.0.1');
             const err = await connect(type);
             expect(reached).toEqual([]);
+            // The guard's own lookup judged the host: an unguarded transport
+            // resolves through Node itself and never calls this mock.
+            expect(mockLookup).toHaveBeenCalledWith(
+                'mcp.example.test',
+                expect.anything(),
+                expect.any(Function),
+            );
             // The SSE transport re-wraps the failure as "SSE error: fetch failed".
             expect(chain(err)).toMatch(
                 type === 'http'
@@ -135,7 +142,7 @@ describe('an org MCP server URL is dialed through the address check', () => {
             resolvesTo('169.254.169.254');
             const err = await connect('http');
             expect(chain(err)).toMatch(
-                /resolves to a private or reserved address \(169\.254\.169\.254\)/,
+                /MCP server host "mcp\.example\.test" resolves to a private or reserved address;/,
             );
         },
     );

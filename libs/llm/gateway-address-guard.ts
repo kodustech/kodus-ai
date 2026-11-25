@@ -364,8 +364,12 @@ export class GatewayAddressRefusedError extends Error {
         /** What the host is, for the message: a BYOK base URL, an MCP server… */
         label = 'BYOK base URL',
     ) {
+        // The address is named only when the org typed it: what a NAME
+        // resolved to on the platform's network is the platform's, and
+        // echoing it would map that network one refused name at a time. The
+        // `address` field keeps it for the logs.
         super(
-            `${label} host "${host}" resolves to a private or reserved address (${address}); the call was not sent.`,
+            `${label} host "${host}" resolves to a private or reserved address${ipLiteral(host) ? ` (${address})` : ''}; the call was not sent.`,
         );
         this.name = 'GatewayAddressRefusedError';
     }
@@ -440,6 +444,26 @@ export function createGatewayDispatcher(
 ): Dispatcher {
     const policyFor = (host: string, port: number): Refuses =>
         opts.refuses ?? (opts.policy ?? addressRefusal)(host, port);
+    // One connector per host, port and allowance, so each keeps its TLS
+    // session cache across connections; the lookup has to know the port the
+    // allowance is for. Bounded: a host list churning past the cap starts over.
+    const connectors = new Map<string, ReturnType<typeof buildConnector>>();
+    const connectorFor = (host: string, port: number, refuses: Refuses) => {
+        const allowance = opts.refuses
+            ? ''
+            : (process.env[ALLOWED_PRIVATE_HOSTS_ENV] ?? '');
+        // The policy can follow the install's mode as well (integrations).
+        const key = `${host}:${port}|${allowance}|${environment.API_CLOUD_MODE === true}`;
+        let connector = connectors.get(key);
+        if (!connector) {
+            if (connectors.size >= 256) connectors.clear();
+            connector = buildConnector({
+                lookup: gatewayLookup(opts.resolve, refuses, opts.label),
+            });
+            connectors.set(key, connector);
+        }
+        return connector;
+    };
     const agent = new Agent({
         ...LONG_FETCH_AGENT_OPTIONS,
         connect: (connectOpts, callback) => {
@@ -462,12 +486,7 @@ export function createGatewayDispatcher(
                 );
                 return;
             }
-            // A connector per connection: the lookup has to know the port the
-            // allowance is for, and the agent pools connections, so a new one
-            // is opened only when none is idle.
-            buildConnector({
-                lookup: gatewayLookup(opts.resolve, refuses, opts.label),
-            })(connectOpts, callback);
+            connectorFor(hostname, port, refuses)(connectOpts, callback);
         },
     });
     return new Dispatcher1Wrapper(agent);
@@ -565,7 +584,7 @@ export async function assertIntegrationUrlAllowed(
     const refused = addresses.find(({ address }) => refuses(address));
     if (refused) {
         throw new IntegrationUrlRefusedError(
-            `${subject} resolves to a private or reserved address (${refused.address}). Point it at a server reachable on the public internet.`,
+            `${subject} resolves to a private or reserved address${literal ? ` (${refused.address})` : ''}. Point it at a server reachable on the public internet.`,
         );
     }
 }

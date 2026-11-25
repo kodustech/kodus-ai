@@ -15,6 +15,12 @@ import { lookup } from 'dns/promises';
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 
 jest.mock('dns/promises', () => ({ lookup: jest.fn() }));
+// The hint names a setting only a self-hosted install has; each test says
+// which install it runs on.
+jest.mock('@libs/ee/configs/environment', () => ({
+    environment: { API_CLOUD_MODE: false },
+}));
+const { environment } = jest.requireMock('@libs/ee/configs/environment');
 
 const answers = new Map<string, string[]>();
 const mockLookup = lookup as unknown as jest.Mock;
@@ -173,7 +179,7 @@ describe('impact: what passed before still passes, what was refused still is', (
     it('without an operator allowance, a private gateway is refused', async () => {
         answering('10.20.30.40');
         await expect(assertSafeOpenAICompatibleUrl(GATEWAY)).rejects.toThrow(
-            'baseURL resolves to a private or reserved address (10.20.30.40)',
+            'baseURL resolves to a private or reserved address.',
         );
     });
 });
@@ -222,11 +228,29 @@ describe('the self-hosted operator allows its private gateways (#2381)', () => {
         ).rejects.toThrow(/must use https/);
     });
 
+    it('on cloud, a private address is refused with no hint (cloud has no such setting)', async () => {
+        environment.API_CLOUD_MODE = true;
+        try {
+            answering('192.168.1.5');
+            const err = await assertSafeOpenAICompatibleUrl(GATEWAY).catch(
+                (e) => e,
+            );
+            expect(String(err?.message)).toMatch(
+                /private or reserved address\. /,
+            );
+            expect(String(err?.message)).not.toMatch(
+                /API_ALLOWED_PRIVATE_HOSTS/,
+            );
+        } finally {
+            environment.API_CLOUD_MODE = false;
+        }
+    });
+
     it('an address outside the allowance is refused, and says who can allow it', async () => {
         allow('10.0.0.0/8');
         answering('192.168.1.5');
         await expect(assertSafeOpenAICompatibleUrl(GATEWAY)).rejects.toThrow(
-            /private or reserved address \(192\.168\.1\.5\).*API_ALLOWED_PRIVATE_HOSTS/,
+            /private or reserved address\. .*API_ALLOWED_PRIVATE_HOSTS/,
         );
     });
 
