@@ -533,7 +533,30 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
         expect(vmEnv.API_LLM_BASE_URL).toBeUndefined();
     });
 
-    it('a caller declaring its provider and its own endpoint keeps both', () => {
+    it('a config with no key of its own keeps its endpoint for the caller key', () => {
+        // Kody on #2700: no config key was dropped, so nothing pairs the
+        // endpoint with anything else; openai_compatible needs it to run.
+        const box = sandbox();
+        writeConfig(box, [
+            'API_LLM_PROVIDER=openai_compatible',
+            'API_LLM_PROVIDER_MODEL=kimi-k2.6',
+            'API_LLM_BASE_URL=https://api.moonshot.ai/v1',
+        ]);
+        const vmEnv = vmLlmEnv(box, {
+            API_LLM_PROVIDER: 'openai_compatible',
+            API_OPEN_AI_API_KEY: 'sk-fake-moonshot',
+        });
+        const declared = resolveDeclaredEnvProvider(vmEnv);
+        expect(declared.kind).toBe('declared');
+        expect(declared.kind === 'declared' && declared.config).toMatchObject({
+            apiKey: 'sk-fake-moonshot',
+            baseURL: 'https://api.moonshot.ai/v1',
+        });
+    });
+
+    it('releasing the config endpoint never drops one the caller set', () => {
+        // Guards the release against reaching the caller's own value: it
+        // passes without the release, and fails if the release unsets blindly.
         const box = sandbox();
         writeConfig(box, [
             'API_LLM_PROVIDER=openai_compatible',

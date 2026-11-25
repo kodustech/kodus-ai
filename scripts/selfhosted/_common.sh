@@ -90,6 +90,7 @@ __caller_legacy_wins() {
     local generic="$1" legacy_snap="$2" generic_snap="$3"
     case "$legacy_snap" in __SET__*) ;; *) return 1 ;; esac
     case "$generic_snap" in __SET__*) return 1 ;; esac
+    [ -n "${!generic:-}" ] || return 1
     unset "$generic"
 }
 # The key alone is ambiguous: API_OPEN_AI_API_KEY is also the embeddings key.
