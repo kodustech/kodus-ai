@@ -428,6 +428,32 @@ it('passes capped historical coverage into the risk judgment', async () => {
     });
 });
 
+it('judges the legacy approval path against the rules the team configured', async () => {
+    (LLM.run as jest.Mock).mockResolvedValue({
+        matchedRules: [],
+        reason: 'Small isolated change.',
+    });
+    await stage.execute(
+        context({
+            approvalRiskActive: true,
+            riskCriteria: [
+                { id: 'kodus-security', enabled: false },
+                {
+                    id: 'tenant',
+                    name: 'Tenant isolation',
+                    enabled: true,
+                    instructions: 'Data must not cross tenants.',
+                },
+            ],
+        }),
+    );
+    const ids = JSON.parse(
+        (LLM.run as jest.Mock).mock.calls[0][0].user,
+    ).riskRules.map((rule: { id: string }) => rule.id);
+    expect(ids).not.toContain('kodus-security');
+    expect(ids).toContain('tenant');
+});
+
 it('vetoes a sensitive path before paying for a model call', async () => {
     const result = await stage.execute(
         context({

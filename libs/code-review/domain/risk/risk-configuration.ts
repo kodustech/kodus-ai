@@ -16,16 +16,16 @@ import {
  * the same text with CRLF or a trailing newline is not a change.
  */
 export function prRiskDescriptionKey(input: { title?: string; body?: string }) {
+    return createHash('sha256')
+        .update(JSON.stringify(normalizedPrText(input)))
+        .digest('hex');
+}
+
+/** PR text as every risk identity compares it: LF line endings, trimmed. */
+export function normalizedPrText(input: { title?: string; body?: string }) {
     const text = (value?: string) =>
         (value ?? '').replace(/\r\n?/g, '\n').trim();
-    return createHash('sha256')
-        .update(
-            JSON.stringify({
-                title: text(input.title),
-                body: text(input.body),
-            }),
-        )
-        .digest('hex');
+    return { title: text(input.title), body: text(input.body) };
 }
 
 export function prRiskConfigurationKey(input: {

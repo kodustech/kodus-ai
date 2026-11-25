@@ -232,6 +232,44 @@ it('sends the migrated free-text instruction as context, not as a rule whose mat
     expect(newCall.user).toBe(oldCall.user);
 });
 
+it.each([
+    ['turned off', { enabled: false }],
+    [
+        'scoped to files the PR does not change',
+        { includedFiles: ['billing/**'] },
+    ],
+])(
+    'does not send the free-text instruction when the team %s',
+    async (_, change) => {
+        jest.mocked(LLM.run).mockResolvedValue({
+            matchedRules: [],
+            reason: 'Recorded model judgment.',
+        } as any);
+        await assessPrRisk({
+            ...input,
+            criteria: [
+                {
+                    id: 'legacy-risk',
+                    name: 'Team context',
+                    enabled: true,
+                    instructions: 'Core product logic merits a human review.',
+                    ...change,
+                },
+            ],
+        });
+        expect(
+            JSON.parse(jest.mocked(LLM.run).mock.calls[0][0].user as string),
+        ).not.toHaveProperty('teamRiskContext');
+    },
+);
+
+it('reuses an assessment when the provider returns the same text with CRLF or a trailing newline', () => {
+    const lf = prRiskSnapshot({ ...input, body: 'Line one\nLine two' });
+    const crlf = prRiskSnapshot({ ...input, body: 'Line one\r\nLine two\n' });
+    expect(crlf.assessmentKey).toBe(lf.assessmentKey);
+    expect(crlf.descriptionKey).toBe(lf.descriptionKey);
+});
+
 it('names Team context when the free-text instruction asks for a person', async () => {
     jest.mocked(LLM.run).mockResolvedValue({
         matchedRules: ['team-context'],
@@ -479,7 +517,7 @@ it.each([
     ['evals/security-scan/realvuln/findings.jsonl', 'added', 796, 0],
     ['libs/scan/engine.spec.ts', 'added', 3115, 0],
     ['tests/fixtures/repo/gitlab.service.ts', 'added', 6683, 0],
-    ['src/__fixtures__/a.json', 'added', 4000, 0],
+    ['src/__fixtures__/a.ts', 'added', 4000, 0],
     ['pnpm-lock.yaml', 'modified', 5000, 4000],
     ['test_email.py', 'added', 4000, 0],
     ['pkg/email_test.go', 'added', 4000, 0],

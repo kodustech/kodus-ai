@@ -1,4 +1,5 @@
 import {
+    normalizedPrText,
     prRiskConfigurationKey,
     prRiskDescriptionKey,
 } from './risk-configuration';
@@ -85,11 +86,14 @@ export function riskRulesFor(
  */
 export function riskContextFor(
     criteria: readonly RiskCriterion[] | undefined,
+    files: FileChange[],
 ): string | undefined {
     const legacy = criteria?.find(
         (criterion) => criterion.id === LEGACY_RISK_CRITERION_ID,
     );
-    return legacy?.enabled !== false && legacy?.instructions?.trim()
+    // A team that scoped or turned it off on the risk page is obeyed.
+    if (!legacy?.instructions?.trim()) return undefined;
+    return applicableRiskCriteria([legacy], files).length
         ? legacy.instructions.trim()
         : undefined;
 }
@@ -109,8 +113,7 @@ export function prRiskSnapshot(input: AssessPrRiskInput): RiskSnapshot {
             .update(
                 JSON.stringify({
                     configurationKey,
-                    title: input.title,
-                    body: input.body,
+                    ...normalizedPrText(input),
                     areaMapVersion: input.areaMap?.version,
                     files: input.files.map((file) => ({
                         path: file.filename,
@@ -147,7 +150,7 @@ export async function assessPrRisk(
         headSha: input.headSha,
         files: input.files,
         rules: riskRulesFor(input.criteria, input.files),
-        teamContext: riskContextFor(input.criteria),
+        teamContext: riskContextFor(input.criteria, input.files),
         language: input.language,
         areaMap: input.areaMap,
         modelSlot: input.modelSlot,
