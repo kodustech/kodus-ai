@@ -356,10 +356,12 @@ export function repairJsonText(text: string): string | null {
 
 /** Above this size a broken payload is not worth a character scan (#2112). */
 const SALVAGE_MAX_CHARS = 1_000_000;
-/** Chars the fallback walk may scan in total, ~0.25s on the worst shapes:
- *  openers that start no parseable container each rescan the text after
- *  them, and a balanced span that is not JSON also pays a regex and a parse. */
-const FALLBACK_SCAN_BUDGET = 20_000_000;
+/** Chars the fallback walk may scan in total: openers that start no parseable
+ *  container each rescan the text after them, and a balanced span that is not
+ *  JSON also pays a regex and a parse. The costliest of 3,725 recorded model
+ *  replies in evals/ scans ~0.85M, so 5M leaves 6x room and caps the worst
+ *  shape at well under a tenth of a second. */
+const FALLBACK_SCAN_BUDGET = 5_000_000;
 
 /**
  * Make the string literals of almost-JSON legal: raw control characters

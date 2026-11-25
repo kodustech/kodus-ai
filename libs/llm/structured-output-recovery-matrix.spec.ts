@@ -193,13 +193,14 @@ const SHAPES: Shape[] = [
         dependsOn: '#2700 (0be848331)',
     },
     {
-        id: '9 a reply of 1,000,000 `{`',
-        reply: { text: '{'.repeat(1_000_000) },
+        // The route of a reply with no object, per provider. The scan budget
+        // that keeps a huge one from stalling is provider-independent and is
+        // pinned in structured-output-repair.spec.ts; a 1M reply here cost
+        // every mutant ~7s per row and timed the mutation gate out.
+        id: '9 a reply made only of unclosed `{`',
+        reply: { text: '{'.repeat(500) },
         outcome: { kind: 'reask' },
         dependsOn: '#2700 (0be848331)',
-        // Not a speed target: the quadratic walk took ~18 min here, and Stryker's
-        // instrumented dry run takes ~7s on CI.
-        maxMs: 30_000,
     },
     {
         id: '10 a <think> block in the text before the answer',
