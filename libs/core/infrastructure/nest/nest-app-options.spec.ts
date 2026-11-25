@@ -17,10 +17,13 @@ describe('NEST_APP_OPTIONS', () => {
                 }
                 if (!path.endsWith('.ts') || path.endsWith('.spec.ts'))
                     continue;
-                // Mentions in comments are not calls.
-                const text = readFileSync(path, 'utf8')
-                    .replace(/\/\*[\s\S]*?\*\//g, '')
-                    .replace(/\/\/.*$/gm, '');
+                // Comments and string contents are not calls, and a `//`
+                // inside a string ('http://…') is not a comment: one pass,
+                // leftmost match first.
+                const text = readFileSync(path, 'utf8').replace(
+                    /\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g,
+                    (token) => (token.startsWith('/') ? '' : "''"),
+                );
                 // Each call up to its closing `);`, where its options sit.
                 const calls =
                     text.match(

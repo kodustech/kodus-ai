@@ -91,6 +91,27 @@ describe('DistributedLockService', () => {
         jest.useRealTimers();
     });
 
+    it('a claim is held for its length without renewal, and one handed back is free at once', async () => {
+        const claim = await instanceA.claim('tick', 30_000);
+        expect(claim).not.toBeNull();
+        expect(await instanceB.claim('tick', 30_000)).toBeNull();
+
+        await jest.advanceTimersByTimeAsync(30_000);
+        const next = await instanceB.claim('tick', 30_000);
+        expect(next).not.toBeNull();
+
+        await next!.release();
+        expect(await instanceA.claim('tick', 30_000)).not.toBeNull();
+    });
+
+    it('a claim of no length is held for a whole lease, not expired the moment it is taken', async () => {
+        expect(await instanceA.claim('tick', 0)).not.toBeNull();
+
+        await jest.advanceTimersByTimeAsync(LOCK_LEASE_MS - 1_000);
+
+        expect(await instanceB.claim('tick', 0)).toBeNull();
+    });
+
     it('a holder that keeps working keeps the lock well past one lease', async () => {
         const lock = await instanceA.acquire('job');
 

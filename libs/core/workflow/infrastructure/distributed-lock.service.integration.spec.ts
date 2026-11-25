@@ -216,12 +216,16 @@ const targets = [
                     ),
                 );
                 expect(won.filter(Boolean)).toHaveLength(1);
-                // Nothing renews or releases a claim.
-                expect(await instanceA.claim(key, 60_000)).toBe(false);
+                // Nothing renews it.
+                expect(await instanceA.claim(key, 60_000)).toBeNull();
 
                 await expireLease(key);
 
-                expect(await instanceB.claim(key, 60_000)).toBe(true);
+                const next = await instanceB.claim(key, 60_000);
+                expect(next).not.toBeNull();
+                // Handed back, it is free at once.
+                await next!.release();
+                expect(await observer.claim(key, 60_000)).not.toBeNull();
             });
 
             it('renewing keeps a lease alive, but never past its max hold', async () => {

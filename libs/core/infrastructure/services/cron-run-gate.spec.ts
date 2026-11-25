@@ -7,6 +7,7 @@ import {
     cronRunGate,
     gatedCron,
     GatedCron,
+    TickClaim,
 } from './cron-run-gate';
 
 /**
@@ -147,14 +148,14 @@ describe('CronRunGate', () => {
                 advance: (ms: number) => (now += ms),
                 claim: async (cron: string, holdMs: number) => {
                     asked.push({ cron, holdMs });
-                    if ((until.get(cron) ?? -1) > now) return false;
+                    if ((until.get(cron) ?? -1) > now) return null;
                     until.set(cron, now + holdMs);
-                    return true;
+                    return { release: async () => until.delete(cron) };
                 },
             };
         };
         const replica = (
-            claim: (cron: string, holdMs: number) => Promise<boolean>,
+            claim: TickClaim,
             work: jest.Mock,
             cronTime = '*/5 * * * *',
         ) => {
@@ -169,21 +170,28 @@ describe('CronRunGate', () => {
             return { gate, job: new Report() };
         };
 
-        it('runs a tick on one replica: the one that fires second skips it, and both run the next tick', async () => {
+        it('runs a tick on one replica: the one that fires second skips it, and the next tick goes to whichever fires first', async () => {
             const store = claims();
-            const work = jest.fn();
-            const a = replica(store.claim, work);
-            const b = replica(store.claim, work);
+            const ranOnA = jest.fn();
+            const ranOnB = jest.fn();
+            const a = replica(store.claim, ranOnA);
+            const b = replica(store.claim, ranOnB);
 
             await a.job.send();
             store.advance(2_000); // b's clock fires a moment later
             await b.job.send();
-            expect(work).toHaveBeenCalledTimes(1);
+            expect([
+                ranOnA.mock.calls.length,
+                ranOnB.mock.calls.length,
+            ]).toEqual([1, 0]);
 
             store.advance(5 * 60_000 - 2_000);
-            await b.job.send();
+            await b.job.send(); // b fires first this time
             await a.job.send();
-            expect(work).toHaveBeenCalledTimes(2);
+            expect([
+                ranOnA.mock.calls.length,
+                ranOnB.mock.calls.length,
+            ]).toEqual([1, 1]);
         });
 
         it('names the tick by class and method, and holds it for half the gap between ticks, at most an hour', async () => {
@@ -211,7 +219,7 @@ describe('CronRunGate', () => {
         });
 
         it('every app claims @GatedCron ticks on the lease table once it boots', async () => {
-            const claim = jest.fn(async () => false);
+            const claim = jest.fn(async () => null);
             const work = jest.fn();
             class Digest {
                 @GatedCron('0 6 * * *')
@@ -233,20 +241,28 @@ describe('CronRunGate', () => {
             expect(work).not.toHaveBeenCalled();
         });
 
-        it('starts no run when shutdown began while the claim was in flight', async () => {
-            let grant!: (won: boolean) => void;
-            const work = jest.fn();
-            const { gate, job } = replica(
-                () => new Promise<boolean>((r) => (grant = r)),
-                work,
+        it('a tick claimed as shutdown began is handed back unrun, so another replica runs it', async () => {
+            const store = claims();
+            let granted!: Promise<unknown>;
+            const ranOnA = jest.fn();
+            const ranOnB = jest.fn();
+            const a = replica(
+                (cron, holdMs) =>
+                    (granted = new Promise((r) =>
+                        setTimeout(() => r(store.claim(cron, holdMs)), 30),
+                    )) as ReturnType<TickClaim>,
+                ranOnA,
             );
+            const b = replica(store.claim, ranOnB);
 
-            const run = job.send();
-            await gate.stop(10);
-            grant(true);
+            const run = a.job.send();
+            await a.gate.stop(1_000); // waits for the claim in flight
+            await granted;
             await run;
+            await b.job.send();
 
-            expect(work).not.toHaveBeenCalled();
+            expect(ranOnA).not.toHaveBeenCalled();
+            expect(ranOnB).toHaveBeenCalledTimes(1);
         });
     });
 

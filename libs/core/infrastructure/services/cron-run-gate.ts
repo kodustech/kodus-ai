@@ -19,10 +19,14 @@ export const MAX_TICK_HOLD_MS = 60 * 60 * 1000;
 type CronOptions = Parameters<typeof Cron>[1];
 
 /**
- * Takes the tick of `cron` for `holdMs` across every process; true when this
- * process got it. Throws when the claim cannot be made.
+ * Takes the tick of `cron` for `holdMs` across every process: a handle when
+ * this process got it, null when another one did. Throws when the claim
+ * cannot be made.
  */
-export type TickClaim = (cron: string, holdMs: number) => Promise<boolean>;
+export type TickClaim = (
+    cron: string,
+    holdMs: number,
+) => Promise<{ release(): Promise<unknown> } | null>;
 
 /** The tick a scheduled method claims before it runs. */
 interface Tick {
@@ -80,19 +84,28 @@ export class CronRunGate {
         tick: Tick,
         work: () => Promise<T>,
     ): Promise<T | undefined> {
-        if (!(await this.claimed(claim, tick))) {
+        const claimed = await this.claimed(claim, tick);
+        if (!claimed.won) {
             return undefined;
         }
-        // Shutdown may have begun while the claim was in flight.
+        // Shutdown may have begun while the claim was in flight. Hand the
+        // tick back unrun, so a replica that fires it later still runs it.
         if (this.stopping) {
+            await claimed.release?.().catch(() => undefined);
             return undefined;
         }
         return work();
     }
 
-    private async claimed(claim: TickClaim, tick: Tick): Promise<boolean> {
+    private async claimed(
+        claim: TickClaim,
+        tick: Tick,
+    ): Promise<{ won: boolean; release?: () => Promise<unknown> }> {
         try {
-            return await claim(tick.cron, tick.holdMs);
+            const handle = await claim(tick.cron, tick.holdMs);
+            return handle
+                ? { won: true, release: () => handle.release() }
+                : { won: false };
         } catch (error) {
             // Every replica ran every tick before claims; the cron's own
             // lock still keeps two runs from overlapping.
@@ -102,7 +115,7 @@ export class CronRunGate {
                 error: error instanceof Error ? error : undefined,
                 metadata: { cron: tick.cron },
             });
-            return true;
+            return { won: true };
         }
     }
 

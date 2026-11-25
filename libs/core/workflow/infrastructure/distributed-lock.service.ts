@@ -49,6 +49,12 @@ export interface DistributedLockConfig {
     /** Who renews held leases. Defaults to a renewal thread. */
     renewer?: LeaseRenewer;
 }
+/** A window taken with DistributedLockService.claim. */
+export interface Claim {
+    /** Frees the window for the next taker; false when it already ran out. */
+    release(): Promise<boolean>;
+}
+
 /** Expired leases older than this are deleted by the sweeper. */
 const EXPIRED_LEASE_GRACE_MS = 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
@@ -363,15 +369,21 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
     }
 
     /**
-     * Takes `key` for `holdMs` and lets it run out: nothing renews or
-     * releases it. True when this caller took it. For "once per window"
-     * across processes, such as one run per cron tick.
+     * Takes `key` for `holdMs` and lets it run out: nothing renews it. Null
+     * when another caller holds it. For "once per window" across processes,
+     * such as one run per cron tick; `release` hands back a window that
+     * will not be used.
      *
      * @throws when the database cannot be reached
      */
-    async claim(key: string, holdMs: number): Promise<boolean> {
+    async claim(key: string, holdMs: number): Promise<Claim | null> {
         const holder = `${hostname()}:${process.pid}:${randomUUID()}`;
-        return this.repository.tryAcquire(key, holder, holdMs, holdMs);
+        // A hold of 0 would be expired the moment it is taken.
+        const hold = holdMs > 0 ? holdMs : this.leaseMs;
+        if (!(await this.repository.tryAcquire(key, holder, hold, hold))) {
+            return null;
+        }
+        return { release: () => this.repository.release(key, holder) };
     }
 
     /**
