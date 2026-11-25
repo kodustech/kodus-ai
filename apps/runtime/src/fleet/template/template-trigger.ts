@@ -92,7 +92,11 @@ export class TemplateBuildTrigger {
         // Only what the environment's active default-branch setup baked can be templated.
         if (!rec || rec.organizationId !== organizationId || rec.state !== 'active' || rec.refSource !== 'default_branch') return;
         const fingerprint = bakeFingerprintOf(rec);
-        if (!fingerprint) return;
+        if (!fingerprint) {
+            // Said, not silent: an environment with no bake to template builds every Run host from the cell base.
+            this.d.log?.('template.skipped', { environmentId, poolId, reason: 'no_bake_fingerprint' });
+            return;
+        }
         const found = await this.d.store.find(organizationId, environmentId, poolId, fingerprint);
         // Ready on the pool's base now: nothing to build. Ready on another base holds the old cell, and is built again.
         if (found?.state === 'ready' && found.cellBase === (cellBaseOf(pool.hostClass) ?? '')) return;

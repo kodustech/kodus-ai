@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+
 import type { EnvironmentSetupRecord } from '@libs/runtime/run';
 import { boundKeyOfTemplate } from '@libs/runtime/placement/candidate-pools';
 
@@ -20,10 +22,17 @@ export const templateSetupCommandKey = (organizationId: string, environmentId: s
  * cell's image id. The setup records them as `sha256:<hex>`; the template name takes bare hex, so the prefix goes, and a
  * value that is not a digest (an image tag such as `latest`) is no fingerprint.
  */
-export function bakeFingerprintOf(rec: Pick<EnvironmentSetupRecord, 'bakeRefsDigest' | 'imageId'>): string | null {
+export function bakeFingerprintOf(rec: Pick<EnvironmentSetupRecord, 'bakeRefsDigest' | 'imageId'> & Partial<Pick<EnvironmentSetupRecord, 'sha' | 'recipe'>>): string | null {
     for (const v of [rec.bakeRefsDigest, rec.imageId]) {
         const hex = v?.replace(/^sha256:/, '');
         if (hex && /^[0-9a-f]{16,64}$/.test(hex)) return hex;
+    }
+    // A setup of one repository bakes by its commit alone (setupRefsDigest is a multi-repository key), and its image id
+    // is a tag: the commit and the recipe it booted name that bake. Without this no environment of one repository ever
+    // got a template, and every Run and suite shard of it built from the cell base (kr-mono on dev).
+    const recipe = rec.recipe?.digest?.replace(/^sha256:/, '');
+    if (rec.imageId && rec.sha && /^[0-9a-f]{40,64}$/.test(rec.sha) && recipe && /^[0-9a-f]{16,64}$/.test(recipe)) {
+        return createHash('sha256').update(`${rec.sha}\0${recipe}`).digest('hex');
     }
     return null;
 }

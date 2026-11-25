@@ -33,6 +33,19 @@ describe('reading how the template host\'s setup ended (setup record)', () => {
         expect(bakeFingerprintOf({ bakeRefsDigest: undefined, imageId: 'latest' })).toBeNull();
         expect(bakeFingerprintOf({ bakeRefsDigest: undefined, imageId: `sha256:${'c'.repeat(64)}` })).toBe('c'.repeat(64));
     });
+    // kr-mono on dev: an environment of one repository records no refs digest and the image tag `latest`, so it had no
+    // fingerprint and never got a template.
+    it('names the bake of a setup of one repository by its commit and recipe', () => {
+        const one = { bakeRefsDigest: undefined, imageId: 'latest', sha: 'a'.repeat(40), recipe: { path: '.kodus/workspace.yaml', sha: 'a'.repeat(40), state: 'found', digest: `sha256:${'d'.repeat(64)}` } } as const;
+        const fp = bakeFingerprintOf(one);
+        expect(fp).toMatch(/^[0-9a-f]{64}$/);
+        // The same commit and recipe, the same bake; another commit or recipe, another one.
+        expect(bakeFingerprintOf({ ...one })).toBe(fp);
+        expect(bakeFingerprintOf({ ...one, sha: 'b'.repeat(40) })).not.toBe(fp);
+        expect(bakeFingerprintOf({ ...one, recipe: { ...one.recipe, digest: `sha256:${'e'.repeat(64)}` } })).not.toBe(fp);
+        // Not baked (no image id): no fingerprint.
+        expect(bakeFingerprintOf({ ...one, imageId: undefined })).toBeNull();
+    });
     it('is done with the bare hex fingerprint when the template setup recorded a sha256: digest', async () => {
         expect(await probe(rec({ bakeRefsDigest: `sha256:${FP}` })).read(req)).toEqual({ state: 'done', fingerprint: FP, ref: 'default_branch' });
     });
