@@ -13,9 +13,14 @@ import {
 } from '@libs/llm/override-reachability';
 import { LLM_ERROR_TAG, LLM_SUCCESS_TAG } from '@libs/llm/log-tags';
 import {
+    addressRefusal,
+    ALLOWED_PRIVATE_HOSTS_ENV,
     ipLiteral,
-    isPrivateOrReservedIp,
+    isAllowedPrivateHostName,
+    isMetadataAddress,
+    urlPort,
 } from '@libs/llm/gateway-address-guard';
+import { environment } from '@libs/ee/configs/environment';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { encrypt } from '@libs/common/utils/crypto';
 import { validateModelTuning } from '@libs/llm/validate-model-tuning';
@@ -26,7 +31,12 @@ import {
 } from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';
-import { BadRequestException, Injectable, Optional, Inject } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    Optional,
+    Inject,
+} from '@nestjs/common';
 import axios, { AxiosError } from 'axios';
 import { lookup } from 'dns/promises';
 
@@ -58,6 +68,11 @@ function assertSafeRegion(region: string): void {
  * This vouches only for what the host resolves to NOW. A review call re-checks
  * the address when it connects (`gatewayGuardedFetch`, applied in
  * `buildModelFromSlot`), so a host whose answer changes later is refused then.
+ *
+ * A self-hosted operator can allow its private gateways
+ * (`API_ALLOWED_PRIVATE_HOSTS`, #2381); a host it names may also be
+ * reached over plain http, since a gateway inside the network rarely has a
+ * certificate. Metadata and link-local addresses stay refused regardless.
  */
 export async function assertSafeOpenAICompatibleUrl(
     rawUrl: string,
@@ -68,7 +83,11 @@ export async function assertSafeOpenAICompatibleUrl(
     } catch {
         throw new BadRequestException('baseURL is not a valid URL.');
     }
-    if (parsed.protocol !== 'https:') {
+    const port = urlPort(parsed);
+    const operatorNamedHost =
+        parsed.protocol === 'http:' &&
+        isAllowedPrivateHostName(parsed.hostname, port);
+    if (parsed.protocol !== 'https:' && !operatorNamedHost) {
         throw new BadRequestException(
             'baseURL must use https:// for security.',
         );
@@ -98,13 +117,21 @@ export async function assertSafeOpenAICompatibleUrl(
             `Couldn't resolve host "${parsed.hostname}". Check the base URL.`,
         );
     }
+    const refuses = addressRefusal(parsed.hostname, port);
     for (const { address } of addresses) {
-        if (isPrivateOrReservedIp(address)) {
+        if (refuses(address)) {
             throw new BadRequestException(
-                `baseURL resolves to a private or reserved address (${address}). Point it at a public provider endpoint.`,
+                `baseURL resolves to a private or reserved address (${address}). Point it at a public provider endpoint.${allowanceHint(address)}`,
             );
         }
     }
+}
+
+/** On a self-hosted install, where the gateway may live on the private
+ *  network, say who can allow it. Cloud has no such setting to point at. */
+function allowanceHint(address: string): string {
+    if (environment.API_CLOUD_MODE || isMetadataAddress(address)) return '';
+    return ` On a self-hosted install, the operator can allow a private gateway with ${ALLOWED_PRIVATE_HOSTS_ENV}.`;
 }
 
 /** A 404 whose message says the requested MODEL is missing (OpenAI's
@@ -146,7 +173,7 @@ export function notFoundAdvice(providerMessage: string | undefined): string {
         said.includes('allowed providers') ||
         (said.includes('no allowed') && said.includes('provider'))
     ) {
-        return "Your provider account allows no upstream that serves this model, so the request has nowhere to route. Allow one of the providers the model is served by, or choose a model your current ones serve — this is a routing setting on the provider account, not a problem with the key.";
+        return 'Your provider account allows no upstream that serves this model, so the request has nowhere to route. Allow one of the providers the model is served by, or choose a model your current ones serve — this is a routing setting on the provider account, not a problem with the key.';
     }
 
     if (said.trim()) {
@@ -264,11 +291,14 @@ export class TestByokConnectionUseCase {
                 !(await this.kodusGate?.isEnabledFor(organizationId))
             ) {
                 this.logger.warn({
-                    message: 'Refused to probe the Kodus provider: org outside the private alpha',
+                    message:
+                        'Refused to probe the Kodus provider: org outside the private alpha',
                     context: TestByokConnectionUseCase.name,
                     metadata: { organizationId, provider: input?.provider },
                 });
-                throw new BadRequestException(KODUS_PROVIDER_NOT_ENABLED_MESSAGE);
+                throw new BadRequestException(
+                    KODUS_PROVIDER_NOT_ENABLED_MESSAGE,
+                );
             }
             const result = await this.runTest(input);
             this.logTestOutcome(input, result);

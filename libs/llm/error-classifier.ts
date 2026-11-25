@@ -495,6 +495,13 @@ function looksLikeModelAccessDenied(lower: string): boolean {
 }
 
 function matchByMessage(lower: string): LlmErrorCategory {
+    // The gateway address check refused to connect (gateway-address-guard.ts):
+    // the base URL is the org's to fix, and retrying or cascading to another
+    // model would not change where it points. Ahead of "fetch failed", which
+    // the refusal is wrapped in and which reads as transient.
+    if (lower.includes('resolves to a private or reserved address')) {
+        return LlmErrorCategory.CONFIG_INVALID;
+    }
     // Same vocabulary the 429 branch uses -- see looksLikeQuota.
     if (looksLikeQuota(lower)) {
         return LlmErrorCategory.QUOTA_EXCEEDED;
@@ -631,6 +638,8 @@ function buildFriendlyMessage(
             return `Transient error reaching the provider${providerLabel}. Try again.`;
         case LlmErrorCategory.REQUEST_REJECTED:
             return `The provider${providerLabel} refused the request for this model.`;
+        case LlmErrorCategory.CONFIG_INVALID:
+            return `The base URL of this model${providerLabel} resolves to a private or reserved address, so the call was not sent. Point it at a public provider endpoint.`;
         default:
             return `Unexpected error while running the code review${providerLabel}.`;
     }

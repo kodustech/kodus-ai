@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import { integrationDispatcher } from '@libs/llm/gateway-address-guard';
 import {
     createRequesterFn,
     getMatchingRateLimiter,
@@ -256,16 +257,19 @@ export const gitlabRequestHandler: RequestHandlerFn = async (
         if (remaining > 0) {
             throw new GitlabRateLimitedError(remaining, url.origin, true);
         }
-        const response = await (
-            agent
-                ? fetch(request, { dispatcher: agent } as RequestInit)
-                : fetch(request)
-        ).catch((e) => {
-            if (e.name === 'TimeoutError' || e.name === 'AbortError') {
-                throw new GitbeakerTimeoutError('Query timeout was reached');
-            }
-            throw e;
-        });
+        const response =
+            await // Self-managed hosts are the org's: every connection is judged by
+            // what the host resolves to then (gateway-address-guard.ts).
+            fetch(request, {
+                dispatcher: agent ?? integrationDispatcher('Git server'),
+            } as RequestInit).catch((e) => {
+                if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+                    throw new GitbeakerTimeoutError(
+                        'Query timeout was reached',
+                    );
+                }
+                throw e;
+            });
 
         if (response.ok) return parseResponse(response, asStream);
 

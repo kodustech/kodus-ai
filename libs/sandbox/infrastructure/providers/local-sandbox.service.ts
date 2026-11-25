@@ -3,6 +3,7 @@ import {
     type RepositoryGrepOptions,
 } from '@libs/common/utils/repository-grep';
 import { buildGitAuthHeader } from './git-auth-header';
+import { pinnedGitFetchConfig } from '@libs/llm/gateway-address-guard';
 import { createLogger } from '@libs/core/log/logger';
 import { PlatformType } from '@libs/core/domain/enums';
 import { Injectable } from '@nestjs/common';
@@ -212,10 +213,21 @@ export class LocalSandboxService implements ISandboxProvider {
             // Pass auth header via env vars instead of -c args
             // to keep the token out of ps/proc/cmdline
             const fetchEnv: Record<string, string> = sandboxEnv() as any;
-            if (authToken) {
-                fetchEnv.GIT_CONFIG_COUNT = '1';
-                fetchEnv.GIT_CONFIG_KEY_0 = 'http.extraHeader';
-                fetchEnv.GIT_CONFIG_VALUE_0 = authHeader;
+            // The git host can be the org's (a self-managed server): resolved
+            // and judged here, then pinned, so git dials the address that was
+            // judged and follows no redirect (gateway-address-guard.ts).
+            const gitConfig: Array<[string, string]> = [
+                ...(await pinnedGitFetchConfig(cloneUrl)),
+                ...(authToken
+                    ? [['http.extraHeader', authHeader] as [string, string]]
+                    : []),
+            ];
+            if (gitConfig.length) {
+                fetchEnv.GIT_CONFIG_COUNT = String(gitConfig.length);
+                gitConfig.forEach(([key, value], i) => {
+                    fetchEnv[`GIT_CONFIG_KEY_${i}`] = key;
+                    fetchEnv[`GIT_CONFIG_VALUE_${i}`] = value;
+                });
             }
 
             await execFileAsync(

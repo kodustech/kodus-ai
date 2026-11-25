@@ -16,7 +16,11 @@ import {
     createGatewayDispatcher,
     gatewayGuardedFetch,
     gatewayLookup,
+    addressRefusal,
+    isAllowedPrivateHostName,
+    isMetadataAddress,
     isPrivateOrReservedIp,
+    parseAllowedPrivateHosts,
 } from './gateway-address-guard';
 
 type Answer = { address: string; family: number };
@@ -265,20 +269,214 @@ describe('isPrivateOrReservedIp', () => {
         '2002:0a00:0001::',
         '2001:0:4136:e378:8000:63bf:3fff:fdd2',
         'not-an-address',
+        // Reserved IPv4 ranges outside RFC 1918 (Kody, #2709).
+        '192.0.0.8',
+        '198.18.0.1',
+        '198.19.255.255',
+        '224.0.0.1',
+        '239.255.255.250',
+        '240.0.0.1',
+        '255.255.255.255',
+        '::ffff:198.18.0.1',
+        // Reserved IPv6 ranges.
+        '100::1',
+        '2001:10::1',
     ])('refuses %s', (ip) => {
         expect(isPrivateOrReservedIp(ip)).toBe(true);
     });
 
     it.each([
         '8.8.8.8',
+        '1.1.1.1',
         '203.0.113.10',
-        '2606:4700:4700::1111',
         '2001:db8::1',
+        '198.20.0.1',
+        '223.255.255.255',
+        '2606:4700:4700::1111',
+        '2a00:1450:4001::1',
+        '2001:200::1',
+        '3ffe::1',
         '[2606:4700:4700::1111]',
         '::ffff:8.8.8.8',
         '64:ff9b::808:808',
         '2002:808:808::1',
     ])('allows %s', (ip) => {
         expect(isPrivateOrReservedIp(ip)).toBe(false);
+    });
+});
+
+describe('the operator allowance (API_ALLOWED_PRIVATE_HOSTS, #2381)', () => {
+    it('reads names, addresses, ports and ranges, and reports what it cannot read', () => {
+        const { allowances, invalid } = parseAllowedPrivateHosts(
+            'llm.internal:4000, 10.0.0.5 [fd00::5]:8080 10.1.0.0/16,fd00:1::/32 GW.Corp. ' +
+                'bad_host 10.0.0.0/33 host:99999 :80',
+        );
+        expect(allowances).toHaveLength(6);
+        expect(invalid).toEqual([
+            'bad_host',
+            '10.0.0.0/33',
+            'host:99999',
+            ':80',
+        ]);
+    });
+
+    it('with nothing set, refuses every private or reserved address', () => {
+        const refuses = addressRefusal('llm.internal', 443, '');
+        expect(refuses('10.0.0.5')).toBe(true);
+        expect(refuses('127.0.0.1')).toBe(true);
+        expect(refuses('8.8.8.8')).toBe(false);
+    });
+
+    it('a named host opens what it resolves to, on its port only', () => {
+        const env = 'llm.internal:4000';
+        expect(addressRefusal('llm.internal', 4000, env)('10.0.0.5')).toBe(
+            false,
+        );
+        expect(addressRefusal('LLM.internal.', 4000, env)('10.0.0.5')).toBe(
+            false,
+        );
+        expect(addressRefusal('llm.internal', 4001, env)('10.0.0.5')).toBe(
+            true,
+        );
+        expect(addressRefusal('other.internal', 4000, env)('10.0.0.5')).toBe(
+            true,
+        );
+    });
+
+    it('a named host without a port opens it on any port', () => {
+        expect(
+            addressRefusal('llm.internal', 8080, 'llm.internal')('10.0.0.5'),
+        ).toBe(false);
+    });
+
+    it('an address or range opens that address whatever name reached it', () => {
+        const env = '10.1.0.0/16, 127.0.0.1:4000, fd00:1::/32';
+        expect(addressRefusal('a.internal', 443, env)('10.1.200.3')).toBe(
+            false,
+        );
+        expect(
+            addressRefusal('a.internal', 443, env)('::ffff:10.1.200.3'),
+        ).toBe(false);
+        expect(addressRefusal('a.internal', 443, env)('10.2.0.1')).toBe(true);
+        expect(addressRefusal('localhost', 4000, env)('127.0.0.1')).toBe(false);
+        expect(addressRefusal('localhost', 4001, env)('127.0.0.1')).toBe(true);
+        expect(addressRefusal('b.internal', 443, env)('fd00:1:2::3')).toBe(
+            false,
+        );
+        expect(addressRefusal('b.internal', 443, env)('fd00:2::3')).toBe(true);
+    });
+
+    it.each([
+        '169.254.169.254',
+        '::ffff:169.254.169.254',
+        '64:ff9b::a9fe:a9fe',
+        '169.254.170.2',
+        '100.100.100.200',
+        'fd00:ec2::254',
+        'fe80::1',
+    ])(
+        'never opens the metadata address %s, even when its range is allowed',
+        (ip) => {
+            const env =
+                '169.254.0.0/16, 100.64.0.0/10, fd00::/8, fe80::/10, meta.internal';
+            expect(isMetadataAddress(ip)).toBe(true);
+            expect(addressRefusal('meta.internal', 443, env)(ip)).toBe(true);
+        },
+    );
+
+    it('a public address stays open whatever is listed', () => {
+        expect(
+            addressRefusal('api.example.com', 443, '10.0.0.0/8')('8.8.8.8'),
+        ).toBe(false);
+    });
+
+    it('plain http is for a host the operator named, not for an address it may resolve to', () => {
+        expect(
+            isAllowedPrivateHostName('llm.internal', 80, 'llm.internal:80'),
+        ).toBe(true);
+        expect(isAllowedPrivateHostName('10.0.0.5', 80, '10.0.0.5')).toBe(true);
+        expect(isAllowedPrivateHostName('llm.internal', 80, '10.0.0.0/8')).toBe(
+            false,
+        );
+        expect(
+            isAllowedPrivateHostName('llm.internal', 81, 'llm.internal:80'),
+        ).toBe(false);
+    });
+});
+
+describe('the operator allowance at call time', () => {
+    let gateway: Server;
+    let internal: Server;
+    let gatewayPort: number;
+    let internalPort: number;
+    let reached: string[];
+    const saved = process.env.API_ALLOWED_PRIVATE_HOSTS;
+
+    beforeAll(async () => {
+        internal = createServer((req, res) => {
+            reached.push(`internal ${req.method} ${req.url}`);
+            res.end('ami-id');
+        });
+        gateway = createServer((req, res) => {
+            reached.push(`gateway ${req.method} ${req.url}`);
+            if (req.url?.includes('redirect')) {
+                res.statusCode = 302;
+                res.setHeader(
+                    'location',
+                    `http://127.0.0.1:${internalPort}/latest/meta-data/`,
+                );
+                res.end();
+                return;
+            }
+            res.end('pong');
+        });
+        await new Promise<void>((r) => internal.listen(0, '127.0.0.1', r));
+        await new Promise<void>((r) => gateway.listen(0, '127.0.0.1', r));
+        internalPort = (internal.address() as AddressInfo).port;
+        gatewayPort = (gateway.address() as AddressInfo).port;
+    });
+
+    afterAll(async () => {
+        if (saved === undefined) delete process.env.API_ALLOWED_PRIVATE_HOSTS;
+        else process.env.API_ALLOWED_PRIVATE_HOSTS = saved;
+        await new Promise<void>((r) => internal.close(() => r()));
+        await new Promise<void>((r) => gateway.close(() => r()));
+    });
+
+    beforeEach(() => {
+        reached = [];
+    });
+
+    const call = (url: string) => {
+        const { resolve } = scriptedResolver([v4('127.0.0.1')]);
+        const dispatcher = createGatewayDispatcher({ resolve });
+        return gatewayGuardedFetch(
+            undefined,
+            dispatcher,
+        )(url).then(
+            async (res) => ({ text: await res.text(), err: undefined as any }),
+            (err) => ({ text: undefined, err }),
+        );
+    };
+
+    it('reaches an allowed gateway, read from the environment at call time', async () => {
+        process.env.API_ALLOWED_PRIVATE_HOSTS = `llm.internal:${gatewayPort}`;
+        const out = await call(`http://llm.internal:${gatewayPort}/v1/models`);
+        expect(out.text).toBe('pong');
+        expect(reached).toEqual(['gateway GET /v1/models']);
+    });
+
+    it('refuses the same host on a port the operator did not name', async () => {
+        process.env.API_ALLOWED_PRIVATE_HOSTS = `llm.internal:${gatewayPort + 1}`;
+        const out = await call(`http://llm.internal:${gatewayPort}/v1/models`);
+        expectRefused(out.err);
+        expect(reached).toEqual([]);
+    });
+
+    it('an allowed gateway cannot redirect the call onto an address it was not allowed', async () => {
+        process.env.API_ALLOWED_PRIVATE_HOSTS = `llm.internal:${gatewayPort}`;
+        const out = await call(`http://llm.internal:${gatewayPort}/redirect`);
+        expectRefused(out.err);
+        expect(reached).toEqual(['gateway GET /redirect']);
     });
 });

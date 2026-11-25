@@ -170,24 +170,93 @@ describe('impact: what passed before still passes, what was refused still is', (
         ).rejects.toThrow(/Couldn't resolve host/);
     });
 
-    // No operator allowance exists yet (#2381 is open): a private gateway is
-    // refused on a self-hosted install exactly as on cloud.
-    it.each(['true', 'false'])(
-        'API_CLOUD_MODE=%s: a private gateway is refused the same way',
-        async (cloud) => {
-            const saved = process.env.API_CLOUD_MODE;
-            process.env.API_CLOUD_MODE = cloud;
-            try {
-                answering('10.20.30.40');
-                await expect(
-                    assertSafeOpenAICompatibleUrl(GATEWAY),
-                ).rejects.toThrow(
-                    'baseURL resolves to a private or reserved address (10.20.30.40)',
-                );
-            } finally {
-                if (saved === undefined) delete process.env.API_CLOUD_MODE;
-                else process.env.API_CLOUD_MODE = saved;
-            }
+    it('without an operator allowance, a private gateway is refused', async () => {
+        answering('10.20.30.40');
+        await expect(assertSafeOpenAICompatibleUrl(GATEWAY)).rejects.toThrow(
+            'baseURL resolves to a private or reserved address (10.20.30.40)',
+        );
+    });
+});
+
+describe('the self-hosted operator allows its private gateways (#2381)', () => {
+    const saved = process.env.API_ALLOWED_PRIVATE_HOSTS;
+    const allow = (value: string) => {
+        process.env.API_ALLOWED_PRIVATE_HOSTS = value;
+    };
+    afterEach(() => {
+        if (saved === undefined) delete process.env.API_ALLOWED_PRIVATE_HOSTS;
+        else process.env.API_ALLOWED_PRIVATE_HOSTS = saved;
+    });
+
+    it('a gateway the operator named saves, over https', async () => {
+        allow('gateway.example.test');
+        answering('10.20.30.40');
+        await expect(
+            assertSafeOpenAICompatibleUrl(GATEWAY),
+        ).resolves.toBeUndefined();
+    });
+
+    it('a gateway the operator named saves over plain http, on its port', async () => {
+        allow('gateway.example.test:4000');
+        answering('10.20.30.40');
+        await expect(
+            assertSafeOpenAICompatibleUrl(
+                'http://gateway.example.test:4000/v1',
+            ),
+        ).resolves.toBeUndefined();
+        await expect(
+            assertSafeOpenAICompatibleUrl(
+                'http://gateway.example.test:4001/v1',
+            ),
+        ).rejects.toThrow(/must use https/);
+    });
+
+    it('an allowed range opens its addresses over https, not plain http', async () => {
+        allow('10.0.0.0/8');
+        answering('10.20.30.40');
+        await expect(
+            assertSafeOpenAICompatibleUrl(GATEWAY),
+        ).resolves.toBeUndefined();
+        await expect(
+            assertSafeOpenAICompatibleUrl('http://gateway.example.test/v1'),
+        ).rejects.toThrow(/must use https/);
+    });
+
+    it('an address outside the allowance is refused, and says who can allow it', async () => {
+        allow('10.0.0.0/8');
+        answering('192.168.1.5');
+        await expect(assertSafeOpenAICompatibleUrl(GATEWAY)).rejects.toThrow(
+            /private or reserved address \(192\.168\.1\.5\).*API_ALLOWED_PRIVATE_HOSTS/,
+        );
+    });
+
+    it.each([
+        '169.254.169.254',
+        '::ffff:169.254.169.254',
+        '100.100.100.200',
+        'fd00:ec2::254',
+    ])(
+        'the metadata address %s stays refused even when its range and host are allowed',
+        async (address) => {
+            allow(
+                'gateway.example.test, 169.254.0.0/16, 100.64.0.0/10, fd00::/8',
+            );
+            answering(address);
+            const err = await assertSafeOpenAICompatibleUrl(GATEWAY).catch(
+                (e) => e,
+            );
+            expect(String(err?.message)).toMatch(/private or reserved address/);
+            expect(String(err?.message)).not.toMatch(
+                /API_ALLOWED_PRIVATE_HOSTS/,
+            );
         },
     );
+
+    it('a public gateway is not affected by the allowance', async () => {
+        allow('10.0.0.0/8');
+        answering('8.8.8.8');
+        await expect(
+            assertSafeOpenAICompatibleUrl(GATEWAY),
+        ).resolves.toBeUndefined();
+    });
 });

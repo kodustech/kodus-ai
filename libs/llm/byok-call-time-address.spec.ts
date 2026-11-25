@@ -15,6 +15,7 @@ import type { AddressInfo } from 'node:net';
 import * as dns from 'dns';
 import { generateText } from 'ai';
 import { REGISTRY } from '@libs/llm/providers';
+import { classifyLLMError, LlmErrorCategory } from '@libs/llm/error-classifier';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { buildModelFromSlot } from './byok-to-vercel';
 
@@ -137,6 +138,63 @@ describe('a review call re-checks the BYOK gateway address when it connects', ()
 
             expect(requests).toEqual([]);
             expect(messages(error)).toMatch(/private or reserved address/);
+        },
+    );
+});
+
+describe("the refusal reads as the org's configuration, not a transient failure", () => {
+    it('is CONFIG_INVALID (no retry, no fallback) and says why', async () => {
+        const slot = {
+            provider: 'openai_compatible',
+            apiKey: 'sk-test',
+            model: 'test-model',
+            baseURL: `http://localhost:${port}/v1`,
+        } as unknown as NormalizedModel;
+        const error = await generateText({
+            model: buildModelFromSlot(slot) as any,
+            prompt: 'ping',
+            maxRetries: 0,
+        }).then(
+            () => undefined,
+            (e: unknown) => e,
+        );
+        const info = classifyLLMError(error);
+        expect(info.category).toBe(LlmErrorCategory.CONFIG_INVALID);
+        expect(info.friendlyMessage).toMatch(/private or reserved address/);
+    });
+});
+
+describe('a gateway the self-hosted operator allowed runs the review call (#2381)', () => {
+    const saved = process.env.API_ALLOWED_PRIVATE_HOSTS;
+    afterEach(() => {
+        if (saved === undefined) delete process.env.API_ALLOWED_PRIVATE_HOSTS;
+        else process.env.API_ALLOWED_PRIVATE_HOSTS = saved;
+    });
+
+    // Every provider that takes a base URL: the call reaches the gateway. The
+    // local server answers chat completions only, so a provider on another
+    // protocol (native OpenAI's Responses API, Anthropic, Gemini) gets a reply
+    // it cannot parse; what is checked here is that it was not refused.
+    it.each(USER_BASE_URL_PROVIDERS)(
+        '%s: an allowed host:port is reached',
+        async (provider) => {
+            process.env.API_ALLOWED_PRIVATE_HOSTS = `localhost:${port}`;
+            const slot = {
+                provider,
+                apiKey: 'sk-test',
+                model: 'test-model',
+                baseURL: `http://localhost:${port}/v1`,
+            } as unknown as NormalizedModel;
+            const error = await generateText({
+                model: buildModelFromSlot(slot) as any,
+                prompt: 'ping',
+                maxRetries: 0,
+            }).then(
+                () => undefined,
+                (e: unknown) => e,
+            );
+            expect(requests).toHaveLength(1);
+            expect(messages(error)).not.toMatch(/private or reserved address/);
         },
     );
 });
