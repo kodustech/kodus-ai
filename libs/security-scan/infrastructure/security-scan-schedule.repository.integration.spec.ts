@@ -101,7 +101,7 @@ const TEST_DB = 'security_scan_schedules_it';
             await schedules.save('org-1', repository, {
                 ...settings,
                 cadence: 'weekly',
-                exportTo: { integrationId: 'int-1', minSeverity: 'high' },
+                modelId: 'model-1',
             });
             const next = new Date('2026-12-01T03:00:00.000Z');
 
@@ -109,7 +109,7 @@ const TEST_DB = 'security_scan_schedules_it';
             expect(await stored('org-1', 'repo-1')).toMatchObject({
                 enabled: false,
                 cadence: 'weekly',
-                exportTo: { integrationId: 'int-1', minSeverity: 'high' },
+                modelId: 'model-1',
             });
 
             const resumed = await schedules.setEnabled(

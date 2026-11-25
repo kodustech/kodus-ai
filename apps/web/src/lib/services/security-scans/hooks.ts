@@ -1,14 +1,9 @@
 import { useFetch } from "src/core/utils/reactQuery";
 import { safeArray } from "src/core/utils/safe-array";
 
-import {
-    exportDestinationsPath,
-    securityScanSchedulesPath,
-    securityScansPath,
-} from "./fetch";
+import { securityScanSchedulesPath, securityScansPath } from "./fetch";
 import {
     isSecurityScanActive,
-    type ExportDestination,
     type SecurityScan,
     type SecurityScanSchedule,
 } from "./types";
@@ -41,21 +36,6 @@ export const useSecurityScanSchedules = () => {
         undefined,
         true,
         { placeholderData: (prev) => prev },
-    );
-
-    return { ...query, data: safeArray(data) };
-};
-
-/** The organization's plugins a finding can be filed through. */
-export const useExportDestinations = (
-    teamId: string | undefined,
-    enabled = true,
-) => {
-    const { data, ...query } = useFetch<ExportDestination[]>(
-        exportDestinationsPath(),
-        { params: { teamId } },
-        enabled && !!teamId,
-        { staleTime: 5 * 60 * 1000, retry: false },
     );
 
     return { ...query, data: safeArray(data) };

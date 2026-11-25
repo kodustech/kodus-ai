@@ -20,7 +20,6 @@ import { IIssuesService } from '@libs/issues/domain/contracts/issues.service.con
 import { IssuesEntity } from '@libs/issues/domain/entities/issues.entity';
 import {
     IIssue,
-    IIssueExport,
 } from '@libs/issues/domain/interfaces/issues.interface';
 import { IContributingSuggestion } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
@@ -182,24 +181,6 @@ export class IssuesService implements IIssuesService {
 
     async foldScanIssueInto(params: FoldScanIssueParams): Promise<boolean> {
         return this.issuesRepository.foldScanIssueInto(params);
-    }
-
-    async recordIssueExport(
-        organizationId: string,
-        issueId: string,
-        exported: IIssueExport,
-    ): Promise<void> {
-        return this.issuesRepository.recordIssueExport(
-            organizationId,
-            issueId,
-            exported,
-        );
-    }
-
-    async findScanIssuesToExport(
-        params: Parameters<IIssuesRepository['findScanIssuesToExport']>[0],
-    ): Promise<IssuesEntity[]> {
-        return this.issuesRepository.findScanIssuesToExport(params);
     }
 
     async markScanIssuesConsolidated(

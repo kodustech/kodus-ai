@@ -6,7 +6,6 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IssuesEntity } from '../entities/issues.entity';
 import {
     IIssue,
-    IIssueExport,
     IIssueOccurrence,
 } from '../interfaces/issues.interface';
 import { IContributingSuggestion } from '../interfaces/kodyIssuesManagement.interface';
@@ -227,29 +226,6 @@ export interface IIssuesRepository {
      * becomes an occurrence there, and it is dismissed as a duplicate.
      */
     foldScanIssueInto(params: FoldScanIssueParams): Promise<boolean>;
-
-    /** Records where an issue was filed through a plugin. */
-    recordIssueExport(
-        organizationId: string,
-        issueId: string,
-        exported: IIssueExport,
-    ): Promise<void>;
-
-    /**
-     * Open scan issues of a repository opened between `since` and `until`
-     * (one scan runs on a repository at a time: that scan's new issues), at
-     * or above a severity, not yet filed through this plugin: what a
-     * schedule exports when its scan ends.
-     */
-    findScanIssuesToExport(
-        params: ScanRepositoryScope & {
-            since: string;
-            until: string;
-            severities: string[];
-            integrationId: string;
-            limit: number;
-        },
-    ): Promise<IssuesEntity[]>;
 
     /** Records that these issues were compared with the others just now. */
     markScanIssuesConsolidated(

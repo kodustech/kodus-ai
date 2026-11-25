@@ -74,8 +74,6 @@ export interface CustomAgentMcpServer extends MCPServerConfig {
 
 export interface CustomAgentMcpToolset {
     tools: AgentTool[];
-    /** Exposed names of the offered tools that are not read-only (an export's create tools). */
-    creates: string[];
     /** Runs a tool by its exposed name; refuses anything outside `tools`. */
     call(name: string, args: unknown, ctx?: ToolContext): Promise<ToolResult>;
     /** Servers that were selected but could not be listed. */
@@ -109,31 +107,6 @@ export function isReadOnlyMcpTool(
         return false;
     }
     return words.some((w) => READ_VERBS.test(w));
-}
-
-/** Verbs of a tool that only adds something new (a ticket, a message). */
-const CREATE_VERBS =
-    /^(create|add|post|send|open|submit|file|report|new|log|comment)(s|es|d|ed|ing)?$/;
-
-/**
- * A tool an export may use: a read-only one, or one that only adds something
- * new (create a ticket, post a message) and changes nothing that exists. A
- * server that annotates its tools must not mark it destructive; by name, it
- * carries a create verb and no other write verb (`create_or_update` is out).
- * Never an update, a close, a delete or a transition.
- */
-export function isReadOrCreateMcpTool(
-    tool: Pick<MCPToolRaw, 'name' | 'annotations'>,
-    serverMarksReadOnly: boolean,
-): boolean {
-    if (isReadOnlyMcpTool(tool, serverMarksReadOnly)) return true;
-    if (tool.annotations?.destructiveHint === true) return false;
-    const words = nameWords(tool.name);
-    const writes = words.filter((w) => WRITE_VERBS.test(w));
-    return (
-        words.some((w) => CREATE_VERBS.test(w)) &&
-        writes.every((w) => CREATE_VERBS.test(w))
-    );
 }
 
 function serverMarksReadOnly(tools: Array<Pick<MCPToolRaw, 'annotations'>>) {
@@ -253,14 +226,7 @@ export async function buildCustomAgentMcpTools(params: {
     cache?: RunToolCache;
     /** The review's ids (organization, team, repository, PR, agent) for the logs. */
     logContext?: Record<string, unknown>;
-    /**
-     * Which listed tools are offered. A review offers read-only ones
-     * (isReadOnlyMcpTool, the default); an export also those that only
-     * create (isReadOrCreateMcpTool).
-     */
-    allow?: typeof isReadOnlyMcpTool;
 }): Promise<CustomAgentMcpToolset> {
-    const allow = params.allow ?? isReadOnlyMcpTool;
     const logContext = params.logContext ?? {};
     const cache = params.cache ?? new RunToolCache();
     const createAdapter = params.createAdapter ?? createMCPAdapter;
@@ -279,7 +245,6 @@ export async function buildCustomAgentMcpTools(params: {
         }
     >();
     const tools: AgentTool[] = [];
-    const creates: string[] = [];
     const adapters: Array<{
         adapter: MCPAdapter;
         server: string;
@@ -357,11 +322,10 @@ export async function buildCustomAgentMcpTools(params: {
         for (const raw of listed) {
             if (!wantsAll && !wanted.has(raw.name)) continue;
             if (connectionAllows && !connectionAllows.has(raw.name)) continue;
-            if (!allow(raw, marks)) continue;
+            if (!isReadOnlyMcpTool(raw, marks)) continue;
 
             const exposed = mcpToolExposedName(server.name, raw.name);
             if (allowed.has(exposed)) continue;
-            if (!isReadOnlyMcpTool(raw, marks)) creates.push(exposed);
             allowed.set(exposed, {
                 adapter,
                 integrationId: selection.integrationId,
@@ -372,7 +336,7 @@ export async function buildCustomAgentMcpTools(params: {
             tools.push({
                 name: exposed,
                 description:
-                    `[${server.name}:${raw.name}] ${isReadOnlyMcpTool(raw, marks) ? 'read-only' : 'creates'}. ${raw.description ?? ''}`.trim(),
+                    `[${server.name}:${raw.name}] read-only. ${raw.description ?? ''}`.trim(),
                 inputSchema: withoutBoundArgs(
                     ((raw.inputSchema as JSONSchema) ?? {
                         type: 'object',
@@ -442,7 +406,6 @@ export async function buildCustomAgentMcpTools(params: {
 
     return {
         tools,
-        creates,
         call,
         unavailable,
         async close() {

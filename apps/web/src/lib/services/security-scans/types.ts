@@ -81,12 +81,6 @@ export type StartSecurityScanPayload = {
 
 export type ScanCadence = "daily" | "weekly";
 
-export type ScanExportTarget = {
-    integrationId: string;
-    destinationNote?: string;
-    minSeverity: "critical" | "high" | "medium" | "low";
-};
-
 export type SecurityScanSchedule = {
     uuid: string;
     teamId: string;
@@ -95,7 +89,6 @@ export type SecurityScanSchedule = {
     budget: SecurityScanBudget;
     mode: SecurityScanMode;
     modelId?: string;
-    exportTo?: ScanExportTarget;
     enabled: boolean;
     nextRunAt: string;
     lastRunAt?: string;
@@ -109,24 +102,8 @@ export type SaveScanSchedulePayload = {
     cadence: ScanCadence;
     mode?: SecurityScanMode;
     modelId?: string;
-    exportTo?: ScanExportTarget;
     enabled?: boolean;
 } & SecurityScanBudget;
-
-/** A plugin a finding can be filed through. */
-export type ExportDestination = {
-    integrationId: string;
-    name: string;
-    createTools: string[];
-};
-
-export type ExportResult = {
-    issueId: string;
-    status: "created" | "already" | "failed" | "skipped";
-    url?: string;
-    ticketId?: string;
-    error?: string;
-};
 
 export const isSecurityScanActive = (scan: Pick<SecurityScan, "status">) =>
     scan.status === "queued" || scan.status === "running";

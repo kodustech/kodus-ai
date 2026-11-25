@@ -179,8 +179,6 @@ export interface SecurityScanRecord {
     mode?: SecurityScanMode;
     /** The schedule that started it, when a schedule did. */
     scheduleId?: string;
-    /** When its schedule finished filing its new findings in a plugin. */
-    exportedAt?: string;
     requestedBy?: { userId?: string; email?: string };
     error?: string;
     startedAt?: string;

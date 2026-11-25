@@ -630,36 +630,3 @@ describe('buildCustomAgentMcpTools — repeated calls in one review run (#2172)'
         expect(two.executeTool).toHaveBeenCalledTimes(1);
     });
 });
-
-describe('isReadOrCreateMcpTool', () => {
-    const { isReadOrCreateMcpTool } = jest.requireActual('./custom-agent-mcp.tools');
-    it.each([
-        ['create_issue', true],
-        ['createJiraIssue', true],
-        ['chat_postMessage', true],
-        ['add_comment', true],
-        ['list_projects', true],
-        ['update_issue', false],
-        ['create_or_update_file', false],
-        ['delete_issue', false],
-        ['close_issue', false],
-        ['transition_issue', false],
-    ])('%s → %s by name', (name, ok) => {
-        expect(isReadOrCreateMcpTool({ name }, false)).toBe(ok);
-    });
-
-    it('keeps out a create tool its server marks destructive', () => {
-        expect(
-            isReadOrCreateMcpTool(
-                { name: 'create_issue', annotations: { readOnlyHint: false, destructiveHint: true } },
-                true,
-            ),
-        ).toBe(false);
-        expect(
-            isReadOrCreateMcpTool(
-                { name: 'create_issue', annotations: { readOnlyHint: false, destructiveHint: false } },
-                true,
-            ),
-        ).toBe(true);
-    });
-});

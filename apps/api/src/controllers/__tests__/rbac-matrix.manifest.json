@@ -1815,28 +1815,6 @@
     }
   },
   {
-    "key": "securityScans.controller.ts#exportDestinations",
-    "httpMethod": "GET",
-    "urlPath": "/security-scans/export-destinations",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "deny",
-      "repo_admin": "allow",
-      "contributor": "allow"
-    }
-  },
-  {
-    "key": "securityScans.controller.ts#exportIssues",
-    "httpMethod": "POST",
-    "urlPath": "/security-scans/issues/export",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "deny",
-      "repo_admin": "allow",
-      "contributor": "deny"
-    }
-  },
-  {
     "key": "securityScans.controller.ts#get",
     "httpMethod": "GET",
     "urlPath": "/security-scans/:id",

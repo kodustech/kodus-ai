@@ -94,12 +94,6 @@ export interface ISecurityScanRepository {
         limit: number,
     ): Promise<string[]>;
     /**
-     * Claims filing a finished scan's findings until `until`: only one caller
-     * (one cron run, one API instance) files them; true for that one. A
-     * claim that expired (its caller died) can be taken again.
-     */
-    claimExport(uuid: string, until: Date): Promise<boolean>;
-    /**
      * Marks as failed the organization's scans nothing has touched for their
      * state's window: the worker running them stopped, or the job waiting for
      * one was lost. Returns how many.
@@ -479,24 +473,6 @@ export class SecurityScanRepository implements ISecurityScanRepository {
         return doc ? toRecord(doc) : null;
     }
 
-    async claimExport(uuid: string, until: Date): Promise<boolean> {
-        const now = new Date();
-        const result = await this.model
-            .updateOne(
-                {
-                    _id: uuid,
-                    exportedAt: { $exists: false },
-                    $or: [
-                        { exportClaimedUntil: { $exists: false } },
-                        { exportClaimedUntil: { $lt: now } },
-                    ],
-                },
-                { $set: { exportClaimedUntil: until } },
-            )
-            .exec();
-        return (result?.modifiedCount ?? 0) > 0;
-    }
-
     async countActive(organizationId: string): Promise<number> {
         return this.model
             .countDocuments({ organizationId, status: { $in: ACTIVE } })
@@ -574,7 +550,6 @@ function toRecord(doc: any): SecurityScanRecord {
         ...(o.modelId ? { modelId: o.modelId } : {}),
         ...(o.mode ? { mode: o.mode } : {}),
         ...(o.scheduleId ? { scheduleId: o.scheduleId } : {}),
-        ...(o.exportedAt ? { exportedAt: o.exportedAt } : {}),
         requestedBy: o.requestedBy,
         error: o.error,
         startedAt: o.startedAt,

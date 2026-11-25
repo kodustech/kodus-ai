@@ -93,13 +93,6 @@ export class SecurityScanModel extends CoreDocument {
     @Prop({ type: String })
     public scheduleId?: string;
 
-    @Prop({ type: String })
-    public exportedAt?: string;
-
-    /** Until when one caller holds filing this scan's findings. */
-    @Prop({ type: Date })
-    public exportClaimedUntil?: Date;
-
     @Prop({ type: Object })
     public requestedBy?: { userId?: string; email?: string };
 

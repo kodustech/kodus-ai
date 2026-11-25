@@ -12,7 +12,7 @@ export const SECURITY_SCAN_SCHEDULE_REPOSITORY_TOKEN = Symbol.for(
 
 export type SecurityScanScheduleSettings = Pick<
     SecurityScanSchedule,
-    'cadence' | 'budget' | 'mode' | 'modelId' | 'exportTo' | 'teamId'
+    'cadence' | 'budget' | 'mode' | 'modelId' | 'teamId'
 > & {
     nextRunAt: string;
     createdBy?: SecurityScanSchedule['createdBy'];
@@ -46,8 +46,6 @@ export interface ISecurityScanScheduleRepository {
         enabled: boolean,
         nextRunAt?: Date,
     ): Promise<SecurityScanSchedule | null>;
-    /** Schedules that file their runs' findings somewhere and have run. */
-    findExporting(limit: number): Promise<SecurityScanSchedule[]>;
     /** Enabled schedules due at `now`, oldest first. */
     findDue(now: Date, limit: number): Promise<SecurityScanSchedule[]>;
     /**
@@ -102,9 +100,6 @@ export class SecurityScanScheduleRepository implements ISecurityScanScheduleRepo
                             ...(settings.modelId
                                 ? { modelId: settings.modelId }
                                 : {}),
-                            ...(settings.exportTo
-                                ? { exportTo: settings.exportTo }
-                                : {}),
                             ...(settings.createdBy
                                 ? { createdBy: settings.createdBy }
                                 : {}),
@@ -114,20 +109,10 @@ export class SecurityScanScheduleRepository implements ISecurityScanScheduleRepo
                         ...(typeof settings.enabled === 'boolean'
                             ? {}
                             : { $setOnInsert: { enabled: true } }),
-                        // Back to the Deep scan routing when no model is picked;
-                        // no export when none is set.
-                        ...(settings.modelId && settings.exportTo
+                        // Back to the Deep scan routing when no model is picked.
+                        ...(settings.modelId
                             ? {}
-                            : {
-                                  $unset: {
-                                      ...(settings.modelId
-                                          ? {}
-                                          : { modelId: '' }),
-                                      ...(settings.exportTo
-                                          ? {}
-                                          : { exportTo: '' }),
-                                  },
-                              }),
+                            : { $unset: { modelId: '' } }),
                     },
                     { upsert: true, new: true },
                 )
@@ -184,19 +169,6 @@ export class SecurityScanScheduleRepository implements ISecurityScanScheduleRepo
             .lean()
             .exec();
         return doc ? toSchedule(doc) : null;
-    }
-
-    async findExporting(limit: number): Promise<SecurityScanSchedule[]> {
-        const docs = await this.model
-            .find({
-                'enabled': true,
-                'exportTo.integrationId': { $exists: true },
-                'lastScanId': { $exists: true },
-            })
-            .limit(limit)
-            .lean()
-            .exec();
-        return docs.map(toSchedule);
     }
 
     async findDue(now: Date, limit: number): Promise<SecurityScanSchedule[]> {
@@ -257,7 +229,6 @@ function toSchedule(doc: any): SecurityScanSchedule {
         budget: doc.budget ?? {},
         mode: doc.mode ?? 'incremental',
         ...(doc.modelId ? { modelId: doc.modelId } : {}),
-        ...(doc.exportTo ? { exportTo: doc.exportTo } : {}),
         enabled: doc.enabled !== false,
         nextRunAt: iso(doc.nextRunAt)!,
         ...(doc.lastRunAt ? { lastRunAt: doc.lastRunAt } : {}),

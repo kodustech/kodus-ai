@@ -2,7 +2,6 @@ import { axiosAuthorized } from "src/core/utils/axios";
 import { pathToApiUrl } from "src/core/utils/helpers";
 
 import type {
-    ExportResult,
     SaveScanSchedulePayload,
     SecurityScan,
     SecurityScanSchedule,
@@ -37,9 +36,6 @@ export const cancelSecurityScan = async (
 
 export const securityScanSchedulesPath = () =>
     `${securityScansPath()}/schedules`;
-
-export const exportDestinationsPath = () =>
-    `${securityScansPath()}/export-destinations`;
 
 export const saveSecurityScanSchedule = async (
     payload: SaveScanSchedulePayload,
@@ -76,19 +72,4 @@ export const removeSecurityScanSchedule = async (
         `${securityScanSchedulesPath()}/${encodeURIComponent(repositoryId)}`,
         { params: { teamId } },
     );
-};
-
-/** Files these findings through a plugin; one result per finding asked. */
-export const exportScanFindings = async (payload: {
-    teamId: string;
-    issueIds: string[];
-    integrationId: string;
-    destinationNote?: string;
-}): Promise<ExportResult[]> => {
-    const response = await axiosAuthorized.post<{ data: ExportResult[] }>(
-        `${securityScansPath()}/issues/export`,
-        payload,
-    );
-
-    return response.data;
 };

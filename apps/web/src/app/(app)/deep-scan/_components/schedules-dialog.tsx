@@ -11,7 +11,6 @@ import {
     DropdownMenuTrigger,
 } from "@components/ui/dropdown-menu";
 import { Input } from "@components/ui/input";
-import { Link } from "@components/ui/link";
 import {
     Select,
     SelectContent,
@@ -37,13 +36,9 @@ import {
     securityScanSchedulesPath,
     setSecurityScanScheduleEnabled,
 } from "@services/security-scans/fetch";
-import {
-    useExportDestinations,
-    useSecurityScanSchedules,
-} from "@services/security-scans/hooks";
+import { useSecurityScanSchedules } from "@services/security-scans/hooks";
 import type {
     ScanCadence,
-    ScanExportTarget,
     SecurityScanMode,
     SecurityScanSchedule,
 } from "@services/security-scans/types";
@@ -66,20 +61,12 @@ import { parseScanLimit } from "../../issues/_components/security-scan/format";
 import { useScanModels } from "./use-scan-models";
 
 const ROUTING_MODEL = "__routing";
-const NO_EXPORT = "__none";
 
 const CADENCE: Record<ScanCadence, string> = { daily: "day", weekly: "week" };
 const MODE: Record<SecurityScanMode, string> = {
     incremental: "what changed",
     full: "the whole repository",
 };
-const SEVERITY_FROM: Record<ScanExportTarget["minSeverity"], string> = {
-    critical: "rated critical",
-    high: "rated high or above",
-    medium: "rated medium or above",
-    low: "of any severity",
-};
-
 const UTC_WHEN = new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",
@@ -134,7 +121,6 @@ const SchedulesPanel = () => {
     const queryClient = useQueryClient();
     const schedules = useSecurityScanSchedules();
     const scanModels = useScanModels();
-    const destinations = useExportDestinations(teamId);
     const { data: allRepositories } = useGetSelectedRepositories(teamId);
 
     const repositories = useMemo(
@@ -154,9 +140,6 @@ const SchedulesPanel = () => {
     );
     const nameOf = (id: string) =>
         repositories.find((r) => String(r.id) === id)?.name ?? id;
-    const destinationOf = (id?: string) =>
-        destinations.data.find((d) => d.integrationId === id)?.name ??
-        "a plugin no longer connected";
 
     const [composing, setComposing] = useState<Composing | null>(null);
     const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
@@ -250,7 +233,6 @@ const SchedulesPanel = () => {
                             schedule={composing?.schedule}
                             models={scanModels.models}
                             routingLabel={scanModels.routingLabel}
-                            destinations={destinations.data}
                             canCancel={!empty}
                             onCancel={() => setComposing(null)}
                             onSaved={async () => {
@@ -281,9 +263,6 @@ const SchedulesPanel = () => {
                                           "a picked model")
                                         : undefined
                                 }
-                                destination={destinationOf(
-                                    s.exportTo?.integrationId,
-                                )}
                                 busy={busy.has(s.uuid)}
                                 editing={composing?.schedule?.uuid === s.uuid}
                                 onToggle={(on) => toggle(s, on)}
@@ -305,7 +284,6 @@ const ScheduleRow = ({
     schedule: s,
     name,
     model,
-    destination,
     busy,
     editing,
     onToggle,
@@ -315,7 +293,6 @@ const ScheduleRow = ({
     schedule: SecurityScanSchedule;
     name: string;
     model?: string;
-    destination: string;
     busy: boolean;
     editing: boolean;
     onToggle: (enabled: boolean) => void;
@@ -357,8 +334,6 @@ const ScheduleRow = ({
                     {s.enabled
                         ? `Next ${whenUtc(next)} · ${formatDistanceToNow(next, { addSuffix: true })}`
                         : "No run until it is turned back on"}
-                    {s.exportTo &&
-                        ` · opens a ticket in ${destination} for each new finding ${labelOf(SEVERITY_FROM, s.exportTo.minSeverity) ?? ""}`}
                 </p>
                 {s.lastError && (
                     <p className="text-danger text-xs">
@@ -437,7 +412,6 @@ const Composer = ({
     schedule,
     models,
     routingLabel,
-    destinations,
     canCancel,
     onCancel,
     onSaved,
@@ -447,7 +421,6 @@ const Composer = ({
     schedule?: SecurityScanSchedule;
     models: Array<{ id: string; label: string }>;
     routingLabel: string;
-    destinations: Array<{ integrationId: string; name: string }>;
     canCancel: boolean;
     onCancel: () => void;
     onSaved: () => Promise<void>;
@@ -469,13 +442,6 @@ const Composer = ({
         schedule?.mode ?? "incremental",
     );
     const [modelId, setModelId] = useState(schedule?.modelId ?? ROUTING_MODEL);
-    const [exportTo, setExportTo] = useState(
-        schedule?.exportTo?.integrationId ?? NO_EXPORT,
-    );
-    const [minSeverity, setMinSeverity] = useState<
-        ScanExportTarget["minSeverity"]
-    >(schedule?.exportTo?.minSeverity ?? "high");
-    const [note, setNote] = useState(schedule?.exportTo?.destinationNote ?? "");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string>();
 
@@ -500,17 +466,6 @@ const Composer = ({
                 maxUsd: limit,
                 mode,
                 ...(modelId === ROUTING_MODEL ? {} : { modelId }),
-                ...(exportTo === NO_EXPORT
-                    ? {}
-                    : {
-                          exportTo: {
-                              integrationId: exportTo,
-                              minSeverity,
-                              ...(note.trim()
-                                  ? { destinationNote: note.trim() }
-                                  : {}),
-                          },
-                      }),
             });
             await onSaved();
         } catch (e) {
@@ -602,77 +557,6 @@ const Composer = ({
                     ))}
                 </Slot>
             </div>
-
-            <div className={line}>
-                <span>After each run,</span>
-                <Slot
-                    label="Open tickets for new findings"
-                    value={exportTo}
-                    disabled={saving}
-                    onChange={setExportTo}>
-                    <SelectItem value={NO_EXPORT}>
-                        {"don't open tickets"}
-                    </SelectItem>
-                    {destinations.map((d) => (
-                        <SelectItem
-                            key={d.integrationId}
-                            value={d.integrationId}>
-                            open a ticket in {d.name}
-                        </SelectItem>
-                    ))}
-                    {exportTo !== NO_EXPORT &&
-                        !destinations.some(
-                            (d) => d.integrationId === exportTo,
-                        ) && (
-                            <SelectItem value={exportTo}>
-                                open a ticket in a plugin no longer connected
-                            </SelectItem>
-                        )}
-                </Slot>
-                {exportTo !== NO_EXPORT && (
-                    <>
-                        <span>for each new finding</span>
-                        <Slot
-                            label="Lowest severity to open a ticket for"
-                            value={minSeverity}
-                            disabled={saving}
-                            onChange={(v) =>
-                                setMinSeverity(
-                                    v as ScanExportTarget["minSeverity"],
-                                )
-                            }>
-                            {(
-                                Object.keys(SEVERITY_FROM) as Array<
-                                    ScanExportTarget["minSeverity"]
-                                >
-                            ).map((severity) => (
-                                <SelectItem key={severity} value={severity}>
-                                    {SEVERITY_FROM[severity]}
-                                </SelectItem>
-                            ))}
-                        </Slot>
-                        <span className="inline-block w-44">
-                            <Input
-                                size="md"
-                                aria-label="Where in that tool (optional)"
-                                placeholder="where: team SEC"
-                                value={note}
-                                maxLength={300}
-                                disabled={saving}
-                                className="h-8 px-3"
-                                onChange={(ev) => setNote(ev.target.value)}
-                            />
-                        </span>
-                    </>
-                )}
-            </div>
-            {destinations.length === 0 && (
-                <p className="text-text-tertiary text-xs">
-                    To open tickets automatically, connect a plugin with a tool
-                    that creates them (like <code>create_issue</code>) in{" "}
-                    <Link href="/settings/plugins">Plugins</Link>.
-                </p>
-            )}
 
             {limitError && <p className="text-danger text-xs">{limitError}</p>}
             {error && (

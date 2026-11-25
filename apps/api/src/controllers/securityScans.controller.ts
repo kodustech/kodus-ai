@@ -22,20 +22,15 @@ import {
     ApiTags,
 } from '@nestjs/swagger';
 import {
-    ArrayMaxSize,
-    ArrayMinSize,
-    IsArray,
     IsBoolean,
     IsIn,
     IsNumber,
     IsOptional,
     IsPositive,
     IsString,
-    ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-import { truncateKeepingSurrogatePairs } from '@libs/common/utils/truncate-text';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
     Action,
@@ -58,8 +53,6 @@ import {
     DeepScanGate,
 } from '@libs/security-scan/application/deep-scan.gate';
 import { SecurityScanSchedulesUseCase } from '@libs/security-scan/application/security-scan-schedules.use-case';
-import { ExportScanIssuesUseCase } from '@libs/security-scan/application/export-scan-issues.use-case';
-import { EXPORT_MAX_ISSUES } from '@libs/security-scan/domain/scan-schedule';
 
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
@@ -111,27 +104,6 @@ export class StartSecurityScanDto {
     modelId?: string;
 }
 
-export class ScheduleExportToDto {
-    @ApiProperty({
-        description:
-            'The plugin connection to file through (GET /security-scans/export-destinations).',
-    })
-    @IsString()
-    integrationId: string;
-
-    @ApiPropertyOptional({
-        description:
-            'Where in that tool, in plain words: "Linear team SEC", "Jira project APPSEC".',
-    })
-    @IsOptional()
-    @IsString()
-    destinationNote?: string;
-
-    @ApiProperty({ enum: ['critical', 'high', 'medium', 'low'] })
-    @IsIn(['critical', 'high', 'medium', 'low'])
-    minSeverity: 'critical' | 'high' | 'medium' | 'low';
-}
-
 export class SaveSecurityScanScheduleDto {
     @ApiProperty()
     @IsString()
@@ -177,15 +149,6 @@ export class SaveSecurityScanScheduleDto {
 
     @ApiPropertyOptional({
         description:
-            "File each run's new findings, from minSeverity up, in one of the organization's plugins (GET /security-scans/export-destinations).",
-    })
-    @IsOptional()
-    @ValidateNested()
-    @Type(() => ScheduleExportToDto)
-    exportTo?: ScheduleExportToDto;
-
-    @ApiPropertyOptional({
-        description:
             'false pauses the schedule without deleting it, true resumes it. Omitted, the schedule keeps its state (a new one starts enabled).',
     })
     @IsOptional()
@@ -201,37 +164,6 @@ export class SetScheduleEnabledDto {
     @ApiProperty({ description: 'false pauses the schedule, true resumes it.' })
     @IsBoolean()
     enabled: boolean;
-}
-
-export class ExportScanIssuesDto {
-    @ApiProperty()
-    @IsString()
-    teamId: string;
-
-    @ApiProperty({
-        description: `The deep scan issues to file, at most ${EXPORT_MAX_ISSUES}.`,
-        type: [String],
-    })
-    @IsArray()
-    @ArrayMinSize(1)
-    @ArrayMaxSize(EXPORT_MAX_ISSUES)
-    @IsString({ each: true })
-    issueIds: string[];
-
-    @ApiProperty({
-        description:
-            'The plugin connection to file them through (GET /security-scans/export-destinations).',
-    })
-    @IsString()
-    integrationId: string;
-
-    @ApiPropertyOptional({
-        description:
-            'Where in that tool, in plain words: "Linear team SEC", "Jira project APPSEC", "#security channel".',
-    })
-    @IsOptional()
-    @IsString()
-    destinationNote?: string;
 }
 
 // A scan spends the organization's model budget on one repository.
@@ -279,7 +211,6 @@ export class SecurityScansController {
         private readonly authorizationService: AuthorizationService,
         private readonly deepScanGate: DeepScanGate,
         private readonly schedules: SecurityScanSchedulesUseCase,
-        private readonly exportScanIssues: ExportScanIssuesUseCase,
     ) {}
 
     /** The caller's organization, once the deep scan is enabled for it. */
@@ -357,51 +288,6 @@ export class SecurityScansController {
         );
     }
 
-    @Get('export-destinations')
-    @ApiOperation({
-        summary: 'Where deep scan findings can be filed',
-        description:
-            "The organization's plugins that can create something (a ticket, an issue, a message), and the tools that do.",
-    })
-    @UseGuards(PolicyGuard)
-    @CheckPolicies(canReadScans)
-    async exportDestinations(@Query('teamId') teamId: string) {
-        if (!teamId) {
-            throw new BadRequestException('teamId is required');
-        }
-        return this.exportScanIssues.destinations({
-            organizationId: await this.organizationId(),
-            teamId,
-        });
-    }
-
-    @Post('issues/export')
-    @ApiOperation({
-        summary: 'File deep scan findings in a plugin',
-        description:
-            "Kody creates one item per finding in the team's own tool (Linear, Jira, GitHub...), through the chosen plugin, on the organization's model. It only reads and creates there; nothing that exists is changed. A finding already filed through that plugin is not filed again.",
-    })
-    @UseGuards(PolicyGuard)
-    @CheckPolicies(canCancelScan)
-    async exportIssues(@Body() body: ExportScanIssuesDto) {
-        const readable = await this.authorizationService.getRepositoryScope({
-            user: this.request.user,
-            action: Action.Create,
-            resource: ResourceType.SecurityScan,
-        });
-        return this.exportScanIssues.execute({
-            organizationAndTeamData: {
-                organizationId: await this.organizationId(),
-                teamId: body.teamId,
-            },
-            issueIds: body.issueIds,
-            integrationId: body.integrationId,
-            destinationNote: body.destinationNote,
-            readableRepositoryIds: readable,
-            requestedBy: this.request.user?.email,
-        });
-    }
-
     @Get('schedules')
     @ApiOperation({
         summary: 'List deep scan schedules',
@@ -447,20 +333,6 @@ export class SecurityScansController {
             },
             mode: body.mode,
             modelId: body.modelId,
-            exportTo: body.exportTo
-                ? {
-                      integrationId: body.exportTo.integrationId,
-                      ...(body.exportTo.destinationNote
-                          ? {
-                                destinationNote: truncateKeepingSurrogatePairs(
-                                    body.exportTo.destinationNote,
-                                    300,
-                                ),
-                            }
-                          : {}),
-                      minSeverity: body.exportTo.minSeverity,
-                  }
-                : undefined,
             enabled: body.enabled,
             requestedBy: {
                 userId: this.request.user?.uuid,

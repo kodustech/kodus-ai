@@ -13,31 +13,17 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 
-import type { PlatformType } from '@libs/core/domain/enums';
 import { createLogger } from '@libs/core/log/logger';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 import { validateBudget } from '../domain/budget-meter';
 import type { SecurityScanMode } from '../domain/coverage-ledger';
 import {
-    EXPORT_MAX_ISSUES,
     nextRunAt,
     SCAN_CADENCES,
-    severitiesFrom,
     type ScanCadence,
-    type ScanExportTarget,
     type SecurityScanSchedule,
 } from '../domain/scan-schedule';
-import { SecurityScanStatus } from '../domain/security-scan.types';
-import {
-    ISecurityScanRepository,
-    SECURITY_SCAN_REPOSITORY_TOKEN,
-} from '../infrastructure/security-scan.repository';
-import {
-    IIssuesService,
-    ISSUES_SERVICE_TOKEN,
-} from '@libs/issues/domain/contracts/issues.service.contract';
-import { ExportScanIssuesUseCase } from './export-scan-issues.use-case';
 import type { SecurityScanBudget } from '../domain/security-scan.types';
 import {
     ISecurityScanScheduleRepository,
@@ -47,11 +33,6 @@ import { DEEP_SCAN_NOT_ENABLED_MESSAGE, DeepScanGate } from './deep-scan.gate';
 import { StartSecurityScanUseCase } from './start-security-scan.use-case';
 
 const logger = createLogger('SecurityScanSchedules');
-
-/** How long one caller holds filing a run's findings. */
-const EXPORT_CLAIM_MS = 60 * 60 * 1000;
-/** The filing run stops well within the claim, so no other caller takes it mid-run. */
-const EXPORT_RUN_MS = 20 * 60 * 1000;
 
 export const SCHEDULE_NOT_FOUND_MESSAGE =
     'This repository has no deep scan schedule.';
@@ -66,8 +47,6 @@ export interface SaveScheduleInput {
     budget: SecurityScanBudget;
     mode?: SecurityScanMode;
     modelId?: string;
-    /** Where each run's new findings are filed when it ends. */
-    exportTo?: ScanExportTarget;
     /** Omitted: the schedule keeps its state (a new one starts enabled). */
     enabled?: boolean;
     requestedBy?: { userId?: string; email?: string };
@@ -80,11 +59,6 @@ export class SecurityScanSchedulesUseCase {
         private readonly schedules: ISecurityScanScheduleRepository,
         private readonly startSecurityScan: StartSecurityScanUseCase,
         private readonly deepScanGate: DeepScanGate,
-        @Inject(SECURITY_SCAN_REPOSITORY_TOKEN)
-        private readonly scans: ISecurityScanRepository,
-        @Inject(ISSUES_SERVICE_TOKEN)
-        private readonly issuesService: IIssuesService,
-        private readonly exportScanIssues: ExportScanIssuesUseCase,
     ) {}
 
     /** The organization's schedules, within the repositories the caller sees. */
@@ -133,7 +107,6 @@ export class SecurityScanSchedulesUseCase {
                 budget: input.budget,
                 mode: input.mode ?? 'incremental',
                 modelId: input.modelId,
-                exportTo: input.exportTo,
                 // Omitted, the stored state stays (editing a paused schedule
                 // does not resume it); a new schedule starts enabled.
                 enabled: input.enabled,
@@ -267,117 +240,5 @@ export class SecurityScanSchedulesUseCase {
             }
         }
         return started;
-    }
-
-    /**
-     * Files the new findings of each schedule's last run, once it ended, in
-     * the plugin the schedule names: at most EXPORT_MAX_ISSUES per schedule
-     * per call, the rest on the next. A run is done exporting when nothing
-     * is left, or when an attempt filed nothing (said on the schedule); a
-     * finding that failed beside filed ones is tried again on a later call.
-     * Returns how many findings were filed.
-     */
-    async exportFinished(): Promise<number> {
-        let filed = 0;
-        for (const schedule of await this.schedules.findExporting(50)) {
-            const target = schedule.exportTo;
-            if (!target || !schedule.lastScanId) continue;
-            const scan = await this.scans.findById(schedule.lastScanId);
-            if (
-                !scan ||
-                scan.exportedAt ||
-                ![
-                    SecurityScanStatus.COMPLETED,
-                    SecurityScanStatus.STOPPED_BY_BUDGET,
-                ].includes(scan.status)
-            ) {
-                continue;
-            }
-            // One caller files a run's findings: another cron run, or
-            // another API instance, finds it claimed and moves on.
-            if (
-                !(await this.scans.claimExport(
-                    scan.uuid,
-                    new Date(Date.now() + EXPORT_CLAIM_MS),
-                ))
-            ) {
-                continue;
-            }
-            const done = async (lastError?: string) => {
-                await this.scans.update(scan.uuid, {
-                    exportedAt: new Date().toISOString(),
-                });
-                if (lastError) {
-                    await this.schedules
-                        .recordRun(schedule.uuid, {
-                            lastRunAt: schedule.lastRunAt ?? scan.createdAt,
-                            lastError,
-                        })
-                        .catch(() => undefined);
-                }
-            };
-            try {
-                const issues = await this.issuesService.findScanIssuesToExport({
-                    organizationId: schedule.organizationId,
-                    repositoryPlatform: scan.repository
-                        .platform as PlatformType,
-                    repositoryHost: scan.repository.host ?? '',
-                    repositoryId: scan.repository.id,
-                    since: scan.startedAt ?? scan.createdAt,
-                    until: scan.finishedAt ?? new Date().toISOString(),
-                    severities: severitiesFrom(target.minSeverity),
-                    integrationId: target.integrationId,
-                    limit: EXPORT_MAX_ISSUES,
-                });
-                if (!issues.length) {
-                    await done();
-                    continue;
-                }
-                const results = await this.exportScanIssues.execute({
-                    organizationAndTeamData: {
-                        organizationId: schedule.organizationId,
-                        teamId: schedule.teamId,
-                    },
-                    issueIds: issues.map((i) => i.uuid),
-                    integrationId: target.integrationId,
-                    destinationNote: target.destinationNote,
-                    readableRepositoryIds: null,
-                    requestedBy: 'schedule',
-                    signal: AbortSignal.timeout(EXPORT_RUN_MS),
-                });
-                const created = results.filter(
-                    (r) => r.status === 'created',
-                ).length;
-                filed += created;
-                if (!created) {
-                    await done(
-                        results.find((r) => r.error)?.error ??
-                            'The findings could not be filed in the plugin.',
-                    );
-                } else if (
-                    issues.length < EXPORT_MAX_ISSUES &&
-                    results.every((r) => r.status !== 'failed')
-                ) {
-                    await done();
-                }
-            } catch (error) {
-                await done(
-                    error instanceof HttpException
-                        ? error.message
-                        : 'The findings could not be filed in the plugin.',
-                );
-                logger.warn({
-                    message: 'Scheduled deep scan export failed',
-                    context: SecurityScanSchedulesUseCase.name,
-                    error,
-                    metadata: {
-                        organizationId: schedule.organizationId,
-                        scheduleId: schedule.uuid,
-                        scanId: scan.uuid,
-                    },
-                });
-            }
-        }
-        return filed;
     }
 }
