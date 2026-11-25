@@ -260,4 +260,38 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
             'new-2',
         ]);
     });
+    // A severity named like an Object.prototype key used to rank as NaN,
+    // which left the sort in insertion order.
+    it('ranks a severity named like a prototype key below a critical one', async () => {
+        mockCommentManagerService.createLineComments = jest
+            .fn()
+            .mockResolvedValue({
+                commentResults: [],
+                lastAnalyzedCommit: 'abc',
+            });
+        const ctx = baseContext({
+            codeReviewConfig: {} as never,
+            validSuggestions: [
+                {
+                    id: 'odd',
+                    relevantFile: 'src/foo.ts',
+                    severity: 'constructor',
+                },
+                {
+                    id: 'crit',
+                    relevantFile: 'src/foo.ts',
+                    severity: 'critical',
+                },
+            ] as never,
+        });
+
+        await stage.execute(ctx);
+
+        const sorted =
+            mockSuggestionService.verifyIfSuggestionsWereSent.mock.calls[0][2];
+        expect(sorted.map((s: { id: string }) => s.id)).toEqual([
+            'crit',
+            'odd',
+        ]);
+    });
 });
