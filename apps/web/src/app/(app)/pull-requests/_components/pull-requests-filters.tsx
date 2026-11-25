@@ -25,6 +25,7 @@ import {
 import { useGetSelectedRepositories } from "@services/codeManagement/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { CheckIcon, FolderIcon } from "lucide-react";
+import { RepositoryName } from "src/core/components/system/repository-name";
 import { useAuth } from "src/core/providers/auth.provider";
 import { usePermissions } from "src/core/providers/permissions.provider";
 import { cn } from "src/core/utils/components";
@@ -131,10 +132,7 @@ export const PullRequestsFilters = ({
                                             setRepoOpen(false);
                                         }}>
                                         <span className="truncate">
-                                            <span className="text-text-secondary">
-                                                {repo.organizationName}/
-                                            </span>
-                                            {repo.name}
+                                            <RepositoryName repository={repo} />
                                         </span>
                                         {selectedRepository === repo.name && (
                                             <CheckIcon className="text-primary-light -mr-2 size-5" />

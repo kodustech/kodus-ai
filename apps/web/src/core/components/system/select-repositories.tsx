@@ -18,6 +18,7 @@ import { useGetRepositories } from "@services/codeManagement/hooks";
 import type { Repository } from "@services/codeManagement/types";
 import { formatDistanceToNow } from "date-fns";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { RepositoryName } from "src/core/components/system/repository-name";
 import { apiErrorMessage } from "src/core/utils/api-error";
 import { pluralize } from "src/core/utils/string";
 
@@ -329,10 +330,9 @@ export const SelectRepositories = (props: {
                                         }}>
                                         <span className="flex flex-col items-start gap-1 text-left">
                                             <span>
-                                                <span className="text-text-secondary">
-                                                    {r.organizationName}/
-                                                </span>
-                                                {r.name}
+                                                <RepositoryName
+                                                    repository={r}
+                                                />
                                             </span>
                                             {formatLastActivity(
                                                 r.lastActivityAt,
@@ -369,10 +369,9 @@ export const SelectRepositories = (props: {
                                         }}>
                                         <span className="flex flex-col items-start gap-1 text-left">
                                             <span>
-                                                <span className="text-text-secondary">
-                                                    {r.organizationName}/
-                                                </span>
-                                                {r.name}
+                                                <RepositoryName
+                                                    repository={r}
+                                                />
                                             </span>
                                             {formatLastActivity(
                                                 r.lastActivityAt,

@@ -32,6 +32,7 @@ import { RepositoryMinimal } from "@services/codeManagement/types";
 import { assignRepos, getAssignedRepos } from "@services/permissions/fetch";
 import { Check } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
+import { repositoryFullName } from "src/core/utils/repository-name";
 import { safeArray } from "src/core/utils/safe-array";
 
 export default function AssignReposModal({
@@ -171,7 +172,9 @@ export default function AssignReposModal({
                                             (repository) => (
                                                 <CommandItem
                                                     key={repository.id}
-                                                    value={`${repository.organizationName}/${repository.name}`}
+                                                    value={repositoryFullName(
+                                                        repository,
+                                                    )}
                                                     onSelect={() =>
                                                         handleToggleRepository(
                                                             repository,

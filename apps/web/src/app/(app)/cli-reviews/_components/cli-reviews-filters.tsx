@@ -24,6 +24,7 @@ import {
 } from "@components/ui/select";
 import { useGetSelectedRepositories } from "@services/codeManagement/hooks";
 import { CheckIcon, FolderIcon } from "lucide-react";
+import { RepositoryName } from "src/core/components/system/repository-name";
 import { cn } from "src/core/utils/components";
 
 export const SINCE_PRESETS = ["today", "7d", "30d"] as const;
@@ -118,10 +119,7 @@ export const CliReviewsFilters = ({
                                             setRepoOpen(false);
                                         }}>
                                         <span className="truncate">
-                                            <span className="text-text-secondary">
-                                                {repo.organizationName}/
-                                            </span>
-                                            {repo.name}
+                                            <RepositoryName repository={repo} />
                                         </span>
                                         {String(repo.id) === repositoryId && (
                                             <CheckIcon className="text-primary-light -mr-2 size-5" />

@@ -13,6 +13,7 @@ import { magicModal } from "@components/ui/magic-modal";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { useTimeout } from "@hooks/use-timeout";
 import type { Repository } from "@services/codeManagement/types";
+import { repositoryFullName } from "src/core/utils/repository-name";
 
 type DeleteMemberModalProps = {
     repository: Repository;
@@ -48,7 +49,7 @@ export const DeleteModal = ({ repository, saveFn }: DeleteMemberModalProps) => {
                 <p className="text-sm">
                     Are you sure you want to remove integration with{" "}
                     <strong className="text-danger">
-                        {repository.organizationName}/{repository.name}
+                        {repositoryFullName(repository)}
                     </strong>
                     ?
                 </p>

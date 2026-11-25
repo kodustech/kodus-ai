@@ -19,6 +19,7 @@ import {
 import { Spinner } from "@components/ui/spinner";
 import { useGetSelectedRepositories } from "@services/codeManagement/hooks";
 import { Check, GitBranch } from "lucide-react";
+import { repositoryFullName } from "src/core/utils/repository-name";
 import { safeArray } from "src/core/utils/safe-array";
 
 import { setCockpitRepositoryCookie } from "../_actions/set-cockpit-repository";
@@ -237,7 +238,7 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
                                     {displayedRepositories.map((r) => {
                                         const fullName =
                                             r.full_name ||
-                                            `${r.organizationName}/${r.name}` ||
+                                            repositoryFullName(r) ||
                                             r.name;
                                         const displayName =
                                             fullName || "Unknown";

@@ -32,6 +32,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { ShieldIcon, XCircleIcon } from "lucide-react";
+import { RepositoryName } from "src/core/components/system/repository-name";
 import { useAuth } from "src/core/providers/auth.provider";
 import { usePermissions } from "src/core/providers/permissions.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
@@ -218,10 +219,7 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                                         <SelectItem
                                             key={repo.id}
                                             value={String(repo.id)}>
-                                            <span className="text-text-secondary">
-                                                {repo.organizationName}/
-                                            </span>
-                                            {repo.name}
+                                            <RepositoryName repository={repo} />
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

@@ -48,6 +48,7 @@ import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { IntegrationCategory } from "src/core/types";
 import { apiErrorMessage } from "src/core/utils/api-error";
 import { generateQueryKey } from "src/core/utils/reactQuery";
+import { repositoryFullName } from "src/core/utils/repository-name";
 import { safeArray } from "src/core/utils/safe-array";
 import { pluralize } from "src/core/utils/string";
 import {
@@ -425,9 +426,10 @@ export default function App() {
                                                     </AlertTitle>
                                                     <AlertDescription className="text-text-secondary text-xs">
                                                         {`Selected repos had no PRs in the last 14 days: ${staleRepositories
-                                                            .map(
-                                                                (r) =>
-                                                                    `${r.organizationName}/${r.name}`,
+                                                            .map((r) =>
+                                                                repositoryFullName(
+                                                                    r,
+                                                                ),
                                                             )
                                                             .join(", ")}`}
                                                     </AlertDescription>
