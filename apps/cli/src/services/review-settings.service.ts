@@ -17,6 +17,7 @@ import type {
     FormattedConfigLevel,
     FormattedConfigNode,
     LLMConfigStatus,
+    RiskRule,
     SaveCodeReviewConfigParams,
     TestByokModelResult,
 } from '../types/review-settings.js';
@@ -552,6 +553,61 @@ class ReviewSettingsService {
             assumeClean: input.assumeClean,
             assumeEnabled: input.assumeEnabled,
         });
+    }
+
+    /**
+     * The risk rules a review applies at this scope: Kodus's rules with the
+     * scope's changes applied by id, then the team's own rules.
+     */
+    async riskRules(
+        target: SettingsTarget,
+    ): Promise<Array<RiskRule & { source: 'kodus' | 'edited' | 'team' }>> {
+        const ctx = await this.context(target);
+        const scope = await this.resolveScope(ctx, target);
+        const [defaults, { configs }] = await Promise.all([
+            api.config.getDefaultRiskCriteria(ctx.accessToken),
+            this.loadScopeConfigs(ctx, scope),
+        ]);
+        const stored = readLeaf(configs, 'riskCriteria')?.value;
+        if (!Array.isArray(stored)) {
+            throw new CommandError(
+                'API_REQUEST_FAILED',
+                'Could not read risk rules for this scope.',
+            );
+        }
+        const rules = stored as Array<Partial<RiskRule> & { id: string }>;
+        const byId = new Map(rules.map((rule) => [rule.id, rule]));
+        const defaultIds = new Set(defaults.map((rule) => rule.id));
+        return [
+            ...defaults.map((base) => {
+                const override = byId.get(base.id);
+                const changes = Object.fromEntries(
+                    Object.entries(override ?? {}).filter(
+                        ([, value]) => value !== undefined,
+                    ),
+                );
+                const edited = [
+                    'name',
+                    'instructions',
+                    'includedFiles',
+                    'excludedFiles',
+                ].some((key) => key in changes);
+                return {
+                    ...base,
+                    ...changes,
+                    source: edited ? ('edited' as const) : ('kodus' as const),
+                };
+            }),
+            // An override of a rule Kodus no longer ships is not applied.
+            ...rules
+                .filter(
+                    (rule): rule is RiskRule =>
+                        !defaultIds.has(rule.id) &&
+                        !!rule.name &&
+                        !!rule.instructions,
+                )
+                .map((rule) => ({ ...rule, source: 'team' as const })),
+        ];
     }
 
     async previewRisk(

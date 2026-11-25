@@ -74,6 +74,16 @@ export interface PreviewPrRiskParams {
     criteria: unknown[];
 }
 
+/** A risk rule as the review applies it at a scope. */
+export interface RiskRule {
+    id: string;
+    name: string;
+    enabled: boolean;
+    instructions: string;
+    includedFiles?: string[];
+    excludedFiles?: string[];
+}
+
 export interface PreviewPrRiskResult {
     assessment:
         | { status: 'disabled' }

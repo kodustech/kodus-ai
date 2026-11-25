@@ -14,9 +14,10 @@ import {
     SheetTitle,
 } from "@components/ui/sheet";
 import { Textarea } from "@components/ui/textarea";
-import type { RiskCriterion } from "@services/risk-assessment/types";
+import type { DefaultRiskCriterion } from "@services/risk-assessment/types";
 import { X } from "lucide-react";
 
+import type { RiskRuleRow } from "../_utils/risk-rules";
 import { FilePatternsField } from "../../general/_components/file-patterns-field";
 
 export function CriterionDialog({
@@ -24,11 +25,11 @@ export function CriterionDialog({
     onApply,
     onClose,
 }: {
-    criterion?: RiskCriterion;
-    onApply: (criterion: RiskCriterion) => void;
+    criterion?: RiskRuleRow;
+    onApply: (criterion: DefaultRiskCriterion) => void;
     onClose: () => void;
 }) {
-    const [draft, setDraft] = useState<RiskCriterion>(
+    const [draft, setDraft] = useState<DefaultRiskCriterion>(
         () =>
             criterion ?? {
                 id: crypto.randomUUID(),
@@ -49,25 +50,27 @@ export function CriterionDialog({
                 <SheetHeader className="border-card-lv3 shrink-0 border-b py-5">
                     <div className="flex items-center justify-between gap-3">
                         <SheetTitle>
-                            {criterion ? "Edit criterion" : "Add criterion"}
+                            {criterion ? "Edit rule" : "Add rule"}
                         </SheetTitle>
                         <SheetClose asChild>
                             <Button
                                 type="button"
                                 variant="cancel"
                                 size="icon-sm"
-                                aria-label="Close criterion editor">
+                                aria-label="Close rule editor">
                                 <X className="size-4" />
                             </Button>
                         </SheetClose>
                     </div>
                     <SheetDescription>
-                        Define what counts as risk for your team.
+                        {criterion?.isDefault
+                            ? "Your version replaces Kodus’s until you reset it."
+                            : "Define what counts as risk for your team."}
                     </SheetDescription>
                 </SheetHeader>
                 <div
                     role="region"
-                    aria-label="Criterion settings"
+                    aria-label="Rule settings"
                     className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
                     <FormControl.Root>
                         <FormControl.Label htmlFor="risk-criterion-name">
@@ -106,7 +109,7 @@ export function CriterionDialog({
                         label="Included files"
                         purpose="include"
                         value={draft.includedFiles ?? []}
-                        hint="Limit this criterion to matching files."
+                        hint="Limit this rule to matching files."
                         onChange={(includedFiles) =>
                             setDraft({ ...draft, includedFiles })
                         }

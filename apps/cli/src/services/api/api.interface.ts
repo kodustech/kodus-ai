@@ -18,6 +18,7 @@ import type {
     SaveCodeReviewConfigResult,
     PreviewPrRiskParams,
     PreviewPrRiskResult,
+    RiskRule,
     PreviewPrApprovalParams,
     PreviewPrApprovalResult,
     TestByokModelResult,
@@ -181,6 +182,7 @@ export interface IConfigApi {
         accessToken: string,
         params: PreviewPrRiskParams,
     ): Promise<PreviewPrRiskResult>;
+    getDefaultRiskCriteria(accessToken: string): Promise<RiskRule[]>;
     previewPrApproval(
         accessToken: string,
         params: PreviewPrApprovalParams,

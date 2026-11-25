@@ -209,6 +209,36 @@ export async function reviewSettingsShowAction(
     }
 }
 
+export async function riskRulesAction(
+    repository: string,
+    options: ReviewSettingsTargetOptions,
+): Promise<void> {
+    try {
+        const rules = await reviewSettingsService.riskRules({
+            repository,
+            directory: options.directory,
+            team: options.team,
+        });
+        if (options.json) {
+            cliInfo(JSON.stringify(rules, null, 2));
+            return;
+        }
+        for (const rule of rules) {
+            const source =
+                rule.source === 'team'
+                    ? 'team'
+                    : rule.source === 'edited'
+                      ? 'Kodus, edited'
+                      : 'Kodus';
+            cliInfo(
+                `${rule.enabled ? 'on ' : 'off'}  ${rule.id}  ${rule.name} (${source})`,
+            );
+        }
+    } catch (error) {
+        fail(error);
+    }
+}
+
 export async function riskPreviewAction(
     repository: string,
     options: RiskPreviewOptions,

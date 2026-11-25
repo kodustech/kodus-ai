@@ -1,8 +1,9 @@
-import { Body, Controller, Inject, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Post, UseGuards } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { PreviewPrRiskUseCase } from '@libs/code-review/application/use-cases/risk/preview-pr-risk.use-case';
 import { PreviewPrApprovalUseCase } from '@libs/code-review/application/use-cases/approval/preview-pr-approval.use-case';
+import { DEFAULT_RISK_CRITERIA } from '@libs/code-review/domain/risk/default-risk-criteria';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
     Action,
@@ -12,7 +13,10 @@ import {
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
-import { checkRepoPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
+import {
+    checkPermissions,
+    checkRepoPermissions,
+} from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 import {
     PreviewPrApprovalDto,
@@ -31,6 +35,19 @@ export class RiskAssessmentController {
         private readonly preview: PreviewPrRiskUseCase,
         private readonly approvalPreview: PreviewPrApprovalUseCase,
     ) {}
+
+    /** The rules Kodus applies unless a team turns them off or edits them. */
+    @Get('default-criteria')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+        }),
+    )
+    defaultCriteria() {
+        return DEFAULT_RISK_CRITERIA;
+    }
 
     @Post('preview')
     @UseGuards(PolicyGuard)

@@ -1782,6 +1782,17 @@
     }
   },
   {
+    "key": "riskAssessment.controller.ts#defaultCriteria",
+    "httpMethod": "GET",
+    "urlPath": "/code-review/risk/default-criteria",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "riskAssessment.controller.ts#previewApprovalOnPr",
     "httpMethod": "POST",
     "urlPath": "/code-review/risk/approval-preview",

@@ -29,7 +29,7 @@ Risk assessment starts off. Kody can assess risk while automatic approval is off
 
 ## Results
 
-- **Risk found:** risk-conditioned agents may run, Routing uses its risk-found mode, and automatic approval is blocked.
+- **Risk found:** the PR falls under at least one enabled [risk rule](#risk-rules). Risk-conditioned agents may run, Routing uses its risk-found mode, and automatic approval is blocked. The approval comment names the rules.
 - **No risk found:** Routing uses its no-risk mode. Approval still needs a clean review and a matching policy.
 - **Unavailable:** Routing uses the configured default review mode. Automatic approval is blocked, and agents that require confirmed risk do not run automatically. The approval comment says why, for example when the Git provider did not return the diff of a code file.
 
@@ -39,13 +39,25 @@ An assessment covers one PR head, title and description. A new commit holds auto
 
 ## Preview on a PR
 
-**Preview on a PR** opens a side panel. Choose a connected repository and PR number to try the current criteria, including unsaved edits. It uses the configured risk-assessment model and does not publish a comment or approve the PR.
+**Preview on a PR** opens a side panel. Choose a connected repository and PR number to try the current rules, including unsaved edits. It uses the configured risk-assessment model and does not publish a comment or approve the PR.
 
-## Optional team criteria
+## Risk rules
 
-Kody assesses risk without team criteria. Criteria add team context, such as the consequences of changing account permissions or deleting customer data.
+Kody finds risk when a PR falls under an enabled rule. Kodus ships these rules, all on:
 
-A criterion has a name, instructions, a switch and optional included/excluded file patterns. You can add up to 50. A name is up to 120 characters and instructions up to 4,000; in a file, each `id` must be unique. Its file filters scope the guidance; matching a file does not automatically declare the PR risky. Kody still assesses the rest of the change.
+- `kodus-security` **Security and permissions:** authentication, authorization, permissions, tenant isolation, input validation, or any check that protects data or actions.
+- `kodus-money` **Money, billing and licensing:** payments, prices, charges, credits, invoices, subscriptions or licensing.
+- `kodus-data` **Stored data and migrations:** data or schema migrations, deleting or rewriting stored data, or the shape of persisted data and the queries that read or write it.
+- `kodus-infrastructure` **Secrets and infrastructure:** secrets, credentials, infrastructure, networking or the runtime environment.
+- `kodus-ci-build` **CI, build, release and dependencies:** CI, build, release or deploy configuration, or a dependency or tool version.
+- `kodus-shared-contract` **Shared contracts and public interfaces:** what other code, users or integrations rely on, such as the results of a public API, library function or CLI.
+- `kodus-concurrency` **Concurrency, retries, queues and caching.**
+- `kodus-ai-behavior` **Production prompts and model behavior:** the prompts, model choice or model settings a production feature runs with.
+- `kodus-broad-change` **Broad or mixed changes:** a broad rewrite of core paths, or one PR that mixes several consequential changes.
+
+You can turn a Kodus rule off, or edit its name, instructions or file filters. Your edits replace Kodus's version until you click **Reset**; what you leave unchanged follows Kodus's updates. Add your own rules for team context, such as the consequences of changing account permissions or deleting customer data.
+
+A rule has a name, instructions, a switch and optional included/excluded file patterns. The settings keep up to 50 entries, counting your rules and the Kodus rules you changed. A name is up to 120 characters and instructions up to 4,000; in a file, each `id` must be unique. A rule with file filters applies only to the changes in matching files; Kody still assesses the rest of the PR against the other rules.
 
 The assessment reads the diff, the PR title and description, and the bug-fix history of the changed areas. Missing history is unknown information, not evidence of safety.
 
@@ -56,6 +68,12 @@ Turn on **Prefer kodus-config.yml settings** in **Code review → General** (rep
 ```yaml
 riskAssessmentActive: true
 riskCriteria:
+  - id: kodus-shared-contract # A Kodus rule, turned off
+    enabled: false
+  - id: kodus-ci-build # A Kodus rule, limited to release workflows
+    enabled: true
+    includedFiles:
+      - '.github/workflows/release*.yml'
   - id: access-control
     name: Access control
     enabled: true
@@ -66,6 +84,6 @@ riskCriteria:
       - '**/*.test.ts'
 ```
 
-`riskCriteria: []` keeps Kody's standard assessment. To stop assessment, set `riskAssessmentActive: false`.
+A Kodus rule is listed by its `id` with only what you change. `riskCriteria: []` applies Kodus's rules as shipped. `kodus config remote risk-rules .` lists the rules in effect, with their ids. To stop assessment, set `riskAssessmentActive: false`.
 
 A configuration that never set **Risk assessment** keeps its existing approval risk behavior until you change this setting. Turning automatic approval on or off does not change the **Risk assessment** switch.

@@ -19,6 +19,7 @@ vi.mock('../api/index.js', () => ({
             getFormattedCodeReviewParameter: vi.fn(),
             saveCodeReviewConfig: vi.fn(),
             previewPrRisk: vi.fn(),
+            getDefaultRiskCriteria: vi.fn(),
             previewPrApproval: vi.fn(),
             getLLMConfigStatus: vi.fn(),
             testByokModel: vi.fn(),
@@ -791,6 +792,74 @@ describe('reviewSettingsService', () => {
             }),
         );
         expect(configApi.saveCodeReviewConfig).not.toHaveBeenCalled();
+    });
+
+    describe('risk rules', () => {
+        it("lists Kodus's rules as the scope left them, then the team's own", async () => {
+            configApi.getDefaultRiskCriteria.mockResolvedValueOnce([
+                {
+                    id: 'kodus-security',
+                    name: 'Security and permissions',
+                    enabled: true,
+                    instructions: 'Auth.',
+                },
+                {
+                    id: 'kodus-shared-contract',
+                    name: 'Shared contracts and public interfaces',
+                    enabled: true,
+                    instructions: 'Contracts.',
+                },
+            ]);
+            configApi.getFormattedCodeReviewParameter.mockResolvedValueOnce({
+                configValue: {
+                    configs: {
+                        riskCriteria: leaf(
+                            [
+                                { id: 'kodus-shared-contract', enabled: false },
+                                {
+                                    id: 'kodus-security',
+                                    enabled: true,
+                                    instructions: 'Only billing auth.',
+                                },
+                                RISK_CRITERION,
+                            ],
+                            'global',
+                        ),
+                    },
+                    repositories: [],
+                },
+            } as any);
+            const rules = await reviewSettingsService.riskRules({
+                repository: 'global',
+            });
+            expect(
+                rules.map(({ id, enabled, instructions, source }) => ({
+                    id,
+                    enabled,
+                    instructions,
+                    source,
+                })),
+            ).toEqual([
+                {
+                    id: 'kodus-security',
+                    enabled: true,
+                    instructions: 'Only billing auth.',
+                    source: 'edited',
+                },
+                {
+                    id: 'kodus-shared-contract',
+                    enabled: false,
+                    instructions: 'Contracts.',
+                    source: 'kodus',
+                },
+                {
+                    id: RISK_CRITERION.id,
+                    enabled: true,
+                    instructions: RISK_CRITERION.instructions,
+                    source: 'team',
+                },
+            ]);
+        });
     });
 
     describe('risk preview', () => {
