@@ -398,6 +398,11 @@ async function once(c, judgeKey) {
     if (!c.repeatCheckFault && checks.some((r) => r.model === 'failed')) {
         throw new Error('INFRA: the repeat check call failed');
     }
+    // A check that ran on a faulted case must have taken the fault, or the
+    // case measured a judged round instead of the no-verdict path.
+    if (c.repeatCheckFault && checks.length && !checks.some((r) => r.model === 'failed')) {
+        throw new Error('INFRA: the injected repeat-check fault did not reach the check');
+    }
 
     // What reaches the PR: each comment the stage hands to posting, at its
     // place and at every place listed under "Also found in" (same text: it can
