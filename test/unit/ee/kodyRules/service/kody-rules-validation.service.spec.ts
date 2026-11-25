@@ -1,6 +1,7 @@
 import { KodyRulesValidationService } from '@libs/ee/kodyRules/service/kody-rules-validation.service';
 import {
     IKodyRule,
+    KodyRuleCentralizedStatus,
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -1118,6 +1119,40 @@ describe('KodyRulesValidationService — deterministic logic', () => {
 
         it('returns "global" for a null rule (optional-chaining guard)', () => {
             expect(call('resolveRuleLevel', null)).toBe('global');
+        });
+    });
+
+    describe('filterKodyRules per Git connection', () => {
+        const connectionGlobal = {
+            ...createRule({ uuid: 'g-b', repositoryId: 'global' }),
+            centralizedConfig: {
+                path: '.kody-rules/review/x.yml',
+                status: KodyRuleCentralizedStatus.SYNCED,
+                sourceRepositoryId: 'cfg-b',
+                sourceConnectionId: 'gl-b',
+                connectionScoped: true,
+            },
+        };
+
+        it("applies a connection's own global rule to that connection's repositories only", () => {
+            expect(
+                service.filterKodyRules(
+                    [connectionGlobal],
+                    'repo-gl',
+                    undefined,
+                    false,
+                    'gl-b',
+                ).standardRules,
+            ).toHaveLength(1);
+            expect(
+                service.filterKodyRules(
+                    [connectionGlobal],
+                    'repo-gh',
+                    undefined,
+                    false,
+                    'gh-a',
+                ).standardRules,
+            ).toHaveLength(0);
         });
     });
 });

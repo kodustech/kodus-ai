@@ -33,6 +33,12 @@ export interface IParametersRepository {
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<ParametersEntity<K>>;
 
+    /** The active parameter of every team in the organization. */
+    findActiveByKeyInOrganization<K extends ParametersKey>(
+        configKey: K,
+        organizationId: string,
+    ): Promise<ParametersEntity<K>[]>;
+
     /**
      * Atomically deactivates every currently-active row for
      * (teamId, configKey) and inserts a brand-new active row with

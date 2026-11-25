@@ -646,10 +646,18 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 (syncedEntity ?? kodyRulesEntity)?.toObject()?.rules || [];
 
             const { standardRules, memoryRules } =
-                this.kodyRulesValidationService.filterKodyRules(
-                    effectiveRules,
-                    repositoryId,
-                );
+                organizationAndTeamData.integrationId
+                    ? this.kodyRulesValidationService.filterKodyRules(
+                          effectiveRules,
+                          repositoryId,
+                          undefined,
+                          undefined,
+                          organizationAndTeamData.integrationId,
+                      )
+                    : this.kodyRulesValidationService.filterKodyRules(
+                          effectiveRules,
+                          repositoryId,
+                      );
 
             if (standardRules.length > 0 || memoryRules.length > 0) {
                 this.logger.log({

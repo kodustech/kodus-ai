@@ -51,7 +51,14 @@ describe('CentralizedConfigService', () => {
         mockParametersService = {
             findByKey: jest.fn(),
             findOne: jest.fn(),
+            findActiveByKeyInOrganization: jest.fn().mockResolvedValue([]),
         };
+        mockParametersService.findByKey.mockResolvedValue({
+            configValue: {
+                enabled: true,
+                repository: { name: 'central-repo', id: 'central-repo-id' },
+            },
+        });
 
         mockIntegrationConfigService = {
             findIntegrationConfigFormatted: jest.fn(),
@@ -1445,6 +1452,7 @@ describe('CentralizedConfigService', () => {
                     centralizedConfig: {
                         path: '.kody-rules/memories/logging.yml',
                         status: 'synced',
+                        sourceRepositoryId: 'central-repo-id',
                     },
                 }),
                 'org-1',
@@ -1531,6 +1539,7 @@ describe('CentralizedConfigService', () => {
                     centralizedConfig: {
                         path: '.kody-rules/review/security.yml',
                         status: 'synced',
+                        sourceRepositoryId: 'central-repo-id',
                     },
                     status: 'pending',
                     origin: 'past_reviews',
@@ -1693,6 +1702,7 @@ describe('CentralizedConfigService', () => {
                     centralizedConfig: {
                         path: '.kody-rules/review/style.yml',
                         status: 'synced',
+                        sourceRepositoryId: 'central-repo-id',
                     },
                     status: 'active',
                 }),
@@ -1782,6 +1792,7 @@ describe('CentralizedConfigService', () => {
                     centralizedConfig: {
                         path: '.kody-rules/review/docs.yml',
                         status: 'synced',
+                        sourceRepositoryId: 'central-repo-id',
                     },
                 }),
                 'org-1',
@@ -2169,7 +2180,10 @@ describe('CentralizedConfigService.synchronizeKodyRules — rejected rule files'
     function makeService(ruleContent: Record<string, unknown>) {
         const createOrUpdateKodyRulesUseCase = { execute: jest.fn() };
         const service = new CentralizedConfigService(
-            {} as any, // parametersService
+            {
+                findByKey: jest.fn(),
+                findActiveByKeyInOrganization: jest.fn().mockResolvedValue([]),
+            } as any, // parametersService
             {
                 findIntegrationConfigFormatted: jest.fn().mockResolvedValue([]),
             } as any,

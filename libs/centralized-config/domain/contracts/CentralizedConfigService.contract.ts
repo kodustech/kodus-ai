@@ -6,6 +6,7 @@ import {
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { DeepPartial } from 'typeorm';
 
+import { CentralizedRuleSource } from '@libs/kodyRules/domain/utils/centralized-rule-source';
 export const CENTRALIZED_CONFIG_SERVICE_TOKEN =
     'CENTRALIZED_CONFIG_SERVICE_TOKEN';
 
@@ -44,6 +45,11 @@ export interface ICentralizedConfigService {
     getCentralizedConfigRepository(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<{ name: string; id: string }>;
+
+    /** The config repository a sync reads, its Git connection, and whether it is that connection's own config. */
+    getCentralizedSource(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CentralizedRuleSource>;
 
     /**
      * Discovers all kodus-config.yml files in the centralized config repository

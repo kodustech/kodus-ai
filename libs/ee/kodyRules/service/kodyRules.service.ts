@@ -105,6 +105,7 @@ import {
     INTEGRATION_CONFIG_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 
+import { keepCentralizedSource } from '@libs/kodyRules/domain/utils/centralized-rule-source';
 @Injectable()
 export class KodyRulesService implements IKodyRulesService {
     private readonly logger = createLogger(KodyRulesService.name);
@@ -888,6 +889,10 @@ export class KodyRulesService implements IKodyRulesService {
             ...kodyRule,
             ...statusOverride,
             ...(mergedSeverity ? { severity: mergedSeverity } : {}),
+            centralizedConfig: keepCentralizedSource(
+                existingRule.centralizedConfig,
+                kodyRule.centralizedConfig ?? existingRule.centralizedConfig,
+            ),
             updatedAt: new Date(),
         };
 

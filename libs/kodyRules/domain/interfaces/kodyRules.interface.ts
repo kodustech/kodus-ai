@@ -263,6 +263,15 @@ export type KodyRuleSourceFileIssue = 'not_a_rule_template';
 export interface IKodyRuleCentralizedConfig {
     path: string;
     status: KodyRuleCentralizedStatus;
+    /** The centralized config repository the rule was synced from. */
+    sourceRepositoryId?: string;
+    /** The Git connection of that repository, when known. */
+    sourceConnectionId?: string;
+    /**
+     * Synced from a Git connection's own centralized config: a global rule
+     * applies only to that connection's repositories.
+     */
+    connectionScoped?: boolean;
 }
 
 export interface IKodyRuleMemory extends Omit<

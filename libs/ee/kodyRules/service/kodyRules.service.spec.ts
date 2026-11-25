@@ -477,6 +477,36 @@ describe('KodyRulesService.createOrUpdate — auto-pause bookkeeping', () => {
         expect(patch.resumedAt).toBeInstanceOf(Date);
     });
 
+    it('keeps the centralized source when the PR flow rewrites the centralized fields of the same file', async () => {
+        const stored = withRule({
+            centralizedConfig: {
+                path: 'repo-1/.kody-rules/review/x.yml',
+                status: 'synced',
+                sourceRepositoryId: 'cfg-a',
+                sourceConnectionId: 'gh-a',
+            },
+        });
+
+        await svc.createOrUpdate(
+            ORG,
+            {
+                ...stored,
+                centralizedConfig: {
+                    path: 'repo-1/.kody-rules/review/x.yml',
+                    status: 'pending_delete',
+                },
+            } as any,
+            SYSTEM,
+        );
+
+        expect(patchSent().centralizedConfig).toEqual({
+            path: 'repo-1/.kody-rules/review/x.yml',
+            status: 'pending_delete',
+            sourceRepositoryId: 'cfg-a',
+            sourceConnectionId: 'gh-a',
+        });
+    });
+
     it('a resume the plan limit refuses keeps the auto-pause and records no resume', async () => {
         const stored = withRule({
             status: KodyRulesStatus.PAUSED,

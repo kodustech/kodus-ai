@@ -175,9 +175,12 @@ export class DeleteIntegrationUseCase {
             !workspaceKeepsAConnection ||
             (await this.centralizedConfigLivesOn(
                 organizationAndTeamData,
+                integration.uuid,
                 connectionRepositoryIds,
             ))
         ) {
+            // Clears this connection's centralized config, whether it held
+            // the workspace's or one of its own; the other connections' stay.
             await this.createOrUpdateParametersUseCase.execute(
                 ParametersKey.CENTRALIZED_CONFIG,
                 {
@@ -188,6 +191,9 @@ export class DeleteIntegrationUseCase {
                 {
                     organizationId: params.organizationId,
                     teamId: params.teamId,
+                    ...(workspaceKeepsAConnection
+                        ? { integrationId: integration.uuid }
+                        : {}),
                 },
             );
         }
@@ -264,6 +270,7 @@ export class DeleteIntegrationUseCase {
     /** Whether the workspace's centralized config repository is on this connection. */
     private async centralizedConfigLivesOn(
         organizationAndTeamData: { organizationId: string; teamId: string },
+        integrationId: string,
         connectionRepositoryIds: Set<string>,
     ): Promise<boolean> {
         const centralized = await this.parametersService?.findByKey(
@@ -271,6 +278,7 @@ export class DeleteIntegrationUseCase {
             {
                 organizationId: organizationAndTeamData.organizationId,
                 teamId: organizationAndTeamData.teamId,
+                integrationId,
             },
         );
         const repositoryId = centralized?.configValue?.repository?.id;

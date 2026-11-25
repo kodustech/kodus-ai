@@ -87,6 +87,7 @@ export interface AutoPauseRunResult {
  * Without fresh warehouse data nothing is judged: self-hosted installs without
  * the analytics worker skip the whole run.
  */
+import { StoredCentralizedConfig } from '@libs/organization/domain/parameters/utils/centralized-config-scope';
 @Injectable()
 export class AutoPauseKodyRulesUseCase {
     private readonly logger = createLogger(AutoPauseKodyRulesUseCase.name);
@@ -340,20 +341,30 @@ export class AutoPauseKodyRulesUseCase {
                         ParametersKey.CODE_REVIEW_CONFIG,
                         orgTeam,
                     ),
-                    this.parametersService.findByKey(
-                        ParametersKey.CENTRALIZED_CONFIG,
-                        orgTeam,
-                    ),
+                    this.parametersService.findOne({
+                        team: { uuid: team.uuid },
+                        configKey: ParametersKey.CENTRALIZED_CONFIG,
+                        active: true,
+                    }),
                 ]);
                 return {
                     teamId: team.uuid,
                     codeReviewConfig: codeReview?.configValue as
                         CodeReviewParameter | undefined,
-                    centralized: Boolean(
-                        (
-                            centralized?.configValue as
-                                CentralizedConfigParameter | undefined
-                        )?.enabled,
+                    // Any of the team's Git connections with its own
+                    // centralized config counts, not only the workspace's.
+                    centralized: [
+                        centralized?.configValue as
+                            StoredCentralizedConfig | undefined,
+                        ...Object.values(
+                            (
+                                centralized?.configValue as
+                                    StoredCentralizedConfig | undefined
+                            )?.connections ?? {},
+                        ),
+                    ].some(
+                        (config: CentralizedConfigParameter | undefined) =>
+                            config?.enabled === true,
                     ),
                 };
             }),

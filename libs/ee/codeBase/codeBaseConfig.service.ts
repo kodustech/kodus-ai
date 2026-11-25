@@ -183,6 +183,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     repository.id,
                     mergedConfigs.directoryId,
                     limited,
+                    organizationAndTeamData.integrationId,
                 ) || { standardRules: [], memoryRules: [] };
 
             const fullConfig = {

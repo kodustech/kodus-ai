@@ -57,13 +57,22 @@ export const withCentralizedConfigFor = (
         (!connections?.[integrationId] &&
             (!workspace.integrationId ||
                 workspace.integrationId === integrationId));
+    // A cleared config belongs to no connection: the next one to set it up
+    // takes the workspace's slot, and a connection's own slot goes away.
+    const cleared = !next.enabled && !next.repository?.id;
     if (writesWorkspace) {
-        const owner = integrationId ?? workspace.integrationId;
-        return { ...next, ...(owner ? { integrationId: owner } : {}), ...keep };
+        const owner = cleared
+            ? undefined
+            : (integrationId ?? workspace.integrationId);
+        const { integrationId: _stamp, ...rest } = next;
+        return { ...rest, ...(owner ? { integrationId: owner } : {}), ...keep };
     }
     const { integrationId: _id, ...own } = next;
-    return {
-        ...workspace,
-        connections: { ...connections, [integrationId]: own },
-    };
+    const others = { ...connections };
+    if (cleared) {
+        delete others[integrationId];
+    } else {
+        others[integrationId] = own;
+    }
+    return { ...workspace, connections: others };
 };

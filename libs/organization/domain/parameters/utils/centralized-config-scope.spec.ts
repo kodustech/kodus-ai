@@ -90,13 +90,13 @@ describe('centralized config per Git connection', () => {
 
             expect(
                 withCentralizedConfigFor(stored, 'gh-a', {
-                    enabled: false,
-                    repository: null,
+                    enabled: true,
+                    repository: { id: 'r-gh2', name: 'acme/config2' },
                     integrationId: 'gh-a',
                 }),
             ).toEqual({
-                enabled: false,
-                repository: null,
+                enabled: true,
+                repository: { id: 'r-gh2', name: 'acme/config2' },
                 integrationId: 'gh-a',
                 connections: { 'gl-b': gitlab },
             });
@@ -136,6 +136,42 @@ describe('centralized config per Git connection', () => {
                 integrationId: 'gh-a',
                 connections: { 'gl-b': gitlab },
             });
+        });
+        it('forgets the connection of a workspace config that was cleared, so the next connection can take it', () => {
+            const stored = {
+                ...github,
+                integrationId: 'gh-a',
+                connections: { 'gl-b': gitlab },
+            };
+
+            expect(
+                withCentralizedConfigFor(stored, 'gh-a', {
+                    enabled: false,
+                    repository: null,
+                    activePullRequest: null,
+                }),
+            ).toEqual({
+                enabled: false,
+                repository: null,
+                activePullRequest: null,
+                connections: { 'gl-b': gitlab },
+            });
+        });
+
+        it("removes a connection's own config once it is cleared", () => {
+            const stored = {
+                ...github,
+                integrationId: 'gh-a',
+                connections: { 'gl-b': gitlab },
+            };
+
+            expect(
+                withCentralizedConfigFor(stored, 'gl-b', {
+                    enabled: false,
+                    repository: null,
+                    activePullRequest: null,
+                }),
+            ).toEqual({ ...github, integrationId: 'gh-a', connections: {} });
         });
     });
 });

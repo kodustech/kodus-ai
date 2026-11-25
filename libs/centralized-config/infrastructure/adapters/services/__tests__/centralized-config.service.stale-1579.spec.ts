@@ -234,6 +234,7 @@ async function buildHarness(opts: {
             return Promise.resolve({ configValue: {} });
         }),
         findOne: jest.fn(),
+        findActiveByKeyInOrganization: jest.fn().mockResolvedValue([]),
     };
 
     const integrationConfigService = {

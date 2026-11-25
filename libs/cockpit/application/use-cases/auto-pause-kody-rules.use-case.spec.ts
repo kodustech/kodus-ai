@@ -52,7 +52,7 @@ describe('AutoPauseKodyRulesUseCase', () => {
         createOrUpdate: jest.Mock;
     };
     let teamService: { find: jest.Mock };
-    let parametersService: { findByKey: jest.Mock };
+    let parametersService: { findByKey: jest.Mock; findOne: jest.Mock };
     let licenseService: { validateOrganizationLicense: jest.Mock };
     let health: { ping: jest.Mock; runsSummary: jest.Mock };
     let notificationService: { emit: jest.Mock };
@@ -97,6 +97,13 @@ describe('AutoPauseKodyRulesUseCase', () => {
                 }
                 return null;
             }),
+            // The raw stored row, with every Git connection's centralized config.
+            findOne: jest.fn(async ({ configKey, team }) =>
+                parametersService.findByKey(configKey, {
+                    organizationId: 'org-1',
+                    teamId: team.uuid,
+                }),
+            ),
         };
         licenseService = {
             validateOrganizationLicense: jest.fn().mockResolvedValue({
@@ -218,6 +225,24 @@ describe('AutoPauseKodyRulesUseCase', () => {
 
             expect(result.skipped).toBe('setting_off');
             expect(reviewAnalytics.getKodyRulesUsage).not.toHaveBeenCalled();
+        });
+
+        it("skips an organization whose rules live in a Git connection's own config repository", async () => {
+            centralizedConfig = {
+                enabled: false,
+                repository: null,
+                connections: {
+                    'gl-b': {
+                        enabled: true,
+                        repository: { id: 'cfg-b', name: 'group/config' },
+                    },
+                },
+            };
+            givenRules([rule('r1')]);
+
+            const result = await useCase.executeForOrganization(ORG, NOW);
+
+            expect(result.skipped).toBe('centralized_config');
         });
 
         it('skips an organization whose rules live in a config repository', async () => {

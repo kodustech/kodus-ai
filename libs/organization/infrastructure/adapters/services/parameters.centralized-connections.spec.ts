@@ -71,7 +71,11 @@ describe('ParametersService centralized config per Git connection', () => {
 
         await service.createOrUpdateConfig(
             ParametersKey.CENTRALIZED_CONFIG,
-            { enabled: false, repository: null, connectionScoped: true },
+            {
+                enabled: true,
+                repository: { id: 'r-gl2', name: 'g/config2' },
+                connectionScoped: true,
+            },
             {
                 organizationId: 'org-1',
                 teamId: 'team-1',
@@ -83,7 +87,12 @@ describe('ParametersService centralized config per Git connection', () => {
             enabled: true,
             repository: { id: 'r-gh', name: 'acme/config' },
             integrationId: 'gh-a',
-            connections: { 'gl-b': { enabled: false, repository: null } },
+            connections: {
+                'gl-b': {
+                    enabled: true,
+                    repository: { id: 'r-gl2', name: 'g/config2' },
+                },
+            },
         });
     });
 
@@ -92,13 +101,16 @@ describe('ParametersService centralized config per Git connection', () => {
 
         await service.createOrUpdateConfig(
             ParametersKey.CENTRALIZED_CONFIG,
-            { enabled: false, repository: null },
+            {
+                enabled: false,
+                repository: { id: 'r-gh', name: 'acme/config' },
+            },
             { organizationId: 'org-1', teamId: 'team-1' },
         );
 
         expect(repository.update.mock.calls[0][1].configValue).toEqual({
             enabled: false,
-            repository: null,
+            repository: { id: 'r-gh', name: 'acme/config' },
             integrationId: 'gh-a',
             connections: stored.connections,
         });

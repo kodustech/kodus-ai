@@ -72,8 +72,29 @@ export class CentralizedConfigSyncUseCase implements IUseCase {
                     repository,
                 });
 
+            // A Git connection's own centralized config covers only its
+            // repositories: its root kodus-config.yml would overwrite the
+            // workspace defaults every connection shares.
+            const source =
+                await this.centralizedConfigService.getCentralizedSource(
+                    organizationAndTeamData,
+                );
+            const appliedConfigFiles = source.connectionScoped
+                ? configFilesMeta.filter((meta) => meta.repositoryId)
+                : configFilesMeta;
+            if (appliedConfigFiles.length < configFilesMeta.length) {
+                this.logger.warn({
+                    message: 'centralized_root_config_ignored',
+                    context: CentralizedConfigSyncUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: repository?.id,
+                    },
+                });
+            }
+
             const configScopesToSync = this.mergeConfigScopes(
-                configFilesMeta,
+                appliedConfigFiles,
                 ruleFilesMeta,
             );
 

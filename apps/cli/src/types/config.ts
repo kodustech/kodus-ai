@@ -58,6 +58,12 @@ export interface CentralizedConfigRepository {
 export interface CentralizedConfigStatus {
     enabled: boolean;
     repository: CentralizedConfigRepository | null;
+    /** Present when the workspace has several Git connections and none was named. */
+    connections?: Array<{
+        connectionId: string;
+        enabled: boolean;
+        repository: CentralizedConfigRepository | null;
+    }>;
 }
 
 export interface CentralizedConfigActionResponse {

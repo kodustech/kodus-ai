@@ -19,6 +19,7 @@ import { Injectable } from '@nestjs/common';
 /**
  * Service for validating and ordering Kody Rules in cloud mode
  */
+import { ruleAppliesToConnection } from '@libs/kodyRules/domain/utils/centralized-rule-source';
 @Injectable()
 export class KodyRulesValidationService {
     public readonly MAX_KODY_RULES = 10;
@@ -93,6 +94,7 @@ export class KodyRulesValidationService {
      * @param rules Array of KodyRules.
      * @param repositoryId Repository identifier.
      * @param directoryId Optional directory identifier.
+     * @param integrationId The Git connection under review: a global rule from another connection's own centralized config is left out.
      * @returns Array of filtered, ordered, and possibly limited KodyRules.
      */
     filterKodyRules(
@@ -100,6 +102,7 @@ export class KodyRulesValidationService {
         repositoryId: string,
         directoryId?: string,
         limited?: boolean,
+        integrationId?: string,
     ): {
         standardRules: Partial<IKodyRule>[];
         memoryRules: Partial<IKodyRule>[];
@@ -133,7 +136,9 @@ export class KodyRulesValidationService {
             }
 
             if (rule.repositoryId === 'global') {
-                globalRules.push(rule);
+                if (ruleAppliesToConnection(rule, integrationId)) {
+                    globalRules.push(rule);
+                }
                 continue;
             }
 

@@ -209,6 +209,23 @@ export class ParametersRepository implements IParametersRepository {
         return mapSimpleModelToEntity(parametersSelected, ParametersEntity);
     }
 
+    async findActiveByKeyInOrganization<K extends ParametersKey>(
+        configKey: K,
+        organizationId: string,
+    ): Promise<ParametersEntity<K>[]> {
+        const parameters = await this.parametersRepository
+            .createQueryBuilder('parameters')
+            .innerJoinAndSelect('parameters.team', 'team')
+            .where('parameters.configKey = :configKey', { configKey })
+            .andWhere('parameters.active = :active', { active: true })
+            .andWhere('team.organization_id = :organizationId', {
+                organizationId,
+            })
+            .getMany();
+
+        return mapSimpleModelsToEntities(parameters, ParametersEntity);
+    }
+
     async createNewActiveVersion<K extends ParametersKey>(
         configKey: K,
         teamId: string,

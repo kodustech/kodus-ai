@@ -102,6 +102,7 @@ const build = (opts: {
         mcpManagerService,
         createOrUpdateParametersUseCase,
         licenseService,
+        parametersService,
     };
 };
 
@@ -209,7 +210,28 @@ describe('DeleteIntegrationUseCase — one connection of several', () => {
         expect(createOrUpdateParametersUseCase.execute).toHaveBeenCalledWith(
             ParametersKey.CENTRALIZED_CONFIG,
             expect.objectContaining({ enabled: false }),
-            { organizationId: ORG, teamId: TEAM },
+            { organizationId: ORG, teamId: TEAM, integrationId: 'gh-a' },
+        );
+    });
+
+    it("reads the removed connection's own centralized config", async () => {
+        const { useCase, parametersService } = build({
+            connections: [
+                { uuid: 'gh-a', repos: ['config-repo'] },
+                { uuid: 'gh-b', repos: ['2'] },
+            ],
+            centralizedRepositoryId: 'config-repo',
+        });
+
+        await useCase.execute({
+            organizationId: ORG,
+            teamId: TEAM,
+            connectionId: 'gh-a',
+        });
+
+        expect(parametersService.findByKey).toHaveBeenCalledWith(
+            ParametersKey.CENTRALIZED_CONFIG,
+            { organizationId: ORG, teamId: TEAM, integrationId: 'gh-a' },
         );
     });
 });

@@ -97,6 +97,16 @@ export class ParametersService implements IParametersService {
         } as IParameters<K>);
     }
 
+    findActiveByKeyInOrganization<K extends ParametersKey>(
+        configKey: K,
+        organizationId: string,
+    ): Promise<ParametersEntity<K>[]> {
+        return this.parametersRepository.findActiveByKeyInOrganization(
+            configKey,
+            organizationId,
+        );
+    }
+
     createNewActiveVersion<K extends ParametersKey>(
         configKey: K,
         teamId: string,

@@ -196,7 +196,12 @@ let available = false;
             );
 
             service = new CentralizedConfigService(
-                {} as any, // parametersService
+                {
+                    findByKey: jest.fn(),
+                    findActiveByKeyInOrganization: jest
+                        .fn()
+                        .mockResolvedValue([]),
+                } as any, // parametersService
                 {
                     findIntegrationConfigFormatted: jest
                         .fn()

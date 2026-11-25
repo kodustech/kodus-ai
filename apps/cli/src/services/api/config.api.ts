@@ -28,6 +28,11 @@ type RequestWithRetry = <T>(
     options?: RequestInit,
 ) => Promise<T>;
 
+/** Names the Git connection when the workspace has several. */
+const connectionQuery = (scope: { connectionId?: string }): string =>
+    scope.connectionId
+        ? `?connectionId=${encodeURIComponent(scope.connectionId)}`
+        : '';
 export class RealConfigApi implements IConfigApi {
     constructor(
         private readonly requester: RequestWithRetry = requestWithRetry,
@@ -172,9 +177,10 @@ export class RealConfigApi implements IConfigApi {
 
     async getCentralizedConfigStatus(
         accessToken: string,
+        scope: { connectionId?: string } = {},
     ): Promise<CentralizedConfigStatus> {
         return this.requester<CentralizedConfigStatus>(
-            '/cli/config/centralized/status',
+            `/cli/config/centralized/status${connectionQuery(scope)}`,
             {
                 headers: this.buildAuthHeaders(accessToken),
             },
@@ -186,6 +192,7 @@ export class RealConfigApi implements IConfigApi {
         params: {
             repositoryId: string;
             syncOption: 'pr' | 'manual';
+            connectionId?: string;
         },
     ): Promise<CentralizedConfigActionResponse> {
         return this.requester<CentralizedConfigActionResponse>(
@@ -200,9 +207,10 @@ export class RealConfigApi implements IConfigApi {
 
     async syncCentralizedConfig(
         accessToken: string,
+        scope: { connectionId?: string } = {},
     ): Promise<CentralizedConfigActionResponse> {
         return this.requester<CentralizedConfigActionResponse>(
-            '/cli/config/centralized/sync',
+            `/cli/config/centralized/sync${connectionQuery(scope)}`,
             {
                 method: 'POST',
                 headers: this.buildAuthHeaders(accessToken),
@@ -212,9 +220,10 @@ export class RealConfigApi implements IConfigApi {
 
     async disableCentralizedConfig(
         accessToken: string,
+        scope: { connectionId?: string } = {},
     ): Promise<CentralizedConfigActionResponse> {
         return this.requester<CentralizedConfigActionResponse>(
-            '/cli/config/centralized/disable',
+            `/cli/config/centralized/disable${connectionQuery(scope)}`,
             {
                 method: 'POST',
                 headers: this.buildAuthHeaders(accessToken),
@@ -222,11 +231,17 @@ export class RealConfigApi implements IConfigApi {
         );
     }
 
-    async downloadCentralizedConfig(accessToken: string): Promise<Uint8Array> {
-        return requestBinaryWithRetry('/cli/config/centralized/download', {
-            method: 'GET',
-            headers: this.buildAuthHeaders(accessToken),
-        });
+    async downloadCentralizedConfig(
+        accessToken: string,
+        scope: { connectionId?: string } = {},
+    ): Promise<Uint8Array> {
+        return requestBinaryWithRetry(
+            `/cli/config/centralized/download${connectionQuery(scope)}`,
+            {
+                method: 'GET',
+                headers: this.buildAuthHeaders(accessToken),
+            },
+        );
     }
 
     // The endpoints below are the ones Settings > Code Review uses; they

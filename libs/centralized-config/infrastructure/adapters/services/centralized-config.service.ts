@@ -63,6 +63,13 @@ import { KodyRuleSeverity } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 import z from 'zod';
 import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.type';
 import { syncedRuleIsUnchanged } from '@libs/centralized-config/utils/synced-rule-is-unchanged';
+import {
+    centralizedRuleOwner,
+    CentralizedRuleSource,
+    centralizedSourceStamp,
+} from '@libs/kodyRules/domain/utils/centralized-rule-source';
+import { StoredCentralizedConfig } from '@libs/organization/domain/parameters/utils/centralized-config-scope';
+import { CentralizedConfigParameter } from '@libs/organization/domain/parameters/types/configValue.type';
 import { ContextReferenceDetectionService } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 
 @Injectable()
@@ -182,6 +189,68 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         }
 
         return centralizedConfigParameter.configValue.repository;
+    }
+
+    /** The config repository a sync reads, and the Git connection it is on. */
+    async getCentralizedSource(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CentralizedRuleSource> {
+        const repository = await this.getCentralizedConfigRepository(
+            organizationAndTeamData,
+        );
+        const configValue = (
+            await this.parametersService.findByKey(
+                ParametersKey.CENTRALIZED_CONFIG,
+                organizationAndTeamData,
+            )
+        )?.configValue;
+        return {
+            repositoryId: String(repository.id),
+            connectionId:
+                organizationAndTeamData.integrationId ??
+                configValue?.integrationId,
+            connectionScoped: configValue?.connectionScoped === true,
+        };
+    }
+
+    /**
+     * Whether the organization has at most one centralized config repository
+     * across its teams and Git connections. Until then a rule synced before
+     * sources were recorded can only have come from it. A failed read answers
+     * no, so nothing unattributed is deleted.
+     */
+    private async hasSingleCentralizedSource(
+        organizationId: string,
+    ): Promise<boolean> {
+        try {
+            const parameters =
+                await this.parametersService.findActiveByKeyInOrganization(
+                    ParametersKey.CENTRALIZED_CONFIG,
+                    organizationId,
+                );
+            const configured = (config?: CentralizedConfigParameter | null) =>
+                config?.enabled === true && Boolean(config.repository?.id);
+            const sources = (parameters ?? []).reduce((count, parameter) => {
+                const value = parameter?.configValue as
+                    StoredCentralizedConfig | undefined;
+                return (
+                    count +
+                    (configured(value) ? 1 : 0) +
+                    Object.values(value?.connections ?? {}).filter(configured)
+                        .length
+                );
+            }, 0);
+            return sources <= 1;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not count the centralized config repositories of the organization; unattributed rules are kept',
+                context: CentralizedConfigService.name,
+                metadata: { organizationId },
+                error,
+            });
+            return false;
+        }
     }
 
     async discoverConfigFiles(params: {
@@ -1192,10 +1261,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             const repositories =
                 await this.integrationConfigService.findIntegrationConfigFormatted<
                     Repositories[]
-                >(IntegrationConfigKey.REPOSITORIES, {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                });
+                >(IntegrationConfigKey.REPOSITORIES, organizationAndTeamData);
 
             const foundRepo = repositories?.find(
                 (repo) => repo.id === repositoryId,
@@ -1645,10 +1711,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             const repositories =
                 await this.integrationConfigService.findIntegrationConfigFormatted<
                     Repositories[]
-                >(IntegrationConfigKey.REPOSITORIES, {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                });
+                >(IntegrationConfigKey.REPOSITORIES, organizationAndTeamData);
 
             const desiredKeys = new Set<string>();
 
@@ -2093,6 +2156,9 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 await this.getCentralizedConfigRepository(
                     organizationAndTeamData,
                 );
+            const source = await this.getCentralizedSource(
+                organizationAndTeamData,
+            );
 
             let syncedCount = 0;
             const failureDetails: Array<{ file: string; error: string }> = [];
@@ -2100,10 +2166,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             const repositories =
                 await this.integrationConfigService.findIntegrationConfigFormatted<
                     Repositories[]
-                >(IntegrationConfigKey.REPOSITORIES, {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                });
+                >(IntegrationConfigKey.REPOSITORIES, organizationAndTeamData);
 
             const repositoriesMap = new Map<
                 string,
@@ -2136,6 +2199,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     status?: KodyRulesStatus;
                     origin?: KodyRulesOrigin;
                     updatedAt?: Date;
+                    own: boolean;
                 }
             >();
 
@@ -2154,16 +2218,33 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     continue;
                 }
 
+                // Another config repository's rule at the same path is not
+                // this sync's to update (#2215). A rule synced before sources
+                // were recorded is adopted, unless one of its own exists.
+                const owner = centralizedRuleOwner(
+                    existingRule.centralizedConfig,
+                    source,
+                );
+                if (owner === 'other') {
+                    continue;
+                }
+                const own = owner === 'own';
+
                 const currentMapped =
                     existingRuleBySourcePath.get(sourcePathKey);
 
-                if (!currentMapped) {
+                if (!currentMapped || (own && !currentMapped.own)) {
                     existingRuleBySourcePath.set(sourcePathKey, {
                         uuid: existingRule.uuid,
                         status: existingRule.status,
                         origin: existingRule.origin,
                         updatedAt: existingRule.updatedAt,
+                        own,
                     });
+                    continue;
+                }
+
+                if (currentMapped.own && !own) {
                     continue;
                 }
 
@@ -2179,6 +2260,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         status: existingRule.status,
                         origin: existingRule.origin,
                         updatedAt: existingRule.updatedAt,
+                        own,
                     });
                     continue;
                 }
@@ -2198,6 +2280,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         status: existingRule.status,
                         origin: existingRule.origin,
                         updatedAt: existingRule.updatedAt,
+                        own,
                     });
                 }
             }
@@ -2382,6 +2465,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         centralizedConfig: {
                             path: ruleFileMeta.path,
                             status: KodyRuleCentralizedStatus.SYNCED,
+                            ...centralizedSourceStamp(source),
                         },
                         origin:
                             existingMatch?.origin ??
@@ -2565,6 +2649,21 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             params;
 
         try {
+            const source = await this.getCentralizedSource(
+                organizationAndTeamData,
+            );
+            let singleSource: boolean | undefined;
+            const ownsRule = async (
+                centralizedConfig: IKodyRule['centralizedConfig'],
+            ) => {
+                const owner = centralizedRuleOwner(centralizedConfig, source);
+                if (owner !== 'unstamped') return owner === 'own';
+                singleSource ??= await this.hasSingleCentralizedSource(
+                    organizationAndTeamData.organizationId,
+                );
+                return singleSource;
+            };
+
             const existingEntity =
                 await this.kodyRulesService.findByOrganizationId(
                     organizationAndTeamData.organizationId,
@@ -2597,7 +2696,10 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             // the root `kodus-config.yml`, so finding one proves the read
             // worked and the rules really are gone.
             const centralizedRuleCount = existingRules.filter(
-                (rule) => rule.centralizedConfig?.path,
+                (rule) =>
+                    rule.centralizedConfig?.path &&
+                    centralizedRuleOwner(rule.centralizedConfig, source) !==
+                        'other',
             ).length;
             const treeReadProven = (configFiles?.length ?? 0) > 0;
             if (
@@ -2644,6 +2746,13 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 }
 
                 if (!currentSourcePaths.has(sourcePath)) {
+                    // Only this config repository's rules can go stale here;
+                    // another team's or connection's are reconciled by its
+                    // own sync (#2215).
+                    if (!(await ownsRule(rule.centralizedConfig))) {
+                        continue;
+                    }
+
                     const centralizedStatus = rule.centralizedConfig?.status;
                     // The file for an in-flight mutation lives on the open
                     // PR, not the default branch that sync reads. Deleting
@@ -2747,10 +2856,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         const repositories =
             await this.integrationConfigService.findIntegrationConfigFormatted<
                 Repositories[]
-            >(IntegrationConfigKey.REPOSITORIES, {
-                organizationId: organizationAndTeamData.organizationId,
-                teamId: organizationAndTeamData.teamId,
-            });
+            >(IntegrationConfigKey.REPOSITORIES, organizationAndTeamData);
 
         if (!repositories || !Array.isArray(repositories)) {
             // A missing/failed repositories mapping is a READ FAILURE, not

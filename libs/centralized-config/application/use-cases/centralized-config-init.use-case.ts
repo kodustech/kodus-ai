@@ -38,8 +38,13 @@ export class CentralizedConfigInitUseCase implements IUseCase {
         message: string;
         prUrl?: string;
     }> {
-        const { user, organizationAndTeamData, repository, syncOption } =
-            params;
+        const { user, repository, syncOption } = params;
+        // The config repository's Git connection owns the config it sets up.
+        const organizationAndTeamData =
+            await this.centralizedConfigPrService.scopeToRepositoryConnection(
+                params.organizationAndTeamData,
+                repository?.id,
+            );
         const { organizationId, teamId } = organizationAndTeamData;
 
         let shouldRollbackEnable = false;
@@ -111,6 +116,7 @@ export class CentralizedConfigInitUseCase implements IUseCase {
                         params.skipAuthorizationForDownload ?? false,
                     organizationId: organizationAndTeamData.organizationId,
                     markRulesAsPendingWithSourcePath: true,
+                    ...(await this.downloadScope(organizationAndTeamData)),
                 },
             );
 
@@ -223,6 +229,31 @@ export class CentralizedConfigInitUseCase implements IUseCase {
             return 'The repository or its default branch could not be found. Confirm the repository still exists and is connected to Kodus.';
         }
         return `Reason: ${detail}`;
+    }
+
+    /**
+     * With several Git connections, the export holds only this connection's
+     * repositories; a connection's own config also leaves out the workspace
+     * defaults, which its sync would not apply.
+     */
+    private async downloadScope(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<{
+        repositoryIds?: string[];
+        includeWorkspaceDefaults?: boolean;
+    }> {
+        if (!organizationAndTeamData.integrationId) return {};
+        const current = await this.parametersService.findByKey(
+            ParametersKey.CENTRALIZED_CONFIG,
+            organizationAndTeamData,
+        );
+        return {
+            repositoryIds:
+                await this.centralizedConfigPrService.repositoryIdsOf(
+                    organizationAndTeamData,
+                ),
+            includeWorkspaceDefaults: !current?.configValue?.connectionScoped,
+        };
     }
 
     private async checkIfCentralizedConfigEnabled(
