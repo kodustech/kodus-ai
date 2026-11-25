@@ -667,6 +667,7 @@ export class GithubService
                 this.configService.get<string>('GLOBAL_GITHUB_CLIENT_ID'),
                 state,
                 redirectUri,
+                this.getGithubWebBaseUrl(this.getGithubAppHost()),
             ),
         };
     }
@@ -786,7 +787,14 @@ export class GithubService
     }
 
     private createUserOctokit(userToken: string): Octokit {
-        return new Octokit({ auth: userToken, request: { timeout: 60000 } });
+        // The user authorized the App, so the token was issued where the App
+        // lives (API_GITHUB_APP_HOST, unset = github.com).
+        const appBaseUrl = this.getGithubApiBaseUrl(this.getGithubAppHost());
+        return new Octokit({
+            auth: userToken,
+            ...(appBaseUrl && { baseUrl: appBaseUrl }),
+            request: { timeout: 60000 },
+        });
     }
 
     async authenticateWithCodeOauth(

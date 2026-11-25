@@ -49,6 +49,53 @@ describe('GithubService — GitHub App on GitHub Enterprise Server', () => {
         });
     });
 
+    describe('user authorization of an installation link', () => {
+        const ghesEnv = {
+            ...appEnv,
+            API_GITHUB_APP_HOST: 'https://ghe.example.com',
+            API_FRONTEND_URL: 'https://app.example.test',
+        };
+
+        it('sends the user to the authorization page of the App host', () => {
+            const svc = createService(ghesEnv);
+
+            const { url } = svc.getInstallationAuthorizationUrl({
+                installationId: '42',
+                userId: 'u1',
+                organizationId: 'o1',
+            });
+
+            expect(new URL(url).origin + new URL(url).pathname).toBe(
+                'https://ghe.example.com/login/oauth/authorize',
+            );
+        });
+
+        it('keeps github.com without API_GITHUB_APP_HOST', () => {
+            const svc = createService({
+                ...appEnv,
+                API_FRONTEND_URL: 'https://app.example.test',
+            });
+
+            const { url } = svc.getInstallationAuthorizationUrl({
+                installationId: '42',
+                userId: 'u1',
+                organizationId: 'o1',
+            });
+
+            expect(new URL(url).origin).toBe('https://github.com');
+        });
+
+        it('lists the user installations on the App host', () => {
+            const svc = createService(ghesEnv);
+
+            const octokit = svc.createUserOctokit('ghu_user_token');
+
+            expect(octokit.request.endpoint.DEFAULTS.baseUrl).toBe(
+                'https://ghe.example.com/api/v3',
+            );
+        });
+    });
+
     describe('installation', () => {
         it('stores the App host with a new installation', async () => {
             const svc = createService({
