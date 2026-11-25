@@ -58,6 +58,15 @@ describe('buildFileContentReadPlan', () => {
         });
     });
 
+    it('reads staged content from the git index', () => {
+        expect(
+            buildFileContentReadPlan('src/app.ts', { staged: true }),
+        ).toEqual({
+            mode: 'git-show',
+            args: [':src/app.ts'],
+        });
+    });
+
     it('reads working tree content from disk', () => {
         expect(buildFileContentReadPlan('src/app.ts')).toEqual({
             mode: 'fs',

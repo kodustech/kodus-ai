@@ -1,6 +1,9 @@
 type ReviewDiffGit = {
     setVerbose(verbose: boolean): void;
-    getDiffForFiles(files: string[]): Promise<string>;
+    getDiffForFiles(
+        files: string[],
+        options?: { staged?: boolean },
+    ): Promise<string>;
     getDiffForBranch(branch: string): Promise<string>;
     getDiffForCommit(commit: string): Promise<string>;
     getStagedDiff(): Promise<string>;
@@ -30,10 +33,14 @@ export async function resolveReviewDiff({
     if (files.length > 0) {
         if (verbose) {
             verboseMessages.push(
-                `[verbose] Getting diff for specific files: ${files.join(', ')}`,
+                options.staged
+                    ? `[verbose] Getting staged diff for specific files: ${files.join(', ')}`
+                    : `[verbose] Getting diff for specific files: ${files.join(', ')}`,
             );
         }
-        diff = await git.getDiffForFiles(files);
+        diff = options.staged
+            ? await git.getDiffForFiles(files, { staged: true })
+            : await git.getDiffForFiles(files);
     } else if (options.branch) {
         if (verbose) {
             verboseMessages.push(

@@ -410,6 +410,118 @@ describe('review integration', () => {
         }
     });
 
+    it('keeps both diff and inlined config.files scoped to staged changes only', async () => {
+        const stagedPath = path.join(gitRepoDir, 'staged-scope.ts');
+        const untrackedPath = path.join(gitRepoDir, 'untracked-scope.ts');
+        await fs.writeFile(stagedPath, 'const STAGED_CONTENT = true;\n');
+        await execFileAsync('git', ['add', 'staged-scope.ts'], {
+            cwd: gitRepoDir,
+        });
+        await fs.writeFile(
+            stagedPath,
+            'const STAGED_CONTENT = true;\nconst UNSTAGED_SAME_FILE = true;\n',
+        );
+        await fs.writeFile(untrackedPath, 'const UNTRACKED_OTHER = true;\n');
+
+        try {
+            const { exitCode } = await runCli([
+                'review',
+                '--staged',
+                '--format',
+                'json',
+            ]);
+            expect(exitCode).toBe(0);
+
+            const req = mockServer.requests.find(
+                (r) => r.url === '/cli/review',
+            );
+            expect(req).toBeDefined();
+            expect(req!.body.diff).toContain('STAGED_CONTENT');
+            expect(req!.body.diff).not.toContain('UNSTAGED_SAME_FILE');
+            expect(req!.body.diff).not.toContain('let z = 3');
+            expect(req!.body.diff).not.toContain('UNTRACKED_OTHER');
+
+            const files = req!.body.config?.files ?? [];
+            expect(files.map((file: any) => file.path)).toEqual([
+                'staged-scope.ts',
+            ]);
+            expect(files[0].content).toContain('STAGED_CONTENT');
+            expect(files[0].content).not.toContain('UNSTAGED_SAME_FILE');
+            expect(files[0].diff).toContain('STAGED_CONTENT');
+            expect(files[0].diff).not.toContain('UNSTAGED_SAME_FILE');
+        } finally {
+            await execFileAsync('git', ['reset', 'HEAD', 'staged-scope.ts'], {
+                cwd: gitRepoDir,
+            }).catch(() => {});
+            await fs.unlink(stagedPath).catch(() => {});
+            await fs.unlink(untrackedPath).catch(() => {});
+        }
+    });
+
+    it('keeps --staged with explicit files scoped to staged index changes only', async () => {
+        const stagedPath = path.join(gitRepoDir, 'staged-explicit.ts');
+        await fs.writeFile(stagedPath, 'const STAGED_EXPLICIT = true;\n');
+        await execFileAsync('git', ['add', 'staged-explicit.ts'], {
+            cwd: gitRepoDir,
+        });
+        await fs.writeFile(
+            stagedPath,
+            'const STAGED_EXPLICIT = true;\nconst UNSTAGED_EXPLICIT_EDIT = true;\n',
+        );
+
+        try {
+            const { exitCode } = await runCli([
+                'review',
+                '--staged',
+                'staged-explicit.ts',
+                'test.ts',
+                '--format',
+                'json',
+            ]);
+            expect(exitCode).toBe(0);
+
+            const req = mockServer.requests.find(
+                (r) => r.url === '/cli/review',
+            );
+            expect(req).toBeDefined();
+            expect(req!.body.diff).toContain('STAGED_EXPLICIT');
+            expect(req!.body.diff).not.toContain('UNSTAGED_EXPLICIT_EDIT');
+            expect(req!.body.diff).not.toContain('let z = 3');
+
+            const files = req!.body.config?.files ?? [];
+            expect(files.map((file: any) => file.path)).toEqual([
+                'staged-explicit.ts',
+            ]);
+            expect(files[0].content).toContain('STAGED_EXPLICIT');
+            expect(files[0].content).not.toContain('UNSTAGED_EXPLICIT_EDIT');
+
+            mockServer.reset();
+
+            const unstagedOnly = await runCli([
+                'review',
+                '--staged',
+                'test.ts',
+                '--format',
+                'json',
+            ]);
+            expect(unstagedOnly.stdout + unstagedOnly.stderr).toContain(
+                'No changes to review',
+            );
+            expect(
+                mockServer.requests.filter((r) => r.url === '/cli/review'),
+            ).toHaveLength(0);
+        } finally {
+            await execFileAsync(
+                'git',
+                ['reset', 'HEAD', 'staged-explicit.ts'],
+                {
+                    cwd: gitRepoDir,
+                },
+            ).catch(() => {});
+            await fs.unlink(stagedPath).catch(() => {});
+        }
+    });
+
     it('outputs markdown format', async () => {
         const { stdout, exitCode } = await runCli([
             'review',

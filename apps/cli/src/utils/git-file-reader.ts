@@ -62,6 +62,13 @@ export function buildFileContentReadPlan(
         };
     }
 
+    if (options?.staged) {
+        return {
+            mode: 'git-show',
+            args: [`:${filePath}`],
+        };
+    }
+
     return {
         mode: 'fs',
         path: filePath,
