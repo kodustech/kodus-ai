@@ -58,24 +58,27 @@ function stageFor(item, storedConfig, { withMap = false } = {}) {
     };
     // Stored rows, provider snapshots, Mongo reads and billing HTTP responses
     // are the data boundaries; every service above those boundaries is real.
-    const integrations = new IntegrationService(
-        {
-            findOne: async (filter) =>
-                filter.organization?.uuid === EVAL_ORG.organizationId &&
-                filter.team?.uuid === EVAL_ORG.teamId &&
-                filter.status === true &&
-                filter.integrationCategory === 'CODE_MANAGEMENT'
-                    ? {
-                          platform: PlatformType.GITHUB,
-                          integrationCategory: 'CODE_MANAGEMENT',
-                          status: true,
-                          organization: { uuid: EVAL_ORG.organizationId },
-                          team: { uuid: EVAL_ORG.teamId },
-                      }
-                    : null,
-        },
-        {},
-    );
+    const integrationRepository = {
+        findOne: async (filter) =>
+            filter.organization?.uuid === EVAL_ORG.organizationId &&
+            filter.team?.uuid === EVAL_ORG.teamId &&
+            filter.status === true &&
+            filter.integrationCategory === 'CODE_MANAGEMENT'
+                ? {
+                      platform: PlatformType.GITHUB,
+                      integrationCategory: 'CODE_MANAGEMENT',
+                      status: true,
+                      organization: { uuid: EVAL_ORG.organizationId },
+                      team: { uuid: EVAL_ORG.teamId },
+                  }
+                : null,
+    };
+    // The workspace's Git connections, which calls are routed among.
+    integrationRepository.find = async (filter) => {
+        const row = await integrationRepository.findOne(filter);
+        return row ? [row] : [];
+    };
+    const integrations = new IntegrationService(integrationRepository, {});
     const factory = new PlatformIntegrationFactory();
     factory.registerCodeManagementService(PlatformType.GITHUB, {
         getPullRequest: async () => pr,

@@ -199,6 +199,11 @@ async function runCase(item, slot, withMap = true) {
                   }
                 : null,
     };
+    // The workspace's Git connections, which calls are routed among.
+    integrationRepository.find = async (filter) => {
+        const row = await integrationRepository.findOne(filter);
+        return row ? [row] : [];
+    };
     const integrations = new IntegrationService(integrationRepository, {});
     const providers = new PlatformIntegrationFactory();
     providers.registerCodeManagementService(
