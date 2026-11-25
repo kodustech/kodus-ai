@@ -197,7 +197,9 @@ const SHAPES: Shape[] = [
         reply: { text: '{'.repeat(1_000_000) },
         outcome: { kind: 'reask' },
         dependsOn: '#2700 (0be848331)',
-        maxMs: 3_000,
+        // Not a speed target: the quadratic walk took ~18 min here, and Stryker's
+        // instrumented dry run takes ~7s on CI.
+        maxMs: 30_000,
     },
     {
         id: '10 a <think> block in the text before the answer',
@@ -640,7 +642,7 @@ describe.each(ROWS)('$id', (row) => {
                 }
                 expectSeen(run, seen);
             },
-            30_000,
+            60_000,
         );
     });
 

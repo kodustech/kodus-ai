@@ -778,8 +778,10 @@ describe('repairAndValidate', () => {
                     '{'.repeat(500_000) + 'x' + '}'.repeat(500_000),
                 ),
             ).toBeUndefined();
-            expect(Date.now() - started).toBeLessThan(5_000);
-        }, 30_000);
+            // Not a speed target: the quadratic walk took ~18 min here, and
+            // Stryker's instrumented dry run takes ~7s on CI.
+            expect(Date.now() - started).toBeLessThan(30_000);
+        }, 60_000);
 
         it('still recovers the answer behind a long quote of real code under the scan budget', async () => {
             // Balanced braces in ordinary code cost their own span, not the
@@ -794,7 +796,7 @@ describe('repairAndValidate', () => {
                     '```ts\n' + code + '```\n' + findings,
                 ),
             ).toEqual({ violations: [{ body: 'bug', line: 12 }] });
-            expect(Date.now() - started).toBeLessThan(2_000);
+            expect(Date.now() - started).toBeLessThan(15_000);
         });
 
         it('recovers an answer whose own string value holds the fence the primary took', async () => {
