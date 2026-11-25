@@ -431,12 +431,21 @@ const Composer = ({
     const [cadence, setCadence] = useState<ScanCadence>(
         schedule?.cadence ?? "weekly",
     );
-    const [maxUsd, setMaxUsd] = useState(
-        schedule?.budget.maxUsd !== undefined
-            ? String(schedule.budget.maxUsd)
-            : schedule
-              ? ""
-              : "10",
+    // A schedule capped in tokens (a model without a known price) keeps
+    // its unit: saving never trades its cap for a dollar amount.
+    const limitBy: "usd" | "tokens" =
+        schedule?.budget.maxUsd === undefined &&
+        schedule?.budget.maxTokens !== undefined
+            ? "tokens"
+            : "usd";
+    const [rawLimit, setRawLimit] = useState(
+        limitBy === "tokens"
+            ? String(schedule?.budget.maxTokens)
+            : schedule?.budget.maxUsd !== undefined
+              ? String(schedule.budget.maxUsd)
+              : schedule
+                ? ""
+                : "10",
     );
     const [mode, setMode] = useState<SecurityScanMode>(
         schedule?.mode ?? "incremental",
@@ -446,9 +455,13 @@ const Composer = ({
     const [error, setError] = useState<string>();
 
     const { value: limit, error: limitError } = parseScanLimit(
-        maxUsd.trim(),
-        "usd",
+        rawLimit.trim(),
+        limitBy,
     );
+    const limitText =
+        limitBy === "tokens"
+            ? `${limit?.toLocaleString()} tokens`
+            : `$${limit}`;
     const firstRun = nextRunAt(cadence, new Date());
     const owner = schedule?.teamId ?? teamId;
     const ready =
@@ -463,7 +476,9 @@ const Composer = ({
                 teamId: owner,
                 repositoryId,
                 cadence,
-                maxUsd: limit,
+                ...(limitBy === "tokens"
+                    ? { maxTokens: limit }
+                    : { maxUsd: limit }),
                 mode,
                 ...(modelId === ROUTING_MODEL ? {} : { modelId }),
             });
@@ -528,19 +543,35 @@ const Composer = ({
 
             <div className={line}>
                 <span>Stop each run at</span>
-                <span className="inline-block w-24">
+                <span
+                    className={
+                        limitBy === "tokens"
+                            ? "inline-block w-32"
+                            : "inline-block w-24"
+                    }>
                     <Input
                         size="md"
-                        aria-label="Limit per run in USD"
+                        aria-label={
+                            limitBy === "tokens"
+                                ? "Limit per run in tokens"
+                                : "Limit per run in USD"
+                        }
                         inputMode="decimal"
-                        value={maxUsd}
+                        value={rawLimit}
                         error={limitError}
                         disabled={saving}
-                        leftIcon={<span className="text-sm">$</span>}
-                        className="h-8 pr-3 pl-8"
-                        onChange={(ev) => setMaxUsd(ev.target.value)}
+                        leftIcon={
+                            limitBy === "usd" ? (
+                                <span className="text-sm">$</span>
+                            ) : undefined
+                        }
+                        className={
+                            limitBy === "usd" ? "h-8 pr-3 pl-8" : "h-8 px-3"
+                        }
+                        onChange={(ev) => setRawLimit(ev.target.value)}
                     />
                 </span>
+                {limitBy === "tokens" && <span>tokens</span>}
                 <span>on</span>
                 <Slot
                     label="Model"
@@ -574,7 +605,7 @@ const Composer = ({
                               schedule && !schedule.enabled
                                   ? "Paused: saving keeps it paused until it is turned back on."
                                   : `${schedule ? "Once saved, the next" : "First"} scan is ${whenUtc(firstRun)}.`
-                          } Each run stops at $${limit}${
+                          } Each run stops at ${limitText}${
                               mode === "incremental"
                                   ? " and reads only files changed since the last."
                                   : " and reads the whole repository."
