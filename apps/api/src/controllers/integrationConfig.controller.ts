@@ -1,4 +1,19 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import {
+    Controller,
+    Get,
+    Inject,
+    Optional,
+    Query,
+    UseGuards,
+} from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import {
+    assertConnectionReadable,
+    readableConnectionIds,
+} from '@libs/identity/infrastructure/adapters/services/permissions/connection-read';
 
 import {
     Action,
@@ -27,6 +42,10 @@ import { ApiArrayResponseDto } from '../dtos/api-response.dto';
 export class IntegrationConfigController {
     constructor(
         private readonly getIntegrationConfigsByIntegrationCategoryUseCase: GetIntegrationConfigsByIntegrationCategoryUseCase,
+        @Inject(REQUEST)
+        private readonly request: UserRequest,
+        @Optional()
+        private readonly connectionAccess?: ConnectionAccessService,
     ) {}
 
     @Get('/get-integration-configs-by-integration-category')
@@ -57,10 +76,15 @@ export class IntegrationConfigController {
         @Query('teamId') teamId: string,
         @Query('connectionId') connectionId?: string,
     ) {
+        const restriction = await this.connectionAccess?.restrictionFor(
+            this.request?.user,
+        );
+        assertConnectionReadable(restriction, connectionId);
         return this.getIntegrationConfigsByIntegrationCategoryUseCase.execute({
             integrationCategory,
             teamId,
             connectionId,
+            readableConnectionIds: readableConnectionIds(restriction),
         });
     }
 }

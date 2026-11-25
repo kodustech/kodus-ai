@@ -38,20 +38,27 @@ export class GetRepositoriesUseCase implements IUseCase {
         perPage?: number;
         /** The Git connection to list; every connection's when absent. */
         connectionId?: string;
+        /** The connections the caller may read; every one when absent. */
+        readableConnectionIds?: string[];
     }) {
         try {
             const organizationId = this.request.user.organization.uuid;
-            const connectionIds = params?.connectionId
-                ? [params.connectionId]
-                : (
-                      (await this.integrationService.find({
-                          organization: { uuid: organizationId },
-                          team: { uuid: params?.teamId },
-                          integrationCategory:
-                              IntegrationCategory.CODE_MANAGEMENT,
-                          status: true,
-                      })) ?? []
-                  ).map((connection) => connection.uuid);
+            const readable = params?.readableConnectionIds
+                ? new Set(params.readableConnectionIds)
+                : null;
+            const connectionIds = (
+                params?.connectionId
+                    ? [params.connectionId]
+                    : (
+                          (await this.integrationService.find({
+                              organization: { uuid: organizationId },
+                              team: { uuid: params?.teamId },
+                              integrationCategory:
+                                  IntegrationCategory.CODE_MANAGEMENT,
+                              status: true,
+                          })) ?? []
+                      ).map((connection) => connection.uuid)
+            ).filter((uuid) => !readable || readable.has(uuid));
 
             const lists = await Promise.allSettled(
                 connectionIds.map(async (integrationId) =>

@@ -7,6 +7,7 @@ import {
     HttpCode,
 } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
 
 import {
     Action,
@@ -19,6 +20,8 @@ import { JOB_STATUS_SERVICE_TOKEN } from '@libs/core/workflow/domain/contracts/j
 import { IJobStatusService } from '@libs/core/workflow/domain/contracts/job-status.service.contract';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
+import { FullConnectionAccessGuard } from '@libs/identity/infrastructure/adapters/services/permissions/full-connection-access.guard';
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 
 /**
  * Job history is not kept forever: finished jobs (COMPLETED, FAILED,
@@ -36,7 +39,24 @@ export class WorkflowQueueController {
     constructor(
         @Inject(JOB_STATUS_SERVICE_TOKEN)
         private readonly jobStatusService: IJobStatusService,
+        @Inject(REQUEST)
+        private readonly request: UserRequest,
     ) {}
+
+    /** Jobs of another organization answer like unknown ones. */
+    private ownJob<
+        T extends
+            | { organizationAndTeamData?: { organizationId?: string } }
+            | null
+            | undefined,
+    >(job: T): T | null {
+        const organizationId = this.request?.user?.organization?.uuid;
+        return job &&
+            organizationId &&
+            job.organizationAndTeamData?.organizationId === organizationId
+            ? job
+            : null;
+    }
 
     @Get('/jobs/:jobId')
     @CheckPolicies(
@@ -45,9 +65,12 @@ export class WorkflowQueueController {
             resource: ResourceType.CodeReviewSettings,
         }),
     )
+    @UseGuards(FullConnectionAccessGuard)
     @HttpCode(HttpStatus.OK)
     async getJobStatus(@Param('jobId') jobId: string) {
-        const job = await this.jobStatusService.getJobStatus(jobId);
+        const job = this.ownJob(
+            await this.jobStatusService.getJobStatus(jobId),
+        );
 
         if (!job) {
             return {
@@ -69,11 +92,12 @@ export class WorkflowQueueController {
             resource: ResourceType.CodeReviewSettings,
         }),
     )
+    @UseGuards(FullConnectionAccessGuard)
     @HttpCode(HttpStatus.OK)
     async getJobDetail(@Param('jobId') jobId: string) {
         const detail = await this.jobStatusService.getJobDetail(jobId);
 
-        if (!detail) {
+        if (!detail || !this.ownJob(detail.job)) {
             return {
                 status: HttpStatus.NOT_FOUND,
                 message: 'Job not found',

@@ -3,8 +3,10 @@ import {
     Body,
     Controller,
     Delete,
+    ForbiddenException,
     Get,
     Inject,
+    Optional,
     Post,
     Put,
     Query,
@@ -12,6 +14,11 @@ import {
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import {
+    assertConnectionReadable,
+    readableConnectionIds,
+} from '@libs/identity/infrastructure/adapters/services/permissions/connection-read';
 import { GetAreaRiskMapUseCase } from '../use-cases/get-area-risk-map.use-case';
 import {
     CheckPolicies,
@@ -103,6 +110,8 @@ export class CodeManagementController {
         private readonly getRepositorySelectionUseCase: GetRepositorySelectionUseCase,
         private readonly setRepositorySelectionUseCase: SetRepositorySelectionUseCase,
         private readonly previewAllRepositoriesUseCase: PreviewAllRepositoriesUseCase,
+        @Optional()
+        private readonly connectionAccess?: ConnectionAccessService,
     ) {}
 
     @Get('/area-risk-map')
@@ -168,7 +177,12 @@ export class CodeManagementController {
             connectionId?: string;
         },
     ) {
-        return this.getRepositoriesUseCase.execute(query);
+        const restriction = await this.readRestriction();
+        assertConnectionReadable(restriction, query.connectionId);
+        return this.getRepositoriesUseCase.execute({
+            ...query,
+            readableConnectionIds: readableConnectionIds(restriction),
+        });
     }
 
     @Get('/repositories/selected')
@@ -352,10 +366,23 @@ export class CodeManagementController {
     public async getOrganizationMembers(
         @Query() query: { teamId: string; connectionId?: string },
     ) {
+        const restriction = await this.readRestriction();
+        assertConnectionReadable(restriction, query.connectionId);
+        let connectionId = query.connectionId || undefined;
+        // A member granted only some connections reads one at a time; with a
+        // single grant that one is implied.
+        if (restriction && !connectionId) {
+            if (restriction.connectionIds.size !== 1) {
+                throw new ForbiddenException(
+                    'Name one of your Git connections (connectionId).',
+                );
+            }
+            [connectionId] = [...restriction.connectionIds];
+        }
         return this.getCodeManagementMemberListUseCase.execute(
             query.teamId,
             {},
-            query.connectionId || undefined,
+            connectionId,
         );
     }
 
@@ -722,13 +749,27 @@ export class CodeManagementController {
     public async getWebhookStatus(
         @Query() query: WebhookStatusQueryDto,
     ): Promise<{ active: boolean }> {
+        const restriction = await this.readRestriction();
+        if (
+            restriction &&
+            !restriction.allowsRepository({ id: query.repositoryId })
+        ) {
+            throw new ForbiddenException(
+                'You are not granted the Git connection of this repository.',
+            );
+        }
+        // The caller's own organization, never one from the query.
         return this.getWebhookStatusUseCase.execute({
             organizationAndTeamData: {
-                organizationId: query.organizationId,
+                organizationId: this.request?.user?.organization?.uuid,
                 teamId: query.teamId,
             },
             repositoryId: query.repositoryId,
         });
+    }
+
+    private readRestriction() {
+        return this.connectionAccess?.restrictionFor(this.request?.user);
     }
 
     // Not `/webhook-*`: in the cloud the load balancer sends `*/webhook*` to

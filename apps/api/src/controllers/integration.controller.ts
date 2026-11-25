@@ -9,10 +9,12 @@ import {
     Put,
     Query,
     UseGuards,
+    Optional,
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
     Action,
@@ -64,6 +66,8 @@ export class IntegrationController {
         // comes from the query (the web passes the selected team).
         @Inject(REQUEST)
         private readonly request: UserRequest,
+        @Optional()
+        private readonly connectionAccess?: ConnectionAccessService,
     ) {}
 
     @Post('/clone-integration')
@@ -192,7 +196,18 @@ export class IntegrationController {
     @ApiQuery({ name: 'teamId', type: String, required: true })
     @ApiOkResponse({ type: ApiArrayResponseDto })
     public async getConnections(@Query() query: TeamQueryDto) {
-        return this.getConnectionsUseCase.execute(query.teamId);
+        const connections = await this.getConnectionsUseCase.execute(
+            query.teamId,
+        );
+        const restriction = await this.connectionAccess?.restrictionFor(
+            this.request?.user,
+        );
+        if (!restriction || !Array.isArray(connections)) return connections;
+        return connections.filter(
+            (connection: { category?: string; connectionId?: string }) =>
+                connection?.category !== 'CODE_MANAGEMENT' ||
+                restriction.connectionIds.has(connection.connectionId),
+        );
     }
 
     @Patch('/connections/:connectionId')

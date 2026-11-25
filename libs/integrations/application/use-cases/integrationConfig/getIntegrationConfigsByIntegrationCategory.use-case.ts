@@ -47,6 +47,7 @@ export class GetIntegrationConfigsByIntegrationCategoryUseCase implements IUseCa
                 return this.codeManagementConfigs(
                     organizationAndTeamData,
                     params.connectionId,
+                    params.readableConnectionIds,
                 );
             }
 
@@ -95,6 +96,7 @@ export class GetIntegrationConfigsByIntegrationCategoryUseCase implements IUseCa
     private async codeManagementConfigs(
         organizationAndTeamData: { organizationId: string; teamId: string },
         connectionId?: string,
+        readableConnectionIds?: string[],
     ) {
         const scope = {
             organization: { uuid: organizationAndTeamData.organizationId },
@@ -111,8 +113,14 @@ export class GetIntegrationConfigsByIntegrationCategoryUseCase implements IUseCa
               ]
             : ((await this.integrationService.find(scope)) ?? []);
 
+        const readable = readableConnectionIds
+            ? new Set(readableConnectionIds)
+            : null;
         const byKey = new Map<string, unknown>();
-        for (const connection of connections.filter(Boolean)) {
+        for (const connection of connections.filter(
+            (connection) =>
+                connection && (!readable || readable.has(connection.uuid)),
+        )) {
             const configs =
                 (await this.integrationConfigService.find({
                     integration: { uuid: connection.uuid },
