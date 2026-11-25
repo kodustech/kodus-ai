@@ -754,8 +754,13 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             });
             expect(webhookLines[0].title).toContain('GitHub App');
             expect(webhookLines[0].title).toContain('api');
-            expect(webhookLines[0].title).toContain(
+            expect(webhookLines[0].title).toContain('recent sample');
+            expect(webhookLines[0].title).toContain('repository ID');
+            expect(webhookLines[0].title).not.toContain(
                 'other GitHub repositories do deliver',
+            );
+            expect(webhookLines[0].title).not.toContain(
+                `in the last ${RECENT_DAYS} days`,
             );
             expect(webhookLines[0].title).not.toContain(
                 'No repository webhook',
@@ -764,6 +769,41 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             expect(webhookLines[0].fix).toContain(
                 'https://api.acme.dev/github/webhook',
             );
+            expect(
+                results.filter((r) => r.status === 'ok').map((r) => r.check),
+            ).toEqual(['git.read', 'git.write']);
+        });
+
+        it('GitHub App with platform events lacking repository IDs stays unverified without claiming other repos delivered (#2708)', async () => {
+            const git = {
+                ...healthyGit({ hook: 'app-level' }),
+                deliveredEvents: jest.fn(async () => ({
+                    platformEvents: 2,
+                    repositoryIds: new Set<string>(),
+                })),
+            };
+            const results = await gitAccessCheck(git).run(ctx());
+            expect(problems(results)).toEqual([]);
+            const webhookLines = results.filter(
+                (r) => r.check === 'git.webhook',
+            );
+            expect(webhookLines).toHaveLength(1);
+            expect(webhookLines[0]).toMatchObject({
+                check: 'git.webhook',
+                status: 'unknown',
+                blocking: true,
+                scope: 'acme/core',
+            });
+            expect(webhookLines[0].title).toContain('GitHub App');
+            expect(webhookLines[0].title).toContain('recent sample');
+            expect(webhookLines[0].title).toContain('repository ID');
+            expect(webhookLines[0].title).not.toContain(
+                'other GitHub repositories do deliver',
+            );
+            expect(webhookLines[0].title).not.toContain(
+                `in the last ${RECENT_DAYS} days`,
+            );
+            expect(webhookLines[0].fix).toContain('GitHub Apps');
             expect(
                 results.filter((r) => r.status === 'ok').map((r) => r.check),
             ).toEqual(['git.read', 'git.write']);
@@ -801,6 +841,7 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             const webhookLines = results.filter(
                 (r) => r.check === 'git.webhook',
             );
+            expect(webhookLines).toHaveLength(2);
             expect(webhookLines.find((r) => r.status === 'ok')).toMatchObject({
                 status: 'ok',
                 title: 'Kodus receives pull request events from 1 repository.',
@@ -813,6 +854,7 @@ describe('doctor checks — each condition in scope, one at a time', () => {
                 blocking: true,
             });
             expect(unknownLine?.title).toContain('web');
+            expect(unknownLine?.title).toContain('recent sample');
             expect(unknownLine?.title).not.toContain('api');
         });
 

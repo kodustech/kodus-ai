@@ -165,7 +165,7 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                 const hookUncovered: string[] = [];
                 /** GitHub App install that delivered nothing in the window. */
                 const appSilent: string[] = [];
-                /** GitHub App install where other repos delivered, but not this repo. */
+                /** GitHub App repos without a matching repo id in the recent event sample. */
                 const appUncovered: string[] = [];
                 /** No hook seen, and the received events could not be read. */
                 const hookUnreadable: string[] = [];
@@ -366,8 +366,8 @@ export function gitAccessCheck(deps: GitDeps): DoctorCheck {
                         check: 'git.webhook',
                         status: 'unknown',
                         scope,
-                        title: `Could not confirm GitHub App delivery for ${names(appUncovered)}: no event came from ${appUncovered.length === 1 ? 'it' : 'them'} in the last ${RECENT_DAYS} days (other ${git} repositories do deliver).`,
-                        fix: `Fine if no pull request was opened there. Otherwise open a pull request to confirm, or check the app's webhook URL (${webhookUrl}) and its "Recent deliveries" in GitHub > Settings > Developer settings > GitHub Apps.`,
+                        title: `Could not confirm GitHub App delivery for ${names(appUncovered)}. The recent sample of ${git} events showed no matching repository ID.`,
+                        fix: `Fine if no pull request was opened there recently. Otherwise open a pull request to confirm, or check the app's webhook URL (${webhookUrl}) and its "Recent deliveries" in GitHub > Settings > Developer settings > GitHub Apps.`,
                         blocking: true,
                     });
                 }
