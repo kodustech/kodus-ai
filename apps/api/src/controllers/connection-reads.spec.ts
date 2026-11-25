@@ -1,4 +1,6 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
+
+import { CliReviewsController } from './cli-reviews.controller';
 
 import { CodeManagementController } from './codeManagement.controller';
 import { IntegrationController } from './integration.controller';
@@ -134,6 +136,47 @@ describe('connection reads for a member granted some connections', () => {
         expect(execute).toHaveBeenCalledWith({
             organizationAndTeamData: { organizationId: 'org-1', teamId: 't' },
             repositoryId: 'repo-gh',
+        });
+    });
+
+    describe('CLI reviews', () => {
+        const scoped = {
+            getRepositoryScope: jest.fn().mockResolvedValue(['repo-gh']),
+        };
+
+        it('lists CLI reviews of a readable repository only', async () => {
+            const execute = jest.fn().mockResolvedValue({ data: [] });
+            const controller = make(CliReviewsController, {
+                getCliReviewsUseCase: { execute },
+                authorizationService: scoped,
+            });
+
+            await controller.list({ teamId: 't', repositoryId: 'repo-gh' });
+            await expect(
+                controller.list({ teamId: 't' }),
+            ).rejects.toBeInstanceOf(ForbiddenException);
+            await expect(
+                controller.list({ teamId: 't', repositoryId: 'repo-gl' }),
+            ).rejects.toBeInstanceOf(ForbiddenException);
+            expect(execute).toHaveBeenCalledTimes(1);
+        });
+
+        it('answers a CLI review of another repository like an unknown one', async () => {
+            const controller = make(CliReviewsController, {
+                getCliReviewByIdUseCase: {
+                    execute: jest
+                        .fn()
+                        .mockResolvedValue({
+                            uuid: 'e-1',
+                            repositoryId: 'repo-gl',
+                        }),
+                },
+                authorizationService: scoped,
+            });
+
+            await expect(controller.detail('e-1')).rejects.toBeInstanceOf(
+                NotFoundException,
+            );
         });
     });
 });
