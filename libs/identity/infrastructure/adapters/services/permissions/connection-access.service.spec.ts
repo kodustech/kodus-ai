@@ -191,7 +191,13 @@ describe('ConnectionAccessService.replaceGrants', () => {
 
         expect(repository.manager.transaction).toHaveBeenCalledTimes(1);
         expect(calls[0]).toContain('pg_advisory_xact_lock');
-        expect(calls[1]).toMatch(/^SELECT/);
+        expect(tx.query).toHaveBeenNthCalledWith(
+            2,
+            expect.stringMatching(
+                /FROM "user_connection_access"[\s\S]*WHERE a\."integration_id" = \$1/,
+            ),
+            ['conn-1'],
+        );
         expect(diff).toEqual({ granted: ['u3'], revoked: ['u1'] });
         expect(tx.query).toHaveBeenCalledWith(
             expect.stringContaining('INSERT INTO "user_connection_access"'),
