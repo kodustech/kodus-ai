@@ -101,38 +101,62 @@ const hostReversalClaim = (expect) => ({
 
 // ---------------------------------------------------------------------------
 // A point the developer answered in its thread. This round edits the same
-// line without fixing what the comment was about.
+// line without fixing what the comment was about: canDelete is async, so the
+// unawaited check never refuses anyone.
 // ---------------------------------------------------------------------------
-const pagingRepo = {
-    'src/users/paging.ts': lines(
-        'export function pageCount(total: number, size: number): number {',
-        '    return Math.floor(total / Math.max(size, 1));',
+const authRepo = {
+    'src/docs/delete.ts': lines(
+        "import { ForbiddenError } from './errors';",
+        '',
+        'export interface Db {',
+        '    docs: { delete(id: string): Promise<void>; ownerOf(id: string): Promise<string | null> };',
+        '}',
+        '',
+        'export async function canDelete(db: Db, userId: string, docId: string): Promise<boolean> {',
+        '    return (await db.docs.ownerOf(docId)) === userId;',
+        '}',
+        '',
+        'export async function deleteDoc(db: Db, userId: string, docId: string): Promise<void> {',
+        '    if (!canDelete(db, userId, docId)) throw new ForbiddenError(`user ${userId} cannot delete ${docId}`);',
+        '    await db.docs.delete(docId);',
         '}',
     ),
+    'src/docs/errors.ts': lines('export class ForbiddenError extends Error {}'),
 };
-const pagingDiff = [
-    patch('src/users/paging.ts', 1, [
-        ' export function pageCount(total: number, size: number): number {',
-        '-    return Math.floor(total / size);',
-        '+    return Math.floor(total / Math.max(size, 1));',
+const authDiff = [
+    patch('src/docs/delete.ts', 1, [
+        "+import { ForbiddenError } from './errors';",
+        '+',
+        ' export interface Db {',
+        '     docs: { delete(id: string): Promise<void>; ownerOf(id: string): Promise<string | null> };',
+        ' }',
+        ' ',
+        ' export async function canDelete(db: Db, userId: string, docId: string): Promise<boolean> {',
+        '     return (await db.docs.ownerOf(docId)) === userId;',
+        ' }',
+        ' ',
+        ' export async function deleteDoc(db: Db, userId: string, docId: string): Promise<void> {',
+        "-    if (!canDelete(db, userId, docId)) throw new Error('forbidden');",
+        '+    if (!canDelete(db, userId, docId)) throw new ForbiddenError(`user ${userId} cannot delete ${docId}`);',
+        '     await db.docs.delete(docId);',
         ' }',
     ]),
 ];
-const pagingDecision = {
-    suggestionId: 'round-a-last-page',
-    relevantFile: 'src/users/paging.ts',
-    relevantLinesStart: 2,
-    relevantLinesEnd: 2,
-    existingCode: '    return Math.floor(total / size);',
-    suggestionContent: 'pageCount drops the last, partial page: 25 users at 10 per page gives 2 pages and users 21-25 are never listed. Round up with Math.ceil.',
+const authDecision = {
+    suggestionId: 'round-a-missing-await',
+    relevantFile: 'src/docs/delete.ts',
+    relevantLinesStart: 10,
+    relevantLinesEnd: 10,
+    existingCode: "    if (!canDelete(db, userId, docId)) throw new Error('forbidden');",
+    suggestionContent: 'canDelete is async, so `!canDelete(...)` tests a Promise, which is always truthy: the check never throws and any user can delete any document. Await it.',
     label: 'bug',
     outcome: 'not_implemented',
     answered: true,
     decidedAt: '2026-11-22T12:01:36Z',
 };
-const lastPageClaim = (id, expect) => ({
+const missingAwaitClaim = (id, expect) => ({
     id,
-    golden: 'pageCount rounds down with Math.floor, so a last partial page is dropped (for example 25 items at 10 per page gives 2 pages instead of 3); it should round up.',
+    golden: 'deleteDoc calls the async canDelete without await, so `!canDelete(...)` negates a Promise (always truthy) and the ownership check never refuses: any user can delete any document; it should await canDelete.',
     truth: 'true',
     premise: 'diff',
     expect,
@@ -278,9 +302,9 @@ const kodus2667Claims = [
 // Thread state read from the host, as production reads it: the record carries
 // only its comment id, and the PR's threads say whether it was answered.
 // ---------------------------------------------------------------------------
-const { answered: _answered, ...pagingDecisionUnread } = pagingDecision;
-const pagingThreadCase = (replyBody) => ({
-    previousDecisions: [{ ...pagingDecisionUnread, commentId: '9101' }],
+const { answered: _answered, ...authDecisionUnread } = authDecision;
+const authThreadCase = (replyBody) => ({
+    previousDecisions: [{ ...authDecisionUnread, commentId: '9101' }],
     reviewThreads: [{ rootIds: ['9101'], replies: [{ body: replyBody }] }],
 });
 
@@ -351,11 +375,11 @@ const contradictionCases = [
     },
     // The developer answered the earlier comment's thread.
     {
-        id: 'R21-reraise-after-reply', family: 'rounds', repo: pagingRepo, changedFiles: pagingDiff, sandbox: 'alive',
-        previousDecisions: [pagingDecision],
-        claims: [lastPageClaim('last-page-reraise', 'not_deliver')],
+        id: 'R21-reraise-after-reply', family: 'rounds', repo: authRepo, changedFiles: authDiff, sandbox: 'alive',
+        previousDecisions: [authDecision],
+        claims: [missingAwaitClaim('missing-await-reraise', 'not_deliver')],
     },
-    { id: 'R21-control', family: 'control', repo: pagingRepo, changedFiles: pagingDiff, sandbox: 'alive', claims: [lastPageClaim('last-page-control', 'deliver')] },
+    { id: 'R21-control', family: 'control', repo: authRepo, changedFiles: authDiff, sandbox: 'alive', claims: [missingAwaitClaim('missing-await-control', 'deliver')] },
     // A reversal of a comment on another file, with a real bug beside it.
     {
         id: 'R22-cross-file-reversal', family: 'rounds', repo: archiveRepo, changedFiles: archiveDiff, sandbox: 'alive',
@@ -370,9 +394,9 @@ const contradictionCases = [
         claims: [hostReversalClaim('not_deliver')],
     },
     {
-        id: 'R21-check-parse-error', family: 'rounds', repo: pagingRepo, changedFiles: pagingDiff, sandbox: 'alive', repeatCheckFault: 'parse',
-        previousDecisions: [pagingDecision],
-        claims: [lastPageClaim('last-page-reraise-unjudged', 'not_deliver')],
+        id: 'R21-check-parse-error', family: 'rounds', repo: authRepo, changedFiles: authDiff, sandbox: 'alive', repeatCheckFault: 'parse',
+        previousDecisions: [authDecision],
+        claims: [missingAwaitClaim('missing-await-reraise-unjudged', 'not_deliver')],
     },
     {
         id: 'R22-check-timeout', family: 'rounds', repo: archiveRepo, changedFiles: archiveDiff, sandbox: 'alive', repeatCheckFault: 'timeout',
@@ -381,9 +405,9 @@ const contradictionCases = [
     },
     // Heavy mode: the lenses never see the history; the check is their gate.
     {
-        id: 'R21-heavy', family: 'rounds', repo: pagingRepo, changedFiles: pagingDiff, sandbox: 'alive', heavy: true,
-        previousDecisions: [pagingDecision],
-        claims: [lastPageClaim('last-page-reraise-heavy', 'not_deliver')],
+        id: 'R21-heavy', family: 'rounds', repo: authRepo, changedFiles: authDiff, sandbox: 'alive', heavy: true,
+        previousDecisions: [authDecision],
+        claims: [missingAwaitClaim('missing-await-reraise-heavy', 'not_deliver')],
     },
     {
         id: 'R20-heavy', family: 'rounds', repo: hostRepo, changedFiles: hostDiff, sandbox: 'alive', heavy: true,
@@ -395,14 +419,14 @@ const contradictionCases = [
     // The point's thread got a reply, read from the host: Kody conceded it, or
     // the developer said it will be fixed later. Either ends the point.
     {
-        id: 'R25-kody-conceded', family: 'rounds', repo: pagingRepo, changedFiles: pagingDiff, sandbox: 'alive',
-        ...pagingThreadCase('Fair point, rounding down is what the export expects here, since a partial page is merged into the previous one. Happy to leave it as is.'),
-        claims: [lastPageClaim('last-page-after-concession', 'not_deliver')],
+        id: 'R25-kody-conceded', family: 'rounds', repo: authRepo, changedFiles: authDiff, sandbox: 'alive',
+        ...authThreadCase('You are right, deleteDoc only runs behind the admin route, which already checks ownership, so this check is a second guard. Happy to leave it as is.'),
+        claims: [missingAwaitClaim('missing-await-after-concession', 'not_deliver')],
     },
     {
-        id: 'R25-will-fix-later', family: 'rounds', repo: pagingRepo, changedFiles: pagingDiff, sandbox: 'alive',
-        ...pagingThreadCase('Good catch, I will fix this in a follow-up PR.'),
-        claims: [lastPageClaim('last-page-after-will-fix', 'not_deliver')],
+        id: 'R25-will-fix-later', family: 'rounds', repo: authRepo, changedFiles: authDiff, sandbox: 'alive',
+        ...authThreadCase('Good catch, I will fix this in a follow-up PR.'),
+        claims: [missingAwaitClaim('missing-await-after-will-fix', 'not_deliver')],
     },
     // A security hole the applied change opened is posted, linked or not.
     {
