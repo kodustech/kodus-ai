@@ -186,12 +186,61 @@ async function consolidateStage(dataset, route, pricing) {
     const meter = new ScanBudgetMeter(rates ? { maxUsd: 20 } : { maxTokens: 40_000_000 }, rates);
     const open = dataset.issues.map((i) => ({ ...findingOf(i), fingerprint: i.fingerprint }));
     const subjects = new Set(open.map((i) => i.fingerprint));
+    // Production's call, with each question and answer kept for the score:
+    // why a labelled duplicate stayed apart.
+    const call = rootCauseCallOn(LLM.run.bind(LLM), model.slot, EVAL_ORG.organizationId);
+    const decisions = [];
+    const recorded = async (request) => {
+        const answer = await call(request).catch((error) => {
+            decisions.push({ user: request.user, error: String(error?.message ?? error) });
+            throw error;
+        });
+        decisions.push({ user: request.user, answer });
+        return answer;
+    };
     const result = await runWithUsageMeter(
         meter,
-        () => consolidateOpenIssues(rootCauseCallOn(LLM.run.bind(LLM), model.slot, EVAL_ORG.organizationId), open, subjects),
+        () => consolidateOpenIssues(recorded, open, subjects),
         { organizationId: EVAL_ORG.organizationId },
     );
-    return { ...result, spend: meter.committedSpend() };
+    return { ...result, decisions, spend: meter.committedSpend() };
+}
+
+/**
+ * Why each labelled duplicate pair stayed apart: never shown to the model
+ * (rootCauseCandidates did not link them), shown and judged another problem
+ * (with the model's reason), or its comparison failed.
+ */
+function missedPairs(dataset, result, root) {
+    const { rootCauseCandidates } = lib('security-scan/domain/root-cause.ts');
+    const pool = dataset.issues.map((i) => ({ ...findingOf(i), fingerprint: i.fingerprint }));
+    const byFp = new Map(pool.map((p) => [p.fingerprint, p]));
+    const asked = (subject, other) =>
+        result.decisions.filter((d) => {
+            const [newPart, reported = ''] = d.user.split('Already reported:');
+            return newPart.includes(subject.title) && reported.includes(other.title);
+        });
+    const out = [];
+    for (const c of dataset.clusters.filter((c) => c.kind === 'same_bug')) {
+        const members = c.fingerprints.map((fp) => byFp.get(fp)).filter(Boolean);
+        if (new Set(members.map((m) => root(m.fingerprint))).size === 1) continue;
+        const pairs = [];
+        for (const a of members) {
+            for (const b of members) {
+                if (a === b || root(a.fingerprint) === root(b.fingerprint)) continue;
+                const proposed = rootCauseCandidates(a, pool).includes(b);
+                const seen = asked(a, b);
+                pairs.push({
+                    subject: a.title,
+                    other: b.title,
+                    outcome: !proposed ? 'not-proposed' : !seen.length ? 'not-asked' : seen.some((d) => d.error) ? 'failed' : 'judged-different',
+                    answers: seen.map((d) => d.answer ?? { error: d.error }),
+                });
+            }
+        }
+        out.push({ cluster: c.id, why: c.why, pairs });
+    }
+    return out;
 }
 
 function scoreConsolidate(dataset, result) {
@@ -235,6 +284,7 @@ function scoreConsolidate(dataset, result) {
         // Not in a labelled cluster: a person reads each one (a missed
         // cluster in the first-pass labels, or a wrong fold).
         foldsToReview: folds.filter((f) => !f.same),
+        missed: missedPairs(dataset, result, root),
         failures: result.failures,
     };
 }
@@ -257,7 +307,7 @@ async function main() {
         const out = await consolidateStage(dataset, route, pricing);
         result.consolidate = { ...scoreConsolidate(dataset, out), spend: out.spend };
         const c = result.consolidate;
-        console.log(`consolidate: issues ${c.issuesBefore} → ${c.issuesAfter} · redundant folded ${c.redundantFolded}/${c.redundantInClusters} · folds outside labelled clusters ${c.foldsToReview.length} · $${out.spend.usd.toFixed(2)}`);
+        console.log(`consolidate: issues ${c.issuesBefore} → ${c.issuesAfter} · redundant folded ${c.redundantFolded}/${c.redundantInClusters} · folds outside labelled clusters ${c.foldsToReview.length} · failures ${c.failures} · $${out.spend.usd.toFixed(2)}`);
     }
     result.tokens = tokensUsed();
     result.ms = Date.now() - started;

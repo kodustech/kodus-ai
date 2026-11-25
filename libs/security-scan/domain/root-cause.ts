@@ -11,6 +11,9 @@ import type { ScanReportedFinding } from './security-scan.types';
  *   gap reported by two lenses.
  * - One sits on the other's attack path: the route, the handler and the
  *   query of one missing check.
+ * - The same kind of weakness in the same module: the repository, the
+ *   service and the use case of one feature (`contextReference.repository`,
+ *   `context-reference.service`), or files side by side that share one guard.
  * - The same kind of weakness with a similar title anywhere: one unsafe
  *   setting repeated in every config file is one change to make.
  */
@@ -55,21 +58,72 @@ function linkRank(
     const fa = cweFamily(a.cwe);
     const sameFamily = !!fa && fa === cweFamily(b.cwe);
     if (sameFile && sameFamily) return 3;
-    if (sameFamily && titleSimilarity(a.title, b.title) >= 0.5) return 4;
+    if (sameFamily && sameModule(a.filePath, b.filePath)) return 4;
+    if (sameFamily && titleSimilarity(a.title, b.title) >= 0.5) return 5;
     return null;
 }
 
-/** `b`'s file is a step of `a`'s attack path. */
-function onPath(a: ScanReportedFinding, b: ScanReportedFinding): boolean {
-    return (a.attackPath ?? []).some((s) => s.file === b.filePath);
+/** Layer suffixes one feature's files carry: `orders.service.ts`, `orders.repository.ts`. */
+const LAYER =
+    /[.-](repository|repo|service|controller|handler|use-?case|resolver|module|model|schema|router|routes?|dto|store|client|api|utils?|helpers?)$/;
+
+/** Names too generic to say two files are one feature. */
+const GENERIC = new Set([
+    'index',
+    'main',
+    'app',
+    'utils',
+    'util',
+    'helpers',
+    'types',
+    'fetch',
+    'common',
+    'shared',
+    'constants',
+    'config',
+]);
+
+/** A feature's name from its file: `context-reference.service.ts` → `contextreference`. */
+function moduleOf(filePath: string): string | undefined {
+    let stem = (filePath.split('/').pop() ?? '').replace(
+        /\.[cm]?[jt]sx?$|\.[a-z]+$/i,
+        '',
+    );
+    for (let i = 0; i < 3 && LAYER.test(stem); i++) {
+        stem = stem.replace(LAYER, '');
+    }
+    const name = stem.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return name.length >= 5 && !GENERIC.has(name) ? name : undefined;
 }
 
-/** Both start at the same entry point. */
+const dirOf = (filePath: string) =>
+    filePath.slice(0, filePath.lastIndexOf('/') + 1);
+
+/** One feature's files: the same name across layers, or files side by side. */
+function sameModule(a: string, b: string): boolean {
+    if (dirOf(a) && dirOf(a) === dirOf(b)) return true;
+    const ma = moduleOf(a);
+    return !!ma && ma === moduleOf(b);
+}
+
+/** The same file, also when one names it by its tail (`orders/repo.ts`). */
+const sameFilePath = (a: string, b: string) =>
+    a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+
+/** `b`'s file is a step of `a`'s attack path. */
+function onPath(a: ScanReportedFinding, b: ScanReportedFinding): boolean {
+    return (a.attackPath ?? []).some((s) => sameFilePath(s.file, b.filePath));
+}
+
+/** Both start at the same entry point: one route, a few lines apart. */
 function sameEntry(a: ScanReportedFinding, b: ScanReportedFinding): boolean {
     const ea = a.attackPath?.[0];
     const eb = b.attackPath?.[0];
     return (
-        !!ea && !!eb && ea.file === eb.file && Math.abs(ea.line - eb.line) <= 3
+        !!ea &&
+        !!eb &&
+        sameFilePath(ea.file, eb.file) &&
+        Math.abs(ea.line - eb.line) <= NEARBY_LINES
     );
 }
 
