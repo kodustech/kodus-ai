@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     Select,
@@ -22,6 +22,9 @@ export const BillingConnectionPicker = () => {
     const router = useRouter();
     const { teamId, connections, connection } = useBillingConnection();
     const several = connections.length > 1;
+    // The cookie is read while rendering, and a refresh does not re-render
+    // this component: the choice shown is kept here.
+    const [selected, setSelected] = useState(connection?.connectionId);
 
     // The server renders the cookie's connection; pin the first one so the
     // seats listed and the toggles always speak about the same connection.
@@ -40,8 +43,9 @@ export const BillingConnectionPicker = () => {
             <div className="flex items-center gap-3">
                 <span className="text-sm font-medium">Git connection</span>
                 <Select
-                    value={connection?.connectionId}
+                    value={selected ?? connection?.connectionId}
                     onValueChange={(connectionId) => {
+                        setSelected(connectionId);
                         selectBillingConnection(teamId, connectionId);
                         router.refresh();
                     }}>

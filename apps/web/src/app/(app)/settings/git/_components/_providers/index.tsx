@@ -17,7 +17,7 @@ export const GitProviders = (props: {
             <CardHeader>
                 <CardTitle>
                     {props.newConnection
-                        ? "Add a Git connection"
+                        ? "Choose the provider"
                         : "Connect a provider"}
                 </CardTitle>
             </CardHeader>
