@@ -214,14 +214,19 @@ export async function riskRulesAction(
     options: ReviewSettingsTargetOptions,
 ): Promise<void> {
     try {
-        const rules = await reviewSettingsService.riskRules({
+        const { active, rules } = await reviewSettingsService.riskRules({
             repository,
             directory: options.directory,
             team: options.team,
         });
         if (options.json) {
-            cliInfo(JSON.stringify(rules, null, 2));
+            cliInfo(JSON.stringify({ active, rules }, null, 2));
             return;
+        }
+        if (!active) {
+            cliInfo(
+                'Risk assessment is off here: these rules are not applied.',
+            );
         }
         for (const rule of rules) {
             const source =

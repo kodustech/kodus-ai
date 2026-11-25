@@ -67,10 +67,16 @@ const DEFAULT_RULES = [
         instructions: "A change to what other code relies on.",
     },
 ];
+const loadedDefaults = () => ({
+    data: { criteria: DEFAULT_RULES, retiredIds: ["kodus-retired"] },
+});
+let mockDefaultRules: {
+    data?: ReturnType<typeof loadedDefaults>["data"];
+    isLoading?: boolean;
+    isError?: boolean;
+} = loadedDefaults();
 jest.mock("@services/risk-assessment/hooks", () => ({
-    useDefaultRiskCriteria: () => ({
-        data: { criteria: DEFAULT_RULES, retiredIds: ["kodus-retired"] },
-    }),
+    useDefaultRiskCriteria: () => mockDefaultRules,
 }));
 jest.mock("@components/ui/toaster/use-toast", () => ({ toast: jest.fn() }));
 const saveSettings = jest.fn();
@@ -123,6 +129,7 @@ function setup(
 beforeEach(() => {
     jest.resetAllMocks();
     mockAccess = true;
+    mockDefaultRules = loadedDefaults();
     saveSettings.mockResolvedValue(undefined);
 });
 
@@ -391,4 +398,66 @@ it("does not list an override of a rule Kodus stopped shipping, which the assess
             "heading",
         ),
     ).toHaveLength(DEFAULT_RULES.length);
+});
+
+it.each<[string, typeof mockDefaultRules]>([
+    ["could not be loaded", { isError: true }],
+    ["are still loading", { isLoading: true }],
+])("keeps the list read-only while Kodus's rules %s", (_, defaultRules) => {
+    mockDefaultRules = defaultRules;
+    setup(true, [
+        {
+            id: "kodus-security",
+            name: "Our security",
+            enabled: true,
+            instructions: "Only billing auth.",
+        },
+        {
+            id: "tenant",
+            name: "Tenant isolation",
+            enabled: true,
+            instructions: "Data must not cross tenants.",
+        },
+    ]);
+    const list = screen.getByRole("list", { name: "Risk rules" });
+    for (const control of [
+        ...within(list).getAllByRole("switch"),
+        ...within(list).getAllByRole("button"),
+    ])
+        expect(control).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add rule" })).toBeDisabled();
+    if (defaultRules.isError)
+        expect(
+            screen.getByText(/Could not load Kodus’s rules/),
+        ).toBeInTheDocument();
+});
+
+it("at 50 stored entries, locks only the Kodus rules a change would add an entry for", () => {
+    setup(true, [
+        { id: "kodus-security", enabled: false },
+        ...Array.from({ length: 49 }, (_, index) => ({
+            id: `team-${index}`,
+            name: `Team rule ${index}`,
+            enabled: true,
+            instructions: "Check it.",
+        })),
+    ]);
+    expect(
+        screen.getByText(
+            "The settings keep up to 50 entries, counting your rules and the Kodus rules you changed.",
+        ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add rule" })).toBeDisabled();
+    const controls = (rule: string) => [
+        screen.getByRole("switch", { name: `Enable ${rule}` }),
+        screen.getByRole("button", { name: `Edit ${rule}` }),
+    ];
+    for (const control of controls("Shared contracts and public interfaces"))
+        expect(control).toBeDisabled();
+    // Already stored, so changing them replaces their entry in place.
+    for (const control of [
+        ...controls("Security and permissions"),
+        ...controls("Team rule 0"),
+    ])
+        expect(control).toBeEnabled();
 });

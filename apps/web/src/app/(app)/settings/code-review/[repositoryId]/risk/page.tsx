@@ -43,6 +43,9 @@ import {
     type RiskRuleRow,
 } from "./_utils/risk-rules";
 
+/** The stored list's cap: team rules and overrides of Kodus rules. */
+const MAX_STORED_RULES = 50;
+
 function RiskSettings() {
     const { teamId } = useSelectedTeamId();
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
@@ -87,6 +90,14 @@ function RiskSettings() {
         criteria,
         defaultRules.data?.retiredIds,
     );
+    // Without Kodus's rules an override reads as a team rule and a save
+    // could store it whole, so the list stays read-only until they load.
+    const canEditRules =
+        active && canConfigure && !!defaultRules.data && !defaultRules.isError;
+    const atCap = criteria.length >= MAX_STORED_RULES;
+    // A Kodus rule the team has not changed yet takes a new entry to change.
+    const needsNewEntry = (rule: RiskRuleRow) =>
+        rule.isDefault && !criteria.some((item) => item.id === rule.id);
     const updateCriteria = (next: RiskCriterion[]) =>
         criteriaField.onChange(next);
     const updateRule = (rule: RiskCriterion) =>
@@ -214,11 +225,7 @@ function RiskSettings() {
                             size="md"
                             variant="primary"
                             leftIcon={<PlusIcon />}
-                            disabled={
-                                !active ||
-                                !canConfigure ||
-                                criteria.length >= 50
-                            }
+                            disabled={!canEditRules || atCap}
                             onClick={() => setEditing("new")}>
                             Add rule
                         </Button>
@@ -229,6 +236,13 @@ function RiskSettings() {
                             <p className="text-text-secondary text-sm">
                                 Could not load Kodus’s rules. Your team’s rules
                                 are below.
+                            </p>
+                        )}
+                        {atCap && (
+                            <p className="text-text-secondary text-sm">
+                                The settings keep up to {MAX_STORED_RULES}{" "}
+                                entries, counting your rules and the Kodus rules
+                                you changed.
                             </p>
                         )}
                         {rows.length > 0 && (
@@ -264,7 +278,9 @@ function RiskSettings() {
                                                     aria-label={`Enable ${rule.name}`}
                                                     checked={rule.enabled}
                                                     disabled={
-                                                        !active || !canConfigure
+                                                        !canEditRules ||
+                                                        (atCap &&
+                                                            needsNewEntry(rule))
                                                     }
                                                     onCheckedChange={(
                                                         enabled,
@@ -280,7 +296,9 @@ function RiskSettings() {
                                                     size="sm"
                                                     variant="cancel"
                                                     disabled={
-                                                        !active || !canConfigure
+                                                        !canEditRules ||
+                                                        (atCap &&
+                                                            needsNewEntry(rule))
                                                     }
                                                     aria-label={`Edit ${rule.name}`}
                                                     onClick={() =>
@@ -295,8 +313,7 @@ function RiskSettings() {
                                                             size="sm"
                                                             variant="cancel"
                                                             disabled={
-                                                                !active ||
-                                                                !canConfigure
+                                                                !canEditRules
                                                             }
                                                             aria-label={`Reset ${rule.name}`}
                                                             onClick={() =>
@@ -316,10 +333,7 @@ function RiskSettings() {
                                                         type="button"
                                                         size="sm"
                                                         variant="cancel"
-                                                        disabled={
-                                                            !active ||
-                                                            !canConfigure
-                                                        }
+                                                        disabled={!canEditRules}
                                                         aria-label={`Delete ${rule.name}`}
                                                         onClick={() =>
                                                             updateCriteria(

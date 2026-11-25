@@ -9,9 +9,11 @@ import {
     type UserContext,
 } from './user-context.service.js';
 import type { CentralizedPrMetadata } from '../types/config.js';
+import { ApiError } from '../types/errors.js';
 import type {
     ApprovalPolicy,
     CodeReviewScope,
+    DefaultRiskRules,
     FormattedCodeReviewParameter,
     FormattedConfigLeaf,
     FormattedConfigLevel,
@@ -183,6 +185,58 @@ function requireByok(status: LLMConfigStatus): string {
         );
     }
     return status.byok.providerId;
+}
+
+/**
+ * Whether an entry for a Kodus rule changes it, as the settings page decides:
+ * a name or instructions that differ from Kodus's, or file filters (Kodus's
+ * rules have none). A copy of Kodus's wording is not an edit.
+ */
+function changesKodusRule(base: RiskRule, entry: Partial<RiskRule>): boolean {
+    return (
+        (entry.name !== undefined && entry.name !== base.name) ||
+        (entry.instructions !== undefined &&
+            entry.instructions !== base.instructions) ||
+        !!entry.includedFiles?.length ||
+        !!entry.excludedFiles?.length
+    );
+}
+
+/**
+ * A `riskCriteria` value as the settings page stores it, so the output of
+ * `risk-rules --json` can be set back without freezing Kodus's wording: an
+ * entry for a Kodus rule keeps only what differs from Kodus's version, and
+ * is dropped when it changes nothing. `source` is output only; team rules
+ * are kept as given.
+ */
+function storedRiskCriteria(value: unknown[], defaults: RiskRule[]) {
+    const byId = new Map(defaults.map((rule) => [rule.id, rule]));
+    return value.flatMap((item) => {
+        const entry = item as Record<string, unknown>;
+        const base = byId.get(entry.id as string);
+        const kept = Object.fromEntries(
+            Object.entries(entry).filter(([key, field]) => {
+                if (key === 'source') {
+                    return false;
+                }
+                if (base && (key === 'name' || key === 'instructions')) {
+                    return field !== base[key];
+                }
+                if (
+                    base &&
+                    (key === 'includedFiles' || key === 'excludedFiles')
+                ) {
+                    return !Array.isArray(field) || field.length > 0;
+                }
+                return true;
+            }),
+        );
+        const unchanged =
+            !!base &&
+            kept.enabled === true &&
+            Object.keys(kept).every((key) => key === 'id' || key === 'enabled');
+        return unchanged ? [] : [kept];
+    });
 }
 
 class ReviewSettingsService {
@@ -555,20 +609,42 @@ class ReviewSettingsService {
         });
     }
 
+    /** Kodus's risk rules, or null from an API older than them (404). */
+    private async defaultRiskRules(
+        ctx: UserContext,
+    ): Promise<DefaultRiskRules | null> {
+        return api.config
+            .getDefaultRiskCriteria(ctx.accessToken)
+            .catch((error: unknown) => {
+                if (error instanceof ApiError && error.statusCode === 404) {
+                    return null;
+                }
+                throw error;
+            });
+    }
+
     /**
      * The risk rules a review applies at this scope: Kodus's rules with the
-     * scope's changes applied by id, then the team's own rules.
+     * scope's changes applied by id, then the team's own rules. `active` is
+     * whether risk assessment runs here at all.
      */
-    async riskRules(
-        target: SettingsTarget,
-    ): Promise<Array<RiskRule & { source: 'kodus' | 'edited' | 'team' }>> {
+    async riskRules(target: SettingsTarget): Promise<{
+        active: boolean;
+        rules: Array<RiskRule & { source: 'kodus' | 'edited' | 'team' }>;
+    }> {
         const ctx = await this.context(target);
         const scope = await this.resolveScope(ctx, target);
-        const [{ criteria: defaults, retiredIds }, { configs }] =
-            await Promise.all([
-                api.config.getDefaultRiskCriteria(ctx.accessToken),
-                this.loadScopeConfigs(ctx, scope),
-            ]);
+        const [defaultRules, { configs }] = await Promise.all([
+            this.defaultRiskRules(ctx),
+            this.loadScopeConfigs(ctx, scope),
+        ]);
+        if (!defaultRules) {
+            throw new CommandError(
+                'API_REQUEST_FAILED',
+                'Risk rules need a newer Kodus API.',
+            );
+        }
+        const { criteria: defaults, retiredIds } = defaultRules;
         const stored = readLeaf(configs, 'riskCriteria')?.value;
         if (!Array.isArray(stored)) {
             throw new CommandError(
@@ -580,38 +656,39 @@ class ReviewSettingsService {
         const byId = new Map(rules.map((rule) => [rule.id, rule]));
         const defaultIds = new Set(defaults.map((rule) => rule.id));
         const retiredIdSet = new Set(retiredIds);
-        return [
-            ...defaults.map((base) => {
-                const override = byId.get(base.id);
-                const changes = Object.fromEntries(
-                    Object.entries(override ?? {}).filter(
-                        ([, value]) => value !== undefined,
-                    ),
-                );
-                const edited = [
-                    'name',
-                    'instructions',
-                    'includedFiles',
-                    'excludedFiles',
-                ].some((key) => Object.hasOwn(changes, key));
-                return {
-                    ...base,
-                    ...changes,
-                    source: edited ? ('edited' as const) : ('kodus' as const),
-                };
-            }),
-            // As the assessment resolves them: an override of a retired rule,
-            // or one without a name that matches no Kodus rule, is dropped.
-            ...rules
-                .filter(
-                    (rule): rule is RiskRule =>
-                        !defaultIds.has(rule.id) &&
-                        !retiredIdSet.has(rule.id) &&
-                        !!rule.name &&
-                        !!rule.instructions,
-                )
-                .map((rule) => ({ ...rule, source: 'team' as const })),
-        ];
+        return {
+            active: readLeaf(configs, 'riskAssessmentActive')?.value === true,
+            rules: [
+                ...defaults.map((base) => {
+                    const override = byId.get(base.id);
+                    const changes = Object.fromEntries(
+                        Object.entries(override ?? {}).filter(
+                            ([, value]) => value !== undefined,
+                        ),
+                    );
+                    return {
+                        ...base,
+                        ...changes,
+                        source:
+                            override && changesKodusRule(base, override)
+                                ? ('edited' as const)
+                                : ('kodus' as const),
+                    };
+                }),
+                // As the assessment resolves them: an override of a retired
+                // rule, or one without a name that matches no Kodus rule, is
+                // dropped.
+                ...rules
+                    .filter(
+                        (rule): rule is RiskRule =>
+                            !defaultIds.has(rule.id) &&
+                            !retiredIdSet.has(rule.id) &&
+                            !!rule.name &&
+                            !!rule.instructions,
+                    )
+                    .map((rule) => ({ ...rule, source: 'team' as const })),
+            ],
+        };
     }
 
     async previewRisk(
@@ -681,11 +758,19 @@ class ReviewSettingsService {
         rawValue: string,
     ): Promise<SettingsMutationResult> {
         const setting = resolveReviewSetting(key);
-        const value = parseReviewSettingValue(setting, rawValue);
+        const parsed = parseReviewSettingValue(setting, rawValue);
         const ctx = await this.context(target);
         const scope = await this.resolveScope(ctx, target, {
             createDirectory: target.createDirectory,
         });
+        // An API without Kodus's rules has none to compare against.
+        const value =
+            setting.key === 'riskCriteria'
+                ? storedRiskCriteria(
+                      parsed as unknown[],
+                      (await this.defaultRiskRules(ctx))?.criteria ?? [],
+                  )
+                : parsed;
 
         const { configs } =
             scope.level === 'directory' && !scope.directoryId

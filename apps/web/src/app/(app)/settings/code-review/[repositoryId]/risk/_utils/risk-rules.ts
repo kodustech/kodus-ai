@@ -40,13 +40,16 @@ export function riskRuleRows(
     return [
         ...defaults.map((base) => {
             const override = byId.get(base.id);
+            // What the override changes, not what it holds: a copy of Kodus's
+            // wording is not an edit.
+            const changes = override && overrideOf(base, override);
             return {
                 ...base,
                 ...(override ? stored(override) : {}),
                 isDefault: true,
                 edited:
-                    !!override &&
-                    EDITABLE.some((key) => override[key] !== undefined),
+                    !!changes &&
+                    EDITABLE.some((key) => changes[key] !== undefined),
             } as RiskRuleRow;
         }),
         // As the assessment resolves them: an override of a retired default

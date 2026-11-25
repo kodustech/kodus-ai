@@ -41,6 +41,19 @@ describe("riskRuleRows", () => {
             { ...team, isDefault: false, edited: false },
         ]);
     });
+
+    it("marks a default edited only when the override differs from Kodus's version", () => {
+        const edited = (override: object) =>
+            riskRuleRows(defaults, [
+                { id: "kodus-security", enabled: true, ...override },
+            ])[0].edited;
+        expect(edited({ name: "Security and permissions" })).toBe(false);
+        expect(edited({ instructions: "Auth and permissions." })).toBe(false);
+        expect(edited({ includedFiles: [], excludedFiles: [] })).toBe(false);
+        expect(edited({ name: "Auth" })).toBe(true);
+        expect(edited({ instructions: "Billing auth only." })).toBe(true);
+        expect(edited({ excludedFiles: ["test/**"] })).toBe(true);
+    });
 });
 
 describe("applyRiskRule", () => {
