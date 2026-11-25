@@ -201,9 +201,12 @@ export class SyncAllRepositoriesUseCase {
                     organizationOf(row),
             )
             .map((row) => ({
+                // The selection belongs to one Git connection; every listing
+                // and write of the sync goes to that connection.
                 organizationAndTeamData: {
                     organizationId: organizationOf(row),
                     teamId: row.team.uuid,
+                    integrationId: row.integration?.uuid,
                 },
                 integrationId: row.integration?.uuid,
                 platform: row.integration?.platform as PlatformType,
@@ -409,13 +412,20 @@ export class SyncAllRepositoriesUseCase {
                     target.platform,
                 );
 
-                await this.updateCodeReviewParameterRepositoriesUseCase.execute({
-                    organizationAndTeamData,
-                    actor: {
-                        source: 'sync',
-                        organizationId: organizationAndTeamData.organizationId,
+                // The review config covers the whole workspace: it is built
+                // from every connection's repositories, not only this one's.
+                const { integrationId: _connection, ...workspace } =
+                    organizationAndTeamData;
+                await this.updateCodeReviewParameterRepositoriesUseCase.execute(
+                    {
+                        organizationAndTeamData: workspace,
+                        actor: {
+                            source: 'sync',
+                            organizationId:
+                                organizationAndTeamData.organizationId,
+                        },
                     },
-                });
+                );
 
                 await this.repositoryConnectionService.registerRepositoryRecords(
                     {

@@ -165,6 +165,17 @@ describe('StartSecurityScanUseCase — running again continues', () => {
         );
     });
 
+    it("asks for the platform of the repository's own Git connection", async () => {
+        const { start, codeManagement } = useCaseWith(null);
+
+        await start();
+
+        expect(codeManagement.findTypeIntegration).toHaveBeenCalledWith(
+            { organizationId: 'org-1', teamId: 't' },
+            expect.objectContaining({ id: 'repo-1', name: 'shop' }),
+        );
+    });
+
     it("looks for the repository's active and last scan by its platform and id", async () => {
         const { scans, start } = useCaseWith(null);
 

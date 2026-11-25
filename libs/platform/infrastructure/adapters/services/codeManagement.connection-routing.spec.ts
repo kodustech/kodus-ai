@@ -184,4 +184,74 @@ describe('CodeManagementService — connection routing', () => {
             }),
         );
     });
+
+    describe('listing repositories with several connections and none named', () => {
+        const fanOut = (failing?: string) => {
+            const providers: Record<string, { getRepositories: jest.Mock }> = {
+                [PlatformType.GITHUB]: {
+                    getRepositories: jest.fn(async () =>
+                        failing === 'gh-a'
+                            ? Promise.reject(new Error('github down'))
+                            : [{ id: '1', name: 'api' }],
+                    ),
+                },
+                [PlatformType.GITLAB]: {
+                    getRepositories: jest.fn(async () => [
+                        { id: '2', name: 'web' },
+                    ]),
+                },
+            };
+            const service = make(CodeManagementService, {
+                platformIntegrationFactory: {
+                    getCodeManagementService: jest.fn(
+                        (type: PlatformType) => providers[type],
+                    ),
+                },
+                integrationService: {
+                    resolveCodeManagementConnection: jest
+                        .fn()
+                        .mockResolvedValue({
+                            platform: null,
+                            ambiguous: true,
+                        }),
+                    find: jest.fn().mockResolvedValue([
+                        { uuid: 'gh-a', platform: PlatformType.GITHUB },
+                        { uuid: 'gl-b', platform: PlatformType.GITLAB },
+                    ]),
+                },
+            }) as CodeManagementService;
+            return { service, providers };
+        };
+
+        it("lists every connection's repositories, each tagged with its connection", async () => {
+            const { service, providers } = fanOut();
+
+            const repositories = await service.getRepositories({
+                organizationAndTeamData: orgTeam(),
+            });
+
+            expect(repositories).toEqual([
+                { id: '1', name: 'api', connectionId: 'gh-a' },
+                { id: '2', name: 'web', connectionId: 'gl-b' },
+            ]);
+            expect(
+                providers[PlatformType.GITLAB].getRepositories,
+            ).toHaveBeenCalledWith({
+                organizationAndTeamData: {
+                    ...orgTeam(),
+                    integrationId: 'gl-b',
+                },
+            });
+        });
+
+        it('still lists the connections that answer when one fails', async () => {
+            const { service } = fanOut('gh-a');
+
+            await expect(
+                service.getRepositories({ organizationAndTeamData: orgTeam() }),
+            ).resolves.toEqual([
+                { id: '2', name: 'web', connectionId: 'gl-b' },
+            ]);
+        });
+    });
 });

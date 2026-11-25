@@ -4,6 +4,7 @@ import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { extractOrganizationAndTeamData } from '@libs/common/utils/helpers';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { CreateAuthIntegrationResult } from '@libs/core/domain/enums/create-auth-integration-status.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import {
@@ -72,12 +73,18 @@ export class CodeManagementService implements ICodeManagementService {
      * none or several on different platforms. A failed lookup throws, so a
      * caller can tell it from an absence.
      */
+    /**
+     * The platform of the workspace's Git connection; with several, the one
+     * listing the given repository.
+     */
     async findTypeIntegration(
         organizationAndTeamData: OrganizationAndTeamData,
+        repository?: { id?: string; name?: string; fullName?: string },
     ): Promise<PlatformType | null> {
         const resolved =
             await this.integrationService.resolveCodeManagementConnection(
                 organizationAndTeamData,
+                repository ? { repository } : {},
             );
         return resolved.platform;
     }
@@ -486,6 +493,14 @@ export class CodeManagementService implements ICodeManagementService {
         },
         type?: PlatformType,
     ): Promise<Repositories[]> {
+        const connections = await this.connectionsToList(
+            params.organizationAndTeamData,
+            type,
+        );
+        if (connections.length > 1) {
+            return this.repositoriesOfEach(params, connections);
+        }
+
         ({ type, params } = await this.route(params, type));
 
         if (!type) {
@@ -496,6 +511,90 @@ export class CodeManagementService implements ICodeManagementService {
             this.platformIntegrationFactory.getCodeManagementService(type);
 
         return codeManagementService.getRepositories(params);
+    }
+
+    /**
+     * The workspace's Git connections a listing with no connection named has
+     * to cover: every one of them (of the given platform) when the call could
+     * not be routed to a single one.
+     */
+    private async connectionsToList(
+        organizationAndTeamData: OrganizationAndTeamData,
+        type?: PlatformType,
+    ): Promise<Array<{ uuid: string; platform: PlatformType }>> {
+        if (
+            !organizationAndTeamData?.teamId ||
+            organizationAndTeamData.integrationId
+        ) {
+            return [];
+        }
+        const resolved =
+            await this.integrationService.resolveCodeManagementConnection(
+                organizationAndTeamData,
+                { platform: type },
+            );
+        if (!resolved.ambiguous) return [];
+        const connections =
+            (await this.integrationService.find({
+                organization: { uuid: organizationAndTeamData.organizationId },
+                team: { uuid: organizationAndTeamData.teamId },
+                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+                status: true,
+            })) ?? [];
+        return connections
+            .filter((connection) => !type || connection.platform === type)
+            .map((connection) => ({
+                uuid: connection.uuid,
+                platform: connection.platform,
+            }));
+    }
+
+    /** Lists each connection's repositories, tagged with it; one failing leaves the others listed. */
+    private async repositoriesOfEach<
+        P extends { organizationAndTeamData: OrganizationAndTeamData },
+    >(
+        params: P,
+        connections: Array<{ uuid: string; platform: PlatformType }>,
+    ): Promise<Repositories[]> {
+        const lists = await Promise.allSettled(
+            connections.map(async (connection) =>
+                (
+                    (await this.platformIntegrationFactory
+                        .getCodeManagementService(connection.platform)
+                        .getRepositories({
+                            ...params,
+                            organizationAndTeamData: {
+                                ...params.organizationAndTeamData,
+                                integrationId: connection.uuid,
+                            },
+                        })) ?? []
+                ).map((repository: Repositories) => ({
+                    ...repository,
+                    connectionId: connection.uuid,
+                })),
+            ),
+        );
+        lists.forEach((list, index) => {
+            if (list.status === 'rejected') {
+                this.logger.warn({
+                    message: 'connection_repositories_unavailable',
+                    context: CodeManagementService.name,
+                    error: list.reason,
+                    metadata: {
+                        organizationId:
+                            params.organizationAndTeamData.organizationId,
+                        teamId: params.organizationAndTeamData.teamId,
+                        integrationId: connections[index].uuid,
+                    },
+                });
+            }
+        });
+        if (lists.every((list) => list.status === 'rejected')) {
+            throw (lists[0] as PromiseRejectedResult).reason;
+        }
+        return lists.flatMap((list) =>
+            list.status === 'fulfilled' ? list.value : [],
+        );
     }
     async getListMembers(params: any, type?: PlatformType): Promise<any> {
         ({ type, params } = await this.route(params, type));
