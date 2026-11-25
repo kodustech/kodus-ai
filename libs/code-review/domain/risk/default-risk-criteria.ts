@@ -2,6 +2,7 @@ import {
     DEFAULT_RISK_CRITERION_PREFIX,
     type RiskCriterion,
 } from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import type { KodusRiskRuleId } from '@libs/core/infrastructure/config/types/general/risk-rule-ids';
 
 /** A rule as the assessment applies it: defaults and overrides resolved. */
 export type EffectiveRiskCriterion = RiskCriterion & {
@@ -17,7 +18,7 @@ export type EffectiveRiskCriterion = RiskCriterion & {
  * edited or disabled default is stored by its id in the team's config.
  */
 export const DEFAULT_RISK_CRITERIA: ReadonlyArray<
-    RiskCriterion & { name: string; instructions: string }
+    RiskCriterion & { id: KodusRiskRuleId; name: string; instructions: string }
 > = [
     {
         id: 'kodus-security',
@@ -84,15 +85,15 @@ export const DEFAULT_RISK_CRITERIA: ReadonlyArray<
     },
 ];
 
-const DEFAULTS_BY_ID = new Map(
+const DEFAULTS_BY_ID = new Map<string, (typeof DEFAULT_RISK_CRITERIA)[number]>(
     DEFAULT_RISK_CRITERIA.map((criterion) => [criterion.id, criterion]),
 );
 
 /**
  * The defaults with the team's overrides applied, then the team's own rules.
- * A `kodus-` id is always an override: one of a default Kodus no longer ships
- * is dropped, whatever it holds, so retiring a default never fails a stored
- * config. A team rule without a name or instructions is dropped too.
+ * A `kodus-` id is always an override: one of a retired default is dropped,
+ * whatever it holds (the schema refuses a `kodus-` id Kodus never shipped).
+ * A team rule without a name or instructions is dropped too.
  */
 export function effectiveRiskCriteria(
     team: readonly RiskCriterion[] | undefined,

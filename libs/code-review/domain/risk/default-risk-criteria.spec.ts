@@ -1,4 +1,5 @@
 import { riskCriteriaSchema } from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import { KODUS_RISK_RULE_IDS } from '@libs/core/infrastructure/config/types/general/risk-rule-ids';
 
 import { riskRulesFor } from './assess-pr-risk';
 import {
@@ -11,6 +12,10 @@ const file = (filename: string) =>
     ({ filename, status: 'modified', additions: 1, deletions: 1 }) as any;
 
 describe('effectiveRiskCriteria', () => {
+    it('ships exactly the ids the config schema reserves', () => {
+        expect(ids(DEFAULT_RISK_CRITERIA)).toEqual([...KODUS_RISK_RULE_IDS]);
+    });
+
     it('is the Kodus defaults when the team set nothing', () => {
         const rules = effectiveRiskCriteria(undefined);
         expect(ids(rules)).toEqual(ids(DEFAULT_RISK_CRITERIA));
@@ -74,6 +79,21 @@ describe('riskCriteriaSchema', () => {
                 { id: 'kodus-security', enabled: false },
             ]).success,
         ).toBe(true);
+    });
+
+    it('refuses a kodus- id Kodus never shipped instead of dropping it later', () => {
+        const result = riskCriteriaSchema.safeParse([
+            {
+                id: 'kodus-securty',
+                name: 'Security review',
+                enabled: true,
+                instructions: 'Check auth.',
+            },
+        ]);
+        expect(result.success).toBe(false);
+        expect(result.error?.issues[0].message).toMatch(
+            /"kodus-securty" is not a Kodus risk rule/,
+        );
     });
 
     it('requires a name and instructions for a team rule', () => {

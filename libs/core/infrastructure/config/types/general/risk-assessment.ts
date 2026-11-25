@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { filePatternListSchema } from './file-pattern-schema';
+import {
+    DEFAULT_RISK_CRITERION_PREFIX,
+    isKnownKodusRiskRuleId,
+} from './risk-rule-ids';
+
+export { DEFAULT_RISK_CRITERION_PREFIX };
 
 /** Request metadata for restoring a scoped setting, never stored in config. */
 export const REVIEW_SETTINGS_INHERITABLE_FIELDS = [
@@ -11,14 +17,12 @@ export const REVIEW_SETTINGS_INHERITABLE_FIELDS = [
     'riskReviewRouting.riskFound',
 ] as const;
 
-/** Kodus' default risk rules carry this id prefix. */
-export const DEFAULT_RISK_CRITERION_PREFIX = 'kodus-';
-
 /**
  * A risk rule: what the team treats as needing a person, scoped by file
  * filters. An entry whose id is a Kodus default's overrides that default, so
  * it may carry only what changes (`enabled: false` turns it off); a team's own
- * rule needs a name and instructions.
+ * rule needs a name and instructions. A `kodus-` id Kodus never shipped is
+ * refused rather than dropped later without a word.
  */
 export const riskCriterionSchema = z
     .object({
@@ -29,12 +33,21 @@ export const riskCriterionSchema = z
         includedFiles: filePatternListSchema.optional(),
         excludedFiles: filePatternListSchema.optional(),
     })
-    .refine(
-        (criterion) =>
-            criterion.id.startsWith(DEFAULT_RISK_CRITERION_PREFIX) ||
-            (!!criterion.name && !!criterion.instructions),
-        'A team risk rule needs a name and instructions.',
-    );
+    .superRefine((criterion, ctx) => {
+        if (criterion.id.startsWith(DEFAULT_RISK_CRITERION_PREFIX)) {
+            if (!isKnownKodusRiskRuleId(criterion.id))
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['id'],
+                    message: `"${criterion.id}" is not a Kodus risk rule; ids starting with ${DEFAULT_RISK_CRITERION_PREFIX} are reserved for them.`,
+                });
+        } else if (!criterion.name || !criterion.instructions) {
+            ctx.addIssue({
+                code: 'custom',
+                message: 'A team risk rule needs a name and instructions.',
+            });
+        }
+    });
 
 export type RiskCriterion = z.infer<typeof riskCriterionSchema>;
 
