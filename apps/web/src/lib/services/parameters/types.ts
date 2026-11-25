@@ -162,6 +162,15 @@ export type OrganizationParametersAutoAssignConfig = {
      * revocation because the member list cannot confirm they are still present.
      */
     manuallyAssignedIds?: string[];
+    /** Each Git connection's own PR author lists; a connection with no entry uses the lists above. */
+    connections?: Record<
+        string,
+        {
+            ignoredUsers?: string[];
+            allowedUsers?: string[];
+            seededBotIds?: string[];
+        }
+    >;
 };
 
 export interface CockpitMetricsVisibility {

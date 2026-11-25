@@ -11,6 +11,7 @@ import {
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { OrganizationParametersAutoAssignConfig } from '@libs/organization/domain/organizationParameters/types/organizationParameters.types';
+import { authorFiltersFor } from '@libs/organization/domain/organizationParameters/utils/author-filters';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationMemberListService } from '@libs/platform/application/services/organization-member-list.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -239,7 +240,10 @@ export class PruneRemovedLicenseSeatsUseCase {
                 parameter?.configValue as OrganizationParametersAutoAssignConfig;
 
             for (const gitId of [
-                ...(config?.seededBotIds ?? []),
+                ...authorFiltersFor(
+                    config,
+                    organizationAndTeamData.integrationId,
+                ).seededBotIds,
                 ...(config?.manuallyAssignedIds ?? []),
             ]) {
                 botIds.add(String(gitId));

@@ -46,6 +46,8 @@ describe('IgnoreBotsUseCase', () => {
                 organizationParametersService as any,
             ),
             organizationParametersService,
+            codeManagementService,
+            pullRequestHandlerService,
         };
     };
 
@@ -165,5 +167,94 @@ describe('IgnoreBotsUseCase', () => {
         expect(savedConfig(organizationParametersService).ignoredUsers).toEqual(
             ['bot-pr'],
         );
+    });
+
+    describe('per Git connection', () => {
+        it("seeds a connection added beside others into that connection's own lists", async () => {
+            const { useCase, organizationParametersService } = makeUseCase({
+                members: [{ id: 'bot-gl', type: 'bot' }],
+                storedConfig: {
+                    configValue: {
+                        enabled: true,
+                        ignoredUsers: ['bot-gh', 'a-human'],
+                        seededBotIds: ['bot-gh'],
+                    },
+                },
+            });
+
+            await useCase.execute({
+                ...params,
+                integrationId: 'gl-b',
+                separateConnection: true,
+            });
+
+            const saved = savedConfig(organizationParametersService);
+            expect(saved.ignoredUsers).toEqual(['bot-gh', 'a-human']);
+            expect(saved.enabled).toBe(true);
+            expect(saved.connections['gl-b']).toEqual({
+                ignoredUsers: ['bot-gl'],
+                allowedUsers: [],
+                seededBotIds: ['bot-gl'],
+            });
+        });
+
+        it('reads members and PR authors of that connection', async () => {
+            const {
+                useCase,
+                codeManagementService,
+                pullRequestHandlerService,
+            } = makeUseCase({ members: [] });
+
+            await useCase.execute({
+                ...params,
+                integrationId: 'gl-b',
+                separateConnection: true,
+            });
+
+            expect(codeManagementService.getListMembers).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    organizationAndTeamData: expect.objectContaining({
+                        integrationId: 'gl-b',
+                    }),
+                }),
+            );
+            expect(
+                pullRequestHandlerService.getPullRequestAuthorsWithCache,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ integrationId: 'gl-b' }),
+                true,
+            );
+        });
+
+        it("adds newly found bots to a connection's existing lists", async () => {
+            const { useCase, organizationParametersService } = makeUseCase({
+                members: [
+                    { id: 'bot-gl', type: 'bot' },
+                    { id: 'bot-new', type: 'bot' },
+                ],
+                storedConfig: {
+                    configValue: {
+                        enabled: false,
+                        ignoredUsers: ['bot-gh'],
+                        connections: {
+                            'gl-b': {
+                                ignoredUsers: ['person'],
+                                allowedUsers: [],
+                                seededBotIds: ['bot-gl'],
+                            },
+                        },
+                    },
+                },
+            });
+
+            await useCase.execute({ ...params, integrationId: 'gl-b' });
+
+            const saved = savedConfig(organizationParametersService);
+            expect(saved.connections['gl-b'].ignoredUsers).toEqual([
+                'person',
+                'bot-new',
+            ]);
+            expect(saved.ignoredUsers).toEqual(['bot-gh']);
+        });
     });
 });

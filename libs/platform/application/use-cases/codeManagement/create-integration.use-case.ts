@@ -97,9 +97,9 @@ export class CreateIntegrationUseCase implements IUseCase {
             organizationAndTeamData.integrationId = connectionId;
         }
         const newConnection = !connectionId && params?.newConnection === true;
-        if (newConnection) {
-            await this.bindPrimaryConnection(organizationAndTeamData);
-        }
+        const separateConnection = newConnection
+            ? await this.bindPrimaryConnection(organizationAndTeamData)
+            : false;
 
         const result = await this.codeManagementService.createAuthIntegration(
             {
@@ -161,6 +161,9 @@ export class CreateIntegrationUseCase implements IUseCase {
             .execute({
                 organizationId: organizationAndTeamData.organizationId,
                 teamId: organizationAndTeamData.teamId,
+                integrationId:
+                    integrationId ?? organizationAndTeamData.integrationId,
+                separateConnection,
             })
             .catch((error) => {
                 this.logger.error({
@@ -220,12 +223,15 @@ export class CreateIntegrationUseCase implements IUseCase {
      * it knows which one keeps the workspace plan. Name it before another
      * connection exists, or the new one would share the workspace's seats.
      */
+    /**
+     * Before a connection is added beside others, billing records which one
+     * keeps the workspace plan. Answers whether the workspace already had a
+     * connection.
+     */
     private async bindPrimaryConnection(organizationAndTeamData: {
         organizationId: string;
         teamId: string;
-    }): Promise<void> {
-        if (!this.licenseService) return;
-
+    }): Promise<boolean> {
         const existing =
             (await this.integrationService.find({
                 organization: { uuid: organizationAndTeamData.organizationId },
@@ -234,7 +240,8 @@ export class CreateIntegrationUseCase implements IUseCase {
                 status: true,
             })) ?? [];
         const primary = primaryConnectionOf(existing);
-        if (!primary) return;
+        if (!primary) return false;
+        if (!this.licenseService) return true;
 
         const bound = await this.licenseService.bindPrimaryConnection(
             {
@@ -248,5 +255,6 @@ export class CreateIntegrationUseCase implements IUseCase {
                 'Billing could not be reached to add this connection. Try again in a moment.',
             );
         }
+        return true;
     }
 }

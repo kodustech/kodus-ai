@@ -142,6 +142,36 @@ describe('AutoAssignLicenseUseCase', () => {
             findByKey: jest.fn().mockRejectedValue(new Error('db down')),
         };
         const licenseService = {
+    it("IGNORED_USER from the ignore list of the PR's Git connection", async () => {
+        const { uc } = make({
+            config: enabled({
+                connections: { 'gl-b': { ignoredUsers: ['5993570'] } },
+            }),
+        });
+
+        const res = await uc.execute({
+            ...base,
+            organizationAndTeamData: { ...orgTeam, integrationId: 'gl-b' },
+        });
+
+        expect(res.reason).toBe('IGNORED_USER');
+    });
+
+    it("NOT_ALLOWED_USER from the allow list of the PR's Git connection", async () => {
+        const { uc } = make({
+            config: enabled({
+                connections: { 'gl-b': { allowedUsers: ['other-user'] } },
+            }),
+        });
+
+        const res = await uc.execute({
+            ...base,
+            organizationAndTeamData: { ...orgTeam, integrationId: 'gl-b' },
+        });
+
+        expect(res.reason).toBe('NOT_ALLOWED_USER');
+    });
+
             getAllUsersWithLicense: jest.fn(),
             assignLicense: jest.fn(),
         };

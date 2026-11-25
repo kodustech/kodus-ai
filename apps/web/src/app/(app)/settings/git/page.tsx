@@ -89,9 +89,9 @@ export default async function GitSettings() {
 
     const connections = safeArray(connectionsResult);
 
-    const organizationMembers =
-        organizationMembersRaw.status === "ok"
-            ? organizationMembersRaw.members.map((member) => {
+    const toMemberOptions = (raw: typeof organizationMembersRaw) =>
+        raw.status === "ok"
+            ? raw.members.map((member) => {
                   const normalizedName =
                       member.name?.trim() ||
                       member.displayName?.trim() ||
@@ -103,15 +103,37 @@ export default async function GitSettings() {
               })
             : [];
 
+    const organizationMembers = toMemberOptions(organizationMembersRaw);
+
     const gitConnections = connections.filter(
         (c) => c.category === "CODE_MANAGEMENT",
     );
     const gitConnection = gitConnections[0];
     const severalConnections = gitConnections.length > 1;
 
-    const hasFilters =
-        (autoLicenseAssignmentConfig?.ignoredUsers?.length ?? 0) > 0 ||
-        (autoLicenseAssignmentConfig?.allowedUsers?.length ?? 0) > 0;
+    // Git ids differ per provider and host, so each connection filters its
+    // own members.
+    const membersByConnection = severalConnections
+        ? await Promise.all(
+              gitConnections.map((connection) =>
+                  getOrganizationMembers({
+                      teamId,
+                      connectionId: connection.connectionId,
+                  })
+                      .catch(() => MEMBERS_UNAVAILABLE)
+                      .then(toMemberOptions),
+              ),
+          )
+        : [];
+
+    const hasFilters = [
+        autoLicenseAssignmentConfig,
+        ...Object.values(autoLicenseAssignmentConfig?.connections ?? {}),
+    ].some(
+        (lists) =>
+            (lists?.ignoredUsers?.length ?? 0) > 0 ||
+            (lists?.allowedUsers?.length ?? 0) > 0,
+    );
 
     const pathname = await getCurrentPathnameOnServerComponents();
 
@@ -230,12 +252,31 @@ export default async function GitSettings() {
                     </TabsContent>
 
                     <TabsContent value="filters" className="max-w-3xl">
-                        <IgnoredUsersCard
-                            organizationMembers={organizationMembers}
-                            autoLicenseAssignmentConfig={
-                                autoLicenseAssignmentConfig
-                            }
-                        />
+                        {severalConnections ? (
+                            gitConnections.map((connection, index) => (
+                                <IgnoredUsersCard
+                                    key={connection.connectionId}
+                                    connectionId={connection.connectionId}
+                                    connectionName={
+                                        connection.connectionName ??
+                                        connection.platformName
+                                    }
+                                    organizationMembers={
+                                        membersByConnection[index] ?? []
+                                    }
+                                    autoLicenseAssignmentConfig={
+                                        autoLicenseAssignmentConfig
+                                    }
+                                />
+                            ))
+                        ) : (
+                            <IgnoredUsersCard
+                                organizationMembers={organizationMembers}
+                                autoLicenseAssignmentConfig={
+                                    autoLicenseAssignmentConfig
+                                }
+                            />
+                        )}
                     </TabsContent>
                 </Tabs>
             </Page.Content>

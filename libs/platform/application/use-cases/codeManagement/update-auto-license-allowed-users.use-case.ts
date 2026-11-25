@@ -44,7 +44,10 @@ export class UpdateAutoLicenseAllowedUsersUseCase {
             organizationAndTeamData,
         );
 
+        // Kept whole: it also carries the bots seeded, the revocation timers,
+        // the manual seats and each Git connection's lists.
         const config: OrganizationParametersAutoAssignConfig = {
+            ...(existing?.configValue ?? {}),
             enabled: existing?.configValue?.enabled ?? false,
             ignoredUsers: existing?.configValue?.ignoredUsers ?? [],
             allowedUsers: existing?.configValue?.allowedUsers ?? [],

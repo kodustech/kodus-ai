@@ -1,4 +1,5 @@
 import {
+    compileAuthorPolicyByConnection,
     compileAuthorPolicyConfig,
     shouldIncludeAuthorByPolicy,
 } from './author-policy-filter.util';
@@ -109,5 +110,36 @@ describe('author-policy-filter.util', () => {
                 config,
             }),
         ).toBe(true);
+    });
+});
+
+describe('author policy per Git connection', () => {
+    const configValue = {
+        ignoredUsers: ['7'],
+        connections: { 'gl-b': { ignoredUsers: ['9'] } },
+    };
+    const repoConnection = new Map([
+        ['repo-gh', 'gh-a'],
+        ['repo-gl', 'gl-b'],
+    ]);
+
+    it("filters a PR with the lists of its repository's connection", () => {
+        const forRepository = compileAuthorPolicyByConnection(
+            configValue,
+            repoConnection,
+        );
+
+        expect(forRepository('repo-gl').ignoredUsers).toEqual(new Set(['9']));
+        expect(forRepository('repo-gh').ignoredUsers).toEqual(new Set(['7']));
+    });
+
+    it('uses the organization lists for a repository no connection lists', () => {
+        const forRepository = compileAuthorPolicyByConnection(
+            configValue,
+            repoConnection,
+        );
+
+        expect(forRepository('unknown').ignoredUsers).toEqual(new Set(['7']));
+        expect(forRepository(undefined).ignoredUsers).toEqual(new Set(['7']));
     });
 });

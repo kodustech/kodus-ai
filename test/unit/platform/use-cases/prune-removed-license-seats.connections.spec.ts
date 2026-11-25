@@ -15,6 +15,7 @@ const build = (opts: {
     seats: Record<string, string[]>;
     members: Record<string, string[] | 'unavailable'>;
     bound?: boolean;
+    autoAssign?: Record<string, unknown>;
 }) => {
     const licenseService = {
         getAllUsersWithLicense: jest.fn(async (otd: any) =>
@@ -43,15 +44,17 @@ const build = (opts: {
         ),
     };
     const integrationService = {
-        find: jest.fn(async () =>
-            opts.connections.map((uuid) => ({ uuid })),
-        ),
+        find: jest.fn(async () => opts.connections.map((uuid) => ({ uuid }))),
     };
     const useCase = new PruneRemovedLicenseSeatsUseCase(
         memberList as any,
         codeManagement as any,
         licenseService as any,
-        { findByKey: jest.fn(async () => undefined) } as any,
+        {
+            findByKey: jest.fn(async () =>
+                opts.autoAssign ? { configValue: opts.autoAssign } : undefined,
+            ),
+        } as any,
         integrationService as any,
     );
     return { useCase, licenseService, memberList };
@@ -131,5 +134,25 @@ describe('PruneRemovedLicenseSeatsUseCase per Git connection', () => {
 
         expect(result.status).toBe('members_unavailable');
         expect(licenseService.unassignLicenses).not.toHaveBeenCalled();
+    });
+
+    it("keeps the bots seeded on a connection's own lists out of that connection's prune", async () => {
+        const { useCase, licenseService } = build({
+            connections: ['gh-a', 'gl-b'],
+            seats: { 'gh-a': [], 'gl-b': ['bot-gl', '9'] },
+            members: { 'gh-a': [], 'gl-b': [] },
+            autoAssign: {
+                seededBotIds: [],
+                connections: { 'gl-b': { seededBotIds: ['bot-gl'] } },
+            },
+        });
+
+        await useCase.execute({ organizationAndTeamData: workspace });
+
+        expect(licenseService.unassignLicenses).toHaveBeenCalledWith(
+            { ...workspace, integrationId: 'gl-b' },
+            ['9'],
+            'gitlab',
+        );
     });
 });

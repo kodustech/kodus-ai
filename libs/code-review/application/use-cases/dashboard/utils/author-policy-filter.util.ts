@@ -1,4 +1,6 @@
 import { PullRequestAuthorPolicy } from '@libs/code-review/dtos/dashboard/pull-request-author-policy.constants';
+import { OrganizationParametersAutoAssignConfig } from '@libs/organization/domain/organizationParameters/types/organizationParameters.types';
+import { authorFiltersFor } from '@libs/organization/domain/organizationParameters/utils/author-filters';
 
 export type AuthorPolicyConfigValue = {
     ignoredUsers?: string[];
@@ -74,4 +76,32 @@ export const shouldIncludeAuthorByPolicy = (params: {
     }
 
     return excluded;
+};
+
+/**
+ * The compiled policy of each PR's Git connection, found from its repository.
+ * A repository no connection lists gets the organization's lists.
+ */
+export const compileAuthorPolicyByConnection = (
+    configValue: Partial<OrganizationParametersAutoAssignConfig> | null,
+    repositoryConnection: ReadonlyMap<string, string>,
+): ((repositoryId?: string) => CompiledAuthorPolicyConfig) => {
+    const compiled = new Map<string, CompiledAuthorPolicyConfig>();
+    const compileFor = (integrationId?: string) => {
+        const key = integrationId ?? '';
+        let config = compiled.get(key);
+        if (!config) {
+            config = compileAuthorPolicyConfig(
+                authorFiltersFor(configValue, integrationId),
+            );
+            compiled.set(key, config);
+        }
+        return config;
+    };
+    return (repositoryId) =>
+        compileFor(
+            repositoryId
+                ? repositoryConnection.get(String(repositoryId))
+                : undefined,
+        );
 };

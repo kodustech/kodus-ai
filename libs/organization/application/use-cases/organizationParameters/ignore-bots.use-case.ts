@@ -6,6 +6,10 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationParametersAutoAssignConfig } from '@libs/organization/domain/organizationParameters/types/organizationParameters.types';
+import {
+    authorFiltersFor,
+    withConnectionAuthorFilters,
+} from '@libs/organization/domain/organizationParameters/utils/author-filters';
 import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { PullRequestHandlerService } from '@libs/code-review/infrastructure/adapters/services/pullRequestManager.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -26,10 +30,24 @@ export class IgnoreBotsUseCase implements IUseCase {
         private readonly organizationParametersService: IOrganizationParametersService,
     ) {}
 
-    public async execute(params: { organizationId: string; teamId: string }) {
+    /**
+     * Seeds the bots found on a Git connection into the PR author ignore list.
+     * A connection added beside the workspace's others (`separateConnection`),
+     * or one that already has lists of its own, is seeded into its own lists:
+     * git ids differ per provider and host. Otherwise the organization's.
+     */
+    public async execute(params: {
+        organizationId: string;
+        teamId: string;
+        integrationId?: string;
+        separateConnection?: boolean;
+    }) {
         const organizationAndTeamData = {
             organizationId: params.organizationId,
             teamId: params.teamId,
+            ...(params.integrationId
+                ? { integrationId: params.integrationId }
+                : {}),
         };
 
         const orgMembers = await this.codeManagementService.getListMembers({
@@ -49,10 +67,7 @@ export class IgnoreBotsUseCase implements IUseCase {
             this.logger.warn({
                 message: 'No users found',
                 context: IgnoreBotsUseCase.name,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                },
+                metadata: organizationAndTeamData,
             });
         }
 
@@ -68,61 +83,55 @@ export class IgnoreBotsUseCase implements IUseCase {
                 organizationAndTeamData,
             );
 
-        if (!autoLicenseEntity || !autoLicenseEntity?.configValue) {
-            this.logger.warn({
-                message:
-                    'Auto license assignment config not found, creating one',
-                context: IgnoreBotsUseCase.name,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                },
-            });
+        const stored = autoLicenseEntity?.configValue as
+            OrganizationParametersAutoAssignConfig | undefined;
 
-            await this.organizationParametersService.createOrUpdateConfig(
-                OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-                {
-                    enabled: false,
-                    ignoredUsers: botIds,
-                    allowedUsers: [],
-                    seededBotIds: botIds,
-                },
-                organizationAndTeamData,
-            );
-        } else {
-            this.logger.debug({
-                message: 'Auto license assignment config found',
-                context: IgnoreBotsUseCase.name,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                },
-            });
+        const ownLists =
+            params.integrationId &&
+            (params.separateConnection ||
+                Boolean(stored?.connections?.[params.integrationId]));
+        const target = ownLists ? params.integrationId : undefined;
 
-            const autoLicenseConfig =
-                autoLicenseEntity.configValue as OrganizationParametersAutoAssignConfig;
+        const current =
+            target && !stored?.connections?.[target]
+                ? { ignoredUsers: [], allowedUsers: [], seededBotIds: [] }
+                : authorFiltersFor(stored, target);
 
-            autoLicenseConfig.allowedUsers =
-                autoLicenseConfig.allowedUsers || [];
+        // Only bots never seeded before are added. Re-adding every bot found
+        // would undo an admin's decision to review one, the case that matters
+        // being an app authoring PRs on a paid seat.
+        const seededBotIds = new Set(current.seededBotIds);
+        const newBotIds = botIds.filter((id) => !seededBotIds.has(id));
 
-            // Only bots never seeded before are added. Re-adding every bot
-            // found would undo an admin's decision to review one — the case
-            // that matters is an app authoring PRs on a paid seat.
-            const seededBotIds = new Set(autoLicenseConfig.seededBotIds ?? []);
-            const newBotIds = botIds.filter((id) => !seededBotIds.has(id));
+        const base: OrganizationParametersAutoAssignConfig = stored ?? {
+            enabled: false,
+            ignoredUsers: [],
+            allowedUsers: [],
+        };
 
-            autoLicenseConfig.ignoredUsers = Array.from(
-                new Set([...autoLicenseConfig.ignoredUsers, ...newBotIds]),
-            );
-            autoLicenseConfig.seededBotIds = Array.from(
-                new Set([...seededBotIds, ...botIds]),
-            );
+        const next = withConnectionAuthorFilters(base, target, {
+            ignoredUsers: Array.from(
+                new Set([...current.ignoredUsers, ...newBotIds]),
+            ),
+            allowedUsers: current.allowedUsers,
+            seededBotIds: Array.from(new Set([...seededBotIds, ...botIds])),
+        });
 
-            await this.organizationParametersService.createOrUpdateConfig(
-                OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-                autoLicenseConfig,
-                organizationAndTeamData,
-            );
-        }
+        this.logger.log({
+            message: 'pr_author_bots_seeded',
+            context: IgnoreBotsUseCase.name,
+            metadata: {
+                ...organizationAndTeamData,
+                connectionLists: Boolean(target),
+                created: !stored,
+                newBots: newBotIds.length,
+            },
+        });
+
+        await this.organizationParametersService.createOrUpdateConfig(
+            OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
+            next,
+            organizationAndTeamData,
+        );
     }
 }

@@ -40,6 +40,7 @@ const build = (
             .fn()
             .mockResolvedValue(opts.bindPrimary ?? true),
     };
+    const ignoreBots = { execute: jest.fn().mockResolvedValue(undefined) };
     const useCase = new CreateIntegrationUseCase(
         codeManagementService as any,
         { emit: jest.fn() } as any,
@@ -51,7 +52,7 @@ const build = (
             },
         } as any,
         { findOne: jest.fn().mockResolvedValue(undefined) } as any,
-        { execute: jest.fn().mockResolvedValue(undefined) } as any,
+        ignoreBots as any,
         { gitIntegrationChanged: jest.fn() } as any,
         integrationService as any,
         licenseService as any,
@@ -61,6 +62,7 @@ const build = (
         codeManagementService,
         integrationService,
         licenseService,
+        ignoreBots,
     };
 };
 
@@ -173,7 +175,8 @@ describe('CreateIntegrationUseCase — connections', () => {
                 'gh-a',
             );
             expect(
-                licenseService.bindPrimaryConnection.mock.invocationCallOrder[0],
+                licenseService.bindPrimaryConnection.mock
+                    .invocationCallOrder[0],
             ).toBeLessThan(
                 codeManagementService.createAuthIntegration.mock
                     .invocationCallOrder[0],
@@ -222,6 +225,44 @@ describe('CreateIntegrationUseCase — connections', () => {
             expect(
                 reconnect.licenseService.bindPrimaryConnection,
             ).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('PR author filters', () => {
+        it("seeds a connection added beside others into that connection's own lists", async () => {
+            const { useCase, ignoreBots } = build({
+                workspaceConnections: [{ uuid: 'gh-a' }],
+            });
+
+            await useCase.execute({
+                integrationType: 'gitlab',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(ignoreBots.execute).toHaveBeenCalledWith({
+                organizationId: ORG,
+                teamId: TEAM,
+                integrationId: 'new-conn',
+                separateConnection: true,
+            });
+        });
+
+        it("seeds a workspace's first connection into the organization lists, as before", async () => {
+            const { useCase, ignoreBots } = build();
+
+            await useCase.execute({
+                integrationType: 'github',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(ignoreBots.execute).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    integrationId: 'new-conn',
+                    separateConnection: false,
+                }),
+            );
         });
     });
 });

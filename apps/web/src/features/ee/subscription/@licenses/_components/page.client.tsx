@@ -68,10 +68,18 @@ export const LicensesPageClient = ({
         },
     );
 
+    // With several Git connections, the ignore list edited here is the
+    // selected connection's: git ids differ per provider and host.
+    const connectionId = readBillingConnectionId(teamId);
+    const connectionLists = connectionId
+        ? autoLicenseAssignmentConfig?.connections?.[connectionId]
+        : undefined;
+    const ignoredUsers =
+        (connectionLists ?? autoLicenseAssignmentConfig)?.ignoredUsers ?? [];
+
     const [open, setOpen] = useState(false);
-    const [pendingIgnoredUsers, setPendingIgnoredUsers] = useState<string[]>(
-        autoLicenseAssignmentConfig?.ignoredUsers ?? [],
-    );
+    const [pendingIgnoredUsers, setPendingIgnoredUsers] =
+        useState<string[]>(ignoredUsers);
 
     // Always merge into the stored config: it also carries the auto-revoke
     // settings and the pending-revocation timers written by the cron.
@@ -132,9 +140,28 @@ export const LicensesPageClient = ({
     const [handleIgnoredUsersChange, { loading: isSavingIgnoredUsers }] =
         useAsyncAction(async () => {
             try {
-                await saveAutoAssignConfig({
-                    ignoredUsers: pendingIgnoredUsers,
-                });
+                await saveAutoAssignConfig(
+                    connectionId
+                        ? {
+                              connections: {
+                                  ...autoLicenseAssignmentConfig?.connections,
+                                  [connectionId]: {
+                                      allowedUsers:
+                                          (
+                                              connectionLists ??
+                                              autoLicenseAssignmentConfig
+                                          )?.allowedUsers ?? [],
+                                      seededBotIds:
+                                          (
+                                              connectionLists ??
+                                              autoLicenseAssignmentConfig
+                                          )?.seededBotIds ?? [],
+                                      ignoredUsers: pendingIgnoredUsers,
+                                  },
+                              },
+                          }
+                        : { ignoredUsers: pendingIgnoredUsers },
+                );
 
                 toast({
                     variant: "success",
