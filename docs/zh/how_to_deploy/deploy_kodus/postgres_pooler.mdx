@@ -75,6 +75,73 @@ DATABASE_URL=postgres://kodusdev:...@pgbouncer.internal:6432/kodus_db
 DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus_db
 ```
 
+## 通过安装器启用
+
+`kodus-installer` 为每种运行 Kodus 的方式接好连接池，并替你填好上面的配置。
+
+### Docker Compose
+
+`pgbouncer` profile 会在内置 PostgreSQL 前启动 transaction 模式的 PgBouncer
+1.26，并已设置 `track_extra_parameters`。在 `.env` 中让 Kodus 指向它，直连仍然
+使用 PostgreSQL：
+
+```bash
+API_PG_DB_HOST=db_kodus_pgbouncer
+API_PG_DB_PORT=5432
+API_PG_DB_DIRECT_HOST=db_kodus_postgres
+```
+
+```bash
+COMPOSE_PROFILES=pgbouncer docker compose up -d
+```
+
+如果使用你自己的连接池，把 上文“配置 Kodus” 中的四个变量设为你的主机，
+不要启用该 profile。
+
+### Helm（CloudNativePG operator）
+
+在 `postgres.mode: operator` 下设置 `postgres.operator.pooler.enabled: true`，
+会在 `<release>-postgres-rw` 前创建 CloudNativePG `Pooler`。应用连接
+`<release>-postgres-pooler-rw`；迁移和 LISTEN 仍使用 `<release>-postgres-rw`。
+chart 总会在你设置的 `parameters` 之外加上 `track_extra_parameters`。
+
+```yaml
+postgres:
+  mode: operator
+  operator:
+    image: <cnpg-image-with-pgvector>
+    pooler:
+      enabled: true
+      poolMode: transaction   # or session
+      instances: 2
+      parameters:
+        max_client_conn: "1000"
+        default_pool_size: "40"
+```
+
+`poolMode` 可选 `transaction`（默认）或 `session`。`max_client_conn` 要按
+`autoscaling.maxReplicas` 时所有 api、worker 和 webhooks 副本来估算。
+
+### Helm（你自己的连接池）
+
+在 `postgres.mode: external` 下，把 `host`/`port` 指向连接池，
+`directHost`/`directPort` 指向 PostgreSQL。直连需要连接字符串时，使用
+`directUrlKey`（见下一节）。
+
+```yaml
+postgres:
+  mode: external
+  external:
+    host: pgbouncer.internal
+    port: 6432
+    directHost: postgres-primary.internal
+    directPort: 5432
+    existingSecret: kodus-postgres
+```
+
+`postgres.mode: bundled` 没有连接池。要在连接池后运行 Kodus，请使用 `operator`
+或 `external`。
+
 ## 你自己的 PgBouncer 或托管连接池
 
 如果 PostgreSQL 和连接池已经在你这边运行，无论使用 Docker Compose 还是 Helm

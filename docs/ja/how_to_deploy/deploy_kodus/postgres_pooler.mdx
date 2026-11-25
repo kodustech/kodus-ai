@@ -78,6 +78,76 @@ DATABASE_URL=postgres://kodusdev:...@pgbouncer.internal:6432/kodus_db
 DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus_db
 ```
 
+## インストーラーで有効にする
+
+`kodus-installer` は Kodus の実行方法ごとにプーラーを組み込み、上記の設定を
+自動で埋めます。
+
+### Docker Compose
+
+`pgbouncer` プロファイルは、同梱の PostgreSQL の前に transaction モードの
+PgBouncer 1.26 を起動します（`track_extra_parameters` は設定済み）。`.env` で
+Kodus をそこに向け、直接接続は PostgreSQL のままにします:
+
+```bash
+API_PG_DB_HOST=db_kodus_pgbouncer
+API_PG_DB_PORT=5432
+API_PG_DB_DIRECT_HOST=db_kodus_postgres
+```
+
+```bash
+COMPOSE_PROFILES=pgbouncer docker compose up -d
+```
+
+自前のプーラーを使う場合は、上記「Kodus の設定」 の 4 つの変数を自分の
+ホストに設定し、プロファイルは使いません。
+
+### Helm（CloudNativePG オペレーター）
+
+`postgres.mode: operator` で `postgres.operator.pooler.enabled: true` にすると、
+`<release>-postgres-rw` の前に CloudNativePG の `Pooler` が作られます。アプリは
+`<release>-postgres-pooler-rw` に接続し、マイグレーションと LISTEN は
+`<release>-postgres-rw` を使います。chart は指定した `parameters` に加えて、常に
+`track_extra_parameters` を設定します。
+
+```yaml
+postgres:
+  mode: operator
+  operator:
+    image: <cnpg-image-with-pgvector>
+    pooler:
+      enabled: true
+      poolMode: transaction   # or session
+      instances: 2
+      parameters:
+        max_client_conn: "1000"
+        default_pool_size: "40"
+```
+
+`poolMode` は `transaction`（既定）または `session` です。`max_client_conn` は
+`autoscaling.maxReplicas` 時のすべての api、worker、webhooks レプリカ分を見込んで
+設定してください。
+
+### Helm（自前のプーラー）
+
+`postgres.mode: external` では、`host`/`port` をプーラーに、
+`directHost`/`directPort` を PostgreSQL に向けます。直接接続に接続文字列が必要な
+場合は `directUrlKey` を使います（次のセクション）。
+
+```yaml
+postgres:
+  mode: external
+  external:
+    host: pgbouncer.internal
+    port: 6432
+    directHost: postgres-primary.internal
+    directPort: 5432
+    existingSecret: kodus-postgres
+```
+
+`postgres.mode: bundled` にはプーラーがありません。プーラー経由で動かすには
+`operator` か `external` を使ってください。
+
 ## 自前の PgBouncer やマネージドプーラー
 
 PostgreSQL とプーラーがすでに稼働しているなら、Docker Compose でも Helm

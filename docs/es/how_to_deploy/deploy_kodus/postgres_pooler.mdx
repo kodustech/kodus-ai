@@ -81,6 +81,76 @@ DATABASE_URL=postgres://kodusdev:...@pgbouncer.internal:6432/kodus_db
 DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus_db
 ```
 
+## Actívalo con el installer
+
+El `kodus-installer` conecta el pooler en cada forma de ejecutar Kodus y
+rellena por ti la configuración de arriba.
+
+### Docker Compose
+
+El profile `pgbouncer` levanta PgBouncer 1.26 en modo transaction delante del
+PostgreSQL incluido, con `track_extra_parameters` ya configurado. Apunta Kodus a
+él en `.env` y deja PostgreSQL como conexión directa:
+
+```bash
+API_PG_DB_HOST=db_kodus_pgbouncer
+API_PG_DB_PORT=5432
+API_PG_DB_DIRECT_HOST=db_kodus_postgres
+```
+
+```bash
+COMPOSE_PROFILES=pgbouncer docker compose up -d
+```
+
+Para usar tu propio pooler, configura las cuatro variables de
+Configura Kodus, arriba, con tus hosts y deja el profile apagado.
+
+### Helm, con el operador CloudNativePG
+
+Con `postgres.mode: operator`, `postgres.operator.pooler.enabled: true` añade un
+`Pooler` de CloudNativePG delante de `<release>-postgres-rw`. La aplicación se
+conecta a `<release>-postgres-pooler-rw`; las migraciones y LISTEN siguen en
+`<release>-postgres-rw`. El chart siempre añade `track_extra_parameters`, además
+de los `parameters` que definas.
+
+```yaml
+postgres:
+  mode: operator
+  operator:
+    image: <cnpg-image-with-pgvector>
+    pooler:
+      enabled: true
+      poolMode: transaction   # or session
+      instances: 2
+      parameters:
+        max_client_conn: "1000"
+        default_pool_size: "40"
+```
+
+`poolMode` acepta `transaction` (por defecto) o `session`. Dimensiona
+`max_client_conn` para todas las réplicas de api, worker y webhooks en
+`autoscaling.maxReplicas`.
+
+### Helm, con tu propio pooler
+
+Con `postgres.mode: external`, apunta `host`/`port` al pooler y
+`directHost`/`directPort` a PostgreSQL. Si la conexión directa necesita una
+connection string, usa `directUrlKey` (siguiente sección).
+
+```yaml
+postgres:
+  mode: external
+  external:
+    host: pgbouncer.internal
+    port: 6432
+    directHost: postgres-primary.internal
+    directPort: 5432
+    existingSecret: kodus-postgres
+```
+
+`postgres.mode: bundled` no tiene pooler. Usa `operator` o `external` para
+ejecutar Kodus detrás de uno.
+
 ## Tu propio PgBouncer o pooler gestionado
 
 Si PostgreSQL y su pooler ya funcionan de tu lado, apunta Kodus a ellos,
