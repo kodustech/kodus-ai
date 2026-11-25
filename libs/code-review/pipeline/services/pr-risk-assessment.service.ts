@@ -14,7 +14,7 @@ import {
 } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
-    assessPrRisk,
+    assessPrRiskWithLevel,
     prRiskSnapshot,
 } from '@libs/code-review/domain/risk/assess-pr-risk';
 import {
@@ -32,6 +32,15 @@ import type {
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { hasCompletePrFileList } from '@libs/code-review/domain/review-files';
 import { riskCriteriaSchema } from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import type { RiskSecondLookResult } from '@libs/code-review/domain/risk/risk-assessment';
+import { buildChangeRiskDiff } from '@libs/code-review/domain/risk/assess-change-risk';
+import {
+    createRiskSecondLook,
+    riskAgentRun,
+    RISK_LOOK_TOOLS,
+} from '@libs/code-review/domain/risk/risk-second-look';
+import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
+import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 
 export interface PrRiskAssessmentRequest {
     organizationAndTeamData: OrganizationAndTeamData;
@@ -55,8 +64,22 @@ export interface PrRiskAssessmentRequest {
     riskConfigurationUnavailable?: boolean;
 }
 
+export interface PrRiskSecondLookRequest {
+    organizationAndTeamData: OrganizationAndTeamData;
+    repository: { id: string; name: string; fullName?: string };
+    pullRequest: { number: number; title: string; body?: string };
+    language?: string;
+    risk: RiskAssessmentResult | undefined;
+    level: PrRiskAssessmentResponse['level'];
+    files: FileChange[];
+    /** The review's sandbox clone of the PR head. */
+    remoteCommands: RemoteCommands;
+}
+
 export interface PrRiskAssessmentResponse {
     assessment: RiskAssessmentResult;
+    /** The judgment's level, for the pipeline only: a medium one gets a second look. */
+    level?: 'low' | 'medium' | 'high';
     fullPrFiles?: FileChange[];
 }
 
@@ -216,8 +239,9 @@ export class PrRiskAssessmentService {
                     'Risk assessment could not run with the available model credits.',
                 );
             }
-            const risk = await assessPrRisk(assessmentInput);
-            return { assessment: risk, fullPrFiles };
+            const { assessment, level } =
+                await assessPrRiskWithLevel(assessmentInput);
+            return { assessment, level, fullPrFiles };
         } catch (error) {
             this.logger.warn({
                 message: 'Shared PR risk assessment unavailable',
@@ -243,6 +267,83 @@ export class PrRiskAssessmentService {
                 },
                 fullPrFiles,
             };
+        }
+    }
+
+    /**
+     * The second look at a medium rating in the review's sandbox: the risk
+     * model with the review's own repository tools, gated by the same credits.
+     * Undefined keeps the first judgment, including on any failure.
+     */
+    async secondLook(
+        request: PrRiskSecondLookRequest,
+    ): Promise<RiskSecondLookResult | undefined> {
+        const { risk, organizationAndTeamData, pullRequest } = request;
+        if (
+            risk?.status !== 'assessed' ||
+            !risk.riskIdentified ||
+            request.level !== 'medium' ||
+            !organizationAndTeamData.organizationId
+        )
+            return undefined;
+        try {
+            const stored = await this.organizationParameters.findByKey(
+                OrganizationParametersKey.BYOK_CONFIG,
+                organizationAndTeamData,
+            );
+            const { slot, verdict } = resolveTaskSlot(
+                isByokConfig(stored?.configValue)
+                    ? stored.configValue
+                    : undefined,
+                LLM_TASK.riskAssessment,
+            );
+            if (verdict && !verdict.modelId) return undefined;
+            if (
+                await this.permissions.gateKodusCreditsForSlot(
+                    slot,
+                    organizationAndTeamData,
+                    this.stageName,
+                )
+            )
+                return undefined;
+            const { registry } = buildFinderToolRegistry({
+                remoteCommands: request.remoteCommands,
+                repositoryFullName: request.repository.fullName,
+            });
+            const cleared = await createRiskSecondLook(
+                riskAgentRun(slot, {
+                    organizationId: organizationAndTeamData.organizationId,
+                    prNumber: pullRequest.number,
+                }),
+            )({
+                title: pullRequest.title,
+                body: pullRequest.body ?? '',
+                diff: buildChangeRiskDiff(request.files),
+                reason: risk.reason,
+                language: request.language,
+                tools: registry
+                    .list()
+                    .filter((tool) => RISK_LOOK_TOOLS.includes(tool.name)),
+            });
+            return cleared
+                ? {
+                      assessmentKey: risk.snapshot.assessmentKey,
+                      reason: cleared.reason,
+                      evidence: cleared.evidence,
+                  }
+                : undefined;
+        } catch (error) {
+            this.logger.warn({
+                message: 'Risk second look failed; the first judgment stands',
+                context: this.stageName,
+                metadata: {
+                    ...organizationAndTeamData,
+                    prNumber: pullRequest.number,
+                    repositoryId: request.repository.id,
+                },
+                error,
+            });
+            return undefined;
         }
     }
 }

@@ -85,6 +85,18 @@ export function prRiskSnapshot(input: AssessPrRiskInput): RiskSnapshot {
 export async function assessPrRisk(
     input: AssessPrRiskInput,
 ): Promise<RiskAssessmentResult> {
+    return (await assessPrRiskWithLevel(input)).assessment;
+}
+
+/**
+ * The same assessment with the judgment's level beside it, for the pipeline
+ * only: whether a medium rating gets its second look. The public result stays
+ * binary.
+ */
+export async function assessPrRiskWithLevel(input: AssessPrRiskInput): Promise<{
+    assessment: RiskAssessmentResult;
+    level?: 'low' | 'medium' | 'high';
+}> {
     const snapshot = prRiskSnapshot(input);
     const unavailable = (reason: string): RiskAssessmentResult => ({
         status: 'unavailable',
@@ -92,7 +104,11 @@ export async function assessPrRisk(
         snapshot,
     });
     if (!input.headSha || !input.baseSha || !input.files.length) {
-        return unavailable('Kody could not verify the complete PR snapshot.');
+        return {
+            assessment: unavailable(
+                'Kody could not verify the complete PR snapshot.',
+            ),
+        };
     }
     const criteria = applicableRiskCriteria(input.criteria, input.files);
     const teamInstructions = criteria
@@ -120,15 +136,20 @@ export async function assessPrRisk(
     });
     if (result.level === 'unknown') {
         return {
-            ...unavailable(result.reason),
-            ...(result.failure ? { failure: result.failure } : {}),
+            assessment: {
+                ...unavailable(result.reason),
+                ...(result.failure ? { failure: result.failure } : {}),
+            },
         };
     }
     return {
-        status: 'assessed',
-        riskIdentified: result.level !== 'low',
-        reason: result.reason,
-        snapshot,
-        areaMapVersion: result.areaMapVersion,
+        assessment: {
+            status: 'assessed',
+            riskIdentified: result.level !== 'low',
+            reason: result.reason,
+            snapshot,
+            areaMapVersion: result.areaMapVersion,
+        },
+        level: result.level,
     };
 }

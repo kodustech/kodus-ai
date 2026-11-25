@@ -1456,6 +1456,48 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             expect(deps.prRiskAssessment.assess).toHaveBeenCalledTimes(1);
         });
 
+        it.each([
+            ['medium', true],
+            ['high', false],
+        ])(
+            'keeps a second-look clearance of the same commits when the new rating is %s=%s',
+            async (level, approves) => {
+                const { cron, deps } = makeCron();
+                deps.codeManagementService.getReviewStatusByPullRequest
+                    .mockResolvedValueOnce(PullRequestReviewState.NONE)
+                    .mockResolvedValueOnce(PullRequestReviewState.APPROVED);
+                deps.codeManagementService.getPullRequest.mockResolvedValue(
+                    live,
+                );
+                deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                    execution({
+                        status: 'assessed',
+                        riskIdentified: false,
+                        reason: 'Both callers already catch it.',
+                        secondLook: { file: 'src/caller.ts', line: 12 },
+                        snapshot,
+                    }),
+                );
+                deps.prRiskAssessment.assess.mockResolvedValue({
+                    assessment: fresh(true),
+                    level,
+                });
+
+                expect(await run(cron)).toBe(approves);
+                expect(
+                    deps.automationExecutionService.update.mock.calls[0][1]
+                        .dataExecution.riskAssessment,
+                ).toMatchObject(
+                    approves
+                        ? {
+                              riskIdentified: false,
+                              secondLook: { file: 'src/caller.ts', line: 12 },
+                          }
+                        : { riskIdentified: true },
+                );
+            },
+        );
+
         it('still waits for a review when the commits changed', async () => {
             const { cron, deps } = makeCron();
             deps.codeManagementService.getPullRequest.mockResolvedValue({

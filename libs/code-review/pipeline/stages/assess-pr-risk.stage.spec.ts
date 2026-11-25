@@ -2,6 +2,7 @@ import { AssessPrRiskStage } from './assess-pr-risk.stage';
 import { PrRiskAssessmentService } from '../services/pr-risk-assessment.service';
 import {
     assessPrRisk,
+    assessPrRiskWithLevel,
     prRiskSnapshot,
 } from '@libs/code-review/domain/risk/assess-pr-risk';
 import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
@@ -9,6 +10,7 @@ import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.
 jest.mock('@libs/code-review/domain/risk/assess-pr-risk', () => ({
     ...jest.requireActual('@libs/code-review/domain/risk/assess-pr-risk'),
     assessPrRisk: jest.fn(),
+    assessPrRiskWithLevel: jest.fn(),
 }));
 
 const files = [
@@ -60,6 +62,11 @@ const stage = new AssessPrRiskStage(service);
 
 beforeEach(() => {
     jest.resetAllMocks();
+    // The service reads the level beside the result; the scripted results
+    // below are the result alone, as assessPrRisk gives it.
+    jest.mocked(assessPrRiskWithLevel).mockImplementation(async (input) => ({
+        assessment: await assessPrRisk(input),
+    }));
     management.getFilesByPullRequestId.mockResolvedValue(files);
     management.getPullRequest.mockResolvedValue(live);
     access.isEnabled.mockResolvedValue(true);
@@ -426,4 +433,23 @@ it('flags unresolved risk settings only when risk may be active', async () => {
             metadata: { reason: 'approval_risk_assessment_failed' },
         }),
     ]);
+});
+
+it('carries the judgment level beside the binary result, for the second look', async () => {
+    parameters.findByKey.mockResolvedValue(undefined);
+    permissions.gateKodusCreditsForSlot.mockResolvedValue(false);
+    jest.mocked(assessPrRiskWithLevel).mockResolvedValue({
+        assessment: {
+            status: 'assessed',
+            riskIdentified: true,
+            reason: 'Callers may rely on the old error.',
+            snapshot: { assessmentKey: 'key' } as any,
+        },
+        level: 'medium',
+    });
+
+    const result = await stage.execute(context());
+
+    expect(result.riskLevel).toBe('medium');
+    expect(result.riskAssessment).not.toHaveProperty('level');
 });

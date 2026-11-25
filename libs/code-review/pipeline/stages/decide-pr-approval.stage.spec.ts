@@ -130,6 +130,59 @@ it.each([
     },
 );
 
+it.each([
+    { lookKey: 'key', kind: 'approve' },
+    { lookKey: 'another-assessment', kind: 'hold' },
+])(
+    'approves a medium rating only when the second look cleared that assessment ($lookKey)',
+    async ({ lookKey, kind }) => {
+        codeManagement.getPullRequest.mockResolvedValueOnce({
+            labels: ['ready'],
+            head: { sha: 'head-1' },
+            base: { sha: 'base' },
+            user: { login: 'alice' },
+        });
+        const riskAssessment = {
+            status: 'assessed' as const,
+            riskIdentified: true,
+            reason: 'Callers may rely on the old error.',
+            snapshot: {
+                organizationId: 'org-1',
+                repositoryId: 'repo-1',
+                prNumber: 42,
+                baseSha: 'base',
+                headSha: 'head-1',
+                assessmentKey: 'key',
+                descriptionKey: prRiskDescriptionKey({}),
+            },
+        };
+        const result = await stage.execute({
+            ...context({ riskAssessmentActive: true }),
+            riskAssessment,
+            riskSecondLook: {
+                assessmentKey: lookKey,
+                reason: 'Both callers already catch it.',
+                evidence: { file: 'src/caller.ts', line: 12 },
+            },
+        });
+
+        expect(result.approvalDecision?.kind).toBe(kind);
+        // What approval decided with is what the execution keeps for the cron.
+        expect(result.riskAssessment).toMatchObject(
+            kind === 'approve'
+                ? {
+                      riskIdentified: false,
+                      reason: 'Both callers already catch it.',
+                      secondLook: { file: 'src/caller.ts', line: 12 },
+                  }
+                : { riskIdentified: true },
+        );
+        expect(result.approvalRisk?.level).toBe(
+            kind === 'approve' ? 'low' : 'high',
+        );
+    },
+);
+
 it('uses fixed approval conditions without legacy risk when the independent toggle is off', async () => {
     const result = await stage.execute(
         context({

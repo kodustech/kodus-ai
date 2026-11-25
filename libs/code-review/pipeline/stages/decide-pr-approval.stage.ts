@@ -23,7 +23,10 @@ import {
 } from '@libs/code-review/domain/approval/approval-decision';
 import { assessApprovalRisk } from '@libs/code-review/domain/approval/assess-approval-risk';
 import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
-import { riskApprovalVeto } from '@libs/code-review/domain/risk/risk-assessment';
+import {
+    riskApprovalVeto,
+    withSecondLook,
+} from '@libs/code-review/domain/risk/risk-assessment';
 import {
     CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
     IConditionalApprovalAccessService,
@@ -37,6 +40,10 @@ import {
 import { approvalPrMetadataKey } from '@libs/code-review/domain/approval/approval-pr-metadata';
 import { normalizeReviewFindingId } from '@libs/code-review/domain/approval/verify-delivered-review-findings';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+
+/** The risk approval decides with: the first judgment, or what the second look cleared. */
+const sharedRiskOf = (context: CodeReviewPipelineContext) =>
+    withSecondLook(context.riskAssessment, context.riskSecondLook);
 
 @Injectable()
 export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -100,7 +107,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                     lineFindings.length === 0 &&
                     (context.prLevelCommentResults?.length ?? 0) === 0 &&
                     !hasBlockingFailure,
-                risk: context.riskAssessment,
+                risk: sharedRiskOf(context),
                 fullPrFiles: context.fullPrFiles,
                 heavy: context.heavy,
                 previousEligibility:
@@ -108,6 +115,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
             });
             return this.updateContext(context, (draft) => {
                 draft.approvalDecision = result.decision;
+                draft.riskAssessment = sharedRiskOf(context);
                 draft.approvalPolicyEligibility = result.eligibility;
                 draft.approvalReviewSummary = {
                     lineFindings: lineFindings.length,
@@ -244,7 +252,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
         );
         // Compatibility projection for persisted executions and the approval
         // cron. Shared consumers use riskAssessment, never these old levels.
-        const sharedRisk = context.riskAssessment;
+        const sharedRisk = sharedRiskOf(context);
         let risk: ApprovalRiskAssessment | undefined =
             config.riskAssessmentActive === true
                 ? approvalRiskFromShared(sharedRisk, headSha)
@@ -318,6 +326,7 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
               });
         return this.updateContext(context, (draft) => {
             draft.approvalRisk = risk;
+            draft.riskAssessment = sharedRisk;
             draft.approvalDecision = {
                 ...decision,
                 ...(headSha && pullRequest.base?.sha

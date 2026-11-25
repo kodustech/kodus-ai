@@ -22,6 +22,8 @@ export type RiskAssessmentResult =
           reason: string;
           snapshot: RiskSnapshot;
           areaMapVersion?: string;
+          /** The line a second look in the repository cited to clear it. */
+          secondLook?: RiskEvidence;
       }
     | {
           status: 'unavailable';
@@ -36,6 +38,43 @@ export type RiskAssessmentResult =
               code?: 'diff_too_large';
           };
       };
+
+export interface RiskEvidence {
+    file: string;
+    line: number;
+}
+
+/** What a second look in the review's sandbox settled about one assessment. */
+export interface RiskSecondLookResult {
+    /** The assessment it looked at: it clears only that one. */
+    assessmentKey: string;
+    reason: string;
+    evidence: RiskEvidence;
+}
+
+/**
+ * The assessment approval decides with: a medium rating the second look
+ * cleared, for this exact assessment, is no risk. Routing and risk-conditioned
+ * agents ran on the first judgment before the look.
+ */
+export function withSecondLook(
+    risk: RiskAssessmentResult | undefined,
+    look: RiskSecondLookResult | undefined,
+): RiskAssessmentResult | undefined {
+    if (
+        risk?.status !== 'assessed' ||
+        !risk.riskIdentified ||
+        !look ||
+        look.assessmentKey !== risk.snapshot.assessmentKey
+    )
+        return risk;
+    return {
+        ...risk,
+        riskIdentified: false,
+        reason: look.reason,
+        secondLook: look.evidence,
+    };
+}
 
 /** Missing, failed or disabled assessment never confirms a risk condition. */
 export function hasConfirmedRisk(

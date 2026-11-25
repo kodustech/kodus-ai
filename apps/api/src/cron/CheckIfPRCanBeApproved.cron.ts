@@ -328,7 +328,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
             )
                 // Same text and settings: an unavailable result stands and says why.
                 return stored?.status === 'unavailable' ? stored : undefined;
-            const { assessment } = await this.prRiskAssessment.assess({
+            const { assessment, level } = await this.prRiskAssessment.assess({
                 organizationAndTeamData: input.organizationAndTeamData,
                 repository: input.repository,
                 pullRequest: {
@@ -345,11 +345,24 @@ export class CheckIfPRCanBeApprovedCronProvider {
             });
             if (assessment.status === 'disabled') return undefined;
             // Keyed to this text and these settings even when it failed, so the
-            // next pass reuses it instead of assessing again.
+            // next pass reuses it instead of assessing again. A medium rating
+            // the review's second look cleared on these same commits stays
+            // cleared: the line it cited did not change with the text.
             const result: RiskAssessmentResult =
                 assessment.status === 'unavailable' && !assessment.snapshot
                     ? { ...assessment, snapshot: { ...snapshot, ...keys } }
-                    : assessment;
+                    : assessment.status === 'assessed' &&
+                        assessment.riskIdentified &&
+                        level === 'medium' &&
+                        stored?.status === 'assessed' &&
+                        stored.secondLook
+                      ? {
+                            ...assessment,
+                            riskIdentified: false,
+                            reason: stored.reason,
+                            secondLook: stored.secondLook,
+                        }
+                      : assessment;
             const approvalRisk = approvalRiskFromShared(result, live.head.sha);
             await this.automationExecutionService.update(
                 { uuid: input.execution.uuid },

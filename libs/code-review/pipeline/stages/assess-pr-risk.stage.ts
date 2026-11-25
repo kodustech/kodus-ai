@@ -23,6 +23,7 @@ export class AssessPrRiskStage extends BasePipelineStage<CodeReviewPipelineConte
         const assessment = result.assessment;
         return this.updateContext(context, (draft) => {
             draft.riskAssessment = assessment;
+            draft.riskLevel = result.level;
             draft.fullPrFiles = result.fullPrFiles;
             // An unavailable assessment stays `unavailable` (never safe), but the
             // stage and the review must not read as a clean success (#2385),

@@ -18,6 +18,7 @@ import { RequestChangesOrApproveStage } from './stages/finish-process-review.sta
 import { DecidePrApprovalStage } from './stages/decide-pr-approval.stage';
 import { AssessPrRiskStage } from './stages/assess-pr-risk.stage';
 import { PrRiskAssessmentService } from './services/pr-risk-assessment.service';
+import { RiskSecondLookStage } from './stages/risk-second-look.stage';
 import { ApprovalPoliciesService } from './services/approval-policies.service';
 import { OwnChangeRequestService } from './services/own-change-request.service';
 import { ResolveRiskRoutingStage } from './stages/resolve-risk-routing.stage';
@@ -181,6 +182,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         AggregateResultsStage,
         DecidePrApprovalStage,
         AssessPrRiskStage,
+        RiskSecondLookStage,
         PrRiskAssessmentService,
         ApprovalPoliciesService,
         OwnChangeRequestService,

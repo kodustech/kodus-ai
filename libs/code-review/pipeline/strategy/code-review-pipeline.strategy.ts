@@ -23,6 +23,7 @@ import { UpdateCommentsAndGenerateSummaryStage } from '../stages/finish-comments
 import { RequestChangesOrApproveStage } from '../stages/finish-process-review.stage';
 import { DecidePrApprovalStage } from '../stages/decide-pr-approval.stage';
 import { AssessPrRiskStage } from '../stages/assess-pr-risk.stage';
+import { RiskSecondLookStage } from '../stages/risk-second-look.stage';
 import { ResolveRiskRoutingStage } from '../stages/resolve-risk-routing.stage';
 import { InitialCommentStage } from '../stages/initial-comment.stage';
 import { LoadCiEvidenceStage } from '../stages/load-ci-evidence.stage';
@@ -67,6 +68,7 @@ export class CodeReviewPipelineStrategy implements IPipelineStrategy<CodeReviewP
         private readonly requestChangesOrApproveStage: RequestChangesOrApproveStage,
         private readonly assessPrRiskStage: AssessPrRiskStage,
         private readonly resolveRiskRoutingStage: ResolveRiskRoutingStage,
+        private readonly riskSecondLookStage: RiskSecondLookStage,
     ) {}
 
     getPipelineName(): string {
@@ -79,6 +81,8 @@ export class CodeReviewPipelineStrategy implements IPipelineStrategy<CodeReviewP
             // Agent is the only engine now: no branch, no engine-selection gate.
             this.businessLogicValidationStage,
             this.createSandboxStage,
+            // Needs the sandbox, which the review agents release.
+            this.riskSecondLookStage,
             this.runAnalyzersStage,
             this.agentReviewStage,
             ...this.sharedPostStages(),

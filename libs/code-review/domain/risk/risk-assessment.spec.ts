@@ -3,6 +3,7 @@ import {
     matchesRiskSnapshot,
     riskApprovalVeto,
     riskSnapshotMismatch,
+    withSecondLook,
     type RiskAssessmentResult,
     type RiskSnapshot,
 } from './risk-assessment';
@@ -188,4 +189,34 @@ describe('shared PR risk contract', () => {
             );
         },
     );
+});
+
+describe('withSecondLook', () => {
+    const look = {
+        assessmentKey: 'config-and-diff',
+        reason: 'The flag is off by default.',
+        evidence: { file: 'src/flags.ts', line: 2 },
+    };
+
+    it('clears the exact assessment the look checked, keeping its identity', () => {
+        expect(withSecondLook(assessed(true), look)).toEqual({
+            ...assessed(true),
+            riskIdentified: false,
+            reason: 'The flag is off by default.',
+            secondLook: { file: 'src/flags.ts', line: 2 },
+        });
+    });
+
+    it.each([
+        [
+            'another assessment',
+            assessed(true),
+            { ...look, assessmentKey: 'other' },
+        ],
+        ['no look', assessed(true), undefined],
+        ['no risk', assessed(false), look],
+        ['an unavailable one', { status: 'unavailable', reason: 'x' }, look],
+    ] as const)('leaves %s as it was', (_, risk, l) => {
+        expect(withSecondLook(risk as any, l as any)).toBe(risk);
+    });
 });

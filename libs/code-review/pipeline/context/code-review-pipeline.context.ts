@@ -3,7 +3,10 @@ import type {
     RequestedReviewMode,
     ReviewRoutingReason,
 } from '@libs/code-review/domain/review-mode';
-import type { RiskAssessmentResult } from '@libs/code-review/domain/risk/risk-assessment';
+import type {
+    RiskAssessmentResult,
+    RiskSecondLookResult,
+} from '@libs/code-review/domain/risk/risk-assessment';
 import type { UltraReviewState } from '@libs/code-review/domain/ultra-review-state';
 import { readAttemptedSlot } from '@libs/llm/model-failover';
 import type {
@@ -309,6 +312,10 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     approvalRisk?: ApprovalRiskAssessment;
     /** Shared pre-review result, including disabled and unavailable states. */
     riskAssessment?: RiskAssessmentResult;
+    /** The judgment's level, for the pipeline only; the result stays binary. */
+    riskLevel?: 'low' | 'medium' | 'high';
+    /** A medium rating the repository settled, for approval only. */
+    riskSecondLook?: RiskSecondLookResult;
     /** Intentional automatic skips, including reviews stopped before dispatch. */
     customAgentRiskSkips?: Array<{ id: string; reason: string }>;
     /** Complete base-to-head diff; never filtered for incremental review or ignorePaths. */

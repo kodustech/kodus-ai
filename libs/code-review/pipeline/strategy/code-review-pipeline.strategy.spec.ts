@@ -33,6 +33,7 @@ const buildStrategy = (): CodeReviewPipelineStrategy =>
         mockStage('RequestChangesOrApproveStage') as any,
         mockStage('AssessPrRiskStage') as any,
         mockStage('ResolveRiskRoutingStage') as any,
+        mockStage('RiskSecondLookStage') as any,
     );
 
 const EXPECTED_ORDER = [
@@ -50,6 +51,7 @@ const EXPECTED_ORDER = [
     // agent engine (the only engine)
     'BusinessLogicValidationStage',
     'CreateSandboxStage',
+    'RiskSecondLookStage',
     'RunAnalyzersStage',
     'AgentReviewStage',
     // shared post
