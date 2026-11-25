@@ -165,12 +165,100 @@ describe('SandboxEgressPolicyService.decide', () => {
         await expect(service.decide(scope)).resolves.toEqual({ route, why });
     });
 
+    it('says the setting could not be read, not that there was no organization, when it has nowhere to read it from', async () => {
+        const { globalParameters } = build({
+            rollout: { directByDefault: true },
+        });
+        const service = new SandboxEgressPolicyService(
+            globalParameters as any,
+            undefined,
+            undefined,
+            undefined,
+        );
+        await expect(service.decide(scope)).resolves.toEqual({
+            route: 'fixed_ip',
+            why: 'marker_unreadable',
+        });
+    });
+
     it('says there was nothing to decide for a sandbox without a team', async () => {
         const { service } = build({ rollout: { directByDefault: true } });
         await expect(service.decide(undefined)).resolves.toEqual({
             route: 'fixed_ip',
             why: 'no_scope',
         });
+    });
+});
+
+describe('SandboxEgressPolicyService per organization', () => {
+    const OTHER = '33333333-3333-4333-8333-333333333333';
+    const otherScope = { organizationId: OTHER, teamId: TEAM };
+    const twoOrgs = () => {
+        const cache = memoryCache();
+        const licenseService = {
+            validateOrganizationLicense: jest.fn(async () => ({
+                ...LICENSES.teams,
+            })),
+        };
+        const orgParams = {
+            findByKey: jest.fn(
+                async (_key: unknown, where: { organizationId?: string }) =>
+                    where?.organizationId === ORG
+                        ? {
+                              configValue: {
+                                  required: true,
+                                  source: 'manual',
+                              },
+                          }
+                        : null,
+            ),
+            createOrUpdateConfig: jest.fn(),
+        };
+        const service = new SandboxEgressPolicyService(
+            {
+                findByKey: jest.fn(async () => ({
+                    configValue: { directByDefault: true },
+                })),
+            } as any,
+            orgParams as any,
+            cache as any,
+            licenseService as any,
+        );
+        return { service, licenseService };
+    };
+
+    it("never lets one organization's marker route another, through the shared cache", async () => {
+        const { service } = twoOrgs();
+        await expect(service.decide(scope)).resolves.toEqual({
+            route: 'fixed_ip',
+            why: 'marked',
+        });
+        await expect(service.decide(otherScope)).resolves.toEqual({
+            route: 'direct',
+            why: 'not_marked',
+        });
+    });
+
+    it("asks billing for the sandbox's own organization and team", async () => {
+        const { service, licenseService } = twoOrgs();
+        await service.decide(otherScope);
+        expect(licenseService.validateOrganizationLicense).toHaveBeenCalledWith(
+            { organizationId: OTHER, teamId: TEAM },
+        );
+        await service.getFixedIpSetting(ORG);
+        expect(licenseService.validateOrganizationLicense).toHaveBeenCalledWith(
+            { organizationId: ORG },
+        );
+    });
+
+    it('decides nothing for a sandbox with an organization but no team', async () => {
+        const { service, licenseService } = twoOrgs();
+        await expect(
+            service.decide({ organizationId: ORG } as any),
+        ).resolves.toEqual({ route: 'fixed_ip', why: 'no_scope' });
+        expect(
+            licenseService.validateOrganizationLicense,
+        ).not.toHaveBeenCalled();
     });
 });
 
@@ -432,6 +520,61 @@ describe('SandboxEgressPolicyService fixed IP setting', () => {
         );
     });
 
+    it('says when an owner turned it off, which a refused clone does not undo', async () => {
+        const off = build({
+            rollout: on,
+            license: 'teams',
+            marker: { required: false, source: 'manual' },
+        });
+        await expect(off.service.getFixedIpSetting(ORG)).resolves.toEqual(
+            expect.objectContaining({ enabled: false, turnedOff: true }),
+        );
+        await expect(off.service.fixedIpFallback(scope)).resolves.toBe(
+            'turned_off',
+        );
+
+        for (const marker of [
+            undefined,
+            {
+                required: false,
+                source: 'clone_fallback',
+                detectedAt: new Date().toISOString(),
+            },
+        ]) {
+            const never = build({ rollout: on, license: 'teams', marker });
+            const setting = await never.service.getFixedIpSetting(ORG);
+            expect(setting.turnedOff).toBeUndefined();
+        }
+    });
+
+    it('says nothing about who or why once an automatic marker has expired', async () => {
+        const { service } = build({
+            rollout: on,
+            license: 'teams',
+            marker: {
+                required: true,
+                source: 'clone_fallback',
+                reason: 'unreachable',
+                detectedAt: '2020-01-01T00:00:00Z',
+            },
+        });
+        const setting = await service.getFixedIpSetting(ORG);
+        expect(setting.enabled).toBe(false);
+        expect(setting.source).toBeUndefined();
+        expect(setting.reason).toBeUndefined();
+    });
+
+    it('does not call a fixed IP an owner turned on "turned off"', async () => {
+        const { service } = build({
+            rollout: on,
+            license: 'teams',
+            marker: { required: true, source: 'manual' },
+        });
+        const setting = await service.getFixedIpSetting(ORG);
+        expect(setting.enabled).toBe(true);
+        expect(setting.turnedOff).toBeUndefined();
+    });
+
     it('shows a fixed IP the clone fallback turned on, and why', async () => {
         const { service } = build({
             rollout: on,
@@ -449,6 +592,7 @@ describe('SandboxEgressPolicyService fixed IP setting', () => {
                 source: 'clone_fallback',
                 reason: 'ip_allow_list',
                 fixedIp: '203.0.113.10',
+                updatedAt: expect.any(String),
             }),
         );
     });
@@ -474,6 +618,17 @@ describe('markerHolds', () => {
         expect(markerHolds(auto('ip_allow_list', 10), now)).toBe(true);
         expect(markerHolds(auto('forbidden', 29), now)).toBe(true);
         expect(markerHolds(auto('ip_allow_list', 31), now)).toBe(false);
+    });
+
+    it('lets the team go direct again at the exact moment the marker expires', () => {
+        const atExpiry = {
+            required: true,
+            source: 'clone_fallback' as const,
+            reason: 'unreachable' as const,
+            detectedAt: new Date(now - DAY).toISOString(),
+        };
+        expect(markerHolds(atExpiry, now)).toBe(false);
+        expect(markerHolds(atExpiry, now - 1)).toBe(true);
     });
 
     it('never expires a marker set by hand', () => {
@@ -874,7 +1029,15 @@ describe('parseEgressRollout', () => {
             '203.0.113.10',
         );
         expect(parseEgressRollout({ fixedIp: '' }).fixedIp).toBeUndefined();
+        expect(parseEgressRollout({ fixedIp: '   ' }).fixedIp).toBeUndefined();
         expect(parseEgressRollout({ fixedIp: 7 }).fixedIp).toBeUndefined();
+    });
+
+    it('rolls out to no organization when the list is not a list', () => {
+        expect(
+            parseEgressRollout({ directOrganizationIds: ORG })
+                .directOrganizationIds,
+        ).toEqual([]);
     });
 
     it('keeps only string organization ids', () => {

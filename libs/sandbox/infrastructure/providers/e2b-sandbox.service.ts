@@ -76,10 +76,7 @@ const EGRESS_BYPASS_CHECK =
  * (it boots without the proxy rules), the policy threw, or the sandbox
  * could not be taken off the proxy. */
 type SandboxRouteWhy =
-    | EgressRouteWhy
-    | 'no_template'
-    | 'policy_failed'
-    | 'bypass_failed';
+    EgressRouteWhy | 'no_template' | 'policy_failed' | 'bypass_failed';
 
 // How long a direct sandbox waits for the Git host to accept a connection.
 const EGRESS_REACH_TIMEOUT_S = 10;
@@ -760,7 +757,10 @@ export class E2BSandboxService implements ISandboxProvider {
      * so it holds even if the template's boot script appends the jump later.
      * False (the sandbox stays on the fixed IP) when that cannot be done.
      */
-    private async useDirectEgress(sandbox: Sandbox): Promise<boolean> {
+    private async useDirectEgress(
+        sandbox: Sandbox,
+        scope?: { organizationId?: string; teamId?: string },
+    ): Promise<boolean> {
         const done = await this.runAsRoot(
             sandbox,
             [
@@ -774,7 +774,11 @@ export class E2BSandboxService implements ISandboxProvider {
                 message:
                     '[egress] could not take the sandbox off the egress proxy; staying on the fixed IP',
                 context: E2BSandboxService.name,
-                metadata: { sandboxId: sandbox.sandboxId },
+                metadata: {
+                    organizationId: scope?.organizationId,
+                    teamId: scope?.teamId,
+                    sandboxId: sandbox.sandboxId,
+                },
             });
         }
         return done;
@@ -1054,7 +1058,7 @@ export class E2BSandboxService implements ISandboxProvider {
             let why: SandboxRouteWhy = decision.why;
             if (
                 egressRoute === 'direct' &&
-                !(await this.useDirectEgress(sandbox))
+                !(await this.useDirectEgress(sandbox, params))
             ) {
                 egressRoute = 'fixed_ip';
                 why = 'bypass_failed';

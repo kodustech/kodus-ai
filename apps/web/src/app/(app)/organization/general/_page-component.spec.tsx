@@ -83,7 +83,12 @@ describe("General settings — review mode commands", () => {
     });
 
     it("shows the switches unknown, and the rest of the page, when they could not be read", () => {
-        renderPage(null);
+        renderPage(null, {
+            available: true,
+            allowedByPlan: true,
+            enabled: false,
+            fixedIp: "203.0.113.10",
+        });
         expect(screen.getByRole("alert")).toHaveTextContent(
             "These settings could not be loaded.",
         );
@@ -93,6 +98,14 @@ describe("General settings — review mode commands", () => {
         ]) {
             expect(screen.getByRole("switch", { name })).toBeDisabled();
         }
+        // The rest of the page is still there, and still usable.
+        expect(screen.getByLabelText("Timezone")).toBeInTheDocument();
+        expect(
+            screen.getByRole("switch", { name: "Auto join by email domain" }),
+        ).toBeEnabled();
+        expect(
+            screen.getByRole("switch", { name: "Fixed outbound IP" }),
+        ).toBeEnabled();
     });
 
     it("saves a command turned off as blocked, and only that parameter", async () => {

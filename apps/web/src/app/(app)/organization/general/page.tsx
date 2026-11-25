@@ -1,3 +1,4 @@
+import { unstable_rethrow as rethrowNextControlFlow } from "next/navigation";
 import { authorizedFetch, TypedFetchError } from "@services/fetch";
 import { ORGANIZATION_PARAMETERS_PATHS } from "@services/organizationParameters";
 import { getOrganizationParameterByKey } from "@services/organizationParameters/fetch";
@@ -16,6 +17,10 @@ import { auth } from "src/core/config/auth";
 
 import { GeneralOrganizationSettingsPage } from "./_page-component";
 
+// Every load below catches its own failure, so each first hands Next back
+// its own control-flow throws: a 401 makes authorizedFetch redirect to
+// /sign-out, which throws, and swallowing it would render "could not load"
+// for an expired session instead of signing out.
 export default async function OrganizationSettingsPage() {
     // Independent — fetch in parallel instead of chaining two round-trips.
     const [, jwtPayload] = await Promise.all([getOrganizationId(), auth()]);
@@ -40,6 +45,7 @@ export default async function OrganizationSettingsPage() {
                 timezoneConfigValue = result.configValue;
             }
         } catch (error: unknown) {
+            rethrowNextControlFlow(error);
             if (error instanceof TypedFetchError && error.statusCode === 404) {
                 await authorizedFetch(
                     ORGANIZATION_PARAMETERS_PATHS.CREATE_OR_UPDATE,
@@ -67,6 +73,7 @@ export default async function OrganizationSettingsPage() {
                 autoJoinConfigValue = result.configValue;
             }
         } catch (error: unknown) {
+            rethrowNextControlFlow(error);
             if (error instanceof TypedFetchError && error.statusCode === 404) {
                 await authorizedFetch(
                     ORGANIZATION_PARAMETERS_PATHS.CREATE_OR_UPDATE,
@@ -95,6 +102,7 @@ export default async function OrganizationSettingsPage() {
             });
             return result?.configValue ?? {};
         } catch (error: unknown) {
+            rethrowNextControlFlow(error);
             // Only "not stored" means both commands are on; a failed read
             // must not show them on, nor take the rest of the page down.
             if (error instanceof TypedFetchError && error.statusCode === 404) {
@@ -117,7 +125,10 @@ export default async function OrganizationSettingsPage() {
     }> =>
         getFixedEgressIp().then(
             (setting) => ({ setting, failed: false }),
-            () => ({ setting: NO_FIXED_EGRESS_IP, failed: true }),
+            (error: unknown) => {
+                rethrowNextControlFlow(error);
+                return { setting: NO_FIXED_EGRESS_IP, failed: true };
+            },
         );
 
     // The parameter loads are independent of each other.

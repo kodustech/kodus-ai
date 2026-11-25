@@ -4,7 +4,7 @@ Serves the bare repositories under ./egress-probe-repos (acme.git and
 open.git, each with a `feature` branch). acme.git answers only the fixed
 egress IP; any other caller gets the 403 GitHub sends when an IP allow list
 refuses it. open.git answers everyone. Every request is logged to
-egress-probe-git.log with the caller IP the tunnel reported (X-Forwarded-For).
+egress-probe-git.log with the caller IP the tunnel reported (the right-most X-Forwarded-For).
 
     python3 allowlist-git-host.py 8099
 """
@@ -16,8 +16,17 @@ LOG = os.path.abspath('egress-probe-git.log')
 
 class H(http.server.BaseHTTPRequestHandler):
     def _client(self):
+        # The tunnel appends the address it saw, so the right-most entry is
+        # the only one a caller cannot write; anything left of it is theirs.
         xff = self.headers.get('X-Forwarded-For', '')
-        return xff.split(',')[0].strip() or self.client_address[0]
+        return xff.split(',')[-1].strip() or self.client_address[0]
+
+    def _reply(self, status, body):
+        self.send_response(status)
+        self.send_header('Content-Type', 'text/plain')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _handle(self):
         ip = self._client()
@@ -26,14 +35,14 @@ class H(http.server.BaseHTTPRequestHandler):
             f.write(json.dumps({'t': time.strftime('%H:%M:%S'), 'ip': ip, 'allowed': allowed, 'method': self.command, 'path': self.path}) + '\n')
         if not allowed:
             body = (f"the `acme` organization has an IP allow list enabled, and your IP address is not permitted to access this resource.\n").encode()
-            self.send_response(403)
-            self.send_header('Content-Type', 'text/plain')
-            self.send_header('Content-Length', str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._reply(403, body)
             return
         path, _, query = self.path.partition('?')
-        length = int(self.headers.get('Content-Length') or 0)
+        raw_length = self.headers.get('Content-Length') or '0'
+        if not raw_length.isdigit():
+            self._reply(400, b'Content-Length must be a non-negative integer\n')
+            return
+        length = int(raw_length)
         data = self.rfile.read(length) if length else b''
         env = dict(os.environ, GIT_PROJECT_ROOT=ROOT, GIT_HTTP_EXPORT_ALL='1', PATH_INFO=path,
                    QUERY_STRING=query, REQUEST_METHOD=self.command, REMOTE_ADDR=ip,

@@ -102,6 +102,11 @@ export interface FixedEgressIpSetting {
     inRollout: boolean;
     /** Who turned it on: an owner, or the clone fallback. */
     source?: EgressFixedIpMarker['source'];
+    /**
+     * An owner turned it off by hand, so a refused direct clone fails
+     * instead of the clone fallback turning it back on.
+     */
+    turnedOff?: boolean;
     reason?: FixedIpReason;
     updatedAt?: string;
     /** The IP the organization's Git host must accept. */
@@ -120,8 +125,8 @@ export type FixedIpFallback = 'allowed' | 'plan' | 'turned_off';
  * `rollout_off` (direct egress not rolled out to the organization),
  * `not_in_plan` (its plan does not include the fixed IP, so always direct),
  * `marked` / `not_marked` (the organization's egress_fixed_ip marker),
- * `marker_unreadable` (kept on the fixed IP), `no_scope` (no organization
- * or team to decide for).
+ * `marker_unreadable` (the marker could not be read, kept on the fixed IP),
+ * `no_scope` (no organization or team to decide for).
  */
 export type EgressRouteWhy =
     | 'no_scope'
@@ -286,8 +291,10 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
         if (!scope?.organizationId || !scope?.teamId) {
             return { route: 'fixed_ip', why: 'no_scope' };
         }
+        // A scope with nothing to read its setting from: the setting is
+        // unknown, not the organization.
         if (!this.organizationParameters) {
-            return { route: 'fixed_ip', why: 'no_scope' };
+            return { route: 'fixed_ip', why: 'marker_unreadable' };
         }
 
         const rollout = await this.readRollout();
@@ -340,7 +347,7 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
             const marker = await this.readMarker(scope.organizationId);
             // An owner chose the shared network by hand: Kody does not
             // override it, the failure says how to turn the IP on.
-            if (marker?.source === 'manual' && marker.required === false) {
+            if (isTurnedOff(marker)) {
                 return 'turned_off';
             }
         } catch (error) {
@@ -375,6 +382,7 @@ export class SandboxEgressPolicyService implements ISandboxEgressPolicy {
                 rollout.directByDefault ||
                 rollout.directOrganizationIds.includes(organizationId),
             ...(holds && marker?.source ? { source: marker.source } : {}),
+            ...(isTurnedOff(marker) ? { turnedOff: true } : {}),
             ...(holds && marker?.reason ? { reason: marker.reason } : {}),
             ...(marker?.detectedAt ? { updatedAt: marker.detectedAt } : {}),
             ...(rollout.fixedIp ? { fixedIp: rollout.fixedIp } : {}),
@@ -639,6 +647,11 @@ export function parseEgressRollout(value: unknown): EgressRollout {
 
 /** Whether a stored marker still sends the organization through the fixed
  * IP. */
+/** An owner chose the shared network by hand; Kody does not override it. */
+function isTurnedOff(marker: EgressFixedIpMarker | undefined): boolean {
+    return marker?.source === 'manual' && marker.required === false;
+}
+
 export function markerHolds(
     marker: EgressFixedIpMarker | undefined,
     now: number,

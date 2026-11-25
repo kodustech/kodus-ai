@@ -19,6 +19,8 @@ export type FixedEgressIp = {
     inRollout?: boolean;
     /** `clone_fallback` when Kodus turned it on after a refused clone. */
     source?: "manual" | "clone_fallback";
+    /** An owner turned it off: a refused clone does not turn it back on. */
+    turnedOff?: boolean;
     reason?: "ip_allow_list" | "forbidden" | "unreachable" | "other";
     updatedAt?: string;
     fixedIp?: string;

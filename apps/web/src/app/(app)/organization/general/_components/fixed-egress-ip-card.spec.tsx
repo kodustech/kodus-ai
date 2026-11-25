@@ -92,6 +92,8 @@ describe("FixedEgressIpCard", () => {
         ).toBeInTheDocument();
         expect(screen.getByRole("switch")).toBeDisabled();
         expect(screen.queryByRole("link")).not.toBeInTheDocument();
+        // No "allowlist it, then turn it on" for a switch that cannot be.
+        expect(screen.queryByText("203.0.113.10")).not.toBeInTheDocument();
     });
 
     it("still lets a team turn it off while the plan cannot be confirmed", () => {
@@ -161,6 +163,34 @@ describe("FixedEgressIpCard", () => {
             expect(screen.getByText("In use")).toBeInTheDocument(),
         );
         expect(screen.queryByText("Not in use")).not.toBeInTheDocument();
+        expect(
+            screen.getByText(
+                "Kody clones from this IP. Keep it on your Git host's allowlist.",
+            ),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByText(/uses this IP only while/),
+        ).not.toBeInTheDocument();
+    });
+
+    it("says a refused clone turns it on, unless an owner turned it off", () => {
+        const { unmount } = render(<FixedEgressIpCard initialSetting={paid} />);
+        expect(
+            screen.getByText(
+                /refuses a clone from the shared network first, Kody turns it on for you/,
+            ),
+        ).toBeInTheDocument();
+        unmount();
+
+        render(
+            <FixedEgressIpCard initialSetting={{ ...paid, turnedOff: true }} />,
+        );
+        expect(
+            screen.getByText(/uses this IP only while Fixed outbound IP is on/),
+        ).toBeInTheDocument();
+        expect(
+            screen.queryByText(/Kody turns it on for you/),
+        ).not.toBeInTheDocument();
     });
 
     it("says why when the API refuses, and stays off", async () => {

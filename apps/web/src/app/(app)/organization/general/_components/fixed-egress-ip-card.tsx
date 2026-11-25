@@ -122,7 +122,16 @@ export const FixedEgressIpCard = ({
     };
 
     const cta = planCtaTarget();
-    const showIp = setting.allowedByPlan && !unusedOnPlan && setting.fixedIp;
+    // Not handed out while the plan cannot be confirmed: the switch cannot
+    // be turned on, so "allowlist it, then turn it on" would be a dead end.
+    const showIp =
+        setting.allowedByPlan &&
+        !unusedOnPlan &&
+        !(setting.planUnconfirmed && !on) &&
+        setting.fixedIp;
+    // Off and never turned off by an owner: a clone the shared network gets
+    // refused turns it on (the clone fallback). An owner's "off" stays off.
+    const fallbackCanTurnOn = !setting.enabled && !setting.turnedOff;
 
     const notice = unusedOnPlan ? (
         <>
@@ -201,8 +210,10 @@ export const FixedEgressIpCard = ({
                     }
                     description={
                         setting.enabled
-                            ? "Kody clones from this IP now. Keep it on your Git host's allowlist."
-                            : "Kody uses this IP only while Fixed outbound IP is on. Allowlist it on your Git host, then turn it on."
+                            ? "Kody clones from this IP. Keep it on your Git host's allowlist."
+                            : fallbackCanTurnOn
+                              ? "Kody uses this IP only while Fixed outbound IP is on. Allowlist it on your Git host, then turn it on. If your Git host refuses a clone from the shared network first, Kody turns it on for you."
+                              : "Kody uses this IP only while Fixed outbound IP is on. Allowlist it on your Git host, then turn it on."
                     }
                     control={
                         <div className="bg-card-lv1 flex items-center gap-1 rounded-lg py-1 pr-1 pl-3">

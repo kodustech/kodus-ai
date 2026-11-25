@@ -12,6 +12,7 @@
  * the .env at DOTENV_PATH (default ./.env). Each scenario kills its sandbox.
  */
 import { createRequire } from 'node:module';
+import { isDeepStrictEqual, inspect } from 'node:util';
 
 import { PlatformType } from '@libs/core/domain/enums';
 import { E2BSandboxService } from '@libs/sandbox/infrastructure/providers/e2b-sandbox.service';
@@ -37,7 +38,8 @@ const it = async (name: string, fn: () => Promise<void>) => {
         results.push({
             name,
             ok: false,
-            detail: error instanceof Error ? error.message : error,
+            // Always a string, so printing the report cannot fail on it.
+            detail: error instanceof Error ? error.message : inspect(error),
         });
     }
 };
@@ -59,7 +61,7 @@ const expect = (actual: unknown) => ({
         },
     },
     toEqual: (expected: unknown) => {
-        if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+        if (!isDeepStrictEqual(actual, expected)) {
             throw new Error(
                 `expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
             );
@@ -123,10 +125,16 @@ const egressIp = async (sandboxId: string): Promise<string> => {
         apiKey: process.env.API_E2B_KEY,
     });
     const r = await sbx.commands.run(
-        'curl -s --max-time 15 https://checkip.amazonaws.com',
+        'curl -sf --max-time 15 https://checkip.amazonaws.com',
         { timeoutMs: 30_000 },
     );
-    return r.stdout.trim();
+    const ip = r.stdout.trim();
+    // An empty or garbled answer is no measurement, and must not pass for
+    // "not the fixed IP".
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) {
+        throw new Error(`could not read the egress IP (got ${inspect(ip)})`);
+    }
+    return ip;
 };
 
 const params = (cloneUrl: string, branch: string) => ({
@@ -211,6 +219,8 @@ async function main() {
             lines,
         });
         expect(error?.name).toBe('FixedEgressIpUnavailableError');
+        expect(error?.reason).toBe('ip_allow_list');
+        expect(error?.blockedBy).toBe('plan');
         expect(egress.marked).toEqual([]);
     });
     console.log(JSON.stringify(results, null, 2));

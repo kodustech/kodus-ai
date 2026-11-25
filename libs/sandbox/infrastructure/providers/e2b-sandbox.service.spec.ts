@@ -1297,12 +1297,16 @@ describe('E2BSandboxService egress route', () => {
     };
 
     type Fallback = 'allowed' | 'plan' | 'turned_off' | 'throws';
-    const policy = (route: 'direct' | 'fixed_ip', fallback: Fallback) => ({
+    const policy = (
+        route: 'direct' | 'fixed_ip',
+        fallback: Fallback,
+        why = route === 'direct' ? 'not_marked' : 'marked',
+    ) => ({
         route: jest.fn().mockResolvedValue(route),
-        decide: jest.fn().mockResolvedValue({
-            route,
-            why: route === 'direct' ? 'not_marked' : 'marked',
-        }),
+        decide:
+            why === 'throws'
+                ? jest.fn().mockRejectedValue(new Error('pg down'))
+                : jest.fn().mockResolvedValue({ route, why }),
         fixedIpAllowed: jest.fn().mockResolvedValue(fallback !== 'plan'),
         fixedIpFallback:
             fallback === 'throws'
@@ -1323,6 +1327,11 @@ describe('E2BSandboxService egress route', () => {
         paidPlan?: boolean;
         /** What the policy answers after a failed direct clone. */
         fallback?: Fallback;
+        /** Why the policy picked the route (default follows the route);
+         * `throws` makes the decision itself fail. */
+        why?: string;
+        /** Overrides the organization and team the sandbox is created for. */
+        scopeOverride?: { organizationId?: string; teamId?: string };
     }) => {
         const { sbx, log } = fakeSandbox(opts.sandbox ?? {});
         (Sandbox as any).create = jest.fn().mockResolvedValue(sbx);
@@ -1343,16 +1352,17 @@ describe('E2BSandboxService egress route', () => {
         const egress = policy(
             opts.route,
             opts.fallback ?? (opts.paidPlan === false ? 'plan' : 'allowed'),
+            opts.why,
         );
         const service = new E2BSandboxService(config as any, egress);
         const logged = jest.fn();
         const realLogger = (service as any).logger;
         (service as any).logger = new Proxy(realLogger, {
             get: (target, prop) =>
-                prop === 'log'
+                prop === 'log' || prop === 'warn'
                     ? (entry: unknown) => {
                           logged(entry);
-                          return target.log(entry);
+                          return target[prop](entry);
                       }
                     : target[prop],
         });
@@ -1364,6 +1374,7 @@ describe('E2BSandboxService egress route', () => {
             platform: PlatformType.GITHUB,
             sandboxMetadata: { stage: 'review' },
             ...(opts.scoped !== false && { organizationId: ORG, teamId: TEAM }),
+            ...opts.scopeOverride,
         });
         return { result, egress, log, sbx, logged };
     };
@@ -1611,6 +1622,22 @@ describe('E2BSandboxService egress route', () => {
         ]);
     });
 
+    it("logs the policy's own reason, not one read off the route", async () => {
+        for (const [route, why] of [
+            ['fixed_ip', 'rollout_off'],
+            ['direct', 'not_in_plan'],
+        ] as const) {
+            const { result, logged } = await create({ route, why });
+            await result;
+            expect(routeLines(logged)).toEqual([
+                expect.objectContaining({
+                    message: `[egress] route=${route} (${why})`,
+                    metadata: expect.objectContaining({ route, why }),
+                }),
+            ]);
+        }
+    });
+
     it('logs the fixed IP with the reason when the sandbox cannot be taken off the proxy', async () => {
         const { result, logged } = await create({
             route: 'direct',
@@ -1622,6 +1649,63 @@ describe('E2BSandboxService egress route', () => {
                 message: '[egress] route=fixed_ip (bypass_failed)',
             }),
         ]);
+        expect(logged).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining(
+                    'could not take the sandbox off the egress proxy',
+                ),
+                metadata: expect.objectContaining({
+                    organizationId: ORG,
+                    teamId: TEAM,
+                }),
+            }),
+        );
+    });
+
+    it('keeps the fixed IP, and says so, when the route decision itself fails', async () => {
+        const { result, logged, log } = await create({
+            route: 'direct',
+            why: 'throws',
+        });
+        await result;
+        expect(touchesNetwork(log)).toBe(false);
+        expect(routeLines(logged)).toEqual([
+            expect.objectContaining({
+                message: '[egress] route=fixed_ip (policy_failed)',
+            }),
+        ]);
+    });
+
+    it('decides nothing for a sandbox with an organization but no team, nor a team but no organization', async () => {
+        for (const scopeOverride of [
+            { teamId: undefined },
+            { organizationId: undefined },
+        ]) {
+            const { result, logged, egress, log } = await create({
+                route: 'direct',
+                scopeOverride,
+            });
+            await result;
+            expect(egress.decide).not.toHaveBeenCalled();
+            expect(touchesNetwork(log)).toBe(false);
+            expect(routeLines(logged)).toEqual([
+                expect.objectContaining({
+                    message: '[egress] route=fixed_ip (no_scope)',
+                }),
+            ]);
+        }
+    });
+
+    it('warns about the proxy only when the sandbox could not leave it', async () => {
+        const { result, logged } = await create({ route: 'direct' });
+        await result;
+        expect(logged).not.toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining(
+                    'could not take the sandbox off the egress proxy',
+                ),
+            }),
+        );
     });
 
     it('logs why a sandbox without the template keeps the fixed IP', async () => {
