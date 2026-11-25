@@ -23,22 +23,15 @@ export function extractDiffHunks(
 
     for (const section of sections) {
         const header = section.slice(0, section.indexOf('\n'));
-        // `a/<path> b/<path>`. A path containing a space still parses, because
-        // the b-side always starts at " b/" followed by the same path. git
-        // switches to a quoted, octal-escaped header as soon as the path holds
-        // a non-ASCII byte, a quote or a backslash — a lockfile under an
-        // accented directory would otherwise be skipped without a word.
-        const match =
-            header.match(/^"a\/(.+?)" "b\/(.+)"$/) ??
-            header.match(/^a\/(.+?) b\/(.+)$/);
-        const raw = match?.[2] ?? match?.[1];
-        const path =
-            raw === undefined
-                ? undefined
-                : header.startsWith('"')
-                  ? unescapeGitPath(raw)
-                  : raw;
-        if (!path || !wanted.has(path)) {
+        // `a/<path> b/<path>`. git quotes a header only when the path holds a
+        // non-ASCII byte, a quote or a backslash, so an accented lockfile would
+        // otherwise be skipped without a word. A plain path can itself contain
+        // " b/", which leaves more than one place to cut the header: the
+        // candidates are offered to the caller, which knows the paths it wants.
+        const path = headerPaths(header).find((candidate) =>
+            wanted.has(candidate),
+        );
+        if (!path) {
             continue;
         }
 
@@ -59,6 +52,47 @@ export function extractDiffHunks(
     }
 
     return out;
+}
+
+/**
+ * The paths a `diff --git` header can name, best reading first.
+ *
+ * git writes `a/<old> b/<new>` and only quotes the header when a path holds a
+ * non-ASCII byte, a quote or a backslash. A plain path that itself contains
+ * " b/" therefore leaves more than one place to cut the header, and the
+ * earliest cut shortens the path: `a/fixtures b/package-lock.json b/fixtures
+ * b/package-lock.json`. The cut whose two sides agree is the path; the other
+ * cuts stay available, in order, so a genuine rename still resolves.
+ */
+function headerPaths(header: string): string[] {
+    const quoted = header.match(/^"a\/(.+?)" "b\/(.+)"$/);
+    if (quoted) {
+        const oldPath = unescapeGitPath(quoted[1]);
+        const newPath = unescapeGitPath(quoted[2]);
+        return oldPath === newPath ? [newPath] : [newPath, oldPath];
+    }
+
+    if (!header.startsWith('a/')) {
+        return [];
+    }
+
+    const body = header.slice(2);
+    const cuts: Array<{ oldPath: string; newPath: string }> = [];
+    for (
+        let at = body.indexOf(' b/');
+        at !== -1;
+        at = body.indexOf(' b/', at + 1)
+    ) {
+        cuts.push({
+            oldPath: body.slice(0, at),
+            newPath: body.slice(at + 3),
+        });
+    }
+
+    const agreeing = cuts.filter((cut) => cut.oldPath === cut.newPath);
+    const renamed = cuts.filter((cut) => cut.oldPath !== cut.newPath);
+
+    return [...agreeing, ...renamed].map((cut) => cut.newPath);
 }
 
 /**

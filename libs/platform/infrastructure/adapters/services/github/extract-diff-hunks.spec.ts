@@ -106,6 +106,43 @@ describe('extractDiffHunks', () => {
         ]);
     });
 
+    it('reads a path that itself contains " b/"', () => {
+        // git does not quote a space, so a header whose path holds " b/"
+        // offers two separators and the first one cuts the path short.
+        const spaced = [
+            'diff --git a/fixtures b/package-lock.json b/fixtures b/package-lock.json',
+            'index 1..2 100644',
+            '--- a/fixtures b/package-lock.json',
+            '+++ b/fixtures b/package-lock.json',
+            '@@ -1,1 +1,1 @@',
+            '-old',
+            '+new',
+            'diff --git a/cafe.txt b/cafe.txt',
+            'index 3..4 100644',
+            '--- a/cafe.txt',
+            '+++ b/cafe.txt',
+            '@@ -1,1 +1,1 @@',
+            '-before',
+            '+after',
+        ].join('\n');
+
+        expect(
+            extractDiffHunks(spaced, [
+                'fixtures b/package-lock.json',
+                'cafe.txt',
+            ]),
+        ).toEqual([
+            {
+                path: 'fixtures b/package-lock.json',
+                patch: '@@ -1,1 +1,1 @@\n-old\n+new',
+            },
+            {
+                path: 'cafe.txt',
+                patch: '@@ -1,1 +1,1 @@\n-before\n+after',
+            },
+        ]);
+    });
+
     it('returns nothing rather than throwing on empty input', () => {
         expect(extractDiffHunks('', ['a.ts'])).toEqual([]);
         expect(extractDiffHunks(diff, [])).toEqual([]);
