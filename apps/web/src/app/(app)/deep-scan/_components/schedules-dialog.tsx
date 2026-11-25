@@ -57,7 +57,10 @@ import { cn } from "src/core/utils/components";
 import { extractRejectionMessage } from "src/core/utils/extract-error-message";
 import { hasPermission } from "src/core/utils/permission-map";
 
-import { parseScanLimit } from "../../issues/_components/security-scan/format";
+import {
+    isNoKnownPriceMessage,
+    parseScanLimit,
+} from "../../issues/_components/security-scan/format";
 import { useScanModels } from "./use-scan-models";
 
 const ROUTING_MODEL = "__routing";
@@ -433,11 +436,12 @@ const Composer = ({
     );
     // A schedule capped in tokens (a model without a known price) keeps
     // its unit: saving never trades its cap for a dollar amount.
-    const limitBy: "usd" | "tokens" =
+    const [limitBy, setLimitBy] = useState<"usd" | "tokens">(
         schedule?.budget.maxUsd === undefined &&
-        schedule?.budget.maxTokens !== undefined
+            schedule?.budget.maxTokens !== undefined
             ? "tokens"
-            : "usd";
+            : "usd",
+    );
     const [rawLimit, setRawLimit] = useState(
         limitBy === "tokens"
             ? String(schedule?.budget.maxTokens)
@@ -484,10 +488,13 @@ const Composer = ({
             });
             await onSaved();
         } catch (e) {
-            setError(
+            const message =
                 extractRejectionMessage(e) ??
-                    "We couldn't save the schedule. Try again.",
-            );
+                "We couldn't save the schedule. Try again.";
+            // The model has no known price: a USD cap can't hold, so the
+            // limit moves to tokens and the API's explanation stays.
+            if (isNoKnownPriceMessage(message)) setLimitBy("tokens");
+            setError(message);
         } finally {
             setSaving(false);
         }
@@ -571,7 +578,14 @@ const Composer = ({
                         onChange={(ev) => setRawLimit(ev.target.value)}
                     />
                 </span>
-                {limitBy === "tokens" && <span>tokens</span>}
+                <Slot
+                    label="Limit unit"
+                    value={limitBy}
+                    disabled={saving}
+                    onChange={(v) => setLimitBy(v as "usd" | "tokens")}>
+                    <SelectItem value="usd">in USD</SelectItem>
+                    <SelectItem value="tokens">in tokens</SelectItem>
+                </Slot>
                 <span>on</span>
                 <Slot
                     label="Model"

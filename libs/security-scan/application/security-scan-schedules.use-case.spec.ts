@@ -33,6 +33,7 @@ function setup() {
     };
     const start = {
         repositoryKeyOf: jest.fn(async () => repositoryKey),
+        scanModelFor: jest.fn(async () => ({ model: {}, rates: {} })),
         execute: jest.fn(async () => ({ uuid: 'scan-9' })),
     };
     const gate = { isEnabledFor: jest.fn(async () => true) };
@@ -187,6 +188,27 @@ describe('SecurityScanSchedulesUseCase', () => {
             useCase.setEnabled({ organizationId: 'org-1', teamId: 'team-1' }, 'repo-1', false, now),
         ).rejects.toThrow('This repository has no deep scan schedule.');
         expect(schedules.setEnabled).not.toHaveBeenCalled();
+    });
+
+    it('refuses a limit the model cannot be held to when saved, not at its first run', async () => {
+        const { useCase, schedules, start } = setup();
+        start.scanModelFor.mockRejectedValue(new Error('Your model has no known price, so the scan cannot be capped in USD.'));
+
+        await expect(
+            useCase.save({
+                organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+                repositoryId: 'repo-1',
+                cadence: 'daily',
+                budget: { maxUsd: 5 },
+                modelId: 'm-unpriced',
+            }),
+        ).rejects.toThrow('no known price');
+        expect(start.scanModelFor).toHaveBeenCalledWith(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            { maxUsd: 5 },
+            'm-unpriced',
+        );
+        expect(schedules.save).not.toHaveBeenCalled();
     });
 
     it('refuses a schedule without a spend limit', async () => {

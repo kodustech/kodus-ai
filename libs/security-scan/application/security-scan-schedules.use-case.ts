@@ -16,7 +16,6 @@ import {
 import { createLogger } from '@libs/core/log/logger';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
-import { validateBudget } from '../domain/budget-meter';
 import type { SecurityScanMode } from '../domain/coverage-ledger';
 import {
     nextRunAt,
@@ -90,10 +89,13 @@ export class SecurityScanSchedulesUseCase {
                 'A scheduled scan needs a spend limit: each run stops there.',
             );
         }
-        const budgetError = validateBudget(input.budget, true);
-        if (budgetError) {
-            throw new BadRequestException(budgetError);
-        }
+        // Refused now, as a run would refuse it: a limit the model cannot be
+        // held to, or a picked model that is gone.
+        await this.startSecurityScan.scanModelFor(
+            input.organizationAndTeamData,
+            input.budget,
+            input.modelId,
+        );
         const repositoryKey = await this.startSecurityScan.repositoryKeyOf(
             input.organizationAndTeamData,
             input.repositoryId,

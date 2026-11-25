@@ -125,6 +125,40 @@ export class StartSecurityScanUseCase {
     ) {}
 
     /** Open to every plan, free included, while the scan is in beta (#2451). */
+    /**
+     * The model a scan runs on and its rates, refused as a start would refuse
+     * it: no BYOK model, a picked model that is gone, or a limit the model
+     * cannot be held to (USD for a model without a known price). A schedule
+     * checks this when saved, so its runs do not fail on it later.
+     */
+    async scanModelFor(
+        orgTeam: OrganizationAndTeamData,
+        budget: SecurityScanBudget,
+        modelId?: string,
+    ) {
+        const { model, rates } = await resolveScanModel({
+            organizationAndTeamData: orgTeam,
+            permissionValidationService: this.permissionValidationService,
+            pricingResolver: this.pricingResolver,
+            pricingOverrides: (await this.spendLimitConfig.getConfig(orgTeam))
+                ?.modelPricing,
+            modelId,
+        });
+        if (!model.slot) {
+            throw new BadRequestException(SCAN_NEEDS_BYOK_MESSAGE);
+        }
+        // A picked model that is gone resolves to the routing's: said, not
+        // silently run on another model.
+        if (modelId && model.slot.byokModelId !== modelId) {
+            throw new BadRequestException(SCAN_MODEL_NOT_FOUND_MESSAGE);
+        }
+        const budgetError = validateBudget(budget, !!rates);
+        if (budgetError) {
+            throw new BadRequestException(budgetError);
+        }
+        return { model, rates };
+    }
+
     async execute(input: StartSecurityScanInput): Promise<SecurityScanRecord> {
         const orgTeam = input.organizationAndTeamData;
 
@@ -133,26 +167,11 @@ export class StartSecurityScanUseCase {
             input.repositoryId,
         );
 
-        const { model, rates } = await resolveScanModel({
-            organizationAndTeamData: orgTeam,
-            permissionValidationService: this.permissionValidationService,
-            pricingResolver: this.pricingResolver,
-            pricingOverrides: (await this.spendLimitConfig.getConfig(orgTeam))
-                ?.modelPricing,
-            modelId: input.modelId,
-        });
-        if (!model.slot) {
-            throw new BadRequestException(SCAN_NEEDS_BYOK_MESSAGE);
-        }
-        // A picked model that is gone resolves to the routing's: said, not
-        // silently run on another model.
-        if (input.modelId && model.slot.byokModelId !== input.modelId) {
-            throw new BadRequestException(SCAN_MODEL_NOT_FOUND_MESSAGE);
-        }
-        const budgetError = validateBudget(input.budget, !!rates);
-        if (budgetError) {
-            throw new BadRequestException(budgetError);
-        }
+        const { model, rates } = await this.scanModelFor(
+            orgTeam,
+            input.budget,
+            input.modelId,
+        );
 
         const { platform, repositoryKey } = await this.keyOf(
             orgTeam,
