@@ -326,6 +326,17 @@ it("stores a Kodus rule the team turns off as its id alone, and drops it when tu
         { id: "kodus-shared-contract", enabled: false },
     ]);
     expect(toggle).not.toBeChecked();
+    await waitFor(() =>
+        expect(
+            screen.getByRole("button", { name: "Save settings" }),
+        ).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalled());
+    const [data, options] = saveSettings.mock.calls[0];
+    expect(options.prepare(data).codeReviewConfig.riskCriteria).toEqual([
+        { id: "kodus-shared-contract", enabled: false },
+    ]);
     fireEvent.click(toggle);
     expect(currentForm.getValues("riskCriteria.value")).toEqual([]);
 });

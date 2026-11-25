@@ -590,7 +590,7 @@ class ReviewSettingsService {
                     'instructions',
                     'includedFiles',
                     'excludedFiles',
-                ].some((key) => key in changes);
+                ].some((key) => Object.hasOwn(changes, key));
                 return {
                     ...base,
                     ...changes,
