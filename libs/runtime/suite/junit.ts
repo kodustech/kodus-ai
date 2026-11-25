@@ -52,14 +52,19 @@ function attemptsOf(c: Node): { attempts: TestAttempt[]; status: TestResult['sta
     return { attempts, status: 'passed' };
 }
 
-/** The spec file a test belongs to: its own `file`, else the nearest suite's, else the nearest suite name that looks like a file. */
-function specOf(c: Node, chain: Node[]): string | undefined {
+/**
+ * The spec file a test belongs to: its own `file`, else the nearest suite's, else the one file the document's top
+ * suites name (Cypress 13 puts it only on the empty Root Suite, beside the suite that holds the tests), else the
+ * nearest suite name that looks like a file.
+ */
+function specOf(c: Node, chain: Node[], documentFile?: string): string | undefined {
     const own = attr(c, 'file');
     if (own) return own;
     for (let i = chain.length - 1; i >= 0; i--) {
         const f = attr(chain[i], 'file');
         if (f) return f;
     }
+    if (documentFile) return documentFile;
     for (let i = chain.length - 1; i >= 0; i--) {
         const name = attr(chain[i], 'name');
         if (name && /\.[A-Za-z0-9]+$/.test(name)) return name;
@@ -78,11 +83,15 @@ export function parseJUnit(xml: string): SpecResult[] {
     if (!root || typeof root !== 'object') throw new Error('not a JUnit report: no testsuites or testsuite element');
     const roots: Node[] = doc.testsuites ? asNodes([doc.testsuites]).flatMap((t) => asNodes(t.testsuite)) : asNodes(doc.testsuite);
 
+    // One file named by the top suites is the document's spec (Cypress writes one JUnit file per spec); more than one names none.
+    const topFiles = new Set(roots.map((r) => attr(r, 'file')).filter((f): f is string => !!f));
+    const documentFile = topFiles.size === 1 ? [...topFiles][0] : undefined;
+
     const bySpec = new Map<string, TestResult[]>();
     const visit = (suite: Node, chain: Node[]) => {
         const here = [...chain, suite];
         for (const c of asNodes(suite.testcase)) {
-            const spec = specOf(c, here) ?? '(unknown spec)';
+            const spec = specOf(c, here, documentFile) ?? '(unknown spec)';
             const { attempts, status } = attemptsOf(c);
             const tests = bySpec.get(spec) ?? [];
             tests.push({ title: attr(c, 'name') ?? '', status, attempts });

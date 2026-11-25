@@ -36,6 +36,32 @@ const PLAYWRIGHT = `<testsuites>
 </testsuites>`;
 
 describe('parseJUnit', () => {
+    // Cypress 13 with its built-in junit reporter (kr-mono on dev): one file per spec, the spec path only on the empty
+    // "Root Suite", and the suite that holds the tests beside it with no file. Every test read as "(unknown spec)" and
+    // the whole suite as not run.
+    describe('a Cypress 13 file whose spec path is only on the Root Suite', () => {
+        const ROOT_ONLY = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="Mocha Tests" time="61.5" tests="2" failures="1">
+  <testsuite name="Root Suite" timestamp="2026-01-01T00:00:00" tests="0" file="cypress/e2e/orders/orders-list.spec.cy.ts" time="0.000" failures="0">
+  </testsuite>
+  <testsuite name="Orders list" timestamp="2026-01-01T00:00:00" tests="2" time="61.5" failures="1">
+    <testcase name="Orders list shows the newest first" time="60.0" classname="shows the newest first">
+      <failure message="expected 3 to equal 1" type="AssertionError"><![CDATA[AssertionError: expected 3 to equal 1]]></failure>
+    </testcase>
+    <testcase name="Orders list paginates" time="1.5" classname="paginates"></testcase>
+  </testsuite>
+</testsuites>`;
+
+        it('gives the tests to the spec the Root Suite names', () => {
+            const specs = parseJUnit(ROOT_ONLY);
+            expect(specs.map((s) => [s.spec, s.status, s.tests.length])).toEqual([['cypress/e2e/orders/orders-list.spec.cy.ts', 'failed', 2]]);
+        });
+
+        it('keeps each suite on its own file when the root suites name more than one', () => {
+            expect(parseJUnit(CYPRESS).map((s) => s.spec)).toEqual(['cypress/e2e/cart.cy.ts', 'cypress/e2e/login.cy.ts']);
+        });
+    });
+
     describe('a Cypress file', () => {
         const specs = parseJUnit(CYPRESS);
         const cart = specs.find((s) => s.spec === 'cypress/e2e/cart.cy.ts')!;
