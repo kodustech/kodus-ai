@@ -833,6 +833,25 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
             ).toHaveBeenCalledTimes(1);
         });
 
+        // Both ids come from the same suggestion today; this keeps the
+        // fallback honest should they ever diverge.
+        it('takes the stored suggestion id when the posted one is empty', async () => {
+            await requestChanges([
+                {
+                    comment: { suggestion: { id: '', severity: 'critical' } },
+                    deliveryStatus: 'sent',
+                    codeReviewFeedbackData: {
+                        commentId: 101,
+                        suggestionId: 's-stored',
+                    },
+                },
+            ]);
+
+            expect(ownChangeRequest.record).toHaveBeenCalledWith(
+                expect.objectContaining({ suggestionIds: ['s-stored'] }),
+            );
+        });
+
         it('leaves out a critical finding that never reached the PR', async () => {
             await requestChanges([
                 finding('critical', 101),
