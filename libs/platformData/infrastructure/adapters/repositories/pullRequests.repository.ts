@@ -299,6 +299,9 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                     'kodyChangeRequest.suggestionIds': {
                         $each: request.suggestionIds,
                     },
+                    'kodyChangeRequest.findingComments': {
+                        $each: request.findingComments,
+                    },
                 },
             },
         );

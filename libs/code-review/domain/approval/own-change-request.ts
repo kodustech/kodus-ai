@@ -67,12 +67,17 @@ export interface StoredFinding {
  * Whether one of the findings behind Kody's change request is still open. A
  * finding is closed once the implementation check found it implemented, or
  * once its thread is resolved on the host; so one whose comment id never came
- * back can still close. A suggestion the PR no longer stores counts as open.
+ * back can still close. A suggestion the PR never stored, or no longer does,
+ * is judged by the thread it was posted as, and is open without one.
  * A finding recorded by its comment alone, before its suggestion was or on a
  * request merged into this one, is judged by its thread.
  */
 export function hasOpenChangeRequestFinding(
-    changeRequest: { commentIds?: string[]; suggestionIds?: string[] },
+    changeRequest: {
+        commentIds?: string[];
+        suggestionIds?: string[];
+        findingComments?: { suggestionId: string; commentId: string }[];
+    },
     stored: StoredFinding[],
     comments: HostReviewComment[],
     platformType: PlatformType,
@@ -89,10 +94,17 @@ export function hasOpenChangeRequestFinding(
     const byId = new Map(
         stored.map((finding) => [finding.suggestionId, finding]),
     );
+    const postedAs = new Map(
+        (changeRequest.findingComments ?? [])
+            .filter((pair) => pair.commentId)
+            .map((pair) => [pair.suggestionId, String(pair.commentId)]),
+    );
+    const commentOf = (id: string) => {
+        const commentId = byId.get(id)?.commentId;
+        return commentId ? String(commentId) : postedAs.get(id);
+    };
     const covered = new Set(
-        stored
-            .filter((finding) => finding.commentId)
-            .map((finding) => String(finding.commentId)),
+        suggestionIds.map(commentOf).filter((id): id is string => !!id),
     );
     const commentOnly = (changeRequest.commentIds ?? []).filter(
         (id) => String(id ?? '') !== '' && !covered.has(String(id)),
@@ -105,17 +117,17 @@ export function hasOpenChangeRequestFinding(
     }
     return suggestionIds.some((id) => {
         const finding = byId.get(id);
-        if (!finding) return true;
         if (
+            finding &&
             resolvesSuggestionThread(
                 normalizeImplementationStatus(finding.implementationStatus),
             )
         ) {
             return false;
         }
+        const commentId = commentOf(id);
         return (
-            !finding.commentId ||
-            hasOpenFinding([String(finding.commentId)], comments, platformType)
+            !commentId || hasOpenFinding([commentId], comments, platformType)
         );
     });
 }

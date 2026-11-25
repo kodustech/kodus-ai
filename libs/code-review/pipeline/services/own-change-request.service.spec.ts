@@ -399,6 +399,7 @@ describe('OwnChangeRequestService', () => {
                     ...request,
                     suggestionIds: ['s-1', 's-2'],
                     commentIds: ['11'],
+                    findingComments: [{ suggestionId: 's-1', commentId: '11' }],
                 }),
             ).resolves.toBe('2026-11-11T17:23:13.000Z');
 
@@ -410,6 +411,7 @@ describe('OwnChangeRequestService', () => {
                     requestedAt: '2026-11-11T17:23:13.000Z',
                     commentIds: ['11'],
                     suggestionIds: ['s-1', 's-2'],
+                    findingComments: [{ suggestionId: 's-1', commentId: '11' }],
                 },
             );
         });
@@ -423,6 +425,7 @@ describe('OwnChangeRequestService', () => {
                 ...request,
                 suggestionIds: ['s-1'],
                 commentIds: [],
+                findingComments: [],
             };
 
             await expect(service.record(input)).resolves.toBeNull();
@@ -437,6 +440,7 @@ describe('OwnChangeRequestService', () => {
                     ...request,
                     suggestionIds: [],
                     commentIds: ['11'],
+                    findingComments: [],
                 }),
             ).resolves.toBe('2026-11-11T17:23:13.000Z');
         });
@@ -449,6 +453,7 @@ describe('OwnChangeRequestService', () => {
                     ...request,
                     suggestionIds: [],
                     commentIds: [],
+                    findingComments: [],
                 }),
             ).resolves.toBeNull();
 

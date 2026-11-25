@@ -356,22 +356,32 @@ export class RequestChangesOrApproveStage extends BasePipelineStage<CodeReviewPi
 
             // Recorded before it is made: the record is what lets the request
             // leave later, with or without an approval.
+            const findings = criticalComments.map((comment) => {
+                const commentId = comment.codeReviewFeedbackData?.commentId;
+                return {
+                    suggestionId:
+                        comment.comment.suggestion?.id ||
+                        comment.codeReviewFeedbackData?.suggestionId ||
+                        '',
+                    commentId:
+                        commentId === undefined || commentId === null
+                            ? ''
+                            : String(commentId),
+                };
+            });
             const requestedAt = await this.ownChangeRequest.record({
                 organizationAndTeamData,
                 repository,
                 prNumber,
-                suggestionIds: criticalComments
-                    .map(
-                        (comment) =>
-                            comment.comment.suggestion?.id ||
-                            comment.codeReviewFeedbackData?.suggestionId,
-                    )
-                    .filter((id): id is string => !!id),
-                commentIds: criticalComments
-                    .map((comment) => comment.codeReviewFeedbackData?.commentId)
-                    .filter((id) => id !== undefined && id !== null)
-                    .map(String)
-                    .filter((id) => id !== ''),
+                suggestionIds: findings
+                    .map((finding) => finding.suggestionId)
+                    .filter(Boolean),
+                commentIds: findings
+                    .map((finding) => finding.commentId)
+                    .filter(Boolean),
+                findingComments: findings.filter(
+                    (finding) => finding.suggestionId && finding.commentId,
+                ),
             });
             if (!requestedAt) {
                 this.logger.warn({

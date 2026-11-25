@@ -761,6 +761,10 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
                 prNumber: 42,
                 suggestionIds: ['s-101', 's-102'],
                 commentIds: ['101', '102'],
+                findingComments: [
+                    { suggestionId: 's-101', commentId: '101' },
+                    { suggestionId: 's-102', commentId: '102' },
+                ],
             });
             expect(
                 codeManagement.requestChangesPullRequest,
@@ -802,6 +806,9 @@ describe('RequestChangesOrApproveStage — review.auto_approved emit', () => {
                 expect.objectContaining({
                     suggestionIds: ['s-101', 's-a', 's-b', 's-c'],
                     commentIds: ['101'],
+                    findingComments: [
+                        { suggestionId: 's-101', commentId: '101' },
+                    ],
                 }),
             );
             expect(

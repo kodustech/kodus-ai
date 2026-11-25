@@ -34,6 +34,13 @@ export interface KodyChangeRequestRecord {
     requestedAt: string;
     commentIds: string[];
     suggestionIds: string[];
+    findingComments: KodyChangeRequestFindingComment[];
+}
+
+/** Which review comment a finding behind the request was posted as. */
+export interface KodyChangeRequestFindingComment {
+    suggestionId: string;
+    commentId: string;
 }
 
 /** A suggestion behind Kody's change request, as the PR stores it. */
@@ -58,6 +65,11 @@ export interface IKodyChangeRequest {
      * it existed, which are judged by their comments alone.
      */
     suggestionIds?: string[];
+    /**
+     * The comment each finding was posted as, so a finding whose suggestion
+     * was never stored is still judged by its thread.
+     */
+    findingComments?: KodyChangeRequestFindingComment[];
     /**
      * Summary comments the host keeps open next to the request (a GitLab
      * discussion, an Azure thread), resolved when it is withdrawn.

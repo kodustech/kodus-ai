@@ -62,6 +62,9 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                     requestedAt: T1,
                     commentIds: ['101', '102'],
                     suggestionIds: ['s-1', 's-2'],
+                    findingComments: [
+                        { suggestionId: 's-1', commentId: '101' },
+                    ],
                 }),
             ).resolves.toBe(true);
 
@@ -71,6 +74,9 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                     'kodyChangeRequest.commentIds': { $each: ['101', '102'] },
                     'kodyChangeRequest.suggestionIds': {
                         $each: ['s-1', 's-2'],
+                    },
+                    'kodyChangeRequest.findingComments': {
+                        $each: [{ suggestionId: 's-1', commentId: '101' }],
                     },
                 },
             });
@@ -84,6 +90,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                     requestedAt: T1,
                     commentIds: ['101'],
                     suggestionIds: ['s-1'],
+                    findingComments: [],
                 }),
             ).resolves.toBe(false);
         });

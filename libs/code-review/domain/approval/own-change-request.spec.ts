@@ -166,6 +166,52 @@ describe('hasOpenChangeRequestFinding', () => {
         ).toBe(true);
     });
 
+    // The suggestions were never saved (the save timed out or failed), so
+    // only the thread each finding was posted as can tell.
+    it('judges a suggestion the PR never stored by the thread it was posted as', () => {
+        const request = {
+            commentIds: ['11'],
+            suggestionIds: ['a'],
+            findingComments: [{ suggestionId: 'a', commentId: '11' }],
+        };
+        expect(
+            hasOpenChangeRequestFinding(
+                request,
+                [],
+                [hostThread(11, true)],
+                github,
+            ),
+        ).toBe(false);
+        expect(
+            hasOpenChangeRequestFinding(
+                request,
+                [],
+                [hostThread(11, false)],
+                github,
+            ),
+        ).toBe(true);
+    });
+
+    it('keeps a stored finding with no comment id open by the thread it was posted as', () => {
+        expect(
+            hasOpenChangeRequestFinding(
+                {
+                    commentIds: ['11'],
+                    suggestionIds: ['a'],
+                    findingComments: [{ suggestionId: 'a', commentId: '11' }],
+                },
+                [
+                    {
+                        suggestionId: 'a',
+                        implementationStatus: 'not_implemented',
+                    },
+                ],
+                [hostThread(11, true)],
+                github,
+            ),
+        ).toBe(false);
+    });
+
     it('keeps a suggestion the PR no longer stores open', () => {
         expect(
             hasOpenChangeRequestFinding(

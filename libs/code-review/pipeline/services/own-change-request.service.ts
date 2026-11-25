@@ -10,7 +10,10 @@ import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
-import type { IPullRequestWithKodyChangeRequest } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import type {
+    IPullRequestWithKodyChangeRequest,
+    KodyChangeRequestFindingComment,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
 /** Shown on the host next to the withdrawn review, where the host shows one. */
 export const OWN_CHANGE_REQUEST_WITHDRAWN_REASON =
@@ -44,6 +47,7 @@ export class OwnChangeRequestService {
         prNumber: number;
         suggestionIds: string[];
         commentIds: string[];
+        findingComments: KodyChangeRequestFindingComment[];
     }): Promise<string | null> {
         if (!input.suggestionIds.length && !input.commentIds.length) {
             return null;
@@ -58,6 +62,7 @@ export class OwnChangeRequestService {
                     requestedAt,
                     commentIds: input.commentIds,
                     suggestionIds: input.suggestionIds,
+                    findingComments: input.findingComments,
                 },
             );
             if (recorded) return requestedAt;
