@@ -288,21 +288,10 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                 body: pullRequest.body,
                 headSha,
                 files: fullFiles,
-                // The defaults, with the old free-text instruction as the
-                // team's own rule, as the shared assessment migrates it.
-                rules: riskRulesFor(
-                    policy.riskInstructions?.trim()
-                        ? [
-                              {
-                                  id: 'legacy-risk',
-                                  name: 'Team context',
-                                  enabled: true,
-                                  instructions: policy.riskInstructions.trim(),
-                              },
-                          ]
-                        : [],
-                    fullFiles,
-                ),
+                // The defaults, with the old free-text instruction as context,
+                // as the shared assessment sends it.
+                rules: riskRulesFor([], fullFiles),
+                teamContext: policy.riskInstructions?.trim() || undefined,
                 language: config.languageResultPrompt,
                 areaMap,
                 modelSlot: config.resolvedModelSlot,

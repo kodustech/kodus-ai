@@ -25,7 +25,7 @@ export const DEFAULT_RISK_CRITERIA: ReadonlyArray<
         name: 'Security and permissions',
         enabled: true,
         instructions:
-            'A change to authentication, authorization or permissions, tenant isolation, input validation, or any check that protects data or actions.',
+            'A change to authentication, authorization or permissions, tenant isolation, input validation, or any check that protects data or actions, including a new endpoint, handler or job that reads or changes data without the guard its neighbours have.',
     },
     {
         id: 'kodus-money',

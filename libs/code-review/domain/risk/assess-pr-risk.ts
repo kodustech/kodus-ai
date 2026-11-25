@@ -50,26 +50,48 @@ export function applicableRiskCriteria(
         });
 }
 
+/** Where the old free-text `approvalRiskInstructions` lives once migrated. */
+export const LEGACY_RISK_CRITERION_ID = 'legacy-risk';
+
 /**
  * The rules a PR is judged against: the Kodus defaults with the team's
  * overrides, then its own rules, each enabled and matching a changed file. A
- * rule with file filters names the changed paths it applies to.
+ * rule with file filters names the changed paths it applies to. The migrated
+ * free-text instruction is not a rule; it travels as `riskContextFor`.
  */
 export function riskRulesFor(
     criteria: readonly RiskCriterion[] | undefined,
     files: FileChange[],
 ): RiskRule[] {
-    return applicableRiskCriteria(effectiveRiskCriteria(criteria), files).map(
-        (criterion) => ({
-            id: criterion.id,
-            name: criterion.name!,
-            instructions: criterion.instructions!,
-            ...(criterion.includedFiles?.length ||
-            criterion.excludedFiles?.length
-                ? { files: criterion.matchingPaths }
-                : {}),
-        }),
+    return applicableRiskCriteria(
+        effectiveRiskCriteria(criteria).filter(
+            (criterion) => criterion.id !== LEGACY_RISK_CRITERION_ID,
+        ),
+        files,
+    ).map((criterion) => ({
+        id: criterion.id,
+        name: criterion.name!,
+        instructions: criterion.instructions!,
+        ...(criterion.includedFiles?.length || criterion.excludedFiles?.length
+            ? { files: criterion.matchingPaths }
+            : {}),
+    }));
+}
+
+/**
+ * The team's free-text guidance from before risk rules existed. It was context
+ * for the judgment, which can relax risk as well as raise it, so it is sent as
+ * context rather than as a rule whose match is risk.
+ */
+export function riskContextFor(
+    criteria: readonly RiskCriterion[] | undefined,
+): string | undefined {
+    const legacy = criteria?.find(
+        (criterion) => criterion.id === LEGACY_RISK_CRITERION_ID,
     );
+    return legacy?.enabled !== false && legacy?.instructions?.trim()
+        ? legacy.instructions.trim()
+        : undefined;
 }
 
 /** Secrets never enter the persisted identity. A model/config/diff change invalidates reuse. */
@@ -125,6 +147,7 @@ export async function assessPrRisk(
         headSha: input.headSha,
         files: input.files,
         rules: riskRulesFor(input.criteria, input.files),
+        teamContext: riskContextFor(input.criteria),
         language: input.language,
         areaMap: input.areaMap,
         modelSlot: input.modelSlot,

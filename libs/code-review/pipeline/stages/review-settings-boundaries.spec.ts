@@ -377,7 +377,7 @@ it('hydrates a real GitLab webhook through the normalized provider before risk a
     expect(result.riskAssessment.status).toBe('assessed');
     expect(result.approvalDecision).toEqual(
         expect.objectContaining({
-            reason: 'Approved by policy “Scoped”.',
+            reason: 'Approved by policy `Scoped`.',
             kind: 'approve',
             reviewedBaseSha: 'base',
         }),
@@ -442,7 +442,7 @@ it.each(['removed', 'ignored', 'incremental'])(
             (await s.decide.execute(reviewed)).approvalDecision,
         ).toMatchObject({
             kind: 'approve',
-            reason: 'Approved by policy “Scoped”.',
+            reason: 'Approved by policy `Scoped`.',
         });
     },
 );

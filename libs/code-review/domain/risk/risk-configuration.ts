@@ -10,13 +10,19 @@ import {
     type NormalizedModel,
 } from '@libs/llm/byok-config';
 
-/** The assessment reads title/body as well as code; edits invalidate its reuse. */
+/**
+ * The assessment reads title/body as well as code; edits invalidate its reuse.
+ * Line endings and surrounding space are normalized, so a provider returning
+ * the same text with CRLF or a trailing newline is not a change.
+ */
 export function prRiskDescriptionKey(input: { title?: string; body?: string }) {
+    const text = (value?: string) =>
+        (value ?? '').replace(/\r\n?/g, '\n').trim();
     return createHash('sha256')
         .update(
             JSON.stringify({
-                title: input.title ?? '',
-                body: input.body ?? '',
+                title: text(input.title),
+                body: text(input.body),
             }),
         )
         .digest('hex');

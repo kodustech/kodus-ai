@@ -199,14 +199,17 @@ describe('the hold names the rules that matched', () => {
     it.each([
         [
             [{ id: 'kodus-money', name: 'Money, billing and licensing' }],
-            'Risk rule: Money, billing and licensing.',
+            'Risk rule: `Money, billing and licensing`.',
         ],
         [
             [
                 { id: 'kodus-data', name: 'Stored data and migrations' },
-                { id: 'fiscal', name: 'Fiscal *XML* @team' },
+                {
+                    id: 'fiscal',
+                    name: 'Fiscal `XML` @team\nhttps://x.example #12',
+                },
             ],
-            'Risk rules: Stored data and migrations, Fiscal \\*XML\\* @\u200bteam.',
+            'Risk rules: `Stored data and migrations`, `Fiscal XML @team https://x.example #12`.',
         ],
         [[], 'Risk was identified in this PR.'],
     ])('for %j', (rules, reason) => {

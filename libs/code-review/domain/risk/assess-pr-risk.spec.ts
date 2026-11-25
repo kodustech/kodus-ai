@@ -200,7 +200,7 @@ it('keeps the model judgment of a focused code change without a test', async () 
     });
 });
 
-it('preserves migrated team instructions in the established model request', async () => {
+it('sends the migrated free-text instruction as context, not as a rule whose match is risk', async () => {
     jest.mocked(LLM.run).mockResolvedValue({
         matchedRules: [],
         reason: 'Recorded model judgment.',
@@ -216,19 +216,101 @@ it('preserves migrated team instructions in the established model request', asyn
     ];
     await assessApprovalRisk({
         ...input,
-        rules: riskRulesFor(criteria, input.files),
+        rules: riskRulesFor([], input.files),
+        teamContext: guidance,
     });
     await assessPrRisk({ ...input, criteria });
     const [oldCall, newCall] = jest
         .mocked(LLM.run)
         .mock.calls.map(([call]) => call);
-    expect(JSON.parse(newCall.user).riskRules).toContainEqual({
-        id: 'legacy-risk',
-        name: 'Team context',
-        instructions: guidance,
-    });
+    const sent = JSON.parse(newCall.user);
+    expect(sent.teamRiskContext).toBe(guidance);
+    expect(sent.riskRules.map((rule: { id: string }) => rule.id)).not.toContain(
+        'legacy-risk',
+    );
     expect(newCall.system).toBe(oldCall.system);
     expect(newCall.user).toBe(oldCall.user);
+});
+
+it('names Team context when the free-text instruction asks for a person', async () => {
+    jest.mocked(LLM.run).mockResolvedValue({
+        matchedRules: ['team-context'],
+        reason: 'The team asks for review of core product logic.',
+    } as any);
+    expect(
+        await assessPrRisk({
+            ...input,
+            criteria: [
+                {
+                    id: 'legacy-risk',
+                    name: 'Team context',
+                    enabled: true,
+                    instructions: 'Core product logic merits a human review.',
+                },
+            ],
+        }),
+    ).toMatchObject({
+        status: 'assessed',
+        riskIdentified: true,
+        rules: [{ id: 'team-context', name: 'Team context' }],
+    });
+});
+
+it.each([
+    [
+        ['Security and permissions'],
+        [{ id: 'kodus-security', name: 'Security and permissions' }],
+    ],
+    [
+        [' KODUS-Security '],
+        [{ id: 'kodus-security', name: 'Security and permissions' }],
+    ],
+    [['kodus-not-sent'], undefined],
+])(
+    'resolves %j by id or name, and still holds on an entry that names no rule',
+    async (matchedRules, rules) => {
+        jest.mocked(LLM.run).mockResolvedValue({
+            matchedRules,
+            reason: 'A person should look at this change.',
+        } as any);
+        const result = await assessPrRisk(input);
+        expect(result).toMatchObject({
+            status: 'assessed',
+            riskIdentified: true,
+        });
+        expect((result as { rules?: unknown }).rules).toEqual(rules);
+    },
+);
+
+it('drops blank entries: an answer of only blanks is no risk', async () => {
+    jest.mocked(LLM.run).mockResolvedValue({
+        matchedRules: ['', '  '],
+        reason: 'Nothing here needs a person.',
+    } as any);
+    expect(await assessPrRisk(input)).toMatchObject({
+        status: 'assessed',
+        riskIdentified: false,
+    });
+});
+
+it('does not call the model when no enabled rule applies to the changed files', async () => {
+    const allOff = [
+        'kodus-security',
+        'kodus-money',
+        'kodus-data',
+        'kodus-infrastructure',
+        'kodus-ci-build',
+        'kodus-shared-contract',
+        'kodus-concurrency',
+        'kodus-ai-behavior',
+        'kodus-broad-change',
+    ].map((id) => ({ id, enabled: false }));
+    expect(await assessPrRisk({ ...input, criteria: allOff })).toMatchObject({
+        status: 'assessed',
+        riskIdentified: false,
+        reason: 'No enabled risk rule applies to the changed files.',
+    });
+    expect(LLM.run).not.toHaveBeenCalled();
 });
 
 it.each([[[]], [['kodus-shared-contract']]])(
@@ -396,7 +478,8 @@ it.each([
     ['apps/api/drizzle/meta/0076_snapshot.json', 'added', 9703, 0],
     ['evals/security-scan/realvuln/findings.jsonl', 'added', 796, 0],
     ['libs/scan/engine.spec.ts', 'added', 3115, 0],
-    ['evals/rounds/fixtures/repo/gitlab.service.ts', 'added', 6683, 0],
+    ['tests/fixtures/repo/gitlab.service.ts', 'added', 6683, 0],
+    ['src/__fixtures__/a.json', 'added', 4000, 0],
     ['pnpm-lock.yaml', 'modified', 5000, 4000],
     ['test_email.py', 'added', 4000, 0],
     ['pkg/email_test.go', 'added', 4000, 0],
@@ -459,6 +542,11 @@ it.each([
     'src/Fastest.cs',
     'src/Testimonial.java',
     'src/TestRailClient.java',
+    // Seed data production loads, and CI or deploy config named like a test.
+    'db/fixtures/production/010_plans.rb',
+    'evals/rounds/fixtures/repo/gitlab.service.ts',
+    'docker-compose.test.yml',
+    'k8s/deployment.spec.yaml',
 ])(
     'treats %s as code: test names compare with case, as toolchains do',
     async (filename) => {

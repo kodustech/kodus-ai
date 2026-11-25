@@ -53,12 +53,14 @@ const MAX_AREA_FILES = 100;
 const logger = createLogger('AssessApprovalRisk');
 
 // Kinds the model can judge by path alone: assets, docs, data, lockfiles, tests
-// and fixtures. Extensions compare without case (a .PNG is an image); names
-// compare with case, as toolchains do (auth_TEST.go and Contest.java are code).
+// and fixtures under a test root. Extensions compare without case (a .PNG is an
+// image); names compare with case, as toolchains do (auth_TEST.go and
+// Contest.java are code). A `fixtures/` outside a test root can be production
+// seed data, and a `.test.yml` can be CI config, so those stay unshown code.
 const JUDGEABLE_EXTENSION =
     /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|icns|tiff?|svg|pdf|mp3|mp4|m4a|mov|webm|ogg|oga|wav|flac|woff2?|ttf|otf|eot|md|mdx|markdown|rst|adoc|txt|csv|tsv|json|jsonl|ndjson|snap)$/i;
 const JUDGEABLE_NAME =
-    /(?:^|\/)(?:yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Gemfile\.lock|composer\.lock|go\.sum|mix\.lock|pubspec\.lock|Podfile\.lock)$|(?:^|\/)(?:__tests__|__snapshots__|__fixtures__|tests?|specs?|fixtures?|testdata)\/|\.(?:test|spec)\.[^/.]+$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/;
+    /(?:^|\/)(?:yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Cargo\.lock|poetry\.lock|Pipfile\.lock|uv\.lock|Gemfile\.lock|composer\.lock|go\.sum|mix\.lock|pubspec\.lock|Podfile\.lock)$|(?:^|\/)(?:__tests__|__snapshots__|__fixtures__|tests?|specs?|testdata)\/|\.(?:test|spec)\.(?:[cm]?[jt]sx?|py|rb|go|rs|java|kt|cs|php|swift|scala|exs?|dart)$|(?:^|\/)(?:test_[^/]+\.(?:py|go|rs)|[^/]+_test\.(?:go|py|rs)|[^/]+Tests?\.(?:cs|java))$/;
 
 const usablePath = (path: unknown): path is string =>
     typeof path === 'string' && !!path.trim();
@@ -93,6 +95,35 @@ export function unshownCodePath(files: FileChange[]): string | undefined {
     return undefined;
 }
 
+/** What the model returns when the team's free-text guidance asks for a person. */
+export const TEAM_CONTEXT_RULE: RiskRule = {
+    id: 'team-context',
+    name: 'Team context',
+    instructions: '',
+};
+
+/**
+ * The rules the model named, resolved by id, then by name, ignoring case and
+ * surrounding space. A blank entry is dropped; any other entry that names no
+ * rule still counts as risk, but only resolved rules are named on the PR.
+ */
+export function matchRules(
+    returned: readonly string[],
+    rules: readonly RiskRule[],
+): { count: number; known: Array<{ id: string; name: string }> } {
+    const key = (value: string) => value.trim().toLowerCase();
+    const byKey = new Map<string, RiskRule>();
+    for (const rule of rules) byKey.set(key(rule.name), rule);
+    for (const rule of rules) byKey.set(key(rule.id), rule);
+    const entries = [...new Set(returned.map(key).filter((entry) => !!entry))];
+    const known = new Map<string, { id: string; name: string }>();
+    for (const entry of entries) {
+        const rule = byKey.get(entry);
+        if (rule) known.set(rule.id, { id: rule.id, name: rule.name });
+    }
+    return { count: entries.length, known: [...known.values()] };
+}
+
 /** A provider path as inert inline code in a published reason. */
 function quotedPath(path: string): string {
     let cut = path.replace(/[`\s]+/g, ' ').slice(0, 200);
@@ -120,6 +151,8 @@ export async function assessChangeRisk(input: {
     files: FileChange[];
     /** What this team treats as needing a person: defaults and its own. */
     rules: RiskRule[];
+    /** The team's free-text guidance from before risk rules existed. */
+    teamContext?: string;
     language?: string;
     areaMap?: CodeAreaRiskMap | null;
     modelSlot?: NormalizedModel;
@@ -130,6 +163,14 @@ export async function assessChangeRisk(input: {
         return {
             level: 'unknown',
             reason: `Kody could not read the diff of ${quotedPath(unshown)}: the Git provider did not return it.`,
+            reviewedHeadSha: input.headSha,
+            areaMapVersion: input.areaMap?.version,
+        };
+    // Nothing can match: no model call, and no id it could return by mistake.
+    if (!input.rules.length && !input.teamContext?.trim())
+        return {
+            level: 'low',
+            reason: 'No enabled risk rule applies to the changed files.',
             reviewedHeadSha: input.headSha,
             areaMapVersion: input.areaMap?.version,
         };
@@ -196,6 +237,9 @@ export async function assessChangeRisk(input: {
                 instructions: rule.instructions,
                 ...(rule.files ? { appliesToFiles: rule.files } : {}),
             })),
+            ...(input.teamContext?.trim()
+                ? { teamRiskContext: input.teamContext.trim() }
+                : {}),
             reviewLanguage: input.language ?? 'en-US',
             fileCount: input.files.length,
             diffWasTruncated: false,
@@ -272,17 +316,13 @@ export async function assessChangeRisk(input: {
         ) {
             throw new Error('Empty approval risk judgment');
         }
-        // An id the model made up still counts as risk; only known rules are
-        // named on the PR.
-        const byId = new Map(input.rules.map((rule) => [rule.id, rule]));
-        const matched = [...new Set(result.matchedRules)];
-        const matchedRules = matched.flatMap((id) => {
-            const rule = byId.get(id);
-            return rule ? [{ id: rule.id, name: rule.name }] : [];
-        });
+        const matched = matchRules(result.matchedRules, [
+            ...input.rules,
+            ...(input.teamContext?.trim() ? [TEAM_CONTEXT_RULE] : []),
+        ]);
         return {
-            level: matched.length ? 'medium' : 'low',
-            ...(matchedRules.length ? { matchedRules } : {}),
+            level: matched.count ? 'medium' : 'low',
+            ...(matched.known.length ? { matchedRules: matched.known } : {}),
             // Bound persisted/published text after validation, preserving the judgment.
             reason:
                 result.reason.trim().length > MAX_REASON_CHARS

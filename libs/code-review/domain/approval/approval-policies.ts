@@ -266,7 +266,7 @@ export async function evaluateApprovalPolicies(
         }
         return {
             kind: 'approve',
-            reason: `Approved by policy “${publicName(policy.name)}”.`,
+            reason: `Approved by policy ${publicName(policy.name)}.`,
             matchedPolicy: { id: policy.id, name: policy.name },
             policies: results,
         };
