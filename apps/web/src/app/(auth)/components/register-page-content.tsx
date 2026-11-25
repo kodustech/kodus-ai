@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@components/ui/button";
 import { FormControl } from "@components/ui/form-control";
 import { Heading } from "@components/ui/heading";
@@ -537,6 +537,20 @@ export const RegisterPageContent = () => {
             confirmPassword: "",
         },
     });
+
+    // When an on-screen keyboard shrinks the viewport, the focused field can
+    // end up below it inside the form's scroll column. Bring it back into view.
+    useEffect(() => {
+        const target = window.visualViewport ?? window;
+        const onResize = () => {
+            const active = document.activeElement;
+            if (active instanceof HTMLInputElement) {
+                active.scrollIntoView({ block: "nearest" });
+            }
+        };
+        target.addEventListener("resize", onResize);
+        return () => target.removeEventListener("resize", onResize);
+    }, []);
 
     return (
         <FormProvider {...form}>
