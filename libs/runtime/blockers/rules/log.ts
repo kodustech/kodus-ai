@@ -311,6 +311,25 @@ const goChecksumDb: LineRule = ({ text }) => {
     };
 };
 
+/**
+ * A tool's download from the cell's artifact mirror (Prisma engines, the
+ * Cypress app, MongoDB, Firebase emulators) answered 404: the mirror serves
+ * only the objects its rules name, so this is a rule the cell lacks, never
+ * the recipe's. Kodus's gap: no rewrite of the recipe gets past it (a Prisma
+ * checksum the mirror refused had Kody rewrite a monorepo's recipe four times).
+ */
+const mirrorArtifactMissing: LineRule = ({ text }) => {
+    const m = /\bmirror\.cell\.internal(?::\d{1,5})?\/artifacts\/([a-z0-9-]{1,40})\/([^\s'"]{1,300})[^\n]{0,120}?\b(?:404|Not Found)\b/.exec(text);
+    if (!m) return null;
+    const file = m[2].split('/').pop() ?? m[2];
+    return {
+        kind: 'platform',
+        signature: `platform:mirror_artifact_missing:${m[1]}`,
+        title: `The cell's ${m[1]} mirror does not serve ${file.slice(0, 120)}, which the build downloads`,
+        fixes: [retry],
+    };
+};
+
 // A cell inspects outbound TLS and hands every build step and machine its CA
 // in SSL_CERT_FILE and NODE_EXTRA_CA_CERTS (machinetrust, the builder's
 // execCABundle). A tool with a trust store of its own ignores both, and its
@@ -382,6 +401,7 @@ const LOG_RULES: ReadonlyArray<readonly [id: string, rule: LineRule]> = [
     ['lockfile_outdated', lockfileOutdated],
     ['go_module_not_pinned', goModuleNotPinned],
     ['go_checksum_db', goChecksumDb],
+    ['mirror_artifact_missing', mirrorArtifactMissing],
     ['ca_untrusted', caUntrusted],
     ['missing_env', missingEnv],
     ['invalid_env', invalidEnv],

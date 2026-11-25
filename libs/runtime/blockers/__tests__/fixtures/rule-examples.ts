@@ -242,6 +242,17 @@ export const RULE_EXAMPLES: RuleExample[] = [
         input: { kind: 'unknown', signature: 'compose_up', message: 'go: verifying module: example.test/lib@v1.2.3: Get "https://sum.golang.org/lookup": dial tcp: i/o timeout' },
     },
     {
+        rule: 'log:mirror_artifact_missing',
+        behavior: "reads a 404 from the cell's artifact mirror as Kodus's gap, which no rewrite of the recipe fixes",
+        card: { kind: 'platform', signature: 'platform:mirror_artifact_missing:prisma', fixes: ['retry_setup'] },
+        input: {
+            kind: 'toolchain',
+            signature: 'compose_up',
+            message:
+                'Error: Failed to fetch sha256 checksum at http://mirror.cell.internal:8080/artifacts/prisma/all_commits/605197351a3c8bdd595af2d2a9bc3025bca48ea2/linux-arm64-openssl-3.0.x/schema-engine.sha256 - 404 Not Found',
+        },
+    },
+    {
         rule: 'log:ca_untrusted',
         behavior: "reads a build tool that does not trust the cell's certificate as a fix in the Dockerfile, never a retry",
         card: { kind: 'toolchain', signature: 'toolchain:ca_untrusted:bun', fixes: ['trust_cell_ca'] },

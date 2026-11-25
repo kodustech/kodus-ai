@@ -509,6 +509,17 @@ describe('repairFailureOf', () => {
         expect(repairFailureOf(blocked(b, { failureBundle: { ...bundle('api.vendor.example'), services: [] } }))).toBeUndefined();
     });
 
+    // kr-mono on dev: a Prisma checksum the cell's mirror did not serve sent the inferred recipe to Kody, who rewrote it four
+    // times for nine minutes; no recipe gets past a rule the mirror lacks.
+    it("never repairs a download the cell's artifact mirror did not serve", () => {
+        const b = { kind: 'toolchain', signature: 'compose_up', message: 'compose up: exit 1' };
+        const bundle = {
+            services: [{ name: 'boot output', state: 'failed' as const, logTail: ['#22 4.411 Error: Failed to fetch sha256 checksum at http://mirror.cell.internal:8080/artifacts/prisma/all_commits/605197351a3c8bdd595af2d2a9bc3025bca48ea2/linux-arm64-openssl-3.0.x/schema-engine.sha256 - 404 Not Found'] }],
+            ports: [], disk: [], deniedEgress: [], redactions: 0, truncated: false, collectedAt: '2026-11-24T23:53:13Z',
+        };
+        expect(repairFailureOf(blocked(b, { failureBundle: bundle }))).toBeUndefined();
+    });
+
     it('is the failure the next setup would send back, for an authored recipe that failed on its own account', () => {
         expect(repairFailureOf(blocked({ kind: 'resources', signature: 'image_too_large', message: 'the image is 31 GB' }))).toMatchObject({ kind: 'resources', failure: { signature: 'image_too_large' } });
         expect(repairFailureOf(blocked({ kind: 'toolchain', signature: 'compose_refused', message: 'privileged: true is refused' }))).toMatchObject({ failure: { signature: 'compose_refused' } });
