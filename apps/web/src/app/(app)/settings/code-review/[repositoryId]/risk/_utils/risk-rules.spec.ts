@@ -20,8 +20,15 @@ describe("riskRuleRows", () => {
         const rows = riskRuleRows(defaults, [
             { id: "kodus-security", enabled: false },
             team,
-            // A default Kodus no longer ships has nothing to show.
+            // A default Kodus no longer ships has nothing to show, even
+            // when the team had edited all of it.
             { id: "kodus-retired", enabled: false },
+            {
+                id: "kodus-retired-edited",
+                name: "Old rule",
+                enabled: true,
+                instructions: "Stale wording.",
+            },
         ]);
         expect(rows).toEqual([
             { ...defaults[0], enabled: false, isDefault: true, edited: false },

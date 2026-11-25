@@ -1,6 +1,7 @@
-import type {
-    DefaultRiskCriterion,
-    RiskCriterion,
+import {
+    DEFAULT_RISK_CRITERION_PREFIX,
+    type DefaultRiskCriterion,
+    type RiskCriterion,
 } from "@services/risk-assessment/types";
 
 /** A rule as the page lists it: a Kodus default with the team's changes, or a team rule. */
@@ -34,7 +35,6 @@ export function riskRuleRows(
     criteria: readonly RiskCriterion[],
 ): RiskRuleRow[] {
     const byId = new Map(criteria.map((rule) => [rule.id, rule]));
-    const defaultIds = new Set(defaults.map((rule) => rule.id));
     return [
         ...defaults.map((base) => {
             const override = byId.get(base.id);
@@ -47,11 +47,14 @@ export function riskRuleRows(
                     EDITABLE.some((key) => override[key] !== undefined),
             } as RiskRuleRow;
         }),
-        // An override of a default Kodus no longer ships has no name to show.
+        // A `kodus-` id is always an override; one of a default Kodus no
+        // longer ships is not applied, so it is not listed either.
         ...criteria
             .filter(
                 (rule) =>
-                    !defaultIds.has(rule.id) && rule.name && rule.instructions,
+                    !rule.id.startsWith(DEFAULT_RISK_CRITERION_PREFIX) &&
+                    rule.name &&
+                    rule.instructions,
             )
             .map(
                 (rule) =>

@@ -50,8 +50,15 @@ describe('effectiveRiskCriteria', () => {
                 enabled: true,
                 instructions: 'Data must not cross tenants.',
             },
-            // A default Kodus no longer ships: nothing to override.
+            // A default Kodus no longer ships: nothing to override, even
+            // when the team had edited all of it.
             { id: 'kodus-retired', enabled: true },
+            {
+                id: 'kodus-retired-edited',
+                name: 'Old rule',
+                enabled: true,
+                instructions: 'Stale wording.',
+            },
             // Not reachable through the schema; never sent half-built.
             { id: 'half', enabled: true } as any,
         ]);

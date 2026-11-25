@@ -222,6 +222,11 @@ it('preserves migrated team instructions in the established model request', asyn
     const [oldCall, newCall] = jest
         .mocked(LLM.run)
         .mock.calls.map(([call]) => call);
+    expect(JSON.parse(newCall.user).riskRules).toContainEqual({
+        id: 'legacy-risk',
+        name: 'Team context',
+        instructions: guidance,
+    });
     expect(newCall.system).toBe(oldCall.system);
     expect(newCall.user).toBe(oldCall.user);
 });

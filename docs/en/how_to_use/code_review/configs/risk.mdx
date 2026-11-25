@@ -84,6 +84,6 @@ riskCriteria:
       - '**/*.test.ts'
 ```
 
-A Kodus rule is listed by its `id` with only what you change. `riskCriteria: []` applies Kodus's rules as shipped. `kodus config remote risk-rules .` lists the rules in effect, with their ids. To stop assessment, set `riskAssessmentActive: false`.
+A Kodus rule is listed by its `id` with only what you change; ids starting with `kodus-` are reserved for Kodus's rules. `riskCriteria: []` applies Kodus's rules as shipped. `kodus config remote risk-rules .` lists the rules in effect, with their ids. To stop assessment, set `riskAssessmentActive: false`.
 
 A configuration that never set **Risk assessment** keeps its existing approval risk behavior until you change this setting. Turning automatic approval on or off does not change the **Risk assessment** switch.

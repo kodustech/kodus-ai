@@ -577,7 +577,6 @@ class ReviewSettingsService {
         }
         const rules = stored as Array<Partial<RiskRule> & { id: string }>;
         const byId = new Map(rules.map((rule) => [rule.id, rule]));
-        const defaultIds = new Set(defaults.map((rule) => rule.id));
         return [
             ...defaults.map((base) => {
                 const override = byId.get(base.id);
@@ -598,11 +597,12 @@ class ReviewSettingsService {
                     source: edited ? ('edited' as const) : ('kodus' as const),
                 };
             }),
-            // An override of a rule Kodus no longer ships is not applied.
+            // A `kodus-` id is always an override; one of a rule Kodus no
+            // longer ships is not applied.
             ...rules
                 .filter(
                     (rule): rule is RiskRule =>
-                        !defaultIds.has(rule.id) &&
+                        !rule.id.startsWith('kodus-') &&
                         !!rule.name &&
                         !!rule.instructions,
                 )

@@ -1,4 +1,7 @@
-import type { RiskCriterion } from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import {
+    DEFAULT_RISK_CRITERION_PREFIX,
+    type RiskCriterion,
+} from '@libs/core/infrastructure/config/types/general/risk-assessment';
 
 /** A rule as the assessment applies it: defaults and overrides resolved. */
 export type EffectiveRiskCriterion = RiskCriterion & {
@@ -87,8 +90,9 @@ const DEFAULTS_BY_ID = new Map(
 
 /**
  * The defaults with the team's overrides applied, then the team's own rules.
- * An override of a default Kodus no longer ships is dropped; so is a team rule
- * without a name or instructions.
+ * A `kodus-` id is always an override: one of a default Kodus no longer ships
+ * is dropped, whatever it holds, so retiring a default never fails a stored
+ * config. A team rule without a name or instructions is dropped too.
  */
 export function effectiveRiskCriteria(
     team: readonly RiskCriterion[] | undefined,
@@ -113,7 +117,7 @@ export function effectiveRiskCriteria(
         } as EffectiveRiskCriterion;
     });
     const own = (team ?? []).flatMap((criterion) =>
-        !DEFAULTS_BY_ID.has(criterion.id) &&
+        !criterion.id.startsWith(DEFAULT_RISK_CRITERION_PREFIX) &&
         criterion.name &&
         criterion.instructions
             ? [

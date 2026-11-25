@@ -4,6 +4,9 @@ export const RISK_ASSESSMENT_API_PATHS = {
     DEFAULT_CRITERIA: pathToApiUrl("/code-review/risk/default-criteria"),
 };
 
+/** Ids Kodus reserves for its own rules; such an id is always an override. */
+export const DEFAULT_RISK_CRITERION_PREFIX = "kodus-";
+
 /**
  * A stored rule: a team rule, or a Kodus default (same id) that the team
  * turned off or edited, holding only what it changes.
