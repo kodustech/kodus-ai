@@ -380,9 +380,9 @@ const MOONSHOT_OPENAI_FAILURES: HttpFailure[] = [
 
 /**
  * Azure OpenAI. Its ordinary token-rate 429 links the quota-increase form
- * (aka.ms/oai/quotaincrease), and "quota" is the billing vocabulary, so a
- * per-minute rate limit reads as QUOTA_EXCEEDED: terminal, no slot cooldown,
- * and a comment telling the customer to top up an account that is fine.
+ * (aka.ms/oai/quotaincrease); the classifier reads the provider's words, not
+ * its links, so it stays a rate limit (production's only Azure 429 says
+ * "exceeded token rate limit", 11-11).
  */
 const AZURE_FAILURES: HttpFailure[] = [
     {
@@ -397,7 +397,7 @@ const AZURE_FAILURES: HttpFailure[] = [
                     'Requests to the ChatCompletions_Create Operation under Azure OpenAI API version 2025-04-01-preview have exceeded token rate limit of your current OpenAI S0 pricing tier. Please retry after 6 seconds. Please go here: https://aka.ms/oai/quotaincrease if you would like to further increase the default rate limit.',
             },
         },
-        expect: { category: C.QUOTA_EXCEEDED, failover: true },
+        expect: { category: C.RATE_LIMIT, failover: true },
     },
     {
         mode: 'auth: invalid subscription key',

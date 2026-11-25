@@ -410,14 +410,18 @@ function matchByHttpStatus(
  * BOTH directions -- the wording it must catch, and the neighbouring
  * temporary wording it must leave on RATE_LIMIT.
  */
-function looksLikeQuota(lower: string): boolean {
+function looksLikeQuota(message: string): boolean {
     // A per-minute quota is a rate limit that clears on its own, not a spent
     // balance. Google words both as "You exceeded your current quota"; only the
     // quota id in the error body ("...InputTokensPerModelPerMinute...") tells a
     // per-minute token limit from a daily or billing one.
-    if (looksLikePerMinuteLimit(lower)) {
+    if (looksLikePerMinuteLimit(message)) {
         return false;
     }
+    // Words in a link are not the provider's words: Fireworks' rate-limit 429
+    // links ".../guides/quotas_usage/rate-limits" and read as a spent quota.
+    // Toward RATE_LIMIT, the cheap direction (above).
+    const lower = message.replace(/https?:\/\/\S+/g, ' ');
     return (
         lower.includes('quota') ||
         lower.includes('credit') ||
@@ -561,7 +565,10 @@ function matchByMessage(lower: string): LlmErrorCategory {
         // Anthropic: "prompt is too long: 212345 tokens > 200000 maximum", and
         // "input length and `max_tokens` exceed context limit: …".
         lower.includes('prompt is too long') ||
-        lower.includes('exceed context limit')
+        lower.includes('exceed context limit') ||
+        // MiniMax: "invalid params, context window exceeds limit (2013)" (105
+        // production events read as a rejected request, so nothing shrank).
+        lower.includes('context window exceeds limit')
     ) {
         return LlmErrorCategory.CONTEXT_OVERFLOW;
     }

@@ -1194,3 +1194,63 @@ describe('OpenRouter upstream errors (#1871)', () => {
         ).toBe(LlmErrorCategory.RATE_LIMIT);
     });
 });
+
+describe('real production shapes the classifier misread (prod worker logs, 11-10..11-24)', () => {
+    const apiError = (message: string, statusCode?: number) =>
+        Object.assign(new Error(message), {
+            name: 'AI_APICallError',
+            ...(statusCode ? { statusCode } : {}),
+        });
+
+    it("MiniMax's context window error (code 2013) is CONTEXT_OVERFLOW, not a rejected request", () => {
+        // 105 events; it was REQUEST_REJECTED, so the run never shrank its input.
+        const err = apiError(
+            'invalid params, context window exceeds limit (2013)',
+            400,
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.CONTEXT_OVERFLOW,
+        );
+    });
+
+    it('a rate-limit 429 whose docs URL says "quotas" stays RATE_LIMIT', () => {
+        // Fireworks: the only "quota" is in the link, which made it a spent quota.
+        const err = apiError(
+            'You have exceeded your rate limit for this API. Please see https://docs.fireworks.ai/guides/quotas_usage/rate-limits for details.',
+            429,
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.RATE_LIMIT,
+        );
+    });
+
+    it.each([
+        // A spent quota that also carries a link still reads from its words.
+        [
+            'You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.',
+            429,
+        ],
+        [
+            'Key limit exceeded (monthly limit). Manage it using https://openrouter.ai/settings/keys',
+            403,
+        ],
+        ['Insufficient balance or no resource package. Please recharge.', 429],
+    ])(
+        'a spent quota with a link is still QUOTA_EXCEEDED: %s',
+        (message, status) => {
+            expect(classifyLLMError(apiError(message, status)).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        },
+    );
+
+    it('an invalid parameter that is not about the context window stays REQUEST_REJECTED', () => {
+        const err = apiError(
+            'invalid params, temperature out of range (2013)',
+            400,
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.REQUEST_REJECTED,
+        );
+    });
+});
