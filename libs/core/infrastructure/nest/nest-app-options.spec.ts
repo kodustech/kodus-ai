@@ -19,9 +19,10 @@ describe('NEST_APP_OPTIONS', () => {
                     continue;
                 // Comments and string contents are not calls, and a `//`
                 // inside a string ('http://…') is not a comment: one pass,
-                // leftmost match first.
+                // leftmost match first. An escape may be a backslash
+                // line continuation, so it takes any character.
                 const text = readFileSync(path, 'utf8').replace(
-                    /\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g,
+                    /\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\[\s\S]|[^'\\\n])*'|"(?:\\[\s\S]|[^"\\\n])*"|`(?:\\[\s\S]|[^`\\])*`/g,
                     (token) => (token.startsWith('/') ? '' : "''"),
                 );
                 // Each call up to its closing `);`, where its options sit.
