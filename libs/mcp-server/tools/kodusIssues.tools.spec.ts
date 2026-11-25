@@ -130,6 +130,24 @@ describe('KodusIssuesTools', () => {
             expect(parsed.success).toBe(true);
         });
 
+        it('passes includeArtifacts on to the facade, and only when given', async () => {
+            mockCodeManagementService.getIssue.mockResolvedValue(base as any);
+            const args = {
+                organizationId: 'org',
+                teamId: 'team',
+                repository: { owner: 'acme', name: 'web' },
+                issueNumber: 7,
+            };
+            await tools
+                .getIssue()
+                .execute({ ...args, includeArtifacts: true } as any);
+            await tools.getIssue().execute(args as any);
+            const [withFlag, without] =
+                mockCodeManagementService.getIssue.mock.calls.map(([p]) => p);
+            expect(withFlag).toMatchObject({ includeArtifacts: true });
+            expect(without.includeArtifacts).toBeUndefined();
+        });
+
         it('returns the artifacts the facade read, untouched', async () => {
             const artifacts = [
                 {

@@ -108,9 +108,11 @@ export abstract class McpTaskTracker implements TaskTracker {
 
     abstract canRead(reference: TaskReference): boolean;
 
+    /** `asParent`: read only as the parent of another task, as context. */
     protected abstract lookup(
         reference: TaskReference,
         context: TrackerReadContext,
+        options?: { asParent?: boolean },
     ): Promise<TrackerLookup>;
 
     /**
@@ -322,6 +324,7 @@ export abstract class McpTaskTracker implements TaskTracker {
         const read = await this.lookup(
             { kind: 'key', id, raw: id, source: 'body', intent: 'mentions' },
             context,
+            { asParent: true },
         ).catch((error) => {
             warnFailure(
                 this.name,

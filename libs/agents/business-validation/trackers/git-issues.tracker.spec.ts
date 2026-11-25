@@ -109,7 +109,46 @@ describe('GitIssuesTracker: GitHub issue artifacts', () => {
         expect(session.calls[0][1]).toMatchObject({
             repository: { owner: 'acme', name: 'web' },
             issueNumber: 1,
+            includeArtifacts: true,
         });
+    });
+
+    it('never asks for the artifacts of a parent it reads as context', async () => {
+        const session = sessionReturning(null);
+        (session as any).call = async (
+            name: string,
+            args: Record<string, unknown>,
+        ) => {
+            session.calls.push([name, args]);
+            return {
+                success: true,
+                data:
+                    args.issueNumber === 1
+                        ? issue({
+                              parent: { number: 9, repository: 'acme/web' },
+                              artifacts: [artifact(1, 'qa.md', 'Returns 422.')],
+                          })
+                        : {
+                              number: 9,
+                              title: 'Epic',
+                              body: 'The larger goal.',
+                              artifacts: [artifact(1, 'epic.md', 'EPIC-ONLY')],
+                          },
+            };
+        };
+        const { task, taskText } = await read(
+            null,
+            new GitIssuesTracker(session),
+        );
+        expect(task.parent?.id).toBe('#9');
+        expect(taskText).toContain('Returns 422.');
+        const byIssue = Object.fromEntries(
+            session.calls.map(([, args]) => [args.issueNumber, args]),
+        );
+        expect(byIssue[1]).toMatchObject({ includeArtifacts: true });
+        expect(byIssue[9]).toBeDefined();
+        expect(byIssue[9].includeArtifacts).toBeUndefined();
+        expect(JSON.stringify(task.parent)).not.toContain('EPIC-ONLY');
     });
 
     it('folds several artifacts, each labelled with its origin', async () => {

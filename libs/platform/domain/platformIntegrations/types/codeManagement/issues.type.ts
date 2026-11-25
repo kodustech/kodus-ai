@@ -62,6 +62,8 @@ export type GetIssueParams = {
     organizationAndTeamData: OrganizationAndTeamData;
     repository: { id?: string; owner: string; name: string };
     issueNumber: number;
+    /** GitHub: also read the issue's artifacts (one extra call). Default false. */
+    includeArtifacts?: boolean;
 };
 
 export type GitHubIssue = {

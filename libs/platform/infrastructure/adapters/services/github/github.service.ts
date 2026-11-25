@@ -3710,7 +3710,12 @@ export class GithubService
     async getIssue(
         params: GetIssueParams,
     ): Promise<CodeManagementIssue | null> {
-        const { organizationAndTeamData, repository, issueNumber } = params;
+        const {
+            organizationAndTeamData,
+            repository,
+            issueNumber,
+            includeArtifacts,
+        } = params;
 
         const octokit = await this.getAuthenticatedOctokit(
             organizationAndTeamData,
@@ -3738,11 +3743,13 @@ export class GithubService
                         sub_issues_summary?: { total?: number };
                     },
                 )),
-                ...(await this.issueArtifacts(
-                    octokit,
-                    repository,
-                    issueNumber,
-                )),
+                ...(includeArtifacts
+                    ? await this.issueArtifacts(
+                          octokit,
+                          repository,
+                          issueNumber,
+                      )
+                    : {}),
             };
         } catch (error) {
             if ((error as { status?: number })?.status === 404) {

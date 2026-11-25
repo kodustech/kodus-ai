@@ -150,6 +150,8 @@ export class KodusIssuesTools {
             teamId: z.string(),
             repository: repositorySchema,
             issueNumber: z.number().int().positive(),
+            /** GitHub only: also read the issue's artifacts (one extra call). */
+            includeArtifacts: z.boolean().optional(),
         });
 
         type InputType = z.infer<typeof inputSchema>;
@@ -178,6 +180,7 @@ export class KodusIssuesTools {
                         },
                         repository: args.repository,
                         issueNumber: args.issueNumber,
+                        includeArtifacts: args.includeArtifacts,
                     });
 
                     return {

@@ -44,6 +44,7 @@ export class GitIssuesTracker extends McpTaskTracker {
     protected async lookup(
         reference: TaskReference,
         context: TrackerReadContext,
+        options?: { asParent?: boolean },
     ): Promise<TrackerLookup> {
         // A parent is read by its bare number here, whatever the source.
         if (
@@ -68,6 +69,8 @@ export class GitIssuesTracker extends McpTaskTracker {
                 teamId: context.organizationAndTeamData.teamId,
                 repository: { owner: repository.owner, name: repository.name },
                 issueNumber: Number(reference.id),
+                // Artifacts are the spec of the linked issue, not of its parent.
+                ...(options?.asParent ? {} : { includeArtifacts: true }),
             }),
         );
         if (payload.success === false) {

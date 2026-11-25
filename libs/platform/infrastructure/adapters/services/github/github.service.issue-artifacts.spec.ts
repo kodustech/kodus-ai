@@ -52,6 +52,7 @@ describe('GithubService.getIssue: issue artifacts', () => {
             organizationAndTeamData: { organizationId: 'org-1' },
             repository,
             issueNumber: 12,
+            includeArtifacts: true,
         });
 
     const isList = (route: string) =>
@@ -199,6 +200,21 @@ describe('GithubService.getIssue: issue artifacts', () => {
         expect(unreadOf(result)).toEqual([
             expect.objectContaining({ reason: 'may_have_more' }),
         ]);
+    });
+
+    it('makes no artifact call unless the caller asks for them', async () => {
+        const { service, request } = serviceWith(issue(), () => [
+            item(1, 'qa.md', 'Returns 422.'),
+        ]);
+        const result = await service.getIssue({
+            organizationAndTeamData: { organizationId: 'org-1' },
+            repository,
+            issueNumber: 12,
+        });
+        expect(result?.number).toBe(12);
+        expect(artifactsOf(result)).toBeUndefined();
+        expect(unreadOf(result)).toBeUndefined();
+        expect(request).not.toHaveBeenCalled();
     });
 
     it('leaves an issue without artifacts as it is', async () => {
