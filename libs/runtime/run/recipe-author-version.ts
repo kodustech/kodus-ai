@@ -41,6 +41,15 @@ const firebaseWithoutMirror = (r: RevisedRecipe) => {
     return texts.some((t) => /firebase/i.test(t)) && !texts.some((t) => t.includes('/tmp/kodus-fetch-firebase-emulators.cjs'));
 };
 
+/**
+ * A recipe whose suite runs Cypress in no service of its own: in the app's container there is no Cypress app or browser,
+ * and the CI's localhost URLs answer nothing (kr-mono on dev: 75 specs never ran).
+ */
+const cypressWithoutSuiteService = (r: RevisedRecipe) => {
+    const suite = /^suite:\n((?:[ \t].*\n?|\n)*)/m.exec(r.recipe)?.[1] ?? '';
+    return /^\s+runner:\s*cypress\b/m.test(suite) && !/^\s+service:/m.test(suite);
+};
+
 export const RECIPE_AUTHOR_REVISIONS: readonly RecipeAuthorRevision[] = [
     { version: 1, reauthor: false, reason: 'the instructions before recipes recorded their version' },
     { version: 2, reauthor: true, reason: 'an app with pages starts on its production server (next start, not next dev)' },
@@ -55,6 +64,12 @@ export const RECIPE_AUTHOR_REVISIONS: readonly RecipeAuthorRevision[] = [
         reauthor: true,
         reason: 'Firebase emulators the tests need stay in the recipe, run from a Dockerfile Kodus fetches them for from its mirror',
         appliesTo: firebaseWithoutMirror,
+    },
+    {
+        version: 5,
+        reauthor: true,
+        reason: 'a Cypress suite runs in a service built from cypress/included, where Kodus forwards localhost to the exposed services',
+        appliesTo: cypressWithoutSuiteService,
     },
 ];
 

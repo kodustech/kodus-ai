@@ -15,6 +15,7 @@ import { workspaceShapeError } from '@libs/runtime/contracts/workspace';
 import { AUTHORED_FILE_LIMITS, type AuthoredFile, type AuthoredWorkspace, checkAuthoredSubmission } from './authored-files-policy';
 import { directoryExistsCheck, fileExists, modelView, READ_LIMITS, type RepoReader, RepoPathError, repoPath } from './repo-reader';
 import { ciEvidence } from './ci-evidence';
+import { suiteServiceOf } from './authored-dockerfile-e2e';
 import { appendSuiteBlock } from './suite-block';
 import type { PullRequestPaths } from './pull-request-focus';
 import { factsBlock, repositoryFacts, workspaceFactsBlock } from './repository-facts';
@@ -431,6 +432,7 @@ The build reaches package registries and the read-only hosts of the Kodus recomm
 - A Next.js app that imports next/font/google builds with next build: the build reaches fonts.googleapis.com and fonts.gstatic.com through the Kodus recommended list. Only when the Facts say the organization turned that list off, run next dev instead and say so in notes.
 - The cell builds linux/arm64, where many native Node modules (bcrypt, bufferutil, utf-8-validate, better-sqlite3, node-gyp builds) have no prebuilt binary and compile on install: base a Node image on the full node:<version>-bookworm, which has python3, make and g++, not -slim; and do not apt-get install build-essential or python3 on a slim image, use the full one instead.
 - Firebase emulators (an emulators block in firebase.json, firebase emulators:start): firebase-tools downloads each emulator from storage.googleapis.com when they start, which no machine reaches, but the Kodus mirror serves them. Never leave out the emulators the CI starts (logins and data often go through them): run them from a Dockerfile under .kodus/ that installs firebase-tools and Java, and Kodus adds the step that fetches the emulators from its mirror. A service built from the repository's own Dockerfile gets no such step, and its emulators fail to start.
+- A Cypress suite in the CI evidence: add a service named e2e to your compose file, built from .kodus/Dockerfile.e2e: FROM cypress/included:<the cypress version the lockfile pins> (it has the Cypress app, its browsers and Xvfb), the same dependency install as the app with ENV CYPRESS_INSTALL_BINARY=0 (the image already has the app), then COPY . . and no CMD; depends_on the public service, and expose nothing of its own. The suite runs in that container, and Kodus makes it answer localhost for every port the recipe exposes, as the CI runner did: expose each service the tests reach (the app, its API, emulators, a database the tests seed).
 Monorepos (workspace globs in the Facts):
 - Install at the root with the root lockfile and every member's package.json (pnpm install --frozen-lockfile, yarn install --immutable), then start the app with its filter (pnpm --filter <app>... start, yarn workspace <app> start; dev only as the rule on pages says). Never build one package on its own: its workspace dependencies are not on npm.
 - Build only the app under test and what it depends on (turbo build --filter=<app>..., nx build <app>, pnpm --filter <app>... build), never the whole monorepo.
@@ -886,7 +888,8 @@ export async function authorRecipe(
     const base = { usage: run.usage, steps: run.steps.length, rejected: state.rejected, ...report };
     if (state.accepted) {
         // The suite block comes from the CI evidence, by code, after the checks: the model never writes it.
-        const withSuite = appendSuiteBlock(state.accepted, ciRead);
+        const suiteService = suiteServiceOf(state.files);
+        const withSuite = appendSuiteBlock(state.accepted, ciRead, suiteService ? { service: suiteService } : {});
         return {
             status: 'submitted',
             recipe: withSuite.recipe,

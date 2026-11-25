@@ -21,7 +21,7 @@ export interface SuiteBlock {
 }
 
 /** The block of a candidate that is certain, or undefined (no block, no guess). */
-export function suiteBlockOf(evidence: Pick<CiEvidence, 'suiteCandidate' | 'suiteAmbiguous'>): SuiteBlock | undefined {
+export function suiteBlockOf(evidence: Pick<CiEvidence, 'suiteCandidate' | 'suiteAmbiguous'>, opts: { service?: string } = {}): SuiteBlock | undefined {
     const c = evidence.suiteCandidate;
     if (!c || evidence.suiteAmbiguous) return undefined;
     // `specs` is required by the schema and a default for it would be a guess: only a config that states it counts.
@@ -45,6 +45,8 @@ export function suiteBlockOf(evidence: Pick<CiEvidence, 'suiteCandidate' | 'suit
     suite.specs = c.specs;
     if (c.matrixSize && c.matrixSize > 1) suite.shards = Math.min(c.matrixSize, SUITE_LIMITS.shards);
     if (Object.keys(env).length) suite.env = env;
+    // The service Kody wrote for a Cypress suite (authored-dockerfile-e2e.ts): the app's own image has no Cypress app or browser.
+    if (opts.service && c.runner === 'cypress') suite.service = opts.service;
     suite.results = { junit: DEFAULT_SUITE_RESULTS_GLOB };
 
     const keys = Object.keys(suite);
@@ -58,10 +60,10 @@ export function suiteBlockOf(evidence: Pick<CiEvidence, 'suiteCandidate' | 'suit
  * in. The text comes back unchanged when it already has a suite, when nothing
  * is certain, or when the result would not parse.
  */
-export function appendSuiteBlock(recipe: string, evidence: Pick<CiEvidence, 'suiteCandidate' | 'suiteAmbiguous'>): { recipe: string; suiteKeys: string[] } {
+export function appendSuiteBlock(recipe: string, evidence: Pick<CiEvidence, 'suiteCandidate' | 'suiteAmbiguous'>, opts: { service?: string } = {}): { recipe: string; suiteKeys: string[] } {
     const unchanged = { recipe, suiteKeys: [] as string[] };
     if (/^suite\s*:/m.test(recipe)) return unchanged;
-    const block = suiteBlockOf(evidence);
+    const block = suiteBlockOf(evidence, opts);
     if (!block) return unchanged;
     const text = `${recipe.replace(/\s*$/, '')}\n${block.yaml}`;
     return 'error' in parseRecipe(text) ? unchanged : { recipe: text, suiteKeys: block.keys };

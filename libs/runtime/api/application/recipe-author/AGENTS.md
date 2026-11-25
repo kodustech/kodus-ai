@@ -33,7 +33,7 @@ Kody's recipe author: an agent on the product's harness, with the org's BYOK (AD
 
 ## Module map
 
-Files (16, tests apart): `authored-compose-sanitiser.ts`, `authored-dockerfile-firebase.ts`, `authored-dockerfile-mirror.ts`, `authored-files-policy.ts`, `authored-recipe-policy.ts`, `ci-evidence.ts`, `firebase-emulators-fetch-script.ts`, `git-repo-reader.ts`, `pull-request-focus.ts`, `recipe-author-context.ts`, `recipe-author.agent.ts`, `repo-reader.ts`, `repository-facts.ts`, `suite-block.ts`, `suite-candidate.ts`, `workspace-repo-reader.ts`
+Files (17, tests apart): `authored-compose-sanitiser.ts`, `authored-dockerfile-e2e.ts`, `authored-dockerfile-firebase.ts`, `authored-dockerfile-mirror.ts`, `authored-files-policy.ts`, `authored-recipe-policy.ts`, `ci-evidence.ts`, `firebase-emulators-fetch-script.ts`, `git-repo-reader.ts`, `pull-request-focus.ts`, `recipe-author-context.ts`, `recipe-author.agent.ts`, `repo-reader.ts`, `repository-facts.ts`, `suite-block.ts`, `suite-candidate.ts`, `workspace-repo-reader.ts`
 
 Imports these Runtime modules:
 

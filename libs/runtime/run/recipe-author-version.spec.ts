@@ -42,4 +42,17 @@ describe('the versions of the recipe author instructions', () => {
         expect(reauthorRevision(3, undefined, fetched)).toBeUndefined();
         expect(reauthorRevision(3, undefined, plain)).toBeUndefined();
     });
+
+    // kr-mono (2026-11-25): its Cypress suite ran in the app's container, which has no Cypress app, and 75 specs never ran.
+    it('v5 asks again only a recipe whose Cypress suite names no service', () => {
+        const base = 'version: 1\nservices:\n  compose:\n    files: [docker-compose.yml]\n';
+        const noService = { recipe: `${base}suite:\n  runner: cypress\n  command: npx cypress run --spec "{specs}"\n  specs: cypress/e2e/**/*.cy.ts\n` };
+        const withService = { recipe: `${noService.recipe}  service: e2e\n` };
+        const playwright = { recipe: `${base}suite:\n  runner: playwright\n  command: npx playwright test {specs}\n  specs: e2e/*.spec.ts\n` };
+        expect(recipeAuthorRevision(5)).toMatchObject({ reauthor: true });
+        expect(reauthorRevision(4, undefined, noService)?.version).toBe(5);
+        expect(reauthorRevision(4, undefined, withService)).toBeUndefined();
+        expect(reauthorRevision(4, undefined, playwright)).toBeUndefined();
+        expect(reauthorRevision(4, undefined, { recipe: base })).toBeUndefined();
+    });
 });

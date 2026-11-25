@@ -117,7 +117,16 @@ disk). A host boots in 10 to 20 s with main's build ready (`host-providers.md` 8
   **`image:` is not built:** the engine does not turn an image into a compose service (the cell composes only the
   environment's own compose file, sandboxed and verified, and the suite service needs the checkout mounted); the recipe
   validator refuses `suite.image` with the message to add the image as a service of the compose file and name it with
-  `suite.service`. Having the recipe author write that compose service is the plan above and is not built here.
+  `suite.service`.
+  **The recipe author writes the service (built):** for a Cypress suite in the CI evidence, Kody adds a compose service
+  `e2e` built from `.kodus/Dockerfile.e2e` (`FROM cypress/included:<the lockfile's cypress version>`, the dependency
+  install with `CYPRESS_INSTALL_BINARY=0`, `COPY . .`), and Kodus names it in the suite block (`suite.service: e2e`,
+  `authored-dockerfile-e2e.ts` `suiteServiceOf`). A CI runs every service on one runner, so a repository's Cypress
+  config, its Cypress env and the URLs its front end bundles say `localhost` (kr-mono: `http://localhost:3000`,
+  `http://localhost:9099`). Kodus makes the suite container answer localhost the same way: it replaces the image's own
+  `cypress run` entrypoint with a plain Node forwarder (`addLocalhostForward`) that listens on `127.0.0.1:<port>` for
+  each port the recipe exposes and pipes it to the service that owns it, and keeps the container running for the
+  engine's exec calls. Only exposed ports are forwarded, so the recipe exposes every service the tests reach.
 - **Java and emulators** (Firebase emulators, the customer's functions) are already services of the environment; the
   suite shard boots the same compose project the Run's PR side boots.
 - **Memory.** Chrome plus the app plus emulators on 16 GB: the same load as one CI shard on 8 vCPU. Unverified on

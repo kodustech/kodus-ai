@@ -9,6 +9,7 @@ import { redactPatterns } from '@libs/runtime/redaction';
 import { SECRET_NAME } from '@libs/runtime/run/recipe-inference';
 
 import { sanitiseAuthoredCompose } from './authored-compose-sanitiser';
+import { addLocalhostForward } from './authored-dockerfile-e2e';
 import { addFirebaseEmulatorFetch, firebaseEmulatorsOf } from './authored-dockerfile-firebase';
 import { declareMirrorBuildArgs } from './authored-dockerfile-mirror';
 import { checkAuthoredRecipe, type AuthoredRecipeCheck } from './authored-recipe-policy';
@@ -1514,6 +1515,14 @@ export async function checkAuthoredSubmission(
                 if (fb.changes.length && fits(fb.content)) {
                     adjusted.push(...fb.changes);
                     f = { path: f.path, content: fb.content };
+                }
+            }
+            // The suite service's container answers localhost as the CI runner did (authored-dockerfile-e2e.ts).
+            if (check.recipe) {
+                const fwd = addLocalhostForward(f.path, f.content, check.recipe.expose);
+                if (fwd.changes.length && fits(fwd.content)) {
+                    adjusted.push(...fwd.changes);
+                    f = { path: f.path, content: fwd.content };
                 }
             }
         }
