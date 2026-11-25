@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/sys/unix"
 
@@ -699,5 +700,110 @@ func TestAdoptionNeverUsesABakeOfAnotherOrg(t *testing.T) {
 	}
 	if _, ok := docker.volumes[g.Volumes["pgdata"]]; ok {
 		t.Fatal("the other org's data volume was left on the host")
+	}
+}
+
+// A Run host made from a boat template: boat reports the host running and
+// starts the cell while it is still loading the disk's docker images (the
+// bake's 2 GB image came 51 s after the cell started on dev). The cell waits
+// for the images its adopted catalog names instead of retiring the bake and
+// building the environment again.
+func TestAHostMadeFromATemplateWaitsForTheDiskToLoadTheBakeImages(t *testing.T) {
+	d, docker := bakeDriver(t)
+	ctx := context.Background()
+	setup := machine("claim-setup", bakeEnv)
+	boot(t, d, setup, sandbox.Build{Service: "api", Context: project(t), Dockerfile: "Dockerfile"})
+	if err := d.PinBakeSource(ctx, setup); err != nil {
+		t.Fatal(err)
+	}
+	image, err := d.Bake(ctx, bakeSpec(setup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := generationForTest(t, d, image.ImageID)
+	if len(g.Images) == 0 {
+		t.Fatal("the bake has no image to wait for")
+	}
+	if err := d.Destroy(ctx, setup); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	docker.mu.Lock()
+	for _, ref := range g.Images {
+		delete(docker.images, ref)
+	}
+	docker.mu.Unlock()
+	cfg := d.cfg
+	cfg.CellID, cfg.BakeAdoptOrg = "cell-2", bakeOrg
+	host, err := New(ctx, docker, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer host.Close()
+	host.hooksForTest().adoptPollEvery = 5 * time.Millisecond
+	loaded := make(chan struct{})
+	go func() {
+		defer close(loaded)
+		time.Sleep(50 * time.Millisecond)
+		docker.mu.Lock()
+		for _, ref := range g.Images {
+			docker.images[ref] = true
+		}
+		docker.mu.Unlock()
+	}()
+	recovered, err := host.RecoverBakes(ctx)
+	<-loaded
+	if err != nil || len(recovered) != 1 || recovered[0].ImageID != image.ImageID {
+		t.Fatalf("the template's bake was retired while its images were loading: %v %v", recovered, err)
+	}
+}
+
+// Images that never come are not waited for past the bound: the bake is
+// retired as any generation with missing artifacts, and the cell starts.
+func TestAHostMadeFromATemplateStopsWaitingForImagesThatNeverCome(t *testing.T) {
+	d, docker := bakeDriver(t)
+	ctx := context.Background()
+	setup := machine("claim-setup", bakeEnv)
+	boot(t, d, setup, sandbox.Build{Service: "api", Context: project(t), Dockerfile: "Dockerfile"})
+	if err := d.PinBakeSource(ctx, setup); err != nil {
+		t.Fatal(err)
+	}
+	image, err := d.Bake(ctx, bakeSpec(setup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := generationForTest(t, d, image.ImageID)
+	if len(g.Images) == 0 {
+		t.Fatal("the bake has no image to wait for")
+	}
+	if err := d.Destroy(ctx, setup); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	docker.mu.Lock()
+	for _, ref := range g.Images {
+		delete(docker.images, ref)
+	}
+	docker.mu.Unlock()
+	cfg := d.cfg
+	cfg.CellID, cfg.BakeAdoptOrg = "cell-2", bakeOrg
+	host, err := New(ctx, docker, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer host.Close()
+	h := host.hooksForTest()
+	h.adoptPollEvery, h.adoptWait = 5*time.Millisecond, 30*time.Millisecond
+	start := time.Now()
+	recovered, err := host.RecoverBakes(ctx)
+	if err != nil || len(recovered) != 0 {
+		t.Fatalf("a bake without its images was recovered: %v %v", recovered, err)
+	}
+	if waited := time.Since(start); waited > 2*time.Second {
+		t.Fatalf("waited %s for images that never came", waited)
 	}
 }

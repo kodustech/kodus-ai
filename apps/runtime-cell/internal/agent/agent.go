@@ -188,7 +188,9 @@ func (a *Agent) recoverBakes() error {
 	if startup == nil {
 		startup = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(startup, 30*time.Second)
+	// A host made from a template waits there for its disk's images (up to 3
+	// minutes, dockergvisor awaitAdoptedImages) before it checks its bakes.
+	ctx, cancel := context.WithTimeout(startup, 4*time.Minute)
 	recovered, err := a.cfg.Parts.BakeCatalog.RecoverBakes(ctx)
 	cancel()
 	if err != nil {

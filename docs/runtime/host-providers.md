@@ -647,7 +647,11 @@ A host that does not meet them (or a catalog that fails any check) is never fata
 `bake.catalog.quarantined reason=corrupt|unsafe|unreadable|foreign_cell|foreign_driver|invalid` with the generation
 counts. A generation whose images or volumes are gone is retired at start (`bake.recovery.retired`) instead of
 failing it. At start a Run host from a template logs `bake.catalog.adopted from=<template cell> org=<org> kept=N
-retired=M`, then recovers the bakes of its org as any restarted cell does, and its first claim boots from them. New
+retired=M`, then recovers the bakes of its org as any restarted cell does, and its first claim boots from them.
+Before it checks them it waits, up to 3 minutes, for docker to list every image the catalog names
+(`bake.adopt.waiting_for_images`, then `bake.adopt.images_loaded` or `bake.adopt.images_missing`): boat reports the
+host usable and starts the cell while it still loads the disk's docker images one by one, and a 2 GB bake image came
+51 s after the cell started. Without the wait the bake was retired and removed and the Run built its environment again. New
 bakes on that host keep the owner's names, so the catalog stays one lineage.
 
 Left over: artifacts a quarantined catalog named (its own cell's or a foreign one's) stay on the disk, because no

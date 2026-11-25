@@ -360,6 +360,10 @@ type testHooks struct {
 	// freeBytes measures the free space evictCaches keeps above the floor;
 	// nil: buildstate.FreeBytes.
 	freeBytes func(path string) (int64, error)
+	// adoptPollEvery and adoptWait replace how often and how long an adopted
+	// catalog's images are waited for (awaitAdoptedImages); zero: the defaults.
+	adoptPollEvery time.Duration
+	adoptWait      time.Duration
 }
 
 // registryDialer dials a build's registry in production.
