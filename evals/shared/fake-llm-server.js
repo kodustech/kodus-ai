@@ -66,9 +66,10 @@ function instanceOf(schema, root = schema, depth = 0, prefer = []) {
             const out = {};
             const props = schema.properties || {};
             for (const name of Object.keys(props)) {
-                // A scripted low-risk judgment falls under no risk rule.
+                // A scripted medium-risk judgment is the only one that matches
+                // a rule; every other scripted level, the default included, matches none.
                 out[name] =
-                    name === 'matchedRules' && prefer.includes('no-risk')
+                    name === 'matchedRules' && !prefer.includes('medium')
                         ? []
                         : instanceOf(props[name] || {}, root, depth + 1, prefer);
             }
