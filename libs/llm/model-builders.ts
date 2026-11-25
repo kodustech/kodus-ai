@@ -125,13 +125,6 @@ export interface BedrockCredentials {
     awsSessionToken?: string;
 }
 
-/**
- * Build a Vercel AI SDK model for Amazon Bedrock. Two auth paths, in priority:
- *   1. Bearer API key (recommended) — takes precedence over any SigV4 config.
- *   2. Static IAM user credentials (SigV4) — legacy path.
- * Emits a clear auth error at call time when credentials are missing (the
- * test-byok endpoint already catches empty fields before save).
- */
 /** Whether `text` parses as JSON (the json tool's input always does). */
 const parsesAsJson = (text: unknown): boolean => {
     if (typeof text !== 'string') return false;
@@ -183,6 +176,13 @@ function keepJsonToolAnswerOnly(model: LanguageModel): LanguageModel {
     }) as LanguageModel;
 }
 
+/**
+ * Build a Vercel AI SDK model for Amazon Bedrock. Two auth paths, in priority:
+ *   1. Bearer API key (recommended) — takes precedence over any SigV4 config.
+ *   2. Static IAM user credentials (SigV4) — legacy path.
+ * Emits a clear auth error at call time when credentials are missing (the
+ * test-byok endpoint already catches empty fields before save).
+ */
 export function bedrockModelFromCredentials(
     config: BedrockCredentials | undefined,
     modelId: string,

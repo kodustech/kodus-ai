@@ -136,7 +136,7 @@ export function classifyLLMError(
 
     let category = matchByHttpStatus(httpStatus, lower);
     if (category === LlmErrorCategory.UNKNOWN) {
-        category = matchByMessage(lower);
+        category = matchByMessage(lower, httpStatus);
     }
     // A gateway that refuses to route a valid model (allowed providers, a
     // region pin) answers 400 or 404 as it likes; the body is the same
@@ -421,7 +421,9 @@ function looksLikeQuota(message: string): boolean {
     // Words in a link are not the provider's words: Fireworks' rate-limit 429
     // links ".../guides/quotas_usage/rate-limits" and read as a spent quota.
     // Toward RATE_LIMIT, the cheap direction (above).
-    const lower = message.replace(/https?:\/\/\S+/g, ' ');
+    // Bounded to URL characters: in minified JSON a link runs straight into
+    // `","code":"insufficient_quota"`, which must survive.
+    const lower = message.replace(/https?:\/\/[^\s"'<>\\)\]}]+/g, ' ');
     return (
         lower.includes('quota') ||
         lower.includes('credit') ||
@@ -464,6 +466,18 @@ function looksLikeQuota(message: string): boolean {
         lower.includes('failure to pay') ||
         lower.includes('past invoices') ||
         lower.includes('past due')
+    );
+}
+
+/** A connection that never got an answer: refused, no DNS, no route. */
+function unreachable(lower: string): boolean {
+    return (
+        lower.includes('cannot connect to api') ||
+        lower.includes('econnrefused') ||
+        lower.includes('enotfound') ||
+        lower.includes('eai_again') ||
+        lower.includes('ehostunreach') ||
+        lower.includes('enetunreach')
     );
 }
 
@@ -511,7 +525,7 @@ function looksLikeModelAccessDenied(lower: string): boolean {
     );
 }
 
-function matchByMessage(lower: string): LlmErrorCategory {
+function matchByMessage(lower: string, httpStatus?: number): LlmErrorCategory {
     // Same vocabulary the 429 branch uses -- see looksLikeQuota.
     if (looksLikeQuota(lower)) {
         return LlmErrorCategory.QUOTA_EXCEEDED;
@@ -579,12 +593,9 @@ function matchByMessage(lower: string): LlmErrorCategory {
         // a provider that is down read as UNKNOWN and never reached the
         // fallback (#1844). "cannot connect to api" is the AI SDK's own prefix
         // for any fetch-level failure; the codes cover callers outside it.
-        lower.includes('cannot connect to api') ||
-        lower.includes('econnrefused') ||
-        lower.includes('enotfound') ||
-        lower.includes('eai_again') ||
-        lower.includes('ehostunreach') ||
-        lower.includes('enetunreach') ||
+        // Only with no status: a provider that answered was reached, and a
+        // body that echoes a diff mentioning ENOTFOUND is a rejection.
+        (httpStatus === undefined && unreachable(lower)) ||
         lower.includes('socket hang up') ||
         lower.includes('network error') ||
         lower.includes('fetch failed') ||

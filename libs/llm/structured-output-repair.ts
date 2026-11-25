@@ -96,8 +96,6 @@ export function ensureValidatingSchema(wire: unknown): unknown {
     return jsonSchema(s.jsonSchema as any, { validate: validate as any });
 }
 
-/** Slice out the outermost balanced `{ … }` / `[ … ]`, string-aware so braces
- *  inside string literals don't move the depth. Returns null if none found. */
 /** End (exclusive) of the balanced span opened at `s[start]`, which must be
  *  `{` or `[`, or -1 when it never closes. Same string-aware rule as
  *  {@link sliceBalancedJson}, without copying the text after `start`. */
@@ -127,6 +125,8 @@ function balancedSpanEnd(s: string, start: number): number {
     return -1;
 }
 
+/** Slice out the outermost balanced `{ … }` / `[ … ]`, string-aware so braces
+ *  inside string literals don't move the depth. Returns null if none found. */
 function sliceBalancedJson(s: string): string | null {
     const start = s.search(/[{[]/);
     if (start < 0) {
@@ -664,8 +664,8 @@ async function firstValidatingObjectAfter<T = unknown>(
     const candidates: { value: unknown; end: number }[] = [];
     // Every opener that starts no parseable container rescans the text after
     // it, so the window alone does not bound the walk: `{` × 1M is ~10^12
-    // steps. Past FALLBACK_SCAN_BUDGET chars scanned the walk gives up →
-    // re-ask, as before the fallback existed.
+    // steps. Past FALLBACK_SCAN_BUDGET chars scanned the walk stops and judges
+    // only the candidates it already has.
     let scanned = 0;
     for (let i = 0; i < text.length; i++) {
         const ch = text[i];
@@ -673,7 +673,10 @@ async function firstValidatingObjectAfter<T = unknown>(
         const end = balancedSpanEnd(text, i);
         scanned += (end < 0 ? text.length : end) - i;
         if (scanned > FALLBACK_SCAN_BUDGET) {
-            return undefined;
+            // Stop scanning, keep what was found: candidates come in order and
+            // the first valid one wins, so a later one could not have beaten
+            // it; none found → re-ask, as before.
+            break;
         }
         // Unbalanced from HERE says nothing about a later `{` — keep scanning.
         if (end < 0) continue;

@@ -1254,3 +1254,42 @@ describe('real production shapes the classifier misread (prod worker logs, 11-10
         );
     });
 });
+
+describe('transport codes and links inside a provider body', () => {
+    const apiError = (message: string, statusCode: number, body: string) =>
+        Object.assign(new Error(message), {
+            name: 'AI_APICallError',
+            statusCode,
+            responseBody: body,
+        });
+
+    it('a 400 whose body echoes code mentioning ENOTFOUND stays REQUEST_REJECTED', () => {
+        // Review prompts are diffs; a rejection that echoes one is not a
+        // network failure (Kody, PR #2700): no failover, no "network" copy.
+        const err = apiError(
+            'Bad Request',
+            400,
+            JSON.stringify({
+                error: {
+                    message:
+                        "Invalid 'messages[1].content': unsupported value near `if (e.code === 'ENOTFOUND' || e.code === 'EAI_AGAIN') retry()`",
+                },
+            }),
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.REQUEST_REJECTED,
+        );
+    });
+
+    it('a spent quota whose minified body has a link before the quota code stays QUOTA_EXCEEDED', () => {
+        // The link must not swallow the JSON after it.
+        const err = apiError(
+            'Too Many Requests',
+            429,
+            '{"error":{"message":"See https://platform.example.com/docs/errors","code":"insufficient_quota"}}',
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.QUOTA_EXCEEDED,
+        );
+    });
+});

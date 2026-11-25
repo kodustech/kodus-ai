@@ -783,6 +783,20 @@ describe('repairAndValidate', () => {
             expect(Date.now() - started).toBeLessThan(30_000);
         }, 60_000);
 
+        it('keeps an answer already found when the scan budget runs out after it', async () => {
+            // Kody, PR #2700: the budget dropped the candidates it had parsed,
+            // so a valid answer followed by a run of unclosed openers re-asked.
+            const text =
+                '```json\n{"improvedCode":1,"fixStatus":"fixed"}\n```\n' +
+                answer('const real = 1;') +
+                '\n' +
+                '{'.repeat(10_000);
+            expect(await repairAndValidate(codeWire, text)).toEqual({
+                improvedCode: 'const real = 1;',
+                fixStatus: 'fixed',
+            });
+        });
+
         it('still recovers the answer behind a long quote of real code under the scan budget', async () => {
             // Balanced braces in ordinary code cost their own span, not the
             // rest of the reply: 100k chars of nested functions stay cheap.
