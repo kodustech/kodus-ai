@@ -206,14 +206,21 @@ func (o Options) serviceMem(n int) (string, error) {
 // leaves it out), and it takes no share of the claim's memory. Should one
 // start anyway, VerifyCanonical refuses the sum of the shares.
 func startedServices(services map[string]any) int {
-	n := 0
-	for _, s := range services {
-		svc, _ := s.(map[string]any)
+	return len(startedNames(services))
+}
+
+// startedNames are the services compose starts on the cell, sorted: the
+// ones compose config lists, so the ones VerifyCanonical gives addresses to.
+// A service behind a profile gets no address and no name in extra_hosts.
+func startedNames(services map[string]any) []string {
+	var out []string
+	for _, name := range sortedKeys(services) {
+		svc, _ := services[name].(map[string]any)
 		if list, _ := svc["profiles"].([]any); len(list) == 0 {
-			n++
+			out = append(out, name)
 		}
 	}
-	return n
+	return out
 }
 
 // logBound is the cell's log bound: the size as written, in bytes, and the
@@ -414,7 +421,7 @@ func Apply(raw []byte, o Options) ([]byte, error) {
 	if len(c.v) > 0 {
 		return nil, &RefusedError{Violations: c.v}
 	}
-	addrs, err := o.addresses(sortedKeys(services))
+	addrs, err := o.addresses(startedNames(services))
 	if err != nil {
 		return nil, err
 	}
@@ -985,8 +992,8 @@ func (c *checker) rewriteService(name string, svc map[string]any) {
 	if o.Network != "" {
 		svc["networks"] = []any{ClaimNetworkKey}
 	}
-	if c.addrs != nil {
-		svc["networks"] = map[string]any{ClaimNetworkKey: map[string]any{"ipv4_address": c.addrs[name].String(), "mac_address": ServiceMAC(c.addrs[name])}}
+	if a, ok := c.addrs[name]; ok {
+		svc["networks"] = map[string]any{ClaimNetworkKey: map[string]any{"ipv4_address": a.String(), "mac_address": ServiceMAC(a)}}
 		svc["extra_hosts"] = extraHosts(c.addrs)
 	}
 	if o.Resolv != "" {

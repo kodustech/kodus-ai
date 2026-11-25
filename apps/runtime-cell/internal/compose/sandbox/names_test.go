@@ -61,6 +61,39 @@ func TestEveryServiceGetsItsAddressTheNamesAndTheCellResolver(t *testing.T) {
 	}
 }
 
+// A service behind a profile never starts on the cell, and compose config
+// leaves it out: VerifyCanonical gives addresses to the services that config
+// lists, so the cell names only those in extra_hosts. With the profiled one
+// in, every service of a project with a `seed` behind a profile was refused.
+func TestAServiceBehindAProfileGetsNoAddressAndNoName(t *testing.T) {
+	dir := checkout(t)
+	o := opts(dir)
+	o.Subnet = claimSubnet
+	compose := "services:\n  api:\n    image: img-api\n  web:\n    image: img-web\n    profiles: []\n  seed:\n    image: img-api\n    profiles: [tools]\n"
+	out, err := Apply([]byte(compose), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	_ = yaml.Unmarshal(out, &doc)
+	services := doc["services"].(map[string]any)
+	// What VerifyCanonical computes from compose config's output.
+	started, _ := ServiceAddresses([]string{"api", "web"}, claimSubnet)
+	for _, name := range []string{"api", "web"} {
+		svc := services[name].(map[string]any)
+		if !sameHosts(svc["extra_hosts"], started) {
+			t.Errorf("%s: extra_hosts %v, want only the started services %v", name, svc["extra_hosts"], extraHosts(started))
+		}
+		net := svc["networks"].(map[string]any)[ClaimNetworkKey].(map[string]any)
+		if net["ipv4_address"] != started[name].String() {
+			t.Errorf("%s: address %v, want %s", name, net["ipv4_address"], started[name])
+		}
+	}
+	if _, ok := services["seed"].(map[string]any)["extra_hosts"]; ok {
+		t.Errorf("seed, behind a profile, got extra_hosts: %v", services["seed"])
+	}
+}
+
 // Name resolution is the cell's: a checkout cannot mount over it.
 func TestACheckoutCannotMountOverNameResolution(t *testing.T) {
 	dir := checkout(t)
