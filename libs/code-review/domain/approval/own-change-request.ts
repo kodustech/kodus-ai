@@ -68,7 +68,8 @@ export interface StoredFinding {
  * finding is closed once the implementation check found it implemented, or
  * once its thread is resolved on the host; so one whose comment id never came
  * back can still close. A suggestion the PR no longer stores counts as open.
- * A request recorded before its suggestions were is judged by its comments.
+ * A finding recorded by its comment alone, before its suggestion was or on a
+ * request merged into this one, is judged by its thread.
  */
 export function hasOpenChangeRequestFinding(
     changeRequest: { commentIds?: string[]; suggestionIds?: string[] },
@@ -88,6 +89,20 @@ export function hasOpenChangeRequestFinding(
     const byId = new Map(
         stored.map((finding) => [finding.suggestionId, finding]),
     );
+    const covered = new Set(
+        stored
+            .filter((finding) => finding.commentId)
+            .map((finding) => String(finding.commentId)),
+    );
+    const commentOnly = (changeRequest.commentIds ?? []).filter(
+        (id) => !covered.has(String(id)),
+    );
+    if (
+        commentOnly.length &&
+        hasOpenFinding(commentOnly, comments, platformType)
+    ) {
+        return true;
+    }
     return suggestionIds.some((id) => {
         const finding = byId.get(id);
         if (!finding) return true;

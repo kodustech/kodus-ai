@@ -177,6 +177,35 @@ describe('hasOpenChangeRequestFinding', () => {
         ).toBe(true);
     });
 
+    // A request recorded by comment alone, merged with a later one that
+    // carried suggestion ids.
+    it('keeps a finding recorded by its comment alone open while its thread is', () => {
+        const request = { commentIds: ['11', '22'], suggestionIds: ['a'] };
+        const stored = [
+            {
+                suggestionId: 'a',
+                commentId: '11',
+                implementationStatus: 'implemented',
+            },
+        ];
+        expect(
+            hasOpenChangeRequestFinding(
+                request,
+                stored,
+                [hostThread(11, true), hostThread(22, false)],
+                github,
+            ),
+        ).toBe(true);
+        expect(
+            hasOpenChangeRequestFinding(
+                request,
+                stored,
+                [hostThread(11, false), hostThread(22, true)],
+                github,
+            ),
+        ).toBe(false);
+    });
+
     it('judges a request recorded before its suggestions by its comments', () => {
         expect(
             hasOpenChangeRequestFinding(
