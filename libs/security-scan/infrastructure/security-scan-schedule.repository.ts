@@ -36,6 +36,16 @@ export interface ISecurityScanScheduleRepository {
         organizationId: string,
         repository: ScanRepositoryKey,
     ): Promise<boolean>;
+    /**
+     * Pauses or resumes the repository's schedule and nothing else, moving
+     * its next run when given. Null when it has none.
+     */
+    setEnabled(
+        organizationId: string,
+        repository: ScanRepositoryKey,
+        enabled: boolean,
+        nextRunAt?: Date,
+    ): Promise<SecurityScanSchedule | null>;
     /** Schedules that file their runs' findings somewhere and have run. */
     findExporting(limit: number): Promise<SecurityScanSchedule[]>;
     /** Enabled schedules due at `now`, oldest first. */
@@ -157,6 +167,23 @@ export class SecurityScanScheduleRepository implements ISecurityScanScheduleRepo
             ...sameRepository(repository),
         });
         return result.deletedCount > 0;
+    }
+
+    async setEnabled(
+        organizationId: string,
+        repository: ScanRepositoryKey,
+        enabled: boolean,
+        nextRunAt?: Date,
+    ): Promise<SecurityScanSchedule | null> {
+        const doc = await this.model
+            .findOneAndUpdate(
+                { organizationId, ...sameRepository(repository) },
+                { $set: { enabled, ...(nextRunAt ? { nextRunAt } : {}) } },
+                { new: true },
+            )
+            .lean()
+            .exec();
+        return doc ? toSchedule(doc) : null;
     }
 
     async findExporting(limit: number): Promise<SecurityScanSchedule[]> {

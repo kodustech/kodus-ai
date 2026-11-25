@@ -299,7 +299,7 @@ const RunSecurityScanDialog = ({ onClose }: { onClose: () => void }) => {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value={ROUTING_MODEL}>
-                                        Deep scan routing (default)
+                                        {scanModels.routingLabel}
                                     </SelectItem>
                                     {scanModels.models.map((model) => (
                                         <SelectItem

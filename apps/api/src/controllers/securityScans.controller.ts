@@ -7,6 +7,7 @@ import {
     Get,
     Inject,
     Param,
+    Patch,
     Post,
     Put,
     Query,
@@ -190,6 +191,16 @@ export class SaveSecurityScanScheduleDto {
     @IsOptional()
     @IsBoolean()
     enabled?: boolean;
+}
+
+export class SetScheduleEnabledDto {
+    @ApiProperty()
+    @IsString()
+    teamId: string;
+
+    @ApiProperty({ description: 'false pauses the schedule, true resumes it.' })
+    @IsBoolean()
+    enabled: boolean;
 }
 
 export class ExportScanIssuesDto {
@@ -456,6 +467,34 @@ export class SecurityScansController {
                 email: this.request.user?.email,
             },
         });
+    }
+
+    @Patch('schedules/:repositoryId')
+    @ApiOperation({
+        summary: "Pause or resume a repository's deep scan schedule",
+        description:
+            'Changes only whether it runs. Resumed, it runs at its next time from now.',
+    })
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(canScheduleScan)
+    async setScheduleEnabled(
+        @Param('repositoryId') repositoryId: string,
+        @Body() body: SetScheduleEnabledDto,
+    ) {
+        await this.authorizationService.ensure({
+            user: this.request.user,
+            action: Action.Create,
+            resource: ResourceType.SecurityScan,
+            repoIds: [repositoryId],
+        });
+        return this.schedules.setEnabled(
+            {
+                organizationId: await this.organizationId(),
+                teamId: body.teamId,
+            },
+            repositoryId,
+            body.enabled,
+        );
     }
 
     @Delete('schedules/:repositoryId')

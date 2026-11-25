@@ -10,6 +10,7 @@ import {
     HttpException,
     Inject,
     Injectable,
+    NotFoundException,
 } from '@nestjs/common';
 
 import type { PlatformType } from '@libs/core/domain/enums';
@@ -51,6 +52,9 @@ const logger = createLogger('SecurityScanSchedules');
 const EXPORT_CLAIM_MS = 60 * 60 * 1000;
 /** The filing run stops well within the claim, so no other caller takes it mid-run. */
 const EXPORT_RUN_MS = 20 * 60 * 1000;
+
+export const SCHEDULE_NOT_FOUND_MESSAGE =
+    'This repository has no deep scan schedule.';
 
 /** Most scheduled scans one cron run starts; the rest stay due for the next. */
 export const MAX_SCHEDULED_STARTS_PER_RUN = 20;
@@ -137,6 +141,40 @@ export class SecurityScanSchedulesUseCase {
                 createdBy: input.requestedBy,
             },
         );
+    }
+
+    /**
+     * Pauses or resumes a schedule without touching its settings. Resumed, it
+     * runs at its next time from now, not at once for the run it missed.
+     */
+    async setEnabled(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string,
+        enabled: boolean,
+        now = new Date(),
+    ): Promise<SecurityScanSchedule> {
+        const repositoryKey = await this.startSecurityScan.repositoryKeyOf(
+            organizationAndTeamData,
+            repositoryId,
+        );
+        const organizationId = organizationAndTeamData.organizationId;
+        const current = await this.schedules.find(
+            organizationId,
+            repositoryKey,
+        );
+        if (!current) {
+            throw new NotFoundException(SCHEDULE_NOT_FOUND_MESSAGE);
+        }
+        const updated = await this.schedules.setEnabled(
+            organizationId,
+            repositoryKey,
+            enabled,
+            enabled ? nextRunAt(current.cadence, now) : undefined,
+        );
+        if (!updated) {
+            throw new NotFoundException(SCHEDULE_NOT_FOUND_MESSAGE);
+        }
+        return updated;
     }
 
     async remove(

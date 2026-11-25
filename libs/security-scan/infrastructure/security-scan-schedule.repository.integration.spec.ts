@@ -97,6 +97,34 @@ const TEST_DB = 'security_scan_schedules_it';
             expect((await stored('org-1', 'repo-1')).enabled).toBe(true);
         });
 
+        it('pauses and resumes with nothing else changed', async () => {
+            await schedules.save('org-1', repository, {
+                ...settings,
+                cadence: 'weekly',
+                exportTo: { integrationId: 'int-1', minSeverity: 'high' },
+            });
+            const next = new Date('2026-12-01T03:00:00.000Z');
+
+            await schedules.setEnabled('org-1', repository, false);
+            expect(await stored('org-1', 'repo-1')).toMatchObject({
+                enabled: false,
+                cadence: 'weekly',
+                exportTo: { integrationId: 'int-1', minSeverity: 'high' },
+            });
+
+            const resumed = await schedules.setEnabled(
+                'org-1',
+                repository,
+                true,
+                next,
+            );
+            expect(resumed?.enabled).toBe(true);
+            expect((await stored('org-1', 'repo-1')).nextRunAt).toEqual(next);
+            expect(
+                await schedules.setEnabled('org-2', repository, true),
+            ).toBeNull();
+        });
+
         it("touches only its own organization's and repository's schedule", async () => {
             await schedules.save('org-2', repository, {
                 ...settings,

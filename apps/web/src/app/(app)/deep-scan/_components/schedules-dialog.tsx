@@ -34,13 +34,13 @@ import {
     removeSecurityScanSchedule,
     saveSecurityScanSchedule,
     securityScanSchedulesPath,
+    setSecurityScanScheduleEnabled,
 } from "@services/security-scans/fetch";
 import {
     useExportDestinations,
     useSecurityScanSchedules,
 } from "@services/security-scans/hooks";
 import type {
-    SaveScanSchedulePayload,
     ScanCadence,
     ScanExportTarget,
     SecurityScanMode,
@@ -90,23 +90,12 @@ const UTC_WHEN = new Intl.DateTimeFormat("en-US", {
 });
 const whenUtc = (date: Date) => `${UTC_WHEN.format(date)} UTC`;
 
-/** A schedule saved again as it is, paused or resumed. */
-const payloadOf = (
-    s: SecurityScanSchedule,
-    enabled: boolean,
-): SaveScanSchedulePayload => ({
-    teamId: s.teamId,
-    repositoryId: s.repository.id,
-    cadence: s.cadence,
-    mode: s.mode,
-    ...(s.budget.maxUsd !== undefined ? { maxUsd: s.budget.maxUsd } : {}),
-    ...(s.budget.maxTokens !== undefined
-        ? { maxTokens: s.budget.maxTokens }
-        : {}),
-    ...(s.modelId ? { modelId: s.modelId } : {}),
-    ...(s.exportTo ? { exportTo: s.exportTo } : {}),
-    enabled,
-});
+/** A label from one of the maps above, by its own key only. */
+const labelOf = <K extends string>(
+    labels: Record<K, string>,
+    key: string,
+): string | undefined =>
+    Object.hasOwn(labels, key) ? labels[key as K] : undefined;
 
 /**
  * "Schedules": a repository's deep scan on a clock. Each schedule reads as
@@ -169,7 +158,15 @@ const SchedulesPanel = () => {
         "a plugin no longer connected";
 
     const [composing, setComposing] = useState<Composing | null>(null);
-    const [busy, setBusy] = useState<string>();
+    const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+    // Each row stays locked until its own request ends.
+    const lock = (uuid: string, on: boolean) =>
+        setBusy((current) => {
+            const next = new Set(current);
+            if (on) next.add(uuid);
+            else next.delete(uuid);
+            return next;
+        });
     const [error, setError] = useState<string>();
 
     const refresh = () =>
@@ -178,10 +175,14 @@ const SchedulesPanel = () => {
         });
 
     const toggle = async (s: SecurityScanSchedule, enabled: boolean) => {
-        setBusy(s.uuid);
+        lock(s.uuid, true);
         setError(undefined);
         try {
-            await saveSecurityScanSchedule(payloadOf(s, enabled));
+            await setSecurityScanScheduleEnabled(
+                s.teamId,
+                s.repository.id,
+                enabled,
+            );
             await refresh();
         } catch (e) {
             setError(
@@ -189,12 +190,12 @@ const SchedulesPanel = () => {
                     "We couldn't update the schedule. Try again.",
             );
         } finally {
-            setBusy(undefined);
+            lock(s.uuid, false);
         }
     };
 
     const remove = async (s: SecurityScanSchedule) => {
-        setBusy(s.uuid);
+        lock(s.uuid, true);
         setError(undefined);
         try {
             await removeSecurityScanSchedule(s.teamId, s.repository.id);
@@ -205,7 +206,7 @@ const SchedulesPanel = () => {
                     "We couldn't remove the schedule. Try again.",
             );
         } finally {
-            setBusy(undefined);
+            lock(s.uuid, false);
         }
     };
 
@@ -247,6 +248,7 @@ const SchedulesPanel = () => {
                             repositories={repositories}
                             schedule={composing?.schedule}
                             models={scanModels.models}
+                            routingLabel={scanModels.routingLabel}
                             destinations={destinations.data}
                             canCancel={!empty}
                             onCancel={() => setComposing(null)}
@@ -281,7 +283,7 @@ const SchedulesPanel = () => {
                                 destination={destinationOf(
                                     s.exportTo?.integrationId,
                                 )}
-                                busy={busy === s.uuid}
+                                busy={busy.has(s.uuid)}
                                 editing={composing?.schedule?.uuid === s.uuid}
                                 onToggle={(on) => toggle(s, on)}
                                 onEdit={() => {
@@ -346,7 +348,8 @@ const ScheduleRow = ({
                     )}
                 </div>
                 <p className="text-text-secondary text-sm">
-                    Every {CADENCE[s.cadence]}, reads {MODE[s.mode]}, {limit}
+                    Every {labelOf(CADENCE, s.cadence) ?? s.cadence}, reads{" "}
+                    {labelOf(MODE, s.mode) ?? "what changed"}, {limit}
                     {model && ` on ${model}`}.
                 </p>
                 <p className="text-text-tertiary text-xs">
@@ -354,7 +357,7 @@ const ScheduleRow = ({
                         ? `Next ${whenUtc(next)} · ${formatDistanceToNow(next, { addSuffix: true })}`
                         : "No run until it is turned back on"}
                     {s.exportTo &&
-                        ` · files new findings ${SEVERITY_FROM[s.exportTo.minSeverity]} in ${destination}`}
+                        ` · files new findings ${labelOf(SEVERITY_FROM, s.exportTo.minSeverity) ?? ""} in ${destination}`}
                 </p>
                 {s.lastError && (
                     <p className="text-danger text-xs">
@@ -379,6 +382,7 @@ const ScheduleRow = ({
                         <Button
                             size="icon-sm"
                             variant="cancel"
+                            disabled={busy}
                             aria-label={`Actions for ${name}`}>
                             <MoreHorizontalIcon />
                         </Button>
@@ -419,7 +423,7 @@ const Slot = ({
         <SelectTrigger
             size="sm"
             aria-label={label}
-            className="text-text-primary inline-flex w-auto max-w-64 gap-1.5 px-3 font-medium">
+            className="text-text-primary inline-flex w-auto max-w-full gap-1.5 px-3 font-medium whitespace-nowrap">
             <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>{children}</SelectContent>
@@ -431,6 +435,7 @@ const Composer = ({
     repositories,
     schedule,
     models,
+    routingLabel,
     destinations,
     canCancel,
     onCancel,
@@ -440,6 +445,7 @@ const Composer = ({
     repositories: Array<{ id: string | number; name: string }>;
     schedule?: SecurityScanSchedule;
     models: Array<{ id: string; label: string }>;
+    routingLabel: string;
     destinations: Array<{ integrationId: string; name: string }>;
     canCancel: boolean;
     onCancel: () => void;
@@ -586,7 +592,7 @@ const Composer = ({
                     disabled={saving}
                     onChange={setModelId}>
                     <SelectItem value={ROUTING_MODEL}>
-                        the Deep scan routing
+                        {routingLabel}
                     </SelectItem>
                     {models.map((m) => (
                         <SelectItem key={m.id} value={m.id}>
@@ -666,13 +672,17 @@ const Composer = ({
 
             <div className="border-card-lv3/60 mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
                 <p className="text-text-tertiary min-w-0 flex-1 text-xs">
-                    {ready
-                        ? `${schedule ? "Next" : "First"} scan ${whenUtc(firstRun)}. Each run stops at $${limit}${
+                    {!ready
+                        ? "Pick a repository and a limit to see when it first runs."
+                        : `${
+                              schedule && !schedule.enabled
+                                  ? "Paused: saving keeps it paused until it is turned back on."
+                                  : `${schedule ? "Once saved, the next" : "First"} scan is ${whenUtc(firstRun)}.`
+                          } Each run stops at $${limit}${
                               mode === "incremental"
                                   ? " and reads only files changed since the last."
                                   : " and reads the whole repository."
-                          }`
-                        : "Pick a repository and a limit to see when it first runs."}
+                          }`}
                 </p>
                 <div className="flex shrink-0 gap-2">
                     {canCancel && (

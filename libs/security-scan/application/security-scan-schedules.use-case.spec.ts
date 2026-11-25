@@ -24,6 +24,9 @@ function setup() {
         find: jest.fn(),
         list: jest.fn(async () => [schedule(), schedule({ uuid: 'sch-2', repository: { ...repositoryKey, id: 'repo-2' } })]),
         remove: jest.fn(async () => true),
+        setEnabled: jest.fn(async (_org: string, _key: unknown, enabled: boolean, next?: Date) =>
+            schedule({ enabled, ...(next ? { nextRunAt: next.toISOString() } : {}) }),
+        ),
         findDue: jest.fn(async () => [schedule()]),
         claim: jest.fn(async () => true),
         recordRun: jest.fn(async () => undefined),
@@ -158,6 +161,35 @@ describe('SecurityScanSchedulesUseCase', () => {
         expect(schedules.find).not.toHaveBeenCalled();
         expect(schedules.save.mock.calls[0][2].enabled).toBeUndefined();
         expect(schedules.save.mock.calls[1][2]).toMatchObject({ enabled: false });
+    });
+
+    it('pauses a schedule without touching its settings', async () => {
+        const { useCase, schedules } = setup();
+        schedules.find.mockResolvedValue(schedule());
+
+        await useCase.setEnabled({ organizationId: 'org-1', teamId: 'team-1' }, 'repo-1', false, now);
+
+        expect(schedules.setEnabled).toHaveBeenCalledWith('org-1', repositoryKey, false, undefined);
+        expect(schedules.save).not.toHaveBeenCalled();
+    });
+
+    it('resumes a schedule at its next time from now, not at once for the run it missed', async () => {
+        const { useCase, schedules } = setup();
+        schedules.find.mockResolvedValue(schedule({ cadence: 'weekly', enabled: false, nextRunAt: '2026-11-01T03:00:00.000Z' }));
+
+        await useCase.setEnabled({ organizationId: 'org-1', teamId: 'team-1' }, 'repo-1', true, now);
+
+        expect(schedules.setEnabled).toHaveBeenCalledWith('org-1', repositoryKey, true, new Date('2026-11-25T03:00:00.000Z'));
+    });
+
+    it('says when the repository has no schedule to pause', async () => {
+        const { useCase, schedules } = setup();
+        schedules.find.mockResolvedValue(null);
+
+        await expect(
+            useCase.setEnabled({ organizationId: 'org-1', teamId: 'team-1' }, 'repo-1', false, now),
+        ).rejects.toThrow('This repository has no deep scan schedule.');
+        expect(schedules.setEnabled).not.toHaveBeenCalled();
     });
 
     it('refuses a schedule without a spend limit', async () => {

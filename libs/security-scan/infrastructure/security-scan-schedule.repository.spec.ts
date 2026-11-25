@@ -28,6 +28,23 @@ function withModel(write: jest.Mock) {
     return { schedules: new SecurityScanScheduleRepository(model as any), model };
 }
 
+describe('SecurityScanScheduleRepository.setEnabled', () => {
+    it('changes only whether it runs, and its next run when resumed', async () => {
+        const write: jest.Mock = jest.fn(async () => ({ _id: 'sch-1', organizationId: 'org-1', repository, ...settings, enabled: true }));
+        const model = {
+            findOneAndUpdate: jest.fn((...args: unknown[]) => ({ lean: () => ({ exec: () => write(...args) }) })),
+        };
+        const schedules = new SecurityScanScheduleRepository(model as any);
+        const next = new Date('2026-11-26T03:00:00.000Z');
+
+        await schedules.setEnabled('org-1', repository, true, next);
+        await schedules.setEnabled('org-1', repository, false);
+
+        expect(model.findOneAndUpdate.mock.calls[0]).toEqual([FILTER, { $set: { enabled: true, nextRunAt: next } }, { new: true }]);
+        expect(model.findOneAndUpdate.mock.calls[1]).toEqual([FILTER, { $set: { enabled: false } }, { new: true }]);
+    });
+});
+
 describe('SecurityScanScheduleRepository.save', () => {
     it('leaves the stored state alone when saved without saying, and enables a new one, in one write', async () => {
         const { schedules, model } = withModel(jest.fn());

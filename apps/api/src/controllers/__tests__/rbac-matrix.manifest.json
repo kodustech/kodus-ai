@@ -1892,6 +1892,17 @@
     }
   },
   {
+    "key": "securityScans.controller.ts#setScheduleEnabled",
+    "httpMethod": "PATCH",
+    "urlPath": "/security-scans/schedules/:repositoryId",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "securityScans.controller.ts#start",
     "httpMethod": "POST",
     "urlPath": "/security-scans",

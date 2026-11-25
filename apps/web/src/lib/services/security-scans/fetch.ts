@@ -52,6 +52,22 @@ export const saveSecurityScanSchedule = async (
     return response.data;
 };
 
+/** Pauses or resumes a schedule, leaving its settings as they are. */
+export const setSecurityScanScheduleEnabled = async (
+    teamId: string,
+    repositoryId: string,
+    enabled: boolean,
+): Promise<SecurityScanSchedule> => {
+    const response = await axiosAuthorized.patch<{
+        data: SecurityScanSchedule;
+    }>(`${securityScanSchedulesPath()}/${encodeURIComponent(repositoryId)}`, {
+        teamId,
+        enabled,
+    });
+
+    return response.data;
+};
+
 export const removeSecurityScanSchedule = async (
     teamId: string,
     repositoryId: string,
