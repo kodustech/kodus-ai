@@ -412,11 +412,16 @@ describe('extractProviderMessage — a wrapper with no body of its own', () => {
         expect(published).not.toContain('abcdefghijklmnopqrstuvwxyz0123456789');
     });
 
-    it('stops on a cycle instead of looping', () => {
-        const a: any = new Error('a');
-        const b: any = new Error('b');
+    it("reads the provider's sentence across a cause cycle and still terminates", () => {
+        const a: any = new Error('wrapper');
+        const b: any = apiError({ error: { message: 'Overloaded' } });
         a.cause = b;
         b.cause = a;
-        expect(extractProviderMessage(a)).toBeUndefined();
+        expect(extractProviderMessage(a)).toBe('Overloaded');
+        const c: any = new Error('c');
+        const d: any = new Error('d');
+        c.cause = d;
+        d.cause = c;
+        expect(extractProviderMessage(c)).toBeUndefined();
     });
 });

@@ -112,7 +112,14 @@ default_llm_key() {
         echo "$existing_llm_api_key"; return
     fi
     case "$provider" in
-        openai|openai_compatible) own="$existing_openai_key" ;;
+        # The legacy OpenAI slot held whatever upstream API_OPENAI_FORCE_BASE_URL
+        # pointed at (Gemini, Moonshot…): offered to native OpenAI only when it
+        # pointed nowhere else, so that key never goes to api.openai.com.
+        openai)
+            case "$(lowercase "$existing_openai_base_url")" in
+                ""|*api.openai.com*) own="$existing_openai_key" ;;
+            esac ;;
+        openai_compatible) own="$existing_openai_key" ;;
         anthropic) own="${API_ANTHROPIC_API_KEY:-}" ;;
         google_gemini) own="${API_GOOGLE_AI_API_KEY:-${GOOGLE_GENERATIVE_AI_API_KEY:-}}" ;;
         google_vertex) own="${API_VERTEX_AI_API_KEY:-}" ;;
@@ -281,7 +288,7 @@ current_llm_key=$(default_llm_key "$new_llm_provider")
 key_hint="Required for Kodus to review PRs."
 case "$new_llm_provider" in
     google_gemini) key_hint="$key_hint AI Studio key from https://aistudio.google.com/apikey." ;;
-    google_vertex) key_hint="$key_hint Base64 service-account JSON (empty = Application Default Credentials with GOOGLE_CLOUD_PROJECT)." ;;
+    google_vertex) key_hint="$key_hint Base64 service-account JSON." ;;
     openai) key_hint="$key_hint https://platform.openai.com/api-keys." ;;
     *) [ "$new_llm_provider" = "$DEFAULT_LLM_PROVIDER" ] && key_hint="$key_hint Team default: Moonshot key from https://platform.moonshot.ai." ;;
 esac
@@ -289,7 +296,7 @@ new_llm_api_key=$(prompt_secret "LLM API key ($new_llm_provider)" "$current_llm_
 if [ -z "$new_llm_api_key" ] && [ -n "$current_llm_key" ]; then
     new_llm_api_key="$current_llm_key"
 fi
-if [ -z "$new_llm_api_key" ] && [ "$new_llm_provider" != "google_vertex" ]; then
+if [ -z "$new_llm_api_key" ]; then
     warn "No LLM API key: the dashboard will show 'No LLM provider configured' until you set one."
 fi
 

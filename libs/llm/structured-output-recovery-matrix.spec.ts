@@ -732,7 +732,7 @@ describe('coverage', () => {
     it('every registered provider is driven by a row or excluded with a reason', () => {
         const driven = new Set(ROWS.map((r) => r.slot.provider as string));
         const missing = REGISTRY.ids().filter(
-            (id) => !driven.has(id) && !(id in EXCLUDED_PROVIDERS),
+            (id) => !driven.has(id) && !Object.hasOwn(EXCLUDED_PROVIDERS, id),
         );
         expect(missing).toEqual([]);
     });
@@ -750,7 +750,7 @@ describe('coverage', () => {
         for (const shape of PROD_SHAPES as Record<string, unknown>[]) {
             const { orgs: _orgs, ...slot } = shape;
             const provider = slot.provider as string;
-            if (provider in EXCLUDED_PROVIDERS) continue;
+            if (Object.hasOwn(EXCLUDED_PROVIDERS, provider)) continue;
             const run = await withStubbedModel(
                 (req) => cleanReplyFor(req, FINDINGS),
                 () => structuredCall(slot),

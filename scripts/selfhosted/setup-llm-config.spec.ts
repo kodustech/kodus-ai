@@ -16,6 +16,7 @@ import { execFileSync } from 'node:child_process';
 import {
     chmodSync,
     copyFileSync,
+    existsSync,
     mkdirSync,
     mkdtempSync,
     readFileSync,
@@ -240,6 +241,35 @@ describe('selfhosted setup.sh writes the LLM config the runtime runs', () => {
         expect(config.API_OPEN_AI_API_KEY).toBe('sk-fake-openai');
     });
 
+    it('never offers native OpenAI a legacy key that went to another upstream', () => {
+        // Kody, PR #2700: the legacy slot held a Gemini key behind
+        // API_OPENAI_FORCE_BASE_URL; accepting it for `openai` sent it to
+        // api.openai.com.
+        const box = sandbox();
+        writeConfig(box, [
+            `DIGITALOCEAN_TOKEN=${DO_TOKEN}`,
+            'API_OPEN_AI_API_KEY=AIza-fake-studio-key',
+            'API_OPENAI_FORCE_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/',
+            'API_LLM_PROVIDER_MODEL=gemini-3.5-flash',
+            `KODUS_INSTALLER_PATH=${INSTALLER}`,
+        ]);
+
+        const config = runSetup(box, [
+            '',
+            '',
+            '',
+            'openai',
+            'gpt-5.4',
+            '', // key: Enter must not keep the Gemini key
+            '',
+            '',
+            '',
+        ]);
+
+        expect(config.API_LLM_PROVIDER).toBe('openai');
+        expect(config.API_LLM_API_KEY ?? '').not.toBe('AIza-fake-studio-key');
+    });
+
     it('does not offer a key saved for another provider when the provider changes', () => {
         const box = sandbox();
         writeConfig(box, [
@@ -291,9 +321,18 @@ describe('selfhosted setup.sh writes the LLM config the runtime runs', () => {
     it('rejects a provider the runtime cannot run', () => {
         const box = sandbox();
 
-        expect(() =>
-            runSetup(box, [DO_TOKEN, '', '', 'gemini', 'gemini-3.5-flash']),
-        ).toThrow();
+        let failure: { status?: number; stdout?: Buffer; stderr?: Buffer } = {};
+        try {
+            runSetup(box, [DO_TOKEN, '', '', 'gemini', 'gemini-3.5-flash']);
+        } catch (e) {
+            failure = e as typeof failure;
+        }
+        // The rejection itself, not a later prompt running out of answers.
+        expect(failure.status).toBe(1);
+        expect(`${failure.stdout ?? ''}${failure.stderr ?? ''}`).toContain(
+            'API_LLM_PROVIDER must be one of',
+        );
+        expect(existsSync(join(box.home, '.kodus-dev', 'config'))).toBe(false);
     });
 });
 

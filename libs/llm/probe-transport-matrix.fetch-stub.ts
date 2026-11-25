@@ -175,7 +175,10 @@ export function createFetchStub(routes: Record<string, Route>): FetchStub {
         count: number,
     ): Promise<Response> => {
         hosts.push(url.host);
-        const route = routes[url.host];
+        // Own keys only: a host named `constructor` must fail like any other.
+        const route = Object.hasOwn(routes, url.host)
+            ? routes[url.host]
+            : undefined;
         if (!route) {
             // What undici reports when the name does not resolve.
             throw new TypeError('fetch failed', {
