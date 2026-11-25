@@ -281,6 +281,8 @@ export class FakeSuiteDemand implements SuiteHostDemand {
     readonly failed = new Set<number>();
     /** Shards whose host never comes up (stays starting). */
     readonly stuck = new Set<number>();
+    /** When set, every host stays starting until the clock reaches it (a host that takes long to register). */
+    readyAt?: number;
     private asked = new Set<number>();
     async request(d: { shards: readonly number[] }) {
         this.requested.push([...d.shards]);
@@ -288,7 +290,8 @@ export class FakeSuiteDemand implements SuiteHostDemand {
         for (const s of d.shards) this.asked.add(s);
     }
     async status(): Promise<SuiteShardHost[]> {
-        return [...this.asked].sort((a, b) => a - b).map((shard): SuiteShardHost => (this.failed.has(shard) ? { shard, state: 'failed', failure: 'host_unavailable' } : { shard, state: this.stuck.has(shard) ? 'starting' : 'ready' }));
+        const late = this.readyAt !== undefined && this.clock.now() < this.readyAt;
+        return [...this.asked].sort((a, b) => a - b).map((shard): SuiteShardHost => (this.failed.has(shard) ? { shard, state: 'failed', failure: 'host_unavailable' } : { shard, state: this.stuck.has(shard) || late ? 'starting' : 'ready' }));
     }
     async end() {
         this.ended++;

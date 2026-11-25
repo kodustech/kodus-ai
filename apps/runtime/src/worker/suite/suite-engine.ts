@@ -370,6 +370,9 @@ export class SuiteEngine {
         const first = balanceSpecs(inputs.specs, ctx.stats, asked);
         await this.d.runs.savePlan(req.organizationId, req.suiteRunId, first.bins.map((b, i) => ({ shard: i, specs: b.specs })));
         await this.requestDemand(ctx, shards);
+        // Asked again while the hosts come: a demand row lasts 120 s, and a host that registers after it lapsed is ended
+        // as served the moment it is ready. Narrowed to the hosts that came once the wait ends.
+        ctx.demandShards = new Set(shards);
 
         const ready = await this.waitForHosts(ctx, shards);
         const plan = ready.length === 0 ? [] : spreadOnto(inputs.specs, ctx.stats, ready);

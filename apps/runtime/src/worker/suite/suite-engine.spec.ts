@@ -54,6 +54,19 @@ describe('the first pass of a suite run', () => {
         expect(w.cell.acquires.map((a) => ({ consumer: a.consumer, side: a.ref.side, sha: a.ref.sha, suiteRunId: a.suiteRunId, shard: a.shard })).sort((x, y) => x.shard! - y.shard!)).toEqual([0, 1, 2].map((shard) => ({ consumer: 'suite', side: 'pr', sha: 'b'.repeat(40), suiteRunId: 'sr-1', shard })));
     });
 
+    it('keeps asking for the hosts while it waits for them, so a host that registers after the demand row would lapse still serves its shard', async () => {
+        // dev, 2026-11-25: the suite asked once, the rows lapsed after 120 s, and the three hosts that registered at 3 min
+        // were ended as served the second they came; every spec was infra.
+        const w = world({ specs: { 'a.cy.ts': { ms: MIN }, 'b.cy.ts': { ms: MIN }, 'c.cy.ts': { ms: MIN } } });
+        const start = w.clock.now();
+        w.demand.readyAt = start + 3 * MIN;
+        const out = await w.engine.run(request(), w.inputs(['a.cy.ts', 'b.cy.ts', 'c.cy.ts']));
+        const beforeHosts = w.demand.requested.filter((_, i) => w.demand.requestedAt[i] > start && w.demand.requestedAt[i] < start + 3 * MIN);
+        expect(beforeHosts.length).toBeGreaterThanOrEqual(3);
+        for (const shards of beforeHosts) expect([...shards].sort()).toEqual([0, 1, 2]);
+        expect(Object.values(statusOf(out))).toEqual(['passed', 'passed', 'passed']);
+    });
+
     it('records when each shard got its host ready and when its specs ended, so the page can say where the time went', async () => {
         const w = world({ specs: { 'a.cy.ts': { ms: 2 * MIN }, 'b.cy.ts': { ms: MIN } } }, { maxShards: 2 });
         await w.engine.run(request(), w.inputs(['a.cy.ts', 'b.cy.ts']));
