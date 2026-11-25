@@ -36,6 +36,7 @@ export function riskRuleRows(
 ): RiskRuleRow[] {
     const byId = new Map(criteria.map((rule) => [rule.id, rule]));
     const defaultIds = new Set(defaults.map((rule) => rule.id));
+    const retiredIdSet = new Set(retiredIds);
     return [
         ...defaults.map((base) => {
             const override = byId.get(base.id);
@@ -54,7 +55,7 @@ export function riskRuleRows(
             .filter(
                 (rule) =>
                     !defaultIds.has(rule.id) &&
-                    !retiredIds.includes(rule.id) &&
+                    !retiredIdSet.has(rule.id) &&
                     rule.name &&
                     rule.instructions,
             )

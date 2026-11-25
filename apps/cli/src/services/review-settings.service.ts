@@ -579,6 +579,7 @@ class ReviewSettingsService {
         const rules = stored as Array<Partial<RiskRule> & { id: string }>;
         const byId = new Map(rules.map((rule) => [rule.id, rule]));
         const defaultIds = new Set(defaults.map((rule) => rule.id));
+        const retiredIdSet = new Set(retiredIds);
         return [
             ...defaults.map((base) => {
                 const override = byId.get(base.id);
@@ -605,7 +606,7 @@ class ReviewSettingsService {
                 .filter(
                     (rule): rule is RiskRule =>
                         !defaultIds.has(rule.id) &&
-                        !retiredIds.includes(rule.id) &&
+                        !retiredIdSet.has(rule.id) &&
                         !!rule.name &&
                         !!rule.instructions,
                 )

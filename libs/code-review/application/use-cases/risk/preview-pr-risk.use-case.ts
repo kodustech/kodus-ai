@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ParametersKey } from '@libs/core/domain/enums';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { riskCriteriaInputSchema } from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import { riskCriteriaSchema } from '@libs/core/infrastructure/config/types/general/risk-assessment';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -32,9 +32,9 @@ export class PreviewPrRiskUseCase {
         if (!Number.isSafeInteger(input.prNumber) || input.prNumber < 1) {
             throw new BadRequestException('Enter a valid PR number.');
         }
-        const criteria = riskCriteriaInputSchema.safeParse(
-            input.criteria ?? [],
-        );
+        // Read like the assessment reads stored settings: an entry it would
+        // drop must not stop the preview of the rest.
+        const criteria = riskCriteriaSchema.safeParse(input.criteria ?? []);
         if (!criteria.success)
             throw new BadRequestException('Risk criteria are invalid.');
         const parameter = await this.parameters.findByKey(

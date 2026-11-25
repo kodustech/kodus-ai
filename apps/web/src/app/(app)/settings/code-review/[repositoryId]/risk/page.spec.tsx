@@ -69,7 +69,7 @@ const DEFAULT_RULES = [
 ];
 jest.mock("@services/risk-assessment/hooks", () => ({
     useDefaultRiskCriteria: () => ({
-        data: { criteria: DEFAULT_RULES, retiredIds: [] },
+        data: { criteria: DEFAULT_RULES, retiredIds: ["kodus-retired"] },
     }),
 }));
 jest.mock("@components/ui/toaster/use-toast", () => ({ toast: jest.fn() }));
@@ -374,4 +374,21 @@ it("keeps only what the team changed in an edited Kodus rule, and Reset restores
     expect(
         screen.getByText("A change to authentication or permissions."),
     ).toBeInTheDocument();
+});
+
+it("does not list an override of a rule Kodus stopped shipping, which the assessment drops", () => {
+    setup(true, [
+        {
+            id: "kodus-retired",
+            name: "Old rule",
+            enabled: true,
+            instructions: "Stale wording.",
+        },
+    ]);
+    expect(screen.queryByRole("heading", { name: "Old rule" })).toBeNull();
+    expect(
+        within(screen.getByRole("list", { name: "Risk rules" })).getAllByRole(
+            "heading",
+        ),
+    ).toHaveLength(DEFAULT_RULES.length);
 });
