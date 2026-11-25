@@ -134,10 +134,9 @@ export function classifyLLMError(
         extractErrorText(err).toLowerCase() || rawMessage.toLowerCase();
     const httpStatus = extractHttpStatus(err);
 
-    let category =
-        httpStatus === undefined && refusedByAddressGuard(err)
-            ? LlmErrorCategory.CONFIG_INVALID
-            : matchByHttpStatus(httpStatus, lower);
+    let category = refusedByAddressGuard(err, httpStatus === undefined)
+        ? LlmErrorCategory.CONFIG_INVALID
+        : matchByHttpStatus(httpStatus, lower);
     if (category === LlmErrorCategory.UNKNOWN) {
         category = matchByMessage(lower);
     }
@@ -503,10 +502,11 @@ function looksLikeModelAccessDenied(lower: string): boolean {
  * not change where it points. Read from the error itself, never from a body: the
  * refusal carries its code (`EBYOK_GATEWAY_ADDRESS`) on the cause fetch wraps it
  * in ("fetch failed", which reads as transient), and a cause rebuilt across
- * realms keeps at least its own sentence. A provider that answered (a status)
- * was reached, so no answer of its own can say this.
+ * realms keeps at least its own sentence. The code and the name are read
+ * whatever else the error carries; the sentence only with no HTTP status, since
+ * a provider that answered was reached and its words are not the guard's.
  */
-function refusedByAddressGuard(err: unknown): boolean {
+function refusedByAddressGuard(err: unknown, readSentence: boolean): boolean {
     const seen = new Set<object>();
     const walk = (e: unknown, depth: number): boolean => {
         if (!e || typeof e !== 'object' || depth > 5 || seen.has(e)) {
@@ -524,9 +524,10 @@ function refusedByAddressGuard(err: unknown): boolean {
         if (
             node.code === 'EBYOK_GATEWAY_ADDRESS' ||
             node.name === 'GatewayAddressRefusedError' ||
-            /\bhost "[^"]*" resolves to a private or reserved address\b.*the call was not sent/.test(
-                String(node.message ?? ''),
-            )
+            (readSentence &&
+                /\bhost "[^"]*" resolves to a private or reserved address\b.*the call was not sent/.test(
+                    String(node.message ?? ''),
+                ))
         ) {
             return true;
         }

@@ -1002,7 +1002,29 @@ describe('classifyLLMError: the address guard refusal is read from the error, no
                 },
             }),
         });
-        expect(classifyLLMError(err).category).not.toBe(
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.REQUEST_REJECTED,
+        );
+    });
+
+    it('a status-less failure whose BODY alone quotes the refusal sentence is not CONFIG_INVALID', () => {
+        const err = Object.assign(new Error('upstream failed'), {
+            responseBody:
+                'the diff says BYOK base URL host "x" resolves to a private or reserved address; the call was not sent.',
+        });
+        expect(classifyLLMError(err).category).toBe(LlmErrorCategory.UNKNOWN);
+    });
+
+    it('a refusal carried under a status is still CONFIG_INVALID (never retried)', () => {
+        const refusal = Object.assign(new Error('refused'), {
+            name: 'GatewayAddressRefusedError',
+            code: 'EBYOK_GATEWAY_ADDRESS',
+        });
+        const err = Object.assign(new Error('wrapped'), {
+            statusCode: 503,
+            cause: refusal,
+        });
+        expect(classifyLLMError(err).category).toBe(
             LlmErrorCategory.CONFIG_INVALID,
         );
     });
