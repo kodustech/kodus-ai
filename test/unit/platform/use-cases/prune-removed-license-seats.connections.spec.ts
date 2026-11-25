@@ -129,6 +129,40 @@ describe('PruneRemovedLicenseSeatsUseCase per Git connection', () => {
         expect(result.candidates).toEqual([]);
     });
 
+    it('revokes a shared seat once every connection confirms its holder is gone', async () => {
+        const { useCase, licenseService } = build({
+            connections: ['gh-a', 'gl-b'],
+            seats: { 'gh-a': [], 'gl-b': [] },
+            shared: ['5', '6'],
+            members: { 'gh-a': ['6'], 'gl-b': [] },
+        });
+
+        const result = await useCase.execute({
+            organizationAndTeamData: workspace,
+        });
+
+        expect(licenseService.unassignLicenses).toHaveBeenCalledTimes(1);
+        expect(licenseService.unassignLicenses).toHaveBeenCalledWith(
+            { ...workspace, integrationId: 'gh-a' },
+            ['5'],
+            'github',
+        );
+        expect(result.revoked).toEqual(['5']);
+    });
+
+    it('leaves shared seats while any connection cannot be read', async () => {
+        const { useCase, licenseService } = build({
+            connections: ['gh-a', 'gl-b'],
+            seats: { 'gh-a': [], 'gl-b': [] },
+            shared: ['5'],
+            members: { 'gh-a': [], 'gl-b': 'unavailable' },
+        });
+
+        await useCase.execute({ organizationAndTeamData: workspace });
+
+        expect(licenseService.unassignLicenses).not.toHaveBeenCalled();
+    });
+
     it('keeps the single-connection path unchanged', async () => {
         const { useCase, memberList } = build({
             connections: ['gh-a'],

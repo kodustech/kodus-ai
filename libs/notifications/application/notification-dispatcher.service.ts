@@ -1,3 +1,4 @@
+import pLimit from 'p-limit';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
@@ -74,6 +75,9 @@ interface ResolvedRecipient {
      */
     directed?: boolean;
 }
+
+/** Access lookups in flight at once while narrowing an audience. */
+const SCOPE_LOOKUP_CONCURRENCY = 4;
 
 /** The repository an event payload names, under the fields emitters use. */
 const repositoryOfPayload = (
@@ -717,13 +721,16 @@ export class NotificationDispatcherService {
         if (!this.connectionAccess || (!repository?.id && !repository?.name)) {
             return members;
         }
+        const limit = pLimit(SCOPE_LOOKUP_CONCURRENCY);
         const scopes = await Promise.allSettled(
             members.map((member) =>
-                this.connectionAccess.restrictionFor({
-                    uuid: member.userId,
-                    role: member.role,
-                    organization: { uuid: organizationId },
-                }),
+                limit(() =>
+                    this.connectionAccess.restrictionFor({
+                        uuid: member.userId,
+                        role: member.role,
+                        organization: { uuid: organizationId },
+                    }),
+                ),
             ),
         );
         // A member whose access could not be read is left out, never widened.

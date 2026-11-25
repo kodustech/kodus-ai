@@ -37,6 +37,13 @@ export type PruneRemovedLicenseSeatsParams = {
     gitIds?: string[];
 };
 
+/** One pool's result, plus what the shared-seat pass needs from it. */
+type PoolPrune = PruneRemovedLicenseSeatsResult & {
+    memberIds?: Set<string>;
+    protectedIds?: Set<string>;
+    sharedIds?: Set<string>;
+};
+
 @Injectable()
 export class PruneRemovedLicenseSeatsUseCase {
     private readonly logger = createLogger(
@@ -77,7 +84,13 @@ export class PruneRemovedLicenseSeatsUseCase {
                   })) ?? []);
 
         if (connections.length <= 1) {
-            return this.pruneSeatPool(params);
+            const {
+                memberIds: _memberIds,
+                protectedIds: _protectedIds,
+                sharedIds: _sharedIds,
+                ...result
+            } = await this.pruneSeatPool(params);
+            return result;
         }
 
         // Billing keeps the workspace seats on one connection and, until it
@@ -112,6 +125,7 @@ export class PruneRemovedLicenseSeatsUseCase {
             revoked: [],
             failed: [],
         };
+        const pools: PoolPrune[] = [];
         for (const connection of connections) {
             const result = await this.pruneSeatPool({
                 ...params,
@@ -120,17 +134,79 @@ export class PruneRemovedLicenseSeatsUseCase {
                     integrationId: connection.uuid,
                 },
             });
+            pools.push(result);
             if (result.status !== 'ok') merged.status = result.status;
             merged.candidates.push(...result.candidates);
             merged.revoked.push(...result.revoked);
             merged.failed.push(...result.failed);
         }
+
+        if (merged.status === 'ok') {
+            const shared = await this.pruneSharedSeats(
+                params,
+                connections[0].uuid,
+                pools,
+            );
+            merged.candidates.push(...shared.candidates);
+            merged.revoked.push(...shared.revoked);
+            merged.failed.push(...shared.failed);
+        }
         return merged;
+    }
+
+    /**
+     * Seats every connection shares go once no connection lists their holder:
+     * only after every connection's members were read.
+     */
+    private async pruneSharedSeats(
+        params: PruneRemovedLicenseSeatsParams,
+        integrationId: string,
+        pools: PoolPrune[],
+    ): Promise<Pick<PoolPrune, 'candidates' | 'revoked' | 'failed'>> {
+        const union = (pick: (pool: PoolPrune) => Set<string> | undefined) =>
+            new Set(pools.flatMap((pool) => [...(pick(pool) ?? [])]));
+        const members = union((pool) => pool.memberIds);
+        const protectedIds = union((pool) => pool.protectedIds);
+        const requested = params.gitIds?.length
+            ? new Set(params.gitIds.map(String))
+            : null;
+        const candidates = [...union((pool) => pool.sharedIds)].filter(
+            (gitId) =>
+                !members.has(gitId) &&
+                !protectedIds.has(gitId) &&
+                (!requested || requested.has(gitId)),
+        );
+        if (params.dryRun || !candidates.length) {
+            return { candidates, revoked: [], failed: [] };
+        }
+
+        const organizationAndTeamData = {
+            ...params.organizationAndTeamData,
+            integrationId,
+        };
+        const provider = await this.codeManagementService.getTypeIntegration(
+            organizationAndTeamData,
+        );
+        const { revoked, failed } = await this.licenseService.unassignLicenses(
+            organizationAndTeamData,
+            candidates,
+            provider,
+        );
+        this.logger.log({
+            message: 'Pruned license seats shared by every Git connection',
+            context: PruneRemovedLicenseSeatsUseCase.name,
+            metadata: {
+                ...params.organizationAndTeamData,
+                revokedCount: revoked.length,
+                failedCount: failed.length,
+            },
+        });
+        return { candidates, revoked, failed };
     }
 
     private async pruneSeatPool(
         params: PruneRemovedLicenseSeatsParams,
-    ): Promise<PruneRemovedLicenseSeatsResult> {
+    ): Promise<PoolPrune> {
         const { organizationAndTeamData, dryRun, gitIds } = params;
 
         // Read once: the seats checked with the provider below must be the
@@ -199,7 +275,7 @@ export class PruneRemovedLicenseSeatsUseCase {
         if (sharedIds.size) {
             this.logger.log({
                 message:
-                    'Left seats shared by every Git connection out of the prune',
+                    'Left seats shared by every Git connection to the shared pass',
                 context: PruneRemovedLicenseSeatsUseCase.name,
                 metadata: {
                     ...organizationAndTeamData,
@@ -208,8 +284,15 @@ export class PruneRemovedLicenseSeatsUseCase {
             });
         }
 
+        const seen = { memberIds, protectedIds, sharedIds };
         if (dryRun || candidates.length === 0) {
-            return { status: 'ok', candidates, revoked: [], failed: [] };
+            return {
+                status: 'ok',
+                candidates,
+                revoked: [],
+                failed: [],
+                ...seen,
+            };
         }
 
         const provider = await this.codeManagementService.getTypeIntegration(
@@ -235,7 +318,7 @@ export class PruneRemovedLicenseSeatsUseCase {
             },
         });
 
-        return { status: 'ok', candidates, revoked, failed };
+        return { status: 'ok', candidates, revoked, failed, ...seen };
     }
 
     private async resolveProtectedIds(

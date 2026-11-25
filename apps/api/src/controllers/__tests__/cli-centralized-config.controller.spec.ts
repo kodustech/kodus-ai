@@ -389,7 +389,9 @@ describe('CliCentralizedConfigController', () => {
                 undefined,
             );
 
-            expect(codeManagementService.getTypeIntegration).toHaveBeenCalledWith({
+            expect(
+                codeManagementService.getTypeIntegration,
+            ).toHaveBeenCalledWith({
                 ...workspace,
                 integrationId: 'gl-b',
             });
@@ -410,9 +412,14 @@ describe('CliCentralizedConfigController', () => {
             await expect(
                 controller.sync('kodus_test_key', undefined),
             ).rejects.toThrow(BadRequestException);
-            await expect(
-                controller.sync('kodus_test_key', undefined, 'gl-b'),
-            ).resolves.toBeDefined();
+            await controller.sync('kodus_test_key', undefined, 'gl-b');
+
+            expect(centralizedConfigSyncUseCase.execute).toHaveBeenCalledWith({
+                organizationAndTeamData: {
+                    ...workspace,
+                    integrationId: 'gl-b',
+                },
+            });
         });
 
         it('refuses a connection that is not in the workspace', async () => {

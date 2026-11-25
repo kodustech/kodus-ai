@@ -1,3 +1,4 @@
+import pLimit from 'p-limit';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
@@ -92,13 +93,17 @@ export class SendRulesNotificationUseCase {
                 string,
                 { titles: string[]; users: typeof users }
             >();
+            // Bounded: one lookup per member, a few in flight at a time.
+            const limit = pLimit(4);
             const scopes = await Promise.allSettled(
                 users.map((user) =>
-                    this.connectionAccess?.restrictionFor({
-                        uuid: user.uuid,
-                        role: user.role,
-                        organization: { uuid: organizationId },
-                    }),
+                    limit(() =>
+                        this.connectionAccess?.restrictionFor({
+                            uuid: user.uuid,
+                            role: user.role,
+                            organization: { uuid: organizationId },
+                        }),
+                    ),
                 ),
             );
             for (const [index, user] of users.entries()) {

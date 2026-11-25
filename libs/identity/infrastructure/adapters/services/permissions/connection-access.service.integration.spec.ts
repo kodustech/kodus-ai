@@ -41,6 +41,14 @@ const dataSource = () =>
         extra: { max: 1, min: 1, connectionTimeoutMillis: 10_000 },
     });
 
+/** Postgres not running or not reachable: skip. Anything else must fail. */
+const UNREACHABLE = new Set([
+    'ECONNREFUSED',
+    'ENOTFOUND',
+    'EAI_AGAIN',
+    'ETIMEDOUT',
+]);
+
 const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
 
 (skipIntegration ? describe.skip : describe)(
@@ -65,20 +73,18 @@ const skipIntegration = process.env.SKIP_INTEGRATION === 'true';
             const candidate = dataSource();
             try {
                 await candidate.initialize();
-                const [{ exists }] = await candidate.query(
-                    `SELECT to_regclass('public.user_connection_access') IS NOT NULL AS exists`,
-                );
-                if (!exists) throw new Error('table not migrated');
-                // The rows reference throwaway users and connections.
-                await candidate.query(`SET session_replication_role = replica`);
-                ds = candidate;
-                service = new ConnectionAccessService({
-                    manager: ds.manager,
-                } as any);
-            } catch {
-                await candidate.destroy().catch(() => undefined);
-                ds = undefined;
+            } catch (error) {
+                if (!UNREACHABLE.has((error as { code?: string })?.code)) {
+                    throw error;
+                }
+                return;
             }
+            // The rows reference throwaway users and connections.
+            await candidate.query(`SET session_replication_role = replica`);
+            ds = candidate;
+            service = new ConnectionAccessService({
+                manager: ds.manager,
+            } as any);
         });
 
         afterAll(async () => {
