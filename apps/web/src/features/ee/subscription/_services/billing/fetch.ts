@@ -13,6 +13,7 @@ import type {
     PlanType,
     TrialExtensionRequest,
     TrialExtensionRequestResult,
+    TrialTerms,
     TrialUnlock,
     TrialUnlockSignals,
 } from "./types";
@@ -135,6 +136,33 @@ export const refreshOrganizationMembers = async (params: {
     );
 
     return toMemberListResult(response);
+};
+
+/**
+ * Length and Kodus-paid reviews of a trial started now, so onboarding shows
+ * billing's config instead of numbers of its own. `null` on self-hosted (no
+ * billing) or when billing does not answer with both numbers.
+ */
+export const getTrialTerms = async (): Promise<TrialTerms | null> => {
+    if (isSelfHosted) return null;
+
+    try {
+        const terms = await billingFetch<Partial<TrialTerms> | undefined>(
+            `trial-terms`,
+        );
+        if (
+            typeof terms?.trialDays !== "number" ||
+            typeof terms.trialReviewCreditsIncluded !== "number"
+        ) {
+            return null;
+        }
+        return {
+            trialDays: terms.trialDays,
+            trialReviewCreditsIncluded: terms.trialReviewCreditsIncluded,
+        };
+    } catch {
+        return null;
+    }
 };
 
 export const startTeamTrial = async (params: {

@@ -50,10 +50,7 @@ import { apiErrorMessage } from "src/core/utils/api-error";
 import { generateQueryKey } from "src/core/utils/reactQuery";
 import { safeArray } from "src/core/utils/safe-array";
 import { pluralize } from "src/core/utils/string";
-import {
-    TRIAL_DAYS,
-    TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED,
-} from "src/features/ee/subscription/_constants/trial";
+import { useTrialTerms } from "src/features/ee/subscription/_hooks/use-trial-terms";
 
 import { StepIndicators } from "../_components/step-indicators";
 
@@ -98,6 +95,7 @@ export default function App() {
     const hasRepositories = isLoading ? null : safeRepositories.length > 0;
 
     const connections = useSuspenseGetConnections(teamId);
+    const trialTerms = useTrialTerms();
 
     const codeManagementConnections = safeArray(connections).filter(
         (c) => c.category === "CODE_MANAGEMENT" && c.hasConnection,
@@ -369,27 +367,36 @@ export default function App() {
                             </div>
 
                             <div className="flex flex-col gap-4">
-                                <Alert variant="info">
-                                    <InfoIcon />
-                                    <AlertTitle>
-                                        Your first{" "}
-                                        {TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED}{" "}
-                                        PR reviews are on us
-                                    </AlertTitle>
-                                    <AlertDescription>
-                                        <p>
-                                            During your {TRIAL_DAYS}-day trial
-                                            we cover your first{" "}
+                                {/* Billing's config is the only source for
+                                    these numbers; without it (self-hosted,
+                                    billing down) the alert is left out
+                                    rather than guessed. */}
+                                {trialTerms ? (
+                                    <Alert variant="info">
+                                        <InfoIcon />
+                                        <AlertTitle>
+                                            Your first{" "}
                                             {
-                                                TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED
+                                                trialTerms.trialReviewCreditsIncluded
                                             }{" "}
-                                            PR reviews — no AI key needed. After
-                                            that, connect your AI key for
-                                            unlimited reviews (free, on any
-                                            plan).
-                                        </p>
-                                    </AlertDescription>
-                                </Alert>
+                                            PR reviews are on us
+                                        </AlertTitle>
+                                        <AlertDescription>
+                                            <p>
+                                                During your{" "}
+                                                {trialTerms.trialDays}-day trial
+                                                we cover your first{" "}
+                                                {
+                                                    trialTerms.trialReviewCreditsIncluded
+                                                }{" "}
+                                                PR reviews — no AI key needed.
+                                                After that, connect your AI key
+                                                for unlimited reviews (free, on
+                                                any plan).
+                                            </p>
+                                        </AlertDescription>
+                                    </Alert>
+                                ) : null}
 
                                 <FormControl.Root>
                                     <FormControl.Label htmlFor="select-repositories">

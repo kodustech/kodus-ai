@@ -112,3 +112,62 @@ describe("updateCreditAutoTopUp monthly cap contract", () => {
         },
     );
 });
+
+describe("getTrialTerms", () => {
+    const billingFetchMock = () =>
+        jest.requireMock("./utils").billingFetch as jest.Mock;
+
+    beforeEach(() => billingFetchMock().mockReset());
+
+    it("returns billing's length and included reviews for a new trial", async () => {
+        billingFetchMock().mockResolvedValue({
+            trialDays: 7,
+            trialReviewCreditsIncluded: 5,
+        });
+        const { getTrialTerms } = await import("./fetch");
+
+        await expect(getTrialTerms()).resolves.toEqual({
+            trialDays: 7,
+            trialReviewCreditsIncluded: 5,
+        });
+        expect(billingFetchMock()).toHaveBeenCalledWith("trial-terms");
+    });
+
+    it("returns null on self-hosted without asking billing", async () => {
+        // fetch.ts reads the flag at call time, so flipping the mocked
+        // module's export is enough.
+        const selfHosted = jest.requireMock("src/core/utils/self-hosted");
+        selfHosted.isSelfHosted = true;
+        try {
+            const { getTrialTerms } = await import("./fetch");
+
+            await expect(getTrialTerms()).resolves.toBeNull();
+            expect(billingFetchMock()).not.toHaveBeenCalled();
+        } finally {
+            selfHosted.isSelfHosted = false;
+        }
+    });
+
+    it.each([
+        [
+            "billing fails",
+            () => billingFetchMock().mockRejectedValue(new Error("down")),
+        ],
+        [
+            "billing predates the route",
+            () => billingFetchMock().mockResolvedValue(undefined),
+        ],
+        [
+            "a number is missing",
+            () => billingFetchMock().mockResolvedValue({ trialDays: 7 }),
+        ],
+    ])(
+        "returns null when %s, so no number is guessed",
+        async (_label, arrange) => {
+            arrange();
+            const { getTrialTerms } = await import("./fetch");
+
+            await expect(getTrialTerms()).resolves.toBeNull();
+        },
+    );
+});

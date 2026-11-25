@@ -1,5 +1,4 @@
 import {
-    TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED,
     TRIAL_UNLOCK_BYOK_REWARD_LABEL,
     TRIAL_UNLOCK_CODE_ORG_REWARD,
     TRIAL_UNLOCK_COMPANY_EMAIL_REWARD,
@@ -70,14 +69,19 @@ export const getTrialCreditBalance = (
         typeof credits?.used === "number" ||
         typeof credits?.remaining === "number";
 
-    const fallbackTotal = TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED;
-    const total = Math.max(0, credits?.total ?? fallbackTotal);
+    // Billing owns the allowance. Without its total, count what it did
+    // report; without any credit data the credit UI is not shown at all.
     const used = Math.max(0, credits?.used ?? 0);
+    const total = Math.max(
+        0,
+        credits?.total ?? used + Math.max(0, credits?.remaining ?? 0),
+    );
     const remaining = Math.max(
         0,
         credits?.remaining ?? Math.max(0, total - used),
     );
-    const percentUsed = total > 0 ? Math.min(100, (used / total) * 100) : 100;
+    const percentUsed =
+        total > 0 ? Math.min(100, (used / total) * 100) : hasLiveData ? 100 : 0;
 
     return {
         total,
