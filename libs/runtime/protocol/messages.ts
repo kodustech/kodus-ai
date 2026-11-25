@@ -211,6 +211,8 @@ export const EXEC_SERVICE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/;
  * shipped is one of these: the hub leaves it out for a cell that did not
  * name it.
  *   - seedsCache: claim.acquire seedsCache (a setup seeds the build cache).
+ *   - skipBake: claim.acquire skipBake (a base built cold: no bake, no pool
+ *     machine, no shared image).
  *   - claimSize: claim.acquire size (the environment's machine size).
  *   - egressAllow: claim.acquire egressAllow (the approved hosts as the
  *     claim starts). A cell without it gets them in the egress.policy the
@@ -389,6 +391,10 @@ export const CELL_FEATURES = [
     // the hub sends it only to a cell that names this; only a driver that runs the project's own containers names it. At the
     // end, like the features before it, so an older hub's trim drops it first.
     'execService',
+    // claim.acquire skipBake (a base built cold to confirm a PR's boot failure): the claim takes no bake, no pool machine and
+    // no shared image, and builds from the recipe at its commit. The hub sends the field only to a cell that names this, and
+    // the worker keeps its verdict as before for a cell that does not. At the end, like the features before it.
+    'skipBake',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
 
@@ -914,6 +920,11 @@ export const MessageBodySchemas = {
         // a setup that fails later (boot, health, its ceiling) leaves the next
         // one its layers. Only a setup claim that is not a PR may ask.
         seedsCache: z.boolean().optional(),
+        // Feature skipBake: the claim builds from the recipe at its commit and
+        // takes no bake of the environment, no pool machine and no shared image
+        // (a base built cold, to confirm that a PR's boot failure is the PR's).
+        // Only a base claim of a consumer that is not a setup may ask.
+        skipBake: z.boolean().optional(),
         // The recipe the product read from the default branch (§6). The cell
         // boots with it, never with the checkout's copy (a PR could change
         // that one); content null: the default branch has none, so the
@@ -963,6 +974,9 @@ export const MessageBodySchemas = {
     }).refine((b) => !b.seedsCache || (b.consumer === 'setup' && b.side !== 'pr'), {
         message: 'only a setup claim that is not a PR may seed the build cache',
         path: ['seedsCache'],
+    }).refine((b) => !b.skipBake || (b.consumer !== 'setup' && b.side === 'base'), {
+        message: 'only a base claim that is not a setup may skip the bake',
+        path: ['skipBake'],
     }).refine((b) => claimReposError(b.repos) === undefined, {
         message: 'each repository of a claim has its own alias',
         path: ['repos'],

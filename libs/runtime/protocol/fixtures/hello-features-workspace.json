@@ -54,7 +54,8 @@
         "toolLayers",
         "buildStateDiskFacts",
         "suite",
-        "execService"
+        "execService",
+        "skipBake"
       ],
       "maxClaimSize": {
         "memoryMb": 16384,

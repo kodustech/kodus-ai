@@ -601,6 +601,9 @@
         "seedsCache": {
           "type": "boolean"
         },
+        "skipBake": {
+          "type": "boolean"
+        },
         "recipe": {
           "type": "object",
           "properties": {

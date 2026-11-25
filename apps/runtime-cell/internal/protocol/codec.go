@@ -202,6 +202,9 @@ func refine(body any) error {
 		if b.SeedsCache != nil && *b.SeedsCache && (b.Consumer != ConsumerSetup || b.Side == SidePr) {
 			return fmt.Errorf("seedsCache: only a setup claim that is not a PR may seed the build cache")
 		}
+		if b.SkipBake != nil && *b.SkipBake && (b.Consumer == ConsumerSetup || b.Side != SideBase) {
+			return fmt.Errorf("skipBake: only a base claim that is not a setup may skip the bake")
+		}
 		if err := refineRepos(b.Repos); err != nil {
 			return err
 		}

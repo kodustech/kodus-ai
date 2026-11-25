@@ -44,6 +44,7 @@ const (
 	FeatureBuildStateDiskFacts   = "buildStateDiskFacts"
 	FeatureSuite                 = "suite"
 	FeatureExecService           = "execService"
+	FeatureSkipBake              = "skipBake"
 )
 
 // CellFeatures is CELL_FEATURES (libs/runtime/protocol/messages.ts), in order.
@@ -87,6 +88,7 @@ var CellFeatures = []string{
 	FeatureBuildStateDiskFacts,
 	FeatureSuite,
 	FeatureExecService,
+	FeatureSkipBake,
 }
 
 // HubAcceptedFeatures is HUB_ACCEPTED_FEATURES (libs/runtime/protocol/messages.ts):

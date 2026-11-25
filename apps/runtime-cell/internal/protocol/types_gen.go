@@ -299,6 +299,7 @@ type ClaimAcquireBody struct {
 	LeaseExpiresAt    *string                             `json:"leaseExpiresAt,omitempty"`
 	DiagnosticHold    *bool                               `json:"diagnosticHold,omitempty"`
 	SeedsCache        *bool                               `json:"seedsCache,omitempty"`
+	SkipBake          *bool                               `json:"skipBake,omitempty"`
 	Recipe            *ClaimAcquireBodyRecipe             `json:"recipe,omitempty"`
 	EgressAllow       []string                            `json:"egressAllow,omitempty"`
 	EgressInspect     []ClaimAcquireBodyEgressInspectItem `json:"egressInspect,omitempty"`
