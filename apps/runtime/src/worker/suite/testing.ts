@@ -316,6 +316,8 @@ export interface FakeSuiteWorld {
     blocked?: (req: AcquireRequest) => boolean;
     /** The cell has no exec service: every exec that names one is answered exec_service_unavailable. */
     refusesService?: boolean;
+    /** What the runner prints last on every poll (its log tail), after the fake's own clock line. */
+    log?: string;
 }
 
 interface FakeProcess {
@@ -417,7 +419,7 @@ export class FakeSuiteCell {
         const now = this.clock.now();
         const files = mine.flatMap((p) => p.files.filter((f) => p.startedAt + f.doneAt <= now && (p.killedAt === undefined || p.startedAt + f.doneAt <= p.killedAt) && (p.diesAt === undefined || f.doneAt <= p.diesAt))).map((f) => `file=${f.path}`);
         const state = stopAt !== undefined && at >= stopAt ? POLL_STATES.dead : at >= proc.exitAt ? `${POLL_STATES.exited}${proc.exitCode}` : POLL_STATES.running;
-        return ok([`state=${state}`, ...files, 'log:', `at ${Math.round(at / 1000)}s`].join('\n'));
+        return ok([`state=${state}`, ...files, 'log:', `at ${Math.round(at / 1000)}s`, ...(this.world.log ? [this.world.log] : [])].join('\n'));
     }
 
     private start(claim: { claimId: string; side: string }, req: ExecRequest): string {

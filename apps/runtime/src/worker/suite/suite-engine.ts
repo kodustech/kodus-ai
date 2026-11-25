@@ -206,10 +206,27 @@ function plannedNameOf(reported: string, planned: ReadonlySet<string>): string {
     return reported;
 }
 
+/** The longest cause stored with an `infra` spec. */
+const MAX_INFRA_CAUSE = 300;
+const ERROR_LINE = /error|missing|not found|cannot|failed|denied|refused|killed/i;
+
+/**
+ * Why a runner reported nothing, in one line: the reason, the exit status and the last line of its log that names an
+ * error (else its last line). Every spec of the shard was stored `infra` with nothing more, so a suite that never ran
+ * (a Cypress binary the image left out, kr-mono on dev) gave the person nothing to act on.
+ */
+export function infraCause(reason: string, exitCode: number | undefined, logTail: string | undefined): string {
+    const lines = (logTail ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
+    const line = [...lines].reverse().find((l) => ERROR_LINE.test(l)) ?? lines.at(-1);
+    return `${reason}${exitCode !== undefined ? ` (exit ${exitCode})` : ''}${line ? `: ${line}` : ''}`.slice(0, MAX_INFRA_CAUSE);
+}
+
 /** What a command run on a claim produced: the specs the runner reported and those it did not, with why. */
 interface Ran {
     done: Map<string, SpecResult>;
     missing: Map<string, 'not_run' | 'infra'>;
+    /** Why the runner reported nothing for the `infra` specs: the reason, the exit status and its last error line. */
+    cause?: string;
 }
 
 /** The files of one run of a command, as the engine reads them. */
@@ -232,6 +249,8 @@ interface ShardRun {
     done: Map<string, SpecResult>;
     /** Specs that ended without a result, and why. */
     missing: Map<string, 'not_run' | 'infra'>;
+    /** Why the runner reported nothing (Ran.cause), stored with each `infra` spec. */
+    cause?: string;
 }
 
 interface RunCtx {
@@ -515,6 +534,7 @@ export class SuiteEngine {
         const ran = await this.runSpecs(ctx, { claimId, shard: shard.shard }, 'shard', ordered, `${req.suiteRunId}-${shard.shard}`, { timeoutMs: inputs.config.shardTimeoutMs, crashRetries: 1, clear: false });
         for (const [spec, r] of ran.done) shard.done.set(spec, r);
         for (const [spec, why] of ran.missing) shard.missing.set(spec, why);
+        if (ran.cause) shard.cause = ran.cause;
     }
 
     /** Only a baseline collects: a PR run never sets `NODE_V8_COVERAGE` and never runs a spec alone for it. */
@@ -542,6 +562,7 @@ export class SuiteEngine {
             const ran = await this.runSpecs(ctx, { claimId, shard: shard.shard }, 'shard', [spec], key, { timeoutMs: left, crashRetries: 1, clear: false, env: { NODE_V8_COVERAGE: dir } });
             for (const [s, r] of ran.done) shard.done.set(s, r);
             for (const [s, why] of ran.missing) shard.missing.set(s, why);
+            if (ran.cause) shard.cause = ran.cause;
             if (!ran.done.has(spec)) continue;
             const files = await collectCoverage(this.execIn(inputs.config), claimId, key, dir);
             if (files) ctx.coverage.set(spec, files);
@@ -559,6 +580,7 @@ export class SuiteEngine {
         // A re-run starts from an empty results directory: the runner writes the same file names again.
         if (o.clear) await this.clearResults(ctx, host.claimId, keyBase);
         let remaining = [...specs];
+        let cause: string | undefined;
         for (let attempt = 0; attempt <= o.crashRetries && remaining.length > 0; attempt++) {
             // Time the run may still use: past its deadline nothing starts, and a command is cut at it.
             const timeoutMs = Math.min(o.timeoutMs, (ctx.inputs.deadlineAt ?? Infinity) - this.d.clock.now());
@@ -574,12 +596,13 @@ export class SuiteEngine {
             }
             if (out.outcome === 'infra') {
                 for (const s of remaining) missing.set(s, 'infra');
-                return { done: col.done, missing };
+                return { done: col.done, missing, cause: infraCause(out.reason, out.exitCode, out.logTail) };
             }
             // crashed: the loop asks once more for what is left.
+            cause = infraCause('crashed', undefined, out.logTail);
         }
         for (const s of remaining) missing.set(s, 'infra');
-        return { done: col.done, missing };
+        return { done: col.done, missing, ...(cause ? { cause } : {}) };
     }
 
     /** The environment's exec for the suite's commands: in the recipe's service when it names one. */
@@ -675,14 +698,16 @@ export class SuiteEngine {
         ctx.stop.abort();
     }
 
-    private async recordMissing(ctx: RunCtx, phase: SuitePhase = 'shard', shards: Iterable<{ shard: number; missing: ReadonlyMap<string, 'not_run' | 'infra'> }> = ctx.shards.values()): Promise<void> {
+    private async recordMissing(ctx: RunCtx, phase: SuitePhase = 'shard', shards: Iterable<{ shard: number; missing: ReadonlyMap<string, 'not_run' | 'infra'>; cause?: string }> = ctx.shards.values()): Promise<void> {
         for (const shard of shards) {
             if (shard.missing.size === 0) continue;
+            // The runner's own words are the customer's code talking: redacted and bounded like a failure message (result-hygiene).
+            const cause = shard.cause ? cleanSpecResult({ spec: '', status: 'infra', durationMs: 0, tests: [], errorSignature: shard.cause }, ctx.inputs.canaries ?? []).result.errorSignature : undefined;
             await this.d.runs.recordResults(
                 ctx.req.organizationId,
                 ctx.req.suiteRunId,
                 { phase, shard: shard.shard },
-                [...shard.missing].map(([spec, status]) => ({ spec, status, durationMs: 0, tests: [] })),
+                [...shard.missing].map(([spec, status]) => ({ spec, status, durationMs: 0, tests: [], ...(status === 'infra' && cause ? { errorSignature: cause } : {}) })),
             );
         }
     }
@@ -812,7 +837,7 @@ export class SuiteEngine {
         const ran = await this.runSpecs(ctx, { claimId, shard: FRESH_HOST_SHARD }, 'shard', runnable, `${ctx.req.suiteRunId}-${FRESH_HOST_SHARD}`, { timeoutMs: ctx.inputs.config.shardTimeoutMs, crashRetries: 0, clear: false });
         ctx.hostMs.rerun += Math.max(0, this.d.clock.now() - at);
         ctx.shards.set(FRESH_HOST_SHARD, { shard: FRESH_HOST_SHARD, planned: runnable, claimId, done: ran.done, missing: ran.missing });
-        await this.recordMissing(ctx, 'shard', [{ shard: FRESH_HOST_SHARD, missing: ran.missing }]);
+        await this.recordMissing(ctx, 'shard', [{ shard: FRESH_HOST_SHARD, missing: ran.missing, ...(ran.cause ? { cause: ran.cause } : {}) }]);
         return { ran };
     }
 
@@ -832,7 +857,7 @@ export class SuiteEngine {
                 const ran = await this.held(ctx, 'rerun', () => this.runSpecs(ctx, { claimId, shard }, 'rerun_pr', list, `${ctx.req.suiteRunId}-${shard}-rerun`, { timeoutMs: RERUN_TIMEOUT_MS, crashRetries: 0, clear: true }));
                 for (const [k, v] of ran.done) done.set(k, v);
                 for (const [k, v] of ran.missing) missing.set(k, v);
-                await this.recordMissing(ctx, 'rerun_pr', [{ shard, missing: ran.missing }]);
+                await this.recordMissing(ctx, 'rerun_pr', [{ shard, missing: ran.missing, ...(ran.cause ? { cause: ran.cause } : {}) }]);
             }),
         );
         return { ran: { done, missing } };
@@ -848,7 +873,7 @@ export class SuiteEngine {
             if (!claimId) continue;
             const ran = await this.runSpecs(ctx, { claimId, shard: MAIN_HOST_SHARD }, 'rerun_main', specs, `${req.suiteRunId}-${MAIN_HOST_SHARD}`, { timeoutMs: RERUN_TIMEOUT_MS, crashRetries: 0, clear: false });
             ctx.hostMs.rerun += Math.max(0, this.d.clock.now() - at);
-            await this.recordMissing(ctx, 'rerun_main', [{ shard: MAIN_HOST_SHARD, missing: ran.missing }]);
+            await this.recordMissing(ctx, 'rerun_main', [{ shard: MAIN_HOST_SHARD, missing: ran.missing, ...(ran.cause ? { cause: ran.cause } : {}) }]);
             return { state: 'ran', ran };
         }
         return { state: 'no_host' };

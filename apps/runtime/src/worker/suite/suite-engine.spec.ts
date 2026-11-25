@@ -124,6 +124,15 @@ describe('the first pass of a suite run', () => {
         expect(statusOf(await w.engine.run(request(), w.inputs(['a.cy.ts', 'b.cy.ts'])))).toEqual({ 'a.cy.ts': 'infra', 'b.cy.ts': 'infra' });
     });
 
+    // kr-mono on dev: 75 Cypress specs stored as infra with nothing more, because the image had no Cypress binary.
+    it("stores why the runner reported nothing with each infra spec: the reason and the runner's last error line", async () => {
+        const w = world({ specs: { 'a.cy.ts': { pr: ['crash'] }, 'b.cy.ts': {} }, log: 'Error: The cypress npm package is installed, but the Cypress binary is missing.' }, { maxShards: 1 });
+        await w.engine.run(request(), w.inputs(['a.cy.ts', 'b.cy.ts']));
+        const infra = (await w.runs.results(ORG, 'sr-1')).filter((r) => r.status === 'infra');
+        expect(infra.length).toBeGreaterThan(0);
+        for (const r of infra) expect(r.errorSignature).toMatch(/^(?:no_result_file|crashed).*: Error: The cypress npm package is installed, but the Cypress binary is missing\.$/);
+    });
+
     it('a host the fleet could not make is not waited for: its specs go to the shards that came', async () => {
         const w = world({ specs: Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f'].map((n) => [`${n}.cy.ts`, { ms: 4 * MIN }])) });
         w.demand.failed.add(2);
