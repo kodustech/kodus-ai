@@ -28,6 +28,7 @@ import {
     type RecipeAuthorResponse,
 } from '@libs/runtime/contracts/recipe-author';
 import { RUNTIME_RECIPE_MAX_BYTES } from '@libs/runtime/contracts/runtime-commands';
+import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import { redactPatterns } from '@libs/runtime/redaction';
 import { setupLearnScopeId } from '@libs/runtime/run';
 
@@ -69,6 +70,7 @@ import {
     recipeAuthorWorkspace,
     type RecipeAuthorWorkspace,
     type RecipeAuthorWorkspaceRepository,
+    withoutSuiteBlock,
 } from '../recipe-author/recipe-author.agent';
 import { RuntimeEnvironmentMembers } from '../environment-members.service';
 import { withFailureContext } from '../failure-context';
@@ -646,8 +648,16 @@ export class RuntimeRecipeAuthorUseCase {
             });
         // Directories too, so a COPY source that is gone at this commit is refused here as in the agent's tool (a reused
         // recipe meets it here first). Only where the platform lists the tree: elsewhere no directory could be told apart from a missing one.
-        const check = await checkAuthoredSubmission(recipe, files, (path) => fileExists(reader, path), read, await directoryExistsCheck(reader), ws?.policy);
+        // The suite block is Kodus's own, written from the CI evidence after the agent's checks (appendSuiteBlock): the authored
+        // checks, which refuse a suite block the model writes, judge the rest, and the whole recipe must still parse. Judging it
+        // whole refused every recipe Kody wrote for a repository whose CI runs an e2e suite (kr-mono on dev).
+        const core = withoutSuiteBlock(recipe);
+        const check = await checkAuthoredSubmission(core.text, files, (path) => fileExists(reader, path), read, await directoryExistsCheck(reader), ws?.policy);
         if (!check.ok) return { status: 'no_recipe', reason: `the checks refused the recipe: ${check.errors.join('; ')}`, errors: check.errors };
+        if (core.dropped) {
+            const whole = parseRecipe(recipe);
+            if ('error' in whole) return { status: 'no_recipe', reason: `the checks refused the recipe: ${whole.error}`, errors: [whole.error] };
+        }
         return { status: 'submitted', recipe, ...(notes ? { notes } : {}), ...(check.files?.length ? { files: check.files } : {}), ...(check.adjusted?.length ? { adjusted: check.adjusted } : {}) };
     }
 }

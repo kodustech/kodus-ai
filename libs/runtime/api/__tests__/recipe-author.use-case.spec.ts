@@ -292,6 +292,23 @@ describe('POST /internal/runtime/recipe-author', () => {
         expect(t.calls.filter((c) => c.startsWith('read .kodus/'))).toEqual([]);
     });
 
+    // kr-mono on dev: Kodus adds the suite block from the CI after the agent's checks, and the product's final check then
+    // refused every recipe Kody wrote for a repository whose CI runs an e2e suite ("suite: Kody does not write this field").
+    it("answers Kody's recipe with the suite block Kodus wrote from the CI: the final check judges the rest", async () => {
+        scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: KODY_RECIPE, files: KODY_FILES } }]);
+        const files = {
+            'package.json': FILES['package.json'],
+            'src/server.js': FILES['src/server.js'],
+            '.github/workflows/e2e.yml': 'jobs:\n  cypress:\n    strategy:\n      matrix:\n        containers: [1, 2, 3]\n    steps:\n      - run: npx cypress run --browser chrome\n',
+            'cypress.config.ts': "export default { e2e: { specPattern: 'cypress/e2e/**/*.cy.ts' } };",
+        };
+        const out = await make({ files }).uc.execute({ authorization: bearer(), body: { sha: SHA } });
+        expect(out.status).toBe('submitted');
+        const recipe = out.status === 'submitted' ? out.recipe : '';
+        expect(recipe.startsWith(KODY_RECIPE.trimEnd())).toBe(true);
+        expect(recipe).toMatch(/^suite:\n {2}runner: cypress$/m);
+    });
+
     it('never returns files that would replace a repository file', async () => {
         scripted([{ tool: SUBMIT_RECIPE_TOOL, input: { recipe: KODY_RECIPE, files: KODY_FILES } }]);
         const t = make({ files: { ...FILES, '.kodus/Dockerfile': 'FROM node:22\n' } });
@@ -537,6 +554,15 @@ describe('POST /internal/runtime/recipe-author with the last setup\'s recipe (Re
         expect(t.usage.rows).toEqual([]);
         // Read at the setup's commit, like any submission.
         expect(t.calls.every((c) => c.endsWith(`@${SHA.slice(0, 4)}`))).toBe(true);
+    });
+
+    // The recipe Kodus answered carries its suite block: reused at the next setup, it passes the checks with it.
+    it('reuses the last recipe with the suite block Kodus wrote from the CI', async () => {
+        const runners: RuntimeAgentRunnerFactory = { forOrganization: jest.fn(async () => null) };
+        const withSuite = `${KODY_RECIPE.trimEnd()}\n# suite: origin inferred from e2e.yml job cypress; keys: runner, command\nsuite:\n  runner: cypress\n  command: npx cypress run --spec "{specs}"\n  specs: cypress/e2e/**/*.cy.ts\n`;
+        const out = await make({ files: repo, runners }).uc.execute({ authorization: bearer(), body: { sha: SHA, last: last({ recipe: withSuite }) } });
+        expect(out).toMatchObject({ status: 'submitted', recipe: withSuite, reused: true });
+        expect(runners.forOrganization).not.toHaveBeenCalled();
     });
 
     // The author's font rule follows the org's Outbound access switch: Google Fonts reaches a build only through the
