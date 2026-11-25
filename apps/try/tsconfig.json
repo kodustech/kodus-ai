@@ -23,5 +23,7 @@
         }
     },
     "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-    "exclude": ["node_modules"]
+    // Component specs import @testing-library/* from the monorepo root, which
+    // are intentionally absent from apps/try's standalone package.json.
+    "exclude": ["node_modules", "**/*.spec.tsx"]
 }

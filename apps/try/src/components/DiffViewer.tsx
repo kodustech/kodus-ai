@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { PatchDiff } from "@pierre/diffs/react";
-import type { DiffFile } from "@/lib/diff";
+import { extractDiffPatchPath, type DiffFile } from "@/lib/diff";
 import type { ReviewIssue, PrInfo } from "@/lib/api";
 import { CopyButton } from "./CopyButton";
 import { SuggestionCard } from "./SuggestionCard";
@@ -48,13 +48,13 @@ export function DiffViewer({
 
     const patchByPath = useMemo(() => {
         const map = new Map<string, string>();
-        const chunks = rawDiff.split(/^diff --git /m).filter(Boolean);
+        const chunks = rawDiff
+            .split(/(?=^diff --git )/m)
+            .filter((chunk) => chunk.startsWith("diff --git "));
         for (const chunk of chunks) {
-            const fullChunk = "diff --git " + chunk;
-            const match = fullChunk.match(/diff --git a\/(.+) b\/(.+)/);
-            const newPath = match?.[2] ?? null;
+            const newPath = extractDiffPatchPath(chunk);
             if (newPath) {
-                map.set(newPath, fullChunk);
+                map.set(newPath, chunk);
             }
         }
         return map;

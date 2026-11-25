@@ -6,7 +6,7 @@ import {
     FolderTree,
     PanelLeftClose,
 } from "lucide-react";
-import type { DiffFile } from "@/lib/diff";
+import { createGroupedFileResolver, type DiffFile } from "@/lib/diff";
 import type { PrGrouping, ReviewIssue } from "@/lib/api";
 
 /**
@@ -20,6 +20,7 @@ import type { PrGrouping, ReviewIssue } from "@/lib/api";
 export function FileTreeGrouped({
     groupings,
     files,
+    rawDiff,
     issues,
     activePath,
     viewed,
@@ -30,6 +31,7 @@ export function FileTreeGrouped({
 }: {
     groupings: PrGrouping[];
     files: DiffFile[];
+    rawDiff?: string;
     issues: ReviewIssue[];
     activePath: string | null;
     viewed: Record<string, boolean>;
@@ -38,11 +40,10 @@ export function FileTreeGrouped({
     onToggleMode?: () => void;
     prRef?: string;
 }) {
-    const fileByPath = useMemo(() => {
-        const m = new Map<string, DiffFile>();
-        for (const f of files) m.set(f.path, f);
-        return m;
-    }, [files]);
+    const resolveFile = useMemo(
+        () => createGroupedFileResolver(files, rawDiff, groupings),
+        [files, rawDiff, groupings],
+    );
 
     const issueCount = useMemo(() => {
         const m = new Map<string, number>();
@@ -139,15 +140,18 @@ export function FileTreeGrouped({
                             </div>
                             <ul className="mt-1">
                                 {group.files.map((path) => {
-                                    const file = fileByPath.get(path);
+                                    const file = resolveFile(path);
                                     if (!file) return null;
-                                    const isActive = path === activePath;
-                                    const isViewed = !!viewed[path];
-                                    const count = issueCount.get(path) ?? 0;
+                                    const isActive = file.path === activePath;
+                                    const isViewed = !!viewed[file.path];
+                                    const count =
+                                        issueCount.get(file.path) ?? 0;
                                     return (
-                                        <li key={path}>
+                                        <li key={file.path}>
                                             <button
-                                                onClick={() => onPick(path)}
+                                                onClick={() =>
+                                                    onPick(file.path)
+                                                }
                                                 className={`w-full flex items-center gap-2 pl-10 pr-3 py-1 text-left text-sm transition-colors ${
                                                     isActive
                                                         ? "bg-[var(--bg-input)] text-[var(--text)]"
@@ -169,7 +173,7 @@ export function FileTreeGrouped({
                                                             : ""
                                                     }`}
                                                 >
-                                                    {prettyPath(path)}
+                                                    {prettyPath(file.path)}
                                                 </span>
                                                 {count > 0 && (
                                                     <span className="shrink-0 text-[10px] font-semibold px-1.5 py-px rounded bg-[var(--yellow)]/15 text-[var(--yellow)]">
