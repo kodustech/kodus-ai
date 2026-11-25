@@ -12,6 +12,10 @@ import { runDetached } from './detached-exec';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+// Real processes in real time: under a loaded machine (the full pre-push run) a 1.5 s timeout plus its polls and the
+// kill took over jest's 5 s default, and the push was blocked for a test that passes alone.
+jest.setTimeout(30_000);
+
 function shellEnv(root: string) {
     return {
         async exec(_claimId: string, req: ExecRequest): Promise<StepResult | EnvError> {
