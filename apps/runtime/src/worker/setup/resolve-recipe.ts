@@ -135,9 +135,7 @@ export async function resolveRecipe(run: SetupRun): Promise<boolean> {
         // Kodus could not infer one either: Kody reads the repository and writes it.
         const written = recipe.inference ? await writtenRecipe(run) : undefined;
         if (written?.status === 'recipe') {
-            if (written.reauthor) rec.reauthor = written.reauthor;
-            const adopted = { path: RECIPE_PATH, content: written.content, label: written.label, origin: 'authored' as const, notes: written.notes, files: written.files, adjusted: written.adjusted, authorVersion: written.authorVersion };
-            if (!(await useRecipe(run, recipeStep, adopted))) return false;
+            if (!(await useWritten(run, recipeStep, written))) return false;
         } else if (written?.status === 'no_recipe') {
             await journal.block(recipeStep, { kind: 'no_recipe', signature: 'setup:no_recipe', message: `Kody could not write a recipe: ${written.reason}` });
             return false;
@@ -151,11 +149,33 @@ export async function resolveRecipe(run: SetupRun): Promise<boolean> {
             const kody = written?.status === 'unavailable' ? `; Kody could not write one (${written.message})` : '';
             await journal.finish(recipeStep, 'skipped', `no ${recipe.path} on the default branch${recipe.inference ? '; Kodus could not infer one' : ''}${kody}`);
         }
-    } else if (!(await useRecipe(run, recipeStep, { path: recipe.path, content: recipe.content, label: recipe.origin === 'inferred' ? 'inferred by Kodus' : recipe.path, origin: recipe.origin }))) {
-        return false;
+    } else {
+        // An inferred recipe Kody already repaired for this environment boots Kody's recipe instead (kept, reused or
+        // written again from it, as writtenRecipe decides): booting the guess again would fail as before and pay for
+        // a boot and a repair on every setup (kr-mono on dev). A different inferred recipe (the compose changed) boots.
+        const written = recipe.origin === 'inferred' && repairedBefore(run, recipe.content) ? await writtenRecipe(run) : undefined;
+        if (written?.status === 'recipe') return useWritten(run, recipeStep, written);
+        if (!(await useRecipe(run, recipeStep, { path: recipe.path, content: recipe.content, label: recipe.origin === 'inferred' ? 'inferred by Kodus' : recipe.path, origin: recipe.origin }))) {
+            return false;
+        }
     }
     if (run.deps.opts.devExpose) run.expose = run.deps.opts.devExpose;
     return true;
+}
+
+/** Adopts the recipe Kody wrote (or kept) as the recipe step's answer; false when the setup ended blocked on it. */
+async function useWritten(run: SetupRun, recipeStep: EnvironmentSetupStep, written: Extract<WrittenRecipe, { status: 'recipe' }>): Promise<boolean> {
+    if (written.reauthor) run.rec.reauthor = written.reauthor;
+    const adopted = { path: RECIPE_PATH, content: written.content, label: written.label, origin: 'authored' as const, notes: written.notes, files: written.files, adjusted: written.adjusted, authorVersion: written.authorVersion };
+    return useRecipe(run, recipeStep, adopted);
+}
+
+/** The environment's last setup repaired exactly this inferred recipe and ended on a recipe Kody wrote. */
+function repairedBefore(run: SetupRun, inferred: string): boolean {
+    const p = run.previous;
+    if (!p || p.recipe?.origin !== 'authored') return false;
+    const digest = recipeDigest(inferred);
+    return (p.repairs ?? []).some((r) => r.failedDigest === digest);
 }
 
 /**

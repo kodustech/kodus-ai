@@ -1,6 +1,7 @@
 import type { RuntimeEnvironmentSetupRequested } from '@libs/runtime/api/domain/runtime-commands';
 import type { AcquireRequest, Blocked, EnvironmentRuntime } from '@libs/runtime/environment';
 import { recipeDigest, sealSecret, type EnvironmentSetupRecord } from '@libs/runtime/run';
+import { RECIPE_AUTHOR_VERSION } from '@libs/runtime/run/recipe-author-version';
 
 import { devSealKey } from '../../testing/dev-seal-key';
 import { clockFrom, testSetupService } from '../../testing/setup-service';
@@ -198,6 +199,40 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
         expect(a.calls[0].last).toMatchObject({ recipe: FIRST, failure: { signature: 'compose_refused' } });
         expect(calls.filter((c) => c.startsWith('acquire'))).toEqual([`acquire setup:${KEY}`, `acquire setup:${KEY}:repair-1`]);
         expect(rec.repairs).toHaveLength(1);
+    });
+
+    // kr-mono on dev: every setup booted the inferred recipe again, failed as before, and paid Kody for the same repair.
+    it("the next setup boots Kody's repair of the inferred recipe, not the inferred recipe again", async () => {
+        const store = new InMemoryEnvironmentSetupStore();
+        const { env, calls } = fakeEnv({ first: BUILD_FAILED, second: 'ok' });
+        // Written under the current instructions, so no revision asks for it again.
+        const a = author(store, { ...submitted(SECOND), authorVersion: RECIPE_AUTHOR_VERSION });
+        const inferred = { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST, origin: 'inferred' as const };
+        await service(store, env, { author: a.client }).run(cmd({ recipe: inferred }));
+        calls.length = 0;
+
+        const KEY2 = 'env-1:2026-11-11T13:00:00.000Z';
+        const rec = await service(store, env, { author: a.client }).run(cmd({ key: KEY2, requestedAt: '2026-11-11T13:00:00.000Z', llmToken: sealSecret('kst1.setup-token', devSealKey(), KEY2), recipe: inferred }));
+
+        expect(rec.state).toBe('active');
+        expect(rec.recipe).toMatchObject({ origin: 'authored', content: SECOND });
+        expect(calls.filter((c) => c.startsWith('acquire'))).toEqual([`acquire setup:${KEY2}`]);
+        // Kept at the same commit: no model call.
+        expect(a.calls).toHaveLength(1);
+    });
+
+    it('a different inferred recipe (the compose changed) boots, even after Kody repaired the last one', async () => {
+        const store = new InMemoryEnvironmentSetupStore();
+        const { env } = fakeEnv({ first: BUILD_FAILED, second: 'ok', third: 'ok' });
+        const a = author(store, submitted(SECOND));
+        await service(store, env, { author: a.client }).run(cmd({ recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST, origin: 'inferred' } }));
+
+        const KEY2 = 'env-1:2026-11-11T13:00:00.000Z';
+        const rec = await service(store, env, { author: a.client }).run(
+            cmd({ key: KEY2, requestedAt: '2026-11-11T13:00:00.000Z', llmToken: sealSecret('kst1.setup-token', devSealKey(), KEY2), recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: THIRD, origin: 'inferred' } }),
+        );
+
+        expect(rec.recipe).toMatchObject({ origin: 'inferred', content: THIRD });
     });
 
     // The cell loads the compose project before building it; a build context whose Dockerfile is missing is its
