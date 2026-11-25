@@ -84,6 +84,12 @@ export interface RiskRule {
     excludedFiles?: string[];
 }
 
+/** Kodus's risk rules, and the ids of rules it stopped shipping. */
+export interface DefaultRiskRules {
+    criteria: RiskRule[];
+    retiredIds: string[];
+}
+
 export interface PreviewPrRiskResult {
     assessment:
         | { status: 'disabled' }

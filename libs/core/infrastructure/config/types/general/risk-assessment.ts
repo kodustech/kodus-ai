@@ -54,22 +54,24 @@ export const riskCriteriaSchema = z
     );
 
 /**
- * What a save may store: also refuses a `kodus-` id Kodus never shipped, which
- * the assessment would otherwise ignore without a word (a typo such as
- * `kodus-securty`). Reads stay on `riskCriteriaSchema`, so a config stored
- * before a rule was renamed never fails to load.
+ * What a save or a kodus-config.yml may hold: an entry that matches no Kodus
+ * rule needs a name and instructions, so a mistyped override such as
+ * `{ id: 'kodus-securty', enabled: false }` is refused instead of being
+ * ignored by the assessment without a word. It refuses exactly what
+ * `effectiveRiskCriteria` drops. Stored configs are read with
+ * `riskCriteriaSchema`, so they never fail to load.
  */
 export const riskCriteriaInputSchema = riskCriteriaSchema.superRefine(
     (criteria, ctx) =>
         criteria.forEach((criterion, index) => {
             if (
-                criterion.id.startsWith(DEFAULT_RISK_CRITERION_PREFIX) &&
-                !isKnownKodusRiskRuleId(criterion.id)
+                !isKnownKodusRiskRuleId(criterion.id) &&
+                (!criterion.name || !criterion.instructions)
             )
                 ctx.addIssue({
                     code: 'custom',
                     path: [index, 'id'],
-                    message: `"${criterion.id}" is not a Kodus risk rule; ids starting with ${DEFAULT_RISK_CRITERION_PREFIX} are reserved for them.`,
+                    message: `"${criterion.id}" matches no Kodus risk rule; check the id, or give the rule a name and instructions.`,
                 });
         }),
 );

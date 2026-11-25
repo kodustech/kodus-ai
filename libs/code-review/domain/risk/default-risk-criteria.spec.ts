@@ -127,12 +127,19 @@ describe('riskCriteriaSchema', () => {
         const saved = riskCriteriaInputSchema.safeParse(stored);
         expect(saved.success).toBe(false);
         expect(saved.error?.issues[0].message).toMatch(
-            /"kodus-securty" is not a Kodus risk rule/,
+            /"kodus-securty" matches no Kodus risk rule/,
         );
+        // Accepts what the assessment applies or drops on purpose.
         expect(
             riskCriteriaInputSchema.safeParse([
                 { id: 'kodus-security', enabled: false },
                 { id: 'kodus-retired', enabled: false },
+                {
+                    id: 'kodus-tenant',
+                    name: 'Tenant isolation',
+                    enabled: true,
+                    instructions: 'Data must not cross tenants.',
+                },
             ]).success,
         ).toBe(true);
     });

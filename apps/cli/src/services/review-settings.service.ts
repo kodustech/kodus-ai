@@ -564,10 +564,11 @@ class ReviewSettingsService {
     ): Promise<Array<RiskRule & { source: 'kodus' | 'edited' | 'team' }>> {
         const ctx = await this.context(target);
         const scope = await this.resolveScope(ctx, target);
-        const [defaults, { configs }] = await Promise.all([
-            api.config.getDefaultRiskCriteria(ctx.accessToken),
-            this.loadScopeConfigs(ctx, scope),
-        ]);
+        const [{ criteria: defaults, retiredIds }, { configs }] =
+            await Promise.all([
+                api.config.getDefaultRiskCriteria(ctx.accessToken),
+                this.loadScopeConfigs(ctx, scope),
+            ]);
         const stored = readLeaf(configs, 'riskCriteria')?.value;
         if (!Array.isArray(stored)) {
             throw new CommandError(
@@ -598,12 +599,13 @@ class ReviewSettingsService {
                     source: edited ? ('edited' as const) : ('kodus' as const),
                 };
             }),
-            // As the assessment resolves them: an entry without a name that
-            // matches no Kodus rule is a stale or mistyped override.
+            // As the assessment resolves them: an override of a retired rule,
+            // or one without a name that matches no Kodus rule, is dropped.
             ...rules
                 .filter(
                     (rule): rule is RiskRule =>
                         !defaultIds.has(rule.id) &&
+                        !retiredIds.includes(rule.id) &&
                         !!rule.name &&
                         !!rule.instructions,
                 )

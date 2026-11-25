@@ -18,7 +18,7 @@ import type {
     PreviewPrRiskResult,
     PreviewPrApprovalParams,
     PreviewPrApprovalResult,
-    RiskRule,
+    DefaultRiskRules,
     TestByokModelResult,
 } from '../../types/review-settings.js';
 import type { IConfigApi } from './api.interface.js';
@@ -300,8 +300,10 @@ export class RealConfigApi implements IConfigApi {
         );
     }
 
-    async getDefaultRiskCriteria(accessToken: string): Promise<RiskRule[]> {
-        return this.requester<RiskRule[]>(
+    async getDefaultRiskCriteria(
+        accessToken: string,
+    ): Promise<DefaultRiskRules> {
+        return this.requester<DefaultRiskRules>(
             '/code-review/risk/default-criteria',
             { headers: this.buildAuthHeaders(accessToken) },
         );

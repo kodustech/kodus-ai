@@ -68,7 +68,9 @@ const DEFAULT_RULES = [
     },
 ];
 jest.mock("@services/risk-assessment/hooks", () => ({
-    useDefaultRiskCriteria: () => ({ data: DEFAULT_RULES }),
+    useDefaultRiskCriteria: () => ({
+        data: { criteria: DEFAULT_RULES, retiredIds: [] },
+    }),
 }));
 jest.mock("@components/ui/toaster/use-toast", () => ({ toast: jest.fn() }));
 const saveSettings = jest.fn();

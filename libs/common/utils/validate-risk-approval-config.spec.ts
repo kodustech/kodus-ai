@@ -36,6 +36,7 @@ it.each([
     { approvalPolicies: [{ ...policy, maxChangedLines: -1 }] },
     { riskCriteria: [criterion, criterion] },
     { riskCriteria: [{ ...criterion, instructions: '   ' }] },
+    { riskCriteria: [{ id: 'kodus-securty', enabled: false }] },
     { riskReviewRouting: { riskFound: 'light' } },
 ])(
     'rejects the same ambiguous or invalid contract as the settings API: %j',

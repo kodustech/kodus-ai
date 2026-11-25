@@ -81,8 +81,12 @@ function RiskSettings() {
     const [editing, setEditing] = useState<RiskRuleRow | "new" | null>(null);
     const [previewing, setPreviewing] = useState(false);
     const defaultRules = useDefaultRiskCriteria();
-    const defaults = defaultRules.data ?? [];
-    const rows = riskRuleRows(defaults, criteria);
+    const defaults = defaultRules.data?.criteria ?? [];
+    const rows = riskRuleRows(
+        defaults,
+        criteria,
+        defaultRules.data?.retiredIds,
+    );
     const updateCriteria = (next: RiskCriterion[]) =>
         criteriaField.onChange(next);
     const updateRule = (rule: RiskCriterion) =>

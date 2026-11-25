@@ -1,4 +1,3 @@
-import { RETIRED_KODUS_RISK_RULE_IDS } from "@libs/core/infrastructure/config/types/general/risk-rule-ids";
 import type {
     DefaultRiskCriterion,
     RiskCriterion,
@@ -33,6 +32,7 @@ const stored = (rule: RiskCriterion): RiskCriterion =>
 export function riskRuleRows(
     defaults: readonly DefaultRiskCriterion[],
     criteria: readonly RiskCriterion[],
+    retiredIds: readonly string[] = [],
 ): RiskRuleRow[] {
     const byId = new Map(criteria.map((rule) => [rule.id, rule]));
     const defaultIds = new Set(defaults.map((rule) => rule.id));
@@ -54,7 +54,7 @@ export function riskRuleRows(
             .filter(
                 (rule) =>
                     !defaultIds.has(rule.id) &&
-                    !RETIRED_KODUS_RISK_RULE_IDS.includes(rule.id) &&
+                    !retiredIds.includes(rule.id) &&
                     rule.name &&
                     rule.instructions,
             )

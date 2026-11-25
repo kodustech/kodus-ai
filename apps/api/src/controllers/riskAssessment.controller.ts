@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { PreviewPrRiskUseCase } from '@libs/code-review/application/use-cases/risk/preview-pr-risk.use-case';
 import { PreviewPrApprovalUseCase } from '@libs/code-review/application/use-cases/approval/preview-pr-approval.use-case';
 import { DEFAULT_RISK_CRITERIA } from '@libs/code-review/domain/risk/default-risk-criteria';
+import { RETIRED_KODUS_RISK_RULE_IDS } from '@libs/core/infrastructure/config/types/general/risk-rule-ids';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
     Action,
@@ -36,7 +37,10 @@ export class RiskAssessmentController {
         private readonly approvalPreview: PreviewPrApprovalUseCase,
     ) {}
 
-    /** The rules Kodus applies unless a team turns them off or edits them. */
+    /**
+     * The rules Kodus applies unless a team turns them off or edits them, and
+     * the ids of rules it stopped shipping, whose overrides no longer apply.
+     */
     @Get('default-criteria')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
@@ -46,7 +50,10 @@ export class RiskAssessmentController {
         }),
     )
     defaultCriteria() {
-        return DEFAULT_RISK_CRITERIA;
+        return {
+            criteria: DEFAULT_RISK_CRITERIA,
+            retiredIds: RETIRED_KODUS_RISK_RULE_IDS,
+        };
     }
 
     @Post('preview')

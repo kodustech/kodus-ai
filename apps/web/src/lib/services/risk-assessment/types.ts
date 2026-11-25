@@ -22,6 +22,12 @@ export type DefaultRiskCriterion = RiskCriterion & {
     instructions: string;
 };
 
+/** Kodus's rules, and the ids of rules it stopped shipping. */
+export type DefaultRiskCriteria = {
+    criteria: DefaultRiskCriterion[];
+    retiredIds: string[];
+};
+
 /** The settings preview only renders these public fields of the assessment. */
 export type RiskAssessmentView =
     | { status: "disabled" }

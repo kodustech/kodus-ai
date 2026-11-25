@@ -1,10 +1,5 @@
 import { applyRiskRule, resetRiskRule, riskRuleRows } from "./risk-rules";
 
-jest.mock(
-    "@libs/core/infrastructure/config/types/general/risk-rule-ids",
-    () => ({ RETIRED_KODUS_RISK_RULE_IDS: ["kodus-retired-edited"] }),
-);
-
 const defaults = [
     {
         id: "kodus-security",
@@ -22,20 +17,25 @@ const team = {
 
 describe("riskRuleRows", () => {
     it("shows the defaults with the team's changes, then the team's rules", () => {
-        const rows = riskRuleRows(defaults, [
-            { id: "kodus-security", enabled: false },
-            team,
-            // A default Kodus no longer ships has nothing to show, even
-            // when the team had edited all of it; neither has a mistyped
-            // override.
-            { id: "kodus-retired", enabled: false },
-            {
-                id: "kodus-retired-edited",
-                name: "Old rule",
-                enabled: true,
-                instructions: "Stale wording.",
-            },
-        ]);
+        const rows = riskRuleRows(
+            defaults,
+            [
+                { id: "kodus-security", enabled: false },
+                team,
+                // A default Kodus no longer ships has nothing to show, even
+                // when the team had edited all of it; neither has a mistyped
+                // override.
+                { id: "kodus-retired", enabled: false },
+                {
+                    id: "kodus-retired-edited",
+                    name: "Old rule",
+                    enabled: true,
+                    instructions: "Stale wording.",
+                },
+                { id: "kodus-securty", enabled: false },
+            ],
+            ["kodus-retired-edited"],
+        );
         expect(rows).toEqual([
             { ...defaults[0], enabled: false, isDefault: true, edited: false },
             { ...team, isDefault: false, edited: false },

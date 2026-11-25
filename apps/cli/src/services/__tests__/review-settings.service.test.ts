@@ -796,20 +796,23 @@ describe('reviewSettingsService', () => {
 
     describe('risk rules', () => {
         it("lists Kodus's rules as the scope left them, then the team's own", async () => {
-            configApi.getDefaultRiskCriteria.mockResolvedValueOnce([
-                {
-                    id: 'kodus-security',
-                    name: 'Security and permissions',
-                    enabled: true,
-                    instructions: 'Auth.',
-                },
-                {
-                    id: 'kodus-shared-contract',
-                    name: 'Shared contracts and public interfaces',
-                    enabled: true,
-                    instructions: 'Contracts.',
-                },
-            ]);
+            configApi.getDefaultRiskCriteria.mockResolvedValueOnce({
+                criteria: [
+                    {
+                        id: 'kodus-security',
+                        name: 'Security and permissions',
+                        enabled: true,
+                        instructions: 'Auth.',
+                    },
+                    {
+                        id: 'kodus-shared-contract',
+                        name: 'Shared contracts and public interfaces',
+                        enabled: true,
+                        instructions: 'Contracts.',
+                    },
+                ],
+                retiredIds: ['kodus-retired'],
+            });
             configApi.getFormattedCodeReviewParameter.mockResolvedValueOnce({
                 configValue: {
                     configs: {
@@ -822,6 +825,12 @@ describe('reviewSettingsService', () => {
                                     instructions: 'Only billing auth.',
                                 },
                                 RISK_CRITERION,
+                                {
+                                    id: 'kodus-retired',
+                                    name: 'Old rule',
+                                    enabled: true,
+                                    instructions: 'Stale.',
+                                },
                             ],
                             'global',
                         ),
