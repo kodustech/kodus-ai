@@ -7,6 +7,7 @@ jest.mock('@libs/core/log/logger', () => ({
 
 import {
     ThreadLeaseRenewer,
+    TimerLeaseRenewer,
     redactCredentials,
     renewalConnectionConfig,
 } from './lease-renewer';
@@ -176,6 +177,44 @@ describe('renewal thread restarts', () => {
         expect(Math.max(...gaps)).toBeLessThanOrEqual(30_000 * 1.2);
     });
 
+    it('while a lease is held, a thread that keeps dying is brought back within half a renewal beat', async () => {
+        const startedAt: number[] = [];
+        renewer = ThreadLeaseRenewer.overThreads(() => {
+            const thread = spawn();
+            startedAt.push(Date.now());
+            queueMicrotask(() => thread.die());
+            return thread;
+        });
+        renewer.track('job', 'h1', 60_000, jest.fn());
+
+        await jest.advanceTimersByTimeAsync(60_000);
+
+        // A 60s lease is renewed every 20s; waiting up to 30s for a thread
+        // let a crashing renewer sit out a whole lease.
+        const gaps = startedAt.slice(1).map((t, i) => t - startedAt[i]);
+        expect(gaps.length).toBeGreaterThan(5);
+        expect(Math.max(...gaps)).toBeLessThanOrEqual(10_000 * 1.2);
+    });
+
+    it('a lease granted before a stall is renewed at once and runs out from its grant, not from when it was tracked', async () => {
+        const onLost = jest.fn();
+        renewer.track('job', 'h1', 60_000, onLost, Date.now() - 25_000);
+        renewer.track('fresh', 'h2', 60_000, jest.fn(), Date.now() - 5_000);
+
+        expect(threads[0].tracks()).toEqual([
+            expect.objectContaining({ key: 'job', delay: 0 }),
+            expect.objectContaining({ key: 'fresh', delay: 15_000 }),
+        ]);
+
+        // No renewal ever lands: the lease granted 25s ago ends 35s from now.
+        failSpawn = true;
+        threads[0].die();
+        await jest.advanceTimersByTimeAsync(34_000);
+        expect(onLost).not.toHaveBeenCalled();
+        await jest.advanceTimersByTimeAsync(2_000);
+        expect(onLost).toHaveBeenCalledTimes(1);
+    });
+
     it('while no thread can start, a held lease is reported lost when its time runs out, not before', async () => {
         const onLost = jest.fn();
         renewer.track('job', 'h1', 60_000, onLost);
@@ -226,6 +265,23 @@ describe('renewal thread restarts', () => {
         const line = JSON.stringify(logged.warn.mock.calls);
         expect(line).not.toContain('s3cret');
         expect(line).toContain('postgres://***');
+    });
+});
+
+describe('main-loop renewal (fallback when no thread can start)', () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    it('renews a lease granted before a stall at once, then every third of its lease', async () => {
+        const renew = jest.fn(async () => true);
+        const renewer = new TimerLeaseRenewer({ renew } as any);
+        const stop = renewer.track('job', 'h1', 60_000, jest.fn(), Date.now() - 25_000);
+
+        await jest.advanceTimersByTimeAsync(1);
+        expect(renew).toHaveBeenCalledTimes(1);
+        await jest.advanceTimersByTimeAsync(20_000);
+        expect(renew).toHaveBeenCalledTimes(2);
+        stop();
     });
 });
 

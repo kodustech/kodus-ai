@@ -6,23 +6,32 @@ import { resolveSessionTimeouts } from '@libs/core/infrastructure/database/typeo
 
 import { IDistributedLockRepository } from '../domain/contracts/distributed-lock.repository.contract';
 import { resolvePgSslOption } from './cross-process-events.bridge';
-import { RENEW_LEASE_SQL } from './repositories/distributed-lock.repository';
+import { RENEW_LEASES_SQL } from './repositories/distributed-lock.repository';
 
 /**
  * Keeps held leases alive until they are released, and reports the ones
  * that were lost (taken over, or past their max hold).
  */
 export interface LeaseRenewer {
-    /** Starts renewing; returns the function that stops it. */
+    /**
+     * Starts renewing; returns the function that stops it. `grantedAt` is
+     * when the lease was asked for (main-thread clock): the lease runs from
+     * then, not from whenever a blocked event loop got around to tracking it.
+     */
     track(
         key: string,
         holder: string,
         leaseMs: number,
         onLost: () => void,
+        grantedAt?: number,
     ): () => void;
 }
 
 const renewEvery = (leaseMs: number) => Math.max(250, Math.floor(leaseMs / 3));
+
+/** Wait before the first renewal of a lease granted at `grantedAt`. */
+const firstRenewalIn = (leaseMs: number, grantedAt: number) =>
+    Math.max(0, renewEvery(leaseMs) - (Date.now() - grantedAt));
 
 /**
  * Renews from a timer on the caller's own event loop. A holder whose event
@@ -40,14 +49,20 @@ export class TimerLeaseRenewer implements LeaseRenewer {
         holder: string,
         leaseMs: number,
         onLost: () => void,
+        grantedAt: number = Date.now(),
     ): () => void {
         let stopped = false;
-        const timer = setInterval(async () => {
+        let timer: NodeJS.Timeout | undefined;
+        const stop = () => {
+            stopped = true;
+            clearTimeout(first);
+            if (timer) clearInterval(timer);
+        };
+        const beat = async () => {
             try {
                 const held = await this.repository.renew(key, holder, leaseMs);
                 if (!held && !stopped) {
-                    stopped = true;
-                    clearInterval(timer);
+                    stop();
                     onLost();
                 }
             } catch (error) {
@@ -59,12 +74,15 @@ export class TimerLeaseRenewer implements LeaseRenewer {
                     metadata: { key, holder },
                 });
             }
-        }, renewEvery(leaseMs));
-        timer.unref?.();
-        return () => {
-            stopped = true;
-            clearInterval(timer);
         };
+        const first = setTimeout(() => {
+            if (stopped) return;
+            void beat();
+            timer = setInterval(beat, renewEvery(leaseMs));
+            timer.unref?.();
+        }, firstRenewalIn(leaseMs, grantedAt));
+        first.unref?.();
+        return stop;
     }
 }
 
@@ -76,7 +94,7 @@ export class TimerLeaseRenewer implements LeaseRenewer {
 const THREAD_SOURCE = `
 const { parentPort, workerData } = require('node:worker_threads');
 const { Client } = require('pg');
-const { connection, renewSql } = workerData;
+const { connection, renewManySql } = workerData;
 const leases = new Map();
 let client = null;
 let busy = false;
@@ -126,16 +144,25 @@ async function beat() {
     let c = client;
     try {
         c = c || (await connect(budget));
+        // One statement for every due lease: renewing them one by one made
+        // a batch of thirty take thirty round trips, longer than a lease on
+        // a slow database or a busy pooler.
+        const sentAt = Date.now();
+        const result = await withDeadline(
+            c.query(renewManySql, [
+                due.map(([, l]) => l.key),
+                due.map(([, l]) => l.holder),
+                due.map(([, l]) => l.leaseMs),
+            ]),
+            budget,
+            'renewal',
+        );
+        const heldNow = new Set(
+            result.rows.filter((r) => r.held === true).map((r) => r.lock_key + '\\u0000' + r.holder),
+        );
         for (const [id, l] of due) {
-            const sentAt = Date.now();
-            const result = await withDeadline(
-                c.query(renewSql, [l.key, l.holder, l.leaseMs]),
-                budget,
-                'renewal',
-            );
             if (!leases.has(id)) continue;
-            const held = result.rows.length > 0 && result.rows[0].held === true;
-            if (held) {
+            if (heldNow.has(l.key + '\\u0000' + l.holder)) {
                 l.nextAt = Date.now() + l.every;
                 // Held until at least sentAt + leaseMs: the database moved
                 // expires_at after the query was sent.
@@ -214,7 +241,10 @@ interface Tracked {
 
 type SpawnThread = (source: string, options: WorkerOptions) => Worker;
 
-/** Longest wait between two attempts to bring a dead thread back. */
+/**
+ * Longest wait between two attempts to bring a dead thread back while no
+ * lease is held; with leases held it is half a renewal beat.
+ */
 const MAX_RESTART_DELAY_MS = 30_000;
 /** A thread that ran this long before exiting did not die on start. */
 const HEALTHY_RUN_MS = 60_000;
@@ -249,9 +279,16 @@ function redactedError(error: unknown): Error | undefined {
  * lease later instead of at once.
  *
  * One thread per process and connection. A thread that dies is started
- * again, with a growing delay when it keeps dying, and gets every tracked
- * lease. While there is no thread, leases whose time runs out are reported
- * lost, so no holder believes it still holds a lock nobody renews.
+ * again, with a growing delay when it keeps dying (capped at half a renewal
+ * beat while leases are held), and gets every tracked lease. While there is
+ * no thread, leases whose time runs out are reported lost, so no holder
+ * believes it still holds a lock nobody renews.
+ *
+ * Limit: the restart runs on the main event loop. A thread that dies while
+ * that loop is blocked for longer than the lease leaves the lease unrenewed
+ * until the loop is back, and another holder can take the key meanwhile —
+ * the same limit as a database unreachable for that long. Only a fencing
+ * token checked by the protected write would close it.
  */
 export class ThreadLeaseRenewer implements LeaseRenewer {
     private static readonly shared = new Map<string, ThreadLeaseRenewer>();
@@ -309,6 +346,7 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
         holder: string,
         leaseMs: number,
         onLost: () => void,
+        grantedAt: number = Date.now(),
     ): () => void {
         const id = randomUUID();
         this.tracked.set(id, {
@@ -316,10 +354,10 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
             holder,
             leaseMs,
             onLost,
-            confirmedUntil: Date.now() + leaseMs,
+            confirmedUntil: grantedAt + leaseMs,
         });
         // With no thread right now, the restart hands it over.
-        this.post(id, renewEvery(leaseMs));
+        this.post(id, firstRenewalIn(leaseMs, grantedAt));
         return () => {
             if (this.tracked.delete(id)) {
                 this.worker?.postMessage({ type: 'untrack', id });
@@ -346,7 +384,7 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
             eval: true,
             workerData: {
                 connection: this.connection,
-                renewSql: RENEW_LEASE_SQL,
+                renewManySql: RENEW_LEASES_SQL,
             },
         });
         worker.on('message', (message: any) => this.onMessage(message));
@@ -380,9 +418,17 @@ export class ThreadLeaseRenewer implements LeaseRenewer {
     private scheduleRestart(): void {
         if (this.stopped || this.restartTimer) return;
         this.startWatchdog();
-        // A thread that dies on every start must not become a tight loop.
-        const base = Math.min(
+        // A thread that dies on every start must not become a tight loop,
+        // but while a lease is held the wait stays under half a renewal
+        // beat: a longer one let a crashing renewer sit out a whole lease.
+        const ceiling = Math.min(
             MAX_RESTART_DELAY_MS,
+            ...[...this.tracked.values()].map((lease) =>
+                Math.max(250, renewEvery(lease.leaseMs) / 2),
+            ),
+        );
+        const base = Math.min(
+            ceiling,
             250 * 2 ** Math.max(0, this.restarts - 1),
         );
         const delay = Math.round(base * (0.8 + Math.random() * 0.4));

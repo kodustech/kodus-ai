@@ -101,6 +101,47 @@ describe('DistributedLockService', () => {
         await lock!.release();
     });
 
+    it('an acquire that comes back after a whole lease went by gives the key up instead of entering on an expired lease', async () => {
+        const realTryAcquire = leases.tryAcquire.bind(leases);
+        jest.spyOn(leases, 'tryAcquire').mockImplementationOnce(
+            async (...args) => {
+                const granted = await realTryAcquire(...args);
+                // The main event loop was blocked while the answer waited.
+                jest.setSystemTime(Date.now() + LOCK_LEASE_MS + 1);
+                return granted;
+            },
+        );
+        const release = jest.spyOn(leases, 'release');
+
+        expect(await instanceA.acquire('job')).toBeNull();
+        expect(release).toHaveBeenCalledWith('job', expect.any(String));
+    });
+
+    it('a late acquire hands the time it asked for the lease to the renewer', async () => {
+        const grants: (number | undefined)[] = [];
+        const service = new DistributedLockService({} as any, leases, {
+            renewer: {
+                track: (_key, _holder, _leaseMs, _onLost, grantedAt) => {
+                    grants.push(grantedAt);
+                    return () => undefined;
+                },
+            },
+        });
+        const realTryAcquire = leases.tryAcquire.bind(leases);
+        jest.spyOn(leases, 'tryAcquire').mockImplementationOnce(
+            async (...args) => {
+                const granted = await realTryAcquire(...args);
+                jest.setSystemTime(Date.now() + LOCK_LEASE_MS / 2);
+                return granted;
+            },
+        );
+        const askedAt = Date.now();
+
+        expect(await service.acquire('job')).not.toBeNull();
+        expect(grants).toEqual([askedAt]);
+        await service.onModuleDestroy();
+    });
+
     it('a holder that stops beating loses the key to another instance after its lease', async () => {
         const lock = await instanceA.acquire('job');
         // The holder's process is stuck: no heartbeat reaches the database.

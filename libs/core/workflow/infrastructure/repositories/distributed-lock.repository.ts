@@ -25,6 +25,21 @@ export const RENEW_LEASE_SQL = `UPDATE ${DISTRIBUTED_LOCKS_TABLE}
  RETURNING expires_at > now() AS held`;
 
 /**
+ * RENEW_LEASE_SQL for many leases in one statement ($1 keys, $2 holders,
+ * $3 lease lengths in ms, same order). A lease missing from the result is
+ * no longer this holder's. The renewal thread renews every due lease with
+ * it: one statement a beat, so a slow database or a busy pooler delays the
+ * whole batch by one round trip instead of one round trip per lease.
+ */
+export const RENEW_LEASES_SQL = `UPDATE ${DISTRIBUTED_LOCKS_TABLE} AS l
+    SET expires_at = LEAST(
+            now() + v.lease_ms * interval '1 millisecond',
+            COALESCE(l.max_hold_until, 'infinity'::timestamptz))
+   FROM unnest($1::text[], $2::text[], $3::double precision[]) AS v(lock_key, holder, lease_ms)
+  WHERE l.lock_key = v.lock_key AND l.holder = v.holder
+ RETURNING l.lock_key, l.holder, l.expires_at > now() AS held`;
+
+/**
  * Single-statement SQL only: each call is its own implicit transaction, so a
  * pooler in transaction mode may run it on any server connection. Every
  * time comparison uses the database clock (`now()`), never the app's, so

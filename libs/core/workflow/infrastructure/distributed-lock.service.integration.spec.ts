@@ -361,12 +361,19 @@ const targets = [
              * connection looks after a pooler restart or a dropped route.
              * Connections opened after the freeze relay normally.
              */
-            const startRelay = async () => {
+            const startRelay = async (latencyMs = 0) => {
                 const pairs: [Socket, Socket][] = [];
                 const all: Socket[] = [];
                 const server: Server = createServer((client) => {
                     const upstream = connect(port, PG_HOST);
-                    client.pipe(upstream);
+                    if (latencyMs > 0) {
+                        // A slow link: every request reaches the server late.
+                        client.on('data', (chunk) =>
+                            setTimeout(() => upstream.write(chunk), latencyMs),
+                        );
+                    } else {
+                        client.pipe(upstream);
+                    }
                     upstream.pipe(client);
                     const drop = () => {
                         client.destroy();
@@ -396,6 +403,61 @@ const targets = [
                     },
                 };
             };
+
+            it('many locks held at once all stay held over a slow link, not just the first few renewed', async () => {
+                const keys = Array.from({ length: 30 }, (_, i) =>
+                    uniqueKey(`many-${i}`),
+                );
+                const leaseMs = 2_000;
+                const relay = await startRelay(150);
+                const viaRelay = new DataSource({
+                    type: 'postgres',
+                    host: '127.0.0.1',
+                    port: relay.port,
+                    username: PG_USER,
+                    password: PG_PASSWORD,
+                    database: PG_DB,
+                    entities: [],
+                    extra: { max: 10 },
+                });
+                await viaRelay.initialize();
+                const holder = new DistributedLockService(viaRelay, undefined, {
+                    leaseMs,
+                });
+                try {
+                    const locks = await Promise.all(
+                        keys.map((key) => holder.acquire(key)),
+                    );
+                    expect(locks.every(Boolean)).toBe(true);
+
+                    // For three leases, another instance keeps trying every key.
+                    const stolen: string[] = [];
+                    const until = Date.now() + leaseMs * 3;
+                    while (Date.now() < until) {
+                        const taken = await Promise.all(
+                            keys.map((key) => instanceB.acquire(key)),
+                        );
+                        for (const [i, lock] of taken.entries()) {
+                            if (lock) {
+                                stolen.push(keys[i]);
+                                await lock.release();
+                            }
+                        }
+                        await new Promise((r) => setTimeout(r, 200));
+                    }
+
+                    expect(stolen).toEqual([]);
+                    expect(locks.filter((lock) => lock!.isLost())).toEqual([]);
+                } finally {
+                    await ThreadLeaseRenewer.stopAll();
+                    await relay.close();
+                    await viaRelay.destroy().catch(() => undefined);
+                    await sources[2].query(
+                        `DELETE FROM "kodus_workflow"."distributed_locks" WHERE lock_key = ANY($1)`,
+                        [keys],
+                    );
+                }
+            }, 40_000);
 
             it('a renewal connection that hangs without an error is replaced, and the lock is kept', async () => {
                 const key = uniqueKey('hung-renewal');

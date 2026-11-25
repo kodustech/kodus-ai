@@ -68,9 +68,15 @@ export class DistributedLock {
         ttl: number | undefined,
         private readonly onSettled: (lock: DistributedLock) => void,
         private readonly logger = createLogger(DistributedLock.name),
+        /** When the lease was asked for; it runs from then. */
+        grantedAt: number = Date.now(),
     ) {
-        this.stopRenewing = renewer.track(key, holder, leaseMs, () =>
-            this.markLost(),
+        this.stopRenewing = renewer.track(
+            key,
+            holder,
+            leaseMs,
+            () => this.markLost(),
+            grantedAt,
         );
 
         if (ttl) {
@@ -86,7 +92,7 @@ export class DistributedLock {
                     });
                     this.release().catch(() => undefined);
                 }
-            }, ttl);
+            }, Math.max(0, ttl - (Date.now() - grantedAt)));
             this.ttlTimer.unref?.();
         }
     }
@@ -276,6 +282,10 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
     ): Promise<DistributedLock | null> {
         const holder = `${hostname()}:${process.pid}:${randomUUID()}`;
         try {
+            // The lease starts when the database grants it, at or after
+            // this. Nothing renews it until the answer is handled on this
+            // event loop, so a block in between eats into it.
+            const askedAt = Date.now();
             const acquired = await this.repository.tryAcquire(
                 key,
                 holder,
@@ -293,6 +303,26 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
                 return null;
             }
 
+            if (Date.now() - askedAt >= this.leaseMs) {
+                // A whole lease went by before this loop saw the answer
+                // (blocked event loop): another holder may have the key
+                // already. Give it up rather than work on an expired lease.
+                this.logger.warn({
+                    message:
+                        'Distributed lock was granted but its lease ran out before the holder saw it — giving it up',
+                    context: DistributedLockService.name,
+                    metadata: {
+                        key,
+                        waitedMs: Date.now() - askedAt,
+                        leaseMs: this.leaseMs,
+                    },
+                });
+                await this.repository
+                    .release(key, holder)
+                    .catch(() => undefined);
+                return null;
+            }
+
             const lock = new DistributedLock(
                 this.repository,
                 this.renewer,
@@ -302,6 +332,7 @@ export class DistributedLockService implements OnModuleInit, OnModuleDestroy {
                 options.ttl,
                 (settled) => this.held.delete(settled),
                 this.logger,
+                askedAt,
             );
             this.held.add(lock);
 
