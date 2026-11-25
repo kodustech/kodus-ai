@@ -96,6 +96,8 @@ export class AcceptUserInvitationUseCase implements IUseCase {
             });
         }
 
-        return userUpdated;
+        // The route is public: answer with the user's plain record, which
+        // leaves out the password hash the entity holds (#2717).
+        return userUpdated.toObject();
     }
 }
