@@ -1,5 +1,10 @@
 import { applyRiskRule, resetRiskRule, riskRuleRows } from "./risk-rules";
 
+jest.mock(
+    "@libs/core/infrastructure/config/types/general/risk-rule-ids",
+    () => ({ RETIRED_KODUS_RISK_RULE_IDS: ["kodus-retired-edited"] }),
+);
+
 const defaults = [
     {
         id: "kodus-security",
@@ -21,7 +26,8 @@ describe("riskRuleRows", () => {
             { id: "kodus-security", enabled: false },
             team,
             // A default Kodus no longer ships has nothing to show, even
-            // when the team had edited all of it.
+            // when the team had edited all of it; neither has a mistyped
+            // override.
             { id: "kodus-retired", enabled: false },
             {
                 id: "kodus-retired-edited",

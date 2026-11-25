@@ -4,8 +4,6 @@ export const RISK_ASSESSMENT_API_PATHS = {
     DEFAULT_CRITERIA: pathToApiUrl("/code-review/risk/default-criteria"),
 };
 
-export { DEFAULT_RISK_CRITERION_PREFIX } from "@libs/core/infrastructure/config/types/general/risk-rule-ids";
-
 /**
  * A stored rule: a team rule, or a Kodus default (same id) that the team
  * turned off or edited, holding only what it changes.

@@ -164,6 +164,8 @@ describe('independent risk configuration validation', () => {
     it.each([
         { riskCriteria: [{ ...criterion, instructions: 42 }] },
         { riskCriteria: [criterion, criterion] },
+        { riskCriteria: [{ id: 'kodus-securty', enabled: false }] },
+        { riskCriteria: [{ ...criterion, id: 'kodus-tenant' }] },
         { riskCriteria: [{ ...criterion, includedFiles: '**/*.ts' }] },
         { riskCriteria: [{ ...criterion, includedFiles: ['src/['] }] },
         { riskCriteria: [{ ...criterion, excludedFiles: ['!src/**'] }] },

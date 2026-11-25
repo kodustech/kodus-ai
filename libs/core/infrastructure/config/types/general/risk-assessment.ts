@@ -21,8 +21,9 @@ export const REVIEW_SETTINGS_INHERITABLE_FIELDS = [
  * A risk rule: what the team treats as needing a person, scoped by file
  * filters. An entry whose id is a Kodus default's overrides that default, so
  * it may carry only what changes (`enabled: false` turns it off); a team's own
- * rule needs a name and instructions. A `kodus-` id Kodus never shipped is
- * refused rather than dropped later without a word.
+ * rule needs a name and instructions. Stored configs are read with this
+ * schema, so it stays lenient; a save also goes through
+ * `riskCriteriaInputSchema`.
  */
 export const riskCriterionSchema = z
     .object({
@@ -33,21 +34,12 @@ export const riskCriterionSchema = z
         includedFiles: filePatternListSchema.optional(),
         excludedFiles: filePatternListSchema.optional(),
     })
-    .superRefine((criterion, ctx) => {
-        if (criterion.id.startsWith(DEFAULT_RISK_CRITERION_PREFIX)) {
-            if (!isKnownKodusRiskRuleId(criterion.id))
-                ctx.addIssue({
-                    code: 'custom',
-                    path: ['id'],
-                    message: `"${criterion.id}" is not a Kodus risk rule; ids starting with ${DEFAULT_RISK_CRITERION_PREFIX} are reserved for them.`,
-                });
-        } else if (!criterion.name || !criterion.instructions) {
-            ctx.addIssue({
-                code: 'custom',
-                message: 'A team risk rule needs a name and instructions.',
-            });
-        }
-    });
+    .refine(
+        (criterion) =>
+            criterion.id.startsWith(DEFAULT_RISK_CRITERION_PREFIX) ||
+            (!!criterion.name && !!criterion.instructions),
+        'A team risk rule needs a name and instructions.',
+    );
 
 export type RiskCriterion = z.infer<typeof riskCriterionSchema>;
 
@@ -60,6 +52,27 @@ export const riskCriteriaSchema = z
             criteria.length,
         'Risk criteria must have unique IDs.',
     );
+
+/**
+ * What a save may store: also refuses a `kodus-` id Kodus never shipped, which
+ * the assessment would otherwise ignore without a word (a typo such as
+ * `kodus-securty`). Reads stay on `riskCriteriaSchema`, so a config stored
+ * before a rule was renamed never fails to load.
+ */
+export const riskCriteriaInputSchema = riskCriteriaSchema.superRefine(
+    (criteria, ctx) =>
+        criteria.forEach((criterion, index) => {
+            if (
+                criterion.id.startsWith(DEFAULT_RISK_CRITERION_PREFIX) &&
+                !isKnownKodusRiskRuleId(criterion.id)
+            )
+                ctx.addIssue({
+                    code: 'custom',
+                    path: [index, 'id'],
+                    message: `"${criterion.id}" is not a Kodus risk rule; ids starting with ${DEFAULT_RISK_CRITERION_PREFIX} are reserved for them.`,
+                });
+        }),
+);
 
 export const riskReviewRoutingSchema = z.object({
     noRisk: z.enum(['balanced', 'heavy', 'ultra']).optional(),

@@ -4,7 +4,7 @@ import {
     type NamedApprovalPolicy,
 } from '@libs/core/infrastructure/config/types/general/approval-policies';
 import {
-    riskCriteriaSchema,
+    riskCriteriaInputSchema,
     riskReviewRoutingSchema,
     REVIEW_SETTINGS_INHERITABLE_FIELDS,
     type RiskCriterion,
@@ -953,9 +953,9 @@ class CodeReviewConfigWithoutLLMProviderDto {
         name: 'riskCriteria',
         validator: {
             validate: (value: unknown) =>
-                riskCriteriaSchema.safeParse(value).success,
+                riskCriteriaInputSchema.safeParse(value).success,
             defaultMessage: () =>
-                'Risk criteria must be valid and have unique IDs.',
+                'Risk criteria must be valid, have unique IDs, and use kodus- IDs only for Kodus risk rules.',
         },
     })
     riskCriteria?: RiskCriterion[];

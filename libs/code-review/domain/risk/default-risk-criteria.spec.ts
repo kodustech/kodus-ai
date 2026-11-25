@@ -1,5 +1,25 @@
-import { riskCriteriaSchema } from '@libs/core/infrastructure/config/types/general/risk-assessment';
+import {
+    riskCriteriaInputSchema,
+    riskCriteriaSchema,
+} from '@libs/core/infrastructure/config/types/general/risk-assessment';
 import { KODUS_RISK_RULE_IDS } from '@libs/core/infrastructure/config/types/general/risk-rule-ids';
+
+// Rules Kodus stopped shipping, to pin how their overrides resolve.
+jest.mock(
+    '@libs/core/infrastructure/config/types/general/risk-rule-ids',
+    () => {
+        const actual = jest.requireActual(
+            '@libs/core/infrastructure/config/types/general/risk-rule-ids',
+        );
+        const retired = ['kodus-retired', 'kodus-retired-edited'];
+        return {
+            ...actual,
+            RETIRED_KODUS_RISK_RULE_IDS: retired,
+            isKnownKodusRiskRuleId: (id: string) =>
+                actual.isKnownKodusRiskRuleId(id) || retired.includes(id),
+        };
+    },
+);
 
 import { riskRulesFor } from './assess-pr-risk';
 import {
@@ -64,11 +84,31 @@ describe('effectiveRiskCriteria', () => {
                 enabled: true,
                 instructions: 'Stale wording.',
             },
+            // A mistyped override changes nothing; the default stays on.
+            { id: 'kodus-securty', enabled: false },
             // Not reachable through the schema; never sent half-built.
             { id: 'half', enabled: true } as any,
         ]);
         expect(ids(rules)).toEqual([...ids(DEFAULT_RISK_CRITERIA), 'tenant']);
         expect(rules.at(-1)).toMatchObject({ isDefault: false });
+        expect(rules.find((r) => r.id === 'kodus-security')?.enabled).toBe(
+            true,
+        );
+    });
+
+    it('still applies a whole rule stored under an unknown kodus- id, as before the id was reserved', () => {
+        const rules = effectiveRiskCriteria([
+            {
+                id: 'kodus-tenant',
+                name: 'Tenant isolation',
+                enabled: true,
+                instructions: 'Data must not cross tenants.',
+            },
+        ]);
+        expect(rules.at(-1)).toMatchObject({
+            id: 'kodus-tenant',
+            isDefault: false,
+        });
     });
 });
 
@@ -81,19 +121,20 @@ describe('riskCriteriaSchema', () => {
         ).toBe(true);
     });
 
-    it('refuses a kodus- id Kodus never shipped instead of dropping it later', () => {
-        const result = riskCriteriaSchema.safeParse([
-            {
-                id: 'kodus-securty',
-                name: 'Security review',
-                enabled: true,
-                instructions: 'Check auth.',
-            },
-        ]);
-        expect(result.success).toBe(false);
-        expect(result.error?.issues[0].message).toMatch(
+    it('reads a stored kodus- id Kodus never shipped, but a save refuses it', () => {
+        const stored = [{ id: 'kodus-securty', enabled: false }];
+        expect(riskCriteriaSchema.safeParse(stored).success).toBe(true);
+        const saved = riskCriteriaInputSchema.safeParse(stored);
+        expect(saved.success).toBe(false);
+        expect(saved.error?.issues[0].message).toMatch(
             /"kodus-securty" is not a Kodus risk rule/,
         );
+        expect(
+            riskCriteriaInputSchema.safeParse([
+                { id: 'kodus-security', enabled: false },
+                { id: 'kodus-retired', enabled: false },
+            ]).success,
+        ).toBe(true);
     });
 
     it('requires a name and instructions for a team rule', () => {

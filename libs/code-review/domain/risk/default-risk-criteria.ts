@@ -1,8 +1,8 @@
+import type { RiskCriterion } from '@libs/core/infrastructure/config/types/general/risk-assessment';
 import {
-    DEFAULT_RISK_CRITERION_PREFIX,
-    type RiskCriterion,
-} from '@libs/core/infrastructure/config/types/general/risk-assessment';
-import type { KodusRiskRuleId } from '@libs/core/infrastructure/config/types/general/risk-rule-ids';
+    RETIRED_KODUS_RISK_RULE_IDS,
+    type KodusRiskRuleId,
+} from '@libs/core/infrastructure/config/types/general/risk-rule-ids';
 
 /** A rule as the assessment applies it: defaults and overrides resolved. */
 export type EffectiveRiskCriterion = RiskCriterion & {
@@ -91,9 +91,11 @@ const DEFAULTS_BY_ID = new Map<string, (typeof DEFAULT_RISK_CRITERIA)[number]>(
 
 /**
  * The defaults with the team's overrides applied, then the team's own rules.
- * A `kodus-` id is always an override: one of a retired default is dropped,
- * whatever it holds (the schema refuses a `kodus-` id Kodus never shipped).
- * A team rule without a name or instructions is dropped too.
+ * An override of a retired default is dropped, whatever it holds. Any other
+ * entry with a name and instructions applies as a team rule, so a config the
+ * save would now refuse still assesses as before; an entry without them that
+ * matches no default (a mistyped override) is dropped, leaving the default
+ * as Kodus ships it.
  */
 export function effectiveRiskCriteria(
     team: readonly RiskCriterion[] | undefined,
@@ -118,7 +120,8 @@ export function effectiveRiskCriteria(
         } as EffectiveRiskCriterion;
     });
     const own = (team ?? []).flatMap((criterion) =>
-        !criterion.id.startsWith(DEFAULT_RISK_CRITERION_PREFIX) &&
+        !DEFAULTS_BY_ID.has(criterion.id) &&
+        !RETIRED_KODUS_RISK_RULE_IDS.includes(criterion.id) &&
         criterion.name &&
         criterion.instructions
             ? [
