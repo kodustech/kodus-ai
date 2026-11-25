@@ -547,7 +547,7 @@ function errorTree(
  * the code, for the message the user sees; undefined when it was reached.
  */
 function connectFailureOf(err: unknown): string | undefined {
-    const tree = errorTree(err);
+    const tree = errorTree(err, 0, [], { attempts: false });
     // The deepest error carrying the code: the socket's own, not a wrapper.
     const coded = tree.findLast((e) =>
         UNREACHABLE_CODES.has(String((e as { code?: unknown }).code ?? '')),

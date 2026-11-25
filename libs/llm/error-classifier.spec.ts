@@ -1448,3 +1448,29 @@ describe('classifyLLMError: Kody on #2700', () => {
         expect(info.friendlyMessage).not.toContain('outer');
     });
 });
+
+describe('classifyLLMError: Kody on #2700, second pass', () => {
+    it("the connect message names the final attempt's failure, not an earlier one", () => {
+        const earlier = Object.assign(
+            new Error('getaddrinfo ENOTFOUND old.example'),
+            {
+                code: 'ENOTFOUND',
+                hostname: 'old.example',
+            },
+        );
+        const last = Object.assign(new Error('connect ECONNREFUSED'), {
+            code: 'ECONNREFUSED',
+            address: '203.0.113.9',
+            port: 443,
+        });
+        const retry = {
+            name: 'AI_RetryError',
+            message: 'Failed after 2 attempts.',
+            errors: [earlier, last],
+            lastError: last,
+        };
+        const info = classifyLLMError(retry);
+        expect(info.friendlyMessage).toContain('ECONNREFUSED 203.0.113.9:443');
+        expect(info.friendlyMessage).not.toContain('old.example');
+    });
+});

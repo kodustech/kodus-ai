@@ -92,10 +92,11 @@ __caller_legacy_wins() {
     esac
 }
 # The key alone is ambiguous: API_OPEN_AI_API_KEY is also the embeddings key.
-# It stands for the LLM only beside the legacy base URL, or in a config that
-# names no provider (a pre-API_LLM_* one); otherwise the configured LLM key stays.
-case "$__snap_API_OPENAI_FORCE_BASE_URL" in
-    __SET__*) __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" ;;
+# It stands for the LLM when the caller says so: beside the legacy base URL, or
+# beside a provider it declared itself. Otherwise only in a config that names no
+# provider (a pre-API_LLM_* one); the configured LLM key stays.
+case "$__snap_API_OPENAI_FORCE_BASE_URL$__snap_API_LLM_PROVIDER" in
+    *__SET__*) __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" ;;
     *) [ -z "${API_LLM_PROVIDER:-}" ] && __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" ;;
 esac
 __caller_legacy_wins API_LLM_BASE_URL "$__snap_API_OPENAI_FORCE_BASE_URL" "$__snap_API_LLM_BASE_URL"

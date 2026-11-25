@@ -509,6 +509,26 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
         });
     });
 
+    it('a caller declaring its own provider with the legacy key gets that key, not the config one', () => {
+        // Kody on #2700: decided from the caller's declaration, not the
+        // restored value.
+        const box = sandbox();
+        writeConfig(box, [
+            'API_LLM_PROVIDER=openai_compatible',
+            'API_LLM_PROVIDER_MODEL=kimi-k2.6',
+            'API_LLM_API_KEY=sk-fake-moonshot',
+        ]);
+        const vmEnv = vmLlmEnv(box, {
+            API_LLM_PROVIDER: 'openai',
+            API_OPEN_AI_API_KEY: 'sk-proj-caller',
+            API_LLM_PROVIDER_MODEL: 'gpt-6-sol',
+        });
+        const declared = resolveDeclaredEnvProvider(vmEnv);
+        expect(declared.kind === 'declared' && declared.config).toMatchObject({
+            apiKey: 'sk-proj-caller',
+        });
+    });
+
     it('lets the caller override the provider inline, and resolves a 1Password key', () => {
         const box = sandbox();
         writeConfig(box, [
