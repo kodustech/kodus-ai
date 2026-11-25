@@ -38,7 +38,7 @@ The environment setup: boot the default-branch head the product resolved with th
 
 ## Module map
 
-Files (17, tests apart): `author-repair.ts`, `blocker-message.ts`, `boot-once.ts`, `boot-phases.ts`, `environment-setup.service.ts`, `environment-setup.store.ts`, `learn-from-failure.ts`, `learn-loop.ts`, `lesson.store.ts`, `recipe-failure.ts`, `resolve-recipe.ts`, `resolve-ref.ts`, `setup-journal.ts`, `setup-scope.ts`, `setup-tokens.ts`, `template-routing-setup.store.ts`, `testing.ts`
+Files (18, tests apart): `author-repair.ts`, `blocker-message.ts`, `boot-once.ts`, `boot-phases.ts`, `environment-setup.service.ts`, `environment-setup.store.ts`, `learn-from-failure.ts`, `learn-loop.ts`, `lesson.store.ts`, `recipe-failure.ts`, `recipe-for-claim.ts`, `resolve-recipe.ts`, `resolve-ref.ts`, `setup-journal.ts`, `setup-scope.ts`, `setup-tokens.ts`, `template-routing-setup.store.ts`, `testing.ts`
 
 Imports these Runtime modules:
 

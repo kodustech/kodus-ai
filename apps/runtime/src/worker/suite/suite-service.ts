@@ -1,4 +1,5 @@
-import { type Claim } from '@libs/runtime/environment';
+import type { MachineSize } from '@libs/runtime/contracts/machine-size';
+import { type Claim, type RecipeForClaim } from '@libs/runtime/environment';
 import type { RuntimeSuiteRequested } from '@libs/runtime/contracts/runtime-commands';
 import { parseRecipe } from '@libs/runtime/protocol/recipe';
 import { sha256, uuidV5From } from '@libs/runtime/contracts/derive-id';
@@ -17,7 +18,8 @@ import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
 import { isCancellation } from '../workflow-cancellation';
 import { mainHistoryOf } from './suite-adapters';
 import { suiteConfigOf, type ResolvedSuite } from './suite-config';
-import { execInService, type SuiteEnvironment } from './suite-environment';
+import { bootingAsRuns, execInService, type SuiteEnvironment } from './suite-environment';
+import { recipeForClaimOf } from '../setup/recipe-for-claim';
 import { type SuiteHostDemand, SuiteEngine, type SuiteTemplates } from './suite-engine';
 import { type SpecListing, TemplateSpecLister } from './spec-lister';
 import { ExecArtifactSource, SuiteArtifactKeeper } from './suite-artifacts';
@@ -103,6 +105,9 @@ interface Started {
     suite: ResolvedSuite;
     imageId: string;
     expose: Claim['manifest']['expose'];
+    /** What the environment's setup booted with, as its Runs' claims carry it (recipeForClaimOf, the setup's machine size). */
+    recipe?: RecipeForClaim;
+    size?: MachineSize;
 }
 
 /**
@@ -156,7 +161,8 @@ export class SuiteService {
         const suite = parsed?.ok ? suiteConfigOf(parsed.recipe) : undefined;
         if (!suite || !setup) return { status: 'off', reason: 'no_suite' };
         if (cmd.mode === 'baseline' && !suite.baseline) return { status: 'off', reason: 'baseline_disabled' };
-        return { suite, imageId: setup.imageId ?? 'latest', expose: setup.expose ?? [] };
+        const recipe = recipeForClaimOf(setup.recipe);
+        return { suite, imageId: setup.imageId ?? 'latest', expose: setup.expose ?? [], ...(recipe ? { recipe } : {}), ...(setup.machineSize ? { size: setup.machineSize } : {}) };
     }
 
     private async runEngine(cmd: RuntimeSuiteRequested, s: Started, deadlineAt?: number, signal?: AbortSignal, canaries?: readonly Canary[]): Promise<SuiteServiceResult> {
@@ -165,7 +171,7 @@ export class SuiteService {
         if (held?.finishedAt) return { status: 'ran', suiteRunId: cmd.suiteRunId, state: held.state, replayed: true };
         if (!cmd.repositoryFullName) return this.unavailable(cmd, 'no_repository');
         const tokens = [cmd.repoToken, ...(cmd.moreRepoTokens ?? [])].filter((t): t is string => !!t);
-        const env = this.d.environment({
+        const env = bootingAsRuns(this.d.environment({
             organizationId: cmd.organizationId,
             suiteRunId: cmd.suiteRunId,
             key: cmd.key,
@@ -174,7 +180,7 @@ export class SuiteService {
             imageId: s.imageId,
             expose: s.expose,
             tokens,
-        });
+        }), { recipe: s.recipe, size: s.size });
         const demand = this.d.demand({ organizationId: cmd.organizationId, suiteRunId: cmd.suiteRunId });
         // The product read main's specs from the repository's tree: no listing host (on an environment with no ready template it
         // would build main cold only to list files). Without them, the listing host lists them.

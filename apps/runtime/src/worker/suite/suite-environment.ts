@@ -1,5 +1,6 @@
 import { sha256, uuidV5From } from '@libs/runtime/contracts/derive-id';
-import type { AcquireOptions, AcquireRequest, Blocked, Claim, EnvironmentRuntime, EnvError, ExecRequest, StepResult } from '@libs/runtime/environment';
+import type { MachineSize } from '@libs/runtime/contracts/machine-size';
+import type { AcquireOptions, AcquireRequest, Blocked, Claim, EnvironmentRuntime, EnvError, ExecRequest, RecipeForClaim, StepResult } from '@libs/runtime/environment';
 
 import { ClaimLeaseKeeper, type LeaseKeeperOptions } from '../run/lease-keeper';
 import type { LeaseHold } from '../run/ports';
@@ -72,4 +73,20 @@ export function suiteEnvironment(make: (sealedRepoToken: string) => EnvironmentR
 export function execInService<E extends Pick<EnvironmentRuntime, 'exec'>>(env: E, service: string | undefined): Pick<EnvironmentRuntime, 'exec'> {
     if (service === undefined) return env;
     return { exec: (claimId: string, req: ExecRequest) => env.exec(claimId, req.service !== undefined ? req : { ...req, service }) };
+}
+
+/**
+ * `env` with every acquire booting as the environment's Runs do: the recipe its setup recorded (with Kody's build files) and
+ * the machine size it booted at. Without them a suite claim booted the checkout's own files: on dev the repository's Dockerfile
+ * made the Firebase emulator download from storage.googleapis.com, which the egress refuses, and every shard failed compose_up.
+ * A request that already names a recipe or a size keeps it.
+ */
+export function bootingAsRuns(env: SuiteEnvironment, boot: { recipe?: RecipeForClaim; size?: MachineSize }): SuiteEnvironment {
+    if (!boot.recipe && !boot.size) return env;
+    return {
+        acquire: (req: AcquireRequest, opts?: AcquireOptions) =>
+            env.acquire({ ...(boot.recipe ? { recipe: boot.recipe } : {}), ...(boot.size ? { size: boot.size } : {}), ...req }, opts),
+        exec: (claimId: string, req: ExecRequest) => env.exec(claimId, req),
+        release: (claimId: string) => env.release(claimId),
+    };
 }

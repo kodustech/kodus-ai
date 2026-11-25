@@ -37,7 +37,7 @@ const request = (over: Partial<RuntimeSuiteRequested> = {}): RuntimeSuiteRequest
 
 const cancelError = () => Object.assign(new Error('workflow cancelled'), { name: 'DBOSWorkflowCancelledError' });
 
-function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any; maps?: InMemorySuiteCoverageMaps; evidence?: InMemoryEvidenceStore; shots?: Record<string, Buffer>; shadow?: { shadows: InMemorySuiteShadows; selection: InMemorySuiteSelectionState; alerts?: unknown[] } } = {}) {
+function world(over: { recipe?: string | null; files?: Array<{ path: string; content: string }>; machineSize?: { memoryMb: number; cpus: number }; ready?: boolean; specs?: FakeSuiteWorld['specs']; main?: string[]; setupMissing?: boolean; publisher?: boolean; map?: any; maps?: InMemorySuiteCoverageMaps; evidence?: InMemoryEvidenceStore; shots?: Record<string, Buffer>; shadow?: { shadows: InMemorySuiteShadows; selection: InMemorySuiteSelectionState; alerts?: unknown[] } } = {}) {
     const published: string[] = [];
     const finishedStates: string[] = [];
     const clock = new SuiteClock();
@@ -65,7 +65,7 @@ function world(over: { recipe?: string | null; ready?: boolean; specs?: FakeSuit
     const baselines = new InMemorySuiteBaselines();
     const demand = new FakeSuiteDemand(clock);
     const deps: SuiteServiceDeps = {
-        setups: { get: async () => (over.setupMissing ? null : ({ environmentId: ENV, organizationId: ORG, imageId: 'img-1', expose: [], recipe: { path: '.kodus/workspace.yaml', sha: MAIN, state: over.recipe === null ? 'absent' : 'found', content: over.recipe ?? RECIPE } } as never)) },
+        setups: { get: async () => (over.setupMissing ? null : ({ environmentId: ENV, organizationId: ORG, imageId: 'img-1', expose: [], recipe: { path: '.kodus/workspace.yaml', sha: MAIN, state: over.recipe === null ? 'absent' : 'found', content: over.recipe ?? RECIPE, digest: 'rd-1', ...(over.files ? { files: over.files } : {}) }, ...(over.machineSize ? { machineSize: over.machineSize } : {}) } as never)) },
         environment: (ctx) => {
             tokens.push(...ctx.tokens);
             return env;
@@ -95,6 +95,19 @@ describe('running a suite as a workflow', () => {
         // The listing host and every claim are released and the demand ended.
         expect(w.demand.ended).toBe(1);
         expect(w.cell.claims.size).toBe(w.cell.released.length);
+    });
+
+    // dev, 2026-11-25: the shards booted the checkout's own Dockerfile, not Kody's, so the Firebase emulator tried
+    // storage.googleapis.com, the egress refused it and every shard failed compose_up while the Run's own claims booted.
+    it('boots every claim it takes with the recipe and the machine size the setup recorded, with the files Kody wrote', async () => {
+        const files = [{ path: '.kodus/Dockerfile.firebase', content: 'FROM node:22\n' }];
+        const w = world({ files, machineSize: { memoryMb: 6144, cpus: 3 } });
+        await w.service.run(request(), passthrough);
+        expect(w.cell.acquires.length).toBeGreaterThan(1);
+        for (const a of w.cell.acquires) {
+            expect(a.recipe).toEqual({ path: '.kodus/workspace.yaml', content: RECIPE, digest: 'rd-1', files });
+            expect(a.size).toEqual({ memoryMb: 6144, cpus: 3 });
+        }
     });
 
     it('runs a spec the PR adds, and leaves out one the PR removes', async () => {

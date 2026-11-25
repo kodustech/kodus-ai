@@ -19,6 +19,7 @@ import type { PrAdmissionStore, PrAdmissionDecision, RunDeliveryContext } from '
 import type { DistributedLocks } from '../../shared/persistence/locks';
 import { readyTarget } from '../env/ready-check';
 import { recipeChangedInPr } from '../run/recipe-change';
+import { recipeForClaimOf } from '../setup/recipe-for-claim';
 import type { CommandStore } from '../../shared/persistence/pg-command-store';
 import type { EnvironmentSetupStore } from '../setup/environment-setup.store';
 import type { CommandHandler, HandlerResult } from './command-handlers';
@@ -105,15 +106,7 @@ export class RunRequestedHandler implements CommandHandler {
             return { req };
         }
         // The cell boots with this recipe, not with the PR's copy (§6).
-        const forClaim = setup.recipe
-            ? {
-                  path: setup.recipe.path,
-                  content: setup.recipe.state === 'found' && typeof setup.recipe.content === 'string' ? setup.recipe.content : null,
-                  ...(setup.recipe.digest ? { digest: setup.recipe.digest } : {}),
-                  // Kody's build files, from the default branch's authored submission the setup booted: the PR's checkout never supplies them.
-                  ...(setup.recipe.state === 'found' && typeof setup.recipe.content === 'string' && setup.recipe.files?.length ? { files: setup.recipe.files } : {}),
-              }
-            : undefined;
+        const forClaim = recipeForClaimOf(setup.recipe);
         const environment: RuntimeRunRequested['environment'] = { ...req.environment, ...(setup.expose?.length ? { expose: setup.expose } : {}), ...(forClaim ? { recipe: forClaim } : {}) };
         const prChangesRecipe = recipeChangedInPr({ ...req, environment }).length > 0;
         const recipe = setup.recipe ? { sha: setup.recipe.sha, state: setup.recipe.state, ...(setup.recipe.digest ? { digest: setup.recipe.digest } : {}), prChangesRecipe } : undefined;
