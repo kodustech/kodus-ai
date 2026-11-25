@@ -190,8 +190,99 @@ describe('selfhosted setup.sh writes the LLM config the runtime runs', () => {
             model: 'kimi-k2.6',
         });
         expect(config.API_LLM_API_KEY).toBe('sk-fake-moonshot');
-        // Also the embeddings key: kept as it was.
-        expect(config.API_OPEN_AI_API_KEY).toBe('sk-fake-moonshot');
+        // The legacy slot held the Moonshot key, not an OpenAI one: offered
+        // again as the embeddings key it would 401 on api.openai.com.
+        expect(config.API_OPEN_AI_API_KEY).toBe('');
+    });
+
+    it('a re-run over a legacy Gemini config does not keep the Gemini key as the embeddings key', () => {
+        // Review, PR #2700: Enter at the embeddings prompt kept the Gemini key
+        // as API_OPEN_AI_API_KEY, which is always sent to api.openai.com.
+        const box = sandbox();
+        writeConfig(box, [
+            `DIGITALOCEAN_TOKEN=${DO_TOKEN}`,
+            'API_OPEN_AI_API_KEY=AIza-fake-studio-key',
+            'API_OPENAI_FORCE_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/',
+            'API_LLM_PROVIDER_MODEL=gemini-3.5-flash',
+            `KODUS_INSTALLER_PATH=${INSTALLER}`,
+        ]);
+
+        const config = runSetup(box, ['', '', '', '', '', '', '', '']);
+
+        expect(config.API_LLM_API_KEY).toBe('AIza-fake-studio-key');
+        expect(config.API_OPEN_AI_API_KEY).toBe('');
+    });
+
+    it('a re-run over a legacy native OpenAI config keeps its key for embeddings', () => {
+        const box = sandbox();
+        writeConfig(box, [
+            `DIGITALOCEAN_TOKEN=${DO_TOKEN}`,
+            'API_OPEN_AI_API_KEY=sk-fake-openai',
+            'API_LLM_PROVIDER_MODEL=gpt-5.4',
+            `KODUS_INSTALLER_PATH=${INSTALLER}`,
+        ]);
+
+        const config = runSetup(box, ['', '', '', '', '', '', '', '']);
+
+        expect(config.API_LLM_PROVIDER).toBe('openai');
+        expect(config.API_LLM_API_KEY).toBe('sk-fake-openai');
+        expect(config.API_OPEN_AI_API_KEY).toBe('sk-fake-openai');
+    });
+
+    it('switching to openai_compatible does not offer the embeddings key as the LLM key', () => {
+        // Review, PR #2700: in a config this setup wrote, API_OPEN_AI_API_KEY
+        // is the OpenAI embeddings key; Enter sent it to Moonshot.
+        const box = sandbox();
+        writeConfig(box, [
+            `DIGITALOCEAN_TOKEN=${DO_TOKEN}`,
+            'API_LLM_PROVIDER=google_gemini',
+            'API_LLM_PROVIDER_MODEL=gemini-3.5-flash',
+            'API_LLM_API_KEY=AIza-fake-studio-key',
+            'API_OPEN_AI_API_KEY=sk-fake-embeddings',
+            `KODUS_INSTALLER_PATH=${INSTALLER}`,
+        ]);
+
+        const config = runSetup(box, [
+            '',
+            '',
+            '',
+            'openai_compatible',
+            'kimi-k2.6',
+            '', // key: nothing to keep for openai_compatible
+            '', // base URL: team default
+            '', // embeddings: kept
+            '',
+        ]);
+
+        expect(config.API_LLM_PROVIDER).toBe('openai_compatible');
+        expect(config.API_LLM_API_KEY).toBe('');
+        expect(config.API_OPEN_AI_API_KEY).toBe('sk-fake-embeddings');
+    });
+
+    it('a re-run over an `auto` config keeps auto instead of aborting', () => {
+        // Review, PR #2700: `auto` + an OpenAI key (what the old README
+        // recommended) forced a model id and aborted on Enter.
+        const box = sandbox();
+        writeConfig(box, [
+            `DIGITALOCEAN_TOKEN=${DO_TOKEN}`,
+            'API_OPEN_AI_API_KEY=sk-fake-openai',
+            'API_LLM_PROVIDER_MODEL=auto',
+            `KODUS_INSTALLER_PATH=${INSTALLER}`,
+        ]);
+        const before = describeEnvLLMConfig(
+            parseEnvLines(
+                readFileSync(join(box.home, '.kodus-dev', 'config'), 'utf8'),
+            ),
+        );
+
+        const config = runSetup(box, ['', '', '', '', '', '', '']);
+
+        expect(config.API_LLM_PROVIDER_MODEL).toBe('auto');
+        expect(config.API_LLM_PROVIDER ?? '').toBe('');
+        expect(config.API_LLM_API_KEY ?? '').toBe('');
+        expect(config.API_OPEN_AI_API_KEY).toBe('sk-fake-openai');
+        expect(resolveDeclaredEnvProvider(config).kind).toBe('inferred');
+        expect(describeEnvLLMConfig(config)).toEqual(before);
     });
 
     it('a first setup on all defaults still lands on the team default upstream', () => {
@@ -368,6 +459,33 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
             API_OPEN_AI_API_KEY: 'sk-fake-moonshot',
             API_OPENAI_FORCE_BASE_URL: 'https://api.moonshot.ai/v1',
             API_LLM_PROVIDER_MODEL: 'kimi-k2.6',
+        });
+    });
+
+    it('a caller that overrides only the OpenAI-named vars wins over the config, as before', () => {
+        // Review, PR #2700: scripts/e2e/run.sh exports its trio under the
+        // legacy names; the config's API_LLM_API_KEY / API_LLM_BASE_URL then
+        // outranked them at runtime and sent the Moonshot key with the E2E model.
+        const box = sandbox();
+        writeConfig(box, [
+            'API_LLM_PROVIDER=openai_compatible',
+            'API_LLM_PROVIDER_MODEL=kimi-k2.6',
+            'API_LLM_API_KEY=sk-fake-moonshot',
+            'API_LLM_BASE_URL=https://api.moonshot.ai/v1',
+        ]);
+
+        const vmEnv = vmLlmEnv(box, {
+            API_LLM_PROVIDER: 'openai_compatible',
+            API_OPEN_AI_API_KEY: 'fw-fake-e2e',
+            API_OPENAI_FORCE_BASE_URL: 'https://api.fireworks.ai/inference/v1',
+            API_LLM_PROVIDER_MODEL: 'accounts/fireworks/models/deepseek-v4p1-flash',
+        });
+
+        const declared = resolveDeclaredEnvProvider(vmEnv);
+        expect(declared.kind).toBe('declared');
+        expect(declared.kind === 'declared' && declared.config).toMatchObject({
+            apiKey: 'fw-fake-e2e',
+            baseURL: 'https://api.fireworks.ai/inference/v1',
         });
     });
 

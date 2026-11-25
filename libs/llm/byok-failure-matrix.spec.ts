@@ -164,12 +164,11 @@ interface Outcome {
  *
  * The dual-stack rows are the edge. The aggregate carries no message (captured
  * for ECONNREFUSED above), so the SDK's message is "Cannot connect to API: "
- * with nothing after the colon, and the classifier never reads `code`. Only
- * the "cannot connect to api" prefix rule (#1844) makes them TRANSIENT. For
- * ETIMEDOUT that same emptiness hides the word `isAbortOrHardTimeout` looks
- * for, so a dual-stack connect timeout DOES cascade, unlike the single-address
- * one. That shape is built, not captured: through fetch it needs the kernel's
- * connect timeout to fire before undici's own 10s ConnectTimeoutError.
+ * with nothing after the colon: the classifier reads the cause's `code`
+ * instead. A dual-stack ETIMEDOUT is a connect timeout like the single-address
+ * one, so it keeps the no-failover rule. That shape is built, not captured:
+ * through fetch it needs the kernel's connect timeout to fire before undici's
+ * own 10s ConnectTimeoutError.
  */
 const TRANSPORT_OUTCOME: Record<TransportMode, Outcome> = {
     'refused': { category: C.TRANSIENT, failover: true },
@@ -178,7 +177,7 @@ const TRANSPORT_OUTCOME: Record<TransportMode, Outcome> = {
     'dns-eai-again': { category: C.TRANSIENT, failover: true },
     'connect-timeout': { category: C.TRANSIENT, failover: false },
     'etimedout': { category: C.TRANSIENT, failover: false },
-    'etimedout-dual-stack': { category: C.TRANSIENT, failover: true },
+    'etimedout-dual-stack': { category: C.TRANSIENT, failover: false },
 };
 
 // ─── HTTP failures, in each vendor's own envelope ───────────────────────────

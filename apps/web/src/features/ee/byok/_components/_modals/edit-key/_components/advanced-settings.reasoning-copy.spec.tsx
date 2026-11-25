@@ -31,12 +31,20 @@ jest.mock("@services/organizationParameters/hooks", () => ({
     useModelCapabilities: () => ({ data: mockCaps.current }),
 }));
 
-function Harness({ provider, model }: { provider: string; model: string }) {
+function Harness({
+    provider,
+    model,
+    reasoningEffort = null,
+}: {
+    provider: string;
+    model: string;
+    reasoningEffort?: string | null;
+}) {
     const form = useForm({
         defaultValues: {
             provider,
             model,
-            reasoningEffort: null,
+            reasoningEffort,
             reasoningConfigOverride: null,
         } as any,
     });
@@ -47,10 +55,19 @@ function Harness({ provider, model }: { provider: string; model: string }) {
     );
 }
 
-function renderKind({ provider, model, caps }: CapabilityKind) {
+function renderKind(
+    { provider, model, caps }: CapabilityKind,
+    reasoningEffort: string | null = null,
+) {
     // The response travels as JSON, so the form sees what survives it.
     mockCaps.current = JSON.parse(JSON.stringify(caps));
-    render(<Harness provider={provider} model={model} />);
+    render(
+        <Harness
+            provider={provider}
+            model={model}
+            reasoningEffort={reasoningEffort}
+        />,
+    );
     const advanced = screen.queryByText("Advanced settings");
     if (advanced) fireEvent.click(advanced);
 }
@@ -59,7 +76,7 @@ const toggle = (label: string) =>
     screen.getByText(label, { selector: "button" });
 
 describe("ByokAdvancedSettings — reasoning copy per production capability kind", () => {
-    describe("always reasons, no level to send (anthropic_compatible MiniMax-M3)", () => {
+    describe("always reasons, no level to send (anthropic_compatible MiniMax-M3.1-Flash)", () => {
         const kind = CAPABILITY_KINDS.alwaysOn;
 
         it("says it always reasons, not that it has no reasoning", () => {
@@ -70,13 +87,26 @@ describe("ByokAdvancedSettings — reasoning copy per production capability kind
             ).not.toBeInTheDocument();
         });
 
-        it("locks every level but Off", () => {
-            renderKind(kind);
-            expect(toggle("Off")).toBeEnabled();
-            for (const level of ["Low", "Medium", "High", "Custom"]) {
-                expect(toggle(level)).toBeDisabled();
-            }
-        });
+        // Whatever the slot saved, no level control is shown: an Off selected
+        // over "always reasons" contradicted the copy (#2036).
+        it.each([null, "none", "high"])(
+            "shows no level to pick, with %p saved",
+            (saved) => {
+                renderKind(kind, saved);
+                for (const level of [
+                    "Off",
+                    "Low",
+                    "Medium",
+                    "High",
+                    "Custom",
+                ]) {
+                    expect(
+                        screen.queryByText(level, { selector: "button" }),
+                    ).not.toBeInTheDocument();
+                }
+                expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+            },
+        );
     });
 
     describe("no reasoning (openai gpt-4o-mini)", () => {

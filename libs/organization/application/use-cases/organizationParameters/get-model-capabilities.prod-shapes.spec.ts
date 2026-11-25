@@ -11,15 +11,22 @@
  * `/model-capabilities` endpoint calls, with the real `ProviderService` (the
  * one that decides which ids are supported).
  *
- * The expected value is derived from the provider facts, never from a list:
- * the anthropic module reports it when the model has no reasoning config and
- * the compatible traits say thinking cannot be disabled. The one hand-written
- * list below is the pinned result, so a change in traits shows up in review.
+ * The expected value is derived from the facts, never from a list: the model
+ * reasons on every call (its traits), the form offers no level, and the request
+ * a slot with no saved level actually builds carries no reasoning field. The
+ * one hand-written list below is the pinned result, so a change in traits or
+ * in what a transport sends shows up in review.
  */
 import '@libs/llm/providers'; // side-effect: self-register every provider module
 import { REGISTRY } from '@libs/llm/providers';
-import { anthropicReasoningConfig } from '@libs/llm/providers/anthropic/traits';
-import { resolveCompatibleReasoningTraits } from '@libs/llm/providers/kernel/reasoning-traits';
+import {
+    alwaysReasons,
+    resolveCompatibleReasoningTraits,
+} from '@libs/llm/providers/kernel/reasoning-traits';
+import {
+    buildProviderOptions,
+    defaultReasoningEffortFor,
+} from '@libs/llm/reasoning-options';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import PROD_SHAPES from '@libs/llm/testing/__fixtures__/byok-prod-shapes.json';
 import {
@@ -39,15 +46,28 @@ interface ProdShape {
     model: string;
 }
 
-const ANTHROPIC_PROTOCOL = new Set(['anthropic', 'anthropic_compatible']);
 const BRANDS = new Set(['moonshot', 'zai']);
 
-/** What the provider facts say, read from their sources. */
-function expectedAlwaysOn({ provider, model }: ProdShape): boolean {
+/** The request a slot with no saved level builds carries no reasoning field:
+ *  the runtime decision, read through the same builder the calls use. */
+function sendsNoLevel({ provider, model }: ProdShape): boolean {
+    const effort =
+        defaultReasoningEffortFor({ provider, model } as any) ?? 'none';
+    const options = buildProviderOptions('prod-shapes', undefined, {
+        reasoningEffort: effort,
+        byokProvider: provider,
+        modelName: model,
+    });
+    return !/thinking|reasoning|budget|effort/i.test(JSON.stringify(options));
+}
+
+/** What the facts say: reasons on every call, no level offered, none sent. */
+function expectedAlwaysOn(row: ProdShape): boolean {
+    if (BRANDS.has(row.provider)) return false;
     return (
-        ANTHROPIC_PROTOCOL.has(provider) &&
-        !anthropicReasoningConfig(model) &&
-        resolveCompatibleReasoningTraits(model).canDisableThinking === false
+        !REGISTRY.get(row.provider).capabilities(row.model).supportsReasoning &&
+        alwaysReasons(resolveCompatibleReasoningTraits(row.model)) &&
+        sendsNoLevel(row)
     );
 }
 
@@ -135,13 +155,17 @@ describe('GetModelCapabilitiesUseCase over the production BYOK shapes', () => {
  * reasoning config moved, which deserves a reviewer's eye.
  */
 const PINNED_ALWAYS_ON: string[] = [
-    // GLM-5.3 forces thinking on; the Anthropic-protocol endpoint takes no level.
-    'anthropic_compatible GLM-5.3',
-    // MiniMax M3 rejects a disable and has no thinking toggle on this wire.
-    'anthropic_compatible MiniMax-M3',
+    // Bedrock sends no reasoning field for a non-Anthropic id, and MiniMax M2
+    // and Kimi k3 reason on every call.
+    'amazon_bedrock minimax.minimax-m2',
+    'amazon_bedrock minimax.minimax-m2.5',
+    'amazon_bedrock moonshotai.kimi-k3',
+    // MiniMax M3.1 reasons with the field omitted and 400s on a disable
+    // (#2036); nothing is sent on either wire. Plain M3 does not reason
+    // unasked, and GLM-5.3 / Kimi k3 on this endpoint are sent a budget.
     'anthropic_compatible MiniMax-M3.1-Flash',
-    'anthropic_compatible glm-5.3',
-    'anthropic_compatible glm-5.3-flash',
-    'anthropic_compatible internal-glm-5.3-flash',
-    'anthropic_compatible minimax-m3',
+    'openai_compatible MiniMax-M3.1-Flash',
+    'openai_compatible minimax-m3.1-flash',
+    'openai_compatible minimax-m3.1-flash-free',
+    'openai_compatible minimax/minimax-m3.1-flash',
 ];

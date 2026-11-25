@@ -119,7 +119,10 @@ default_llm_key() {
             case "$(lowercase "$existing_openai_base_url")" in
                 ""|*api.openai.com*) own="$existing_openai_key" ;;
             esac ;;
-        openai_compatible) own="$existing_openai_key" ;;
+        # In a config this setup wrote, that slot is the OpenAI embeddings key,
+        # not an LLM key: offered only when it came from a legacy config.
+        openai_compatible)
+            [ "$llm_from_legacy" = "1" ] && own="$existing_openai_key" ;;
         anthropic) own="${API_ANTHROPIC_API_KEY:-}" ;;
         google_gemini) own="${API_GOOGLE_AI_API_KEY:-${GOOGLE_GENERATIVE_AI_API_KEY:-}}" ;;
         google_vertex) own="${API_VERTEX_AI_API_KEY:-}" ;;
@@ -255,6 +258,10 @@ fi
 llm_from_legacy=0
 if [ -n "$existing_llm_provider" ]; then
     default_llm_provider="$existing_llm_provider"
+elif [ "$existing_llm_model" = "auto" ] && [ -z "$existing_openai_base_url" ]; then
+    # `auto` ran no env model (the key next to it was only the embeddings
+    # key), so a re-run keeps it instead of guessing a provider from that key.
+    default_llm_provider="auto"
 elif [ -n "$existing_openai_key$existing_openai_base_url" ] \
     || { [ -n "$existing_llm_model" ] && [ "$existing_llm_model" != "auto" ]; }; then
     default_llm_provider=$(legacy_llm_provider)
@@ -263,8 +270,8 @@ else
     default_llm_provider="$DEFAULT_LLM_PROVIDER"
 fi
 new_llm_provider=$(prompt_plain "LLM provider" "$default_llm_provider" \
-    "One of: ${LLM_PROVIDERS// /, }. Team default: $DEFAULT_LLM_PROVIDER (Kimi on Moonshot). Gemini: google_gemini with an AI Studio key, not openai_compatible.")
-case " $LLM_PROVIDERS " in
+    "One of: ${LLM_PROVIDERS// /, }, or auto (no env model, as before). Team default: $DEFAULT_LLM_PROVIDER (Kimi on Moonshot). Gemini: google_gemini with an AI Studio key, not openai_compatible.")
+case " $LLM_PROVIDERS auto " in
     *" $new_llm_provider "*) ;;
     *) warn "API_LLM_PROVIDER must be one of: $LLM_PROVIDERS (got '$new_llm_provider'). Aborting."; exit 1 ;;
 esac
@@ -272,6 +279,15 @@ if [ "$llm_from_legacy" = "1" ] && [ "$new_llm_provider" = "$default_llm_provide
     dim "  Provider guessed from your old API_OPENAI_FORCE_BASE_URL / model; it is now written as API_LLM_PROVIDER."
 fi
 
+new_llm_model=""; new_llm_api_key=""; new_llm_base_url=""
+if [ "$new_llm_provider" = "auto" ]; then
+    # No env model: API_LLM_PROVIDER and the API_LLM_* vars stay empty (the
+    # runtime refuses them next to `auto`).
+    new_llm_provider=""
+    new_llm_model="auto"
+fi
+
+if [ "$new_llm_model" != "auto" ]; then
 default_llm_model="$existing_llm_model"
 [ "$default_llm_model" = "auto" ] && default_llm_model=""
 if [ -z "$default_llm_model" ] && [ "$new_llm_provider" = "$DEFAULT_LLM_PROVIDER" ]; then
@@ -326,10 +342,16 @@ if [ "$base_url_mode" != "none" ]; then
             warn "Gemini's OpenAI endpoint drops the thought signatures Gemini 3 needs for tool calls. Use API_LLM_PROVIDER=google_gemini." ;;
     esac
 fi
+fi
 
 # API_OPEN_AI_API_KEY is also the platform embeddings key (always sent to
 # api.openai.com), so it is kept apart from the LLM key.
 default_embeddings_key="$existing_openai_key"
+# In a legacy config whose provider was not OpenAI, that slot held the LLM key
+# of another upstream (Gemini, Moonshot, Anthropic): not an embeddings key.
+if [ "$llm_from_legacy" = "1" ] && [ "$default_llm_provider" != "openai" ]; then
+    default_embeddings_key=""
+fi
 if [ -z "$default_embeddings_key" ] && [ "$new_llm_provider" = "openai" ]; then
     default_embeddings_key="$new_llm_api_key"
 fi

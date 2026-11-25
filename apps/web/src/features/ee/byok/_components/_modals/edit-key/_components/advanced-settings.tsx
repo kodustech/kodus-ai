@@ -233,47 +233,53 @@ export const ByokAdvancedSettings = ({
                             </span>
                         </div>
 
-                        <Controller
-                            name="reasoningEffort"
-                            control={control}
-                            render={({ field }) => (
-                                <ToggleGroup.Root
-                                    type="single"
-                                    className="bg-card-lv2 grid grid-cols-5 gap-px overflow-hidden rounded-lg p-0.5"
-                                    value={
-                                        field.value ??
-                                        (configOverride ? "custom" : "none")
-                                    }
-                                    onValueChange={(value) => {
-                                        if (!value) return;
-                                        // "Off" MUST persist as the explicit
-                                        // 'none' effort — mapping it to null made
-                                        // it indistinguishable from "unset", which
-                                        // the read resolves to the catalog default
-                                        // (medium), so Off could never be saved.
-                                        field.onChange(value);
-                                    }}>
-                                    {THINKING_OPTIONS.map((opt) => {
-                                        // Off is always available; every other
-                                        // option is gated by the model's declared
-                                        // reasoning support + valid levels.
-                                        const disabled =
-                                            opt.value !== "none" &&
-                                            (reasoningUnsupported ||
-                                                !isLevelAllowed(opt.value));
-                                        return (
-                                            <ToggleGroup.Item
-                                                key={opt.value}
-                                                value={opt.value}
-                                                disabled={disabled}
-                                                className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 disabled:hover:text-text-secondary rounded-md px-2 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 data-[state=on]:shadow-sm data-[state=on]:ring-1">
-                                                {opt.label}
-                                            </ToggleGroup.Item>
-                                        );
-                                    })}
-                                </ToggleGroup.Root>
-                            )}
-                        />
+                        {/* A model that always reasons with no level to send
+                            has nothing to pick: a toggle would show Off
+                            selected over "always reasons". The copy below
+                            says what happens instead. */}
+                        {!caps?.reasoningAlwaysOn && (
+                            <Controller
+                                name="reasoningEffort"
+                                control={control}
+                                render={({ field }) => (
+                                    <ToggleGroup.Root
+                                        type="single"
+                                        className="bg-card-lv2 grid grid-cols-5 gap-px overflow-hidden rounded-lg p-0.5"
+                                        value={
+                                            field.value ??
+                                            (configOverride ? "custom" : "none")
+                                        }
+                                        onValueChange={(value) => {
+                                            if (!value) return;
+                                            // "Off" MUST persist as the explicit
+                                            // 'none' effort — mapping it to null made
+                                            // it indistinguishable from "unset", which
+                                            // the read resolves to the catalog default
+                                            // (medium), so Off could never be saved.
+                                            field.onChange(value);
+                                        }}>
+                                        {THINKING_OPTIONS.map((opt) => {
+                                            // Off is always available; every other
+                                            // option is gated by the model's declared
+                                            // reasoning support + valid levels.
+                                            const disabled =
+                                                opt.value !== "none" &&
+                                                (reasoningUnsupported ||
+                                                    !isLevelAllowed(opt.value));
+                                            return (
+                                                <ToggleGroup.Item
+                                                    key={opt.value}
+                                                    value={opt.value}
+                                                    disabled={disabled}
+                                                    className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 disabled:hover:text-text-secondary rounded-md px-2 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 data-[state=on]:shadow-sm data-[state=on]:ring-1">
+                                                    {opt.label}
+                                                </ToggleGroup.Item>
+                                            );
+                                        })}
+                                    </ToggleGroup.Root>
+                                )}
+                            />
+                        )}
 
                         {reasoningUnsupported &&
                             (caps?.reasoningAlwaysOn ? (
@@ -392,12 +398,12 @@ export const ByokAdvancedSettings = ({
 
                     {temperatureUnsupported && (
                         <p className="text-text-tertiary text-xs text-pretty">
-                            This model doesn&apos;t accept a temperature, so
-                            the field is hidden rather than ignored. Some
-                            providers reject the request outright (Claude 4.7+,
-                            OpenAI GPT-5 / o-series); others fix the value and
-                            discard whatever is sent (Kimi k2.6, k2.7-code).
-                            Steer it with the thinking level above instead.
+                            This model doesn&apos;t accept a temperature, so the
+                            field is hidden rather than ignored. Some providers
+                            reject the request outright (Claude 4.7+, OpenAI
+                            GPT-5 / o-series); others fix the value and discard
+                            whatever is sent (Kimi k2.6, k2.7-code). Steer it
+                            with the thinking level above instead.
                         </p>
                     )}
 

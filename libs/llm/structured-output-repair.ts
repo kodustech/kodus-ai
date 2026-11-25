@@ -96,6 +96,48 @@ export function ensureValidatingSchema(wire: unknown): unknown {
     return jsonSchema(s.jsonSchema as any, { validate: validate as any });
 }
 
+/**
+ * The end of every container opened after `start`, from ONE string-aware pass
+ * read the way {@link balancedSpanEnd} reads it from `start`: an opener outside
+ * a string in that pass gets its end (or -1, never closed) in `ends`. Two
+ * openers outside a string see the same strings after them, so the pass
+ * answers for all of them at once; one that sat inside a string here gets its
+ * own pass when asked. Returns the chars scanned.
+ */
+function resolveSpansFrom(
+    s: string,
+    start: number,
+    ends: Map<number, number>,
+): number {
+    const curly: number[] = [];
+    const square: number[] = [];
+    let inStr = false;
+    let escaped = false;
+    for (let i = start; i < s.length; i++) {
+        const ch = s[i];
+        if (inStr) {
+            if (escaped) escaped = false;
+            else if (ch === '\\') escaped = true;
+            else if (ch === '"') inStr = false;
+            continue;
+        }
+        if (ch === '"') inStr = true;
+        else if (ch === '{') curly.push(i);
+        else if (ch === '[') square.push(i);
+        else if (ch === '}') {
+            const open = curly.pop();
+            if (open !== undefined && !ends.has(open)) ends.set(open, i + 1);
+        } else if (ch === ']') {
+            const open = square.pop();
+            if (open !== undefined && !ends.has(open)) ends.set(open, i + 1);
+        }
+    }
+    for (const open of [...curly, ...square]) {
+        if (!ends.has(open)) ends.set(open, -1);
+    }
+    return s.length - start;
+}
+
 /** End (exclusive) of the balanced span opened at `s[start]`, which must be
  *  `{` or `[`, or -1 when it never closes. Same string-aware rule as
  *  {@link sliceBalancedJson}, without copying the text after `start`. */
@@ -644,10 +686,13 @@ async function firstValidatingObjectAfter<T = unknown>(
      *  sat inside the answer's own string value). Null when the text has no
      *  first fence and no balanced span — everything competes. */
     floor: number | null,
-    /** The first fence quoted code (no primary candidate came out of it):
-     *  a valid object before it makes the one after it ambiguous, see the
-     *  walk below. */
+    /** The first fence quoted code (no primary candidate came out of it, or
+     *  what came out did not validate): a valid object before it makes the
+     *  one after it ambiguous, see the walk below. */
     before = false,
+    /** No re-ask follows this attempt: an answer before the quote is taken
+     *  when it is the only valid object (see the walk below). */
+    lastChance = false,
 ): Promise<T | undefined> {
     // Same #2112 bound as salvageJsonText for the EXPENSIVE part: the
     // candidate walk (sliceBalancedJson + a parse per delimiter) scans at
@@ -668,12 +713,17 @@ async function firstValidatingObjectAfter<T = unknown>(
     // it, so the window alone does not bound the walk: `{` × 1M is ~10^12
     // steps. Past FALLBACK_SCAN_BUDGET chars scanned the walk stops and judges
     // only the candidates it already has.
+    // A pass resolves the end of every opener it reads outside a string
+    // (resolveSpansFrom), so an unclosed opener no longer charges the rest of
+    // the text once per opener: prose quoting `function f(req) {` twenty times
+    // before a long answer costs one pass, not twenty.
     let scanned = 0;
+    const ends = new Map<number, number>();
     for (let i = 0; i < text.length; i++) {
         const ch = text[i];
         if (ch !== '{' && ch !== '[') continue;
-        const end = balancedSpanEnd(text, i);
-        scanned += (end < 0 ? text.length : end) - i;
+        if (!ends.has(i)) scanned += resolveSpansFrom(text, i, ends);
+        const end = ends.get(i)!;
         if (scanned > FALLBACK_SCAN_BUDGET) {
             // Stop scanning, keep what was found: candidates come in order and
             // the first valid one wins, so a later one could not have beaten
@@ -761,13 +811,22 @@ async function firstValidatingObjectAfter<T = unknown>(
     // ambiguous → re-ask, never a guess that can ship an empty review. An
     // object before the quote never stands alone either: a reply cut off
     // after the quote leaves only the prose example.
-    if (!fromAfter) {
-        return undefined;
-    }
     const fromBefore = await firstAccepted(
         candidates.filter((c) => floor !== null && c.end <= floor),
     );
-    return fromBefore ? undefined : (fromAfter.value as T);
+    if (!fromAfter) {
+        // Only an object before the quote. With a re-ask left it is not
+        // taken: a reply cut off after the quote leaves only the prose
+        // example. With none left (the caller says so, and only for a reply
+        // that ended on its own), it is the answer or nothing.
+        return lastChance ? (fromBefore?.value as T | undefined) : undefined;
+    }
+    if (!fromBefore) return fromAfter.value as T;
+    // The same object on both sides (the answer restated after the quote) is
+    // no ambiguity.
+    return JSON.stringify(fromBefore.value) === JSON.stringify(fromAfter.value)
+        ? (fromAfter.value as T)
+        : undefined;
 }
 
 /**
@@ -794,6 +853,10 @@ async function firstValidatingObjectAfter<T = unknown>(
 export async function repairAndValidate<T = unknown>(
     wire: unknown,
     rawText: string,
+    /** No model re-ask follows this attempt (the second request, a tool-call
+     *  correction), and the reply ended on its own: an answer the walk would
+     *  otherwise re-ask over is taken when it is the only valid object. */
+    opts: { lastChance?: boolean } = {},
 ): Promise<T | undefined> {
     // A reasoning block that opens first and never closes carries no answer at
     // all — no primary candidate, and no fallback either: the reasoning quotes
@@ -829,11 +892,32 @@ export async function repairAndValidate<T = unknown>(
     // without it a prose example BEFORE the quote (`If nothing is wrong I
     // would return {"violations":[]}`) beat the real findings after it. No
     // fence and no balanced span → no floor.
+    // A first fence whose content did not validate is a quote as well, braces
+    // or not: code with `{ b() }` in it made a primary candidate that failed,
+    // and without this the `Empty would be {…}` after it beat the answer
+    // before it.
+    const fenced = /```(?:json)?\s*[\s\S]*?```/i.test(stripped);
     return firstValidatingObjectAfter<T>(
         stripped,
         validate,
         primarySpanEnd(stripped),
-        candidate == null,
+        candidate == null || fenced,
+        opts.lastChance === true,
+    );
+}
+
+/**
+ * A reply that ended on its own: `stop`, a tool call, or a finish the SDK did
+ * not name. `length`, `content-filter` and `other` (what the OpenAI-compatible
+ * SDK maps an upstream's `max_tokens` to) are not: asking again meets the same
+ * limit or refusal, and what was cut off is not a complete answer.
+ */
+export function endedOnItsOwn(finishReason: unknown): boolean {
+    return (
+        finishReason === undefined ||
+        finishReason === 'stop' ||
+        finishReason === 'tool-calls' ||
+        finishReason === 'unknown'
     );
 }
 
@@ -1107,13 +1191,21 @@ export function readOutput<T = unknown>(result: unknown): T {
 export async function salvageStructuredError<T = unknown>(
     err: unknown,
     wire: unknown,
+    /** No model re-ask follows (see repairAndValidate). */
+    opts: { lastChance?: boolean } = {},
 ): Promise<T | undefined> {
     if (!NoObjectGeneratedError.isInstance(err)) {
         return undefined;
     }
-    const { cause, text } = err as { cause?: unknown; text?: unknown };
+    const { cause, text, finishReason } = err as {
+        cause?: unknown;
+        text?: unknown;
+        finishReason?: unknown;
+    };
     if (!JSONParseError.isInstance(cause) || typeof text !== 'string') {
         return undefined;
     }
-    return repairAndValidate<T>(wire, text);
+    return repairAndValidate<T>(wire, text, {
+        lastChance: opts.lastChance === true && endedOnItsOwn(finishReason),
+    });
 }

@@ -1293,3 +1293,88 @@ describe('transport codes and links inside a provider body', () => {
         );
     });
 });
+
+// Review on #2700 (sartorijr92): each case is the reviewer's reproduction.
+describe('classifyLLMError: review on #2700', () => {
+    const { TypeValidationError, JSONParseError, NoObjectGeneratedError } =
+        jest.requireActual('ai');
+    const modelSays =
+        'The retry loop treats ENOTFOUND as fatal; getaddrinfo EAI_AGAIN is transient';
+
+    it.each([
+        [
+            'TypeValidationError',
+            () =>
+                new TypeValidationError({
+                    value: { suggestions: [{ suggestionContent: modelSays }] },
+                    cause: new Error('schema'),
+                }),
+        ],
+        ['JSONParseError', () => new JSONParseError({ text: modelSays, cause: new Error('parse') })],
+        [
+            'NoObjectGeneratedError',
+            () =>
+                new NoObjectGeneratedError({
+                    message: 'No object generated',
+                    text: modelSays,
+                    cause: new TypeValidationError({ value: modelSays, cause: new Error('x') }),
+                    response: {} as any,
+                    usage: {} as any,
+                    finishReason: 'stop',
+                }),
+        ],
+    ])(
+        'a %s whose model output quotes network codes stays UNKNOWN (no re-issue, no cascade)',
+        (_name, build) => {
+            const info = classifyLLMError(build());
+            expect(info.category).toBe(LlmErrorCategory.UNKNOWN);
+        },
+    );
+
+    it('an unresolvable host is TRANSIENT and the message says why', () => {
+        const cause = Object.assign(new TypeError('fetch failed'), {
+            cause: Object.assign(new Error('getaddrinfo ENOTFOUND api.deepseek.cm'), {
+                code: 'ENOTFOUND',
+                hostname: 'api.deepseek.cm',
+            }),
+        });
+        const err = new APICallError({
+            message: 'Cannot connect to API: getaddrinfo ENOTFOUND api.deepseek.cm',
+            url: 'https://api.deepseek.cm/v1/chat/completions',
+            requestBodyValues: {},
+            cause,
+            isRetryable: true,
+        });
+        const info = classifyLLMError(err, 'openai_compatible');
+        expect(info.category).toBe(LlmErrorCategory.TRANSIENT);
+        expect(info.friendlyMessage).toContain('getaddrinfo ENOTFOUND api.deepseek.cm');
+        expect(info.friendlyMessage).toContain('check the base URL');
+    });
+
+    it.each([
+        'Insufficient balance or no resource package. Please recharge. Please retry in 10s.',
+        'Key limit exceeded (monthly limit). Please retry in 30s',
+        'You have reached your specified API usage limits. You will regain access on 2026-12-01. Please retry in 30s',
+    ])('a spent balance with a short retry delay stays QUOTA_EXCEEDED: %s', (message) => {
+        const err = Object.assign(new Error(message), { statusCode: 429 });
+        expect(classifyLLMError(err).category).toBe(LlmErrorCategory.QUOTA_EXCEEDED);
+    });
+
+    it('a link naming a daily window does not switch the per-minute delay rule off', () => {
+        const err = Object.assign(
+            new Error(
+                'You exceeded your current quota. See https://ai.google.dev/gemini-api/docs/rate-limits#requests-per-day. Please retry in 17s.',
+            ),
+            { statusCode: 429 },
+        );
+        expect(classifyLLMError(err).category).toBe(LlmErrorCategory.RATE_LIMIT);
+    });
+
+    it('a link naming a per-minute window does not make a spent balance a rate limit', () => {
+        const err = Object.assign(
+            new Error('Insufficient balance. See https://docs.x.ai/limits#tokens-per-minute'),
+            { statusCode: 429 },
+        );
+        expect(classifyLLMError(err).category).toBe(LlmErrorCategory.QUOTA_EXCEEDED);
+    });
+});

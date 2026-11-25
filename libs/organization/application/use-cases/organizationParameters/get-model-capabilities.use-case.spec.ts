@@ -47,6 +47,30 @@ describe('GetModelCapabilitiesUseCase — provider-owned UI capability hints', (
             expect(c.reasoningAlwaysOn).toBe(true);
         });
 
+        // #2036's measurements (api.minimax.io/anthropic): plain MiniMax-M3
+        // answers with no thinking blocks with the field omitted and accepts
+        // `disabled`, so it is not a model that always reasons.
+        it('does not say plain MiniMax-M3 always reasons (#2036)', () => {
+            for (const model of ['MiniMax-M3', 'minimax-m3']) {
+                expect(
+                    useCase.execute('anthropic_compatible', model)
+                        .reasoningAlwaysOn,
+                ).toBeFalsy();
+            }
+        });
+
+        // Kimi k2.7-code/k3 and GLM-5.3 always think, but a slot with no saved
+        // level is sent a thinking budget here, so "its level can't be set"
+        // would be false.
+        it('does not say it for a model that is sent a level', () => {
+            for (const model of ['kimi-k2.7-code', 'k3', 'glm-5.3']) {
+                expect(
+                    useCase.execute('anthropic_compatible', model)
+                        .reasoningAlwaysOn,
+                ).toBeFalsy();
+            }
+        });
+
         it('never says a model it knows nothing about always reasons', () => {
             for (const [provider, model] of [
                 ['anthropic_compatible', 'llama-3.3-70b-instruct'],

@@ -29,6 +29,7 @@ import {
     extractJsonFromText,
     normalizeEnvelope,
     readOutput,
+    endedOnItsOwn,
     repairAndValidate,
     salvageStructuredError,
 } from '@libs/llm/structured-output-repair';
@@ -752,6 +753,8 @@ async function runReviewCall<T>(
             const repaired = await salvageStructuredError<T>(
                 err,
                 mode.validatingSchema,
+                // Already the re-ask: nothing follows it.
+                { lastChance: true },
             );
             if (repaired !== undefined) {
                 logger.warn({
@@ -795,17 +798,21 @@ async function runReviewCall<T>(
                     outputArgs: {}, // plain generateText — no Output.object, no tool_choice
                     ...(recovery ? { prompt: withJsonUserHint(user) } : {}),
                     extract: async (r: any) => {
+                        const ended = endedOnItsOwn(r?.finishReason);
                         const value = await repairAndValidate<T>(
                             mode.validatingSchema,
                             (r?.text ?? '') as string,
+                            // The re-ask is the last request this path makes.
+                            { lastChance: !!recovery && ended },
                         );
                         if (value === undefined) {
                             const e = new Error(
                                 `[structured-output] reroute-json produced no valid object for ${runName}`,
                             );
-                            // A reply the token limit cut off re-asks into
-                            // the same limit: thrown as is, like the text path.
-                            if (r?.finishReason !== 'length') {
+                            // A reply cut off by the token limit, a filter or
+                            // an unnamed upstream stop re-asks into the same
+                            // wall: thrown as is, like the text path.
+                            if (ended) {
                                 noValidObject.add(e);
                             }
                             throw e;

@@ -1452,6 +1452,43 @@ describe('reroute-json — no valid object re-asks once through the reroute', ()
         ).rejects.toThrow('produced no valid object');
         expect(mockGenerate).toHaveBeenCalledTimes(1);
     });
+
+    // Review on #2700: the OpenAI-compatible SDK maps an upstream's max_tokens
+    // to 'other'; a filter or a refusal would refuse again.
+    it.each(['other', 'content-filter'])(
+        'a reply that finished with %s is not re-asked',
+        async (finishReason) => {
+            mockGenerate.mockResolvedValueOnce({
+                text: '{"keep":',
+                finishReason,
+                usage: {},
+            });
+            await expect(
+                runStructuredReviewCall({
+                    ...base,
+                    schema: keepSchema,
+                    byokConfig: zooKimiSlot,
+                }),
+            ).rejects.toThrow('produced no valid object');
+            expect(mockGenerate).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it('the re-ask, the last request, takes an answer followed by a quoted line', async () => {
+        const answerThenQuote =
+            '{"keep":true}\n```ts\nconst x = await fetchUser(id);\n```';
+        mockGenerate
+            .mockResolvedValueOnce({ text: answerThenQuote, finishReason: 'stop', usage: {} })
+            .mockResolvedValueOnce({ text: answerThenQuote, finishReason: 'stop', usage: {} });
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema: keepSchema,
+                byokConfig: zooKimiSlot,
+            }),
+        ).resolves.toEqual({ keep: true });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
 });
 
 describe('reroute-json — a 429 is re-issued once, then handed to the fallback', () => {

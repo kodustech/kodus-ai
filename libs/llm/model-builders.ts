@@ -9,6 +9,7 @@
  * No LangChain runtime dependency: the bedrock config is
  * typed structurally, not via NormalizedByokConfig.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { wrapLanguageModel, type LanguageModel } from 'ai';
 import { createVertex } from '@ai-sdk/google-vertex';
 import { createVertexAnthropic } from '@ai-sdk/google-vertex/anthropic';
@@ -125,25 +126,47 @@ export interface BedrockCredentials {
     awsSessionToken?: string;
 }
 
-/** Whether `text` parses as JSON (the json tool's input always does). */
-const parsesAsJson = (text: unknown): boolean => {
-    if (typeof text !== 'string') return false;
-    try {
-        JSON.parse(text);
-        return true;
-    } catch {
-        return false;
+/**
+ * The `json` tool inputs of the Converse answer a call is waiting on, read from
+ * the response body itself (`toolUse` blocks named `json`), written as
+ * `@ai-sdk/amazon-bedrock` writes them into the text part:
+ * `JSON.stringify(toolUse.input)`. One store per `doGenerate`, so concurrent
+ * calls never read each other's answer.
+ */
+const converseToolInputs = new AsyncLocalStorage<{ inputs?: string[] }>();
+
+/** The SDK's fetch, also reading the json tool inputs off a Converse answer. */
+const fetchReadingToolInputs: typeof fetch = async (input, init) => {
+    const response = await fetch(input, init);
+    const store = converseToolInputs.getStore();
+    const url = typeof input === 'string' ? input : (input as any)?.url ?? String(input);
+    if (store && response.ok && /\/converse$/.test(url)) {
+        try {
+            const body: any = await response.clone().json();
+            const blocks = body?.output?.message?.content;
+            store.inputs = Array.isArray(blocks)
+                ? blocks
+                      .filter((b: any) => b?.toolUse?.name === 'json')
+                      .map((b: any) => JSON.stringify(b.toolUse.input))
+                : [];
+        } catch {
+            store.inputs = undefined;
+        }
     }
+    return response;
 };
 
 /**
  * When Bedrock answers through the forced `json` tool, `@ai-sdk/amazon-bedrock`
- * emits the tool input as one more text part AFTER the model's own text, and
+ * emits the tool input as one more text part next to the model's own text, and
  * the SDK joins them: a prose example the model wrote first (`If nothing is
  * wrong I would return {"violations":[]}`) then beat the tool answer and
  * shipped as an empty review. The tool input is the answer, as
- * `@ai-sdk/anthropic` treats it (it drops the text): keep only the last text
- * part that is JSON, which is the tool's (the turn ends at the tool call).
+ * `@ai-sdk/anthropic` treats it (it drops the text): keep only the text part
+ * that IS the tool input, identified from the response body
+ * (`fetchReadingToolInputs`), not by position. Two json tool calls in one turn,
+ * or a body that could not be read, cannot say which is the answer: the result
+ * is left as it came, and the call fails as it did before this.
  */
 function keepJsonToolAnswerOnly(model: LanguageModel): LanguageModel {
     return wrapLanguageModel({
@@ -151,15 +174,23 @@ function keepJsonToolAnswerOnly(model: LanguageModel): LanguageModel {
         middleware: {
             specificationVersion: 'v3',
             wrapGenerate: async ({ doGenerate }: any) => {
-                const result = await doGenerate();
+                const store: { inputs?: string[] } = {};
+                const result = await converseToolInputs.run(store, () =>
+                    doGenerate(),
+                );
                 const fromTool =
                     result?.providerMetadata?.bedrock
                         ?.isJsonResponseFromTool === true;
-                if (!fromTool || !Array.isArray(result.content)) {
+                if (
+                    !fromTool ||
+                    !Array.isArray(result.content) ||
+                    store.inputs?.length !== 1
+                ) {
                     return result;
                 }
+                const [toolText] = store.inputs;
                 const toolIndex = result.content.findLastIndex(
-                    (p: any) => p?.type === 'text' && parsesAsJson(p.text),
+                    (p: any) => p?.type === 'text' && p.text === toolText,
                 );
                 if (toolIndex < 0) {
                     return result;
@@ -194,6 +225,7 @@ export function bedrockModelFromCredentials(
             createAmazonBedrock({
                 region,
                 apiKey: decrypt(config!.awsBearerToken!),
+                fetch: fetchReadingToolInputs,
             })(modelId),
         );
     }
@@ -214,6 +246,7 @@ export function bedrockModelFromCredentials(
             accessKeyId,
             secretAccessKey,
             sessionToken,
+            fetch: fetchReadingToolInputs,
         })(modelId),
     );
 }

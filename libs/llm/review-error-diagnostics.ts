@@ -44,8 +44,27 @@ const SECRET_PATTERNS: ReadonlyArray<RegExp> = [
     // ordinary words such as "org-level" intact.
     /\borg-[A-Za-z0-9]{16,}/g,
     /\bak-[A-Za-z0-9]{12,}/g,
-    // A key named in a JSON body: {"api_key":"..."} / "authorization": "..."
-    /("?(?:api[_-]?key|authorization|access[_-]?token|secret)"?\s*[:=]\s*"?)[^"\s,}]+/gi,
+    // Keys of the other providers Kodus serves: Google AI Studio auth keys
+    // (AQ.), Bedrock API keys (ABSK), Fireworks (fw_), Together (tgp_v1_),
+    // Novita (sk_), xAI (xai-), Groq (gsk_), Hugging Face (hf_), Z.ai
+    // (<32 hex>.<16>), and any JWT.
+    /\bAQ\.[A-Za-z0-9\-_]{16,}/g,
+    /\bABSK[A-Za-z0-9+/=]{16,}/g,
+    /\bfw_[A-Za-z0-9]{12,}/g,
+    /\btgp_v1_[A-Za-z0-9\-_]{12,}/g,
+    /\bsk_[A-Za-z0-9\-_]{12,}/g,
+    /\bxai-[A-Za-z0-9]{16,}/g,
+    /\bgsk_[A-Za-z0-9]{16,}/g,
+    /\bhf_[A-Za-z0-9]{16,}/g,
+    /\b[0-9a-f]{32}\.[A-Za-z0-9]{16}\b/g,
+    /\beyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]*/g,
+    // A key in a query string: ?key=…, &api_key=…, &token=…
+    /([?&](?:key|api[_-]?key|access[_-]?token|token)=)[^&\s"']+/gi,
+    // A key named in a JSON body or prose: {"api_key":"..."}, "authorization":
+    // "...", token=..., password: ...
+    /("?(?:api[_-]?key|authorization|access[_-]?token|secret|token|password|passwd)"?\s*[:=]\s*"?)[^"\s,}]+/gi,
+    // An e-mail address (an account owner named in a billing error).
+    /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b/g,
 ];
 
 /**
@@ -155,12 +174,16 @@ const upstreamMessageIn = (body: unknown): string | undefined => {
         unknown
     >;
 
+    // Every upstream behind an aggregator answers in its own shape, and a
+    // labelled message can still be a payload: vLLM's 400 `message` is the
+    // Python repr of its validation errors, with the prompt (the customer's
+    // diff) as `'input'`. So the upstream's words are held to the prose test
+    // whatever field they came from.
     const said =
         typeof raw === 'string'
-            ? (messageIn(parsed(raw)) ??
-              (looksLikeProse(raw) ? raw.trim() : undefined))
+            ? (messageIn(parsed(raw)) ?? raw.trim())
             : messageIn(raw);
-    if (!said) return undefined;
+    if (!said || !looksLikeProse(said)) return undefined;
     return typeof providerName === 'string' && providerName.trim()
         ? `${providerName.trim()}: ${said}`
         : said;
@@ -185,6 +208,13 @@ export const extractProviderMessage = (
 ): string | undefined => {
     if (!err || typeof err !== 'object' || depth > 3) return undefined;
     const e = err as Record<string, unknown>;
+
+    // Below the error it was handed, only a provider's own error is read: an
+    // inner error is otherwise anything (a database driver's, a clone's), and
+    // its body is not something the provider said. A wrapper is walked through.
+    if (depth > 0 && e.name !== 'AI_APICallError') {
+        return innerProviderMessage(e, depth);
+    }
 
     const bodies: unknown[] = [
         e.data,
@@ -214,17 +244,28 @@ export const extractProviderMessage = (
         }
     }
 
-    // A wrapper carries no body of its own: the AI SDK's RetryError keeps the
-    // provider's answer on the last attempt (every retried 429 / 5xx in the
-    // agent loop), and our own errors keep it as the cause. The same walk
-    // extractErrorText makes, under the same publishing rules.
-    for (const inner of [e.lastError, e.cause]) {
-        if (inner && inner !== err) {
+    return innerProviderMessage(e, depth);
+};
+
+/**
+ * A wrapper carries no body of its own: the AI SDK's RetryError keeps the
+ * provider's answers on its attempts (every retried 429 / 5xx in the agent
+ * loop): `lastError`, then the earlier `errors` from last to first, since a
+ * later attempt can fail without a body (a timeout after an informative 429).
+ * Our own errors keep the provider's as the cause. Only an `APICallError` on
+ * the way is read (see above).
+ */
+const innerProviderMessage = (
+    e: Record<string, unknown>,
+    depth: number,
+): string | undefined => {
+    const attempts = Array.isArray(e.errors) ? [...e.errors].reverse() : [];
+    for (const inner of [e.lastError, ...attempts, e.cause]) {
+        if (inner && inner !== e) {
             const found = extractProviderMessage(inner, depth + 1);
             if (found) return found;
         }
     }
-
     return undefined;
 };
 

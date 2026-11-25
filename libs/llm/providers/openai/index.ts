@@ -37,6 +37,7 @@ import type {
 import type { TemperaturePolicy } from '../kernel/model-types';
 import {
     resolveCompatibleReasoningTraits,
+    reasonsWithNoLevelSent,
     compatibleTemperaturePolicy,
     isCompatibleReasoner,
     compatibleEffortValue,
@@ -77,11 +78,19 @@ export const openaiModule: ProviderModule = {
         // central family resolver (single source).
         const reasoner = isOpenAiReasoner(model);
         const reasoningConfig = openaiReasoningConfig(model);
+        // Native OpenAI reasoners OR a recognized compatible-family reasoner
+        // (Kimi/GLM/DeepSeek served over openai_compatible — those ids never
+        // appear on native OpenAI, so the OR is transport-safe).
+        const supportsReasoning =
+            !!reasoningConfig || isCompatibleReasoner(model);
+        // Offers no level, yet the model reasons on every call and none is
+        // sent (MiniMax M3.1 through a compatible gateway).
+        const alwaysOn =
+            !supportsReasoning &&
+            reasonsWithNoLevelSent(resolveCompatibleReasoningTraits(model));
         return {
-            // Native OpenAI reasoners OR a recognized compatible-family reasoner
-            // (Kimi/GLM/DeepSeek served over openai_compatible — those ids never
-            // appear on native OpenAI, so the OR is transport-safe).
-            supportsReasoning: !!reasoningConfig || isCompatibleReasoner(model),
+            supportsReasoning,
+            ...(alwaysOn ? { reasoningAlwaysOn: true } : {}),
             reasoningConfig,
             // Provider-level execution capabilities (01-04; per-model refinement
             // is a follow-up — note capabilities(model) can't see openai vs

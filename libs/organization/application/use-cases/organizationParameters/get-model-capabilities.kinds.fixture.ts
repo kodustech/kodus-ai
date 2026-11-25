@@ -20,10 +20,11 @@ export interface CapabilityKind {
 }
 
 export const CAPABILITY_KINDS = {
-    /** Always reasons, and no level can be sent on this wire. */
+    /** Always reasons, and no level is sent on this wire (#2036: M3.1 reasons
+     *  with the field omitted and refuses a disable; plain M3 does not). */
     alwaysOn: {
         provider: 'anthropic_compatible',
-        model: 'MiniMax-M3',
+        model: 'MiniMax-M3.1-Flash',
         caps: {
             temperature: { kind: 'adjustable' },
             supportsReasoning: false,

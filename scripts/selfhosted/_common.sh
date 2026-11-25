@@ -81,6 +81,19 @@ __restore_if_set HCLOUD_LOCATION           "$__snap_HCLOUD_LOCATION"
 __restore_if_set HCLOUD_SERVER_TYPE        "$__snap_HCLOUD_SERVER_TYPE"
 __restore_if_set HCLOUD_IMAGE              "$__snap_HCLOUD_IMAGE"
 
+# A caller that sets only the OpenAI-named var (scripts/e2e/run.sh, the old
+# docs' `API_OPEN_AI_API_KEY=… provision`) means it for the LLM, as it did
+# before API_LLM_*. The runtime prefers the generic var, so the one a config
+# file brought would outrank the caller: dropped unless the caller set it too.
+__caller_legacy_wins() {
+    local generic="$1" legacy_snap="$2" generic_snap="$3"
+    case "$legacy_snap" in
+        __SET__*) case "$generic_snap" in __SET__*) ;; *) unset "$generic" ;; esac ;;
+    esac
+}
+__caller_legacy_wins API_LLM_API_KEY  "$__snap_API_OPEN_AI_API_KEY"       "$__snap_API_LLM_API_KEY"
+__caller_legacy_wins API_LLM_BASE_URL "$__snap_API_OPENAI_FORCE_BASE_URL" "$__snap_API_LLM_BASE_URL"
+
 unset __snap_DIGITALOCEAN_TOKEN __snap_HCLOUD_TOKEN __snap_SH_LICENSE_KEY \
       __snap_GH_DEV_TOKEN __snap_API_OPEN_AI_API_KEY __snap_API_OPENAI_FORCE_BASE_URL \
       __snap_API_LLM_PROVIDER_MODEL __snap_API_LLM_PROVIDER __snap_API_LLM_API_KEY \
@@ -88,7 +101,7 @@ unset __snap_DIGITALOCEAN_TOKEN __snap_HCLOUD_TOKEN __snap_SH_LICENSE_KEY \
       __snap_KODUS_INSTALLER_PATH __snap_TEST_VM_PROVIDER \
       __snap_IMAGE_TAG __snap_DO_REGION __snap_DO_SIZE __snap_DO_IMAGE \
       __snap_HCLOUD_LOCATION __snap_HCLOUD_SERVER_TYPE __snap_HCLOUD_IMAGE
-unset -f __load_value_from_file __restore_if_set
+unset -f __load_value_from_file __restore_if_set __caller_legacy_wins
 
 # Resolve 1Password CLI references — any var whose value starts with `op://`
 # is replaced with the value of that 1Password item field, fetched via the

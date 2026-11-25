@@ -288,6 +288,8 @@ describe('bedrockModelFromCredentials', () => {
         expect(settings).toEqual({
             region: 'eu-west-1',
             apiKey: 'DEC:BEARER_CIPHER',
+            // Reads the json tool's input off the Converse body.
+            fetch: expect.any(Function),
         });
         // SigV4 fields must NOT leak into the bearer path.
         expect(settings.accessKeyId).toBeUndefined();
@@ -329,6 +331,7 @@ describe('bedrockModelFromCredentials', () => {
             accessKeyId: 'DEC:AK_CIPHER',
             secretAccessKey: 'DEC:SK_CIPHER',
             sessionToken: 'DEC:ST_CIPHER',
+            fetch: expect.any(Function),
         });
     });
 
@@ -385,24 +388,8 @@ describe('bedrockModelFromCredentials — the forced json tool is the answer', (
     const findings = '{"violations":[{"body":"bug","line":12}]}';
     const meta = { bedrock: { isJsonResponseFromTool: true } };
 
-    it('drops the prose text parts, keeping the tool input', async () => {
-        const out = await generateWith({
-            content: [
-                { type: 'reasoning', text: 'thinking' },
-                {
-                    type: 'text',
-                    text: 'If nothing is wrong I would return {"violations":[]}.',
-                },
-                { type: 'text', text: '{"violations":[]}' },
-                { type: 'text', text: findings },
-            ],
-            providerMetadata: meta,
-        });
-        expect(out.content).toEqual([
-            { type: 'reasoning', text: 'thinking' },
-            { type: 'text', text: findings },
-        ]);
-    });
+    // Which text part is the tool's is read from the Converse body, through
+    // the real SDK: model-builders.bedrock-json-tool.spec.ts.
 
     it('leaves a reply that did not come from the json tool untouched', async () => {
         const content = [

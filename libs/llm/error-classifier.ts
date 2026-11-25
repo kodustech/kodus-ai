@@ -134,9 +134,13 @@ export function classifyLLMError(
         extractErrorText(err).toLowerCase() || rawMessage.toLowerCase();
     const httpStatus = extractHttpStatus(err);
 
+    // Read from the error's structure, never its text: a validation or parse
+    // error carries the model's own output, which can quote "ENOTFOUND".
+    const connect =
+        httpStatus === undefined ? connectFailureOf(err) : undefined;
     let category = matchByHttpStatus(httpStatus, lower);
     if (category === LlmErrorCategory.UNKNOWN) {
-        category = matchByMessage(lower, httpStatus);
+        category = matchByMessage(lower, httpStatus, !!connect);
     }
     // A gateway that refuses to route a valid model (allowed providers, a
     // region pin) answers 400 or 404 as it likes; the body is the same
@@ -170,7 +174,9 @@ export function classifyLLMError(
                 : category === LlmErrorCategory.REQUEST_REJECTED &&
                     providerMessage
                   ? `The provider${provider ? ` (${provider})` : ''} refused the request for this model: ${providerMessage}`
-                  : buildFriendlyMessage(category, provider, lower),
+                  : category === LlmErrorCategory.TRANSIENT && connect
+                    ? `Couldn't connect to the provider${provider ? ` (${provider})` : ''}: ${connect}. If it keeps failing, check the base URL.`
+                    : buildFriendlyMessage(category, provider, lower),
         providerMessage,
         ...(category === LlmErrorCategory.MODEL_NOT_FOUND &&
         isRoutingRefusal(lower)
@@ -192,7 +198,16 @@ export function isAbortOrHardTimeout(err: unknown): boolean {
     if (!err) return false;
     if ((err as { name?: string }).name === 'AbortError') return true;
     const text = err instanceof Error ? err.message : String(err ?? '');
-    return /\[HARD-TIMEOUT\]|aborted|timed?\s*out|timeout/i.test(text);
+    if (/\[HARD-TIMEOUT\]|aborted|timed?\s*out|timeout/i.test(text)) {
+        return true;
+    }
+    // A connect timeout can carry no word for it: Node's dual-stack connect
+    // throws an `AggregateError` with an empty message and code `ETIMEDOUT`,
+    // which the AI SDK wraps as "Cannot connect to API: ".
+    return errorTree(err).some((e) => {
+        const code = String((e as { code?: unknown }).code ?? '');
+        return code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT';
+    });
 }
 
 const RETRIES_EXHAUSTED = Symbol.for('kodus.llm.retriesExhausted');
@@ -410,22 +425,35 @@ function matchByHttpStatus(
  * BOTH directions -- the wording it must catch, and the neighbouring
  * temporary wording it must leave on RATE_LIMIT.
  */
+/**
+ * Words in a link are not the provider's words: Fireworks' rate-limit 429 links
+ * ".../guides/quotas_usage/rate-limits" and read as a spent quota, and a link to
+ * ".../limits#tokens-per-minute" is not a per-minute window. Bounded to URL
+ * characters: in minified JSON a link runs straight into
+ * `","code":"insufficient_quota"`, which must survive.
+ */
+function withoutLinks(text: string): string {
+    return text.replace(/https?:\/\/[^\s"'<>\\)\]}]+/g, ' ');
+}
+
 function looksLikeQuota(message: string): boolean {
+    const lower = withoutLinks(message);
     // A per-minute quota is a rate limit that clears on its own, not a spent
     // balance. Google words both as "You exceeded your current quota"; only the
     // quota id in the error body ("...InputTokensPerModelPerMinute...") tells a
     // per-minute token limit from a daily or billing one.
-    if (looksLikePerMinuteLimit(message)) {
+    if (looksLikePerMinuteLimit(lower)) {
         return false;
     }
-    // Words in a link are not the provider's words: Fireworks' rate-limit 429
-    // links ".../guides/quotas_usage/rate-limits" and read as a spent quota.
-    // Toward RATE_LIMIT, the cheap direction (above).
-    // Bounded to URL characters: in minified JSON a link runs straight into
-    // `","code":"insufficient_quota"`, which must survive.
-    const lower = message.replace(/https?:\/\/[^\s"'<>\\)\]}]+/g, ' ');
+    return lower.includes('quota') || namesSpentBalance(lower);
+}
+
+/**
+ * The spent-balance and spent-cap vocabulary, without the bare word "quota"
+ * (Google words a per-minute limit as "You exceeded your current quota").
+ */
+function namesSpentBalance(lower: string): boolean {
     return (
-        lower.includes('quota') ||
         lower.includes('credit') ||
         lower.includes('billing') ||
         lower.includes('payment') ||
@@ -469,16 +497,55 @@ function looksLikeQuota(message: string): boolean {
     );
 }
 
-/** A connection that never got an answer: refused, no DNS, no route. */
-function unreachable(lower: string): boolean {
-    return (
-        lower.includes('cannot connect to api') ||
-        lower.includes('econnrefused') ||
-        lower.includes('enotfound') ||
-        lower.includes('eai_again') ||
-        lower.includes('ehostunreach') ||
-        lower.includes('enetunreach')
+/** Socket codes of a connection that never got an answer: refused, no DNS,
+ *  no route. */
+const UNREACHABLE_CODES = new Set([
+    'ECONNREFUSED',
+    'ENOTFOUND',
+    'EAI_AGAIN',
+    'EHOSTUNREACH',
+    'ENETUNREACH',
+]);
+
+/** The errors an error is made of: itself, its `cause`, the AI SDK's
+ *  `RetryError` attempts, an `AggregateError`'s members (dual-stack connect). */
+function errorTree(err: unknown, depth = 0, out: object[] = []): object[] {
+    if (!err || typeof err !== 'object' || depth > 4 || out.includes(err)) {
+        return out;
+    }
+    out.push(err);
+    const e = err as { cause?: unknown; lastError?: unknown; errors?: unknown };
+    errorTree(e.cause, depth + 1, out);
+    errorTree(e.lastError, depth + 1, out);
+    if (Array.isArray(e.errors)) {
+        for (const member of e.errors) errorTree(member, depth + 1, out);
+    }
+    return out;
+}
+
+/**
+ * Why a call never reached the provider, read from the error's structure: a
+ * socket code (`ENOTFOUND`, `ECONNREFUSED`…) on the error or its causes, or the
+ * AI SDK's own connect failure (`APICallError` "Cannot connect to API"). The
+ * text of a validation or parse error is the model's output and is never read.
+ * Returns the deepest cause's message (`getaddrinfo ENOTFOUND api.x.cm`), or
+ * the code, for the message the user sees; undefined when it was reached.
+ */
+function connectFailureOf(err: unknown): string | undefined {
+    const tree = errorTree(err);
+    const coded = tree.find((e) =>
+        UNREACHABLE_CODES.has(String((e as { code?: unknown }).code ?? '')),
+    ) as { code?: string; message?: string } | undefined;
+    const sdkConnect = tree.some(
+        (e) =>
+            (e as { name?: string }).name === 'AI_APICallError' &&
+            /^cannot connect to api\b/i.test(
+                String((e as { message?: string }).message ?? ''),
+            ),
     );
+    if (!coded && !sdkConnect) return undefined;
+    const detail = coded?.message?.trim() || coded?.code;
+    return (detail || 'the connection failed').slice(0, 200);
 }
 
 /** "key limit exceeded", "usage limit reached", "spending cap": a named cap. */
@@ -496,12 +563,24 @@ function namesASpentCap(lower: string): boolean {
  * billing quota gives no delay. A daily quota in the same text is never a
  * per-minute limit.
  */
-function looksLikePerMinuteLimit(lower: string): boolean {
+function looksLikePerMinuteLimit(text: string): boolean {
+    const lower = withoutLinks(text);
     if (/per[\s_-]?day/.test(lower)) {
         return false;
     }
     if (/per[\s_-]?minute/.test(lower)) {
         return true;
+    }
+    // A short delay does not make a spent balance a rate limit: "Insufficient
+    // balance … Please retry in 10s" is still a balance to top up. Google's
+    // "please check your plan and billing details" is boilerplate on its
+    // per-minute 429 too (#2130), so it says nothing about the balance.
+    if (
+        namesSpentBalance(
+            lower.replace(/please check your plan and billing details/g, ' '),
+        )
+    ) {
+        return false;
     }
     const delay = /retry in (\d+(?:\.\d+)?)\s*s\b/.exec(lower);
     return !!delay && Number(delay[1]) <= PER_MINUTE_RETRY_MAX_SECONDS;
@@ -525,7 +604,11 @@ function looksLikeModelAccessDenied(lower: string): boolean {
     );
 }
 
-function matchByMessage(lower: string, httpStatus?: number): LlmErrorCategory {
+function matchByMessage(
+    lower: string,
+    httpStatus?: number,
+    unreachableEndpoint = false,
+): LlmErrorCategory {
     // Same vocabulary the 429 branch uses -- see looksLikeQuota.
     if (looksLikeQuota(lower)) {
         return LlmErrorCategory.QUOTA_EXCEEDED;
@@ -595,7 +678,7 @@ function matchByMessage(lower: string, httpStatus?: number): LlmErrorCategory {
         // for any fetch-level failure; the codes cover callers outside it.
         // Only with no status: a provider that answered was reached, and a
         // body that echoes a diff mentioning ENOTFOUND is a rejection.
-        (httpStatus === undefined && unreachable(lower)) ||
+        unreachableEndpoint ||
         lower.includes('socket hang up') ||
         lower.includes('network error') ||
         lower.includes('fetch failed') ||
