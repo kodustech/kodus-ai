@@ -1,5 +1,6 @@
 import type {
     UpdateSuggestionOptions,
+    KodyChangeRequestFinding,
     KodyChangeRequestRecord,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
@@ -169,6 +170,22 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    addKodyChangeRequestSummary(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        requestedAt: string,
+        summaryCommentId: string,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.addKodyChangeRequestSummary(
+            organizationId,
+            repositoryId,
+            prNumber,
+            requestedAt,
+            summaryCommentId,
+        );
+    }
+
     clearKodyChangeRequest(
         organizationId: string,
         repositoryId: string,
@@ -194,6 +211,20 @@ export class PullRequestsService implements IPullRequestsService {
             repositoryId,
             prNumber,
             requestedAt,
+        );
+    }
+
+    findKodyChangeRequestFindings(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        suggestionIds: string[],
+    ): Promise<KodyChangeRequestFinding[]> {
+        return this.pullRequestsRepository.findKodyChangeRequestFindings(
+            organizationId,
+            repositoryId,
+            prNumber,
+            suggestionIds,
         );
     }
 
