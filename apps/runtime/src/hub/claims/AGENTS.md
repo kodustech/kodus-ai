@@ -40,6 +40,8 @@ Everything the runtime-hub does with a claim: acquire, the cell's outcome, relea
 - A new step kind: `StepDispatcher` (its `StepKind`, refusal codes), the protocol first.
 - A new refusal before admission: `ClaimService.refusalBeforeAdmission`, with a blocker card in `libs/runtime/blockers/catalog.ts` when users see it.
 
+- `claim.acquire skipBake` (a base built cold, `claim.service.ts`): sent only to a cell that names `skipBake`, with no shared images; any other cell gets the blocker `skip_bake_unsupported` before anything is recorded or sent.
+
 ## Tests
 - `API_NODE_ENV=test npx jest apps/runtime/src/hub/claims` (in-memory store, no services). `claim-lifecycle.spec.ts` covers the races; `cell-memory.spec.ts` the admission line.
 - `pg-machine-minutes.*.integration.spec.ts`: `RUNTIME_IT_DATABASE_URL`, `--runInBand`.

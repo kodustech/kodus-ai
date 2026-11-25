@@ -44,6 +44,13 @@ describe('reserved ticket pins the environment client', () => {
         expect(h.post).toHaveBeenCalledTimes(1);
     });
 
+    it('sends no claim outside the ticket: a base built cold is blocked skip_bake_unsupported, so the PR boot failure stays as it was', async () => {
+        const h = fixture();
+        const outcome = await h.env.acquire({ ...h.request, idempotencyKey: `${key}:cold`, skipBake: true });
+        expect(outcome).toMatchObject({ status: 'blocked', blockers: [{ signature: 'skip_bake_unsupported' }] });
+        expect(h.post).not.toHaveBeenCalled();
+    });
+
     it('retargets a setup child before opening credentials without reserving another slot', async () => {
         const h = fixture();
         const setupTicket: PhysicalAdmissionTicket = { ...ticket, kind: 'setup', key: 'setup-key', members: [{ side: 'setup', idempotencyKey: 'setup:setup-key', claimId: claimIdFor(ticket.organizationId, 'setup:setup-key') }] };

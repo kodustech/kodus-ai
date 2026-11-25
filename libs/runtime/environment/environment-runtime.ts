@@ -29,6 +29,12 @@ export interface AcquireRequest {
     /** A setup of the default branch: its builds' cache becomes the environment's when each build finishes (setup only, never a PR). */
     seedsCache?: boolean;
     /**
+     * A base built cold (runtime base claim only): the cell builds from the recipe at the claim's commit and takes no
+     * bake, no pool machine and no shared image. A cell that does not name skipBake is not sent the claim: the hub
+     * answers the blocker `skip_bake_unsupported`, and nothing was started.
+     */
+    skipBake?: boolean;
+    /**
      * A template's setup (`template:<org>/<env>`, setup only): placement alone reads it, to reserve only the cell
      * bound to that key. The worker never sends it to the cell or the hub.
      */

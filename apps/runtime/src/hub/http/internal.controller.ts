@@ -46,6 +46,7 @@ const AcquireBody = z.strictObject({
     repoToken: z.string().min(1),
     diagnosticHold: z.boolean().optional(),
     seedsCache: z.boolean().optional(),
+    skipBake: z.boolean().optional(),
     recipe: ClaimRecipeSchema.optional(),
     size: MachineSizeSchema.optional(),
     // The least isolation the claim runs under (isolation-architecture.md C1): a cell that does not satisfy it blocks the claim.

@@ -217,7 +217,7 @@ const withObserved = <S extends 'base' | 'pr'>(side: S, o: Observed | undefined)
 /** One side's acquire key: what the hub knows its claim (and its claim.progress) by. */
 const acquireKey = (req: RuntimeRunRequested, side: 'base' | 'pr', renewed = false) => `${req.runId}:${side}:${req.attempt}${renewed ? ':renewed' : ''}`;
 
-export function acquireRequest(req: RuntimeRunRequested, side: 'base' | 'pr', renewed = false, canaries: Canary[] = []): AcquireRequest {
+export function acquireRequest(req: RuntimeRunRequested, side: 'base' | 'pr', renewed = false, canaries: Canary[] = [], cold = false): AcquireRequest {
     return {
         organizationId: req.organizationId,
         environmentId: req.environment.environmentId,
@@ -226,7 +226,9 @@ export function acquireRequest(req: RuntimeRunRequested, side: 'base' | 'pr', re
         // The primary's commit for the side: the PR's own, unless the PR is in another repository of the workspace.
         ref: { side, sha: claimShaOf(req, side) },
         consumer: 'runtime',
-        idempotencyKey: acquireKey(req, side, renewed),
+        idempotencyKey: `${acquireKey(req, side, renewed)}${cold ? ':cold' : ''}`,
+        // A base built cold takes no bake and no pool machine: it confirms a PR's boot failure (confirmedByColdBase).
+        ...(cold ? { skipBake: true } : {}),
         ...(req.environment.recipe ? { recipe: req.environment.recipe } : {}),
         ...(req.environment.size ? { size: req.environment.size } : {}),
         // Planted by the cell in both sides' workloads: a sighting anywhere halts the Run.
@@ -1076,21 +1078,7 @@ async function settleBoot(run: RunScope, b: BootedSides): Promise<ReadySides | {
     if (isBlocked(pr) && infraBootBlocker(pr)) {
         // The cell or the hub, not the PR: a fault one of them declared about itself (report.ts
         // infraBootBlocker). Never a finding against the PR; its paths stay untested, and why.
-        const blocker = bootBlockerOf(pr.blockers, pr.buildStateEvictedAt);
-        const analysis = await diffAnalysisOf(run);
-        const ids = await deps.step('uncovered:pr-boot', async () => {
-            const ids = behaviorEntryPointIds(analysis);
-            await deps.projection.upsert(req.runId, { uncoveredEntryPoints: ids, uncovered: uncoveredByBoot(ids, blocker), ...bootFailureFor(run, 'pr', pr, booted.pr.readyAt), ...coldBuildOf(b) });
-            return ids;
-        });
-        return {
-            finished: await finishRun(
-                run,
-                'partly_tested',
-                decideRunVerdict({ entryPoints: ids, probes: [] }),
-                `the cell could not start the PR's machine (${pr.blockers.map((x) => `${x.kind}:${x.signature}`).join(', ')}); not attributed to the PR`,
-            ),
-        };
+        return { finished: await prBootNotAttributed(run, b, pr, `the cell could not start the PR's machine (${pr.blockers.map((x) => `${x.kind}:${x.signature}`).join(', ')}); not attributed to the PR`) };
     }
     if (isBlocked(pr)) {
         // The proxy's own record of what it denied the PR's claims and not the base's (never the PR's output): a
@@ -1100,6 +1088,11 @@ async function settleBoot(run: RunScope, b: BootedSides): Promise<ReadySides | {
             prOnlyDeniedHosts([...(await deps.claims.deniedEgressOfRun(req.organizationId, req.runId)), ...bundleDeniedOf(pr)]),
         );
         if (denied.length) return { finished: await prBootDenied(run, b, pr, denied) };
+        // A base that booted from the bake never ran the build the PR failed: the comparison is fair only once a base built
+        // cold from the recipe has booted too. The PR's output decides nothing (infraBootBlocker); the cold base's boot does.
+        if (!unresolvedImage(base) && (await confirmedByColdBase(run)) === 'fails') {
+            return { finished: await prBootNotAttributed(run, b, pr, 'the base fails to build here too; not attributed to the PR') };
+        }
         const boot: ProbeVerdict = {
             probeId: 'boot',
             entryPoint: 'boot',
@@ -1124,6 +1117,53 @@ async function settleBoot(run: RunScope, b: BootedSides): Promise<ReadySides | {
     const identityMismatch = runIdentityMismatchOf(base, pr);
     if (identityMismatch) deps.log?.warn({ msg: 'run.identity_mismatch', runId: req.runId, mismatch: identityMismatch, baseCellId: base.cellId, prCellId: pr.cellId });
     return { base, pr, pinnedImageId, rounds, baseMs: b.baseMs, applyMs: b.applyMs, ...(identityMismatch ? { identityMismatch } : {}) };
+}
+
+/**
+ * A PR side that stopped the boot and is not attributed to the PR: partly tested, every behavior entry point untested
+ * with the PR's boot blocker as the cause, and the reason says why it is not the PR's.
+ */
+async function prBootNotAttributed(run: RunScope, b: BootedSides, pr: Blocked, reason: string): Promise<RunResult> {
+    const { deps, req } = run;
+    const blocker = bootBlockerOf(pr.blockers, pr.buildStateEvictedAt);
+    const analysis = await diffAnalysisOf(run);
+    const ids = await deps.step('uncovered:pr-boot', async () => {
+        const ids = behaviorEntryPointIds(analysis);
+        await deps.projection.upsert(req.runId, { uncoveredEntryPoints: ids, uncovered: uncoveredByBoot(ids, blocker), ...bootFailureFor(run, 'pr', pr, b.booted.pr.readyAt), ...coldBuildOf(b) });
+        return ids;
+    });
+    return finishRun(run, 'partly_tested', decideRunVerdict({ entryPoints: ids, probes: [] }), reason);
+}
+
+/** What a cold base's acquire says about a PR's boot failure when it is none of these: the claim never started. */
+const INCONCLUSIVE_COLD_SIGNATURES = new Set(['skip_bake_unsupported', 'cell_unavailable', 'cell_lost', 'admission_ticket_invalid', 'admission_ticket_required']);
+
+/**
+ * The base built cold, to settle a PR boot failure the base's own boot cannot: a base that booted from the bake never ran
+ * the build the PR failed. A second base claim on the environment builds from the recipe at the base commit (no bake, no
+ * pool machine, no shared image) and is released as soon as it answers; it is never baked, never seeds a cache. In one
+ * durable step, so a replay asks nothing again. `fails`: it did not boot either, so the PR's failure is not the PR's;
+ * `boots`: the PR's failure stands; `unknown`: nothing was learned (a cell that cannot, no room, a lost cell), so the
+ * verdict is the one it was.
+ */
+async function confirmedByColdBase(run: RunScope): Promise<'fails' | 'boots' | 'unknown'> {
+    const { deps, req } = run;
+    return deps.step('confirm:base-cold', async () => {
+        let claim: Claim | Blocked;
+        try {
+            claim = await deps.env.acquire(acquireRequest(req, 'base', false, deps.canaries.forRun(req), true));
+        } catch (e) {
+            if (isCancellation(e)) throw e;
+            deps.log?.warn({ msg: 'run.cold_base.unanswered', runId: req.runId, error: (e as Error)?.message });
+            return 'unknown' as const;
+        }
+        if (!isBlocked(claim)) {
+            await deps.env.release(claim.claimId).catch((e) => deps.onReleaseFailed?.(claim.claimId, e as Error));
+            return 'boots' as const;
+        }
+        const unanswered = claim.blockers.some((x) => INCONCLUSIVE_COLD_SIGNATURES.has(x.signature) || x.kind === 'security_violation');
+        return unanswered || isCapacityWait(claim) ? ('unknown' as const) : ('fails' as const);
+    });
 }
 
 /** The hosts the PR claim's failure bundle says the proxy denied it (the cell's own record, never its log); a platform-denied host is no host to approve. */

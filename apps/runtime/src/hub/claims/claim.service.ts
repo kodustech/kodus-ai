@@ -513,6 +513,11 @@ export class ClaimService {
             this.log('warn', 'claim.authored_files_unsupported', { ...ids, files: req.recipe.files.length });
             return authoredFilesUnsupported();
         }
+        if (req.skipBake && !supports(session, 'skipBake')) {
+            // Nothing was sent or recorded: a cell that does not name the field would refuse it at decode.
+            this.log('warn', 'claim.skip_bake_unsupported', ids);
+            return { status: 'blocked', blockers: [{ kind: 'platform', signature: 'skip_bake_unsupported', message: 'this cell cannot build a claim without its bake' }] };
+        }
         if (req.consumer === 'sandbox' && !supports(session, 'sandbox')) {
             // Nothing was sent or recorded: the worker picks a cell that names it.
             this.log('warn', 'claim.sandbox_unsupported', ids);
@@ -717,6 +722,7 @@ export class ClaimService {
                     leaseExpiresAt,
                     ...(hold ? { diagnosticHold: true } : {}),
                     ...(seedsCache ? { seedsCache: true } : {}),
+                    ...(req.skipBake ? { skipBake: true } : {}),
                     ...(req.recipe ? { recipe: claimRecipe(req.recipe) } : {}),
                     ...(egressAllow.length ? { egressAllow } : {}),
                     ...egressTiers,
@@ -756,7 +762,7 @@ export class ClaimService {
      * cell builds as it would have.
      */
     private async sharedImagesFor(session: CellSession, req: AcquireInput, ids: ClaimIds & { orgId: string }): Promise<SharedImage[]> {
-        if (req.consumer === 'setup' || !supports(session, 'bakeShare')) return [];
+        if (req.consumer === 'setup' || req.skipBake || !supports(session, 'bakeShare')) return [];
         try {
             return await this.store.sharedImages(req.organizationId, req.environmentId, MAX_SHARED_IMAGES);
         } catch (e) {

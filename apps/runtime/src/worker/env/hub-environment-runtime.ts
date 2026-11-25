@@ -424,6 +424,8 @@ export class HubEnvironmentClient implements EnvironmentRuntime {
 
     private async sendAcquire(req: AcquireRequest, timeoutMs: number): Promise<Claim | Blocked> {
         const ticket = this.run.admissionTicket;
+        // A physical admission names the claims of its Run: a base built cold is none of them, so none is asked.
+        if (ticket && req.skipBake) return { status: 'blocked', blockers: [{ kind: 'platform', signature: 'skip_bake_unsupported', message: 'a physically admitted Run takes no claim outside its admission' }] };
         if (ticket) {
             if (ticket.organizationId !== req.organizationId || req.organizationId !== this.run.organizationId ||
                 (ticket.kind === 'run' && (ticket.key !== this.run.runId || req.runId !== this.run.runId || req.consumer !== 'runtime')) ||
