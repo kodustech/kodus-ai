@@ -9,6 +9,11 @@ environments still read "active".
 - **The state** (`buildstate`, `-gvisor-build-state`): BuildKit's whole root per environment, `EnvKey(cell, org, env)`,
   layers and `RUN --mount=type=cache` directories. The default branch's setup writes it (seed); every other build reads
   a copy-on-write view. It is the fast path: demo-twenty's PR boot on it took 0 ms of view time.
+  On a boat host the work directory is a FUSE disk restored lazily from the snapshot: no reflink, no overlay upper
+  layer there. `-gvisor-build-state-views-dir` puts each build's view on the host's local disk (kernel overlay, the
+  state as its lower directory) and leaves the state where the template's snapshot carries it. Without the state
+  (`build.cache.input mode=exported`) each PR build imported the 4.5 GB exported cache inside gVisor: 140 to 420 s per
+  service on a 4-service monorepo, with its build steps taking 3 to 19 s.
 - **The exported cache** (`buildcache`, `cache/env/<key>/<service>`): a `type=local` BuildKit cache. Until P2 of the
   2026-11-14 review it was written only by a setup that could not hold the state; a setup that seeded the state
   exported none, to save minutes. Now every seeding setup exports it next to the state (`build.go`,

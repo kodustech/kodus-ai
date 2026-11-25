@@ -36,7 +36,7 @@ type spareView struct {
 	gen uint64
 }
 
-func (s *Store) sparesRoot() string { return filepath.Join(s.root, "spare") }
+func (s *Store) sparesRoot() string { return filepath.Join(s.views, "spare") }
 
 // takeSpare moves the state's spare to base, the build's view directory, when
 // one was made at the state's current generation. false: none, stale, or the

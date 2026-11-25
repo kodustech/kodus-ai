@@ -88,6 +88,10 @@ type Config struct {
 	// every other build reads it through a throwaway overlay. Off: each build starts from the exported
 	// cache alone.
 	PersistBuildState bool
+	// BuildStateViewsDir, when set, is where each build's throwaway view of a
+	// state goes (buildstate.Config.ViewsRoot), always a kernel overlay: a
+	// reflink clone never crosses disks. Empty: next to the states.
+	BuildStateViewsDir string
 	// DiskMinFreeBytes is the cell's free-disk floor (-disk-min-free-gb),
 	// under which the agent's watchdog stops every claim of the cell. The
 	// driver keeps a margin of the same size above it (diskfloor.go): a
@@ -565,9 +569,12 @@ func New(ctx context.Context, d Docker, cfg Config) (*Driver, error) {
 		// elsewhere: on the overlay a build that replaces a file of an earlier
 		// layer fails and runs again cold (buildstate.cloneMounter).
 		mounter, view := buildstate.MounterFor(root)
-		dr.log().Info("build.state.store", "root", root, "view", view)
+		if cfg.BuildStateViewsDir != "" {
+			mounter, view = buildstate.DefaultMounter(), "overlay"
+		}
+		dr.log().Info("build.state.store", "root", root, "view", view, "views", cfg.BuildStateViewsDir)
 		if dr.states, err = buildstate.New(buildstate.Config{
-			Root: root, CellID: cfg.CellID, Cell: dr.envCell, MinFree: cfg.BuildStateMinFreeBytes,
+			Root: root, ViewsRoot: cfg.BuildStateViewsDir, CellID: cfg.CellID, Cell: dr.envCell, MinFree: cfg.BuildStateMinFreeBytes,
 			BuilderDir: dr.dirs.builderDir, Mounter: mounter, FreeBytes: buildstate.FreeBytes, Clock: clk, Log: dr.log(),
 			// A clone is a plain directory: the next build's view can be made
 			// ahead of it (buildstate/spare.go). A kernel overlay is made at once.

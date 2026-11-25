@@ -3,7 +3,7 @@
 docker-gvisor's BuildKit state per environment (its layer snapshots and `RUN --mount=type=cache` directories), kept so the next setup and every pull request compile only what changed. A subpackage the driver holds (`driver.go` `states`, through `build_states.go` `stateStore`; used by `build.go`, `build_states.go`, `cache.go`, `reap.go`); it knows no Docker. It runs in the cell process. The package doc in `store.go` states the model.
 
 ## Owns
-- `store.go` `Store`, `New`, `Config`: states under a root (`env/<key>`, `machine/<machine>/<service>` for a build's view, a trash).
+- `store.go` `Store`, `New`, `Config`: states under a root (`env/<key>`, `machine/<machine>/<service>` for a build's view, a trash). `Config.ViewsRoot` (`-gvisor-build-state-views-dir`) puts the views, the spares and their trash on another disk, for a state directory that takes no overlay upper layer (a boat host's work directory is a FUSE disk restored lazily from the snapshot); the states stay under the root, where the template's snapshot carries them.
 - `Acquire` and `Release`: one seeding build (`Request.Seeds`, `ModeSeed`) writes a state, or any number of builds read a copy-on-write view of it (`ModeOverlay`), never both; a busy state leaves the build on its own throwaway state and the exported cache (`Acquire` returns false). A waiting seed goes before new readers, for at most `Config.SeedWait`.
 - Views: `clone_linux.go` `cloneMounter` (a reflink clone) and `mount_linux.go` `overlayMounter` (the kernel's overlay), picked by `MounterFor`; none off Linux (`mount_other.go`).
 - Spare views made ahead of the next build, dropped when a seed or an eviction overlaps them: `spare.go`.

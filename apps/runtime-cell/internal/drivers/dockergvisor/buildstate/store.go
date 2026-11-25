@@ -32,6 +32,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -82,6 +83,9 @@ type Mounter interface {
 // what eviction took out of env before its bytes go.
 type Store struct {
 	root string
+	// views is where each build's throwaway view, the spares and their trash
+	// go: the state's root unless Config.ViewsRoot names another directory.
+	views string
 	// cell is the cell id the environments' directories are keyed by.
 	cell func() string
 	// minFree is the disk floor Evict keeps; zero: no eviction.
@@ -159,6 +163,13 @@ const defaultSeedWait = 5 * time.Minute
 // Config is what New needs; Clock nil is the wall clock.
 type Config struct {
 	Root, CellID string
+	// ViewsRoot, when set, holds each build's throwaway view (its upper,
+	// work and merged directories), the spare views and their trash, apart
+	// from the states under Root: a host whose state directory cannot take
+	// an overlay's upper layer (boat restores it on a lazily loaded FUSE
+	// disk) keeps the states there and the views on a local disk. Empty:
+	// Root.
+	ViewsRoot string
 	// Cell, when set, gives the id the directories are keyed by, read at each
 	// use; a host made from a template keys them by the template's cell.
 	Cell    func() string
@@ -188,8 +199,12 @@ func New(c Config) (*Store, error) {
 		id := c.CellID
 		cell = func() string { return id }
 	}
+	views := c.ViewsRoot
+	if views == "" {
+		views = c.Root
+	}
 	s := &Store{
-		root: c.Root, cell: cell, minFree: c.MinFree, builderDir: c.BuilderDir, mounter: c.Mounter, freeBytes: c.FreeBytes,
+		root: c.Root, views: views, cell: cell, minFree: c.MinFree, builderDir: c.BuilderDir, mounter: c.Mounter, freeBytes: c.FreeBytes,
 		clock: clock.Or(c.Clock), log: c.Log, seedWait: c.SeedWait, holds: map[string]*stateHold{},
 		removing: map[string]bool{}, removeAll: os.RemoveAll,
 		spareViews: c.SpareViews, gen: map[string]uint64{}, spares: map[string]spareView{}, making: map[string]bool{},
@@ -257,7 +272,7 @@ func (s *Store) Acquire(ctx context.Context, req Request) (State, bool) {
 		}
 		return State{}, false
 	}
-	base := filepath.Join(s.root, "machine", req.Machine, req.Service)
+	base := filepath.Join(s.views, "machine", req.Machine, req.Service)
 	st := State{Dir: filepath.Join(base, "merged"), Mode: ModeOverlay, env: dir, overlay: base, machine: req.Machine}
 	upper, work := filepath.Join(base, "upper"), filepath.Join(base, "work")
 	fail := func(event string, err error) (State, bool) {
@@ -468,6 +483,15 @@ func (s *Store) touch(dir string) {
 	}
 }
 
+// trashDirs are the trash directories Evict empties: the state root's and,
+// when the views are elsewhere, the views root's.
+func (s *Store) trashDirs() []string {
+	if s.views == s.root {
+		return []string{filepath.Join(s.root, "trash")}
+	}
+	return []string{filepath.Join(s.root, "trash"), filepath.Join(s.views, "trash")}
+}
+
 // Evict removes the environment states nobody holds that are cheapest to
 // keep (cost.go: rebuild cost weighed by how recently each was used) while
 // the cell's disk has less free space than the floor, then whatever an
@@ -475,17 +499,18 @@ func (s *Store) touch(dir string) {
 // It retries the unmounts that failed first: their states stay held until then.
 func (s *Store) Evict() error {
 	errs := []error{s.retryStuck(), s.evictCheapest()}
-	trash := filepath.Join(s.root, "trash")
-	entries, _ := os.ReadDir(trash)
-	for _, e := range entries {
-		p := filepath.Join(trash, e.Name())
-		s.mu.Lock()
-		busy := s.removing[p]
-		s.mu.Unlock()
-		if busy {
-			continue // a released view's removal is deleting it
+	for _, trash := range s.trashDirs() {
+		entries, _ := os.ReadDir(trash)
+		for _, e := range entries {
+			p := filepath.Join(trash, e.Name())
+			s.mu.Lock()
+			busy := s.removing[p]
+			s.mu.Unlock()
+			if busy {
+				continue // a released view's removal is deleting it
+			}
+			errs = append(errs, os.RemoveAll(p))
 		}
-		errs = append(errs, os.RemoveAll(p))
 	}
 	return errors.Join(errs...)
 }
@@ -577,7 +602,12 @@ func (s *Store) takeOut(dir string) (string, error) {
 // removes the bytes. The caller holds s.mu.
 func (s *Store) trashLocked(dir, name string) (string, error) {
 	s.seq++
-	trash := filepath.Join(s.root, "trash", name+"-"+strconv.FormatInt(s.clock.Now().UnixNano(), 36)+"-"+strconv.Itoa(s.seq))
+	// A rename never crosses disks: a view's trash is under the views root.
+	root := s.root
+	if s.views != s.root && strings.HasPrefix(dir, s.views+string(filepath.Separator)) {
+		root = s.views
+	}
+	trash := filepath.Join(root, "trash", name+"-"+strconv.FormatInt(s.clock.Now().UnixNano(), 36)+"-"+strconv.Itoa(s.seq))
 	if err := os.MkdirAll(filepath.Dir(trash), 0o700); err != nil {
 		return "", err
 	}

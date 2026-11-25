@@ -281,6 +281,10 @@ type settings struct {
 	GVisorBuildState          bool
 	GVisorBuildStateKeep      string
 	GVisorBuildStateMinFreeGB int
+	// GVisorBuildStateViewsDir holds each build's throwaway view of a state
+	// apart from the states (a disk that takes an overlay's upper layer, when
+	// the work directory's does not). Empty: under the state's root.
+	GVisorBuildStateViewsDir string
 	// GVisorBuildCacheRemote is the build cache's store off the cell (an OCI
 	// registry, docs/runtime/build-cache.md); GVisorBuildCacheRemoteAuthFile
 	// holds its "user:password". Empty: the cache lives on the cell only.
@@ -403,6 +407,7 @@ func (s *settings) register(fs *flag.FlagSet) {
 	fs.StringVar(&s.DockerDataRoot, "docker-data-root", "/var/lib/docker", "docker-gvisor: Docker's data root (daemon.json data-root), whose free space the disk watchdog reads")
 	fs.IntVar(&s.DiskMinFreeGB, "disk-min-free-gb", 5, "docker-gvisor: under this much free space in -docker-data-root the cell stops its claims (a booting one fails as resources/cell_disk_full) before the disk fills for every tenant; under twice it on that disk or the work directory's, no workload is created and a running build stops (resources/disk_capacity), and the one claim whose disk grew the most is stopped (resources/disk_top_writer); 0: no watchdog")
 	fs.StringVar(&s.GVisorBuildStateKeep, "gvisor-build-state-keep", "20GB", "docker-gvisor: what BuildKit's GC keeps in one environment's state")
+	fs.StringVar(&s.GVisorBuildStateViewsDir, "gvisor-build-state-views-dir", "", "docker-gvisor: where each build's throwaway view of an environment's state goes (its overlay's upper, work and merged directories), on a disk that takes an overlay's upper layer; the states stay under the work directory. For a host whose work directory is on a FUSE disk (a boat host restored from a snapshot). Empty: next to the states")
 	fs.IntVar(&s.GVisorBuildStateMinFreeGB, "gvisor-build-state-min-free-gb", 20, "docker-gvisor: below this much free disk, the environment states cheapest to keep (rebuild time, last use) are removed, then exported build caches")
 	fs.StringVar(&s.GVisorBuildCacheRemote, "gvisor-build-cache-remote", "", "docker-gvisor: an OCI registry off the cell where the default branch's setup pushes its build cache and a build whose state and cache are gone pulls it, http(s)://host[:port]/<prefix> (plain HTTP only on loopback); empty: the build cache lives on the cell only")
 	fs.StringVar(&s.GVisorBakeShare, "gvisor-bake-share", "", "docker-gvisor: the org's OCI registry of baked images, http(s)://host[:port]/<prefix> (plain HTTP only on loopback): each bake's images are pushed there and a claim on any cell of the org pulls one by the digest the hub recorded instead of building it; empty: bakes stay on the cell")

@@ -58,7 +58,7 @@ func (s *Store) recoverOverlays() error {
 	if s.mounter == nil {
 		return nil
 	}
-	machines := filepath.Join(s.root, "machine")
+	machines := filepath.Join(s.views, "machine")
 	mounts, err := s.mounter.Mounted(machines)
 	if err != nil {
 		return err

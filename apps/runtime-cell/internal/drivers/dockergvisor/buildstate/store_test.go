@@ -456,3 +456,55 @@ func TestAViewWhoseRemovalFailedIsDeletedByTheNextSweep(t *testing.T) {
 		t.Fatalf("the sweep left the view: %v", err)
 	}
 }
+
+// A boat host restores the state's directory on a lazily loaded FUSE disk
+// that takes no overlay upper layer: the state stays there (the template's
+// snapshot carries it) and each build's throwaway view goes on another disk
+// (ViewsRoot). The view is made, released and swept there, never next to the
+// state, and a restart finds what a crashed cell left there.
+func TestAViewGoesUnderTheViewsRootWhenOneIsSet(t *testing.T) {
+	dir := t.TempDir()
+	root, views := filepath.Join(dir, "lazy", "buildkit"), filepath.Join(dir, "local", "views")
+	m := &fakeMounter{}
+	st, err := New(Config{
+		Root: root, ViewsRoot: views, CellID: testCell, Mounter: m,
+		BuilderDir: func(p string) error { return os.MkdirAll(p, 0o700) },
+		FreeBytes:  func(string) (int64, error) { return 1 << 40, nil },
+		Clock:      clock.NewFake(time.Date(2026, 11, 25, 12, 0, 0, 0, time.UTC)),
+		Log:        slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(st.WaitRemovals)
+	mkdir(t, st.EnvDir(testOrg, testEnv))
+	view, ok := st.Acquire(context.Background(), pr("m-pr"))
+	if !ok {
+		t.Fatal("reader refused")
+	}
+	if !strings.HasPrefix(view.Dir, views+string(filepath.Separator)) || !strings.HasPrefix(view.overlay, views+string(filepath.Separator)) {
+		t.Fatalf("the view is not under the views root: %s (%s)", view.Dir, view.overlay)
+	}
+	if lower := m.mounts[view.Dir]; lower != st.EnvDir(testOrg, testEnv) {
+		t.Fatalf("the view's lower directory is %q, want the state", lower)
+	}
+	st.Release(view)
+	st.WaitRemovals()
+	if _, err := os.Stat(filepath.Join(root, "machine")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a view directory was made next to the state: %v", err)
+	}
+	if _, err := os.Stat(view.overlay); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the released view is still there: %v", err)
+	}
+
+	// What a crashed cell left mounted under the views root is unmounted at start.
+	left := filepath.Join(views, "machine", "m-old", "api", "merged")
+	mkdir(t, left)
+	m2 := &fakeMounter{mounts: map[string]string{left: st.EnvDir(testOrg, testEnv)}}
+	if _, err := New(Config{Root: root, ViewsRoot: views, CellID: testCell, Mounter: m2, Log: slog.New(slog.DiscardHandler)}); err != nil {
+		t.Fatal(err)
+	}
+	if len(m2.unmounts) != 1 || m2.unmounts[0] != left {
+		t.Fatalf("the leftover view was not unmounted: %v", m2.unmounts)
+	}
+}
