@@ -124,7 +124,6 @@ export class StartSecurityScanUseCase {
         private readonly queueProbe: ISecurityScanQueueProbe,
     ) {}
 
-    /** Open to every plan, free included, while the scan is in beta (#2451). */
     /**
      * The model a scan runs on and its rates, refused as a start would refuse
      * it: no BYOK model, a picked model that is gone, or a limit the model
@@ -159,6 +158,7 @@ export class StartSecurityScanUseCase {
         return { model, rates };
     }
 
+    /** Open to every plan, free included, while the scan is in beta (#2451). */
     async execute(input: StartSecurityScanInput): Promise<SecurityScanRecord> {
         const orgTeam = input.organizationAndTeamData;
 

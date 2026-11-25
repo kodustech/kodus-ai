@@ -458,6 +458,13 @@ const Composer = ({
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string>();
 
+    // A number typed in one unit is never read in the other: a $5 cap must
+    // not become 5 tokens.
+    const changeUnit = (unit: "usd" | "tokens") => {
+        if (unit === limitBy) return;
+        setLimitBy(unit);
+        setRawLimit("");
+    };
     const { value: limit, error: limitError } = parseScanLimit(
         rawLimit.trim(),
         limitBy,
@@ -493,7 +500,7 @@ const Composer = ({
                 "We couldn't save the schedule. Try again.";
             // The model has no known price: a USD cap can't hold, so the
             // limit moves to tokens and the API's explanation stays.
-            if (isNoKnownPriceMessage(message)) setLimitBy("tokens");
+            if (isNoKnownPriceMessage(message)) changeUnit("tokens");
             setError(message);
         } finally {
             setSaving(false);
@@ -582,7 +589,7 @@ const Composer = ({
                     label="Limit unit"
                     value={limitBy}
                     disabled={saving}
-                    onChange={(v) => setLimitBy(v as "usd" | "tokens")}>
+                    onChange={(v) => changeUnit(v as "usd" | "tokens")}>
                     <SelectItem value="usd">in USD</SelectItem>
                     <SelectItem value="tokens">in tokens</SelectItem>
                 </Slot>
