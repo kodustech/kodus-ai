@@ -23,6 +23,8 @@ import {
     type RuntimeReleaseGate,
     type RuntimeRepoTokenIssuer,
     type RuntimeSuiteBaselineReader,
+    RUNTIME_ENVIRONMENT_SETUP_READER,
+    type RuntimeEnvironmentSetupReader,
 } from '../domain/ports';
 import { sealForRuntime } from './secret-sealer';
 import { suiteOfRecipeAt } from './suite-recipe';
@@ -52,6 +54,8 @@ export class RuntimeSuiteBaselineRequests {
         @Inject(RUNTIME_CLOCK) private readonly now: Clock,
         @Inject(RUNTIME_API_CONFIG) private readonly config: RuntimeApiConfig,
         @Optional() @Inject(RUNTIME_RELEASE_GATE) private readonly release?: RuntimeReleaseGate,
+        /** The environment's setup: its booted recipe is the suite's source when the repository has none committed. */
+        @Optional() @Inject(RUNTIME_ENVIRONMENT_SETUP_READER) private readonly setups?: Pick<RuntimeEnvironmentSetupReader, 'get'>,
     ) {}
 
     /** Never throws: a request that cannot be issued is logged and left for the next pass. */
@@ -79,7 +83,7 @@ export class RuntimeSuiteBaselineRequests {
                 }
                 const orgTeam = { organizationId: env.organizationId, teamId: env.teamId };
                 const repo = { repositoryId: env.repositoryId, repositoryName: env.repositoryName };
-                const suite = await suiteOfRecipeAt(this.git, { ...orgTeam, ...repo }, p.mainSha);
+                const suite = await suiteOfRecipeAt(this.git, { ...orgTeam, ...repo }, p.mainSha, await this.setups?.get(p.organizationId, p.environmentId));
                 const shards = suite?.baseline ? suite.shards : undefined;
                 if (shards === undefined) {
                     // No suite at that commit: nothing to run, and nothing minted. Not asked again by this process.

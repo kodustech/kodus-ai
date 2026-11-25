@@ -18,6 +18,8 @@ import {
     type RuntimeGitPort,
     type RuntimeReleaseGate,
     type RuntimeSuiteShadowReader,
+    RUNTIME_ENVIRONMENT_SETUP_READER,
+    type RuntimeEnvironmentSetupReader,
 } from '../domain/ports';
 import { RuntimeSuiteInputs } from './suite-inputs.service';
 import { suiteOfRecipeAt } from './suite-recipe';
@@ -46,6 +48,8 @@ export class RuntimeSuiteShadowRequests {
         @Inject(RUNTIME_CLOCK) private readonly now: Clock,
         @Inject(RUNTIME_API_CONFIG) private readonly config: RuntimeApiConfig,
         @Optional() @Inject(RUNTIME_RELEASE_GATE) private readonly release?: RuntimeReleaseGate,
+        /** The environment's setup: its booted recipe is the suite's source when the repository has none committed. */
+        @Optional() @Inject(RUNTIME_ENVIRONMENT_SETUP_READER) private readonly setups?: Pick<RuntimeEnvironmentSetupReader, 'get'>,
     ) {}
 
     /** Never throws: a shadow that cannot be issued is logged and left for the next pass. */
@@ -72,7 +76,7 @@ export class RuntimeSuiteShadowRequests {
                     continue;
                 }
                 const repo = { organizationId: env.organizationId, teamId: env.teamId, repositoryId: env.repositoryId, repositoryName: env.repositoryName };
-                const suite = await suiteOfRecipeAt(this.git, repo, p.mainSha);
+                const suite = await suiteOfRecipeAt(this.git, repo, p.mainSha, await this.setups?.get(p.organizationId, p.environmentId));
                 if (!suite) {
                     // No suite at main any more: nothing to run, nothing minted. Not asked again by this process.
                     this.handled.add(p.shadowRunId);

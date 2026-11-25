@@ -41,6 +41,8 @@ export const SuiteReportSchema = z.strictObject({
         .max(ANNOTATIONS_MAX),
     annotationsOmitted: count,
     unavailable: z.enum(SUITE_UNAVAILABLE_REASONS).optional(),
+    /** The suite block came from the recipe the environment booted, not one committed in the repository (RuntimeSuiteRequested.suiteSource). */
+    source: z.literal('environment').optional(),
     requestedAt: z.iso.datetime(),
 });
 

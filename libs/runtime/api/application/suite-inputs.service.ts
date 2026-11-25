@@ -103,9 +103,10 @@ export class RuntimeSuiteInputs {
      * commit declares no suite, so nothing is minted for a suite that cannot run.
      */
     async forRun(input: { repo: SuiteRepo; environmentId: string; diff: PullRequestDiff; runId: string; headSha: string }): Promise<SuiteRunInputs | undefined> {
-        const mainSha = (await this.setups.get(input.repo.organizationId, input.environmentId))?.sha;
+        const setup = await this.setups.get(input.repo.organizationId, input.environmentId);
+        const mainSha = setup?.sha;
         if (!mainSha) return undefined;
-        const suite = await suiteOfRecipeAt(this.git, input.repo, mainSha);
+        const suite = await suiteOfRecipeAt(this.git, input.repo, mainSha, setup);
         if (!suite) return undefined;
         const [repoToken, ...moreRepoTokens] = await this.tokensFor(input.repo, suite.shards, input.runId);
         return {

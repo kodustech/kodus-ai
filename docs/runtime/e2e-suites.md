@@ -98,6 +98,11 @@ Rules:
   block with `origin: inferred` like an inferred recipe; the user edits it in the recipe editor, and the web shows
   which keys were inferred. If nothing is certain the block is absent and the feature is off (no guess).
 - Suite changes on a PR's recipe never apply to that PR: the recipe is read from the default branch (S-52), as today.
+- **Where the block is read.** The recipe committed in the repository decides, a suite or none. With none committed, the
+  recipe the environment booted at the main commit decides the same way (Kody's or Kodus's, recorded on the setup;
+  `suite-recipe.ts` `environmentRecipeAt`): the Runs already boot it, so a customer has e2e from the first pull
+  request instead of after a commit of `.kodus/`. The command carries `suiteSource`, and the check says when the suite
+  ran from a setup file the repository does not have yet, with the link to review and add it.
 
 ## 4. Where it runs
 

@@ -84,6 +84,8 @@ export function renderSuiteCheckOutput(r: SuiteReport, links: RuntimeLinks): Sui
         }
     }
     lines.push('', selectionLine(r));
+    // The suite ran from the setup file Kody wrote, which the repository does not have yet: said, with where to review it.
+    if (r.source === 'environment') lines.push(`Suite settings: the setup file Kody wrote from your CI, not in your repository yet.${links.settings ? ` [Review it and add it](${links.settings})` : ''}`);
     if (r.baseline) lines.push(`Baseline: \`${r.baseline.sha.slice(0, 7)}\` on main.`);
     if (r.baseDrift) lines.push(`main has moved ${plural(r.baseDrift, 'commit')} since this branch started: update the branch to confirm.`);
     if (r.baseDrift && r.selection.reachUnknown) lines.push(`Which specs this change reaches is not known (${FULL_REASON_TEXT[r.selection.reachUnknown]}), so a failing spec cannot be confirmed as a regression until the branch is up to date.`);

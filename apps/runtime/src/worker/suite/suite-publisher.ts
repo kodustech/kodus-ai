@@ -11,6 +11,9 @@ export interface SuitePublishRequester {
 }
 
 const ZERO = { passed: 0, failed: 0, skipped: 0, notRun: 0 };
+
+/** The check says when the suite ran from the recipe the environment booted rather than one committed in the repository. */
+const sourceOf = (cmd: RuntimeSuiteRequested): { source?: 'environment' } => (cmd.suiteSource === 'environment' ? { source: 'environment' } : {});
 const NO_CLASSES = { regression: 0, preExisting: 0, flaky: 0, unclassified: 0, infra: 0 };
 
 /**
@@ -42,14 +45,16 @@ export class SuitePublisher {
                 annotations: [],
                 annotationsOmitted: 0,
                 requestedAt: cmd.requestedAt,
+                ...sourceOf(cmd),
             },
         });
     }
 
     async finished(cmd: RuntimeSuiteRequested, result: SuiteServiceResult, suite: { cwd?: string }): Promise<void> {
         if (cmd.mode === 'baseline' || cmd.mode === 'shadow' || result.status === 'off') return;
-        const report = await this.reportOf(cmd, result, suite);
-        if (!report) return;
+        const built = await this.reportOf(cmd, result, suite);
+        if (!built) return;
+        const report = { ...built, ...sourceOf(cmd) };
         await this.requester.request({ ...this.envelope(cmd, 'final'), check: { status: 'completed', conclusion: suiteConclusionOf(report.state) }, report });
     }
 
@@ -70,6 +75,7 @@ export class SuitePublisher {
                 annotations: [],
                 annotationsOmitted: 0,
                 requestedAt: cmd.requestedAt,
+                ...sourceOf(cmd),
             },
         });
     }

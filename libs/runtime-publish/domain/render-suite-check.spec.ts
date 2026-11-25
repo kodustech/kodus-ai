@@ -51,6 +51,13 @@ describe('the suite check output', () => {
         expect(out.summary).toContain('| Unclassified | 3 |');
     });
 
+    // The suite runs from the setup file Kody wrote before anyone commits it: the check says so and where to review it.
+    it("says when the suite ran from the setup file Kody wrote, which the repository does not have yet", () => {
+        const out = renderSuiteCheckOutput(report({ source: 'environment' }), { settings: 'https://app.example/runtime/environments/env-1' });
+        expect(out.summary).toContain('the setup file Kody wrote from your CI, not in your repository yet. [Review it and add it](https://app.example/runtime/environments/env-1)');
+        expect(renderSuiteCheckOutput(report(), {}).summary).not.toContain('Suite settings');
+    });
+
     it('says the baseline it compared with and how far main moved, with the hint to update the branch', () => {
         const out = renderSuiteCheckOutput(report({ baseline: { sha: 'c'.repeat(40) }, baseDrift: 4 }), {});
         expect(out.summary).toContain('Baseline: `ccccccc`');

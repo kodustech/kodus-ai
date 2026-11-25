@@ -17,7 +17,7 @@ const SUITE = 'suite:\n  runner: cypress\n  command: npx cypress run --spec "{sp
 const recipe = `version: 1\nservices:\n  compose:\n    public: app\n${SUITE}`;
 const env = (patch: Partial<ProductEnvironment> = {}): ProductEnvironment => ({ environmentId: 'env-1', organizationId: ORG, teamId: TEAM, repositoryId: REPO, repositoryName: 'acme/shop', state: 'active', createdAt: NOW.toISOString(), updatedAt: NOW.toISOString(), ...patch });
 
-function world(o: { head?: Partial<Awaited<ReturnType<RuntimeGitPort['getPullRequestHead']>> & object> | null; recipe?: string | null; setupSha?: string | null; released?: boolean; truncated?: boolean; diff?: Array<{ path: string; previousPath?: string }>; removed?: string[]; compare?: unknown } = {}) {
+function world(o: { head?: Partial<Awaited<ReturnType<RuntimeGitPort['getPullRequestHead']>> & object> | null; recipe?: string | null; setupSha?: string | null; setupRecipe?: { content: string; origin: string; sha?: string }; released?: boolean; truncated?: boolean; diff?: Array<{ path: string; previousPath?: string }>; removed?: string[]; compare?: unknown } = {}) {
     const outbox = new FakeOutbox();
     const targets = new InMemoryRunTargetStore();
     const issued: string[] = [];
@@ -29,7 +29,7 @@ function world(o: { head?: Partial<Awaited<ReturnType<RuntimeGitPort['getPullReq
         ...(o.compare === 'absent' ? {} : { compareWithMain: async (i: unknown) => (compared.push(i), o.compare === 'throws' ? Promise.reject(new Error('git api down')) : ('compare' in o ? o.compare : { mergeBase: BASE, behindBy: 1 })) }),
     } as unknown as RuntimeGitPort;
     const tokens = { issue: async () => (issued.push('t'), `ghs_${issued.length}`) };
-    const setups = { get: async () => (o.setupSha === null ? null : { sha: o.setupSha ?? MAIN }) };
+    const setups = { get: async () => (o.setupSha === null ? null : { sha: o.setupSha ?? MAIN, ...(o.setupRecipe ? { recipe: { path: '.kodus/workspace.yaml', state: 'found', sha: o.setupRecipe.sha ?? o.setupSha ?? MAIN, content: o.setupRecipe.content, origin: o.setupRecipe.origin } } : {}) }) };
     const store = { get: async () => env() };
     const step = new RuntimeSuiteRequester(store as any, git, tokens, outbox as any, clock, config(), setups as any, targets, { getTypeIntegration: async () => PlatformType.GITHUB }, o.released === undefined ? undefined : runtimeReleaseGate(o.released));
     return { step, outbox, targets, issued, compared };
@@ -37,6 +37,32 @@ function world(o: { head?: Partial<Awaited<ReturnType<RuntimeGitPort['getPullReq
 const commands = (ob: FakeOutbox) => ob.rows.filter((r) => r.payload.event_name === 'runtime.suite.requested').map((r) => r.payload.payload);
 
 describe('asking for the suite of a pull request (CI mode)', () => {
+    // A design partner's monorepo would have had no e2e until someone committed .kodus/: the Runs already boot the recipe Kody
+    // wrote, and the suite now runs from it too. A recipe committed in the repository still decides, a suite or none.
+    describe("the suite of the recipe the environment booted, when the repository has none committed", () => {
+        it('runs from the recipe Kody wrote and the environment booted at the main commit', async () => {
+            const w = world({ recipe: null, setupRecipe: { content: recipe, origin: 'authored' } });
+            expect(await w.step.requestCi({ environment: env(), prNumber: 42 })).toMatchObject({ status: 'requested' });
+            expect(commands(w.outbox)[0]).toMatchObject({ mode: 'ci', mainSha: MAIN, suiteSource: 'environment' });
+        });
+
+        it('says the suite came from the repository when it is committed', async () => {
+            const w = world({ setupRecipe: { content: recipe, origin: 'authored' } });
+            await w.step.requestCi({ environment: env(), prNumber: 42 });
+            expect(commands(w.outbox)[0]).toMatchObject({ suiteSource: 'repository' });
+        });
+
+        it('runs nothing when the committed recipe declares no suite, whatever the environment booted', async () => {
+            const w = world({ recipe: 'version: 1\nservices:\n  compose:\n    public: app\n', setupRecipe: { content: recipe, origin: 'authored' } });
+            expect(await w.step.requestCi({ environment: env(), prNumber: 42 })).toEqual({ status: 'skipped', reason: 'no_suite' });
+        });
+
+        it('runs nothing from a recipe booted at another commit than the main one', async () => {
+            const w = world({ recipe: null, setupRecipe: { content: recipe, origin: 'authored', sha: 'f'.repeat(40) } });
+            expect(await w.step.requestCi({ environment: env(), prNumber: 42 })).toEqual({ status: 'skipped', reason: 'no_suite' });
+        });
+    });
+
     it('issues one suite_requested of mode ci with the PR, the main commit of the template, the changed files and one token per claim', async () => {
         const w = world();
         const out = await w.step.requestCi({ environment: env(), prNumber: 42 });

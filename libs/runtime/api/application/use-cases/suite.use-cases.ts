@@ -141,10 +141,11 @@ export class GetRuntimeEnvironmentSuiteUseCase {
 
     async execute(input: { user: Partial<IUser>; environmentId: string }): Promise<RuntimeEnvironmentSuiteView> {
         const env = await environmentFor(this.environments, this.authorization, this.members, input.user, input.environmentId, Action.Read);
-        const mainSha = (await this.setups.get(env.organizationId, env.environmentId))?.sha;
+        const setup = await this.setups.get(env.organizationId, env.environmentId);
+        const mainSha = setup?.sha;
         const repo = { organizationId: env.organizationId, teamId: env.teamId, repositoryId: env.repositoryId, repositoryName: env.repositoryName };
         const [recipe, selection, lastBaseline] = await Promise.all([
-            mainSha ? suiteDeclarationAt(this.git, repo, mainSha) : undefined,
+            mainSha ? suiteDeclarationAt(this.git, repo, mainSha, setup) : undefined,
             this.reader.selectionState(env.organizationId, env.environmentId),
             this.reader.lastBaseline(env.organizationId, env.environmentId),
         ]);

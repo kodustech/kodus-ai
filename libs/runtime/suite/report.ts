@@ -83,6 +83,8 @@ export interface SuiteReport {
     annotations: SuiteAnnotation[];
     annotationsOmitted: number;
     unavailable?: SuiteUnavailableReason;
+    /** The suite block came from the recipe the environment booted, not one committed in the repository: the check says so. */
+    source?: 'environment';
     requestedAt: string;
 }
 

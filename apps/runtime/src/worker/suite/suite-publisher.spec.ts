@@ -52,6 +52,16 @@ describe('publishing the suite check', () => {
         });
     });
 
+    it("says, when it opens and when it closes, that the suite ran from the recipe the environment booted", async () => {
+        const w = await world({ results: [failing], classification });
+        await w.publisher.started(cmd({ suiteSource: 'environment' }));
+        await w.publisher.finished(cmd({ suiteSource: 'environment' }), { status: 'ran', suiteRunId: ID, state: 'failed', replayed: false }, {});
+        expect(w.sent.map((m) => m.report.source)).toEqual(['environment', 'environment']);
+        const plain = await world({ results: [failing], classification });
+        await plain.publisher.finished(cmd({ suiteSource: 'repository' }), { status: 'ran', suiteRunId: ID, state: 'failed', replayed: false }, {});
+        expect(plain.sent[0].report).not.toHaveProperty('source');
+    });
+
     it('a run that never said how it chose reports the whole suite, with no reason it cannot prove', async () => {
         const w = await world({ results: [{ ...failing, status: 'passed' }], state: 'passed' });
         await w.publisher.finished(cmd(), { status: 'ran', suiteRunId: ID, state: 'passed', replayed: false }, {});

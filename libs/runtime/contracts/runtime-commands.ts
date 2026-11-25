@@ -478,6 +478,12 @@ export const RuntimeSuiteRequestedSchema = z
         mainSpecs: z.array(z.strictObject({ path: z.string().min(1).max(512), sizeBytes: z.number().int().min(0) })).max(SUITE_CHANGED_FILES_MAX).optional(),
         /** Run only these spec files (a retry of a shard or of the failed specs); the suite's digest stays the whole suite's. */
         specs: z.array(z.string().min(1).max(512)).max(SUITE_CHANGED_FILES_MAX).optional(),
+        /**
+         * Where the suite block came from: the recipe committed in the repository, or the one the environment booted (Kody's or
+         * Kodus's) when none is committed; the check says which. Absent: the repository's. Deploy the runtime-worker before the
+         * product sends it: an older worker's strict schema refuses the field.
+         */
+        suiteSource: z.enum(['repository', 'environment']).optional(),
     })
     .superRefine((m, ctx) => {
         const pr = [m.prNumber, m.prSha, m.mergeBase];

@@ -74,9 +74,11 @@ export class RuntimeSuiteRequester {
         if (head.draft) return { status: 'skipped', reason: 'draft' };
         if (head.fork) return { status: 'skipped', reason: 'fork' };
         // The main side is the commit the environment's template was built from: the setup's.
-        const mainSha = (await this.setups.get(env.organizationId, env.environmentId))?.sha;
+        const setup = await this.setups.get(env.organizationId, env.environmentId);
+        const mainSha = setup?.sha;
         if (!mainSha) return { status: 'skipped', reason: 'no_setup' };
-        const suite = await suiteOfRecipeAt(this.git, { ...orgTeam, ...repo }, mainSha);
+        // The committed recipe's suite, else the one of the recipe the environment booted (suite-recipe.ts environmentRecipeAt).
+        const suite = await suiteOfRecipeAt(this.git, { ...orgTeam, ...repo }, mainSha, setup);
         if (!suite) return { status: 'skipped', reason: 'no_suite' };
         const platform = await this.platforms.getTypeIntegration(orgTeam);
         if (!platform) return { status: 'skipped', reason: 'no_setup' };
@@ -117,6 +119,7 @@ export class RuntimeSuiteRequester {
                     repositoryId: env.repositoryId,
                     ...(env.repositoryName.includes('/') ? { repositoryFullName: env.repositoryName } : {}),
                     mode: 'ci',
+                    suiteSource: suite.source,
                     prNumber: input.prNumber,
                     prSha: head.headSha,
                     mergeBase: standing.mergeBase ?? head.baseSha,
