@@ -517,6 +517,7 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
             'API_LLM_PROVIDER=openai_compatible',
             'API_LLM_PROVIDER_MODEL=kimi-k2.6',
             'API_LLM_API_KEY=sk-fake-moonshot',
+            'API_LLM_BASE_URL=https://api.moonshot.ai/v1',
         ]);
         const vmEnv = vmLlmEnv(box, {
             API_LLM_PROVIDER: 'openai',
@@ -526,6 +527,29 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
         const declared = resolveDeclaredEnvProvider(vmEnv);
         expect(declared.kind === 'declared' && declared.config).toMatchObject({
             apiKey: 'sk-proj-caller',
+        });
+        // The config's endpoint went with its key: the caller's key is not
+        // sent to Moonshot.
+        expect(vmEnv.API_LLM_BASE_URL).toBeUndefined();
+    });
+
+    it('a caller declaring its provider and its own endpoint keeps both', () => {
+        const box = sandbox();
+        writeConfig(box, [
+            'API_LLM_PROVIDER=openai_compatible',
+            'API_LLM_PROVIDER_MODEL=kimi-k2.6',
+            'API_LLM_API_KEY=sk-fake-moonshot',
+            'API_LLM_BASE_URL=https://api.moonshot.ai/v1',
+        ]);
+        const vmEnv = vmLlmEnv(box, {
+            API_LLM_PROVIDER: 'openai_compatible',
+            API_OPEN_AI_API_KEY: 'fw-fake-caller',
+            API_LLM_BASE_URL: 'https://api.fireworks.ai/inference/v1',
+        });
+        const declared = resolveDeclaredEnvProvider(vmEnv);
+        expect(declared.kind === 'declared' && declared.config).toMatchObject({
+            apiKey: 'fw-fake-caller',
+            baseURL: 'https://api.fireworks.ai/inference/v1',
         });
     });
 

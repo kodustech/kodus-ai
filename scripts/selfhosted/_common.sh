@@ -85,21 +85,28 @@ __restore_if_set HCLOUD_IMAGE              "$__snap_HCLOUD_IMAGE"
 # docs' `API_OPEN_AI_API_KEY=… provision`) means it for the LLM, as it did
 # before API_LLM_*. The runtime prefers the generic var, so the one a config
 # file brought would outrank the caller: dropped unless the caller set it too.
+# Returns 0 only when it dropped the config's value.
 __caller_legacy_wins() {
     local generic="$1" legacy_snap="$2" generic_snap="$3"
-    case "$legacy_snap" in
-        __SET__*) case "$generic_snap" in __SET__*) ;; *) unset "$generic" ;; esac ;;
-    esac
+    case "$legacy_snap" in __SET__*) ;; *) return 1 ;; esac
+    case "$generic_snap" in __SET__*) return 1 ;; esac
+    unset "$generic"
 }
 # The key alone is ambiguous: API_OPEN_AI_API_KEY is also the embeddings key.
 # It stands for the LLM when the caller says so: beside the legacy base URL, or
 # beside a provider it declared itself. Otherwise only in a config that names no
 # provider (a pre-API_LLM_* one); the configured LLM key stays.
+__caller_key_won=
 case "$__snap_API_OPENAI_FORCE_BASE_URL$__snap_API_LLM_PROVIDER" in
-    *__SET__*) __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" ;;
-    *) [ -z "${API_LLM_PROVIDER:-}" ] && __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" ;;
+    *__SET__*) __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" && __caller_key_won=1 ;;
+    *) [ -z "${API_LLM_PROVIDER:-}" ] && __caller_legacy_wins API_LLM_API_KEY "$__snap_API_OPEN_AI_API_KEY" "$__snap_API_LLM_API_KEY" && __caller_key_won=1 ;;
 esac
-__caller_legacy_wins API_LLM_BASE_URL "$__snap_API_OPENAI_FORCE_BASE_URL" "$__snap_API_LLM_BASE_URL"
+# The config's endpoint belongs to the config's key: when the caller's key won,
+# it goes too, unless the caller also set API_LLM_BASE_URL.
+__caller_legacy_wins API_LLM_BASE_URL "$__snap_API_OPENAI_FORCE_BASE_URL" "$__snap_API_LLM_BASE_URL" \
+    || { [ -n "$__caller_key_won" ] && __caller_legacy_wins API_LLM_BASE_URL __SET__ "$__snap_API_LLM_BASE_URL"; } \
+    || true
+unset __caller_key_won
 
 unset __snap_DIGITALOCEAN_TOKEN __snap_HCLOUD_TOKEN __snap_SH_LICENSE_KEY \
       __snap_GH_DEV_TOKEN __snap_API_OPEN_AI_API_KEY __snap_API_OPENAI_FORCE_BASE_URL \
