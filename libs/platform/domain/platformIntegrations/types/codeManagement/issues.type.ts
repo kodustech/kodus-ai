@@ -28,6 +28,20 @@ export type CodeManagementIssue = {
         title: string;
         state: 'open' | 'closed';
     }>;
+    /** GitHub issue artifacts (public preview): the current version of each. */
+    artifacts?: Array<{
+        number: number;
+        name: string;
+        version: number;
+        content: string;
+    }>;
+    /** Artifacts that could not be read: coverage of the issue is incomplete. */
+    unreadArtifacts?: Array<{
+        number?: number;
+        name?: string;
+        reason: string;
+        status?: number;
+    }>;
 };
 
 export type ListIssuesParams = {

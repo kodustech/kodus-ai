@@ -4,6 +4,7 @@ import type {
     TrackerLookup,
 } from '../business-validation.types';
 import { asRecord } from '../value-utils';
+import { artifactContext } from './github-issue-artifacts';
 import { McpToolSession } from './mcp-tool-session';
 import { McpTaskTracker, TrackerReadContext } from './tracker';
 
@@ -88,6 +89,9 @@ export class GitIssuesTracker extends McpTaskTracker {
             return { status: 'not_found' };
         }
 
+        const artifacts = artifactContext(issue);
+        const body = typeof issue.body === 'string' ? issue.body : undefined;
+        const links = hierarchy(issue, repository);
         return {
             status: 'found',
             task: {
@@ -98,10 +102,15 @@ export class GitIssuesTracker extends McpTaskTracker {
                         : `#${reference.id}`,
                 title:
                     typeof issue.title === 'string' ? issue.title : undefined,
-                description:
-                    typeof issue.body === 'string' ? issue.body : undefined,
+                description: artifacts?.incompleteNote
+                    ? [body, artifacts.incompleteNote]
+                          .filter(Boolean)
+                          .join('\n\n')
+                    : body,
                 url: typeof issue.url === 'string' ? issue.url : undefined,
-                links: hierarchy(issue, repository),
+                links: artifacts?.documents.length
+                    ? { ...links, documents: artifacts.documents }
+                    : links,
             },
         };
     }

@@ -48,7 +48,10 @@ describe('GithubService.getIssue: parent and sub-issues', () => {
         const result = await get(service);
         expect(result?.parent).toEqual({ number: 11, repository: 'acme/web' });
         expect(result?.subIssues).toBeUndefined();
-        expect(request).not.toHaveBeenCalled();
+        expect(request).not.toHaveBeenCalledWith(
+            expect.stringContaining('/sub_issues'),
+            expect.anything(),
+        );
     });
 
     it('lists the sub-issues only when the summary says there are some', async () => {

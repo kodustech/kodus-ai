@@ -78,9 +78,9 @@ const UNREACHABLE =
 const logger = createLogger('McpTaskTracker');
 
 /** Attached documents read per task; more is a wiki, not this task's spec. */
-const MAX_DOCUMENTS = 3;
+export const MAX_DOCUMENTS = 3;
 /** A parent or a document longer than this is cut: it is context, not the task. */
-const MAX_RELATED_CHARS = 6_000;
+export const MAX_RELATED_CHARS = 6_000;
 
 function clipText(text: string): string {
     return text.length > MAX_RELATED_CHARS

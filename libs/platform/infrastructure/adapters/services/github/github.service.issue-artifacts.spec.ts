@@ -187,7 +187,20 @@ describe('GithubService.getIssue: issue artifacts', () => {
         },
     );
 
-    it.each([403, 404, 500])(
+    it('treats a 404 on the artifact list as no artifacts: no note', async () => {
+        const { service } = serviceWith(issue(), (route) => {
+            if (isList(route)) {
+                throw httpError(404);
+            }
+            return null;
+        });
+        const result = await get(service);
+        expect(result?.number).toBe(12);
+        expect(artifactsOf(result) ?? []).toEqual([]);
+        expect(unreadOf(result) ?? []).toEqual([]);
+    });
+
+    it.each([403, 500])(
         'still returns the issue when listing the artifacts fails with %s',
         async (status) => {
             const { service } = serviceWith(issue(), (route) => {

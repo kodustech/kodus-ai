@@ -134,7 +134,7 @@ describe('GitIssuesTracker: GitHub issue artifacts', () => {
         expect(plain.task.description).toBe(
             'Acceptance criteria: see qa.md (artifact #1)',
         );
-        expect(plain.taskText).not.toMatch(/artifact #\d|coverage incomplete/i);
+        expect(plain.taskText).not.toMatch(/## Document|coverage incomplete/i);
         expect(empty.taskText).toBe(plain.taskText);
         expect(empty.task).toEqual(plain.task);
     });

@@ -3738,6 +3738,11 @@ export class GithubService
                         sub_issues_summary?: { total?: number };
                     },
                 )),
+                ...(await this.issueArtifacts(
+                    octokit,
+                    repository,
+                    issueNumber,
+                )),
             };
         } catch (error) {
             if ((error as { status?: number })?.status === 404) {
@@ -3745,6 +3750,157 @@ export class GithubService
             }
             throw error;
         }
+    }
+
+    /**
+     * The artifacts GitHub attaches to an issue (public preview): the current
+     * version of each, read through the issue's own repository only. Never
+     * throws: what could not be read is named in `unreadArtifacts`, so the
+     * review can say its Business Logic coverage is incomplete.
+     */
+    private async issueArtifacts(
+        octokit: Awaited<ReturnType<typeof this.getAuthenticatedOctokit>>,
+        repository: { owner: string; name: string },
+        issueNumber: number,
+    ): Promise<{
+        artifacts?: Array<{
+            number: number;
+            name: string;
+            version: number;
+            content: string;
+        }>;
+        unreadArtifacts?: Array<{
+            number?: number;
+            name?: string;
+            reason: string;
+            status?: number;
+        }>;
+    }> {
+        const API_VERSION = '2026-03-10';
+        const MAX_READ = 10;
+        const TIMEOUT_MS = 10_000;
+        const base = {
+            owner: repository.owner,
+            repo: repository.name,
+            issue_number: issueNumber,
+            headers: { 'X-GitHub-Api-Version': API_VERSION },
+        };
+        const call = (route: string, extra: Record<string, unknown>) =>
+            (
+                octokit.request as unknown as (
+                    route: string,
+                    params: Record<string, unknown>,
+                ) => Promise<{ data: unknown }>
+            )(route, {
+                ...base,
+                ...extra,
+                request: { signal: AbortSignal.timeout(TIMEOUT_MS) },
+            });
+        const statusOf = (error: unknown) => {
+            const status = (error as { status?: unknown })?.status;
+            return typeof status === 'number' ? { status } : {};
+        };
+
+        let list: unknown;
+        try {
+            list = (
+                await call(
+                    'GET /repos/{owner}/{repo}/issues/{issue_number}/artifacts',
+                    { per_page: 100 },
+                )
+            ).data;
+        } catch (error) {
+            // 404: the feature is unavailable here (GHES, older API, preview off).
+            if ((error as { status?: number })?.status === 404) {
+                return {};
+            }
+            return {
+                unreadArtifacts: [
+                    { reason: 'list_failed', ...statusOf(error) },
+                ],
+            };
+        }
+        if (!Array.isArray(list)) {
+            return { unreadArtifacts: [{ reason: 'invalid_payload' }] };
+        }
+
+        const artifacts: NonNullable<
+            Awaited<ReturnType<typeof this.issueArtifacts>>['artifacts']
+        > = [];
+        const unread: NonNullable<
+            Awaited<ReturnType<typeof this.issueArtifacts>>['unreadArtifacts']
+        > = [];
+        const wanted: Array<{ number: number; name?: string }> = [];
+        for (const item of list as Array<Record<string, unknown>>) {
+            const number = item?.number;
+            const name = typeof item?.name === 'string' ? item.name : undefined;
+            if (!Number.isInteger(number) || (number as number) < 1) {
+                unread.push({ reason: 'invalid_payload', name });
+            } else if (wanted.length >= MAX_READ) {
+                unread.push({
+                    number: number as number,
+                    name,
+                    reason: 'over_cap',
+                });
+            } else {
+                wanted.push({ number: number as number, name });
+            }
+        }
+
+        const reads = await Promise.all(
+            wanted.map(async ({ number, name }) => {
+                try {
+                    const { data } = await call(
+                        'GET /repos/{owner}/{repo}/issues/{issue_number}/artifacts/{artifact_number}',
+                        { artifact_number: number },
+                    );
+                    const current = (
+                        data as { versions?: Array<Record<string, unknown>> }
+                    )?.versions?.[0];
+                    const resolvedName =
+                        typeof current?.name === 'string' ? current.name : name;
+                    if (
+                        !current ||
+                        typeof current.body !== 'string' ||
+                        !Number.isInteger(current.version) ||
+                        !resolvedName
+                    ) {
+                        return {
+                            unread: { number, name, reason: 'invalid_payload' },
+                        };
+                    }
+                    return {
+                        artifact: {
+                            number,
+                            name: resolvedName,
+                            version: current.version as number,
+                            content: current.body,
+                        },
+                    };
+                } catch (error) {
+                    return {
+                        unread: {
+                            number,
+                            name,
+                            reason: 'read_failed',
+                            ...statusOf(error),
+                        },
+                    };
+                }
+            }),
+        );
+        for (const read of reads) {
+            if ('artifact' in read && read.artifact) {
+                artifacts.push(read.artifact);
+            } else if ('unread' in read && read.unread) {
+                unread.push(read.unread);
+            }
+        }
+
+        return {
+            ...(artifacts.length ? { artifacts } : {}),
+            ...(unread.length ? { unreadArtifacts: unread } : {}),
+        };
     }
 
     /**

@@ -38,6 +38,28 @@ const IssueSchema = z.strictObject({
             }),
         )
         .optional(),
+    /** GitHub issue artifacts (public preview): current version of each. */
+    artifacts: z
+        .array(
+            z.strictObject({
+                number: z.number(),
+                name: z.string(),
+                version: z.number(),
+                content: z.string(),
+            }),
+        )
+        .optional(),
+    /** Artifacts that could not be read, so coverage is known to be incomplete. */
+    unreadArtifacts: z
+        .array(
+            z.strictObject({
+                number: z.number().optional(),
+                name: z.string().optional(),
+                reason: z.string(),
+                status: z.number().optional(),
+            }),
+        )
+        .optional(),
 });
 
 const repositorySchema = z.strictObject({
