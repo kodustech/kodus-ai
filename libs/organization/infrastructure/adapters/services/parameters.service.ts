@@ -15,6 +15,12 @@ import { IParametersService } from '@libs/organization/domain/parameters/contrac
 import { ParametersEntity } from '@libs/organization/domain/parameters/entities/parameters.entity';
 import { IParameters } from '@libs/organization/domain/parameters/interfaces/parameters.interface';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
+import { CentralizedConfigParameter } from '@libs/organization/domain/parameters/types/configValue.type';
+import {
+    centralizedConfigFor,
+    StoredCentralizedConfig,
+    withCentralizedConfigFor,
+} from '@libs/organization/domain/parameters/utils/centralized-config-scope';
 
 @Injectable()
 export class ParametersService implements IParametersService {
@@ -73,10 +79,22 @@ export class ParametersService implements IParametersService {
         configKey: K,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<ParametersEntity<K>> {
-        return this.parametersRepository.findByKey(
+        const parameter = await this.parametersRepository.findByKey(
             configKey,
             organizationAndTeamData,
         );
+        if (configKey !== ParametersKey.CENTRALIZED_CONFIG || !parameter) {
+            return parameter;
+        }
+        // Each Git connection has its own centralized config; callers see the
+        // one of the connection they name.
+        return ParametersEntity.create({
+            ...parameter.toObject(),
+            configValue: centralizedConfigFor(
+                parameter.configValue as StoredCentralizedConfig,
+                organizationAndTeamData?.integrationId,
+            ),
+        } as IParameters<K>);
     }
 
     createNewActiveVersion<K extends ParametersKey>(
@@ -123,6 +141,14 @@ export class ParametersService implements IParametersService {
             const version = existingParameters
                 ? existingParameters.version + 1
                 : 1;
+
+            if (parametersKey === ParametersKey.CENTRALIZED_CONFIG) {
+                configValue = withCentralizedConfigFor(
+                    existingParameters?.configValue as StoredCentralizedConfig,
+                    organizationAndTeamData.integrationId,
+                    configValue as CentralizedConfigParameter,
+                ) as ParametersEntity<K>['configValue'];
+            }
 
             if (parametersKey !== ParametersKey.CODE_REVIEW_CONFIG) {
                 return existingParameters

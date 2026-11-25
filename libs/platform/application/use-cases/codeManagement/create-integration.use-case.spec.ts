@@ -21,8 +21,19 @@ const build = (
         existingConnection?: unknown;
         workspaceConnections?: Array<{ uuid: string; createdAt?: Date }>;
         bindPrimary?: boolean;
+        centralized?: Record<string, unknown>;
     } = {},
 ) => {
+    const parametersService = {
+        findByKey: jest
+            .fn()
+            .mockResolvedValue(
+                opts.centralized
+                    ? { configValue: opts.centralized }
+                    : undefined,
+            ),
+        createOrUpdateConfig: jest.fn().mockResolvedValue(true),
+    };
     const codeManagementService = {
         createAuthIntegration: jest.fn().mockResolvedValue({
             success: true,
@@ -56,6 +67,7 @@ const build = (
         { gitIntegrationChanged: jest.fn() } as any,
         integrationService as any,
         licenseService as any,
+        parametersService as any,
     );
     return {
         useCase,
@@ -63,6 +75,7 @@ const build = (
         integrationService,
         licenseService,
         ignoreBots,
+        parametersService,
     };
 };
 
@@ -263,6 +276,52 @@ describe('CreateIntegrationUseCase — connections', () => {
                     separateConnection: false,
                 }),
             );
+        });
+    });
+
+    describe('centralized config', () => {
+        it("records the workspace's centralized config as the existing connection's before another is added", async () => {
+            const centralized = {
+                enabled: true,
+                repository: { id: 'r-1', name: 'acme/config' },
+            };
+            const { useCase, parametersService } = build({
+                workspaceConnections: [{ uuid: 'gh-a' }],
+                centralized,
+            });
+
+            await useCase.execute({
+                integrationType: 'gitlab',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(parametersService.createOrUpdateConfig).toHaveBeenCalledWith(
+                'centralized_config',
+                centralized,
+                { organizationId: ORG, teamId: TEAM, integrationId: 'gh-a' },
+            );
+        });
+
+        it('leaves a centralized config already recorded on a connection alone', async () => {
+            const { useCase, parametersService } = build({
+                workspaceConnections: [{ uuid: 'gh-a' }],
+                centralized: {
+                    enabled: true,
+                    repository: null,
+                    integrationId: 'gh-a',
+                },
+            });
+
+            await useCase.execute({
+                integrationType: 'gitlab',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(
+                parametersService.createOrUpdateConfig,
+            ).not.toHaveBeenCalled();
         });
     });
 });

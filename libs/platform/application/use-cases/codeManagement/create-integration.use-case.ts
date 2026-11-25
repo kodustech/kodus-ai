@@ -30,6 +30,11 @@ import {
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
 import { primaryConnectionOf } from '@libs/integrations/domain/integrations/utils/primary-connection';
+import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
+import {
+    IParametersService,
+    PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 
 @Injectable()
 export class CreateIntegrationUseCase implements IUseCase {
@@ -62,6 +67,10 @@ export class CreateIntegrationUseCase implements IUseCase {
         @Optional()
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService?: ILicenseService,
+
+        @Optional()
+        @Inject(PARAMETERS_SERVICE_TOKEN)
+        private readonly parametersService?: IParametersService,
     ) {}
 
     public async execute(params: any): Promise<any> {
@@ -241,6 +250,10 @@ export class CreateIntegrationUseCase implements IUseCase {
             })) ?? [];
         const primary = primaryConnectionOf(existing);
         if (!primary) return false;
+        await this.recordCentralizedConfigOwner(
+            organizationAndTeamData,
+            primary.uuid,
+        );
         if (!this.licenseService) return true;
 
         const bound = await this.licenseService.bindPrimaryConnection(
@@ -256,5 +269,33 @@ export class CreateIntegrationUseCase implements IUseCase {
             );
         }
         return true;
+    }
+
+    /**
+     * A centralized config stored before the workspace had several Git
+     * connections serves every connection. Recorded on the existing one
+     * before another is added, so it keeps applying only to its repositories.
+     */
+    private async recordCentralizedConfigOwner(
+        organizationAndTeamData: { organizationId: string; teamId: string },
+        integrationId: string,
+    ): Promise<void> {
+        if (!this.parametersService) return;
+        const parameter = await this.parametersService.findByKey(
+            ParametersKey.CENTRALIZED_CONFIG,
+            organizationAndTeamData,
+        );
+        const configValue = parameter?.configValue;
+        if (!configValue || configValue.integrationId) return;
+        await this.parametersService.createOrUpdateConfig(
+            ParametersKey.CENTRALIZED_CONFIG,
+            configValue,
+            { ...organizationAndTeamData, integrationId },
+        );
+        this.logger.log({
+            message: 'centralized_config_owner_recorded',
+            context: CreateIntegrationUseCase.name,
+            metadata: { ...organizationAndTeamData, integrationId },
+        });
     }
 }
