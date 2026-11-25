@@ -41,7 +41,8 @@ async function bootstrap() {
     process.env.COMPONENT_TYPE = 'webhook';
     const app = await NestFactory.create<NestExpressApplication>(
         WebhookHandlerModule,
-        { snapshot: true },
+        // See apps/api/src/main.ts: one instance per identical dynamic module.
+        { snapshot: true, moduleIdGeneratorAlgorithm: 'deep-hash' },
     );
 
     const logger = app.get(LoggerWrapperService);

@@ -60,7 +60,8 @@ async function bootstrap() {
     try {
         appContext = await NestFactory.createApplicationContext(
             WorkerModule.forRoot(),
-            { snapshot: true },
+            // See apps/api/src/main.ts: one instance per identical dynamic module.
+            { snapshot: true, moduleIdGeneratorAlgorithm: 'deep-hash' },
         );
 
         logger = appContext.get(LoggerWrapperService);

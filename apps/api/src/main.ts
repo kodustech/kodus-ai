@@ -93,7 +93,13 @@ async function bootstrap() {
     // throw, no log — which on ECS surfaced as a 46s-silent container
     // killed by the health check. Do not re-add without also adding
     // the devtools package.
-    const app = await NestFactory.create<NestExpressApplication>(ApiModule);
+    // Nest 11 identifies dynamic modules by reference: two identical
+    // `forRoot()` imports (ScheduleModule in CronModule and NotificationModule)
+    // became two instances, and every @Cron and some @OnEvent handlers ran
+    // twice per process. 'deep-hash' keeps one instance per identical module.
+    const app = await NestFactory.create<NestExpressApplication>(ApiModule, {
+        moduleIdGeneratorAlgorithm: 'deep-hash',
+    });
 
     console.log('[BOOTSTRAP] NestFactory.create returned, wiring app...');
 
