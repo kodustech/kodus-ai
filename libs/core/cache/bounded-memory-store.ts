@@ -12,7 +12,7 @@
  *
  * Keyv serializes every value to a string before `set`, so the size of an
  * entry is the length of that string. Eviction drops the oldest insertions
- * first (a re-set moves the key to the end). An entry larger than
+ * first (a read or a re-set moves the key to the end). An entry larger than
  * `maxEntryChars` is not stored at all: it would evict many useful entries to
  * cache one value that is unlikely to repeat.
  */
@@ -51,6 +51,21 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
             this.delete(oldest);
         }
         return this;
+    }
+
+    /**
+     * A read moves the key to the newest end, so eviction takes the entries
+     * nobody reads first. The same cache holds state that is read on every
+     * event (rate limiters, the BYOK error counter) next to file contents read
+     * once; insertion order alone would evict a live counter before them.
+     */
+    override get(key: string): V | undefined {
+        const value = super.get(key);
+        if (value !== undefined) {
+            super.delete(key);
+            super.set(key, value);
+        }
+        return value;
     }
 
     override delete(key: string): boolean {

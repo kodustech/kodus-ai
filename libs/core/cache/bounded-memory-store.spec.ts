@@ -52,4 +52,25 @@ describe('BoundedMemoryStore', () => {
         store.delete('a');
         expect(store.heldChars).toBe(0);
     });
+
+    // Rate limiters and the BYOK error counter keep state in this cache and
+    // read it on every event; file contents are read about once.
+    it('keeps a key that is read while new entries pour in', () => {
+        const store = new BoundedMemoryStore(bounds);
+        store.set('limiter:org-1', 'count');
+        for (let i = 0; i < 500; i++) {
+            store.set(`gh:contents:${i}`, 'v');
+            if (i % 50 === 0) expect(store.get('limiter:org-1')).toBe('count');
+        }
+        expect(store.get('limiter:org-1')).toBe('count');
+        expect(store.size).toBe(100);
+    });
+
+    it('evicts a key nobody reads, in insertion order', () => {
+        const store = new BoundedMemoryStore(bounds);
+        store.set('limiter:org-1', 'count');
+        for (let i = 0; i < 100; i++) store.set(`gh:contents:${i}`, 'v');
+        expect(store.has('limiter:org-1')).toBe(false);
+        expect(store.heldChars).toBe(100);
+    });
 });
