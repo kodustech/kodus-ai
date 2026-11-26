@@ -360,8 +360,21 @@ export class SyncAllRepositoriesUseCase {
                 >(IntegrationConfigKey.REPOSITORIES, organizationAndTeamData)) ??
                 [];
             const currentIds = new Set(current.map((repo) => String(repo.id)));
+            // A repository is reviewed by one connection: one another
+            // connection on the same server lists stays with it, as a
+            // manual selection would be refused.
+            const listedElsewhere = organizationAndTeamData.integrationId
+                ? await this.integrationConfigService.repositoryIdsListedByOtherConnections(
+                      organizationAndTeamData.organizationId,
+                      organizationAndTeamData.integrationId,
+                  )
+                : new Set<string>();
             const added = eligible
-                .filter((repo) => !currentIds.has(String(repo.id)))
+                .filter(
+                    (repo) =>
+                        !currentIds.has(String(repo.id)) &&
+                        !listedElsewhere.has(String(repo.id)),
+                )
                 .map((repo) => ({ ...repo, selected: true }));
 
             const pendingWebhookIds = new Set(

@@ -1,3 +1,4 @@
+import { readConnectionIntent } from "@services/codeManagement/connection-intent";
 import {
     GITHUB_RETURN_COOKIE,
     GITHUB_RETURN_MAX_AGE_S,
@@ -21,7 +22,12 @@ export async function startGithubInstallationAuthorization(
     const path = safeReturnPath(returnTo);
     if (!path) throw new Error(`Not a path of this site: ${returnTo}`);
 
-    const url = await getGithubInstallationAuthorizationUrl(installationId);
+    // Read once, here: the link that follows carries it sealed, so another
+    // tab's add or a later reconfigure cannot change what this one does.
+    const url = await getGithubInstallationAuthorizationUrl(
+        installationId,
+        readConnectionIntent()?.newConnection === true,
+    );
     ClientSideCookieHelpers(GITHUB_RETURN_COOKIE, {
         path: "/",
         maxAge: GITHUB_RETURN_MAX_AGE_S,

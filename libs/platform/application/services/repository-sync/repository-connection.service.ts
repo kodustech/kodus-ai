@@ -94,10 +94,17 @@ export class RepositoryConnectionService {
             return [];
         }
 
+        // The connection's own row when it is named: with several, the
+        // records must point at the list the repositories are in.
         const repositoriesConfig = await this.integrationConfigService.findOne({
             team: { uuid: organizationAndTeamData.teamId },
             configKey: IntegrationConfigKey.REPOSITORIES,
-            integration: { status: true },
+            integration: {
+                status: true,
+                ...(organizationAndTeamData.integrationId
+                    ? { uuid: organizationAndTeamData.integrationId }
+                    : {}),
+            },
         });
 
         if (!repositoriesConfig?.uuid) {

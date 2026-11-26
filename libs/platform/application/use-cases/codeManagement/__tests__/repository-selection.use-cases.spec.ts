@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 
 import {
@@ -8,12 +9,19 @@ import {
 const orgTeam = { organizationId: 'org-1', teamId: 'team-1' };
 
 describe('SetRepositorySelectionUseCase', () => {
-    const build = (integration: unknown = { uuid: 'int-1' }) => {
+    const build = (
+        integration: unknown = { uuid: 'int-1' },
+        others: Array<{ uuid: string }> = [],
+    ) => {
         const integrationConfigService = {
             createOrUpdateConfig: jest.fn().mockResolvedValue({}),
         };
         const integrationService = {
-            findOne: jest.fn().mockResolvedValue(integration),
+            find: jest
+                .fn()
+                .mockResolvedValue(
+                    integration ? [integration, ...others] : others,
+                ),
         };
         const sync = { syncTeam: jest.fn().mockResolvedValue(undefined) };
         const useCase = new SetRepositorySelectionUseCase(
@@ -34,7 +42,9 @@ describe('SetRepositorySelectionUseCase', () => {
             actorUserId: 'user-1',
         });
 
-        expect(integrationConfigService.createOrUpdateConfig).toHaveBeenCalledWith(
+        expect(
+            integrationConfigService.createOrUpdateConfig,
+        ).toHaveBeenCalledWith(
             IntegrationConfigKey.REPOSITORY_SELECTION,
             expect.objectContaining({
                 mode: 'all',
@@ -44,13 +54,47 @@ describe('SetRepositorySelectionUseCase', () => {
             'int-1',
             orgTeam,
         );
-        expect(sync.syncTeam).toHaveBeenCalledWith(orgTeam, 'enable');
+        expect(sync.syncTeam).toHaveBeenCalledWith(
+            { ...orgTeam, integrationId: 'int-1' },
+            'enable',
+        );
+    });
+
+    it('asks which connection when the workspace has several and none is named', async () => {
+        const { useCase, integrationConfigService } = build({ uuid: 'int-1' }, [
+            { uuid: 'int-2' },
+        ]);
+
+        await expect(
+            useCase.execute({ organizationAndTeamData: orgTeam, mode: 'all' }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(
+            integrationConfigService.createOrUpdateConfig,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('stores the choice on the named connection', async () => {
+        const { useCase, integrationConfigService } = build({ uuid: 'int-1' }, [
+            { uuid: 'int-2' },
+        ]);
+
+        await useCase.execute({
+            organizationAndTeamData: { ...orgTeam, integrationId: 'int-2' },
+            mode: 'manual',
+        });
+
+        expect(
+            integrationConfigService.createOrUpdateConfig.mock.calls[0][2],
+        ).toBe('int-2');
     });
 
     it('does not sync when going back to manual selection', async () => {
         const { useCase, sync } = build();
 
-        await useCase.execute({ organizationAndTeamData: orgTeam, mode: 'manual' });
+        await useCase.execute({
+            organizationAndTeamData: orgTeam,
+            mode: 'manual',
+        });
 
         expect(sync.syncTeam).not.toHaveBeenCalled();
     });
@@ -61,7 +105,9 @@ describe('SetRepositorySelectionUseCase', () => {
         await expect(
             useCase.execute({ organizationAndTeamData: orgTeam, mode: 'all' }),
         ).rejects.toBeDefined();
-        expect(integrationConfigService.createOrUpdateConfig).not.toHaveBeenCalled();
+        expect(
+            integrationConfigService.createOrUpdateConfig,
+        ).not.toHaveBeenCalled();
     });
 
     it('rejects an unknown mode', async () => {
@@ -111,11 +157,18 @@ describe('GetRepositorySelectionUseCase', () => {
             ),
         } as any);
 
-        const result = await useCase.execute({ organizationAndTeamData: orgTeam });
+        const result = await useCase.execute({
+            organizationAndTeamData: orgTeam,
+        });
 
         expect(result).toMatchObject({
             mode: 'all',
-            sync: { status: 'running', total: 487, done: 320, pendingAstBuilds: 2 },
+            sync: {
+                status: 'running',
+                total: 487,
+                done: 320,
+                pendingAstBuilds: 2,
+            },
         });
         expect(result.sync).not.toHaveProperty('pendingAstRepositoryIds');
     });

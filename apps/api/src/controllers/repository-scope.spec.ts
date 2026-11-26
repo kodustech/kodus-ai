@@ -319,6 +319,12 @@ describe('repository scope — CLI suggestions with a user JWT', () => {
 });
 
 describe('workspace scope — suggestions with a team CLI key', () => {
+    const storedPr = {
+        toObject: () => ({
+            number: 1,
+            repository: { id: OTHER, fullName: 'acme/other' },
+        }),
+    };
     const teamKeyController = (teamRepositoryIds: string[]) => {
         const execute = jest.fn().mockResolvedValue({
             response: {},
@@ -339,18 +345,71 @@ describe('workspace scope — suggestions with a team CLI key', () => {
                     ),
             },
             pullRequestsService: {
-                findOne: jest.fn().mockResolvedValue({
-                    toObject: () => ({
-                        number: 1,
-                        repository: { id: OTHER, fullName: 'acme/other' },
-                    }),
-                }),
+                findOne: jest.fn().mockResolvedValue(storedPr),
+                find: jest.fn().mockResolvedValue([storedPr]),
             },
             getPullRequestSuggestionsUseCase: { execute },
             eventEmitter: { emit: jest.fn() },
         });
         return { controller, execute };
     };
+
+    it("serves the key's own repository when another server has one with the same id", async () => {
+        const execute = jest.fn().mockResolvedValue({
+            response: {},
+            suggestionsCount: 0,
+        });
+        const pr = (fullName: string) => ({
+            toObject: () => ({
+                number: 12,
+                repository: { id: '3', fullName },
+            }),
+        });
+        const controller = make(PullRequestController, {
+            teamCliKeyService: {
+                validateKey: jest.fn().mockResolvedValue({
+                    organization: { uuid: 'org-1' },
+                    team: { uuid: 'team-1' },
+                }),
+            },
+            integrationConfigService: {
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue([
+                        { id: 3, name: 'api', organizationName: 'acme' },
+                    ]),
+            },
+            pullRequestsService: {
+                findOne: jest.fn().mockResolvedValue(pr('other/tool')),
+                find: jest
+                    .fn()
+                    .mockResolvedValue([pr('other/tool'), pr('acme/api')]),
+            },
+            getPullRequestSuggestionsUseCase: { execute },
+            eventEmitter: { emit: jest.fn() },
+            automationExecutionService: {
+                create: jest.fn().mockResolvedValue(undefined),
+            },
+        });
+
+        await controller.getSuggestionsByPullRequest(
+            undefined,
+            '3',
+            '12',
+            'json',
+            undefined,
+            undefined,
+            'kodus_key',
+        );
+
+        expect(execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                pr: expect.objectContaining({
+                    repository: { id: '3', fullName: 'acme/api' },
+                }),
+            }),
+        );
+    });
 
     it("refuses a pull request of a repository outside the key's workspace", async () => {
         const { controller, execute } = teamKeyController([ALLOWED]);

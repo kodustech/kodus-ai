@@ -89,13 +89,16 @@ export class DeleteIntegrationAndRepositoriesUseCase {
                       connection.uuid,
                   )
                 : undefined;
-            const repositoriesIds = connectionRepositoryIds
-                ? await this.notListedElsewhere(
-                      organizationId,
-                      connection.uuid,
-                      connectionRepositoryIds,
-                  )
-                : await this.getRepositoriesIds(teamId, organizationId);
+            // Either way, a repository another connection of the
+            // organization lists (another workspace included) keeps them.
+            const repositoriesIds = await this.notListedElsewhere(
+                organizationId,
+                connection?.uuid,
+                connectionRepositoryIds ??
+                    new Set(
+                        await this.getRepositoriesIds(teamId, organizationId),
+                    ),
+            );
 
             this.logger.log({
                 message:
@@ -256,7 +259,7 @@ export class DeleteIntegrationAndRepositoriesUseCase {
      */
     private async notListedElsewhere(
         organizationId: string,
-        integrationId: string,
+        integrationId: string | undefined,
         repositoryIds: Set<string>,
     ): Promise<string[]> {
         const configs =

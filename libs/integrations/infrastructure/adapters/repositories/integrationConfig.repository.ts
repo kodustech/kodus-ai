@@ -18,6 +18,7 @@ import {
 import { createNestedConditions } from '@libs/core/infrastructure/repositories/model/filters';
 import {
     IIntegrationConfigRepository,
+    OrganizationRepositoryList,
     RepositoryListing,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.repository.contracts';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
@@ -475,6 +476,26 @@ export class IntegrationConfigRepository implements IIntegrationConfigRepository
             integrationConfigs,
             IntegrationConfigEntity,
         );
+    }
+
+    /** Every active Git connection's repository list in the organization, with its server. */
+    async findRepositoryListsOfOrganization(
+        organizationId: string,
+    ): Promise<OrganizationRepositoryList[]> {
+        if (!organizationId) return [];
+        return (await this.integrationConfigRepository.manager.query(
+            `SELECT i."uuid" AS "integrationId",
+                    i."platform" AS "platform",
+                    ai."authDetails"->>'host' AS "host",
+                    ic."configValue" AS "repositories"
+               FROM "integration_configs" ic
+               JOIN "integrations" i ON i."uuid" = ic."integration_id"
+               LEFT JOIN "auth_integrations" ai ON ai."uuid" = i."auth_integration_id"
+              WHERE i."organization_id" = $1
+                AND i."status" = true
+                AND ic."configKey" = $2`,
+            [organizationId, IntegrationConfigKey.REPOSITORIES],
+        )) as OrganizationRepositoryList[];
     }
 
     /**

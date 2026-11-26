@@ -200,15 +200,28 @@ export class IntegrationController {
         const connections = await this.getConnectionsUseCase.execute(
             query.teamId,
         );
+        if (!Array.isArray(connections)) return connections;
         const restriction = await this.connectionAccess.restrictionFor(
             this.request?.user,
         );
-        if (!restriction || !Array.isArray(connections)) return connections;
-        return connections.filter(
-            (connection: { category?: string; connectionId?: string }) =>
-                connection?.category !== 'CODE_MANAGEMENT' ||
-                restriction.connectionIds.has(connection.connectionId),
-        );
+        type Listed = { category?: string; connectionId?: string };
+        const isGit = (connection: Listed) =>
+            connection?.category === 'CODE_MANAGEMENT';
+        // How many the workspace has, which a member granted some of them
+        // does not see: the page lays itself out by it.
+        const workspaceConnectionCount = connections.filter(isGit).length;
+        return connections
+            .filter(
+                (connection: Listed) =>
+                    !restriction ||
+                    !isGit(connection) ||
+                    restriction.connectionIds.has(connection.connectionId),
+            )
+            .map((connection: Listed) =>
+                isGit(connection)
+                    ? { ...connection, workspaceConnectionCount }
+                    : connection,
+            );
     }
 
     @Patch('/connections/:connectionId')

@@ -23,11 +23,12 @@ export class GetInstallationAuthorizationUseCase implements IUseCase {
         },
     ) {}
 
-    public async execute(installationId: string) {
+    public async execute(installationId: string, newConnection?: boolean) {
         return this.githubService.getInstallationAuthorizationUrl({
             installationId,
             userId: this.request.user?.uuid,
             organizationId: this.request.user?.organization?.uuid,
+            newConnection: newConnection === true,
         });
     }
 }

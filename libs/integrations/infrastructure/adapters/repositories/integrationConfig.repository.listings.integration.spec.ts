@@ -130,3 +130,80 @@ import { IntegrationConfigRepository } from './integrationConfig.repository';
         });
     },
 );
+
+(skipPostgresIntegration ? describe.skip : describe)(
+    'IntegrationConfigRepository.findRepositoryListsOfOrganization (integration, real Postgres)',
+    () => {
+        let ds: DataSource | undefined;
+        let repository: IntegrationConfigRepository;
+        const organizationId = randomUUID();
+        const [active, inactive] = [randomUUID(), randomUUID()];
+        const [auth, configA, configB] = [
+            randomUUID(),
+            randomUUID(),
+            randomUUID(),
+        ];
+
+        beforeAll(async () => {
+            ds = await connectTestPostgres({ replica: true });
+            if (!ds) return;
+            repository = new IntegrationConfigRepository({
+                manager: ds.manager,
+            } as any);
+            await ds.query(
+                `INSERT INTO "auth_integrations" ("uuid", "status", "authDetails")
+                 VALUES ($1, true, $2::jsonb)`,
+                [
+                    auth,
+                    JSON.stringify({ host: 'https://git.acme.io', token: 'x' }),
+                ],
+            );
+            await ds.query(
+                `INSERT INTO "integrations" ("uuid", "status", "platform", "integrationCategory", "organization_id", "auth_integration_id")
+                 VALUES ($1, true, 'GITLAB', 'CODE_MANAGEMENT', $3, $4),
+                        ($2, false, 'GITLAB', 'CODE_MANAGEMENT', $3, NULL)`,
+                [active, inactive, organizationId, auth],
+            );
+            await ds.query(
+                `INSERT INTO "integration_configs" ("uuid", "configKey", "configValue", "integration_id", "team_id")
+                 VALUES ($1, 'repositories', '[{"id": 42}]'::jsonb, $3, $5),
+                        ($2, 'repositories', '[{"id": 7}]'::jsonb, $4, $5)`,
+                [configA, configB, active, inactive, randomUUID()],
+            );
+        });
+
+        afterAll(async () => {
+            if (!ds) return;
+            await ds.query(
+                `DELETE FROM "integration_configs" WHERE "uuid" = ANY($1::uuid[])`,
+                [[configA, configB]],
+            );
+            await ds.query(
+                `DELETE FROM "integrations" WHERE "uuid" = ANY($1::uuid[])`,
+                [[active, inactive]],
+            );
+            await ds.query(
+                `DELETE FROM "auth_integrations" WHERE "uuid" = $1`,
+                [auth],
+            );
+            await disconnectTestPostgres(ds);
+        });
+
+        it("lists each active connection's repositories with its platform and host only", async () => {
+            if (!ds) return;
+
+            expect(
+                await repository.findRepositoryListsOfOrganization(
+                    organizationId,
+                ),
+            ).toEqual([
+                {
+                    integrationId: active,
+                    platform: 'GITLAB',
+                    host: 'https://git.acme.io',
+                    repositories: [{ id: 42 }],
+                },
+            ]);
+        });
+    },
+);

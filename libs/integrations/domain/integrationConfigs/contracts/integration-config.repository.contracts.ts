@@ -15,7 +15,18 @@ export type RepositoryListing = {
     repository: Record<string, unknown>;
 };
 
+/** One active connection's repository list, with the server it is on. */
+export type OrganizationRepositoryList = {
+    integrationId: string;
+    platform: string;
+    host?: string | null;
+    repositories: unknown;
+};
+
 export interface IIntegrationConfigRepository {
+    findRepositoryListsOfOrganization(
+        organizationId: string,
+    ): Promise<OrganizationRepositoryList[]>;
     findRepositoryListings(params: {
         teamId: string;
         integrationIds: string[];

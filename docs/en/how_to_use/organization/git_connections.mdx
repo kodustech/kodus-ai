@@ -7,20 +7,24 @@ A workspace can hold several Git connections: two GitHub organizations, GitHub b
 
 ## Add a connection
 
-In **Settings → Git**, an owner clicks **Add connection** and connects the account the same way as the first one (OAuth, a token, or the GitHub App). Each connection gets a card where an owner can:
+In **Settings → Git**, an owner clicks **Add connection** and connects the account the same way as the first one (OAuth, a token, or the GitHub App). Turn off **Review all repositories** first: it is offered for a workspace's only connection.
+
+Once the workspace has two or more connections, each one gets a card where an owner can:
 
 - rename it,
 - turn its reviews on or off (in addition to the workspace's automated review setting),
 - choose its repositories,
-- update its token,
+- update its token (GitLab and Forgejo),
 - choose which members can read it,
 - reset it. Reset removes that connection only: its repositories, hooks and rules go, the others stay.
 
-A repository can belong to one connection only. Adding a repository another connection already lists is refused.
+With a single connection, the page keeps its usual layout: choose repositories, update the token and reset from there.
+
+A repository can belong to one connection only. Adding a repository another connection on the same server already lists is refused.
 
 ## Who can read a connection
 
-Owners read every connection. A new connection starts with owners only; give members access from its card. A member granted only some connections sees just their repositories in pull requests, settings, Kody Rules, issues, CLI reviews and notifications. Cockpit opens for them one repository at a time, and token usage, which covers the whole workspace, stays with members who read every connection.
+Owners read every connection. A workspace's first connection is read by every member of the workspace. A connection added beside others starts with owners only; give members access from its card. A member granted only some connections sees just their repositories in pull requests, settings, Kody Rules, issues, CLI reviews and notifications. Cockpit opens for them one repository at a time. Token usage, which covers the whole workspace, stays with members who read every connection and with billing managers. An owner who becomes another role keeps reading every connection until an owner narrows it.
 
 Team CLI keys belong to the workspace and are created by owners, so a key reads every connection of its workspace.
 

@@ -26,6 +26,12 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import { createLogger } from '@libs/core/log/logger';
 import { ConnectionBillingService } from '@libs/platform/application/services/billing/connection-billing.service';
+import {
+    IIntegrationConfigService,
+    INTEGRATION_CONFIG_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
+import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
+import { stateAsksForNewConnection } from '@libs/platform/infrastructure/adapters/services/github/installation-authorization';
 import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import {
@@ -65,6 +71,9 @@ export class CreateIntegrationUseCase implements IUseCase {
 
         private readonly connectionAccess: ConnectionAccessService,
 
+        @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
+        private readonly integrationConfigService: IIntegrationConfigService,
+
         @Optional()
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService?: IParametersService,
@@ -102,7 +111,13 @@ export class CreateIntegrationUseCase implements IUseCase {
             }
             organizationAndTeamData.integrationId = connectionId;
         }
-        const newConnection = !connectionId && params?.newConnection === true;
+        // A GitHub App link carries the request in its sealed state, tied
+        // to this flow; the request's own flag serves the token paths.
+        const newConnection =
+            !connectionId &&
+            (params?.githubState
+                ? stateAsksForNewConnection(params.githubState)
+                : params?.newConnection === true);
         const workspace = {
             organizationId: organizationAndTeamData.organizationId,
             teamId: organizationAndTeamData.teamId,
@@ -311,6 +326,21 @@ export class CreateIntegrationUseCase implements IUseCase {
         const [oldest] =
             await this.connectionBilling.workspaceConnections(workspace);
         if (!oldest) return false;
+
+        // "Review all repositories" is offered for a workspace's only
+        // connection; beside another it could no longer be turned off.
+        const selection =
+            await this.integrationConfigService.findIntegrationConfigFormatted<{
+                mode?: string;
+            }>(IntegrationConfigKey.REPOSITORY_SELECTION, {
+                ...workspace,
+                integrationId: oldest.uuid,
+            });
+        if (selection?.mode === 'all') {
+            throw new BadRequestException(
+                'Turn off reviewing all repositories in Settings > Git before adding another Git connection.',
+            );
+        }
         await this.recordCentralizedConfigOwner(workspace, oldest.uuid);
 
         const handover = await this.connectionBilling.ensurePrimary(workspace, {

@@ -157,20 +157,36 @@ export class PullRequestController implements OnApplicationShutdown {
     }
 
     /** Whether a team key's workspace lists the repository, across its Git connections. */
+    /**
+     * Whether the key's workspace lists the pull request's repository. Ids
+     * repeat across servers, so a recorded full name has to match too.
+     */
     private async keyWorkspaceListsRepository(
         organizationId: string,
         teamId: string | undefined,
-        repositoryId: unknown,
+        repository: { id?: unknown; fullName?: string } | undefined,
     ): Promise<boolean> {
-        if (!teamId || repositoryId == null) return false;
+        if (!teamId || repository?.id == null) return false;
         const repositories =
             (await this.integrationConfigService.findIntegrationConfigFormatted<
                 Repositories[]
             >(IntegrationConfigKey.REPOSITORIES, { organizationId, teamId })) ??
             [];
-        return repositories.some(
-            (repository) => String(repository.id) === String(repositoryId),
-        );
+        const fullName = repository.fullName?.toLowerCase();
+        return repositories.some((listed) => {
+            if (String(listed.id) !== String(repository.id)) return false;
+            if (!fullName) return true;
+            const names = [
+                listed.full_name,
+                listed.organizationName && listed.name
+                    ? `${listed.organizationName}/${listed.name}`
+                    : undefined,
+                listed.name,
+            ]
+                .filter((name): name is string => !!name?.includes('/'))
+                .map((name) => name.toLowerCase());
+            return !names.length || names.includes(fullName);
+        });
     }
 
     onApplicationShutdown() {
@@ -662,29 +678,26 @@ export class PullRequestController implements OnApplicationShutdown {
             }
         }
 
-        const prEntity = await this.findPrEntity({
-            prUrl,
-            repositoryId,
-            prNumber,
-            organizationId,
-        });
+        const prEntity = jwtUser
+            ? await this.findPrEntity({
+                  prUrl,
+                  repositoryId,
+                  prNumber,
+                  organizationId,
+              })
+            : await this.findKeyWorkspacePr({
+                  prUrl,
+                  repositoryId,
+                  prNumber,
+                  organizationId,
+                  teamId: keyTeamId,
+              });
 
         if (!prEntity) {
             throw new NotFoundException('Pull request not found');
         }
 
         const pr = prEntity.toObject();
-
-        if (
-            !jwtUser &&
-            !(await this.keyWorkspaceListsRepository(
-                organizationId,
-                keyTeamId,
-                pr.repository?.id,
-            ))
-        ) {
-            throw new NotFoundException('Pull request not found');
-        }
 
         if (jwtUser) {
             await this.authorizationService.ensure({
@@ -717,6 +730,46 @@ export class PullRequestController implements OnApplicationShutdown {
         }
 
         return response;
+    }
+
+    /**
+     * A team key reads its own workspace's pull requests only. The same
+     * repository id and number can name a pull request on another server,
+     * so every match is checked against the workspace's repositories.
+     */
+    private async findKeyWorkspacePr(params: {
+        prUrl?: string;
+        repositoryId?: string;
+        prNumber?: string;
+        organizationId: string;
+        teamId?: string;
+    }) {
+        const { repositoryId, prNumber, organizationId, teamId } = params;
+        const parsedPrNumber = prNumber ? parseInt(prNumber, 10) : NaN;
+        const candidates =
+            !params.prUrl && repositoryId && !Number.isNaN(parsedPrNumber)
+                ? ((await this.pullRequestsService.find({
+                      'number': parsedPrNumber,
+                      organizationId,
+                      'repository.id': repositoryId,
+                  } as any)) ?? [])
+                : [];
+        if (!candidates.length) {
+            const found = await this.findPrEntity(params);
+            if (found) candidates.push(found);
+        }
+        for (const candidate of candidates) {
+            if (
+                await this.keyWorkspaceListsRepository(
+                    organizationId,
+                    teamId,
+                    candidate.toObject().repository,
+                )
+            ) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private async findPrEntity(params: {

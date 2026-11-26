@@ -25,6 +25,7 @@ export interface IGithubService {
         installationId: unknown;
         userId: string;
         organizationId: string;
+        newConnection?: boolean;
     }): { url: string };
     getAllMembersByOrg(
         organizationAndTeamData: OrganizationAndTeamData,

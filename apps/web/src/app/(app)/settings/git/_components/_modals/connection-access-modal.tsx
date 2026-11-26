@@ -14,17 +14,11 @@ import {
 import { magicModal } from "@components/ui/magic-modal";
 import { Spinner } from "@components/ui/spinner";
 import { toast } from "@components/ui/toaster/use-toast";
-import { UserRole } from "@enums";
 import { useAsyncAction } from "@hooks/use-async-action";
 import {
-    getConnectionAccess,
-    setConnectionAccess,
-} from "@services/codeManagement/fetch";
-import { SETUP_PATHS } from "@services/setup";
-import type { MembersSetup, TeamMembersResponse } from "@services/setup/types";
-import { axiosAuthorized } from "src/core/utils/axios";
-
-type Member = { userId: string; name: string; email: string };
+    useConnectionAccess,
+    useSetConnectionAccess,
+} from "@services/codeManagement/hooks/use-connection-access";
 
 /** Owners choose which members read this Git connection's repositories. */
 export const ConnectionAccessModal = (props: {
@@ -32,57 +26,29 @@ export const ConnectionAccessModal = (props: {
     connectionId: string;
     connectionLabel: string;
 }) => {
-    const [members, setMembers] = useState<Member[]>();
-    const [granted, setGranted] = useState<Set<string>>(new Set());
+    const access = useConnectionAccess(props.teamId, props.connectionId);
+    const saveAccess = useSetConnectionAccess(props.teamId, props.connectionId);
+    // The member's edits, over what the connection grants now.
+    const [edited, setEdited] = useState<Set<string>>();
+    const granted =
+        edited ?? (access.data ? new Set(access.data.userIds) : undefined);
     // Saving after a failed load would revoke everyone it could not show.
-    const [loadFailed, setLoadFailed] = useState(false);
+    const loadFailed = access.isError;
+    const members = access.data?.members ?? (loadFailed ? [] : undefined);
 
     useEffect(() => {
-        let alive = true;
-        Promise.all([
-            axiosAuthorized.fetcher<{ data: TeamMembersResponse }>(
-                SETUP_PATHS.TEAM_MEMBERS,
-                { params: { teamId: props.teamId } },
-            ),
-            getConnectionAccess(props.teamId, props.connectionId),
-        ])
-            .then(([membersResponse, userIds]) => {
-                if (!alive) return;
-                const list = (
-                    (membersResponse?.data?.members ?? []) as MembersSetup[]
-                )
-                    .filter(
-                        (member: MembersSetup) =>
-                            member.userId && member.role !== UserRole.OWNER,
-                    )
-                    .map((member: MembersSetup) => ({
-                        userId: member.userId!,
-                        name: member.name,
-                        email: member.email,
-                    }));
-                setMembers(list);
-                setGranted(new Set(userIds));
-            })
-            .catch(() => {
-                if (!alive) return;
-                setMembers([]);
-                setLoadFailed(true);
-                toast({
-                    variant: "warning",
-                    title: "Could not load who reads this connection",
-                });
+        if (loadFailed) {
+            toast({
+                variant: "warning",
+                title: "Could not load who reads this connection",
             });
-        return () => {
-            alive = false;
-        };
-    }, [props.teamId, props.connectionId]);
+        }
+    }, [loadFailed]);
 
     const [save, { loading }] = useAsyncAction(async () => {
         magicModal.lock();
         try {
-            await setConnectionAccess(props.teamId, props.connectionId, [
-                ...granted,
-            ]);
+            await saveAccess.mutateAsync([...(granted ?? [])]);
             toast({ variant: "success", title: "Access updated" });
             magicModal.hide();
         } catch {
@@ -96,8 +62,8 @@ export const ConnectionAccessModal = (props: {
     });
 
     const toggle = (userId: string, on: boolean) =>
-        setGranted((current) => {
-            const next = new Set(current);
+        setEdited((current) => {
+            const next = new Set(current ?? granted ?? []);
             if (on) next.add(userId);
             else next.delete(userId);
             return next;
@@ -109,8 +75,9 @@ export const ConnectionAccessModal = (props: {
                 <DialogHeader>
                     <DialogTitle>Who reads {props.connectionLabel}</DialogTitle>
                     <DialogDescription>
-                        Members you select see this connection&apos;s repositories,
-                        reviews and metrics. Owners always see every connection.
+                        Members you select see this connection&apos;s
+                        repositories, reviews and metrics. Owners always see
+                        every connection.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -130,7 +97,9 @@ export const ConnectionAccessModal = (props: {
                                 className="flex items-center gap-3">
                                 <Checkbox
                                     id={`access-${member.userId}`}
-                                    checked={granted.has(member.userId)}
+                                    checked={
+                                        granted?.has(member.userId) ?? false
+                                    }
                                     onCheckedChange={(checked) =>
                                         toggle(member.userId, checked === true)
                                     }
@@ -159,7 +128,7 @@ export const ConnectionAccessModal = (props: {
                         size="md"
                         variant="primary"
                         loading={loading}
-                        disabled={!members || loadFailed}
+                        disabled={!members || !granted || loadFailed}
                         onClick={save}>
                         Save
                     </Button>

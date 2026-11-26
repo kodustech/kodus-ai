@@ -1,14 +1,36 @@
-import { authorizedFetch, typedFetch } from '@services/fetch';
-import { getOrganizationId } from '@services/organizations/fetch';
+import { cache } from "react";
 // eslint-disable-next-line camelcase -- Next.js's own export name
-import { unstable_rethrow } from 'next/navigation';
-import { createUrl, pathToApiUrl } from 'src/core/utils/helpers';
-import { isServerSide } from 'src/core/utils/server-side';
+import { unstable_rethrow } from "next/navigation";
+import { authorizedFetch, typedFetch, TypedFetchError } from "@services/fetch";
+import { getOrganizationId } from "@services/organizations/fetch";
+import { createUrl, pathToApiUrl } from "src/core/utils/helpers";
+import { isServerSide } from "src/core/utils/server-side";
 
-import type { PercentageDiff } from '../../_components/percentage-diff';
-import { getSelectedRepository } from '../../_helpers/get-selected-repository';
+import type { PercentageDiff } from "../../_components/percentage-diff";
+import { getSelectedRepository } from "../../_helpers/get-selected-repository";
 
-type CockpitSource = 'internal' | 'legacy-bq';
+/**
+ * Whether the API lets the caller read Cockpit for the repository (or the
+ * whole organization). Asked once per render however many charts read, and
+ * only a refusal (403) blanks them: any other failure surfaces as an error.
+ */
+const mayReadCockpit = cache(async (repository?: string | null) => {
+    try {
+        await authorizedFetch(pathToApiUrl("/cockpit/access"), {
+            params: repository ? { repository } : {},
+        });
+        return true;
+    } catch (error) {
+        // An expired session redirects to sign-out.
+        unstable_rethrow(error);
+        if (TypedFetchError.isError(error) && error.statusCode === 403) {
+            return false;
+        }
+        throw error;
+    }
+});
+
+type CockpitSource = "internal" | "legacy-bq";
 
 /**
  * In-memory cache of which backend serves cockpit data per organization.
@@ -51,13 +73,13 @@ async function resolveCockpitSource(
                 `[cockpit] source resolver failed, defaulting to legacy-bq: ${err.message}`,
             );
         }
-        return 'legacy-bq';
+        return "legacy-bq";
     }
 }
 
 export const analyticsFetch = async <Data>(
     url: `/${string}`,
-    options: Parameters<typeof typedFetch>['1'] = {},
+    options: Parameters<typeof typedFetch>["1"] = {},
 ) => {
     const [organizationId, selectedRepository] = await Promise.all([
         getOrganizationId(),
@@ -72,7 +94,7 @@ export const analyticsFetch = async <Data>(
         ...(selectedRepository && { repository: selectedRepository }),
     };
 
-    if (source === 'internal') {
+    if (source === "internal") {
         // New path: route through apps/api (Postgres analytics warehouse).
         // `authorizedFetch` injects the JWT (cookie or session), and
         // unwraps the apps/api `{ data, statusCode, type }` envelope so
@@ -102,19 +124,13 @@ export const analyticsFetch = async <Data>(
     // It is called with a shared secret, so the API decides first whether
     // the member may read this repository (or the whole organization): a
     // member granted only some Git connections reads only theirs.
-    try {
-        await authorizedFetch(pathToApiUrl('/cockpit/access'), {
-            params: selectedRepository ? { repository: selectedRepository } : {},
-        });
-    } catch (error) {
-        // An expired session redirects to sign-out; only a refusal reads nothing.
-        unstable_rethrow(error);
+    if (!(await mayReadCockpit(selectedRepository))) {
         return null as Data;
     }
 
     if (!process.env.WEB_ANALYTICS_SECRET) {
         console.warn(
-            'WEB_ANALYTICS_SECRET is not configured. Analytics requests will be skipped.',
+            "WEB_ANALYTICS_SECRET is not configured. Analytics requests will be skipped.",
         );
         return null as Data;
     }
@@ -123,10 +139,10 @@ export const analyticsFetch = async <Data>(
     const port = process.env.WEB_PORT_ANALYTICS;
 
     // if 'true' we are in the server and hostname is not a domain
-    if (isServerSide && hostName === 'localhost') {
+    if (isServerSide && hostName === "localhost") {
         hostName =
             process.env.GLOBAL_ANALYTICS_CONTAINER_NAME ||
-            'kodus-analytics-service';
+            "kodus-analytics-service";
     }
 
     // Analytics service is intra-network — http + port, no heuristics.
@@ -140,7 +156,7 @@ export const analyticsFetch = async <Data>(
             params,
             headers: {
                 ...options?.headers,
-                'x-api-key': process.env.WEB_ANALYTICS_SECRET,
+                "x-api-key": process.env.WEB_ANALYTICS_SECRET,
             },
         });
     } catch (error) {
@@ -166,18 +182,18 @@ export const getPercentageDiff = ({
     trend,
 }: {
     trend: string;
-}): React.ComponentProps<typeof PercentageDiff>['status'] => {
+}): React.ComponentProps<typeof PercentageDiff>["status"] => {
     switch (trend) {
-        case 'unchanged':
-            return 'neutral';
+        case "unchanged":
+            return "neutral";
 
-        case 'improved':
-            return 'good';
+        case "improved":
+            return "good";
 
-        case 'worsened':
-            return 'bad';
+        case "worsened":
+            return "bad";
 
         default:
-            return 'neutral';
+            return "neutral";
     }
 };

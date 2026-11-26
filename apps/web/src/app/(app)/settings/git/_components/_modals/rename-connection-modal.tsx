@@ -52,13 +52,26 @@ export const RenameConnectionModal = (props: {
                     <DialogTitle>Rename Git connection</DialogTitle>
                 </DialogHeader>
 
-                <Input
-                    autoFocus
-                    maxLength={120}
-                    value={name}
-                    placeholder="e.g. Client repositories"
-                    onChange={(e) => setName(e.target.value)}
-                />
+                <form
+                    className="flex flex-col gap-2"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        void save();
+                    }}>
+                    <label
+                        htmlFor="connection-name"
+                        className="text-sm font-medium">
+                        Name
+                    </label>
+                    <Input
+                        id="connection-name"
+                        autoFocus
+                        maxLength={120}
+                        value={name}
+                        placeholder="e.g. Client repositories"
+                        onChange={(e) => setName(e.target.value)}
+                    />
+                </form>
 
                 <DialogFooter>
                     <Button

@@ -30,6 +30,7 @@ import { GitConnectedProvider } from "./_components/connected-provider";
 import { IgnoredUsersCard } from "./_components/ignored-users-card";
 import { ReviewAllRepositoriesCard } from "./_components/review-all-repositories-card";
 import { GitRepositoriesTable } from "./_components/table";
+import { connectionLabel } from "./_constants";
 
 const MANUAL_SELECTION: RepositorySelection = {
     mode: "manual",
@@ -47,14 +48,6 @@ export default async function GitSettings() {
     let autoLicenseAssignmentConfig: Awaited<
         ReturnType<typeof getAutoLicenseAssignmentConfig>
     > = undefined;
-    let organizationMembersRaw: Awaited<
-        ReturnType<typeof getOrganizationMembers>
-    > = MEMBERS_UNAVAILABLE;
-    let webhookFailures: Awaited<
-        ReturnType<typeof getWebhookCreationFailures>
-    > = {};
-    let webhookFailuresUnavailable = false;
-    let repositorySelection: RepositorySelection = MANUAL_SELECTION;
     let connectionsError = false;
 
     try {
@@ -62,25 +55,10 @@ export default async function GitSettings() {
             connectionsResult,
             connectedRepositories,
             autoLicenseAssignmentConfig,
-            organizationMembersRaw,
-            webhookFailures,
-            repositorySelection,
         ] = await Promise.all([
             getConnections(teamId),
             getIntegrationConfig({ teamId }),
             getAutoLicenseAssignmentConfig().catch(() => undefined),
-            getOrganizationMembers({ teamId }).catch(() => MEMBERS_UNAVAILABLE),
-            // Ancillary read: left unguarded it would reject the whole batch
-            // and blank the connections and repositories that loaded fine,
-            // because those are only assigned by the destructuring. So it is
-            // guarded -- but NOT with an empty payload, which reads as the
-            // healthy "this team has no webhook failures": the table is told
-            // the status could not be loaded instead (#2003 review).
-            getWebhookCreationFailures(teamId).catch(() => {
-                webhookFailuresUnavailable = true;
-                return {};
-            }),
-            getRepositorySelection(teamId).catch(() => MANUAL_SELECTION),
         ]);
     } catch (err) {
         console.error("[GitSettings] error fetching data:", err);
@@ -89,7 +67,9 @@ export default async function GitSettings() {
 
     const connections = safeArray(connectionsResult);
 
-    const toMemberOptions = (raw: typeof organizationMembersRaw) =>
+    const toMemberOptions = (
+        raw: Awaited<ReturnType<typeof getOrganizationMembers>>,
+    ) =>
         raw.status === "ok"
             ? raw.members.map((member) => {
                   const normalizedName =
@@ -103,28 +83,64 @@ export default async function GitSettings() {
               })
             : [];
 
-    const organizationMembers = toMemberOptions(organizationMembersRaw);
+    // An ancillary read: when it fails, the table says the status could not
+    // be loaded rather than showing the healthy "no failures" (#2003 review).
+    const readWebhookFailures = (connectionId?: string) =>
+        getWebhookCreationFailures(teamId, connectionId)
+            .then((failures) => ({ failures, unavailable: false }))
+            .catch(() => ({
+                failures: {} as Awaited<
+                    ReturnType<typeof getWebhookCreationFailures>
+                >,
+                unavailable: true,
+            }));
 
     const gitConnections = connections.filter(
         (c) => c.category === "CODE_MANAGEMENT",
     );
     const gitConnection = gitConnections[0];
-    const severalConnections = gitConnections.length > 1;
+    // Laid out by the workspace's connections, which a member granted only
+    // some of them does not all see.
+    const severalConnections =
+        gitConnections.length > 1 ||
+        (gitConnection?.workspaceConnectionCount ?? 0) > 1;
 
-    // Git ids differ per provider and host, so each connection filters its
-    // own members.
-    const membersByConnection = severalConnections
+    // Git ids differ per provider and host, so with several connections
+    // each one reads its own members and its own webhook failures.
+    const byConnection = severalConnections
         ? await Promise.all(
-              gitConnections.map((connection) =>
-                  getOrganizationMembers({
-                      teamId,
-                      connectionId: connection.connectionId,
-                  })
-                      .catch(() => MEMBERS_UNAVAILABLE)
-                      .then(toMemberOptions),
-              ),
+              gitConnections.map(async (connection) => {
+                  const [members, webhooks] = await Promise.all([
+                      getOrganizationMembers({
+                          teamId,
+                          connectionId: connection.connectionId,
+                      })
+                          .catch(() => MEMBERS_UNAVAILABLE)
+                          .then(toMemberOptions),
+                      readWebhookFailures(connection.connectionId),
+                  ]);
+                  return { members, webhooks };
+              }),
           )
         : [];
+
+    const [organizationMembersRaw, singleWebhooks, repositorySelection] =
+        !severalConnections && gitConnection
+            ? await Promise.all([
+                  getOrganizationMembers({ teamId }).catch(
+                      () => MEMBERS_UNAVAILABLE,
+                  ),
+                  readWebhookFailures(),
+                  getRepositorySelection(teamId).catch(() => MANUAL_SELECTION),
+              ])
+            : [
+                  MEMBERS_UNAVAILABLE,
+                  { failures: {}, unavailable: false },
+                  MANUAL_SELECTION,
+              ];
+
+    const organizationMembers = toMemberOptions(organizationMembersRaw);
+    const membersByConnection = byConnection.map((entry) => entry.members);
 
     const hasFilters = [
         autoLicenseAssignmentConfig,
@@ -204,6 +220,7 @@ export default async function GitSettings() {
                                         className="flex flex-col gap-4">
                                         <GitConnectedProvider
                                             connection={connection}
+                                            connections={gitConnections}
                                             showConnectionActions
                                         />
                                         <GitRepositoriesTable
@@ -219,9 +236,22 @@ export default async function GitSettings() {
                                                     ).connectionId ===
                                                     connection.connectionId,
                                             )}
-                                            webhookFailures={webhookFailures}
+                                            connectionId={
+                                                connection.connectionId
+                                            }
+                                            webhookFailures={
+                                                byConnection[
+                                                    gitConnections.indexOf(
+                                                        connection,
+                                                    )
+                                                ]?.webhooks.failures
+                                            }
                                             webhookFailuresUnavailable={
-                                                webhookFailuresUnavailable
+                                                byConnection[
+                                                    gitConnections.indexOf(
+                                                        connection,
+                                                    )
+                                                ]?.webhooks.unavailable
                                             }
                                             reviewsAllRepositories={false}
                                         />
@@ -237,9 +267,10 @@ export default async function GitSettings() {
                                 <GitRepositoriesTable
                                     platformName={gitConnection.platformName}
                                     repositories={connectedRepositories}
-                                    webhookFailures={webhookFailures}
+                                    connectionId={gitConnection.connectionId}
+                                    webhookFailures={singleWebhooks.failures}
                                     webhookFailuresUnavailable={
-                                        webhookFailuresUnavailable
+                                        singleWebhooks.unavailable
                                     }
                                     reviewsAllRepositories={
                                         repositorySelection.mode === "all"
@@ -257,10 +288,10 @@ export default async function GitSettings() {
                                 <IgnoredUsersCard
                                     key={connection.connectionId}
                                     connectionId={connection.connectionId}
-                                    connectionName={
-                                        connection.connectionName ??
-                                        connection.platformName
-                                    }
+                                    connectionName={connectionLabel(
+                                        connection,
+                                        gitConnections,
+                                    )}
                                     organizationMembers={
                                         membersByConnection[index] ?? []
                                     }

@@ -103,6 +103,20 @@ describe('RepositoryConnectionService', () => {
         }
     });
 
+    it("registers the records under the named connection's own repositories row", async () => {
+        await service.registerRepositoryRecords({
+            organizationAndTeamData: { ...orgTeam, integrationId: 'gl-b' },
+            platform: 'gitlab',
+            repositories: [{ id: '7', name: 'acme/api' } as any],
+        });
+
+        expect(integrationConfigService.findOne).toHaveBeenCalledWith({
+            team: { uuid: 'team-1' },
+            configKey: IntegrationConfigKey.REPOSITORIES,
+            integration: { status: true, uuid: 'gl-b' },
+        });
+    });
+
     it('counts the team AST builds that are queued or running, ignoring stale ones', async () => {
         const now = Date.now();
         jobQueueService.listJobs.mockImplementation(async ({ status }) => ({

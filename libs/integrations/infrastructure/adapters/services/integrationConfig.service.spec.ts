@@ -154,22 +154,38 @@ describe('IntegrationConfigService.findIntegrationConfigFormatted — connection
 });
 
 describe('IntegrationConfigService.repositoryIdsListedByOtherConnections', () => {
-    it('collects the repository ids every other active connection in the organization lists', async () => {
+    const lists = [
+        {
+            integrationId: 'mine',
+            platform: 'GITLAB',
+            host: 'https://git.a.io',
+            repositories: [{ id: 1 }, { id: 2 }, { id: 42 }],
+        },
+        {
+            integrationId: 'other-same-server',
+            platform: 'GITLAB',
+            host: 'git.a.io',
+            repositories: [{ id: 2 }],
+        },
+        {
+            integrationId: 'other-server',
+            platform: 'GITLAB',
+            host: 'git.b.io',
+            repositories: [{ id: 42 }],
+        },
+        {
+            integrationId: 'forgejo',
+            platform: 'FORGEJO',
+            host: 'git.a.io',
+            repositories: [{ id: '1' }],
+        },
+    ];
+
+    it('collects the ids other connections on the same server list', async () => {
         const repository = {
-            findByOrganizationAndConfigKey: jest.fn().mockResolvedValue([
-                {
-                    integration: { uuid: 'mine' },
-                    configValue: [{ id: 1 }, { id: 2 }],
-                },
-                {
-                    integration: { uuid: 'other-a' },
-                    configValue: [{ id: 2 }],
-                },
-                {
-                    integration: { uuid: 'other-b' },
-                    configValue: [{ id: '3' }],
-                },
-            ]),
+            findRepositoryListsOfOrganization: jest
+                .fn()
+                .mockResolvedValue(lists),
         } as any;
         const service = new IntegrationConfigService(repository);
 
@@ -178,10 +194,26 @@ describe('IntegrationConfigService.repositoryIdsListedByOtherConnections', () =>
             'mine',
         );
 
-        expect([...ids].sort()).toEqual(['2', '3']);
-        expect(repository.findByOrganizationAndConfigKey).toHaveBeenCalledWith(
+        // 42 on another GitLab and 1 on a Forgejo are other repositories.
+        expect([...ids]).toEqual(['2']);
+        expect(
+            repository.findRepositoryListsOfOrganization,
+        ).toHaveBeenCalledWith('org-1');
+    });
+
+    it('keeps every listed id when the connection itself is not found, so no hook is removed on a guess', async () => {
+        const repository = {
+            findRepositoryListsOfOrganization: jest
+                .fn()
+                .mockResolvedValue(lists.slice(1)),
+        } as any;
+        const service = new IntegrationConfigService(repository);
+
+        const ids = await service.repositoryIdsListedByOtherConnections(
             'org-1',
-            IntegrationConfigKey.REPOSITORIES,
+            'mine',
         );
+
+        expect([...ids].sort()).toEqual(['1', '2', '42']);
     });
 });

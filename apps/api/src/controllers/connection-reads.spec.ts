@@ -54,6 +54,8 @@ describe('connection reads for a member granted some connections', () => {
         expect(
             connections.map((c: { connectionId: string }) => c.connectionId),
         ).toEqual(['gh-a', 'jira']);
+        // The page still shows the workspace's several-connection view.
+        expect(connections[0]).toMatchObject({ workspaceConnectionCount: 2 });
     });
 
     it('lists the provider repositories of granted connections only', async () => {

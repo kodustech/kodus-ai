@@ -171,10 +171,13 @@ export const ResetIntegrationModal = ({
                     </DialogTitle>
                 </DialogHeader>
 
-                <p className="text-sm">
-                    Only this connection is removed. The workspace&apos;s other Git
-                    connections and their repositories stay as they are.
-                </p>
+                {connectionId && (
+                    <p className="text-sm">
+                        Only this connection is removed. The workspace&apos;s
+                        other Git connections and their repositories stay as
+                        they are.
+                    </p>
+                )}
 
                 <DialogFooter className="flex flex-col gap-3">
                     <Button

@@ -157,6 +157,17 @@ describe('DeleteIntegrationAndRepositoriesUseCase — one connection of several'
         );
     });
 
+    it("keeps the rules and messages of a repository another workspace lists, on a workspace's only connection", async () => {
+        const { useCase, deletedRepoIds } = build([
+            { uuid: 'gh-a', repos: ['1', '9'] },
+            { uuid: 'gh-x', team: 'team-2', repos: ['9'] },
+        ]);
+
+        await useCase.execute({ organizationId: ORG, teamId: TEAM });
+
+        expect(deletedRepoIds()).toEqual(['1']);
+    });
+
     it('asks which connection when the workspace has several and none is named, before touching anything', async () => {
         const { useCase, deleteIntegrationUseCase, deletedRepoIds } = build([
             { uuid: 'gh-a', repos: ['1'] },

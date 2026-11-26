@@ -342,6 +342,7 @@ export class CodeManagementController {
         @Body()
         body: {
             teamId: string;
+            connectionId?: string;
             mode: 'manual' | 'all';
             includeForksAndMirrors?: boolean;
         },
@@ -350,6 +351,9 @@ export class CodeManagementController {
             organizationAndTeamData: {
                 organizationId: this.request?.user?.organization?.uuid,
                 teamId: body.teamId,
+                ...(body.connectionId
+                    ? { integrationId: body.connectionId }
+                    : {}),
             },
             mode: body.mode,
             includeForksAndMirrors: body.includeForksAndMirrors,

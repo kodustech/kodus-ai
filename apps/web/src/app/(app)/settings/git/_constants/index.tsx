@@ -35,3 +35,36 @@ export const CODE_MANAGEMENT_PLATFORMS = {
         }
     >
 >;
+
+type LabelledConnection = {
+    connectionId?: string;
+    connectionName?: string | null;
+    platformName: string;
+};
+
+/**
+ * How a Git connection is shown: its name, else its provider's readable
+ * name, numbered when the workspace has more than one unnamed connection of
+ * that provider.
+ */
+export const connectionLabel = (
+    connection: LabelledConnection,
+    connections: LabelledConnection[] = [connection],
+): string => {
+    const named = connection.connectionName?.trim();
+    if (named) return named;
+    const readable =
+        CODE_MANAGEMENT_PLATFORMS[
+            connection.platformName.toLowerCase() as keyof typeof CODE_MANAGEMENT_PLATFORMS
+        ]?.platformName ?? connection.platformName;
+    const unnamedAlike = connections.filter(
+        (other) =>
+            !other.connectionName?.trim() &&
+            other.platformName === connection.platformName,
+    );
+    if (unnamedAlike.length < 2) return readable;
+    const position = unnamedAlike.findIndex(
+        (other) => other.connectionId === connection.connectionId,
+    );
+    return `${readable} ${position + 1}`;
+};

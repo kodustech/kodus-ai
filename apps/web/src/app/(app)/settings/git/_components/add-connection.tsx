@@ -36,10 +36,16 @@ const AddConnectionModal = () => {
                     </DialogDescription>
                 </DialogHeader>
 
+                <label
+                    htmlFor="new-connection-name"
+                    className="text-sm font-medium">
+                    Name (optional)
+                </label>
                 <Input
+                    id="new-connection-name"
                     maxLength={120}
                     value={name}
-                    placeholder="Name this connection (optional), e.g. Client repositories"
+                    placeholder="e.g. Client repositories"
                     onChange={(e) => setName(e.target.value)}
                 />
 

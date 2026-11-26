@@ -293,21 +293,50 @@ export class GithubService
     }
 
     /**
-     * The connection a connect call rewrites: none when the caller adds a
-     * new one, otherwise the one it names or the workspace's GitHub one.
+     * The connection a connect call rewrites. The one named; else the one
+     * already holding this App installation (a reconfigure, whatever the
+     * caller asked); else none when the caller adds a new one, or the
+     * workspace's only GitHub connection. With several and none of them
+     * matching, it refuses instead of rewriting one of them.
      */
-    private async findConnectionToUpdate(params: any): Promise<any> {
-        if (params?.newConnection) {
-            return undefined;
-        }
-        return this.integrationService.findOne({
+    private async findConnectionToUpdate(
+        params: any,
+        installationId?: string | number | null,
+    ): Promise<any> {
+        const scope = {
             organization: {
                 uuid: params.organizationAndTeamData.organizationId,
             },
             team: { uuid: params.organizationAndTeamData.teamId },
-            ...connectionScope(params.organizationAndTeamData),
             platform: PlatformType.GITHUB,
-        });
+        };
+        if (params.organizationAndTeamData?.integrationId) {
+            return this.integrationService.findOne({
+                ...scope,
+                ...connectionScope(params.organizationAndTeamData),
+            });
+        }
+
+        const existing =
+            (await this.integrationService.find({ ...scope, status: true })) ??
+            [];
+        if (installationId != null) {
+            const holding = existing.find(
+                (connection) =>
+                    String(
+                        connection?.authIntegration?.authDetails
+                            ?.installationId,
+                    ) === String(installationId),
+            );
+            if (holding) return holding;
+        }
+        if (params?.newConnection) return undefined;
+        if (existing.length > 1) {
+            throw new BadRequestException(
+                'This workspace has several GitHub connections: reconnect one from its card in Settings > Git.',
+            );
+        }
+        return existing[0];
     }
 
     private normalizeGithubHost(host?: string): string | undefined {
@@ -656,6 +685,7 @@ export class GithubService
         installationId: unknown;
         userId: string;
         organizationId: string;
+        newConnection?: boolean;
     }): { url: string } {
         if (!isInstallationId(params.installationId)) {
             throw new BadRequestException('Invalid GitHub installation id.');
@@ -669,6 +699,7 @@ export class GithubService
             installationId: params.installationId,
             userId: params.userId,
             organizationId: params.organizationId,
+            ...(params.newConnection ? { newConnection: true as const } : {}),
         });
         return {
             url: githubUserAuthorizationUrl(
@@ -884,7 +915,10 @@ export class GithubService
             }
 
             progress.step = 'find-integration';
-            const integration = await this.findConnectionToUpdate(params);
+            const integration = await this.findConnectionToUpdate(
+                params,
+                authDetails.installationId,
+            );
 
             progress.step = integration
                 ? 'update-integration'

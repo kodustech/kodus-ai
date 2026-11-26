@@ -21,7 +21,7 @@ import {
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { AuthMode, type AwaitedReturnType } from "src/core/types";
 
-import { CODE_MANAGEMENT_PLATFORMS } from "../_constants";
+import { CODE_MANAGEMENT_PLATFORMS, connectionLabel } from "../_constants";
 import { ConnectionAccessModal } from "./_modals/connection-access-modal";
 import { RenameConnectionModal } from "./_modals/rename-connection-modal";
 import { ResetIntegrationModal } from "./_modals/reset-integration-modal";
@@ -36,9 +36,12 @@ const UPDATE_TOKEN_PLATFORMS = new Set(["gitlab", "forgejo"]);
 
 export const GitConnectedProvider = ({
     connection,
+    connections,
     showConnectionActions = false,
 }: {
     connection: AwaitedReturnType<typeof getConnections>[number];
+    /** The workspace's Git connections, to tell unnamed ones apart. */
+    connections?: AwaitedReturnType<typeof getConnections>;
     /** A workspace with several connections manages each one here. */
     showConnectionActions?: boolean;
 }) => {
@@ -56,7 +59,7 @@ export const GitConnectedProvider = ({
     const platformKey =
         connection.platformName.toLowerCase() as keyof typeof CODE_MANAGEMENT_PLATFORMS;
     const platform = CODE_MANAGEMENT_PLATFORMS[platformKey];
-    const label = connection.connectionName || platform.platformName;
+    const label = connectionLabel(connection, connections);
 
     // A GitLab connection made through OAuth stays OAuth: the modal saves a
     // token, so offering it there would swap the authentication mode.

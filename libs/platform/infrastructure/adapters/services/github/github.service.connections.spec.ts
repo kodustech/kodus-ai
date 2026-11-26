@@ -13,7 +13,18 @@ describe('GitHub connections in one workspace', () => {
     const USER = 'user-1';
     const INSTALLATION = '4242';
 
-    const setupOauth = (opts: { linkedInOrg?: boolean } = {}) => {
+    const setupOauth = (
+        opts: {
+            linkedInOrg?: boolean;
+            existing?: Array<{
+                uuid: string;
+                authIntegration: {
+                    uuid: string;
+                    authDetails: { installationId: number };
+                };
+            }>;
+        } = {},
+    ) => {
         const svc: any = Object.create(GithubService.prototype);
         const appOctokit = {
             auth: jest.fn(async (args: any) =>
@@ -49,11 +60,18 @@ describe('GitHub connections in one workspace', () => {
         svc.checkRepositoryPermissions = jest
             .fn()
             .mockResolvedValue({ success: true });
-        svc.integrationService = {
-            findOne: jest.fn().mockResolvedValue({
+        const existing = opts.existing ?? [
+            {
                 uuid: 'existing-gh',
-                authIntegration: { uuid: 'auth-existing' },
-            }),
+                authIntegration: {
+                    uuid: 'auth-existing',
+                    authDetails: { installationId: 1111 },
+                },
+            },
+        ];
+        svc.integrationService = {
+            findOne: jest.fn().mockResolvedValue(existing[0]),
+            find: jest.fn().mockResolvedValue(existing),
         };
         svc.addAccessToken = jest.fn().mockResolvedValue({ uuid: 'new-gh' });
         svc.updateAuthIntegration = jest.fn().mockResolvedValue(undefined);
@@ -85,7 +103,6 @@ describe('GitHub connections in one workspace', () => {
 
         const result = await link(svc, { newConnection: true });
 
-        expect(svc.integrationService.findOne).not.toHaveBeenCalled();
         expect(svc.updateAuthIntegration).not.toHaveBeenCalled();
         expect(svc.addAccessToken).toHaveBeenCalled();
         expect(result).toEqual(
@@ -124,6 +141,60 @@ describe('GitHub connections in one workspace', () => {
         expect(result.integrationId).toBe('existing-gh');
     });
 
+    it('reconnects the connection holding the installation, even when asked for a new one', async () => {
+        const svc = setupOauth({
+            existing: [
+                {
+                    uuid: 'gh-a',
+                    authIntegration: {
+                        uuid: 'auth-a',
+                        authDetails: { installationId: 1111 },
+                    },
+                },
+                {
+                    uuid: 'gh-b',
+                    authIntegration: {
+                        uuid: 'auth-b',
+                        authDetails: { installationId: 4242 },
+                    },
+                },
+            ],
+        });
+
+        const result = await link(svc, { newConnection: true });
+
+        expect(svc.addAccessToken).not.toHaveBeenCalled();
+        expect(svc.updateAuthIntegration).toHaveBeenCalledWith(
+            expect.objectContaining({ integrationId: 'gh-b' }),
+        );
+        expect(result.integrationId).toBe('gh-b');
+    });
+
+    it('refuses to rewrite one of several GitHub connections that the installation does not belong to', async () => {
+        const svc = setupOauth({
+            existing: [
+                {
+                    uuid: 'gh-a',
+                    authIntegration: {
+                        uuid: 'auth-a',
+                        authDetails: { installationId: 1111 },
+                    },
+                },
+                {
+                    uuid: 'gh-c',
+                    authIntegration: {
+                        uuid: 'auth-c',
+                        authDetails: { installationId: 3333 },
+                    },
+                },
+            ],
+        });
+
+        await expect(link(svc)).rejects.toThrow(BadRequestException);
+        expect(svc.updateAuthIntegration).not.toHaveBeenCalled();
+        expect(svc.addAccessToken).not.toHaveBeenCalled();
+    });
+
     it('refuses to add an installation already connected in the organization', async () => {
         const svc = setupOauth({ linkedInOrg: true });
 
@@ -154,6 +225,7 @@ describe('GitHub connections in one workspace', () => {
             .mockResolvedValue({ success: true });
         svc.integrationService = {
             findOne: jest.fn().mockResolvedValue({ uuid: 'existing-gh' }),
+            find: jest.fn().mockResolvedValue([{ uuid: 'existing-gh' }]),
         };
         svc.addAccessToken = jest.fn().mockResolvedValue({ uuid: 'new-pat' });
         svc.updateAuthIntegration = jest.fn();

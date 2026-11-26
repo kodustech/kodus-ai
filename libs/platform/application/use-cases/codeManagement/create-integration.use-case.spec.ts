@@ -1,3 +1,4 @@
+import { sealInstallationState } from '@libs/platform/infrastructure/adapters/services/github/installation-authorization';
 import {
     BadRequestException,
     ServiceUnavailableException,
@@ -22,6 +23,7 @@ const build = (
         workspaceConnections?: Array<{ uuid: string; createdAt?: Date }>;
         bindPrimary?: boolean;
         centralized?: Record<string, unknown>;
+        selectionMode?: 'manual' | 'all';
     } = {},
 ) => {
     const parametersService = {
@@ -72,6 +74,13 @@ const build = (
     const connectionAccess = {
         grantWorkspaceMembers: jest.fn().mockResolvedValue(['u-1']),
     };
+    const integrationConfigService = {
+        findIntegrationConfigFormatted: jest
+            .fn()
+            .mockResolvedValue(
+                opts.selectionMode ? { mode: opts.selectionMode } : null,
+            ),
+    };
     const useCase = new CreateIntegrationUseCase(
         codeManagementService as any,
         { emit: jest.fn() } as any,
@@ -88,6 +97,7 @@ const build = (
         integrationService as any,
         connectionBilling as any,
         connectionAccess as any,
+        integrationConfigService as any,
         parametersService as any,
     );
     return {
@@ -296,6 +306,58 @@ describe('CreateIntegrationUseCase — connections', () => {
                 reconnect.connectionBilling.attributeLegacySeatsBeforeAdding,
             ).not.toHaveBeenCalled();
         });
+    });
+
+    it('refuses another connection while the workspace reviews all repositories of its connection', async () => {
+        const { useCase, codeManagementService } = build({
+            workspaceConnections: [{ uuid: 'gh-a' }],
+            selectionMode: 'all',
+        });
+
+        await expect(
+            useCase.execute({
+                integrationType: 'gitlab',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(
+            codeManagementService.createAuthIntegration,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('adds a new GitHub connection when the sealed authorization asked for one, whatever the request says', async () => {
+        const previous = process.env.API_CRYPTO_KEY;
+        process.env.API_CRYPTO_KEY = 'e'.repeat(64);
+        try {
+            const { useCase, codeManagementService, connectionBilling } = build(
+                {
+                    workspaceConnections: [{ uuid: 'gh-a' }],
+                },
+            );
+
+            await useCase.execute({
+                integrationType: 'github',
+                code: '42',
+                githubState: sealInstallationState({
+                    installationId: '42',
+                    userId: 'user-1',
+                    organizationId: ORG,
+                    newConnection: true,
+                }),
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(
+                codeManagementService.createAuthIntegration,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ newConnection: true }),
+                'github',
+            );
+            expect(connectionBilling.ensurePrimary).toHaveBeenCalled();
+        } finally {
+            process.env.API_CRYPTO_KEY = previous;
+        }
     });
 
     describe('who reads a new connection', () => {

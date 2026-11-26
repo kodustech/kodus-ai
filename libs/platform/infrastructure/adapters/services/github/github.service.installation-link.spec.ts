@@ -80,7 +80,10 @@ describe('GitHub installation linking', () => {
         svc.checkRepositoryPermissions = jest
             .fn()
             .mockResolvedValue({ success: true });
-        svc.integrationService = { findOne: jest.fn().mockResolvedValue(null) };
+        svc.integrationService = {
+            findOne: jest.fn().mockResolvedValue(null),
+            find: jest.fn().mockResolvedValue([]),
+        };
         svc.handleIntegration = jest.fn().mockResolvedValue(undefined);
         svc.findOneByOrganizationId = jest
             .fn()

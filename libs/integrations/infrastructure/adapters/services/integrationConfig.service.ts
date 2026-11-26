@@ -8,11 +8,13 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import {
     IIntegrationConfigRepository,
     INTEGRATION_CONFIG_REPOSITORY_TOKEN,
+    OrganizationRepositoryList,
     RepositoryListing,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.repository.contracts';
 import { IIntegrationConfigService } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 import { IIntegrationConfig } from '@libs/integrations/domain/integrationConfigs/interfaces/integration-config.interface';
+import { connectionServerKey } from '@libs/integrations/domain/integrations/utils/connection-host';
 
 @Injectable()
 export class IntegrationConfigService implements IIntegrationConfigService {
@@ -74,24 +76,35 @@ export class IntegrationConfigService implements IIntegrationConfigService {
     }
 
     /**
-     * Repository ids listed by any other active Git connection of the
-     * organization. Hooks and per-repository records keyed by id alone stay
-     * while one of them still reviews the repository.
+     * Repository ids listed by another active Git connection of the
+     * organization on the same server. Hooks and per-repository records
+     * keyed by id stay while one of them still reviews the repository; the
+     * same id on another server is another repository. When the connection
+     * itself is not among them, every listed id counts.
      */
     async repositoryIdsListedByOtherConnections(
         organizationId: string,
         integrationId: string,
     ): Promise<Set<string>> {
-        const configs =
-            (await this.integrationConfigRepository.findByOrganizationAndConfigKey(
+        const lists =
+            (await this.integrationConfigRepository.findRepositoryListsOfOrganization(
                 organizationId,
-                IntegrationConfigKey.REPOSITORIES,
             )) ?? [];
+        const serverOf = (list: { platform: string; host?: string | null }) =>
+            connectionServerKey(list.platform as PlatformType, {
+                host: list.host,
+            });
+        const own = lists.find((list) => list.integrationId === integrationId);
+        const server = own ? serverOf(own) : undefined;
         return new Set(
-            configs
-                .filter((config) => config?.integration?.uuid !== integrationId)
-                .flatMap((config) =>
-                    Array.isArray(config.configValue) ? config.configValue : [],
+            lists
+                .filter(
+                    (list) =>
+                        list.integrationId !== integrationId &&
+                        (!server || serverOf(list) === server),
+                )
+                .flatMap((list) =>
+                    Array.isArray(list.repositories) ? list.repositories : [],
                 )
                 .map((repository: { id: string | number }) =>
                     String(repository?.id),
@@ -105,6 +118,14 @@ export class IntegrationConfigService implements IIntegrationConfigService {
         repository: { id?: string | number; name?: string; fullName?: string };
     }): Promise<RepositoryListing[]> {
         return this.integrationConfigRepository.findRepositoryListings(params);
+    }
+
+    findRepositoryListsOfOrganization(
+        organizationId: string,
+    ): Promise<OrganizationRepositoryList[]> {
+        return this.integrationConfigRepository.findRepositoryListsOfOrganization(
+            organizationId,
+        );
     }
 
     findAllOfTeamByConfigKey(
