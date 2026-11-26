@@ -410,12 +410,21 @@ const TEST_DB = 'issues_scan_prune_it';
 
         it('keeps a place the scan found again through the issue that holds it', async () => {
             await model.collection.insertMany([
-                issue('i-1', 'org-1', [
-                    { ...place('src/a.ts', 'authz'), severity: 'critical' },
-                    place('src/b.ts', 'authz'),
-                ]),
+                {
+                    ...issue('i-1', 'org-1', [
+                        { ...place('src/a.ts', 'authz'), severity: 'critical' },
+                        place('src/b.ts', 'authz'),
+                    ]),
+                    fingerprintAliases: [
+                        'fp-src/a.ts-authz',
+                        'fp-src/b.ts-authz',
+                    ],
+                },
                 // Another organization's place under the same identity.
-                issue('i-2', 'org-2', [place('src/a.ts', 'authz')]),
+                {
+                    ...issue('i-2', 'org-2', [place('src/a.ts', 'authz')]),
+                    fingerprintAliases: ['fp-src/a.ts-authz'],
+                },
             ] as any[]);
 
             // The dedup dropped the fresh finding at src/a.ts as a repeat of

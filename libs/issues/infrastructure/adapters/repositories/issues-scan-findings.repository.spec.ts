@@ -831,7 +831,7 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
         const { fingerprint: _own, ...repositoryScope } = identity;
         expect(placeFilter).toEqual({
             ...repositoryScope,
-            'occurrences.fingerprint': { $in: ['fp-1', 'fp-2'] },
+            fingerprintAliases: { $in: ['fp-1', 'fp-2'] },
         });
         expect(placeUpdate).toEqual({
             $set: {

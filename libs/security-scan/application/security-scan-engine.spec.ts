@@ -2472,7 +2472,7 @@ describe('SecurityScanEngine: across slices and units', () => {
             collectSurface: jest.fn(async () => SURFACE),
         });
 
-        await engine.run({
+        const result = await engine.run({
             ...baseParams(),
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
@@ -2485,6 +2485,9 @@ describe('SecurityScanEngine: across slices and units', () => {
             onUnitDone.mock.calls as unknown as [unknown, unknown, any[]?][]
         ).flatMap(([, , s]) => (s ?? []).map((x) => x.fingerprint));
         // Stored as the service's issue, and its own place found again.
+        expect(result.findings).toEqual([
+            expect.objectContaining({ storedAs: 'fp-service' }),
+        ]);
         expect(sighted).toEqual(['fp-own:src/orders/orders.controller.ts:7']);
     });
 

@@ -788,7 +788,8 @@ export class IssuesRepository implements IIssuesRepository {
                 'repository.host': params.repositoryHost,
                 'repository.id': params.repositoryId,
                 'source': IssueSource.SECURITY_SCAN,
-                'occurrences.fingerprint': { $in: fingerprints },
+                // A place's identity is among its issue's aliases (indexed).
+                'fingerprintAliases': { $in: fingerprints },
             },
             {
                 $set: {

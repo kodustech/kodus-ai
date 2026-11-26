@@ -951,6 +951,9 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                 },
             );
             let folded = 0;
+            // A fold that did not land (an issue changed since it was read)
+            // leaves its duplicate to be compared again next time.
+            const unfolded = new Set<string>();
             for (const { issue, into } of absorbed) {
                 if (
                     await this.issuesService.foldScanIssueInto({
@@ -960,11 +963,13 @@ export class SecurityScanJobProcessor implements IJobProcessorService {
                     })
                 ) {
                     folded++;
+                } else if (issue.fingerprint) {
+                    unfolded.add(issue.fingerprint);
                 }
             }
             await this.issuesService.markScanIssuesConsolidated({
                 ...scope,
-                fingerprints: compared,
+                fingerprints: compared.filter((fp) => !unfolded.has(fp)),
                 at: new Date().toISOString(),
             });
             return folded;
