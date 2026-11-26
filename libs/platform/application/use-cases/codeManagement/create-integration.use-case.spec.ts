@@ -434,7 +434,7 @@ describe('CreateIntegrationUseCase — connections', () => {
             });
         });
 
-        it('grants no one and seeds no author lists when it cannot tell whether the connection is the first', async () => {
+        it('grants the workspace members as the workspace read before the connection, but seeds no author lists, when it cannot tell whether the connection is the first', async () => {
             const { useCase, connectionAccess, connectionBilling, ignoreBots } =
                 build();
             const listed = connectionBilling.workspaceConnections;
@@ -451,10 +451,16 @@ describe('CreateIntegrationUseCase — connections', () => {
                 organizationAndTeamData: { teamId: TEAM },
             });
 
-            expect(result).toMatchObject({ success: true });
-            expect(
-                connectionAccess.grantWorkspaceMembers,
-            ).not.toHaveBeenCalled();
+            expect(result).toEqual({
+                success: true,
+                status: 'SUCCESS',
+                integrationId: 'new-conn',
+            });
+            // Locking every member out of the workspace's only connection is
+            // the worse failure; an owner can narrow it in the access modal.
+            expect(connectionAccess.grantWorkspaceMembers.mock.calls).toEqual([
+                [TEAM, 'new-conn'],
+            ]);
             expect(ignoreBots.claimConnectionLists).not.toHaveBeenCalled();
             expect(ignoreBots.execute).not.toHaveBeenCalled();
         });

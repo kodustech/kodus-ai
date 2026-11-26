@@ -282,7 +282,9 @@ export class CreateIntegrationUseCase implements IUseCase {
      * workspace was before connections existed. One added beside others
      * starts with owners only, and with author lists of its own. Answers
      * whether the connection is one added beside others, or undefined when
-     * that could not be told: then no one is granted it.
+     * that could not be checked: its members are then granted as the
+     * workspace read before it was created (empty, so first), and its author
+     * lists are left alone.
      */
     private async settleNewConnectionReaders(
         workspace: { organizationId: string; teamId: string },
@@ -291,7 +293,7 @@ export class CreateIntegrationUseCase implements IUseCase {
         separateConnection: boolean,
     ): Promise<boolean | undefined> {
         if (connectionsBefore.has(integrationId)) return separateConnection;
-        let separate: boolean;
+        let separate: boolean | undefined;
         try {
             // Two connections added at once to an empty workspace both read
             // it empty; only the oldest of them is its first.
@@ -303,9 +305,12 @@ export class CreateIntegrationUseCase implements IUseCase {
                 message: 'connection_first_or_beside_unknown',
                 context: CreateIntegrationUseCase.name,
                 error,
-                metadata: { ...workspace, integrationId },
+                metadata: {
+                    ...workspace,
+                    integrationId,
+                    fallback: 'first, as read before it was created',
+                },
             });
-            return undefined;
         }
         try {
             if (separate) {
@@ -333,6 +338,7 @@ export class CreateIntegrationUseCase implements IUseCase {
                         ...workspace,
                         integrationId,
                         members: members.length,
+                        verifiedFirst: separate === false,
                     },
                 });
             }
