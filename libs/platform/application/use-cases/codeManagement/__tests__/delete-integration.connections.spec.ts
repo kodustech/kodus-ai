@@ -79,7 +79,7 @@ const build = (opts: {
     };
 
     const connectionBilling = {
-        releaseBeforeRemoving: jest.fn(async () => true),
+        detachSeatsBeforeRemoving: jest.fn(async () => undefined),
         ensurePrimary: jest.fn(async () => ({
             status: 'bound',
             primaryConnectionId: 'gl-b',
@@ -241,7 +241,7 @@ describe('DeleteIntegrationUseCase — one connection of several', () => {
 });
 
 describe('DeleteIntegrationUseCase — billing', () => {
-    it('frees the primary slot before removing anything, then settles which connection keeps the plan', async () => {
+    it("detaches the connection's seats before removing anything, and settles which connection keeps the plan once it is gone", async () => {
         const {
             useCase,
             connectionBilling,
@@ -261,16 +261,19 @@ describe('DeleteIntegrationUseCase — billing', () => {
         });
 
         const workspace = { organizationId: ORG, teamId: TEAM };
-        expect(connectionBilling.releaseBeforeRemoving).toHaveBeenCalledWith(
-            workspace,
-            'gh-a',
-        );
+        expect(connectionBilling.detachSeatsBeforeRemoving.mock.calls).toEqual([
+            [workspace, 'gh-a'],
+        ]);
         expect(
-            connectionBilling.releaseBeforeRemoving.mock.invocationCallOrder[0],
+            connectionBilling.detachSeatsBeforeRemoving.mock
+                .invocationCallOrder[0],
         ).toBeLessThan(
             codeManagementService.deleteWebhook.mock.invocationCallOrder[0],
         );
-        expect(connectionBilling.ensurePrimary).toHaveBeenCalledWith(workspace);
+        // Billing frees a primary that left the workspace in this pass.
+        expect(connectionBilling.ensurePrimary.mock.calls).toEqual([
+            [workspace],
+        ]);
         expect(
             connectionBilling.ensurePrimary.mock.invocationCallOrder[0],
         ).toBeGreaterThan(
@@ -278,24 +281,19 @@ describe('DeleteIntegrationUseCase — billing', () => {
         );
     });
 
-    it('refuses the reset, removing nothing, while billing cannot free the slot', async () => {
-        const {
-            useCase,
-            connectionBilling,
-            integrationService,
-            codeManagementService,
-        } = build({ connections: [{ uuid: 'gh-a' }, { uuid: 'gl-b' }] });
-        connectionBilling.releaseBeforeRemoving.mockResolvedValue(false);
+    it('resets even while billing cannot be reached, which the daily sweep completes', async () => {
+        const { useCase, connectionBilling, integrationService } = build({
+            connections: [{ uuid: 'gh-a' }],
+        });
+        connectionBilling.ensurePrimary.mockResolvedValue({ status: 'failed' });
 
-        await expect(
-            useCase.execute({
-                organizationId: ORG,
-                teamId: TEAM,
-                connectionId: 'gh-a',
-            }),
-        ).rejects.toBeInstanceOf(ServiceUnavailableException);
-        expect(codeManagementService.deleteWebhook).not.toHaveBeenCalled();
-        expect(integrationService.delete).not.toHaveBeenCalled();
+        await useCase.execute({
+            organizationId: ORG,
+            teamId: TEAM,
+            connectionId: 'gh-a',
+        });
+
+        expect(integrationService.delete).toHaveBeenCalledWith('gh-a');
     });
 
     it('finishes the reset when only naming the next primary fails, which a later pass completes', async () => {

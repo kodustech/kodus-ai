@@ -459,6 +459,11 @@ export class LicenseService implements ILicenseService {
         return;
     }
 
+    // Cloud seats are held per connection in billing, which keeps them.
+    async detachConnectionSeats(): Promise<void> {
+        return;
+    }
+
     async getConnectionLicenses(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<WorkspaceConnectionLicenses | null> {

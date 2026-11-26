@@ -31,6 +31,7 @@ const make = (opts: {
                       ownLicenceConnectionIds: [...own],
                   },
         ),
+        detachConnectionSeats: jest.fn(async () => undefined),
         releaseConnection: jest.fn(async (_w, id: string) => {
             if (primary !== id) return 'not_held';
             primary = null;
@@ -188,24 +189,19 @@ describe('ConnectionBillingService.ensurePrimary', () => {
     });
 });
 
-describe('ConnectionBillingService.releaseBeforeRemoving', () => {
-    it('lets a removal go ahead once billing freed the slot or the connection held none', async () => {
+describe('ConnectionBillingService.detachSeatsBeforeRemoving', () => {
+    it("detaches the connection's seats, and asks billing nothing", async () => {
         const { service, licenseService } = make({
             connections: [],
             primaryConnectionId: 'gh-a',
         });
 
-        await expect(
-            service.releaseBeforeRemoving(workspace, 'gh-a'),
-        ).resolves.toBe(true);
-        await expect(
-            service.releaseBeforeRemoving(workspace, 'gl-b'),
-        ).resolves.toBe(true);
+        await service.detachSeatsBeforeRemoving(workspace, 'gh-a');
 
-        licenseService.releaseConnection.mockResolvedValue('failed');
-        await expect(
-            service.releaseBeforeRemoving(workspace, 'gh-a'),
-        ).resolves.toBe(false);
+        expect(licenseService.detachConnectionSeats.mock.calls).toEqual([
+            [workspace, 'gh-a'],
+        ]);
+        expect(licenseService.releaseConnection).not.toHaveBeenCalled();
     });
 });
 

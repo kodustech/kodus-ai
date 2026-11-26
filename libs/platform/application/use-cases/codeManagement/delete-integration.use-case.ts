@@ -5,7 +5,6 @@ import {
     Inject,
     Injectable,
     Optional,
-    ServiceUnavailableException,
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
@@ -103,18 +102,12 @@ export class DeleteIntegrationUseCase {
             teamId: params.teamId,
         };
 
-        // Billing frees the plan's slot first: a reset that went ahead
-        // without it would leave the workspace plan on a deleted connection.
-        if (
-            !(await this.connectionBilling.releaseBeforeRemoving(
-                workspace,
-                integration.uuid,
-            ))
-        ) {
-            throw new ServiceUnavailableException(
-                'Billing could not be reached to reset this connection. Try again in a moment.',
-            );
-        }
+        // Self-hosted seats stop naming the connection, or its seat holders
+        // would lose their seats once it reconnects under a new id.
+        await this.connectionBilling.detachSeatsBeforeRemoving(
+            workspace,
+            integration.uuid,
+        );
 
         const otherConnections = (
             (await this.integrationService.find({
@@ -229,9 +222,10 @@ export class DeleteIntegrationUseCase {
             integration.authIntegration.uuid,
         );
 
-        // Names the connection that keeps the plan when two or more remain.
-        // A billing blip here is completed by the next pass (another
-        // connection added, the daily seat sweep).
+        // Frees a primary that just left and names the connection that keeps
+        // the plan when two or more remain. Billing never holds up a reset:
+        // a blip here is completed by the next pass (another connection
+        // added, the daily seat sweep).
         await this.connectionBilling.ensurePrimary(workspace);
 
         this.logger.log({

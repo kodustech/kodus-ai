@@ -269,6 +269,17 @@ export interface ILicenseService {
         connection: { uuid: string; platform: string },
     ): Promise<void>;
 
+    /**
+     * Before a connection is removed, its seats stop naming it and serve the
+     * organization's connections again, as seats from before connections
+     * did; a reconnected connection has a new id. Cloud seats live in
+     * billing, so only self-hosted has any.
+     */
+    detachConnectionSeats(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connectionId: string,
+    ): Promise<void>;
+
     /** The workspace's primary connection and the connections billed on their own licence; null when billing could not be asked. */
     getConnectionLicenses(
         organizationAndTeamData: OrganizationAndTeamData,

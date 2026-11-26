@@ -396,10 +396,10 @@ export class SelfHostedLicenseService implements ILicenseService {
         const legacy = assignedUsers.filter((entry) => !entry.connectionId);
         if (!legacy.length) return;
 
-        const provider = connection.platform.toLowerCase();
+        // Only the connection is recorded: the seat keeps being counted by
+        // git id across the instance, as before connections.
         for (const entry of legacy) {
             entry.connectionId = connection.uuid;
-            entry.provider = entry.provider ?? provider;
         }
         await this.saveAssignedUsers(organizationAndTeamData, assignedUsers);
         this.logger.log({
@@ -409,6 +409,33 @@ export class SelfHostedLicenseService implements ILicenseService {
                 organizationId: organizationAndTeamData.organizationId,
                 connectionId: connection.uuid,
                 seats: legacy.length,
+            },
+        });
+    }
+
+    async detachConnectionSeats(
+        organizationAndTeamData: OrganizationAndTeamData,
+        connectionId: string,
+    ): Promise<void> {
+        const assignedUsers = await this.getAssignedUsers(
+            organizationAndTeamData,
+        );
+        const detached = assignedUsers.filter(
+            (entry) => entry.connectionId === connectionId,
+        );
+        if (!detached.length) return;
+
+        for (const entry of detached) {
+            delete entry.connectionId;
+        }
+        await this.saveAssignedUsers(organizationAndTeamData, assignedUsers);
+        this.logger.log({
+            message: 'license_connection_seats_detached',
+            context: SelfHostedLicenseService.name,
+            metadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                connectionId,
+                seats: detached.length,
             },
         });
     }

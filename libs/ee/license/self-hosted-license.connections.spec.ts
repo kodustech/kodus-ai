@@ -187,19 +187,10 @@ describe('SelfHostedLicenseService per Git connection', () => {
             platform: 'GITLAB',
         });
 
+        // Only the connection: the seat keeps being counted by git id.
         expect(store.users).toEqual([
-            {
-                gitId: '3',
-                status: 'active',
-                provider: 'gitlab',
-                connectionId: 'gl-b',
-            },
-            {
-                gitId: '4',
-                status: 'inactive',
-                provider: 'gitlab',
-                connectionId: 'gl-b',
-            },
+            { gitId: '3', status: 'active', connectionId: 'gl-b' },
+            { gitId: '4', status: 'inactive', connectionId: 'gl-b' },
             {
                 gitId: '5',
                 status: 'active',
@@ -250,6 +241,44 @@ describe('SelfHostedLicenseService per Git connection', () => {
             2,
         );
 
+        await expect(
+            service.assignLicense(github, '8', 'github'),
+        ).resolves.toBe(true);
+    });
+
+    it("keeps a removed connection's seat holders licensed once it reconnects under a new id", async () => {
+        const { service, store } = build([
+            {
+                gitId: '7',
+                status: 'active',
+                provider: 'github',
+                connectionId: 'gh-a',
+            },
+            { gitId: '8', status: 'active', connectionId: 'gl-b' },
+        ]);
+
+        await service.detachConnectionSeats(github, 'gh-a');
+
+        expect(store.users).toEqual([
+            { gitId: '7', status: 'active', provider: 'github' },
+            { gitId: '8', status: 'active', connectionId: 'gl-b' },
+        ]);
+        const reconnected = { ...github, integrationId: 'gh-new' };
+        await expect(
+            service.getAllUsersWithLicense(reconnected),
+        ).resolves.toEqual([{ git_id: '7', sharedAcrossConnections: true }]);
+    });
+
+    it("does not raise the instance count when another organization's seats from before connections are attributed", async () => {
+        const { service } = build(
+            [
+                { gitId: '7', status: 'active', connectionId: 'gh-a' },
+                { gitId: '7', status: 'active', connectionId: 'gl-z' },
+            ],
+            2,
+        );
+
+        // Seat 7 of both organizations counts once, as on main: one free.
         await expect(
             service.assignLicense(github, '8', 'github'),
         ).resolves.toBe(true);

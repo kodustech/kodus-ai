@@ -59,20 +59,18 @@ export class ConnectionBillingService {
     }
 
     /**
-     * Before a connection is removed, billing frees the primary slot if the
-     * connection holds it. False when billing could not confirm: the removal
-     * must wait, or the plan would stay on a connection that no longer
-     * exists.
+     * Before a connection is removed, its seats stop naming it: a
+     * reconnected connection gets a new id. Billing's primary slot is freed
+     * once the connection is gone, by `ensurePrimary`.
      */
-    async releaseBeforeRemoving(
+    async detachSeatsBeforeRemoving(
         workspace: Workspace,
         connectionId: string,
-    ): Promise<boolean> {
-        const released = await this.licenseService.releaseConnection(
+    ): Promise<void> {
+        await this.licenseService.detachConnectionSeats(
             workspace,
             connectionId,
         );
-        return released !== 'failed';
     }
 
     /**
