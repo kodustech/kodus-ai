@@ -35,8 +35,12 @@ export class GetSecurityScansUseCase {
         private readonly configs: IIntegrationConfigService,
     ) {}
 
-    /** Legacy permission ids identify no instance: ambiguous ids fail closed. */
-    private async repositoryScope(
+    /**
+     * The repositories behind the ids a caller may see, by platform, host and
+     * id. Legacy permission ids identify no instance: ambiguous ids fail
+     * closed. Undefined ids: every repository.
+     */
+    async repositoryScope(
         organizationId: string,
         ids: string[] | undefined,
     ): Promise<ScanRepositoryKey[] | undefined> {

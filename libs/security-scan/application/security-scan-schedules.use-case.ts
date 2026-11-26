@@ -30,6 +30,7 @@ import {
     SECURITY_SCAN_SCHEDULE_REPOSITORY_TOKEN,
 } from '../infrastructure/security-scan-schedule.repository';
 import { DEEP_SCAN_NOT_ENABLED_MESSAGE, DeepScanGate } from './deep-scan.gate';
+import { GetSecurityScansUseCase } from './get-security-scans.use-case';
 import { StartSecurityScanUseCase } from './start-security-scan.use-case';
 
 const logger = createLogger('SecurityScanSchedules');
@@ -71,6 +72,12 @@ export interface SaveScheduleInput {
     requestedBy?: { userId?: string; email?: string };
 }
 
+const repositoryIdentity = (repository: {
+    platform: string;
+    host: string;
+    id: string;
+}) => `${repository.platform}|${repository.host}|${repository.id}`;
+
 @Injectable()
 export class SecurityScanSchedulesUseCase {
     constructor(
@@ -78,17 +85,25 @@ export class SecurityScanSchedulesUseCase {
         private readonly schedules: ISecurityScanScheduleRepository,
         private readonly startSecurityScan: StartSecurityScanUseCase,
         private readonly deepScanGate: DeepScanGate,
+        private readonly scans: GetSecurityScansUseCase,
     ) {}
 
-    /** The organization's schedules, within the repositories the caller sees. */
+    /**
+     * The organization's schedules, within the repositories the caller sees,
+     * matched on platform, host and id as the scans listing is: an id alone
+     * can name a repository on another server.
+     */
     async list(
         organizationId: string,
         visibleRepositoryIds?: string[],
     ): Promise<SecurityScanSchedule[]> {
-        const all = await this.schedules.list(organizationId);
-        if (!visibleRepositoryIds) return all;
-        const visible = new Set(visibleRepositoryIds);
-        return all.filter((s) => visible.has(s.repository.id));
+        const [all, scope] = await Promise.all([
+            this.schedules.list(organizationId),
+            this.scans.repositoryScope(organizationId, visibleRepositoryIds),
+        ]);
+        if (!scope) return all;
+        const visible = new Set(scope.map(repositoryIdentity));
+        return all.filter((s) => visible.has(repositoryIdentity(s.repository)));
     }
 
     async save(

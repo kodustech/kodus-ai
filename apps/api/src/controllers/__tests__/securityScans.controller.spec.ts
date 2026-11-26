@@ -6,6 +6,7 @@ import {
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 
 import { SecurityScansController } from '../securityScans.controller';
+import { SecurityScanSchedulesUseCase } from '@libs/security-scan/application/security-scan-schedules.use-case';
 
 describe('SecurityScansController.start', () => {
     const setup = (allowed: string[]) => {
@@ -165,11 +166,10 @@ describe('SecurityScansController.cancel', () => {
 });
 
 describe('SecurityScansController — reads by a member granted some Git connections', () => {
-    // The guard lets a connection-scoped read through only to a handler that
-    // narrows it itself: these read the repositories the caller can see,
-    // which for such a member are the granted connections' repositories.
+    // The guard lets a connection-scoped read through only to a handler marked
+    // as narrowing it itself.
     it.each(['list', 'get', 'listSchedules'] as const)(
-        '%s narrows itself to the visible repositories',
+        '%s is marked as narrowing itself',
         (handler) => {
             expect(
                 Reflect.getMetadata(
@@ -180,8 +180,22 @@ describe('SecurityScansController — reads by a member granted some Git connect
         },
     );
 
-    it('lists the schedules of the visible repositories only', async () => {
-        const schedules = { list: jest.fn().mockResolvedValue([]) };
+    it('lists only the schedules of the repositories the caller sees', async () => {
+        const key = { platform: 'GITHUB', host: 'github.com' };
+        const stored = [
+            { uuid: 'granted', repository: { ...key, id: 'repo-gh' } },
+            { uuid: 'ungranted', repository: { ...key, id: 'repo-gl' } },
+        ];
+        const listSchedules = new SecurityScanSchedulesUseCase(
+            { list: jest.fn().mockResolvedValue(stored) } as any,
+            {} as any,
+            {} as any,
+            {
+                repositoryScope: jest.fn(async (_org: string, ids: string[]) =>
+                    ids.map((id) => ({ ...key, id })),
+                ),
+            } as any,
+        );
         const controller = new SecurityScansController(
             { user: { organization: { uuid: 'org-1' } } } as any,
             {} as any,
@@ -191,11 +205,9 @@ describe('SecurityScansController — reads by a member granted some Git connect
                 getRepositoryScope: jest.fn().mockResolvedValue(['repo-gh']),
             } as any,
             { isEnabledFor: jest.fn().mockResolvedValue(true) } as any,
-            schedules as any,
+            listSchedules,
         );
 
-        await controller.listSchedules();
-
-        expect(schedules.list).toHaveBeenCalledWith('org-1', ['repo-gh']);
+        await expect(controller.listSchedules()).resolves.toEqual([stored[0]]);
     });
 });
