@@ -434,7 +434,37 @@ describe('CreateIntegrationUseCase — connections', () => {
             });
         });
 
-        it('grants the workspace members as the workspace read before the connection, but seeds no author lists, when it cannot tell whether the connection is the first', async () => {
+        it('checks again when the first look at the workspace fails, then grants its members the first connection', async () => {
+            const { useCase, connectionAccess, connectionBilling, ignoreBots } =
+                build();
+            const listed = connectionBilling.workspaceConnections;
+            let failed = false;
+            connectionBilling.workspaceConnections = jest.fn(async () => {
+                if (listed.mock.calls.length >= 2 && !failed) {
+                    failed = true;
+                    throw new Error('pg blip');
+                }
+                return listed();
+            });
+
+            await useCase.execute({
+                integrationType: 'gitlab',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(connectionAccess.grantWorkspaceMembers.mock.calls).toEqual([
+                [TEAM, 'new-conn'],
+            ]);
+            expect(ignoreBots.execute).toHaveBeenCalledWith({
+                organizationId: ORG,
+                teamId: TEAM,
+                integrationId: 'new-conn',
+                separateConnection: false,
+            });
+        });
+
+        it('grants no one and seeds no author lists while it cannot tell whether the connection is the first', async () => {
             const { useCase, connectionAccess, connectionBilling, ignoreBots } =
                 build();
             const listed = connectionBilling.workspaceConnections;
@@ -456,11 +486,13 @@ describe('CreateIntegrationUseCase — connections', () => {
                 status: 'SUCCESS',
                 integrationId: 'new-conn',
             });
-            // Locking every member out of the workspace's only connection is
-            // the worse failure; an owner can narrow it in the access modal.
-            expect(connectionAccess.grantWorkspaceMembers.mock.calls).toEqual([
-                [TEAM, 'new-conn'],
-            ]);
+            // Two reads before the connection exists, then three tries.
+            expect(
+                connectionBilling.workspaceConnections,
+            ).toHaveBeenCalledTimes(5);
+            expect(
+                connectionAccess.grantWorkspaceMembers,
+            ).not.toHaveBeenCalled();
             expect(ignoreBots.claimConnectionLists).not.toHaveBeenCalled();
             expect(ignoreBots.execute).not.toHaveBeenCalled();
         });

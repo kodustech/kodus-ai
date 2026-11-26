@@ -39,6 +39,9 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 
+const OLDEST_CHECK_ATTEMPTS = 3;
+const OLDEST_CHECK_BACKOFF_MS = 100;
+
 @Injectable()
 export class CreateIntegrationUseCase implements IUseCase {
     private readonly logger = createLogger(CreateIntegrationUseCase.name);
@@ -282,9 +285,8 @@ export class CreateIntegrationUseCase implements IUseCase {
      * workspace was before connections existed. One added beside others
      * starts with owners only, and with author lists of its own. Answers
      * whether the connection is one added beside others, or undefined when
-     * that could not be checked: its members are then granted as the
-     * workspace read before it was created (empty, so first), and its author
-     * lists are left alone.
+     * that could not be checked: then no one is granted it and its author
+     * lists are left alone (owners still read it and can grant it).
      */
     private async settleNewConnectionReaders(
         workspace: { organizationId: string; teamId: string },
@@ -302,18 +304,15 @@ export class CreateIntegrationUseCase implements IUseCase {
                 !(await this.isOldestConnection(workspace, integrationId));
         } catch (error) {
             this.logger.error({
-                message: 'connection_first_or_beside_unknown',
+                message: 'connection_readers_unsettled',
                 context: CreateIntegrationUseCase.name,
                 error,
-                metadata: {
-                    ...workspace,
-                    integrationId,
-                    fallback: 'first, as read before it was created',
-                },
+                metadata: { ...workspace, integrationId },
             });
+            return undefined;
         }
         try {
-            if (separate) {
+            if (separate === true) {
                 if (!separateConnection) {
                     this.logger.warn({
                         message: 'connection_added_beside_a_concurrent_first',
@@ -325,7 +324,7 @@ export class CreateIntegrationUseCase implements IUseCase {
                     organizationId: workspace.organizationId,
                     integrationId,
                 });
-            } else {
+            } else if (separate === false) {
                 const members =
                     await this.connectionAccess.grantWorkspaceMembers(
                         workspace.teamId,
@@ -338,7 +337,6 @@ export class CreateIntegrationUseCase implements IUseCase {
                         ...workspace,
                         integrationId,
                         members: members.length,
-                        verifiedFirst: separate === false,
                     },
                 });
             }
@@ -353,13 +351,35 @@ export class CreateIntegrationUseCase implements IUseCase {
         return separate;
     }
 
+    /** Checked a few times: a read that fails once must not decide who reads it. */
     private async isOldestConnection(
         workspace: { organizationId: string; teamId: string },
         integrationId: string,
     ): Promise<boolean> {
-        const [oldest] =
-            await this.connectionBilling.workspaceConnections(workspace);
-        return oldest?.uuid === integrationId;
+        let lastError: unknown;
+        for (let attempt = 1; attempt <= OLDEST_CHECK_ATTEMPTS; attempt++) {
+            try {
+                const [oldest] =
+                    await this.connectionBilling.workspaceConnections(
+                        workspace,
+                    );
+                return oldest?.uuid === integrationId;
+            } catch (error) {
+                lastError = error;
+                this.logger.warn({
+                    message: 'connection_oldest_check_failed',
+                    context: CreateIntegrationUseCase.name,
+                    error,
+                    metadata: { ...workspace, integrationId, attempt },
+                });
+                if (attempt < OLDEST_CHECK_ATTEMPTS) {
+                    await new Promise((resolve) =>
+                        setTimeout(resolve, attempt * OLDEST_CHECK_BACKOFF_MS),
+                    );
+                }
+            }
+        }
+        throw lastError;
     }
 
     /**
