@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 
@@ -24,7 +24,8 @@ import {
     SandboxEgressPolicyService,
 } from '@libs/sandbox/infrastructure/services/sandbox-egress-policy.service';
 import { GlobalParametersModule } from '@libs/organization/modules/global-parameters.module';
-import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
+import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
+import { LicenseModule } from '@libs/ee/license/license.module';
 
 @Module({
     imports: [
@@ -32,7 +33,11 @@ import { IntegrationConfigModule } from '@libs/integrations/modules/config.modul
             { name: SandboxLeaseModel.name, schema: SandboxLeaseSchema },
         ]),
         GlobalParametersModule,
-        IntegrationConfigModule,
+        // The organization's fixed outbound IP choice is an organization
+        // parameter.
+        forwardRef(() => OrganizationParametersModule),
+        // The plan decides whether a team may keep the fixed outbound IP.
+        forwardRef(() => LicenseModule),
     ],
     providers: [
         {
@@ -82,6 +87,10 @@ import { IntegrationConfigModule } from '@libs/integrations/modules/config.modul
         },
         SandboxLeaseReaperService,
     ],
-    exports: [SANDBOX_PROVIDER_TOKEN, SANDBOX_LEASE_MANAGER_TOKEN],
+    exports: [
+        SANDBOX_PROVIDER_TOKEN,
+        SANDBOX_LEASE_MANAGER_TOKEN,
+        SANDBOX_EGRESS_POLICY_TOKEN,
+    ],
 })
 export class SandboxModule {}

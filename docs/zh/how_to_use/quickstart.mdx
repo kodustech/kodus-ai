@@ -38,7 +38,7 @@ description: "让 Kody 开始审查你的 pull request:创建账户、连接 Git
     您自己网络中的服务器(GitHub Enterprise Server,beta;自托管 GitLab;Bitbucket Data Center;Forgejo)通过令牌及其 URL 连接。令牌指南中说明了在哪里输入。
 
     <Note>
-      要将 Kodus Cloud 连接到您自己网络中的服务器?请先在防火墙中将 Kodus 的 IP `52.55.217.197` 加入白名单。
+      要将 Kodus Cloud 连接到您自己网络中的服务器?请先在防火墙中将 Kodus 的 IP `52.55.217.197` 加入白名单。在 Teams 和 Enterprise 计划中,还需在 **Organization > General** 中开启 **Fixed outbound IP**,Kody 才会从该 IP 克隆您的代码。在其他计划中,Kody 从共享网络克隆,只接受白名单 IP 的服务器会拒绝连接。
     </Note>
   </Step>
 

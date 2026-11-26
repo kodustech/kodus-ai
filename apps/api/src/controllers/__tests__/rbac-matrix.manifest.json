@@ -1364,6 +1364,17 @@
     }
   },
   {
+    "key": "organizationParameters.controller.ts#getFixedEgressIp",
+    "httpMethod": "GET",
+    "urlPath": "/organization-parameters/fixed-egress-ip",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "organizationParameters.controller.ts#getLLMConfigStatus",
     "httpMethod": "GET",
     "urlPath": "/organization-parameters/llm-config/status",
@@ -1411,6 +1422,17 @@
     "key": "organizationParameters.controller.ts#modelCapabilities",
     "httpMethod": "GET",
     "urlPath": "/organization-parameters/model-capabilities",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "organizationParameters.controller.ts#setFixedEgressIp",
+    "httpMethod": "PUT",
+    "urlPath": "/organization-parameters/fixed-egress-ip",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",

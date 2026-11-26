@@ -38,6 +38,8 @@ describe('OrganizationParametersController.deleteByokConfig — v2 { modelId } r
             undefined as any, // getCockpitMetricsVisibilityUseCase
             undefined as any, // ignoreBotsUseCase
             undefined as any, // updateAutoLicenseAllowedUsersUseCase
+            undefined as any, // getFixedEgressIpUseCase
+            undefined as any, // setFixedEgressIpUseCase
             request as any,
         );
     }
