@@ -207,6 +207,17 @@ that order, whatever finished first. While builds run together their output line
 phases of `claim.progress` (which read one build's steps after another's) skip them; the final `timing.buildSteps` and
 `build.timing` per service are unchanged.
 
+**Two retries, each once.** A build that fails the way the host can cause runs again before the claim fails
+(`build.go`, `buildUnit` and `runBuildPhases`); the log says why in `build.retry reason=...`.
+- A RUN step that dies with exit 139 (SIGSEGV under gVisor; BuildKit's error line gives the status,
+  `buildprogress.Failure.ExitCode`) runs the build again as it was (`reason=segfault`). Only 139: any other status is
+  the code's failure, and so is a second 139.
+- A builder killed at its memory limit (exit 137, `driver.ErrOutOfMemory`) in a claim that builds in more than one lane
+  gets one more try with the claim to itself (`reason=oom_in_lane`): the build leaves its lane, waits until no other
+  build of the claim runs (`buildLanes.takeAll`), and runs with the claim's whole memory instead of a lane's share.
+  Killed again, or killed in a claim with one lane, it fails as out of memory. The first try shows in the build's
+  phases as `failed try in a lane`.
+
 The agent then adds `not measured`: the claim's time from acquire to ready (or to now) minus every phase, when it is a
 second or more. BuildKit steps that ran side by side add up to more than the wall time, so it is a lower bound; it
 is never negative. A Run whose `not measured` grows has a step nobody times: name it here. The claim.* frames still carry

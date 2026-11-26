@@ -256,10 +256,28 @@ func (d *Driver) buildUnit(ctx context.Context, ref driver.MachineRef, u *buildU
 		if err != nil {
 			return err
 		}
-		defer release()
 		bctx := prefixedOutput(withBuildLane(ctx, lane, lanes.size), lanes.size, b.Service)
 		var ran buildprogress.Summary
+		triedAt := d.clock.Now()
 		cache, ran, err = d.runBuild(bctx, ref, b, tag, network, resolv, subnet, secrets)
+		release()
+		tried := d.clock.Now().Sub(triedAt)
+		// A builder killed for memory in a lane got a share of the claim's:
+		// a heavy build (a bundler's) may need more. It runs once more with
+		// the claim to itself, then fails as it did.
+		if err != nil && errors.Is(err, driver.ErrOutOfMemory) && lanes.size > 1 && ctx.Err() == nil {
+			d.log().Warn("build.retry", "machine", ref.MachineID, "service", b.Service, "reason", "oom_in_lane", "lanes", lanes.size, "err", firstLine(err))
+			var giveAll func()
+			if giveAll, err = lanes.takeAll(ctx); err != nil {
+				return err
+			}
+			// Alone: lane 0 of one, the claim's whole memory.
+			actx := prefixedOutput(withBuildLane(ctx, 0, 1), lanes.size, b.Service)
+			cache, ran, err = d.runBuild(actx, ref, b, tag, network, resolv, subnet, secrets)
+			giveAll()
+			// The try in the lane was time spent too.
+			ran = withPhases(ran, buildprogress.Phase{Name: "failed try in a lane", Ms: tried.Milliseconds()})
+		}
 		u.ran, u.ranBuild = ran, true
 		if err != nil {
 			return err

@@ -3,6 +3,7 @@ package dockergvisor
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/driver"
@@ -47,6 +48,10 @@ func (d *Driver) claimBuilds() int {
 type buildLanes struct {
 	size int
 	free chan int
+	// exclusive serializes the builds that ask for the claim to themselves
+	// (takeAll): two of them taking lanes one by one would each hold some
+	// and wait for the rest.
+	exclusive sync.Mutex
 }
 
 // newBuildLanes is the lanes for a call that runs builds builds: no more
@@ -78,6 +83,31 @@ func (l *buildLanes) take(ctx context.Context) (int, func(), error) {
 	case <-ctx.Done():
 		return 0, nil, fmt.Errorf("dockergvisor: waiting for a build lane of the claim: %w", context.Cause(ctx))
 	}
+}
+
+// takeAll waits until no other build of the claim runs and holds every lane
+// until the returned func is called: a build killed for memory beside others
+// runs again with the claim's whole memory. The caller holds no lane. The wait
+// ends with ctx.
+func (l *buildLanes) takeAll(ctx context.Context) (func(), error) {
+	l.exclusive.Lock()
+	taken := 0
+	give := func() {
+		for range taken {
+			l.free <- 0
+		}
+		l.exclusive.Unlock()
+	}
+	for taken < l.size {
+		select {
+		case <-l.free:
+			taken++
+		case <-ctx.Done():
+			give()
+			return nil, fmt.Errorf("dockergvisor: waiting to build alone in the claim: %w", context.Cause(ctx))
+		}
+	}
+	return give, nil
 }
 
 type laneKey struct{}
