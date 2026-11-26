@@ -18,6 +18,7 @@ export const agentPrompt = (repositoryName: string) =>
         "  seed: <command or { service, sql, user, database } that loads test data>",
         "",
         "A Dockerfile or compose file the repository lacks, or that is broken, goes directly under .kodus/ (at most 4 files, 16 KiB each) and the recipe names it there.",
+        "Paths in a compose file under .kodus/ are relative to the repository root, not to .kodus/ (build: { context: ., dockerfile: .kodus/Dockerfile }); .. is refused.",
         "Never copy .env or any secret into the recipe: name the variables the app needs and use test values or fakes; external services get emulators or fakes.",
         "",
         "Then, with the Kodus CLI (a team key with env:fix, this repository added to it):",

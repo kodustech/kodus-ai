@@ -36,6 +36,7 @@ A `health` path needs `public` and an `http` entry for that service in `expose`.
 
 - `.kodus/workspace.yaml`; if it already exists for another tool, `.kodus/workspace.runtime.yaml` (read first). Read the existing file before writing.
 - A Dockerfile or compose file the repository lacks, or that is broken (a compose service building from a Dockerfile that is not there), goes directly under `.kodus/`: flat, at most 4 files, 16 KiB each, 48 KiB together, named like `.kodus/Dockerfile.web`. The recipe names it by that path.
+- Every path in a compose file under `.kodus/` is relative to the repository root, not to `.kodus/`: Kodus runs the compose project from the root. So `build: { context: ., dockerfile: .kodus/Dockerfile.web }` and `./scripts/db-init:/docker-entrypoint-initdb.d`; `..` leaves the project and is refused.
 
 ## Hard rules
 
