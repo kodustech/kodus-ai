@@ -65,6 +65,9 @@ function causeOf(e: unknown): string {
     return /^[a-z][a-z0-9_]{2,40}$/.test(m) ? m : 'unexpected';
 }
 
+/** Ends the stored failure of a build that started from the previous template: the next attempt starts from the cell base. */
+export const TEMPLATE_SOURCED_FAILURE = '@template';
+
 export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: BuildTemplateDeps): Promise<BuildTemplateResult> {
     // Customer data at rest in the provider needs legal sign-off: until then the pool's admission list is the gate.
     if (req.pool.admission && !req.pool.admission.allowOrgs.includes(req.organizationId)) return { ok: false, reason: 'org_not_admitted' };
@@ -79,14 +82,17 @@ export async function buildEnvironmentTemplate(req: BuildTemplateRequest, d: Bui
     // setup: starting from it makes the new setup incremental. Another base's template holds another cell and is never
     // a source; a snapshot the provider no longer has is not either.
     const previous = await d.store.readyName(req.organizationId, req.environmentId, req.poolId, d.cellBase);
-    const from = previous && previous !== name && (await images.get(previous))?.state === 'ready' ? previous : undefined;
+    // A build that started from the template and failed leaves a marker: the next attempt goes cold from the base, so a
+    // template that cannot build never blocks rebuilds.
+    const lastFailure = await d.store.lastFailure(req.organizationId, req.environmentId, req.poolId, d.cellBase);
+    const from = previous && previous !== name && !lastFailure?.endsWith(TEMPLATE_SOURCED_FAILURE) && (await images.get(previous))?.state === 'ready' ? previous : undefined;
     // One host per attempt: the hub enrolls a host id once, so a retry of the same template needs its own.
     const hostId = `tpl-${randomBytes(12).toString('hex')}`;
     // The row names the setup host before it exists: the orphan pass spares it while the template builds.
     if (!(await d.store.begin({ ...key, name, cellBase: d.cellBase, setupHostId: hostId }))) return { ok: false, reason: 'already_building' };
     let source: TemplateSource | undefined;
     const fail = async (reason: Exclude<BuildTemplateResult, { ok: true }>['reason'], cause?: string) => {
-        await d.store.fail(key, cause ? `${reason}:${cause}` : reason);
+        await d.store.fail(key, `${cause ? `${reason}:${cause}` : reason}${source === 'template' ? TEMPLATE_SOURCED_FAILURE : ''}`);
         return { ok: false as const, reason, ...(cause ? { cause } : {}), ...(source ? { source } : {}) };
     };
     // The snapshots this build replaced. They are deleted after the setup host is gone: the host was created from one of them.

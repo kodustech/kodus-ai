@@ -609,7 +609,10 @@ Rules:
   and its seeded volumes are removed before the disk is saved. If there is no ready template, it is of another cell base,
   its snapshot is gone, or creating a host from it fails, the build falls back to the cell base and is cold, as before.
   `template.built` says which one was used (`source: template|base`). The previous snapshot is deleted last: after the new
-  one is ready, promoted, and the setup host created from it is destroyed. A failed build keeps it.
+  one is ready, promoted, and the setup host created from it is destroyed. A failed build keeps it. A build that started
+  from the template and failed marks its stored failure (`@template` at the end); the next attempt for that environment,
+  pool and base starts from the cell base, so a template that cannot build never blocks rebuilds. A later success clears
+  it, and a failure of a build from the base never blocks the template as a source.
 - **A new cell base rebuilds the template.** A template's disk holds the cell of the base its setup host booted, so the
   row records that base (`cell_base`, migration 61). Once the pool names another base (a cell release, a security fix),
   the old template is no ready template: Run hosts boot the new base (cold) and the rebuild pass builds the template

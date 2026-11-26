@@ -260,4 +260,49 @@ describe('a template build starts from the environment\'s previous ready templat
         expect(w.provider.savedImages.has(oldName)).toBe(true);
         expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', BASE)).toBe(oldName);
     });
+    it('after a failed build that started from the template, the next attempt starts from the cell base: a bad template never blocks rebuilds', async () => {
+        const w = await withOldTemplate();
+        w.hosts.bake = { ok: false, reason: 'bake_failed' };
+        expect(await buildEnvironmentTemplate(w.req, w.deps)).toMatchObject({ ok: false, source: 'template' });
+        w.hosts.bake = { ok: true, fingerprint: FP, ref: 'default_branch' };
+        const r = await buildEnvironmentTemplate(w.req, w.deps);
+        expect(w.hosts.from).toEqual([oldName, BASE]);
+        expect(r).toMatchObject({ ok: true, source: 'base' });
+    });
+
+    it('also for a build that failed on another fingerprint, and for every failure after the host was made', async () => {
+        const w = await withOldTemplate();
+        w.hosts.seal = async () => {
+            throw new Error('seal exploded');
+        };
+        expect(await buildEnvironmentTemplate(w.req, w.deps)).toMatchObject({ ok: false, reason: 'build_error', source: 'template' });
+        const other = 'c'.repeat(64);
+        w.hosts.bake = { ok: true, fingerprint: other, ref: 'default_branch' };
+        await buildEnvironmentTemplate({ ...w.req, fingerprint: other }, w.deps);
+        expect(w.hosts.from).toEqual([oldName, BASE]);
+    });
+
+    it('after a failed build that started from the cell base, the next attempt may use the template again', async () => {
+        const w = await withOldTemplate();
+        // The template is unusable as a source once for this build only if a template-sourced build failed; a base failure says nothing about it.
+        w.provider.savedImages.delete(oldName);
+        w.hosts.bake = { ok: false, reason: 'bake_failed' };
+        expect(await buildEnvironmentTemplate(w.req, w.deps)).toMatchObject({ ok: false, source: 'base' });
+        w.provider.savedImages.set(oldName, { name: oldName, state: 'ready' });
+        w.hosts.bake = { ok: true, fingerprint: FP, ref: 'default_branch' };
+        await buildEnvironmentTemplate(w.req, w.deps);
+        expect(w.hosts.from).toEqual([BASE, oldName]);
+    });
+
+    it('a template-sourced failure is forgotten once a later build succeeds', async () => {
+        const w = await withOldTemplate();
+        w.hosts.bake = { ok: false, reason: 'bake_failed' };
+        await buildEnvironmentTemplate(w.req, w.deps);
+        w.hosts.bake = { ok: true, fingerprint: FP, ref: 'default_branch' };
+        await buildEnvironmentTemplate(w.req, w.deps);
+        const third = 'd'.repeat(64);
+        w.hosts.bake = { ok: true, fingerprint: third, ref: 'default_branch' };
+        await buildEnvironmentTemplate({ ...w.req, fingerprint: third }, w.deps);
+        expect(w.hosts.from).toEqual([oldName, BASE, templateNameOf('org-kodus', 'env-shop', FP, BASE)]);
+    });
 });

@@ -197,7 +197,7 @@ export type FleetDepsOverrides = Partial<Omit<PerRunHostDeps, 'step' | 'sleep' |
 
 /** runtime_env_templates in memory, as PgTemplateStore. */
 export class InMemoryTemplateStore implements TemplateStore {
-    readonly rows: Array<TemplateRow & { failure?: string; setupHostId?: string; failedAt?: number; retired?: string }> = [];
+    readonly rows: Array<TemplateRow & { failure?: string; setupHostId?: string; failedAt?: number; retired?: string; seq?: number }> = [];
     private at = 0;
     private readonly readyAt = new Map<TemplateRow, number>();
 
@@ -226,7 +226,12 @@ export class InMemoryTemplateStore implements TemplateStore {
     }
     async fail(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint'>, reason: string) {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
-        if (r?.state === 'building') Object.assign(r, { state: 'failed', failure: reason, failedAt: Date.now() });
+        if (r?.state === 'building') Object.assign(r, { state: 'failed', failure: reason, failedAt: Date.now(), seq: ++this.at });
+    }
+    async lastFailure(o: string, e: string, p: string, cellBase: string) {
+        const rows = this.rows.filter((t) => t.organizationId === o && t.environmentId === e && t.poolId === p && t.cellBase === cellBase && t.seq !== undefined && (t.state === 'failed' || t.state === 'ready' || t.state === 'replaced'));
+        rows.sort((a, b) => b.seq! - a.seq!);
+        return rows[0]?.state === 'failed' ? (rows[0].failure ?? '') : null;
     }
     async holds(t: Pick<TemplateRow, 'organizationId' | 'environmentId' | 'poolId' | 'fingerprint' | 'cellBase'>, failedAfter: Date) {
         const r = this.row(t.organizationId, t.environmentId, t.poolId, t.fingerprint);
@@ -238,6 +243,7 @@ export class InMemoryTemplateStore implements TemplateStore {
         const retired = r.retired;
         delete r.retired;
         this.readyAt.set(r, ++this.at);
+        r.seq = this.at;
         const older = this.rows.filter((x) => x !== r && x.organizationId === t.organizationId && x.environmentId === t.environmentId && x.poolId === t.poolId && x.state === 'ready');
         for (const o of older) o.state = 'replaced';
         return [...older.map((o) => o.name), ...(retired ? [retired] : [])];

@@ -105,6 +105,20 @@ const skip = !database.url || process.env.SKIP_INTEGRATION === 'true';
         await store.promote(row);
         expect(await store.buildingSetupHosts()).not.toContain('tpl-retry');
     });
+    it("reads the failure of the environment's newest build on a cell base, and nothing once a later build is ready", async () => {
+        const store = new PgTemplateStore(pool);
+        const fp = '9'.repeat(64);
+        const row = { organizationId: 'org-lf', environmentId: 'env-lf', poolId: 'p', fingerprint: fp, name: templateNameOf('org-lf', 'env-lf', fp, 'base-1'), cellBase: 'base-1' };
+        expect(await store.lastFailure('org-lf', 'env-lf', 'p', 'base-1')).toBeNull();
+        await store.begin(row);
+        await store.fail(row, 'bake_failed@template');
+        expect(await store.lastFailure('org-lf', 'env-lf', 'p', 'base-1')).toBe('bake_failed@template');
+        expect(await store.lastFailure('org-lf', 'env-lf', 'p', 'base-2')).toBeNull();
+        await store.begin(row);
+        await store.promote(row);
+        expect(await store.lastFailure('org-lf', 'env-lf', 'p', 'base-1')).toBeNull();
+    });
+
     it('holds a fingerprint while a ready or building template has it, or its build failed after the backoff start', async () => {
         const store = new PgTemplateStore(pool);
         const fp = 'f'.repeat(64);

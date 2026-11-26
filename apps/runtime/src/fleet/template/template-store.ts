@@ -40,6 +40,12 @@ export interface TemplateStore {
     fail(t: TemplateKey, reason: string): Promise<void>;
     /** Marks this template ready and every other ready one of its environment and pool replaced; the snapshots to delete (theirs, and the one this build took over). */
     promote(t: TemplateKey): Promise<string[]>;
+    /**
+     * The failure text of the environment's newest build on this pool and cell base, when that build failed; null when it
+     * is ready, replaced or building, or there is none. A build that started from the previous template marks its failure
+     * (build-template.ts), so the next one can start from the cell base.
+     */
+    lastFailure(organizationId: string, environmentId: string, poolId: string, cellBase: string): Promise<string | null>;
     /** Whether this fingerprint needs no build now: a template ready on `cellBase` or building holds it, or its build failed after `failedAfter`. */
     holds(t: TemplateKey & { cellBase: string }, failedAfter: Date): Promise<boolean>;
 }
@@ -87,6 +93,15 @@ export class PgTemplateStore implements TemplateStore {
 
     async fail(t: TemplateKey, reason: string) {
         await this.db.query(`UPDATE runtime.runtime_env_templates SET state = 'failed', failure = $5, updated_at = now() WHERE org_id = $1 AND environment_id = $2 AND pool_id = $3 AND fingerprint = $4 AND state = 'building'`, [t.organizationId, t.environmentId, t.poolId, t.fingerprint, reason]);
+    }
+
+    async lastFailure(organizationId: string, environmentId: string, poolId: string, cellBase: string) {
+        const r = await this.db.query(
+            `SELECT state, failure FROM runtime.runtime_env_templates WHERE org_id = $1 AND environment_id = $2 AND pool_id = $3 AND cell_base = $4 AND state IN ('failed', 'ready', 'replaced') ORDER BY updated_at DESC LIMIT 1`,
+            [organizationId, environmentId, poolId, cellBase],
+        );
+        const row = r.rows[0] as { state: string; failure: string | null } | undefined;
+        return row?.state === 'failed' ? (row.failure ?? '') : null;
     }
 
     async holds(t: TemplateKey & { cellBase: string }, failedAfter: Date) {
