@@ -10,6 +10,7 @@ import { mockTextModel } from '../__test-utils__/mock-model';
 // return our mock model so the agent's real loop runs without touching BYOK.
 const modelRef: { model: any } = { model: null };
 jest.mock('@libs/llm/model-invocation', () => ({
+    declaredAnswerTokens: async (_slot: unknown, answer: number) => answer,
     resolveModelConfig: () => ({
         model: modelRef.model,
         callOptions: {},
@@ -31,6 +32,8 @@ jest.mock('@langfuse/tracing', () => ({
 }));
 
 import { setLlmObservability } from '@libs/llm/llm-observability';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
+import { openOnFirstUse } from '@libs/sandbox/domain/open-on-first-use';
 import { MockLanguageModelV3 } from 'ai/test';
 
 import { ConversationAgentProvider } from './conversationAgent';
@@ -88,7 +91,7 @@ function mockSequenceModel(texts: string[]): MockLanguageModelV3 {
 
 afterEach(() => setLlmObservability(undefined));
 
-function build() {
+function build(slot: Record<string, unknown> | null = null) {
     // Cost is recorded by LLM.run's observability span (the port), not by the
     // agent. Register a spy port to assert the span carries the conversation attrs.
     const runAiSdkLLMInSpan = jest.fn((p: any) => p.exec());
@@ -100,7 +103,7 @@ function build() {
         // native: the agent asks the service for the conversation slot;
         // null → the env/managed default. resolveAgentModel is mocked, so the
         // harness wiring runs regardless of the resolved slot.
-        resolveTaskSlot: jest.fn().mockResolvedValue(null),
+        resolveTaskSlot: jest.fn().mockResolvedValue(slot),
     };
     const mcpManagerService = {
         getConnections: jest.fn().mockResolvedValue([]),
@@ -135,6 +138,54 @@ describe('ConversationAgentProvider (harness wiring)', () => {
                 }),
             }),
         );
+    });
+
+    it("keeps what it sends the model within the slot's window (#2233)", async () => {
+        const prompts: unknown[] = [];
+        modelRef.model = new MockLanguageModelV3({
+            doGenerate: async (options: any) => {
+                prompts.push(options.prompt);
+                return {
+                    content: [{ type: 'text', text: 'reviewed' }],
+                    finishReason: { unified: 'stop', raw: 'stop' },
+                    usage: {
+                        inputTokens: {
+                            total: 10,
+                            noCache: 10,
+                            cacheRead: 0,
+                            cacheWrite: 0,
+                        },
+                        outputTokens: { total: 5, text: 5, reasoning: 0 },
+                    },
+                    warnings: [],
+                } as any;
+            },
+        });
+        const { provider } = build({
+            provider: 'openai_compatible',
+            model: 'local-open-weights',
+            apiKey: '',
+            maxInputTokens: 32_000,
+            maxOutputTokens: 4_000,
+        });
+        const diff = Array.from(
+            { length: 6_000 },
+            (_, line) => `+export const value${line} = compute('${line}');`,
+        ).join('\n');
+        expect(estimateTextTokens(diff)).toBeGreaterThan(60_000);
+
+        const res = await provider.execute(`Review this diff:\n${diff}`, ctx);
+
+        expect(res).toContain('reviewed');
+        expect(prompts.length).toBeGreaterThan(0);
+        for (const prompt of prompts) {
+            // What the model receives, with the 4k answer it may write.
+            expect(
+                estimateTextTokens(JSON.stringify(prompt), {
+                    worstCase: true,
+                }) + 4_000,
+            ).toBeLessThanOrEqual(32_000);
+        }
     });
 
     it('falls back when the model produces no usable text', async () => {
@@ -225,6 +276,112 @@ describe('ConversationAgentProvider (harness wiring)', () => {
                 organizationAndTeamData: { organizationId: 'o' },
             } as any),
         ).rejects.toThrow();
+    });
+});
+
+/**
+ * The PR's checkout opens on the first repository tool call, not before the
+ * run (#2629): the tools and their prompt line are offered either way.
+ */
+describe('ConversationAgentProvider — sandbox opened on first read', () => {
+    const usage = {
+        inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 5, text: 5, reasoning: 0 },
+    };
+
+    /** Step 1 greps and reads in parallel; step 2 answers. */
+    function mockParallelReadsModel(): MockLanguageModelV3 {
+        let call = 0;
+        return new MockLanguageModelV3({
+            doGenerate: async () =>
+                (call++ === 0
+                    ? {
+                          content: [
+                              {
+                                  type: 'tool-call',
+                                  toolCallId: 'c1',
+                                  toolName: 'grep',
+                                  input: JSON.stringify({ pattern: 'total' }),
+                              },
+                              {
+                                  type: 'tool-call',
+                                  toolCallId: 'c2',
+                                  toolName: 'readFile',
+                                  input: JSON.stringify({
+                                      path: 'a.ts',
+                                      start: 1,
+                                      end: 2,
+                                  }),
+                              },
+                          ],
+                          finishReason: {
+                              unified: 'tool-calls',
+                              raw: 'tool_calls',
+                          },
+                          usage,
+                          warnings: [],
+                      }
+                    : {
+                          content: [{ type: 'text', text: 'it is on line 1' }],
+                          finishReason: { unified: 'stop', raw: 'stop' },
+                          usage,
+                          warnings: [],
+                      }) as any,
+        });
+    }
+
+    it('offers the repository tools without opening the sandbox for a reply that reads nothing', async () => {
+        modelRef.model = makeModel('thanks!');
+        const { provider } = build();
+        const openSandbox = jest.fn();
+
+        await provider.execute('thanks', { ...ctx, openSandbox });
+
+        const call = modelRef.model.doGenerateCalls[0];
+        expect(call.tools.map((t: any) => t.name)).toEqual(
+            expect.arrayContaining(['grep', 'readFile', 'listDir', 'exec']),
+        );
+        expect(JSON.stringify(call.prompt)).toContain('grep / readFile');
+        expect(openSandbox).not.toHaveBeenCalled();
+    });
+
+    it('opens one sandbox for the parallel first reads', async () => {
+        modelRef.model = mockParallelReadsModel();
+        const { provider } = build();
+        const remoteCommands = {
+            grep: jest.fn().mockResolvedValue('a.ts:1:total'),
+            read: jest.fn().mockResolvedValue('const total = 1;'),
+            listDir: jest.fn(),
+        };
+        const open = jest.fn().mockResolvedValue({
+            type: 'e2b',
+            remoteCommands,
+        });
+
+        const res = await provider.execute('where is total?', {
+            ...ctx,
+            openSandbox: openOnFirstUse(open).open,
+        });
+
+        expect(res).toContain('it is on line 1');
+        expect(open).toHaveBeenCalledTimes(1);
+        expect(remoteCommands.grep).toHaveBeenCalledWith(
+            'total',
+            '.',
+            undefined,
+        );
+        expect(remoteCommands.read).toHaveBeenCalledWith('a.ts', 1, 2);
+    });
+
+    it('offers no repository tools without an opener', async () => {
+        modelRef.model = makeModel('hi');
+        const { provider } = build();
+
+        await provider.execute('hi', ctx);
+
+        const call = modelRef.model.doGenerateCalls[0];
+        expect(call.tools?.map((t: any) => t.name) ?? []).not.toContain('grep');
+        expect(JSON.stringify(call.prompt)).not.toContain('grep / readFile');
     });
 });
 

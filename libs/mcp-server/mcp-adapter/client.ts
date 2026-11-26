@@ -9,6 +9,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { integrationGuardedFetch } from '@libs/llm/gateway-address-guard';
 
 import {
     CallToolResult,
@@ -1191,10 +1192,11 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
             // rather than throwing. Surface them as exceptions so callers don't
             // mistake error messages (e.g. "MCP error -32602 ...") for real data.
             if (result?.isError) {
-                const errorText = result.content
-                    ?.filter((item: any) => item.type === 'text')
-                    ?.map((item: any) => item.text)
-                    ?.join('\n') || 'Tool execution failed';
+                const errorText =
+                    result.content
+                        ?.filter((item: any) => item.type === 'text')
+                        ?.map((item: any) => item.text)
+                        ?.join('\n') || 'Tool execution failed';
 
                 throw new Error(`Tool ${name} failed: ${errorText}`);
             }
@@ -1670,6 +1672,13 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
 
     private createTransport(): Transport {
         const { transport } = this.config;
+        // A URL an org typed is dialed through the address check: every
+        // connection, and every redirect hop, judged by what it resolves to
+        // then. Only a first-party endpoint from the platform's configuration
+        // skips it.
+        const fetchVia = transport.trusted
+            ? {}
+            : { fetch: integrationGuardedFetch() };
 
         switch (transport.type) {
             case 'http':
@@ -1682,6 +1691,7 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
                         requestInit: {
                             headers: transport.headers,
                         },
+                        ...fetchVia,
                     },
                 );
 
@@ -1693,6 +1703,7 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
                     requestInit: {
                         headers: transport.headers,
                     },
+                    ...fetchVia,
                 });
 
             default:

@@ -40,6 +40,7 @@ import {
     effectiveStoredCustomAgents,
     maskCliSecrets,
     sealCustomAgentSecrets,
+    storedConfigsAtLevel,
     storedCustomAgentsAtLevel,
 } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import { withDirectoryAgentLists } from '@libs/code-review/domain/custom-agents/directory-cascade';
@@ -121,6 +122,12 @@ import {
     HEAVY_MODE_SAVE_PLAN_REQUIRED,
     isHeavyModePlanAllowed,
 } from '@libs/ee/heavy-mode/heavy-mode-plan';
+import {
+    ultraReviewPlanAccess,
+    resolveUltraTrio,
+    ultraTrioRefusal,
+} from '@libs/ee/ultra-review/ultra-review-plan';
+import { ultraSaveRefusalMessage } from '@libs/ee/ultra-review/ultra-review-messages';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { approvalPolicyProviderError } from '@libs/code-review/domain/approval/approval-policy-provider';
@@ -128,6 +135,8 @@ import {
     migratedReviewSettings,
     resolveReviewSettings,
 } from '@libs/code-review/domain/approval/migrate-review-settings';
+import { routesForLegacyMode } from '@libs/code-review/domain/review-mode';
+import { UltraReviewGate } from '@libs/ee/ultra-review/ultra-review-gate';
 import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
 import { REVIEW_SETTINGS_INHERITABLE_FIELDS } from '@libs/core/infrastructure/config/types/general/risk-assessment';
 
@@ -166,6 +175,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         private readonly licenseService: ILicenseService,
         private readonly telemetry: TelemetryService,
         @Optional() private readonly codeManagement?: CodeManagementService,
+        // Without it no Ultra mode is saved: Ultra is in alpha.
+        @Optional() private readonly ultraReviewGate?: UltraReviewGate,
     ) {}
 
     async execute(
@@ -295,6 +306,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 organizationAndTeamData,
                 configValue,
                 body.actor?.source,
+                { repositoryId, directoryId, directoryPaths: resolvedPaths },
+                body.inheritFields,
             );
 
             if (!body.skipAuthorization) {
@@ -859,49 +872,182 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         });
     }
 
+    /**
+     * The review modes a plan or the org's models lock: Heavy on a plan
+     * without it, Ultra without the plan or three of the team's own models
+     * set for it. Checked wherever a mode is saved, the review mode and both
+     * risk routes. The trio is checked only on a mode the save changes to:
+     * a field sent with the Ultra this scope already runs leaves the other
+     * settings free to save while a model is unavailable. The plan is checked
+     * on every one. A field the save inherits is not checked: nothing is
+     * stored for it. A save from the web or the API is refused with the
+     * reason (400); a kodus-config.yml sync leaves the locked fields out and
+     * saves the rest.
+     */
     private async leaveHeavyOutIfPlanNotAllowed(
         organizationAndTeamData: OrganizationAndTeamData,
         configValue:
             CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
         source: string | undefined,
+        level: {
+            repositoryId?: string;
+            directoryId?: string;
+            directoryPaths?: string[];
+        },
+        inheritFields: string[] = [],
     ): Promise<void> {
-        if (configValue?.reviewMode !== 'heavy') {
+        if (!configValue) return;
+        const own = (field: string, mode: string | undefined) =>
+            inheritFields.includes(field) ? undefined : mode;
+        const sent = [
+            own('reviewMode', configValue.reviewMode),
+            own(
+                'riskReviewRouting.noRisk',
+                configValue.riskReviewRouting?.noRisk,
+            ),
+            own(
+                'riskReviewRouting.riskFound',
+                configValue.riskReviewRouting?.riskFound,
+            ),
+        ];
+        if (!sent.some((mode) => mode === 'heavy' || mode === 'ultra')) {
             return;
         }
+        // The modes this scope runs now: its own, else inherited. Read only
+        // for the trio check.
+        const stored = sent.includes('ultra')
+            ? await this.getCodeReviewConfigs(organizationAndTeamData)
+            : undefined;
+        const chain = [
+            storedConfigsAtLevel(stored, level),
+            storedConfigsAtLevel(stored, { repositoryId: level.repositoryId }),
+            stored?.configs,
+        ];
+        const current = (
+            read: (configs: any) => string | undefined,
+        ): string | undefined =>
+            chain.map((configs) => read(configs)).find((mode) => !!mode);
+        const modes = (): Array<{
+            mode: string | undefined;
+            current: string | undefined;
+            clear: () => void;
+        }> => [
+            {
+                mode: own('reviewMode', configValue.reviewMode),
+                current: current((c) => c?.reviewMode),
+                clear: () => delete configValue.reviewMode,
+            },
+            {
+                mode: own(
+                    'riskReviewRouting.noRisk',
+                    configValue.riskReviewRouting?.noRisk,
+                ),
+                current: current((c) => c?.riskReviewRouting?.noRisk),
+                clear: () => delete configValue.riskReviewRouting!.noRisk,
+            },
+            {
+                mode: own(
+                    'riskReviewRouting.riskFound',
+                    configValue.riskReviewRouting?.riskFound,
+                ),
+                current: current((c) => c?.riskReviewRouting?.riskFound),
+                clear: () => delete configValue.riskReviewRouting!.riskFound,
+            },
+        ];
+        const asks = (mode: 'heavy' | 'ultra') =>
+            modes().some((m) => m.mode === mode);
+        const changesTo = (mode: 'ultra') =>
+            modes().some((m) => m.mode === mode && m.current !== mode);
+
+        const refusals: Array<{
+            mode: 'heavy' | 'ultra';
+            reason: string;
+            /** Refused only where the save changes the mode to it. */
+            changedOnly?: boolean;
+        }> = [];
         if (
-            await isHeavyModePlanAllowed(
+            asks('heavy') &&
+            !(await isHeavyModePlanAllowed(
                 this.licenseService,
                 organizationAndTeamData,
                 UpdateOrCreateCodeReviewParameterUseCase.name,
-            )
+            ))
         ) {
-            return;
+            refusals.push({
+                mode: 'heavy',
+                reason: HEAVY_MODE_SAVE_PLAN_REQUIRED,
+            });
         }
+        if (
+            asks('ultra') &&
+            (await this.ultraReviewGate?.isEnabledFor(
+                organizationAndTeamData.organizationId,
+            )) !== true
+        ) {
+            refusals.push({
+                mode: 'ultra',
+                reason: ultraSaveRefusalMessage('not_enabled'),
+            });
+        } else if (asks('ultra')) {
+            const planAccess = await ultraReviewPlanAccess(
+                this.licenseService,
+                organizationAndTeamData,
+                UpdateOrCreateCodeReviewParameterUseCase.name,
+            );
+            if (planAccess !== 'allowed') {
+                refusals.push({
+                    mode: 'ultra',
+                    reason: ultraSaveRefusalMessage(
+                        planAccess === 'unknown' ? 'plan_unreadable' : 'plan',
+                    ),
+                });
+            } else if (changesTo('ultra')) {
+                const refusal = ultraTrioRefusal(
+                    resolveUltraTrio(
+                        await this.permissionValidationService.getBYOKConfig(
+                            organizationAndTeamData,
+                        ),
+                        { forSave: true },
+                    ),
+                );
+                if (refusal) {
+                    refusals.push({
+                        mode: 'ultra',
+                        reason: ultraSaveRefusalMessage(refusal),
+                        changedOnly: true,
+                    });
+                }
+            }
+        }
+        if (!refusals.length) return;
 
+        const logMeta = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+            source,
+            modes: refusals.map((r) => r.mode),
+        };
         if (source !== 'sync') {
             this.logger.log({
-                message:
-                    'Refused a save asking for heavy review mode — plan is not Teams/Enterprise',
+                message: `Refused a save asking for a locked review mode (${refusals.map((r) => r.mode).join(', ')})`,
                 context: UpdateOrCreateCodeReviewParameterUseCase.name,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                    source,
-                },
+                metadata: logMeta,
             });
             // 400, like the other refused saves: the web shows its reason.
-            throw new BadRequestException(HEAVY_MODE_SAVE_PLAN_REQUIRED);
+            throw new BadRequestException(refusals[0].reason);
         }
 
-        delete configValue.reviewMode;
+        const locked = new Set(refusals.map((r) => r.mode));
+        for (const m of modes()) {
+            const refusal = refusals.find((r) => r.mode === m.mode);
+            if (refusal && !(refusal.changedOnly && m.mode === m.current)) {
+                m.clear();
+            }
+        }
         this.logger.log({
-            message:
-                'Left heavy review mode out of the sync — plan is not Teams/Enterprise',
+            message: `Left a locked review mode out of the sync (${[...locked].join(', ')})`,
             context: UpdateOrCreateCodeReviewParameterUseCase.name,
-            metadata: {
-                organizationId: organizationAndTeamData.organizationId,
-                teamId: organizationAndTeamData.teamId,
-            },
+            metadata: logMeta,
         });
     }
 
@@ -1181,19 +1327,23 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                           ? [repository!.configs ?? {}]
                           : []),
                   ).riskReviewRouting;
-        const oldReviewConfig =
-            ownsLegacyMode &&
-            editsRouting &&
-            ancestorRouting?.noRisk === undefined
+        // Each route is seeded with what the legacy mode ran on it, unless
+        // an ancestor sets that route: the scope inherits that one.
+        const legacyRoutes = routesForLegacyMode(oldConfig.reviewMode);
+        const seededRouting =
+            ownsLegacyMode && editsRouting
                 ? {
-                      ...oldConfig,
-                      riskReviewRouting: {
-                          noRisk:
-                              oldConfig.reviewMode === 'heavy'
-                                  ? ('heavy' as const)
-                                  : ('balanced' as const),
-                      },
+                      ...(ancestorRouting?.noRisk === undefined && {
+                          noRisk: legacyRoutes.noRisk,
+                      }),
+                      ...(ancestorRouting?.riskFound === undefined && {
+                          riskFound: legacyRoutes.riskFound,
+                      }),
                   }
+                : undefined;
+        const oldReviewConfig =
+            seededRouting && Object.keys(seededRouting).length
+                ? { ...oldConfig, riskReviewRouting: seededRouting }
                 : oldConfig;
         const mergeOldConfig = this.withoutInheritedReviewOverrides(
             oldReviewConfig,

@@ -7,6 +7,7 @@ import {
     ORGANIZATION_SERVICE_TOKEN,
 } from '@libs/organization/domain/organization/contracts/organization.service.contract';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { findFixedEgressIpUnavailable } from '@libs/sandbox/domain/egress-plan';
 import {
     CustomAgentCliProvisioning,
     provisionCustomAgentClis,
@@ -27,6 +28,7 @@ import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { CliReviewPipelineContext } from '@libs/cli-review/pipeline/context/cli-review-pipeline.context';
+import { ULTRA_RUN_LEASE_TTL_MS } from '@libs/ee/ultra-review/ultra-review.executor';
 
 /**
  * After the review's last read of the checkout, only keep the sandbox warm for
@@ -161,10 +163,11 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             // call (one retry, none on timeouts) and a circuit breaker that
             // fails fast while sandbox infra is degraded. If acquire() throws
             // here the review continues self-contained.
+            // An Ultra review's Kody Rules run as long as its models do.
             const { sandbox, leaseId } = await this.leaseManager.acquire(
                 prKey,
                 'review',
-                undefined,
+                context.ultra ? ULTRA_RUN_LEASE_TTL_MS : undefined,
                 {
                     cloneUrl: cloneInfo.url,
                     authToken: cloneInfo.authToken,
@@ -187,12 +190,13 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             // Override cleanup so it releases the lease (pause) rather than
             // killing the sandbox. 30s idle window — see
             // REVIEW_IDLE_TIMEOUT_MS rationale. Releases once: AgentReviewStage
-            // releases after its last read of the checkout (#2628), and the
-            // observer's call at pipeline end is the fallback for a review
-            // that never got there. Every call shares that one release and
-            // its outcome. A failed one is not retried: release() is not
-            // idempotent (the lease count is a plain decrement), so a retry
-            // could take a co-holder's count; the lease TTL reaper frees it.
+            // releases after its last read of the checkout (#2628), an Ultra
+            // review after its last run, and the observer's call at pipeline
+            // end is the fallback for a review that never got there. Every
+            // call shares that one release and its outcome. A failed one is
+            // not retried: release() is not idempotent (the lease count is a
+            // plain decrement), so a retry could take a co-holder's count; the
+            // lease TTL reaper frees it.
             let release: Promise<void> | undefined;
             sandbox.cleanup = () =>
                 (release ??= this.leaseManager.release(leaseId, {
@@ -312,6 +316,26 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                             prNumber: context.pullRequest?.number,
                         },
                     });
+                });
+            }
+            // The team's Git host refused Kodus's shared network and the team
+            // cannot use the fixed IP (plan or its own switch): theirs to act
+            // on, not an outage. The review says why it has no checkout.
+            const egressBlocked = findFixedEgressIpUnavailable(err);
+            if (egressBlocked) {
+                this.logger.warn({
+                    message: `No sandbox for ${label}: the Git host refused Kodus's shared network (${egressBlocked.reason}, ${egressBlocked.blockedBy}), continuing without it`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
+                        prNumber: context?.pullRequest?.number,
+                        reason: egressBlocked.reason,
+                        blockedBy: egressBlocked.blockedBy,
+                    },
+                });
+                return this.updateContext(context, (draft) => {
+                    draft.sandboxUnavailableDetail = egressBlocked.message;
                 });
             }
             this.logger.error({

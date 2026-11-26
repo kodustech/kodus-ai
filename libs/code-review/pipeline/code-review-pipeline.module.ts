@@ -28,6 +28,7 @@ import { InitialCommentStage } from './stages/initial-comment.stage';
 import { BusinessLogicValidationStage } from './stages/business-logic-validation.stage';
 import { ResolveConfigStage } from './stages/resolve-config.stage';
 import { ValidateConfigStage } from './stages/validate-config.stage';
+import { UltraReviewGate } from '@libs/ee/ultra-review/ultra-review-gate';
 import { ValidateNewCommitsStage } from './stages/validate-new-commits.stage';
 import { ValidatePrerequisitesStage } from './stages/validate-prerequisites.stage';
 
@@ -170,6 +171,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         ValidatePrerequisitesStage,
         ResolveConfigStage,
         ValidateConfigStage,
+        UltraReviewGate,
         FetchChangedFilesStage,
         InitialCommentStage,
         BusinessLogicValidationStage,

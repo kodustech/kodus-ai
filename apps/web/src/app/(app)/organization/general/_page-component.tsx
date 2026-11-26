@@ -1,10 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Card, CardHeader } from "@components/ui/card";
 import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
-import { Label } from "@components/ui/label";
 import { Page } from "@components/ui/page";
 import {
     Select,
@@ -18,15 +16,21 @@ import { toast } from "@components/ui/toaster/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { createOrUpdateOrganizationParameter } from "@services/organizationParameters/fetch";
+import type { FixedEgressIp } from "@services/organizationParameters/fixedEgressIp";
 import {
     OrganizationParametersAutoJoinConfig,
     OrganizationParametersConfigKey,
+    OrganizationParametersReviewCommandModesConfig,
     Timezone,
 } from "@services/parameters/types";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
+import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { publicDomainsSet } from "src/core/utils/email";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 import { z } from "zod";
+
+import { FixedEgressIpCard } from "./_components/fixed-egress-ip-card";
+import { SettingsGroup, SettingsRow } from "./_components/settings-group";
 
 const timezoneOptions = [
     { value: Timezone.NEW_YORK, title: "New York" },
@@ -40,6 +44,10 @@ const createSettingsSchema = (userDomain: string) =>
             autoJoinConfig: z.object({
                 enabled: z.boolean(),
                 domains: z.array(z.string()),
+            }),
+            reviewCommandModes: z.object({
+                heavyBlocked: z.boolean(),
+                ultraBlocked: z.boolean(),
             }),
         })
         .superRefine((data, ctx) => {
@@ -87,8 +95,14 @@ export const GeneralOrganizationSettingsPage = (props: {
     email: string;
     timezone: Timezone;
     autoJoinConfig: OrganizationParametersAutoJoinConfig;
+    /** Undefined when they could not be read: shown unknown, never saved. */
+    reviewCommandModes?: Required<OrganizationParametersReviewCommandModesConfig>;
+    /** Saved on its own by its card, outside this form. */
+    fixedEgressIp: FixedEgressIp;
+    fixedEgressIpLoadFailed?: boolean;
 }) => {
     const router = useRouter();
+    const ultraEnabled = useFeatureFlags().ultraReview === true;
     const userDomain = props.email.split("@")[1];
 
     const form = useForm<SettingsFormData>({
@@ -97,6 +111,10 @@ export const GeneralOrganizationSettingsPage = (props: {
         defaultValues: {
             timezone: props.timezone,
             autoJoinConfig: props.autoJoinConfig,
+            reviewCommandModes: props.reviewCommandModes ?? {
+                heavyBlocked: false,
+                ultraBlocked: false,
+            },
         },
     });
 
@@ -105,6 +123,11 @@ export const GeneralOrganizationSettingsPage = (props: {
         handleSubmit,
         formState: { errors, isDirty, isValid },
     } = form;
+
+    const autoJoinEnabled = useWatch({
+        control,
+        name: "autoJoinConfig.enabled",
+    });
 
     const [saveSettings, { loading: isLoadingSubmitButton }] = useAsyncAction(
         async (data: SettingsFormData) => {
@@ -128,6 +151,21 @@ export const GeneralOrganizationSettingsPage = (props: {
                         createOrUpdateOrganizationParameter(
                             OrganizationParametersConfigKey.AUTO_JOIN_CONFIG,
                             data.autoJoinConfig,
+                        ),
+                    );
+                }
+
+                if (
+                    props.reviewCommandModes &&
+                    (data.reviewCommandModes.heavyBlocked !==
+                        props.reviewCommandModes.heavyBlocked ||
+                        data.reviewCommandModes.ultraBlocked !==
+                            props.reviewCommandModes.ultraBlocked)
+                ) {
+                    promises.push(
+                        createOrUpdateOrganizationParameter(
+                            OrganizationParametersConfigKey.REVIEW_COMMAND_MODES_CONFIG,
+                            data.reviewCommandModes,
                         ),
                     );
                 }
@@ -159,8 +197,8 @@ export const GeneralOrganizationSettingsPage = (props: {
                     <Page.TitleContainer>
                         <Page.Title>General settings</Page.Title>
                         <Page.Description>
-                            Your organization&apos;s timezone and who can join
-                            it automatically.
+                            Settings that apply to every team in this
+                            organization.
                         </Page.Description>
                     </Page.TitleContainer>
                     <Page.SaveActions
@@ -172,141 +210,186 @@ export const GeneralOrganizationSettingsPage = (props: {
                     />
                 </Page.Header>
 
-                <Page.Content className="flex flex-col gap-8">
-                    <Controller
-                        name="timezone"
-                        control={control}
-                        render={({ field }) => (
-                            <FormControl.Root>
-                                <FormControl.Label htmlFor="timezone">
-                                    Timezone
-                                </FormControl.Label>
-                                <FormControl.Input>
-                                    <Select
-                                        value={field.value}
-                                        onValueChange={field.onChange}>
-                                        <SelectTrigger
-                                            id="timezone"
-                                            className="w-72">
-                                            <SelectValue placeholder="Select timezone" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {timezoneOptions.map((opt) => (
-                                                <SelectItem
-                                                    key={opt.value}
-                                                    value={opt.value}>
-                                                    {opt.title}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </FormControl.Input>
-                            </FormControl.Root>
-                        )}
-                    />
+                <Page.Content className="flex max-w-3xl flex-col gap-10">
+                    <SettingsGroup title="Organization">
+                        <SettingsRow
+                            title="Timezone"
+                            description="Dates and times for this organization follow it."
+                            htmlFor="timezone"
+                            control={
+                                <Controller
+                                    name="timezone"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Select
+                                            value={field.value}
+                                            onValueChange={field.onChange}>
+                                            <SelectTrigger
+                                                id="timezone"
+                                                className="w-48">
+                                                <SelectValue placeholder="Select timezone" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {timezoneOptions.map((opt) => (
+                                                    <SelectItem
+                                                        key={opt.value}
+                                                        value={opt.value}>
+                                                        {opt.title}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                            }
+                        />
+                    </SettingsGroup>
 
-                    <Card color="lv1" className="w-md">
-                        <CardHeader>
-                            <FormControl.Root className="flex flex-col">
-                                <FormControl.Label className="mb-0 text-base font-bold">
-                                    Auto Join
-                                </FormControl.Label>
-                                <FormControl.Helper className="mt-0 mb-5">
-                                    Allow users with matching email domains to
-                                    automatically join.
-                                </FormControl.Helper>
-
+                    <SettingsGroup title="Members">
+                        <SettingsRow
+                            title="Auto join by email domain"
+                            description="People who sign up with your company's email domain join this organization on their own."
+                            htmlFor="autoJoinConfig.enabled"
+                            control={
                                 <Controller
                                     name="autoJoinConfig.enabled"
                                     control={control}
                                     render={({ field }) => (
-                                        <div className="flex items-center gap-3">
-                                            <Switch
-                                                id={field.name}
-                                                checked={field.value}
-                                                onCheckedChange={(v) => {
-                                                    field.onChange(v);
-                                                    form.trigger(
-                                                        "autoJoinConfig.domains",
-                                                    );
-                                                }}
-                                            />
-                                            <Label
-                                                htmlFor={field.name}
-                                                className="text-sm font-medium">
-                                                Enable Auto Join
-                                            </Label>
-                                        </div>
+                                        <Switch
+                                            id={field.name}
+                                            checked={field.value}
+                                            onCheckedChange={(v) => {
+                                                field.onChange(v);
+                                                form.trigger(
+                                                    "autoJoinConfig.domains",
+                                                );
+                                            }}
+                                        />
                                     )}
                                 />
-
+                            }>
+                            {autoJoinEnabled && (
                                 <Controller
                                     name="autoJoinConfig.domains"
                                     control={control}
-                                    render={({ field, fieldState }) => {
-                                        const autoJoinEnabled = form.watch(
-                                            "autoJoinConfig.enabled",
-                                        );
-                                        return (
-                                            <>
-                                                <FormControl.Input>
-                                                    <Input
-                                                        placeholder="e.g., yourcompany.com"
-                                                        error={fieldState.error}
-                                                        value={
-                                                            field.value?.join(
-                                                                ",",
-                                                            ) ?? ""
-                                                        }
-                                                        onChange={(e) => {
-                                                            const inputValue =
-                                                                e.target.value;
-
-                                                            if (
-                                                                inputValue ===
-                                                                ""
-                                                            ) {
-                                                                field.onChange(
-                                                                    [],
-                                                                );
-                                                                return;
-                                                            }
-
-                                                            const domains =
-                                                                e.target.value
-                                                                    .split(
-                                                                        /,\s*/,
-                                                                    )
-                                                                    .map((d) =>
-                                                                        d.trim(),
-                                                                    );
-                                                            field.onChange(
-                                                                domains,
-                                                            );
-                                                        }}
-                                                        disabled={
-                                                            !autoJoinEnabled
-                                                        }
-                                                        className="mt-3"
-                                                    />
-                                                </FormControl.Input>
-                                                <FormControl.Error>
-                                                    {
-                                                        errors.autoJoinConfig
-                                                            ?.domains?.message
+                                    render={({ field, fieldState }) => (
+                                        <FormControl.Root>
+                                            <FormControl.Label htmlFor="autoJoinConfig.domains">
+                                                Domains
+                                            </FormControl.Label>
+                                            <FormControl.Input>
+                                                <Input
+                                                    id="autoJoinConfig.domains"
+                                                    placeholder="e.g., yourcompany.com"
+                                                    error={fieldState.error}
+                                                    value={
+                                                        field.value?.join(
+                                                            ",",
+                                                        ) ?? ""
                                                     }
-                                                </FormControl.Error>
-                                                <FormControl.Helper>
-                                                    Enter domains separated by
-                                                    commas.
-                                                </FormControl.Helper>
-                                            </>
-                                        );
-                                    }}
+                                                    onChange={(e) => {
+                                                        const inputValue =
+                                                            e.target.value;
+                                                        if (inputValue === "") {
+                                                            field.onChange([]);
+                                                            return;
+                                                        }
+                                                        field.onChange(
+                                                            inputValue
+                                                                .split(/,\s*/)
+                                                                .map((d) =>
+                                                                    d.trim(),
+                                                                ),
+                                                        );
+                                                    }}
+                                                />
+                                            </FormControl.Input>
+                                            <FormControl.Error>
+                                                {
+                                                    errors.autoJoinConfig
+                                                        ?.domains?.message
+                                                }
+                                            </FormControl.Error>
+                                            <FormControl.Helper>
+                                                Separate domains with commas.
+                                                Only your own domain is
+                                                accepted.
+                                            </FormControl.Helper>
+                                        </FormControl.Root>
+                                    )}
                                 />
-                            </FormControl.Root>
-                        </CardHeader>
-                    </Card>
+                            )}
+                        </SettingsRow>
+                    </SettingsGroup>
+
+                    <SettingsGroup
+                        title="Review commands"
+                        description={
+                            <>
+                                Anyone with write access to a repository can
+                                start these reviews from a PR comment. Turning
+                                one off blocks only the command: automatic
+                                reviews keep the mode set in Routing.
+                            </>
+                        }>
+                        {!props.reviewCommandModes && (
+                            <p
+                                role="alert"
+                                className="text-danger px-5 py-4 text-sm">
+                                These settings could not be loaded. Reload the
+                                page to try again.
+                            </p>
+                        )}
+                        {(
+                            [
+                                ["heavyBlocked", "Heavy", "--heavy"],
+                                // In alpha: outside it, Ultra has no command.
+                                ...(ultraEnabled
+                                    ? ([
+                                          ["ultraBlocked", "Ultra", "--ultra"],
+                                      ] as const)
+                                    : []),
+                            ] as const
+                        ).map(([key, mode, flag]) => (
+                            <Controller
+                                key={key}
+                                name={`reviewCommandModes.${key}`}
+                                control={control}
+                                render={({ field }) => (
+                                    <SettingsRow
+                                        title={`${mode} review`}
+                                        description={
+                                            <code className="text-text-secondary text-xs">
+                                                @kody review {flag}
+                                            </code>
+                                        }
+                                        htmlFor={field.name}
+                                        control={
+                                            // On means the command is
+                                            // allowed; the stored value is
+                                            // whether it is blocked.
+                                            <Switch
+                                                id={field.name}
+                                                aria-label={`Allow ${mode} review by command`}
+                                                disabled={
+                                                    !props.reviewCommandModes
+                                                }
+                                                checked={!field.value}
+                                                onCheckedChange={(allowed) =>
+                                                    field.onChange(!allowed)
+                                                }
+                                            />
+                                        }
+                                    />
+                                )}
+                            />
+                        ))}
+                    </SettingsGroup>
+
+                    <FixedEgressIpCard
+                        initialSetting={props.fixedEgressIp}
+                        loadFailed={props.fixedEgressIpLoadFailed}
+                    />
                 </Page.Content>
             </form>
         </Page.Root>

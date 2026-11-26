@@ -10,15 +10,17 @@ import { Agent, setGlobalDispatcher } from 'undici';
  * in agent-loop.ts. Our signal-based timeouts stay the authoritative
  * cutoff; this just prevents undici from aborting earlier.
  *
- * Call once, early in every app entry point (before NestFactory.create).
+ * Exported so a dispatcher built for one kind of traffic (the BYOK gateway
+ * guard) keeps the same ceilings as the global one.
  */
+export const LONG_FETCH_AGENT_OPTIONS = {
+    headersTimeout: 20 * 60 * 1000,
+    bodyTimeout: 20 * 60 * 1000,
+    keepAliveTimeout: 60 * 1000,
+    keepAliveMaxTimeout: 20 * 60 * 1000,
+} as const;
+
+/** Call once, early in every app entry point (before NestFactory.create). */
 export function configureLongFetchTimeouts(): void {
-    setGlobalDispatcher(
-        new Agent({
-            headersTimeout: 20 * 60 * 1000,
-            bodyTimeout: 20 * 60 * 1000,
-            keepAliveTimeout: 60 * 1000,
-            keepAliveMaxTimeout: 20 * 60 * 1000,
-        }),
-    );
+    setGlobalDispatcher(new Agent({ ...LONG_FETCH_AGENT_OPTIONS }));
 }

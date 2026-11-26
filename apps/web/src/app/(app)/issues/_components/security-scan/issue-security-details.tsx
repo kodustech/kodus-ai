@@ -110,13 +110,58 @@ export const IssueSecurityEvidence = ({
     const evidence = issue.security?.evidence;
     const attackPath = evidence?.attackPath ?? [];
     const reproduction = evidence?.reproduction;
+    const assumption = evidence?.assumption?.trim();
+    const occurrences = issue.security?.occurrences ?? [];
+    const duplicateOf = issue.security?.duplicateOf;
 
-    if (attackPath.length === 0 && !reproduction) return null;
+    if (
+        attackPath.length === 0 &&
+        !reproduction &&
+        !assumption &&
+        occurrences.length === 0 &&
+        !duplicateOf
+    )
+        return null;
 
     const status = reproduction ? reproductionStatus(reproduction) : undefined;
 
     return (
         <div className="mt-10 flex flex-col gap-10 px-6">
+            {duplicateOf && (
+                <p className="text-text-secondary text-sm">
+                    Folded into another issue with the same root cause: fix that
+                    one.
+                </p>
+            )}
+
+            {occurrences.length > 0 && (
+                <div>
+                    <Heading variant="h3" className="mb-2">
+                        Also at ({occurrences.length})
+                    </Heading>
+
+                    <ul className="text-text-secondary list-outside list-disc space-y-2 pl-5 text-sm">
+                        {occurrences.map((place) => (
+                            <li key={place.fingerprint}>
+                                <code className="text-text-primary break-all">
+                                    {place.filePath}:{place.startLine}
+                                    {place.endLine !== place.startLine &&
+                                        `-${place.endLine}`}
+                                </code>
+                                {place.title && <> — {place.title}</>}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {assumption && (
+                <div className="flex flex-col gap-2 text-sm">
+                    <Heading variant="h3">Depends on</Heading>
+                    <p className="text-text-secondary">{assumption}</p>
+                </div>
+            )}
+
             {attackPath.length > 0 && (
                 <div>
                     <Heading variant="h3" className="mb-2">

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { IssueSource } from '@libs/issues/domain/interfaces/issues.interface';
+import { IssueStatus } from '@libs/core/infrastructure/config/types/general/issues.type';
 import { REQUEST } from '@nestjs/core';
 
 import {
@@ -169,6 +170,12 @@ export class GetIssueByIdUseCase implements IUseCase {
                     endLine: issue.endLine,
                     evidence: issue.evidence,
                     lastSeenAt: issue.lastSeenAt,
+                    occurrences: issue.occurrences,
+                    // A reopened duplicate is its own issue again.
+                    duplicateOf:
+                        issue.status === IssueStatus.DISMISSED
+                            ? issue.duplicateOf
+                            : undefined,
                 },
                 owner: issue.owner,
             }),

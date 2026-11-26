@@ -18,6 +18,9 @@ export const FEATURE_FLAGS = {
     /** Deep scan — private alpha. Gates the menu entry, the page and its
      *  routing card; the API refuses the scans themselves. */
     deepScan: "deep-scan",
+    /** Ultra review — alpha, by release track. Gates its mode option, its
+     *  models row and its command switch; the API refuses it outside. */
+    ultraReview: "ultra-review",
 } as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[keyof typeof FEATURE_FLAGS];

@@ -35,6 +35,53 @@ describe('GetModelCapabilitiesUseCase — provider-owned UI capability hints', (
     });
 
     describe('Anthropic (temperature policy owned by the module, not capabilities)', () => {
+        // #2036: MiniMax M3.1 always reasons and refuses a disable, while no
+        // level can be sent on this endpoint. The form said "doesn't support
+        // reasoning — it always runs without a thinking budget", which is false.
+        it('says a model that always reasons, with no level to send, reasons (#2036)', () => {
+            const c = useCase.execute(
+                'anthropic_compatible',
+                'MiniMax-M3.1-Flash-Preview',
+            );
+            expect(c.supportsReasoning).toBe(false);
+            expect(c.reasoningAlwaysOn).toBe(true);
+        });
+
+        // #2036's measurements (api.minimax.io/anthropic): plain MiniMax-M3
+        // answers with no thinking blocks with the field omitted and accepts
+        // `disabled`, so it is not a model that always reasons.
+        it('does not say plain MiniMax-M3 always reasons (#2036)', () => {
+            for (const model of ['MiniMax-M3', 'minimax-m3']) {
+                expect(
+                    useCase.execute('anthropic_compatible', model)
+                        .reasoningAlwaysOn,
+                ).toBeFalsy();
+            }
+        });
+
+        // Kimi k2.7-code/k3 and GLM-5.3 always think, but a slot with no saved
+        // level is sent a thinking budget here, so "its level can't be set"
+        // would be false.
+        it('does not say it for a model that is sent a level', () => {
+            for (const model of ['kimi-k2.7-code', 'k3', 'glm-5.3']) {
+                expect(
+                    useCase.execute('anthropic_compatible', model)
+                        .reasoningAlwaysOn,
+                ).toBeFalsy();
+            }
+        });
+
+        it('never says a model it knows nothing about always reasons', () => {
+            for (const [provider, model] of [
+                ['anthropic_compatible', 'llama-3.3-70b-instruct'],
+                ['openai', 'gpt-4o'],
+            ]) {
+                expect(
+                    useCase.execute(provider, model).reasoningAlwaysOn,
+                ).toBeFalsy();
+            }
+        });
+
         it('4.7+ rejects temperature → unsupported', () => {
             const c = useCase.execute('anthropic', 'claude-opus-4-7');
             expect(c.temperature.kind).toBe('unsupported');
@@ -85,7 +132,9 @@ describe('GetModelCapabilitiesUseCase — provider-owned UI capability hints', (
         it('sends BOTH answers for a model whose constraint is scoped to thinking', () => {
             const c = useCase.execute('openai_compatible', 'deepseek-v4-pro');
             expect(c.temperature).toEqual({ kind: 'unsupported' });
-            expect(c.temperatureWhenReasoningOff).toEqual({ kind: 'adjustable' });
+            expect(c.temperatureWhenReasoningOff).toEqual({
+                kind: 'adjustable',
+            });
         });
 
         it('omits the second answer when it does not differ', () => {
@@ -110,9 +159,9 @@ describe('GetModelCapabilitiesUseCase — provider-owned UI capability hints', (
         it('stays a pure function of (provider, model)', () => {
             // The regression guard for the shape itself: two identical calls must
             // be identical, with no hidden third input.
-            expect(useCase.execute('openai_compatible', 'deepseek-v4-pro')).toEqual(
+            expect(
                 useCase.execute('openai_compatible', 'deepseek-v4-pro'),
-            );
+            ).toEqual(useCase.execute('openai_compatible', 'deepseek-v4-pro'));
         });
     });
 

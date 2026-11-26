@@ -1,7 +1,12 @@
 import { axiosAuthorized } from "src/core/utils/axios";
 import { pathToApiUrl } from "src/core/utils/helpers";
 
-import type { SecurityScan, StartSecurityScanPayload } from "./types";
+import type {
+    SaveScanSchedulePayload,
+    SecurityScan,
+    SecurityScanSchedule,
+    StartSecurityScanPayload,
+} from "./types";
 
 // A function, not a constant: pathToApiUrl resolves to the same-origin proxy
 // only when called in the browser.
@@ -27,4 +32,44 @@ export const cancelSecurityScan = async (
     );
 
     return response.data;
+};
+
+export const securityScanSchedulesPath = () =>
+    `${securityScansPath()}/schedules`;
+
+export const saveSecurityScanSchedule = async (
+    payload: SaveScanSchedulePayload,
+): Promise<SecurityScanSchedule> => {
+    const response = await axiosAuthorized.put<{ data: SecurityScanSchedule }>(
+        securityScanSchedulesPath(),
+        payload,
+    );
+
+    return response.data;
+};
+
+/** Pauses or resumes a schedule, leaving its settings as they are. */
+export const setSecurityScanScheduleEnabled = async (
+    teamId: string,
+    repositoryId: string,
+    enabled: boolean,
+): Promise<SecurityScanSchedule> => {
+    const response = await axiosAuthorized.patch<{
+        data: SecurityScanSchedule;
+    }>(`${securityScanSchedulesPath()}/${encodeURIComponent(repositoryId)}`, {
+        teamId,
+        enabled,
+    });
+
+    return response.data;
+};
+
+export const removeSecurityScanSchedule = async (
+    teamId: string,
+    repositoryId: string,
+): Promise<void> => {
+    await axiosAuthorized.deleted(
+        `${securityScanSchedulesPath()}/${encodeURIComponent(repositoryId)}`,
+        { params: { teamId } },
+    );
 };

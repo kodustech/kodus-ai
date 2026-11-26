@@ -5,7 +5,6 @@ import {
     getTokenUsageByPR,
 } from "@services/usage/fetch";
 import type { ModelPricingInfo } from "@services/usage/types";
-import { differenceInDays, format, subDays } from "date-fns";
 import { TrendingUpIcon } from "lucide-react";
 import { isBYOKSubscriptionPlan } from "src/features/ee/byok/_utils";
 
@@ -18,45 +17,9 @@ import {
     TokenProjectionBanner,
     TokenProjectionEmptyState,
 } from "./token-projection.client";
+import { getUsageDateRange } from "./usage-date-range";
 
-const TRIAL_DURATION_DAYS = 14;
-const USAGE_LOOKBACK_DAYS = 30;
 const MIN_PRS_FOR_PROJECTION = 5;
-
-function getUsageDateRange(
-    license: Awaited<ReturnType<typeof validateOrganizationLicense>> | null,
-) {
-    const now = new Date();
-
-    // Guard: some trial licenses carry subscriptionStatus="trial" without a
-    // trialEnd (e.g. legacy rows / plan-reset via SQL). new Date(undefined)
-    // is Invalid Date and format() then throws RangeError. Fall back to the
-    // default lookback window instead of crashing the choose-plan page.
-    if (
-        license?.valid &&
-        license.subscriptionStatus === "trial" &&
-        license.trialEnd
-    ) {
-        const trialEndDate = new Date(license.trialEnd);
-        if (!isNaN(trialEndDate?.getTime())) {
-            const trialStartDate = subDays(trialEndDate, TRIAL_DURATION_DAYS);
-            const daysUsed = Math.max(1,differenceInDays(now, trialStartDate));
-
-            return {
-                startDate: format(trialStartDate, "yyyy-MM-dd"),
-                endDate: format(now, "yyyy-MM-dd"),
-                daysUsed,
-            };
-        }
-    }
-
-    const startDate = subDays(now, USAGE_LOOKBACK_DAYS);
-    return {
-        startDate: format(startDate, "yyyy-MM-dd"),
-        endDate: format(now, "yyyy-MM-dd"),
-        daysUsed: USAGE_LOOKBACK_DAYS,
-    };
-}
 
 async function computeTokenProjection(
     license: Awaited<ReturnType<typeof validateOrganizationLicense>> | null,

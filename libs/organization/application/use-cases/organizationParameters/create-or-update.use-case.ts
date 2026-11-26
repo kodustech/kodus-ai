@@ -16,6 +16,9 @@ import {
     KodusProviderGate,
 } from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
+import { bedrockRegion } from '@libs/llm/providers/bedrock/region';
+import { assertVertexServiceAccountKey } from '@libs/llm/providers/vertex/credential-type';
+import { vertexLocation } from '@libs/llm/providers/vertex/location';
 import { describeProtocolMismatch } from '@libs/llm/base-url-hygiene';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
@@ -26,6 +29,20 @@ import {
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { OrganizationParametersEntity } from '@libs/organization/domain/organizationParameters/entities/organizationParameters.entity';
+import {
+    IParametersService,
+    PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
+import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
+import { ultraModeScopes } from '@libs/code-review/domain/review-mode';
+import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
+import { normalizeModelId } from '@libs/ee/ultra-review/ultra-merge-ranking';
+import { UltraReviewGate } from '@libs/ee/ultra-review/ultra-review-gate';
+import { ULTRA_MODELS_NOT_ENABLED_MESSAGE } from '@libs/ee/ultra-review/ultra-review-messages';
 import {
     BadRequestException,
     HttpException,
@@ -44,6 +61,7 @@ const AUDITABLE_KEYS = new Set([
     OrganizationParametersKey.AUTO_JOIN_CONFIG,
     OrganizationParametersKey.TIMEZONE_CONFIG,
     OrganizationParametersKey.COCKPIT_METRICS_VISIBILITY,
+    OrganizationParametersKey.REVIEW_COMMAND_MODES_CONFIG,
 ]);
 
 @Injectable()
@@ -64,6 +82,15 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         @Optional()
         @Inject(KODUS_PROVIDER_GATE_TOKEN)
         private readonly kodusGate?: KodusProviderGate,
+        @Optional()
+        @Inject(PARAMETERS_SERVICE_TOKEN)
+        private readonly parametersService?: IParametersService,
+        @Optional()
+        @Inject(TEAM_SERVICE_TOKEN)
+        private readonly teamService?: ITeamService,
+        // Without it no Ultra models are saved: Ultra is in alpha.
+        @Optional()
+        private readonly ultraReviewGate?: UltraReviewGate,
     ) {}
 
     async execute(
@@ -144,6 +171,98 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         }
     }
 
+    /**
+     * Ultra review is in alpha: an organization outside it cannot pick Ultra
+     * models. Only a save that changes them to a non-empty set is checked, so
+     * clearing them, or any unrelated edit, still saves.
+     */
+    private async assertUltraModelsAllowed(
+        next: BYOKConfig,
+        previous: BYOKConfig | undefined,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<void> {
+        const ids = (config: BYOKConfig | undefined) =>
+            [...new Set((config?.routing?.ultraModelIds ?? []).filter(Boolean))]
+                .sort()
+                .join();
+        const picked = ids(next);
+        if (!picked || picked === ids(previous)) return;
+        if (
+            (await this.ultraReviewGate?.isEnabledFor(
+                organizationAndTeamData.organizationId,
+            )) === true
+        ) {
+            return;
+        }
+        throw new BadRequestException(ULTRA_MODELS_NOT_ENABLED_MESSAGE);
+    }
+
+    /**
+     * The Ultra trio cannot stop being three different models while a review
+     * mode of any team, at any scope, is Ultra: those reviews would all be
+     * refused. Change the mode first. Only a save that breaks a set trio is
+     * checked, so an unrelated edit never trips over it; a read that fails
+     * refuses the save rather than passing unchecked.
+     */
+    private async assertUltraTrioKeptWhileInUse(
+        next: BYOKConfig,
+        previous: BYOKConfig | undefined,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<void> {
+        // Three different models, counted as the review counts them: one
+        // model through two providers is one.
+        const isSet = (config: BYOKConfig | undefined) => {
+            const picked = (config?.routing?.ultraModelIds ?? []).filter(
+                Boolean,
+            );
+            const modelById = new Map(
+                (config?.models ?? []).map((m) => [m?.id, m?.model]),
+            );
+            const models = picked.map((id) => {
+                const model = modelById.get(id);
+                return model ? normalizeModelId(model) : id;
+            });
+            return picked.length === 3 && new Set(models).size === 3;
+        };
+        if (
+            !isSet(previous) ||
+            isSet(next) ||
+            !this.parametersService ||
+            !this.teamService
+        ) {
+            return;
+        }
+        const organizationId = organizationAndTeamData.organizationId;
+        // Active teams only: a removed team's settings cannot be opened to
+        // change its mode, so it must not hold the trio.
+        const teams = await this.teamService.find(
+            { organization: { uuid: organizationId } },
+            [STATUS.ACTIVE],
+        );
+        // One read at a time: an org's teams are few, and a failed read
+        // refuses the save rather than passing unchecked.
+        const scopes: string[] = [];
+        for (const team of teams) {
+            const stored = await this.parametersService.findByKey(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                { organizationId, teamId: team.uuid },
+            );
+            for (const scope of ultraModeScopes(stored?.configValue)) {
+                scopes.push(
+                    teams.length > 1
+                        ? `${scope} of team "${team.name}"`
+                        : scope,
+                );
+            }
+        }
+        if (scopes.length) {
+            throw new BadRequestException(
+                `Ultra review is the review mode in ${scopes.join('; ')}. ` +
+                    'Keep three different Ultra models, or change that mode first.',
+            );
+        }
+    }
+
     private async saveByokConfig(
         organizationParametersKey: OrganizationParametersKey,
         configValue: any,
@@ -198,6 +317,16 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             await this.assertKodusProviderAllowed(
                 configValue as BYOKConfig,
                 isByokConfig(existingConfig) ? existingConfig : undefined,
+            );
+            await this.assertUltraModelsAllowed(
+                configValue as BYOKConfig,
+                isByokConfig(existingConfig) ? existingConfig : undefined,
+                organizationAndTeamData,
+            );
+            await this.assertUltraTrioKeptWhileInUse(
+                configValue as BYOKConfig,
+                isByokConfig(existingConfig) ? existingConfig : undefined,
+                organizationAndTeamData,
             );
         }
 
@@ -290,6 +419,47 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         }
 
         for (const cred of config.credentials ?? []) {
+            // Bedrock builds its host from the region (providers/bedrock/region.ts).
+            const awsRegion = (cred?.settings as { awsRegion?: unknown })
+                ?.awsRegion;
+            if (
+                cred?.provider === 'amazon_bedrock' &&
+                typeof awsRegion === 'string' &&
+                awsRegion.trim()
+            ) {
+                try {
+                    bedrockRegion(awsRegion);
+                } catch (err) {
+                    throw new BadRequestException((err as Error).message);
+                }
+            }
+            // Vertex builds its host from the location (providers/vertex/location.ts).
+            const location = (cred?.settings as { vertexLocation?: unknown })
+                ?.vertexLocation;
+            if (
+                cred?.provider === 'google_vertex' &&
+                typeof location === 'string' &&
+                location.trim()
+            ) {
+                try {
+                    vertexLocation(location);
+                } catch (err) {
+                    throw new BadRequestException((err as Error).message);
+                }
+            }
+            // A new Vertex key reaches google-auth-library, which follows the
+            // key's own URLs for anything but a service account.
+            if (
+                cred?.provider === 'google_vertex' &&
+                typeof cred.apiKey === 'string' &&
+                cred.apiKey.trim()
+            ) {
+                try {
+                    assertVertexServiceAccountKey(cred.apiKey);
+                } catch (err) {
+                    throw new BadRequestException((err as Error).message);
+                }
+            }
             const baseURL = cred?.settings?.baseURL;
             if (typeof baseURL !== 'string' || !baseURL.trim()) continue;
             const key = String(cred?.id ?? cred?.provider ?? '');

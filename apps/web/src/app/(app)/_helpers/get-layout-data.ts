@@ -33,6 +33,7 @@ export const getLayoutData = cache(async (teamId: string) => {
         deterministicEvidenceFeatureFlag,
         conditionalPrApprovalFeatureFlag,
         deepScanFeatureFlag,
+        ultraReviewFeatureFlag,
     ] = await Promise.all([
         getPermissions().catch(() => ({})),
         getOrganizationName().catch(() => ""),
@@ -77,6 +78,15 @@ export const getLayoutData = cache(async (teamId: string) => {
             )
             .catch(() => false),
         isDeepScanEnabled().catch(() => false),
+        releaseTrackPromise
+            .then((releaseTrack) =>
+                isFeatureEnabled({
+                    feature: FEATURE_FLAGS.ultraReview,
+                    identifier: "organization",
+                    releaseTrack,
+                }),
+            )
+            .catch(() => false),
     ]);
 
     return {
@@ -91,6 +101,7 @@ export const getLayoutData = cache(async (teamId: string) => {
             deterministicEvidence: deterministicEvidenceFeatureFlag,
             conditionalPrApproval: conditionalPrApprovalFeatureFlag,
             deepScan: deepScanFeatureFlag,
+            ultraReview: ultraReviewFeatureFlag,
         },
     };
 });

@@ -1,16 +1,26 @@
+import { unstable_rethrow as rethrowNextControlFlow } from "next/navigation";
 import { authorizedFetch, TypedFetchError } from "@services/fetch";
 import { ORGANIZATION_PARAMETERS_PATHS } from "@services/organizationParameters";
 import { getOrganizationParameterByKey } from "@services/organizationParameters/fetch";
+import {
+    getFixedEgressIp,
+    type FixedEgressIp,
+} from "@services/organizationParameters/fixedEgressIp";
 import { getOrganizationId } from "@services/organizations/fetch";
 import {
     OrganizationParametersAutoJoinConfig,
     OrganizationParametersConfigKey,
+    OrganizationParametersReviewCommandModesConfig,
     Timezone,
 } from "@services/parameters/types";
 import { auth } from "src/core/config/auth";
 
 import { GeneralOrganizationSettingsPage } from "./_page-component";
 
+// Every load below catches its own failure, so each first hands Next back
+// its own control-flow throws: a 401 makes authorizedFetch redirect to
+// /sign-out, which throws, and swallowing it would render "could not load"
+// for an expired session instead of signing out.
 export default async function OrganizationSettingsPage() {
     // Independent — fetch in parallel instead of chaining two round-trips.
     const [, jwtPayload] = await Promise.all([getOrganizationId(), auth()]);
@@ -35,6 +45,7 @@ export default async function OrganizationSettingsPage() {
                 timezoneConfigValue = result.configValue;
             }
         } catch (error: unknown) {
+            rethrowNextControlFlow(error);
             if (error instanceof TypedFetchError && error.statusCode === 404) {
                 await authorizedFetch(
                     ORGANIZATION_PARAMETERS_PATHS.CREATE_OR_UPDATE,
@@ -62,6 +73,7 @@ export default async function OrganizationSettingsPage() {
                 autoJoinConfigValue = result.configValue;
             }
         } catch (error: unknown) {
+            rethrowNextControlFlow(error);
             if (error instanceof TypedFetchError && error.statusCode === 404) {
                 await authorizedFetch(
                     ORGANIZATION_PARAMETERS_PATHS.CREATE_OR_UPDATE,
@@ -77,14 +89,69 @@ export default async function OrganizationSettingsPage() {
         }
     };
 
-    // Both parameter loads are independent of each other.
-    await Promise.all([loadTimezone(), loadAutoJoin()]);
+    // Nothing stored leaves both commands on; no row is created for it.
+    // Undefined when the read failed: the page shows the switches unknown.
+    const loadReviewCommandModes = async (): Promise<
+        OrganizationParametersReviewCommandModesConfig | undefined
+    > => {
+        try {
+            const result = await getOrganizationParameterByKey<{
+                configValue: OrganizationParametersReviewCommandModesConfig;
+            }>({
+                key: OrganizationParametersConfigKey.REVIEW_COMMAND_MODES_CONFIG,
+            });
+            return result?.configValue ?? {};
+        } catch (error: unknown) {
+            rethrowNextControlFlow(error);
+            // Only "not stored" means both commands are on; a failed read
+            // must not show them on, nor take the rest of the page down.
+            if (error instanceof TypedFetchError && error.statusCode === 404) {
+                return {};
+            }
+            return undefined;
+        }
+    };
+
+    // Its own read: a failure says "could not load" on its card instead of
+    // answering "not available", and never takes the rest of the page down.
+    const NO_FIXED_EGRESS_IP: FixedEgressIp = {
+        available: false,
+        allowedByPlan: false,
+        enabled: false,
+    };
+    const loadFixedEgressIp = (): Promise<{
+        setting: FixedEgressIp;
+        failed: boolean;
+    }> =>
+        getFixedEgressIp().then(
+            (setting) => ({ setting, failed: false }),
+            (error: unknown) => {
+                rethrowNextControlFlow(error);
+                return { setting: NO_FIXED_EGRESS_IP, failed: true };
+            },
+        );
+
+    // The parameter loads are independent of each other.
+    const [, , reviewCommandModes, fixedEgressIp] = await Promise.all([
+        loadTimezone(),
+        loadAutoJoin(),
+        loadReviewCommandModes(),
+        loadFixedEgressIp(),
+    ]);
 
     return (
         <GeneralOrganizationSettingsPage
             email={email}
             timezone={timezoneConfigValue}
             autoJoinConfig={autoJoinConfigValue}
+            reviewCommandModes={
+                reviewCommandModes && {
+                    heavyBlocked: reviewCommandModes.heavyBlocked === true,
+                    ultraBlocked: reviewCommandModes.ultraBlocked === true,
+                }
+            }
+            fixedEgressIp={fixedEgressIp.setting}
+            fixedEgressIpLoadFailed={fixedEgressIp.failed}
         />
     );
 }

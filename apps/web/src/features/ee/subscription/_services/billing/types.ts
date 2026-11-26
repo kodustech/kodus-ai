@@ -16,6 +16,8 @@ export type OrganizationLicenseTrial = WithCreditBalance & {
     subscriptionStatus: "trial";
     /** Plan the trial converts into (billing returns e.g. "teams_managed"). */
     planType?: PlanType;
+    /** When the trial started. Absent from billing builds that predate it. */
+    trialStart?: string;
     trialEnd: string;
     byok?: boolean;
     trialReviewCreditsTotal?: number;
@@ -23,6 +25,12 @@ export type OrganizationLicenseTrial = WithCreditBalance & {
     trialReviewCreditsRemaining?: number;
     trialCreditTier?: TrialCreditTier;
     trialUnlocks?: Array<TrialUnlock>;
+};
+
+/** What a trial started now gets, from billing's config (GET /trial-terms). */
+export type TrialTerms = {
+    trialDays: number;
+    trialReviewCreditsIncluded: number;
 };
 
 export type TrialCreditTier =

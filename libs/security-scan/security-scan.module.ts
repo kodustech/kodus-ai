@@ -17,6 +17,14 @@ import {
     SecurityScanSchema,
 } from './infrastructure/security-scan.model';
 import {
+    SecurityScanCoverageModel,
+    SecurityScanCoverageSchema,
+} from './infrastructure/security-scan-coverage.model';
+import {
+    SecurityScanScheduleModel,
+    SecurityScanScheduleSchema,
+} from './infrastructure/security-scan-schedule.model';
+import {
     SECURITY_SCAN_REPOSITORY_TOKEN,
     SecurityScanRepository,
 } from './infrastructure/security-scan.repository';
@@ -25,6 +33,11 @@ import { StartSecurityScanUseCase } from './application/start-security-scan.use-
 import { GetSecurityScansUseCase } from './application/get-security-scans.use-case';
 import { CancelSecurityScanUseCase } from './application/cancel-security-scan.use-case';
 import { DeepScanGate } from './application/deep-scan.gate';
+import { SecurityScanSchedulesUseCase } from './application/security-scan-schedules.use-case';
+import {
+    SECURITY_SCAN_SCHEDULE_REPOSITORY_TOKEN,
+    SecurityScanScheduleRepository,
+} from './infrastructure/security-scan-schedule.repository';
 import {
     SECURITY_SCAN_QUEUE_PROBE_TOKEN,
     SecurityScanQueueProbe,
@@ -34,6 +47,14 @@ import {
     imports: [
         MongooseModule.forFeature([
             { name: SecurityScanModel.name, schema: SecurityScanSchema },
+            {
+                name: SecurityScanCoverageModel.name,
+                schema: SecurityScanCoverageSchema,
+            },
+            {
+                name: SecurityScanScheduleModel.name,
+                schema: SecurityScanScheduleSchema,
+            },
         ]),
         SandboxModule,
         forwardRef(() => PlatformModule),
@@ -66,6 +87,11 @@ import {
         GetSecurityScansUseCase,
         CancelSecurityScanUseCase,
         DeepScanGate,
+        {
+            provide: SECURITY_SCAN_SCHEDULE_REPOSITORY_TOKEN,
+            useClass: SecurityScanScheduleRepository,
+        },
+        SecurityScanSchedulesUseCase,
     ],
     exports: [
         SECURITY_SCAN_REPOSITORY_TOKEN,
@@ -74,6 +100,7 @@ import {
         GetSecurityScansUseCase,
         CancelSecurityScanUseCase,
         DeepScanGate,
+        SecurityScanSchedulesUseCase,
     ],
 })
 export class SecurityScanModule {}

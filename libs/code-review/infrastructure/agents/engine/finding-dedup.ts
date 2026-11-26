@@ -320,6 +320,8 @@ export async function deduplicateFindings(
     prNumber: number,
     resolvedSlot?: NormalizedModel,
     telemetryMeta?: LangfuseTelemetryMetadata,
+    /** Once it fires, no further model call starts. */
+    signal?: AbortSignal,
 ): Promise<{
     suggestions: Partial<CodeSuggestion>[];
     trace: DedupTraceSummary;
@@ -383,6 +385,7 @@ export async function deduplicateFindings(
         // usage span ITSELF — agent.name/phase derived from the 'code-review::
         // dedup' spanName — so the manual recordAgentRunUsage is gone. Returns
         // the parsed dedup object directly.
+        signal?.throwIfAborted();
         const dedupOutput = (await LLM.run({
             byokConfig: resolvedSlot,
             schema: jsonSchema(DEDUP_SCHEMA as any),
@@ -451,6 +454,8 @@ export async function deduplicateFindings(
         // way a failed dedup keeps everything, without degrading the review.
         let followupError: string | undefined;
         if (leftOut.length > 0) {
+            // Outside the try: a stop is not a failed follow-up.
+            signal?.throwIfAborted();
             try {
                 // The same shape recovery as the first answer (#1786): a
                 // wrapped, bare-array or stringified answer still counts,
@@ -699,6 +704,7 @@ export async function deduplicateFindings(
                 // findings actually describe the same thing. A low word-overlap
                 // "duplicate" is a DIFFERENT bug the model over-merged (distinct
                 // issues on overlapping lines) — keep it instead of dropping.
+                signal?.throwIfAborted();
                 const decision = await deps.resolveMerge(
                     suggestions[dupIdx],
                     suggestions[keepIdx],

@@ -1,7 +1,8 @@
 const executeTool = jest.fn();
+const connect = jest.fn().mockResolvedValue(undefined);
 jest.mock('@libs/mcp-server/mcp-adapter', () => ({
     createMCPAdapter: () => ({
-        connect: jest.fn().mockResolvedValue(undefined),
+        connect,
         disconnect: jest.fn().mockResolvedValue(undefined),
         executeTool,
     }),
@@ -11,6 +12,7 @@ import {
     McpToolSession,
     TaskNotFoundError,
     ToolClosedError,
+    TrackerConnectionError,
     TrackerUnavailableError,
 } from './mcp-tool-session';
 
@@ -24,6 +26,24 @@ describe('McpToolSession', () => {
         new McpToolSession({ name: 'tracker', allowedTools: [] } as any, [
             'get_issue',
         ]);
+
+    it('tells a connection that failed apart from one call that failed', async () => {
+        connect.mockRejectedValueOnce(
+            new Error('Failed to connect to any MCP server'),
+        );
+        await expect(
+            session().call('get_issue', { id: 'SAA-9' }),
+        ).rejects.toBeInstanceOf(TrackerConnectionError);
+
+        executeTool.mockResolvedValueOnce(
+            errorResult('503 Service Unavailable'),
+        );
+        const oneCall = await session()
+            .call('get_issue', { id: 'SAA-9' })
+            .catch((error) => error);
+        expect(oneCall).toBeInstanceOf(TrackerUnavailableError);
+        expect(oneCall).not.toBeInstanceOf(TrackerConnectionError);
+    });
 
     it('never reads a tool error as the task', async () => {
         executeTool.mockResolvedValueOnce(errorResult('Issue SAA-9 not found'));

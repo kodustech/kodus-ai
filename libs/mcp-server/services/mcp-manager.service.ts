@@ -484,6 +484,9 @@ export class MCPManagerService {
             provider: connection.provider,
             type: type as TransportType,
             url,
+            // Only the first-party endpoints come from the platform's own
+            // configuration; every other URL is the org's, checked when dialed.
+            trusted: !!firstPartyUrl,
             headers,
             retries: 1,
             timeout: 60_000,

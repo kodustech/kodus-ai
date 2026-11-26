@@ -15,9 +15,16 @@ export const STATUS_ORDER: DoctorStatus[] = [
     'ok',
 ];
 
+/**
+ * A `?` that could hide a ✘ outranks a `!`: "running, degraded" would claim
+ * reviews run, which the doctor could not establish.
+ */
 export function verdictOf(results: DoctorResult[]): ReviewsVerdict {
     if (results.some((r) => r.status === 'fail')) {
         return 'NOT_RUNNING';
+    }
+    if (results.some((r) => r.status === 'unknown' && r.blocking)) {
+        return 'UNVERIFIED';
     }
     if (results.some((r) => r.status === 'warn')) {
         return 'DEGRADED';

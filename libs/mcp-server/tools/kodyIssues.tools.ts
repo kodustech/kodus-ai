@@ -15,7 +15,10 @@ import {
     IIssuesService,
     ISSUES_SERVICE_TOKEN,
 } from '@libs/issues/domain/contracts/issues.service.contract';
-import { IIssue } from '@libs/issues/domain/interfaces/issues.interface';
+import {
+    IIssue,
+    IssueSource,
+} from '@libs/issues/domain/interfaces/issues.interface';
 
 import {
     McpToolDefinition,
@@ -239,6 +242,13 @@ export class KodyIssuesTools {
             repositoryName: z.string().optional(),
             severity: z.enum(SeverityLevel).optional(),
             label: z.enum(LabelType).optional(),
+            source: z
+                .enum(IssueSource)
+                .optional()
+                .describe(
+                    'security_scan: only what a deep scan found; code_review: only what PR reviews found.',
+                ),
+            status: z.enum(IssueStatus).optional(),
         });
 
         type InputType = z.infer<typeof inputSchema>;
@@ -248,7 +258,8 @@ export class KodyIssuesTools {
             annotations: {
                 readOnlyHint: true,
             },
-            description: 'List Kody Issues with optional filters',
+            description:
+                'List Kody Issues with optional filters. A deep scan finding (source security_scan) carries its CWE, attack path, the places it shows (occurrences) and what it depends on; get one by id for all of it.',
             inputSchema,
             outputSchema: z.object({
                 success: z.boolean(),
@@ -261,12 +272,20 @@ export class KodyIssuesTools {
                 // `repository.name`; the authorizer pins `teamId` onto
                 // team-key calls and no issue document carries it, so a spread
                 // filter returned nothing (#2388).
-                const { organizationId, repositoryName, severity, label } =
-                    args;
+                const {
+                    organizationId,
+                    repositoryName,
+                    severity,
+                    label,
+                    source,
+                    status,
+                } = args;
                 const issues = await this.issuesService.findByFilters({
                     organizationId,
                     ...(severity && { severity }),
                     ...(label && { label }),
+                    ...(source && { source }),
+                    ...(status && { status }),
                     ...(repositoryName && {
                         'repository.name': repositoryName,
                     }),

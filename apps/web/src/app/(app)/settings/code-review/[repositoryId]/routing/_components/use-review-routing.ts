@@ -4,6 +4,7 @@ import { useFormContext, useWatch } from "react-hook-form";
 import {
     useCodeReviewConfig,
     useCodeReviewModelData,
+    useFeatureFlags,
 } from "src/app/(app)/settings/_components/context";
 import {
     draftTaskModel,
@@ -14,20 +15,23 @@ import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
 import type { BYOKRouting } from "src/features/ee/byok/_types";
 import { isHeavyModePlan } from "src/features/ee/heavy-mode/plan";
 import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
+import {
+    isUltraReviewPlan,
+    isUltraTrioSet,
+    ultraModelResolver,
+    ultraModelUsable,
+} from "src/features/ee/ultra-review/plan";
 
 import type { CodeReviewFormType } from "../../../_types";
 
-export type Mode = "balanced" | "heavy";
+export type Mode = "balanced" | "heavy" | "ultra";
 export const modeLabel = (mode: Mode) =>
-    mode === "heavy" ? "Heavy" : "Balanced";
+    mode === "ultra" ? "Ultra" : mode === "heavy" ? "Heavy" : "Balanced";
 
-/** The same effective plan fallback and scope override the review uses. */
-export function useReviewRouting(modelDraft?: BYOKRouting) {
-    const { control, getFieldState } = useFormContext<CodeReviewFormType>();
+/** The review modes this page's form holds: edited, else saved. */
+export function useReviewModes() {
+    const { control } = useFormContext<CodeReviewFormType>();
     const config = useCodeReviewConfig();
-    const { llmConfigStatus: status, hasConnectedProvider } =
-        useCodeReviewModelData();
-    const heavyAllowed = isHeavyModePlan(useSubscriptionContext().license);
     const active =
         useWatch({ control, name: "riskAssessmentActive.value" }) ??
         config?.riskAssessmentActive?.value ??
@@ -44,6 +48,44 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
         useWatch({ control, name: "riskReviewRouting.riskFound.value" }) ??
         config?.riskReviewRouting?.riskFound?.value ??
         "heavy";
+    return { active, configuredDefault, noRisk, riskFound };
+}
+
+/**
+ * Whether a review here runs Ultra: the default mode, or a risk route even
+ * with risk assessment off (turning it on would run the route). Other
+ * scopes are checked by the API when the trio is saved.
+ */
+export function useUltraModeInUse(): boolean {
+    const { configuredDefault, noRisk, riskFound } = useReviewModes();
+    return (
+        configuredDefault === "ultra" ||
+        noRisk === "ultra" ||
+        riskFound === "ultra"
+    );
+}
+
+/** The same effective plan fallback and scope override the review uses. */
+export function useReviewRouting(modelDraft?: BYOKRouting) {
+    const { control, getFieldState } = useFormContext<CodeReviewFormType>();
+    const config = useCodeReviewConfig();
+    const { llmConfigStatus: status, hasConnectedProvider } =
+        useCodeReviewModelData();
+    const license = useSubscriptionContext().license;
+    const heavyAllowed = isHeavyModePlan(license);
+    const ultraAllowed = isUltraReviewPlan(license);
+    // In alpha: outside it, Ultra is not offered at all.
+    const ultraEnabled = useFeatureFlags().ultraReview === true;
+    // The trio being edited on this page (cleared included), else the saved.
+    const ultraModelIds = modelDraft
+        ? modelDraft.ultraModelIds
+        : status?.modelRouting?.ultraModelIds;
+    const ultraSet = isUltraTrioSet(
+        ultraModelIds,
+        ultraModelResolver(status?.models),
+        ultraModelUsable(status?.models),
+    );
+    const { active, configuredDefault, noRisk, riskFound } = useReviewModes();
     const selectedScope = useWatch({ control, name: "byokModelId.value" });
     const scopeModel =
         selectedScope !== undefined
@@ -62,9 +104,20 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
             );
         return name ? formatModelLabel(name) : "Kodus default";
     };
+    // Ultra refused at review time runs no review, so it reads as Ultra and
+    // the row says why (page.tsx); heavy refused runs Balanced.
     const effectiveMode = (mode: string): Mode =>
-        mode === "heavy" && heavyAllowed ? "heavy" : "balanced";
+        mode === "ultra"
+            ? "ultra"
+            : mode === "heavy" && heavyAllowed
+              ? "heavy"
+              : "balanced";
     const modelFor = (mode: Mode) => {
+        if (mode === "ultra") {
+            return ultraSet
+                ? `Uses ${ultraModelIds!.map((id) => labelOf(id)).join(", ")}.`
+                : "Set up three Ultra models under Models.";
+        }
         if (modelDraft && status) {
             const id = draftTaskModel(
                 mode === "heavy" ? "codeReviewHeavy" : "codeReview",
@@ -111,9 +164,16 @@ export function useReviewRouting(modelDraft?: BYOKRouting) {
                 status?.modelRouting?.defaultModelId,
         active,
         heavyAllowed,
+        ultraAllowed,
+        ultraEnabled,
+        ultraSet,
         configuredDefault,
         noRisk,
         riskFound,
+        /** A risk route saved on Ultra: shown even with risk assessment off. */
+        ultraRouteSaved:
+            config?.riskReviewRouting?.noRisk?.value === "ultra" ||
+            config?.riskReviewRouting?.riskFound?.value === "ultra",
         effectiveMode,
         modelFor,
         scopeModel,

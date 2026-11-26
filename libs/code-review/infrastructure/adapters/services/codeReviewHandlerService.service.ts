@@ -4,10 +4,13 @@
  */
 
 import type { RequestedReviewMode } from '@libs/code-review/domain/review-mode';
+import type { ReviewCommandAccess } from '@libs/platform/application/services/commenter-access';
+import { ultraReviewRecord } from '@libs/code-review/domain/ultra-review-record';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
+import { reviewErrorsBlockApproval } from '@libs/code-review/domain/approval/review-approval-errors';
 import {
     ForgejoReaction,
     GitHubReaction,
@@ -206,6 +209,8 @@ export class CodeReviewHandlerService {
         requestedReviewMode?: RequestedReviewMode,
         // `@kody -v <slug>` — run only that custom agent (#2172).
         onlyCustomAgent?: string,
+        // Whether the author of a `--heavy` / `--ultra` command can write.
+        requestedReviewModeAccess?: ReviewCommandAccess,
     ) {
         let initialContext: CodeReviewPipelineContext;
 
@@ -214,6 +219,7 @@ export class CodeReviewHandlerService {
                 correlationId,
                 workflowJobId,
                 parentSignal,
+                pipelineStartedAt: Date.now(),
                 statusInfo: {
                     status: AutomationStatus.IN_PROGRESS,
                     message: 'Pipeline started',
@@ -232,6 +238,7 @@ export class CodeReviewHandlerService {
                 userGitId,
                 reviewDirective,
                 requestedReviewMode,
+                requestedReviewModeAccess,
                 ...(onlyCustomAgent ? { onlyCustomAgent } : {}),
                 pipelineMetadata: {
                     lastExecution: {
@@ -264,6 +271,15 @@ export class CodeReviewHandlerService {
             );
 
             const collectedErrors = result.errors || [];
+            // The automation stores this on the execution: the approval cron
+            // reads the status, and this is the part of the pipeline's
+            // decision the status alone cannot carry (#2408).
+            // No errors means no evidence either way: the marker is left off
+            // and the cron keeps its fail-closed reading.
+            const reviewApprovalBlocked =
+                collectedErrors.length > 0
+                    ? reviewErrorsBlockApproval(collectedErrors)
+                    : undefined;
             const hasCriticalError = collectedErrors.some(
                 (e) => (e.severity ?? 'critical') === 'critical',
             );
@@ -367,6 +383,9 @@ export class CodeReviewHandlerService {
                 approvalReviewSummary: result?.approvalReviewSummary,
                 customAgentRiskSkips: result?.customAgentRiskSkips,
                 statusInfo: finalStatus,
+                ...(reviewApprovalBlocked === undefined
+                    ? {}
+                    : { reviewApprovalBlocked }),
                 orphanedBaseCommit: result?.orphanedBaseCommit,
                 businessLogicValidatedAt: result?.businessLogicValidatedAt,
                 licenseNoticePostedAt: result?.licenseNoticePostedAt,
@@ -376,6 +395,7 @@ export class CodeReviewHandlerService {
                 ),
                 linkedRepositoriesMetadata: result?.linkedRepositoriesMetadata,
                 heavy: result?.heavy,
+                ultra: ultraReviewRecord(result?.ultra),
             };
         } catch (error) {
             if (initialContext) {

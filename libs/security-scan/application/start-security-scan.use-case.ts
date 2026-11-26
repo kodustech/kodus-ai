@@ -1,6 +1,8 @@
 import {
     BadRequestException,
     ConflictException,
+    HttpException,
+    HttpStatus,
     Inject,
     Injectable,
     NotFoundException,
@@ -31,6 +33,8 @@ import {
 } from '@libs/issues/domain/scan-fingerprint';
 
 import { validateBudget } from '../domain/budget-meter';
+import { boundedEnvInt } from '../domain/env-limits';
+import type { SecurityScanMode } from '../domain/coverage-ledger';
 import type { VulnClass } from '../domain/surface/surface.types';
 import { resolveScanModel, SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
 import { STALE_SCAN_AFTER } from './get-security-scans.use-case';
@@ -67,7 +71,19 @@ export interface StartSecurityScanInput {
     repositoryId: string;
     budget: SecurityScanBudget;
     requestedBy?: { userId?: string; email?: string };
+    /**
+     * `incremental` (the default) reads only what changed since an earlier
+     * scan's conclusions, or was never read; `full` reads everything again.
+     */
+    mode?: SecurityScanMode;
+    /** A model of the organization's BYOK config to run this scan on. */
+    modelId?: string;
+    /** The schedule starting it, when one does. */
+    scheduleId?: string;
 }
+
+export const SCAN_MODEL_NOT_FOUND_MESSAGE =
+    'The model picked for this scan is not in your AI providers any more. Pick another, or leave it to the Deep scan routing.';
 
 export const DEFAULT_BRANCH_UNREADABLE_MESSAGE =
     "Could not read the repository's default branch from its Git provider. Try again in a moment.";
@@ -77,6 +93,16 @@ export const NO_DEFAULT_BRANCH_MESSAGE =
 
 export const NO_CODE_INTEGRATION_MESSAGE =
     'This team has no active code management integration to scan the repository through.';
+
+/** Scans one organization may have queued or running at once. */
+export const MAX_ACTIVE_SCANS_PER_ORGANIZATION = boundedEnvInt(
+    'API_SECURITY_SCAN_MAX_ACTIVE_PER_ORG',
+    3,
+    1,
+    100,
+);
+
+export const TOO_MANY_ACTIVE_SCANS_MESSAGE = `This organization already has ${MAX_ACTIVE_SCANS_PER_ORGANIZATION} deep scans queued or running. Start this one when one of them finishes, or schedule it.`;
 
 export const SCAN_QUEUE_UNAVAILABLE_MESSAGE =
     'The deep scan worker is not taking jobs right now. Try again in a moment.';
@@ -98,60 +124,59 @@ export class StartSecurityScanUseCase {
         private readonly queueProbe: ISecurityScanQueueProbe,
     ) {}
 
-    /** Open to every plan, free included, while the scan is in beta (#2451). */
-    async execute(input: StartSecurityScanInput): Promise<SecurityScanRecord> {
-        const orgTeam = input.organizationAndTeamData;
-
-        const repositories =
-            (await this.integrationConfigService.findIntegrationConfigFormatted<
-                ConfiguredRepository[]
-            >(IntegrationConfigKey.REPOSITORIES, orgTeam)) ?? [];
-        const repository = repositories.find(
-            (r) => String(r.id) === String(input.repositoryId),
-        );
-        if (!repository) {
-            throw new NotFoundException(
-                'This repository is not connected to the team.',
-            );
-        }
-
+    /**
+     * The model a scan runs on and its rates, refused as a start would refuse
+     * it: no BYOK model, a picked model that is gone, or a limit the model
+     * cannot be held to (USD for a model without a known price). A schedule
+     * checks this when saved, so its runs do not fail on it later.
+     */
+    async scanModelFor(
+        orgTeam: OrganizationAndTeamData,
+        budget: SecurityScanBudget,
+        modelId?: string,
+    ) {
         const { model, rates } = await resolveScanModel({
             organizationAndTeamData: orgTeam,
             permissionValidationService: this.permissionValidationService,
             pricingResolver: this.pricingResolver,
             pricingOverrides: (await this.spendLimitConfig.getConfig(orgTeam))
                 ?.modelPricing,
+            modelId,
         });
         if (!model.slot) {
             throw new BadRequestException(SCAN_NEEDS_BYOK_MESSAGE);
         }
-        const budgetError = validateBudget(input.budget, !!rates);
+        // A picked model that is gone resolves to the routing's: said, not
+        // silently run on another model.
+        if (modelId && model.slot.byokModelId !== modelId) {
+            throw new BadRequestException(SCAN_MODEL_NOT_FOUND_MESSAGE);
+        }
+        const budgetError = validateBudget(budget, !!rates);
         if (budgetError) {
             throw new BadRequestException(budgetError);
         }
+        return { model, rates };
+    }
 
-        // A failed lookup throws (a 5xx, worth retrying); only a confirmed
-        // absence is the caller's to fix.
-        const platform =
-            await this.codeManagementService.findTypeIntegration(orgTeam);
-        // The platform is half the repository's identity (an id is only
-        // unique on it): without an active integration there is no knowing
-        // which repository this is, nor a way to clone it.
-        if (!platform) {
-            throw new BadRequestException(NO_CODE_INTEGRATION_MESSAGE);
-        }
-        const repositoryKey = {
-            platform: String(platform),
-            host: repositoryHost(repository.http_url),
-            id: String(repository.id),
-        };
-        // Read access uses this same complete identity. Queuing a hostless
-        // scan would spend the team's BYOK budget on a record it cannot see.
-        if (!repositoryKey.host) {
-            throw new BadRequestException(
-                'The repository has no readable Git host. Reconnect it before starting a security scan.',
-            );
-        }
+    /** Open to every plan, free included, while the scan is in beta (#2451). */
+    async execute(input: StartSecurityScanInput): Promise<SecurityScanRecord> {
+        const orgTeam = input.organizationAndTeamData;
+
+        const repository = await this.configuredRepository(
+            orgTeam,
+            input.repositoryId,
+        );
+
+        const { model, rates } = await this.scanModelFor(
+            orgTeam,
+            input.budget,
+            input.modelId,
+        );
+
+        const { platform, repositoryKey } = await this.keyOf(
+            orgTeam,
+            repository,
+        );
 
         await this.assertQueueAvailable();
 
@@ -163,11 +188,28 @@ export class StartSecurityScanUseCase {
         if (active) {
             throw new ConflictException(ALREADY_RUNNING);
         }
+        // One organization's scans take a bounded share of the scan workers.
+        if (
+            (await this.scans.countActive(orgTeam.organizationId)) >=
+            MAX_ACTIVE_SCANS_PER_ORGANIZATION
+        ) {
+            throw new HttpException(
+                TOO_MANY_ACTIVE_SCANS_MESSAGE,
+                HttpStatus.TOO_MANY_REQUESTS,
+            );
+        }
 
-        const resumed = await this.resumablePlan(
-            orgTeam.organizationId,
-            repositoryKey,
-        );
+        // A scan asked to read everything again, or one on another model,
+        // starts its own plan: carrying on would keep the areas the last
+        // scan's model already concluded.
+        const resumed =
+            input.mode === 'full'
+                ? null
+                : await this.resumablePlan(
+                      orgTeam.organizationId,
+                      repositoryKey,
+                      model.modelName,
+                  );
         const fullName =
             repository.full_name ||
             (repository.name.includes('/')
@@ -232,6 +274,9 @@ export class StartSecurityScanUseCase {
                     reported: resumed.reported,
                 }),
                 modelName: model.modelName,
+                ...(input.modelId ? { modelId: input.modelId } : {}),
+                mode: input.mode ?? 'incremental',
+                ...(input.scheduleId ? { scheduleId: input.scheduleId } : {}),
                 requestedBy: input.requestedBy,
             })
             .catch(async (error) => {
@@ -249,6 +294,29 @@ export class StartSecurityScanUseCase {
                 }
                 throw error;
             });
+
+        // Starts of two repositories can pass the count above together: the
+        // oldest scans keep their share, a later one gives its place back.
+        if (
+            !(
+                await this.scans.findOldestActiveIds(
+                    orgTeam.organizationId,
+                    MAX_ACTIVE_SCANS_PER_ORGANIZATION,
+                )
+            ).includes(scan.uuid)
+        ) {
+            await this.scans
+                .update(scan.uuid, {
+                    status: SecurityScanStatus.FAILED,
+                    error: TOO_MANY_ACTIVE_SCANS_MESSAGE,
+                    finishedAt: new Date().toISOString(),
+                })
+                .catch(() => undefined);
+            throw new HttpException(
+                TOO_MANY_ACTIVE_SCANS_MESSAGE,
+                HttpStatus.TOO_MANY_REQUESTS,
+            );
+        }
 
         try {
             await this.jobQueue.enqueue({
@@ -279,6 +347,69 @@ export class StartSecurityScanUseCase {
         }
 
         return scan;
+    }
+
+    /**
+     * The identity a scan of this team's repository is stored under (its
+     * platform, instance and id), or the reason it cannot be scanned.
+     */
+    async repositoryKeyOf(
+        orgTeam: OrganizationAndTeamData,
+        repositoryId: string,
+    ): Promise<ScanRepositoryKey> {
+        const repository = await this.configuredRepository(
+            orgTeam,
+            repositoryId,
+        );
+        return (await this.keyOf(orgTeam, repository)).repositoryKey;
+    }
+
+    private async configuredRepository(
+        orgTeam: OrganizationAndTeamData,
+        repositoryId: string,
+    ): Promise<ConfiguredRepository> {
+        const repositories =
+            (await this.integrationConfigService.findIntegrationConfigFormatted<
+                ConfiguredRepository[]
+            >(IntegrationConfigKey.REPOSITORIES, orgTeam)) ?? [];
+        const repository = repositories.find(
+            (r) => String(r.id) === String(repositoryId),
+        );
+        if (!repository) {
+            throw new NotFoundException(
+                'This repository is not connected to the team.',
+            );
+        }
+        return repository;
+    }
+
+    private async keyOf(
+        orgTeam: OrganizationAndTeamData,
+        repository: ConfiguredRepository,
+    ) {
+        // A failed lookup throws (a 5xx, worth retrying); only a confirmed
+        // absence is the caller's to fix.
+        const platform =
+            await this.codeManagementService.findTypeIntegration(orgTeam);
+        // The platform is half the repository's identity (an id is only
+        // unique on it): without an active integration there is no knowing
+        // which repository this is, nor a way to clone it.
+        if (!platform) {
+            throw new BadRequestException(NO_CODE_INTEGRATION_MESSAGE);
+        }
+        const repositoryKey = {
+            platform: String(platform),
+            host: repositoryHost(repository.http_url),
+            id: String(repository.id),
+        };
+        // Read access uses this same complete identity. Queuing a hostless
+        // scan would spend the team's BYOK budget on a record it cannot see.
+        if (!repositoryKey.host) {
+            throw new BadRequestException(
+                'The repository has no readable Git host. Reconnect it before starting a security scan.',
+            );
+        }
+        return { platform, repositoryKey };
     }
 
     /**
@@ -318,6 +449,7 @@ export class StartSecurityScanUseCase {
     private async resumablePlan(
         organizationId: string,
         repository: ScanRepositoryKey,
+        modelName: string,
     ): Promise<Pick<
         SecurityScanRecord,
         'units' | 'progress' | 'coverage' | 'planCommitSha' | 'reported'
@@ -332,6 +464,11 @@ export class StartSecurityScanUseCase {
             (last?.status === SecurityScanStatus.COMPLETED &&
                 (last.progress ?? []).some((p) => p.state === 'failed'));
         if (!last?.units?.length || !unfinished) {
+            return null;
+        }
+        // `provider:model`, as the scan resolved it: a plan made on another
+        // model, or on one not recorded, is not carried on.
+        if (last.modelName !== modelName) {
             return null;
         }
         // Areas that failed (a provider outage) run again, with the rest.
@@ -378,13 +515,41 @@ export class StartSecurityScanUseCase {
                 );
             }
         }
+        // A unit the limit stopped halfway keeps the lenses that ended: this
+        // scan runs only the rest of it, never pays for those again.
+        // Only lenses read to the end are carried; one cut short runs again.
+        const halfway = (last.progress ?? [])
+            .filter(
+                (p) =>
+                    (p.state === 'skipped_budget' || p.state === 'pending') &&
+                    !!p.lensesExamined?.length,
+            )
+            .map((p) => {
+                const read = [
+                    ...new Set([
+                        ...(p.lensesInherited ?? []),
+                        ...(p.lensesExamined ?? []),
+                    ]),
+                ];
+                return {
+                    unitId: p.unitId,
+                    state: 'pending' as const,
+                    findings: 0,
+                    lensesRun: read,
+                    lensesExamined: [],
+                    lensesInherited: read,
+                };
+            });
         return {
             units: last.units,
             // Done, but not read by this scan: what they examined is
             // inherited below, never a miss of this scan's own.
-            progress: progress.map(
-                ({ examinedByClass: _carried, ...carried }) => carried,
-            ),
+            progress: [
+                ...progress.map(
+                    ({ examinedByClass: _carried, ...carried }) => carried,
+                ),
+                ...halfway,
+            ],
             planCommitSha,
             reported,
             coverage: {

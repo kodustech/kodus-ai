@@ -133,4 +133,4 @@ async function scanRepository({ c, route, pricing, budgetUsd, sandbox: sandboxKi
     }
 }
 
-module.exports = { pricingResolver, scanRepository };
+module.exports = { pricingResolver, scanRepository, openSandbox };
