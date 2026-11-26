@@ -3,6 +3,8 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Pool } from 'pg';
 
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
+
 import { loadFleetApplyConfig, loadFleetConfig } from '../shared/config';
 import { RuntimeLogger } from '../shared/observability/logger';
 import { setupRuntimeOtel } from '../shared/observability/otel';
@@ -16,7 +18,7 @@ async function bootstrap() {
     const config = loadFleetConfig();
     const logger = new RuntimeLogger('runtime-fleet');
     const shutdownOtel = await setupRuntimeOtel({ serviceName: 'runtime-fleet', serviceVersion: config.releaseVersion }, config.metricsPort);
-    const app = await NestFactory.createApplicationContext(RuntimeFleetModule.forConfig(config), { logger });
+    const app = await NestFactory.createApplicationContext(RuntimeFleetModule.forConfig(config), { ...NEST_APP_OPTIONS, logger });
     app.enableShutdownHooks();
     await app.init();
     process.once('SIGTERM', () => void shutdownOtel());

@@ -2,6 +2,8 @@ import 'reflect-metadata';
 
 import { NestFactory } from '@nestjs/core';
 
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
+
 import { loadWorkerConfig } from '../shared/config';
 import { RuntimeLogger } from '../shared/observability/logger';
 import { setupRuntimeOtel } from '../shared/observability/otel';
@@ -12,7 +14,7 @@ async function bootstrap() {
     const config = loadWorkerConfig();
     const logger = new RuntimeLogger('runtime-worker');
     const shutdownOtel = await setupRuntimeOtel({ serviceName: 'runtime-worker', serviceVersion: config.releaseVersion }, config.metricsPort);
-    const app = await NestFactory.createApplicationContext(RuntimeWorkerModule.forConfig(config), { logger });
+    const app = await NestFactory.createApplicationContext(RuntimeWorkerModule.forConfig(config), { ...NEST_APP_OPTIONS, logger });
     app.enableShutdownHooks();
     await app.init();
     logger.write('info', 'runtime-worker consuming workflow.jobs.runtime_run.queue');

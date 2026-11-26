@@ -1,7 +1,11 @@
 import { OtelPoolSchedulerMetrics, POOL_SCHEDULER_TICK_METRIC, RuntimePoolSchedulerCron, type PoolSchedulerTickOutcome } from './runtime-pool-scheduler.cron';
 
-const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
-jest.mock('@libs/core/log/logger', () => ({ createLogger: () => logger }));
+// Built inside the factory: cron-run-gate creates its logger while the import above loads, before this file's own consts exist.
+jest.mock('@libs/core/log/logger', () => {
+    const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
+    return { createLogger: () => logger };
+});
+const logger = jest.requireMock<{ createLogger: () => Record<'log' | 'warn' | 'error' | 'debug', jest.Mock> }>('@libs/core/log/logger').createLogger();
 
 function setup(opts: { tick?: () => Promise<any>; acquire?: () => Promise<any> } = {}) {
     const release = jest.fn().mockResolvedValue(undefined);

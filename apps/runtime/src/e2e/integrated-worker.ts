@@ -2,6 +2,7 @@
 import 'reflect-metadata';
 import { DBOS } from '@dbos-inc/dbos-sdk';
 import { NestFactory } from '@nestjs/core';
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
 import { createServer, request as proxyRequest } from 'http';
 import { createServer as createTlsServer } from 'https';
 import { readFileSync } from 'fs';
@@ -20,7 +21,7 @@ async function main() {
         throw new Error('owned manifest/executor required');
     const app = await NestFactory.createApplicationContext(
         RuntimeWorkerModule.forConfig(loadWorkerConfig()),
-        { logger: ['error', 'warn', 'log'] },
+        { ...NEST_APP_OPTIONS, logger: ['error', 'warn', 'log'] },
     );
     app.enableShutdownHooks();
     await app.init();

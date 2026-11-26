@@ -5,6 +5,8 @@ import type { INestApplication, LoggerService } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { json, urlencoded } from 'express';
 
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
+
 import type { RuntimeConfig } from '../shared/config';
 import { RuntimeLogger } from '../shared/observability/logger';
 import { RuntimeHubModule } from './runtime-hub.module';
@@ -25,7 +27,7 @@ export async function createRuntimeHubApp(config: RuntimeConfig, logger: LoggerS
     const httpsOptions = tls?.cert && tls.key ? { cert: tls.cert, key: tls.key, ca: tls.ca, requestCert: true, rejectUnauthorized: false, minVersion: 'TLSv1.3' as const } : undefined;
     // Bodies are parsed here, not by Nest's defaults: a sandbox write (half a MiB of
     // base64, docs/runtime/sandbox.md) is the one route that takes more than 100 kB.
-    const app = await NestFactory.create(RuntimeHubModule, { logger, httpsOptions, bodyParser: false });
+    const app = await NestFactory.create(RuntimeHubModule, { ...NEST_APP_OPTIONS, logger, httpsOptions, bodyParser: false });
     const small = [json({ limit: '100kb' }), urlencoded({ extended: true, limit: '100kb' })];
     const sandboxOp = json({ limit: '1mb' });
     app.use((req: IncomingMessage, res: ServerResponse, next: (e?: unknown) => void) => {
