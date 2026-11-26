@@ -595,6 +595,30 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
         expect(vmEnv.API_LLM_BASE_URL).toBeUndefined();
     });
 
+    it('a caller setting both keys keeps its generic key over the legacy one', () => {
+        // Kody on #2700: the generic name outranks the legacy one when the
+        // caller set both, with a value of its own.
+        const box = sandbox();
+        writeConfig(box, [
+            'API_LLM_PROVIDER=openai_compatible',
+            'API_LLM_PROVIDER_MODEL=kimi-k2.6',
+            'API_LLM_API_KEY=sk-fake-moonshot',
+            'API_LLM_BASE_URL=https://api.moonshot.ai/v1',
+        ]);
+        const vmEnv = vmLlmEnv(box, {
+            API_LLM_API_KEY: 'fw-fake-generic',
+            API_OPEN_AI_API_KEY: 'fw-fake-legacy',
+            API_OPENAI_FORCE_BASE_URL: 'https://api.fireworks.ai/inference/v1',
+        });
+        const declared = resolveDeclaredEnvProvider(vmEnv);
+        expect(declared.kind === 'declared' && declared.config).toEqual({
+            provider: 'openai_compatible',
+            apiKey: 'fw-fake-generic',
+            baseURL: 'https://api.fireworks.ai/inference/v1',
+            model: 'kimi-k2.6',
+        });
+    });
+
     it('a config with no key of its own keeps its endpoint for the caller key', () => {
         // Kody on #2700: no config key was dropped, so nothing pairs the
         // endpoint with anything else; openai_compatible needs it to run.
