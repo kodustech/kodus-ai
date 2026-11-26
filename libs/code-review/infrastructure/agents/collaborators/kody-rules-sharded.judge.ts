@@ -382,7 +382,7 @@ export type RunJudge = (args: {
  */
 export const SHARD_CONCURRENCY_DEFAULT = 4;
 
-/** Terminal provider failures (see isTerminalCategory) before the rest are skipped. */
+/** Terminal provider failures in a row, of one kind (see isTerminalCategory), before the rest are skipped. */
 export const TERMINAL_FAILURES_TO_STOP = 2;
 
 export interface ShardedJudgeInput {
@@ -1490,16 +1490,23 @@ export async function judgeKodyRulesSharded(
     // (a spent cap, a revoked key, a model it does not serve). Every shard
     // calls the same model, so the rest would fail the same way: up to
     // hundreds of calls per review, 14k shard failures in one day (Nov 2026).
-    // Once TERMINAL_FAILURES_TO_STOP shards fail like that, the remaining
-    // ones count as failed without a call; the provider reports the run the
-    // same way it reports any failed shard.
-    let terminalFailures = 0;
+    // After TERMINAL_FAILURES_TO_STOP such failures in a row, of the same
+    // kind, the remaining shards count as failed without a call; the provider
+    // reports the run the way it reports any failed shard. In a row: one
+    // request refused on its content (some gateways answer that with a 403)
+    // must not end a review whose other shards go through.
+    let terminalStreak = 0;
+    let streakCategory: string | undefined;
     let stoppedFor: string | undefined;
     const stopAfterTerminal = (err: unknown): void => {
         const category = classifyLLMError(err).category;
-        if (!isTerminalCategory(category)) return;
-        terminalFailures++;
-        if (!stoppedFor && terminalFailures >= TERMINAL_FAILURES_TO_STOP) {
+        if (!isTerminalCategory(category)) {
+            terminalStreak = 0;
+            return;
+        }
+        terminalStreak = category === streakCategory ? terminalStreak + 1 : 1;
+        streakCategory = category;
+        if (!stoppedFor && terminalStreak >= TERMINAL_FAILURES_TO_STOP) {
             // Reported to the caller, which logs it with the review's ids.
             stoppedFor = category;
         }
@@ -1596,6 +1603,7 @@ export async function judgeKodyRulesSharded(
                 });
                 // resolve ruleId→uuid (dropping hallucinated indices), then
                 // anchor every violation to this file
+                terminalStreak = 0;
                 const resolved = resolveShardViolations(vs, ruleUuids);
                 const proposing = resolved.filter(proposesAChange);
                 if (proposing.length < resolved.length) {

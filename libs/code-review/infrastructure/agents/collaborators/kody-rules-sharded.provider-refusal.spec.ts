@@ -89,4 +89,72 @@ describe('judgeKodyRulesSharded — stops calling a provider that refused the re
 
         expect(runJudge).toHaveBeenCalledTimes(files.length);
     });
+
+    it('does not stop for one refused request between successful ones', async () => {
+        // A gateway that refuses one request on its content answers 403.
+        let call = 0;
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            async () => {
+                call++;
+                if (call === 1 || call === 3) throw refusal(403, 'Forbidden');
+                return [];
+            },
+        );
+
+        const res = await judgeKodyRulesSharded({
+            changedFiles: files,
+            rules,
+            runJudge,
+            concurrency: 1,
+        });
+
+        expect(runJudge).toHaveBeenCalledTimes(20);
+        expect(res.shardsErrored).toBe(2);
+        expect(res.providerRefusal).toBeUndefined();
+    });
+
+    it('does not add up two different kinds of terminal failure', async () => {
+        let call = 0;
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            async () => {
+                call++;
+                if (call === 1) throw refusal(401, 'Incorrect API key provided');
+                if (call === 2) throw refusal(404, 'model not found');
+                return [];
+            },
+        );
+
+        const res = await judgeKodyRulesSharded({
+            changedFiles: files,
+            rules,
+            runJudge,
+            concurrency: 1,
+        });
+
+        expect(runJudge).toHaveBeenCalledTimes(20);
+        expect(res.providerRefusal).toBeUndefined();
+    });
+
+    it('stops when the provider starts refusing in the middle of a review', async () => {
+        let call = 0;
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            async () => {
+                call++;
+                if (call <= 5) return [];
+                throw refusal(429, 'Your project has exceeded its monthly spending cap.');
+            },
+        );
+
+        const res = await judgeKodyRulesSharded({
+            changedFiles: files,
+            rules,
+            runJudge,
+            concurrency: 1,
+        });
+
+        expect(runJudge).toHaveBeenCalledTimes(7);
+        expect(res.shardsRun).toBe(20);
+        expect(res.shardsErrored).toBe(15);
+        expect(res.providerRefusal).toBe('QUOTA_EXCEEDED');
+    });
 });
