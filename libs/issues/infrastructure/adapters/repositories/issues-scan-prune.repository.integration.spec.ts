@@ -407,5 +407,40 @@ const TEST_DB = 'issues_scan_prune_it';
             expect(after.occurrences).toEqual([]);
             expect(after.severity).toBe('medium');
         });
+
+        it('keeps a place the scan found again through the issue that holds it', async () => {
+            await model.collection.insertMany([
+                issue('i-1', 'org-1', [
+                    { ...place('src/a.ts', 'authz'), severity: 'critical' },
+                    place('src/b.ts', 'authz'),
+                ]),
+                // Another organization's place under the same identity.
+                issue('i-2', 'org-2', [place('src/a.ts', 'authz')]),
+            ] as any[]);
+
+            // The dedup dropped the fresh finding at src/a.ts as a repeat of
+            // i-1, and reported its own identity found again.
+            await issues.markScanFindingsSeen({
+                organizationId: 'org-1',
+                repositoryPlatform: PlatformType.GITHUB,
+                repositoryHost: 'github.com',
+                repositoryId: 'repo-1',
+                fingerprints: ['fp-src/a.ts-authz'],
+                scanId: 'scan-3',
+                foundAgain: true,
+            });
+            await scan('scan-3', '2026-11-25T00:00:00.000Z', [
+                {
+                    vulnerabilityClass: 'authz',
+                    filePaths: ['src/a.ts', 'src/b.ts'],
+                },
+            ]);
+
+            expect(await placesOf('i-1')).toEqual(['src/a.ts#authz']);
+            const other = (await model.collection.findOne({
+                _id: 'i-2',
+            } as any)) as any;
+            expect(other.occurrences[0].lastSeenScanId).toBe('scan-1');
+        });
     },
 );

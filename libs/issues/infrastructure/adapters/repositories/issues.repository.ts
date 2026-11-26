@@ -776,6 +776,28 @@ export class IssuesRepository implements IIssuesRepository {
                 },
             },
         );
+        // A place an issue lists under one of these identities (found again,
+        // but dropped as a repeat of the issue that holds it): that place is
+        // seen, so this scan does not prune it. The issue itself is marked
+        // through its own identity, if at all.
+        const fingerprints = [...new Set(params.fingerprints)];
+        await this.issuesModel.updateMany(
+            {
+                'organizationId': params.organizationId,
+                'repository.platform': params.repositoryPlatform,
+                'repository.host': params.repositoryHost,
+                'repository.id': params.repositoryId,
+                'source': IssueSource.SECURITY_SCAN,
+                'occurrences.fingerprint': { $in: fingerprints },
+            },
+            {
+                $set: {
+                    'occurrences.$[o].lastSeenScanId': params.scanId,
+                    'occurrences.$[o].lastSeenAt': now,
+                },
+            },
+            { arrayFilters: [{ 'o.fingerprint': { $in: fingerprints } }] },
+        );
         // Found again after a scan resolved it: back open. A dismissed one
         // stays dismissed, as on a stored sighting.
         const reopened = params.foundAgain

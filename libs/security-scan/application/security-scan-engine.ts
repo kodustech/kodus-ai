@@ -554,6 +554,7 @@ export class SecurityScanEngine {
             (k) => k.fingerprint && !ours.has(k.fingerprint),
         );
         this.known = new Set(known);
+        this.identify = params.identify;
         const findings: ScanFinding[] = [];
         const refuted: RefutedFinding[] = [];
         const examined = new Set<string>();
@@ -614,6 +615,9 @@ export class SecurityScanEngine {
                 result.sighted = [...(result.sighted ?? [])];
                 result.findings = result.findings.filter((f) => {
                     const repeats = duplicatesOf(reportedSoFar, f);
+                    if (repeats.length) {
+                        this.sightOwnPlace(f, result.sighted!);
+                    }
                     if (this.refreshes(f, repeats, result.sighted!)) {
                         return true;
                     }
@@ -692,6 +696,7 @@ export class SecurityScanEngine {
             const sighted = [...(result.sighted ?? [])];
             const fresh = result.findings.filter((f) => {
                 const repeats = duplicatesOf(reported, f);
+                if (repeats.length) this.sightOwnPlace(f, sighted);
                 if (this.refreshes(f, repeats, sighted)) return true;
                 sighted.push(...repeats);
                 return !repeats.length;
@@ -865,6 +870,34 @@ export class SecurityScanEngine {
 
     /** This run's open issues of earlier scans (SecurityScanEngineParams.known). */
     private known: ReadonlySet<ScanReportedFinding> = new Set();
+
+    /** This run's finding identity (SecurityScanEngineParams.identify). */
+    private identify?: (finding: ScanFinding) => string;
+
+    /**
+     * A fresh finding kept off as a repeat (dropped, or stored as the issue
+     * it repeats) is found again under its own identity too: an issue that
+     * lists it as one of its places marks that place seen, or the place
+     * would be pruned by the scan that just found it.
+     */
+    private sightOwnPlace(
+        finding: ScanFinding,
+        sighted: ScanReportedFinding[],
+    ): void {
+        const fingerprint = this.identify?.(finding);
+        if (!fingerprint) return;
+        sighted.push({
+            vulnerabilityClass: finding.vulnerabilityClass,
+            cwe: finding.cwe,
+            title: finding.title,
+            description: finding.description,
+            severity: finding.severity,
+            filePath: finding.filePath,
+            startLine: finding.startLine,
+            endLine: finding.endLine,
+            fingerprint,
+        });
+    }
 
     /**
      * A fresh finding that repeats only open issues of earlier scans is
@@ -1433,6 +1466,8 @@ export class SecurityScanEngine {
                         (repeats.length && !this.mayRefresh(finding, repeats))
                     ) {
                         sighted.push(...repeats);
+                        if (repeats.length)
+                            this.sightOwnPlace(finding, sighted);
                         continue;
                     }
                     // Only what would be reported takes the independent
@@ -1479,6 +1514,7 @@ export class SecurityScanEngine {
                     if (verdict.assumption) {
                         finding.assumption = verdict.assumption;
                     }
+                    if (repeats.length) this.sightOwnPlace(finding, sighted);
                     if (
                         !repeats.length ||
                         this.refreshes(finding, repeats, sighted)

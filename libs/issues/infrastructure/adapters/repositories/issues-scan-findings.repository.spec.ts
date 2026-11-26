@@ -811,7 +811,7 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
 
         expect(result).toEqual({ sighted: 2, reopened: 0 });
         // Not found again: a resolved one stays resolved.
-        expect(updateMany).toHaveBeenCalledTimes(1);
+        expect(updateMany).toHaveBeenCalledTimes(2);
         const [filter, update] = updateMany.mock.calls[0] as unknown as [
             any,
             any,
@@ -824,12 +824,31 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
         });
         expect(update.$set.lastSeenScanId).toBe('scan-2');
         expect(typeof update.$set.lastSeenAt).toBe('string');
+        // A place an issue lists under one of them is seen too, not the
+        // issue holding it.
+        const [placeFilter, placeUpdate, placeOptions] = updateMany.mock
+            .calls[1] as unknown as [any, any, any];
+        const { fingerprint: _own, ...repositoryScope } = identity;
+        expect(placeFilter).toEqual({
+            ...repositoryScope,
+            'occurrences.fingerprint': { $in: ['fp-1', 'fp-2'] },
+        });
+        expect(placeUpdate).toEqual({
+            $set: {
+                'occurrences.$[o].lastSeenScanId': 'scan-2',
+                'occurrences.$[o].lastSeenAt': update.$set.lastSeenAt,
+            },
+        });
+        expect(placeOptions).toEqual({
+            arrayFilters: [{ 'o.fingerprint': { $in: ['fp-1', 'fp-2'] } }],
+        });
     });
 
     it('reopens a resolved one the scan found again, never a dismissed one', async () => {
         const updateMany = jest
             .fn()
             .mockResolvedValueOnce({ modifiedCount: 1 })
+            .mockResolvedValueOnce({ modifiedCount: 0 })
             .mockResolvedValueOnce({ modifiedCount: 1 });
         const repository = new IssuesRepository({ updateMany } as any);
 
@@ -841,7 +860,7 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
         });
 
         expect(result).toEqual({ sighted: 1, reopened: 1 });
-        const [filter, update] = updateMany.mock.calls[1] as unknown as [
+        const [filter, update] = updateMany.mock.calls[2] as unknown as [
             any,
             any,
         ];
