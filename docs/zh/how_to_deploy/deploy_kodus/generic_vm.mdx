@@ -108,6 +108,8 @@ API_DATABASE_DISABLE_SSL=true                 # disable SSL for local DBs
 
 API 支持 `DATABASE_URL` 和 `MONGODB_URI`。使用安装程序时，仍需设置 `API_PG_DB_PASSWORD` 和 `API_MG_DB_PASSWORD`。安装程序要求这两个值，Compose 也仍会启动内置容器。
 
+通过 PgBouncer 或其他连接池访问 PostgreSQL,或使用高可用集群?请参阅[连接池后面的 PostgreSQL](/zh/how_to_deploy/deploy_kodus/postgres_pooler)。
+
 ### RabbitMQ 配置
 
 RabbitMQ 是必需的。请保持 URI 与用户、密码和虚拟主机同步。

@@ -1,13 +1,40 @@
-import { BeforeApplicationShutdown, Injectable } from '@nestjs/common';
+import {
+    BeforeApplicationShutdown,
+    Injectable,
+    OnModuleInit,
+} from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { CronTime } from 'cron';
 
 import { createLogger } from '@libs/core/log/logger';
+import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-with-bounded-timeout';
 
 /** How long shutdown waits for the cron runs in progress. */
 export const CRON_SHUTDOWN_BUDGET_MS = 10_000;
 
+/** Longest a tick stays claimed; replicas fire within seconds of each other. */
+export const MAX_TICK_HOLD_MS = 60 * 60 * 1000;
+
 type CronOptions = Parameters<typeof Cron>[1];
+
+/**
+ * Takes the tick of `cron` for `holdMs` across every process: a handle when
+ * this process got it, null when another one did. Throws when the claim
+ * cannot be made.
+ */
+export type TickClaim = (
+    cron: string,
+    holdMs: number,
+) => Promise<{ release(): Promise<unknown> } | null>;
+
+/** The tick a scheduled method claims before it runs. */
+interface Tick {
+    cron: string;
+    holdMs: number;
+}
+
+const logger = createLogger('CronRunGate');
 
 /**
  * Keeps cron runs from outliving the database on shutdown.
@@ -25,17 +52,70 @@ export class CronRunGate {
     // than one run can be in flight at shutdown.
     private readonly inFlight = new Set<Promise<unknown>>();
     private stopped: Promise<number> | null = null;
+    private claim: TickClaim | null = null;
 
-    async run<T>(work: () => Promise<T>): Promise<T | undefined> {
+    /**
+     * Makes each tick run in one process only. Without it (specs, scripts)
+     * every tick runs.
+     */
+    claimTicksWith(claim: TickClaim | null): void {
+        this.claim = claim;
+    }
+
+    async run<T>(work: () => Promise<T>, tick?: Tick): Promise<T | undefined> {
         if (this.stopping) {
             return undefined;
         }
-        const running = work();
+        // The claim counts as part of the run, so shutdown waits for it too.
+        const running =
+            tick && this.claim
+                ? this.claimThenRun(this.claim, tick, work)
+                : work();
         this.inFlight.add(running);
         try {
             return await running;
         } finally {
             this.inFlight.delete(running);
+        }
+    }
+
+    private async claimThenRun<T>(
+        claim: TickClaim,
+        tick: Tick,
+        work: () => Promise<T>,
+    ): Promise<T | undefined> {
+        const claimed = await this.claimed(claim, tick);
+        if (!claimed.won) {
+            return undefined;
+        }
+        // Shutdown may have begun while the claim was in flight. Hand the
+        // tick back unrun, so a replica that fires it later still runs it.
+        if (this.stopping) {
+            await claimed.release?.().catch(() => undefined);
+            return undefined;
+        }
+        return work();
+    }
+
+    private async claimed(
+        claim: TickClaim,
+        tick: Tick,
+    ): Promise<{ won: boolean; release?: () => Promise<unknown> }> {
+        try {
+            const handle = await claim(tick.cron, tick.holdMs);
+            return handle
+                ? { won: true, release: () => handle.release() }
+                : { won: false };
+        } catch (error) {
+            // Every replica ran every tick before claims; the cron's own
+            // lock still keeps two runs from overlapping.
+            logger.warn({
+                message: 'Could not claim the cron tick — running it anyway',
+                context: CronRunGate.name,
+                error: error instanceof Error ? error : undefined,
+                metadata: { cron: tick.cron },
+            });
+            return { won: true };
         }
     }
 
@@ -67,9 +147,38 @@ export class CronRunGate {
 export const cronRunGate = new CronRunGate();
 
 /**
- * `@Cron` whose runs go through `gate`: no new run once shutdown began, and
- * shutdown waits for the runs in progress. Use `@GatedCron`; this form takes
- * the gate so a spec can bring its own.
+ * How long a tick stays claimed: half the shortest gap between ticks, so the
+ * next tick is free again, and at most MAX_TICK_HOLD_MS. A replica whose
+ * tick fires later than that (event loop blocked longer) runs it again.
+ * Null for a one-off date, which needs no claim.
+ */
+export function tickHoldMs(
+    cronTime: Parameters<typeof Cron>[0],
+): number | null {
+    if (typeof cronTime !== 'string') {
+        return null;
+    }
+    let next: number[];
+    try {
+        // The gaps are the same in every time zone but across a DST
+        // change, which only shortens a daily gap by an hour.
+        next = new CronTime(cronTime, 'UTC')
+            .sendAt(6)
+            .map((at) => at.toMillis());
+    } catch {
+        // Nest rejects the expression when it registers the cron, with a
+        // better error than this one.
+        return null;
+    }
+    const gap = Math.min(...next.slice(1).map((at, i) => at - next[i]));
+    return Math.min(Math.floor(gap / 2), MAX_TICK_HOLD_MS);
+}
+
+/**
+ * `@Cron` whose runs go through `gate`: one process per tick when the gate
+ * claims ticks, no new run once shutdown began, and shutdown waits for the
+ * runs in progress. Use `@GatedCron`; this form takes the gate so a spec can
+ * bring its own.
  */
 export function gatedCron(
     gate: CronRunGate,
@@ -78,8 +187,17 @@ export function gatedCron(
 ): MethodDecorator {
     return (target, key, descriptor: PropertyDescriptor) => {
         const original = descriptor.value as (...args: unknown[]) => unknown;
+        const holdMs = tickHoldMs(cronTime);
+        // Class and method: the same in every replica, unique per cron.
+        const tick =
+            holdMs === null
+                ? undefined
+                : {
+                      cron: `${target.constructor.name}.${String(key)}`,
+                      holdMs,
+                  };
         descriptor.value = function (this: unknown, ...args: unknown[]) {
-            return gate.run(async () => original.apply(this, args));
+            return gate.run(async () => original.apply(this, args), tick);
         };
         Object.defineProperty(descriptor.value, 'name', {
             value: original.name,
@@ -91,7 +209,10 @@ export function gatedCron(
     };
 }
 
-/** `@Cron` that shutdown waits for. Every cron in the repository uses it. */
+/**
+ * `@Cron` that runs once per tick across replicas and that shutdown waits
+ * for. Every cron in the repository uses it.
+ */
 export function GatedCron(
     cronTime: Parameters<typeof Cron>[0],
     options?: CronOptions,
@@ -100,12 +221,24 @@ export function GatedCron(
 }
 
 /**
- * Stops the @GatedCron runs before the database closes. Provided once, by
- * NotificationModule, which every app imports.
+ * Claims @GatedCron ticks on the lease table, and stops the runs before the
+ * database closes. Provided once, by NotificationModule, which every app
+ * imports.
  */
 @Injectable()
-export class CronShutdownService implements BeforeApplicationShutdown {
+export class CronShutdownService
+    implements OnModuleInit, BeforeApplicationShutdown
+{
     private readonly logger = createLogger(CronShutdownService.name);
+
+    constructor(private readonly locks: DistributedLockService) {}
+
+    onModuleInit(): void {
+        // Before onApplicationBootstrap, where Nest starts the crons.
+        cronRunGate.claimTicksWith((cron, holdMs) =>
+            this.locks.claim(`CRON_TICK:${cron}`, holdMs),
+        );
+    }
 
     async beforeApplicationShutdown(): Promise<void> {
         const stillRunning = await cronRunGate.stop();

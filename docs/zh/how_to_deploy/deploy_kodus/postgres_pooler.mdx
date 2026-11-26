@@ -1,0 +1,233 @@
+---
+title: "连接池后面的 PostgreSQL"
+description: "在 PostgreSQL 前面使用 PgBouncer 或其他连接池运行 Kodus,包括高可用集群。"
+icon: "database"
+---
+
+Kodus 支持通过 PgBouncer 等连接池访问 PostgreSQL,池模式可以是 **session 或
+transaction**。每次变更时,CI 都会通过 transaction 模式的 PgBouncer 1.26 运行
+Kodus 的协调锁以及 api 与 worker 之间的事件桥。
+
+本页介绍连接池需要的配置、Kodus 使用的两个连接,以及如何检查结果。
+
+## 两个连接
+
+| 连接 | 变量 | 用途 | 能否指向连接池? |
+| --- | --- | --- | --- |
+| 池化连接 | `API_PG_DB_HOST`、`API_PG_DB_PORT`(或 `DATABASE_URL`) | api、worker 和 webhooks 执行的所有查询 | 可以 |
+| 直连 | `API_PG_DB_DIRECT_HOST`、`API_PG_DB_DIRECT_PORT`(或 `DATABASE_DIRECT_URL`) | 数据库迁移,以及把实时事件从 worker 传到 api 的 LISTEN 连接 | **不可以**:必须直达 PostgreSQL 本身 |
+
+直连复用 `API_PG_DB_USERNAME`、`API_PG_DB_PASSWORD` 和 `API_PG_DB_DATABASE`,
+通常只需要改主机。未设置时,Kodus 与没有连接池时一样,全部使用池化连接。
+
+为什么在 transaction 模式下需要直连:
+
+- **实时事件。** LISTEN 需要一直保持打开的会话。在 transaction 模式的连接池后面,
+  它能连上,但永远收不到任何通知。此时 UI 中的评审状态和合并后的规则同步会改为通过
+  轮询到达,最多延迟 10 秒。
+- **迁移。** 部分迁移会先修改会话的 statement timeout,再用 `CREATE INDEX
+  CONCURRENTLY` 创建索引。在 transaction 模式下,这两条语句可能落在不同的服务器会话上。
+
+## 配置 PgBouncer
+
+```ini
+[pgbouncer]
+pool_mode = transaction
+; Kodus sets these two limits on each connection (PgBouncer 1.20 or later).
+; Without this line PgBouncer refuses every Kodus connection with
+; "unsupported startup parameter: statement_timeout".
+track_extra_parameters = statement_timeout,idle_in_transaction_session_timeout
+; Each Kodus process opens its own pool (api 30, webhooks 30, worker 60
+; by default, plus up to 6 for internal events). Budget for every replica.
+max_client_conn = 1000
+default_pool_size = 40
+```
+
+如果连接池无法跟踪这些参数(较旧的 PgBouncer,或无法配置的托管连接池),请在 Kodus
+侧关闭它们,并在数据库角色上设置等效的限制:
+
+```bash
+DB_STATEMENT_TIMEOUT_MS=0
+DB_IDLE_IN_TRANSACTION_TIMEOUT_MS=0
+```
+
+```sql
+ALTER ROLE kodusdev IN DATABASE kodus_db SET statement_timeout = '30s';
+ALTER ROLE kodusdev IN DATABASE kodus_db SET idle_in_transaction_session_timeout = '60s';
+```
+
+## 配置 Kodus
+
+在 **api、worker、worker-analytics、webhooks** 以及执行迁移的组件
+(`RUN_MIGRATIONS=true`)上设置:
+
+```bash
+API_PG_DB_HOST=pgbouncer.internal          # the pooler
+API_PG_DB_PORT=6432
+API_PG_DB_DIRECT_HOST=postgres-primary.internal   # PostgreSQL itself
+API_PG_DB_DIRECT_PORT=5432
+```
+
+使用连接字符串时:
+
+```bash
+DATABASE_URL=postgres://kodusdev:...@pgbouncer.internal:6432/kodus_db
+DATABASE_DIRECT_URL=postgres://kodusdev:...@postgres-primary.internal:5432/kodus_db
+```
+
+## 通过安装器启用
+
+`kodus-installer` 为每种运行 Kodus 的方式接好连接池，并替你填好上面的配置。
+
+设置直连后，Kodus 的协调锁也会从会话锁改为数据库中的行。仍在没有直连配置下运行的
+Pod 看不到新的锁，因此请在旧 Pod 停止的情况下启用连接池：先运行
+`docker compose down`，或在 `helm upgrade` 之前把 api、worker 和 webhooks 的
+Deployment 缩容到 0。
+
+### Docker Compose
+
+`pgbouncer` profile 会在内置 PostgreSQL 前启动 transaction 模式的 PgBouncer
+1.26，并已设置 `track_extra_parameters`。在 `.env` 中让 Kodus 指向它，直连仍然
+使用 PostgreSQL：
+
+```bash
+API_PG_DB_HOST=db_kodus_pgbouncer
+API_PG_DB_PORT=5432
+API_PG_DB_DIRECT_HOST=db_kodus_postgres
+```
+
+```bash
+COMPOSE_PROFILES=pgbouncer docker compose up -d
+```
+
+如果使用你自己的连接池，把 上文“配置 Kodus” 中的四个变量设为你的主机，
+不要启用该 profile。
+
+### Helm（CloudNativePG operator）
+
+在 `postgres.mode: operator` 下设置 `postgres.operator.pooler.enabled: true`，
+会在 `<release>-postgres-rw` 前创建 CloudNativePG `Pooler`。应用连接
+`<release>-postgres-pooler-rw`；迁移和 LISTEN 仍使用 `<release>-postgres-rw`。
+chart 总会在你设置的 `parameters` 之外加上 `track_extra_parameters`。
+
+```yaml
+postgres:
+  mode: operator
+  operator:
+    image: <cnpg-image-with-pgvector>
+    pooler:
+      enabled: true
+      poolMode: transaction   # or session
+      instances: 2
+      parameters:
+        max_client_conn: "1000"
+        default_pool_size: "40"
+```
+
+`poolMode` 可选 `transaction`（默认）或 `session`。`max_client_conn` 要按
+`autoscaling.maxReplicas` 时所有 api、worker 和 webhooks 副本来估算。
+
+### Helm（你自己的连接池）
+
+在 `postgres.mode: external` 下，把 `host`/`port` 指向连接池，
+`directHost`/`directPort` 指向 PostgreSQL。直连需要连接字符串时，使用
+`directUrlKey`（见下一节）。
+
+```yaml
+postgres:
+  mode: external
+  external:
+    host: pgbouncer.internal
+    port: 6432
+    directHost: postgres-primary.internal
+    directPort: 5432
+    existingSecret: kodus-postgres
+```
+
+`postgres.mode: bundled` 没有连接池。要在连接池后运行 Kodus，请使用 `operator`
+或 `external`。
+
+## 你自己的 PgBouncer 或托管连接池
+
+如果 PostgreSQL 和连接池已经在你这边运行，无论使用 Docker Compose 还是 Helm
+chart，只需让 Kodus 指向它们。请对照下表检查你的配置：
+
+| 你的配置 | 处理方式 |
+| --- | --- |
+| 池模式 `session` | 无需直连即可工作。Kodus 的每个连接在打开期间占用一个服务器连接，因此池的大小要容纳所有副本上的全部 Kodus 连接池 |
+| 池模式 `transaction` | 配置直连（见上文） |
+| 池模式 `statement` | 不支持：Kodus 会执行包含多条语句的事务 |
+| 连接池以另一个名称暴露数据库，或 Kodus 使用另一个用户登录 | 直连的主机形式会复用 `API_PG_DB_DATABASE` 和 `API_PG_DB_USERNAME`，而它们在 PostgreSQL 上并不存在。请用真实值设置 `DATABASE_DIRECT_URL` |
+| Kodus 能访问连接池，但访问不到 PostgreSQL | 在同一个 PgBouncer 上添加一个 session 模式的条目，并将其用作直连（见下文） |
+| PgBouncer 早于 1.20，或托管连接池无法设置 `track_extra_parameters` | 将两个超时设为 `0`，改在数据库角色上设置（见上文） |
+| 连接池与 PostgreSQL 的 TLS 不同 | 在 `DATABASE_DIRECT_URL` 中为直连单独指定 `sslmode`（见下文） |
+
+**只能访问连接池时。** PgBouncer 可以在 transaction 模式条目旁再放一个 session 模式条目。
+Kodus 用它执行迁移，并为每个进程保持一个长时间的 LISTEN 连接，因此一个小池就足够：
+
+```ini
+[databases]
+kodus = host=postgres-primary.internal dbname=kodus_db pool_mode=transaction
+kodus_session = host=postgres-primary.internal dbname=kodus_db pool_mode=session
+```
+
+```bash
+API_PG_DB_HOST=pgbouncer.internal
+API_PG_DB_PORT=6432
+API_PG_DB_DATABASE=kodus
+DATABASE_DIRECT_URL=postgres://kodusdev:...@pgbouncer.internal:6432/kodus_session
+```
+
+**TLS。** `API_DATABASE_DISABLE_SSL` 作用于所有连接。当连接池使用明文 TCP 而 PostgreSQL
+要求 TLS（或相反）时，保持经由连接池的配置不变，并在 `DATABASE_DIRECT_URL` 中写入
+`sslmode`：该连接以 URL 中的 `sslmode` 为准。Kodus 使用的 PostgreSQL 驱动会把
+`sslmode=require` 和 `sslmode=prefer` 当作 `verify-full`，因此服务器证书必须通过验证
+（用 `NODE_EXTRA_CA_CERTS` 添加你的 CA）。用 `sslmode=no-verify` 加密但不校验证书，
+用 `sslmode=disable` 使用明文 TCP。
+
+**Helm chart。** 在 `external` 模式下，把直连字符串放进
+`postgres.external.existingSecret` 指定的 Secret，并在
+`postgres.external.directUrlKey` 中填写其键名。所有 Kodus Pod 和迁移 Job 都会以
+`DATABASE_DIRECT_URL` 接收它。
+
+## 高可用 PostgreSQL
+
+Kodus 每个连接只连一个主机,不接受主机列表或 `target_session_attrs`。请让两个连接都
+指向始终通往**当前主库**的端点:虚拟 IP、带 Patroni 健康检查的 HAProxy、CloudNativePG
+的 `-rw` 服务,或跟随主库的 PgBouncer。Kodus 的所有组件都会写入,因此不使用只读副本。
+
+故障切换期间,正在执行的查询会失败,连接池会在下一次请求时重新连接。使用连接池时,协调锁是
+数据库中的行,因此会随数据一起在故障切换后保留;不使用连接池时它们是会话锁,在与旧主库的会话
+断开时释放。
+
+## 检查配置
+
+在 `kodus-installer` 目录运行 doctor:`./scripts/doctor.sh`,Kubernetes 上使用
+`./scripts/doctor-k8s.sh -n <namespace>`(参见
+[Troubleshooting](/zh/how_to_deploy/deploy_kodus/troubleshooting))。与本页相关的是这两行:
+
+- `database.locks`:Kodus 能获取协调锁。失败通常表示迁移尚未运行。
+- `database.listen`:api 与 worker 之间的实时事件能够到达。警告表示 LISTEN 连接经过了
+  transaction 模式的连接池;请配置直连。
+
+api 连接后也会在日志中记录结果:
+
+```text
+Cross-process LISTEN verified: notifications reach this process
+```
+
+事件无法到达时:
+
+```text
+Cross-process LISTEN is connected but notifications never arrive. ...
+```
+
+## 配置参考
+
+| 变量 | 默认值 | 作用 |
+| --- | --- | --- |
+| `API_PG_DB_DIRECT_HOST` | 未设置 | 用于迁移和 LISTEN 的 PostgreSQL 主机。未设置时使用池化连接的主机 |
+| `API_PG_DB_DIRECT_PORT` | `5432` | 直连主机的端口 |
+| `DATABASE_DIRECT_URL` | 未设置 | 完整的直连连接字符串,优先于主机形式 |
+| `DB_STATEMENT_TIMEOUT_MS` | `30000` | 单条语句的最长执行时间。`0` 表示 Kodus 不发送该参数 |
+| `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` | `60000` | 事务空闲的最长时间。`0` 表示 Kodus 不发送该参数 |

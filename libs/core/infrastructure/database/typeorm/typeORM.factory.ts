@@ -7,6 +7,7 @@ import { TypeOrmModuleOptions, TypeOrmOptionsFactory } from '@nestjs/typeorm';
 import { DatabaseConnection } from '@libs/core/infrastructure/config/types';
 
 import { TypeOrmCustomLogger } from './logger';
+import { resolveSessionTimeouts } from './postgres-connection-env';
 
 import { ENTITIES } from './entities';
 
@@ -104,12 +105,14 @@ export class TypeORMFactory implements TypeOrmOptionsFactory {
                 // is no legitimate HTTP request on this pool that needs a
                 // longer DB query — LLM/agent work runs in the worker and
                 // via its own long-lived clients).
-                statement_timeout: 30000,
                 // 60s cap on idle-in-transaction. A transaction left open
                 // by a crashed handler used to hold row locks + a pool
                 // slot until the RDS `idle_in_transaction_session_timeout`
                 // (10min) kicked in — that's a full pool lifetime lost.
-                idle_in_transaction_session_timeout: 60000,
+                // Both are startup parameters: DB_STATEMENT_TIMEOUT_MS /
+                // DB_IDLE_IN_TRANSACTION_TIMEOUT_MS = 0 leaves them out for
+                // a pooler that refuses them (postgres-connection-env.ts).
+                ...resolveSessionTimeouts(),
                 // Tags every connection this pool opens in `pg_stat_activity`
                 // so incident triage can bucket by process type ("who is
                 // holding those 20 slots?") without guessing.
