@@ -520,8 +520,11 @@ func ownerFile(cert string) string { return filepath.Join(filepath.Dir(cert), "o
 // as the hub answered it over the verified TLS connection.
 func boundKeyFile(cert string) string { return filepath.Join(filepath.Dir(cert), "bound-key") }
 
-// fleetBoundKey matches the keys a fleet host is bound to and captures the org.
-var fleetBoundKey = regexp.MustCompile(`^(?:run|template):([^/\s:]{1,128})/[^/\s]{1,128}$`)
+// fleetBoundKey matches the keys a fleet host is bound to and captures the org:
+// run:<org>/<run>, template:<org>/<env>, and a suite shard's
+// suite:<org>/<suiteRun>/<shard> (the listing, each shard, the fresh and main
+// re-run hosts), which starts from the environment template like a Run host.
+var fleetBoundKey = regexp.MustCompile(`^(?:(?:run|template):([^/\s:]{1,128})/[^/\s]{1,128}|suite:([^/\s:]{1,128})/[^/\s]{1,128}/[0-9]{1,4})$`)
 
 // bakeAdoptOrg is the org whose bake a host made from a template may adopt,
 // or "" (nothing is adopted). Only a fleet host (its seal unit is installed,
@@ -542,7 +545,10 @@ func bakeAdoptOrg(sealUnit, cert, owner string) string {
 	if m == nil {
 		return ""
 	}
-	return m[1]
+	if m[1] != "" {
+		return m[1]
+	}
+	return m[2]
 }
 
 // enrolledOwner is the owner cell register wrote, or kodus (a managed cell,

@@ -657,7 +657,10 @@ the disk, which any disk copy carries, but from three checks the cell makes agai
    --fleet-bootstrap`) is present and the cell is owned by Kodus (enrolled with a `kcf_` token). A self-hosted or
    static cell never adopts: it moves a catalog of another cell aside.
 2. **Only the org the hub bound the host to.** `/cells/register` answers a fleet host with its token's `boundKey`
-   (`run:<org>/<run>` or `template:<org>/<env>`), over the TLS the cell verified against the hub CA. `cell register
+   (`run:<org>/<run>`, `template:<org>/<env>`, or a suite shard's `suite:<org>/<suiteRun>/<shard>`), over the TLS the
+   cell verified against the hub CA. A suite host was left out of the pattern at first: every spec listing and shard
+   quarantined the template's catalog as `foreign_cell` and built the environment cold (5 to 17 minutes before its first
+   spec, against seconds from the bake). `cell register
    -bootstrap` writes it next to the certificate (`bound-key`), replacing or removing any file the template left. The
    org is parsed from it.
 3. **Every generation is checked as before**, against the owner's id (ids, names, labels, volumes), and the generations
