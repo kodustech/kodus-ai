@@ -24,6 +24,7 @@ export const DEFAULT_SYNC_SKILL_NAMES = [
     'kodus-cockpit-usage',
     'kodus-custom-agents',
     'kodus-review-settings',
+    'kodus-runtime-setup',
 ] as const;
 
 const LEGACY_BUSINESS_RULES_NAME = 'business-rules-validation';

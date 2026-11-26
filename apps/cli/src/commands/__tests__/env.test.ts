@@ -52,9 +52,10 @@ const rpc = (structuredContent: unknown, isError = false) => ({
 describe('kodus env', () => {
     beforeEach(() => vi.clearAllMocks());
 
-    it('registers status and fix', () => {
+    it('registers status, fix and recipe', () => {
         expect(envCommand.commands.map((c) => c.name()).sort()).toEqual([
             'fix',
+            'recipe',
             'status',
         ]);
         const fix = envCommand.commands.find((c) => c.name() === 'fix')!;

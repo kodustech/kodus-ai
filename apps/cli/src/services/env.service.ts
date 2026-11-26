@@ -1,6 +1,10 @@
 import type {
     EnvBlockerGroup,
     EnvFixResult,
+    EnvHealth,
+    EnvRecipeCheck,
+    EnvRecipeInput,
+    EnvRecipeSubmit,
     EnvStatus,
     EnvTarget,
 } from '../types/env.js';
@@ -97,7 +101,37 @@ export class EnvService {
     ): Promise<EnvFixResult> {
         return this.callTool<EnvFixResult>('env_fix', compact(target));
     }
+
+    /** env_status: the state and which setup it reads (setupKey). */
+    health(target: EnvTarget): Promise<EnvHealth> {
+        return this.callTool<EnvHealth>('env_status', compact(target));
+    }
+
+    /** env_recipe_check: what Kodus would refuse in the recipe; keeps nothing. */
+    checkRecipe(input: EnvRecipeInput): Promise<EnvRecipeCheck> {
+        return this.callTool<EnvRecipeCheck>(
+            'env_recipe_check',
+            recipeArgs(input),
+        );
+    }
+
+    /** env_recipe_submit: Kodus keeps the recipe and sets the environment up from it. */
+    submitRecipe(input: EnvRecipeInput): Promise<EnvRecipeSubmit> {
+        return this.callTool<EnvRecipeSubmit>(
+            'env_recipe_submit',
+            recipeArgs(input),
+        );
+    }
 }
+
+const recipeArgs = (input: EnvRecipeInput) => ({
+    ...compact({
+        environmentId: input.environmentId,
+        repositoryId: input.repositoryId,
+    }),
+    recipe: input.recipe,
+    ...(input.files?.length ? { files: input.files } : {}),
+});
 
 const compact = (o: Record<string, unknown>) =>
     Object.fromEntries(
@@ -105,7 +139,9 @@ const compact = (o: Record<string, unknown>) =>
     );
 
 function parseText(text?: string): Record<string, unknown> | undefined {
-    if (!text) return undefined;
+    if (!text) {
+        return undefined;
+    }
     try {
         return JSON.parse(text);
     } catch {
