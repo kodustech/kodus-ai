@@ -64,11 +64,18 @@ __from_config() {
     [ -n "${!var+x}" ] && [ "${!snap_var}" = "__SET__${!var}" ] && eval "$snap_var="
     return 0
 }
-__from_config API_OPEN_AI_API_KEY       __snap_API_OPEN_AI_API_KEY
 __from_config API_OPENAI_FORCE_BASE_URL __snap_API_OPENAI_FORCE_BASE_URL
 __from_config API_LLM_PROVIDER          __snap_API_LLM_PROVIDER
 __from_config API_LLM_API_KEY           __snap_API_LLM_API_KEY
 __from_config API_LLM_BASE_URL          __snap_API_LLM_BASE_URL
+# The config's API_OPEN_AI_API_KEY is the embeddings key, an OpenAI key: a
+# caller moving the LLM to OpenAI passes that same key, beside a provider or
+# endpoint of its own. There it is the caller's; only without one is an equal
+# key the config's.
+case "$__snap_API_OPENAI_FORCE_BASE_URL$__snap_API_LLM_BASE_URL$__snap_API_LLM_PROVIDER" in
+    *__SET__*) ;;
+    *) __from_config API_OPEN_AI_API_KEY __snap_API_OPEN_AI_API_KEY ;;
+esac
 
 # Restore caller's pre-existing values on top (caller wins).
 __restore_if_set() {

@@ -870,12 +870,9 @@ export async function repairAndValidate<T = unknown>(
     const validate =
         typeof schema.validate === 'function' ? schema.validate : null;
     const candidate = extractJsonFromText(rawText);
-    // The primary parsed as JSON and failed the schema: an answer attempt.
-    let primaryParsed = false;
     if (candidate != null) {
         const value = parseLenient(candidate);
         if (value !== undefined) {
-            primaryParsed = true;
             if (!validate) {
                 return value as T;
             }
@@ -900,16 +897,24 @@ export async function repairAndValidate<T = unknown>(
     // or not: code with `{ b() }` in it made a primary candidate that failed,
     // and without this the `Empty would be {…}` after it beat the answer
     // before it.
-    const fenced = /```(?:json)?\s*[\s\S]*?```/i.test(stripped);
+    const fence = /```([\w+-]*)\s*([\s\S]*?)```/.exec(stripped);
+    // Only a quote of code lets the object before it stand alone. A fence the
+    // model tagged ```json, or an untagged one whose body opens on a bracket,
+    // is its own answer, invalid: taking the object before it would ship the
+    // prompt's example instead. Judged on the fence itself, not on a span the
+    // extractor slices from inside it: `request.args["id"]` in a ```python
+    // quote has a span that parses, and it is still code.
+    const fenceTag = fence?.[1].toLowerCase();
+    const fenceIsJson =
+        fence !== null &&
+        (fenceTag === 'json' ||
+            (fenceTag === '' && /^[{[]/.test(fence[2].trim())));
     return firstValidatingObjectAfter<T>(
         stripped,
         validate,
         primarySpanEnd(stripped),
-        candidate == null || fenced,
-        // Only a quote of code lets the object before it stand alone. A fence
-        // that parses is the model's own answer, invalid: taking the object
-        // before it would ship the prompt's example instead (review on #2700).
-        opts.lastChance === true && !(fenced && primaryParsed),
+        candidate == null || fence !== null,
+        opts.lastChance === true && !fenceIsJson,
     );
 }
 

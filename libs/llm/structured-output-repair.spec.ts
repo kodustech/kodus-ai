@@ -1866,6 +1866,62 @@ describe('repairAndValidate: review on #2700', () => {
         ).resolves.toEqual(JSON.parse(example));
     });
 
+    it('last chance: a quoted code fence with a parseable bracket in it is still a quote', async () => {
+        // Round 3: the answer, then the offending line quoted in a fence of
+        // code whose first bracket span happens to parse as JSON.
+        const strict = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    reasoning: { type: 'string' },
+                    suggestions: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                ruleId: { type: 'string' },
+                                line: { type: 'integer' },
+                            },
+                            required: ['ruleId', 'line'],
+                        },
+                    },
+                },
+                required: ['reasoning', 'suggestions'],
+            } as any),
+        );
+        const answer =
+            '{"reasoning":"found","suggestions":[{"ruleId":"r1","line":42}]}';
+        const quotes = [
+            '```python\nuser_id = request.args["id"]\n```',
+            '```ts\nconst retries = [100, 200];\n```',
+            '```ts\nconst first = items[0];\n```',
+            '```ts\nconst opts = {};\nrun(opts);\n```',
+        ];
+        for (const quote of quotes) {
+            await expect(
+                repairAndValidate(strict, `${answer}\n\nThe line:\n${quote}`, {
+                    lastChance: true,
+                }),
+            ).resolves.toEqual(JSON.parse(answer));
+        }
+        // A fence whose body is JSON is the model's answer, even when it does
+        // not parse cleanly: the object before it is still not taken.
+        const example =
+            '{"reasoning":"Checked all rules, no violations found","suggestions":[]}';
+        const answers = [
+            '```json\n[{"ruleId":"r1","line":42},]\n```',
+            '```json\n// the violation\n{"reasoning":"found","suggestions":[{"ruleId":"r1","line":"42"}]}\n```',
+            '```\n{"reasoning":"found","suggestions":[{"ruleId":"r1","line":"42"}]}\n```',
+        ];
+        for (const fence of answers) {
+            await expect(
+                repairAndValidate(strict, `If no violations: ${example}\n\n${fence}`, {
+                    lastChance: true,
+                }),
+            ).resolves.toBeUndefined();
+        }
+    });
+
     it('prose quoting many unclosed diff lines before a long reply still finds the answer', async () => {
         const quoted = Array.from(
             { length: 20 },

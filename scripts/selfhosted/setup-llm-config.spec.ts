@@ -564,6 +564,29 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
         expect(vmEnv.API_LLM_BASE_URL).toBeUndefined();
     });
 
+    it('a caller moving the LLM to OpenAI with the embeddings key gets that key, not the config one', () => {
+        // Review, PR #2700 round 3: the key equals the config's embeddings
+        // key, and it is still the caller's, beside a provider it declared.
+        const box = sandbox();
+        writeConfig(box, [
+            'API_LLM_PROVIDER=openai_compatible',
+            'API_LLM_PROVIDER_MODEL=kimi-k2.6',
+            'API_LLM_API_KEY=sk-fake-moonshot',
+            'API_LLM_BASE_URL=https://api.moonshot.ai/v1',
+            'API_OPEN_AI_API_KEY=sk-proj-embed',
+        ]);
+        const vmEnv = vmLlmEnv(box, {
+            API_OPEN_AI_API_KEY: 'sk-proj-embed',
+            API_LLM_PROVIDER: 'openai',
+            API_LLM_PROVIDER_MODEL: 'gpt-6-sol',
+        });
+        const declared = resolveDeclaredEnvProvider(vmEnv);
+        expect(declared.kind === 'declared' && declared.config).toMatchObject({
+            apiKey: 'sk-proj-embed',
+        });
+        expect(vmEnv.API_LLM_BASE_URL).toBeUndefined();
+    });
+
     it('a config with no key of its own keeps its endpoint for the caller key', () => {
         // Kody on #2700: no config key was dropped, so nothing pairs the
         // endpoint with anything else; openai_compatible needs it to run.
@@ -671,6 +694,30 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
                 );
             },
         );
+
+        it('run.sh trio on OpenAI with the embeddings key: the LLM moves to OpenAI with it', () => {
+            // Review, PR #2700 round 3: E2E_LLM_API_KEY is the same OpenAI
+            // key the config keeps for embeddings.
+            const box = sandbox();
+            writeConfig(box, [
+                ...configs.moonshot,
+                'API_OPEN_AI_API_KEY=sk-proj-embed',
+            ]);
+            const vmEnv = vmLlmEnv(box, {
+                ...exported(configs.moonshot),
+                API_OPEN_AI_API_KEY: 'sk-proj-embed',
+                API_LLM_PROVIDER: 'openai',
+                API_OPENAI_FORCE_BASE_URL: 'https://api.openai.com/v1',
+                API_LLM_PROVIDER_MODEL: 'gpt-6-sol',
+            });
+            const declared = resolveDeclaredEnvProvider(vmEnv);
+            expect(
+                declared.kind === 'declared' && declared.config,
+            ).toMatchObject({
+                apiKey: 'sk-proj-embed',
+                baseURL: 'https://api.openai.com/v1',
+            });
+        });
 
         it('under direnv, overriding only the embeddings key keeps the configured LLM key', () => {
             const box = sandbox();
