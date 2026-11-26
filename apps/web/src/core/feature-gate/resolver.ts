@@ -2,7 +2,7 @@ import {
     evaluateCatalogGate,
     isBetaFeaturesEnabled,
 } from "@libs/feature-gate/domain/decision";
-import { FEATURE_KEYS } from "@libs/feature-gate/domain/feature-keys";
+import { isReleaseTrackOnlyFeature } from "@libs/feature-gate/domain/feature-keys";
 import type { ReleaseTrack } from "@libs/feature-gate/domain/release-track";
 import { PostHog } from "posthog-node";
 import { auth } from "src/core/config/auth";
@@ -63,12 +63,12 @@ export const isFeatureEnabled = async ({
     try {
         const entry = findFeature(feature);
         const selfHosted = process.env.WEB_NODE_ENV === "self-hosted";
-        const releaseTrackBeta = feature === FEATURE_KEYS.conditionalPrApproval;
+        const releaseTrackOnly = isReleaseTrackOnlyFeature(feature);
         const decision = evaluateCatalogGate({
             entry,
             audience: selfHosted ? "self-hosted" : "cloud",
             track:
-                entry?.stage === "beta" && !releaseTrackBeta
+                entry?.stage === "beta" && !releaseTrackOnly
                     ? "beta"
                     : releaseTrack,
             // Self-hosted beta stays behind BETA_FEATURES whatever the
@@ -83,7 +83,7 @@ export const isFeatureEnabled = async ({
 
         if (decision === "deny") return false;
         if (selfHosted) return true;
-        if (entry?.stage === "beta" && releaseTrackBeta) return true;
+        if (entry && releaseTrackOnly) return true;
 
         // Keep the existing cloud behavior when PostHog is unconfigured.
         const posthog = getPostHog();
