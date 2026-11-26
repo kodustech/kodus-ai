@@ -6,11 +6,24 @@ jest.mock('@libs/core/log/logger', () => ({
 
 describe('TeamMemberService — Git connection access', () => {
     const build = () => {
+        const runner = { query: jest.fn() };
+        // Runs `alsoWithin` the way the repository runs it inside the insert.
         const repo = {
-            create: jest.fn(async (member: unknown) => member),
+            create: jest.fn(
+                async (
+                    member: unknown,
+                    options?: { alsoWithin?: (r: unknown) => Promise<void> },
+                ) => {
+                    await options?.alsoWithin?.(runner);
+                    return member;
+                },
+            ),
         };
         const connectionAccess = {
-            grantWorkspaceConnections: jest.fn().mockResolvedValue(undefined),
+            grantWorkspaceConnectionsWithin: jest
+                .fn()
+                .mockResolvedValue(undefined),
+            forgetUsers: jest.fn(),
         };
         const service = new TeamMemberService(
             repo as any,
@@ -18,11 +31,11 @@ describe('TeamMemberService — Git connection access', () => {
             {} as any,
             connectionAccess as any,
         );
-        return { service, repo, connectionAccess };
+        return { service, repo, connectionAccess, runner };
     };
 
-    it('grants a member joining a workspace that workspace’s Git connections', async () => {
-        const { service, connectionAccess } = build();
+    it("grants a member joining a workspace that workspace's Git connections inside the member's insert", async () => {
+        const { service, connectionAccess, runner } = build();
 
         await service.create({
             user: { uuid: 'user-1' },
@@ -30,19 +43,28 @@ describe('TeamMemberService — Git connection access', () => {
             organization: { uuid: 'org-1' },
         } as any);
 
-        expect(connectionAccess.grantWorkspaceConnections).toHaveBeenCalledWith(
-            'user-1',
-            'team-1',
+        expect(
+            connectionAccess.grantWorkspaceConnectionsWithin.mock.calls,
+        ).toEqual([[runner, 'user-1', 'team-1']]);
+        expect(connectionAccess.forgetUsers.mock.calls).toEqual([[['user-1']]]);
+        expect(
+            connectionAccess.forgetUsers.mock.invocationCallOrder[0],
+        ).toBeGreaterThan(
+            connectionAccess.grantWorkspaceConnectionsWithin.mock
+                .invocationCallOrder[0],
         );
     });
 
     it('grants nothing for a member row without a user', async () => {
-        const { service, connectionAccess } = build();
+        const { service, repo, connectionAccess } = build();
 
         await service.create({ team: { uuid: 'team-1' } } as any);
 
+        expect(repo.create.mock.calls).toEqual([
+            [{ team: { uuid: 'team-1' } }],
+        ]);
         expect(
-            connectionAccess.grantWorkspaceConnections,
+            connectionAccess.grantWorkspaceConnectionsWithin,
         ).not.toHaveBeenCalled();
     });
 });

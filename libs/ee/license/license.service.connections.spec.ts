@@ -157,7 +157,14 @@ describe('LicenseService per Git connection', () => {
         const { service, get } = makeService();
         get.mockResolvedValue({
             primaryConnectionId: 'gh-a',
-            connections: [{ connectionId: 'gl-b' }],
+            // A licence row left by a failed seat call or an abandoned
+            // checkout holds no subscription: that connection can still
+            // take the workspace plan.
+            connections: [
+                { connectionId: 'gl-b', ownSubscription: true },
+                { connectionId: 'fj-c', ownSubscription: false },
+                { connectionId: 'az-d' },
+            ],
         });
 
         await expect(service.getConnectionLicenses(workspace)).resolves.toEqual(

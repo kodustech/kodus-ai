@@ -1,7 +1,8 @@
 import { createHmac } from 'crypto';
 
 /**
- * The signature the billing service requires on its `/credits/*` routes.
+ * The signature the billing service requires on its `/credits/*` and
+ * `/connections*` routes.
  *
  * Those routes move money (a balance, a ledger, a Stripe checkout, a debit)
  * and take the organizationId straight from the request, so billing

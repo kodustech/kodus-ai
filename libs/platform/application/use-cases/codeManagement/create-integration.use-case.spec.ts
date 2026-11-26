@@ -464,9 +464,32 @@ describe('CreateIntegrationUseCase — connections', () => {
             });
         });
 
-        it('grants no one and seeds no author lists while it cannot tell whether the connection is the first', async () => {
-            const { useCase, connectionAccess, connectionBilling, ignoreBots } =
-                build();
+        it('tries the grant again when writing it fails once', async () => {
+            const { useCase, connectionAccess } = build();
+            connectionAccess.grantWorkspaceMembers
+                .mockRejectedValueOnce(new Error('pg blip'))
+                .mockResolvedValue(['u-1']);
+
+            await useCase.execute({
+                integrationType: 'gitlab',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(connectionAccess.grantWorkspaceMembers.mock.calls).toEqual([
+                [TEAM, 'new-conn'],
+                [TEAM, 'new-conn'],
+            ]);
+        });
+
+        it('keeps the connection inactive and answers 503 while who reads it cannot be set, so connecting again sets it', async () => {
+            const {
+                useCase,
+                connectionAccess,
+                connectionBilling,
+                ignoreBots,
+                integrationService,
+            } = build();
             const listed = connectionBilling.workspaceConnections;
             connectionBilling.workspaceConnections = jest.fn(async () => {
                 if (listed.mock.calls.length >= 2) {
@@ -475,25 +498,60 @@ describe('CreateIntegrationUseCase — connections', () => {
                 return listed();
             });
 
-            const result = await useCase.execute({
-                integrationType: 'gitlab',
-                newConnection: true,
-                organizationAndTeamData: { teamId: TEAM },
-            });
+            await expect(
+                useCase.execute({
+                    integrationType: 'gitlab',
+                    newConnection: true,
+                    organizationAndTeamData: { teamId: TEAM },
+                }),
+            ).rejects.toBeInstanceOf(ServiceUnavailableException);
 
-            expect(result).toEqual({
-                success: true,
-                status: 'SUCCESS',
-                integrationId: 'new-conn',
-            });
             // Two reads before the connection exists, then three tries.
             expect(
                 connectionBilling.workspaceConnections,
             ).toHaveBeenCalledTimes(5);
+            expect(integrationService.update.mock.calls).toEqual([
+                [
+                    {
+                        uuid: 'new-conn',
+                        organization: { uuid: ORG },
+                        team: { uuid: TEAM },
+                    },
+                    { status: false },
+                ],
+            ]);
             expect(
                 connectionAccess.grantWorkspaceMembers,
             ).not.toHaveBeenCalled();
             expect(ignoreBots.claimConnectionLists).not.toHaveBeenCalled();
+            expect(ignoreBots.execute).not.toHaveBeenCalled();
+        });
+
+        it("keeps a connection added beside others inactive while its own author lists cannot be claimed, so it never reads another connection's", async () => {
+            const { useCase, ignoreBots, integrationService } = build({
+                workspaceConnections: [{ uuid: 'gh-a' }],
+            });
+            ignoreBots.claimConnectionLists.mockRejectedValue(
+                new Error('pg down'),
+            );
+
+            await expect(
+                useCase.execute({
+                    integrationType: 'gitlab',
+                    newConnection: true,
+                    organizationAndTeamData: { teamId: TEAM },
+                }),
+            ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+            expect(ignoreBots.claimConnectionLists).toHaveBeenCalledTimes(3);
+            expect(integrationService.update).toHaveBeenCalledWith(
+                {
+                    uuid: 'new-conn',
+                    organization: { uuid: ORG },
+                    team: { uuid: TEAM },
+                },
+                { status: false },
+            );
             expect(ignoreBots.execute).not.toHaveBeenCalled();
         });
 

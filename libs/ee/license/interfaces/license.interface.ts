@@ -144,6 +144,7 @@ export type ReleaseConnectionResult = 'released' | 'not_held' | 'failed';
 
 export type WorkspaceConnectionLicenses = {
     primaryConnectionId: string | null;
+    /** Connections billed on a subscription of their own. */
     ownLicenceConnectionIds: string[];
 };
 

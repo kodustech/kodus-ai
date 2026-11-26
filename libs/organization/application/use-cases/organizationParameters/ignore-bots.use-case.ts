@@ -6,7 +6,6 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationParametersAutoAssignConfig } from '@libs/organization/domain/organizationParameters/types/organizationParameters.types';
-import { authorFiltersFor } from '@libs/organization/domain/organizationParameters/utils/author-filters';
 import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { PullRequestHandlerService } from '@libs/code-review/infrastructure/adapters/services/pullRequestManager.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -74,39 +73,34 @@ export class IgnoreBotsUseCase implements IUseCase {
             ),
         );
 
+        if (!botIds.length) return;
+
         const autoLicenseEntity =
             await this.organizationParametersService.findByKey(
                 OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
                 organizationAndTeamData,
             );
-
         const stored = autoLicenseEntity?.configValue as
             OrganizationParametersAutoAssignConfig | undefined;
 
+        // A connection added beside others, or one that already has lists of
+        // its own, is seeded into them; the workspace's first, into the
+        // organization's.
         const ownLists =
             params.integrationId &&
             (params.separateConnection ||
                 Boolean(stored?.connections?.[params.integrationId]));
         const target = ownLists ? params.integrationId : undefined;
 
-        const current =
-            target && !stored?.connections?.[target]
-                ? { ignoredUsers: [], allowedUsers: [], seededBotIds: [] }
-                : authorFiltersFor(stored, target);
-
-        // Only bots never seeded before are added. Re-adding every bot found
-        // would undo an admin's decision to review one, the case that matters
-        // being an app authoring PRs on a paid seat.
-        const seededBotIds = new Set(current.seededBotIds);
-        const newBotIds = botIds.filter((id) => !seededBotIds.has(id));
-
-        const lists = {
-            ignoredUsers: Array.from(
-                new Set([...current.ignoredUsers, ...newBotIds]),
-            ),
-            allowedUsers: current.allowedUsers,
-            seededBotIds: Array.from(new Set([...seededBotIds, ...botIds])),
-        };
+        // Written in one statement against the stored lists: only bots never
+        // seeded before are ignored (an admin may have chosen to review one,
+        // e.g. an app authoring PRs on a paid seat), and the allow list is
+        // never touched, so a filters save landing meanwhile stays.
+        await this.organizationParametersService.seedBotIds(
+            params.organizationId,
+            botIds,
+            target ? { connectionId: target } : {},
+        );
 
         this.logger.log({
             message: 'pr_author_bots_seeded',
@@ -114,20 +108,9 @@ export class IgnoreBotsUseCase implements IUseCase {
             metadata: {
                 ...organizationAndTeamData,
                 connectionLists: Boolean(target),
-                created: !stored,
-                newBots: newBotIds.length,
+                bots: botIds.length,
             },
         });
-
-        // Only these lists are written, merged into the stored value, so a
-        // concurrent change to another connection's lists or to the
-        // revocation timers is kept.
-        await this.organizationParametersService.mergeConfigValue(
-            OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-            params.organizationId,
-            lists,
-            target ? { connectionId: target } : {},
-        );
     }
 
     /**

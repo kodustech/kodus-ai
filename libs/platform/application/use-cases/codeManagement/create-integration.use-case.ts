@@ -39,8 +39,8 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 
-const OLDEST_CHECK_ATTEMPTS = 3;
-const OLDEST_CHECK_BACKOFF_MS = 100;
+const SETTLE_ATTEMPTS = 3;
+const SETTLE_BACKOFF_MS = 100;
 
 @Injectable()
 export class CreateIntegrationUseCase implements IUseCase {
@@ -209,34 +209,24 @@ export class CreateIntegrationUseCase implements IUseCase {
             connected: true,
         });
 
-        // Whose author lists a connection's bots go to is unknown until it
-        // is told whether the connection is the workspace's first.
-        if (separate === undefined) {
-            this.logger.warn({
-                message: 'pr_author_bots_not_seeded',
-                context: CreateIntegrationUseCase.name,
-                metadata: { ...workspace, integrationId },
-            });
-        } else {
-            this.ignoreBotsUseCase
-                .execute({
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                    integrationId:
-                        integrationId ?? organizationAndTeamData.integrationId,
-                    separateConnection: separate,
-                })
-                .catch((error) => {
-                    this.logger.error({
-                        message: 'Error ignoring bots',
-                        error: error,
-                        context: CreateIntegrationUseCase.name,
-                        metadata: {
-                            organizationAndTeamData: organizationAndTeamData,
-                        },
-                    });
+        this.ignoreBotsUseCase
+            .execute({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                integrationId:
+                    integrationId ?? organizationAndTeamData.integrationId,
+                separateConnection: separate,
+            })
+            .catch((error) => {
+                this.logger.error({
+                    message: 'Error ignoring bots',
+                    error: error,
+                    context: CreateIntegrationUseCase.name,
+                    metadata: {
+                        organizationAndTeamData: organizationAndTeamData,
+                    },
                 });
-        }
+            });
 
         this.authIntegrationService
             .findOne({
@@ -284,102 +274,113 @@ export class CreateIntegrationUseCase implements IUseCase {
      * The workspace's first connection is read by every member, as the
      * workspace was before connections existed. One added beside others
      * starts with owners only, and with author lists of its own. Answers
-     * whether the connection is one added beside others, or undefined when
-     * that could not be checked: then no one is granted it and its author
-     * lists are left alone (owners still read it and can grant it).
+     * whether the connection is one added beside others.
+     *
+     * Every step can be repeated, so a failed one is tried again. When it
+     * still fails, the connection is kept inactive and the call answers 503:
+     * an inactive connection is new to the next connect, which settles it,
+     * and meanwhile nobody is locked out of a connection that reviews, nor
+     * reads one through another connection's author lists.
      */
     private async settleNewConnectionReaders(
         workspace: { organizationId: string; teamId: string },
         integrationId: string,
         connectionsBefore: ReadonlySet<string>,
         separateConnection: boolean,
-    ): Promise<boolean | undefined> {
-        if (connectionsBefore.has(integrationId)) return separateConnection;
-        let separate: boolean | undefined;
-        try {
-            // Two connections added at once to an empty workspace both read
-            // it empty; only the oldest of them is its first.
-            separate =
-                separateConnection ||
-                !(await this.isOldestConnection(workspace, integrationId));
-        } catch (error) {
-            this.logger.error({
-                message: 'connection_readers_unsettled',
-                context: CreateIntegrationUseCase.name,
-                error,
-                metadata: { ...workspace, integrationId },
-            });
-            return undefined;
-        }
-        try {
-            if (separate === true) {
-                if (!separateConnection) {
-                    this.logger.warn({
-                        message: 'connection_added_beside_a_concurrent_first',
-                        context: CreateIntegrationUseCase.name,
-                        metadata: { ...workspace, integrationId },
-                    });
-                }
-                await this.ignoreBotsUseCase.claimConnectionLists({
-                    organizationId: workspace.organizationId,
-                    integrationId,
-                });
-            } else if (separate === false) {
-                const members =
-                    await this.connectionAccess.grantWorkspaceMembers(
-                        workspace.teamId,
-                        integrationId,
-                    );
-                this.logger.log({
-                    message: 'connection_granted_to_workspace_members',
-                    context: CreateIntegrationUseCase.name,
-                    metadata: {
-                        ...workspace,
-                        integrationId,
-                        members: members.length,
-                    },
-                });
-            }
-        } catch (error) {
-            this.logger.error({
-                message: 'Could not settle who reads the new Git connection',
-                context: CreateIntegrationUseCase.name,
-                error,
-                metadata: { ...workspace, integrationId, separate },
-            });
-        }
-        return separate;
-    }
-
-    /** Checked a few times: a read that fails once must not decide who reads it. */
-    private async isOldestConnection(
-        workspace: { organizationId: string; teamId: string },
-        integrationId: string,
     ): Promise<boolean> {
-        let lastError: unknown;
-        for (let attempt = 1; attempt <= OLDEST_CHECK_ATTEMPTS; attempt++) {
+        if (connectionsBefore.has(integrationId)) return separateConnection;
+        for (let attempt = 1; attempt <= SETTLE_ATTEMPTS; attempt++) {
             try {
-                const [oldest] =
-                    await this.connectionBilling.workspaceConnections(
-                        workspace,
-                    );
-                return oldest?.uuid === integrationId;
+                return await this.settleOnce(
+                    workspace,
+                    integrationId,
+                    separateConnection,
+                );
             } catch (error) {
-                lastError = error;
                 this.logger.warn({
-                    message: 'connection_oldest_check_failed',
+                    message: 'connection_readers_settle_failed',
                     context: CreateIntegrationUseCase.name,
                     error,
                     metadata: { ...workspace, integrationId, attempt },
                 });
-                if (attempt < OLDEST_CHECK_ATTEMPTS) {
+                if (attempt < SETTLE_ATTEMPTS) {
                     await new Promise((resolve) =>
-                        setTimeout(resolve, attempt * OLDEST_CHECK_BACKOFF_MS),
+                        setTimeout(resolve, attempt * SETTLE_BACKOFF_MS),
                     );
                 }
             }
         }
-        throw lastError;
+
+        this.logger.error({
+            message: 'connection_readers_unsettled',
+            context: CreateIntegrationUseCase.name,
+            metadata: { ...workspace, integrationId },
+        });
+        try {
+            await this.integrationService.update(
+                {
+                    uuid: integrationId,
+                    organization: { uuid: workspace.organizationId },
+                    team: { uuid: workspace.teamId },
+                },
+                { status: false },
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'connection_unsettled_left_active',
+                context: CreateIntegrationUseCase.name,
+                error,
+                metadata: { ...workspace, integrationId },
+            });
+        }
+        throw new ServiceUnavailableException(
+            'The Git connection was saved, but who can read it could not be set. Connect it again in a moment.',
+        );
+    }
+
+    private async settleOnce(
+        workspace: { organizationId: string; teamId: string },
+        integrationId: string,
+        separateConnection: boolean,
+    ): Promise<boolean> {
+        // Two connections added at once to an empty workspace both read it
+        // empty; only the oldest of them is its first.
+        const separate =
+            separateConnection ||
+            !(await this.isOldestConnection(workspace, integrationId));
+        if (separate) {
+            if (!separateConnection) {
+                this.logger.warn({
+                    message: 'connection_added_beside_a_concurrent_first',
+                    context: CreateIntegrationUseCase.name,
+                    metadata: { ...workspace, integrationId },
+                });
+            }
+            await this.ignoreBotsUseCase.claimConnectionLists({
+                organizationId: workspace.organizationId,
+                integrationId,
+            });
+            return true;
+        }
+        const members = await this.connectionAccess.grantWorkspaceMembers(
+            workspace.teamId,
+            integrationId,
+        );
+        this.logger.log({
+            message: 'connection_granted_to_workspace_members',
+            context: CreateIntegrationUseCase.name,
+            metadata: { ...workspace, integrationId, members: members.length },
+        });
+        return false;
+    }
+
+    private async isOldestConnection(
+        workspace: { organizationId: string; teamId: string },
+        integrationId: string,
+    ): Promise<boolean> {
+        const [oldest] =
+            await this.connectionBilling.workspaceConnections(workspace);
+        return oldest?.uuid === integrationId;
     }
 
     /**

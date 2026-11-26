@@ -5,7 +5,7 @@
  */
 require('dotenv').config();
 
-import { DataSource } from 'typeorm';
+import { DataSource, DataSourceOptions } from 'typeorm';
 
 const UNREACHABLE = new Set([
     'ECONNREFUSED',
@@ -39,6 +39,8 @@ export const skipPostgresIntegration = process.env.SKIP_INTEGRATION === 'true';
  */
 export async function connectTestPostgres(options?: {
     replica?: boolean;
+    /** Models a spec reads through TypeORM repositories. */
+    entities?: DataSourceOptions['entities'];
 }): Promise<DataSource | undefined> {
     const candidate = new DataSource({
         type: 'postgres',
@@ -61,7 +63,7 @@ export async function connectTestPostgres(options?: {
             'kodus_db',
         logging: false,
         synchronize: false,
-        entities: [],
+        entities: options?.entities ?? [],
         // One connection: a session setting covers every query.
         extra: { max: 1, min: 1, connectionTimeoutMillis: 10_000 },
     });

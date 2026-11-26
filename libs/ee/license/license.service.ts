@@ -474,14 +474,21 @@ export class LicenseService implements ILicenseService {
                     teamId: organizationAndTeamData.teamId,
                 },
             });
+            // Only a connection with its own subscription keeps its own
+            // plan: a licence row left by a failed seat call or an abandoned
+            // checkout does not stop it from taking the workspace plan.
             return {
                 primaryConnectionId: result?.primaryConnectionId ?? null,
                 ownLicenceConnectionIds: (
                     (result?.connections ?? []) as Array<{
                         connectionId?: string;
+                        ownSubscription?: boolean;
                     }>
                 )
-                    .map((connection) => connection?.connectionId)
+                    .filter(
+                        (connection) => connection?.ownSubscription === true,
+                    )
+                    .map((connection) => connection.connectionId)
                     .filter((id): id is string => typeof id === 'string'),
             };
         } catch (error) {

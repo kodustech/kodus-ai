@@ -233,5 +233,82 @@ const KEY = OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT;
                 },
             ]);
         });
+
+        describe('seedBotIds', () => {
+            it('adds only bots never seeded before, and leaves the allow list as a concurrent save left it', async () => {
+                if (!ds) return;
+                const organizationId = await organizationWith({
+                    allowedUsers: ['a-saved-meanwhile'],
+                    ignoredUsers: ['x'],
+                    // b1 was seeded, then an admin chose to review it.
+                    seededBotIds: ['b1'],
+                });
+
+                await repository.seedBotIds(organizationId, ['b1', 'b2']);
+
+                expect(await stored(organizationId)).toEqual([
+                    {
+                        allowedUsers: ['a-saved-meanwhile'],
+                        ignoredUsers: ['x', 'b2'],
+                        seededBotIds: ['b1', 'b2'],
+                    },
+                ]);
+            });
+
+            it("seeds a connection's own lists, creating them, and leaves the organization's alone", async () => {
+                if (!ds) return;
+                const organizationId = await organizationWith({
+                    ignoredUsers: ['x'],
+                    connections: {
+                        'gh-a': { ignoredUsers: ['1'], seededBotIds: [7] },
+                    },
+                });
+
+                await repository.seedBotIds(organizationId, ['7', '9'], {
+                    connectionId: 'gh-a',
+                });
+                await repository.seedBotIds(organizationId, ['3'], {
+                    connectionId: 'gl-b',
+                });
+
+                expect(await stored(organizationId)).toEqual([
+                    {
+                        ignoredUsers: ['x'],
+                        connections: {
+                            'gh-a': {
+                                ignoredUsers: ['1', '9'],
+                                seededBotIds: [7, '9'],
+                            },
+                            'gl-b': {
+                                allowedUsers: [],
+                                ignoredUsers: ['3'],
+                                seededBotIds: ['3'],
+                            },
+                        },
+                    },
+                ]);
+            });
+
+            it('creates the row for an organization that has none', async () => {
+                if (!ds) return;
+                const fresh = await organizationWith();
+
+                await repository.seedBotIds(fresh, ['b1'], {
+                    connectionId: 'gh-a',
+                });
+
+                expect(await stored(fresh)).toEqual([
+                    {
+                        connections: {
+                            'gh-a': {
+                                allowedUsers: [],
+                                ignoredUsers: ['b1'],
+                                seededBotIds: ['b1'],
+                            },
+                        },
+                    },
+                ]);
+            });
+        });
     },
 );

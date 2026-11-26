@@ -219,6 +219,29 @@ export class UserConnectionAccessRepository {
         );
     }
 
+    /**
+     * The user reads every active Git connection of the workspace, in one
+     * statement, run by `runner` (a caller's transaction) when given.
+     */
+    async grantWorkspaceConnections(
+        userId: string,
+        teamId: string,
+        runner: {
+            query(sql: string, parameters?: unknown[]): Promise<unknown>;
+        } = this.repository.manager,
+    ): Promise<void> {
+        await runner.query(
+            `INSERT INTO "user_connection_access" ("user_id", "integration_id")
+             SELECT $1::uuid, i."uuid"
+               FROM "integrations" i
+              WHERE i."team_id" = $2
+                AND i."status" = true
+                AND i."integrationCategory" = 'CODE_MANAGEMENT'
+             ON CONFLICT ("user_id", "integration_id") DO NOTHING`,
+            [userId, teamId],
+        );
+    }
+
     async revoke(integrationId: string, userIds: string[]): Promise<void> {
         if (!userIds.length) return;
         await this.repository.manager.query(

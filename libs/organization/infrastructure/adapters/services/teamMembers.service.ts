@@ -81,38 +81,27 @@ export class TeamMemberService implements ITeamMemberService {
         return this.teamMembersRepository.findOne(filter);
     }
 
-    async create(teamMember: ITeamMember): Promise<any> {
-        const created = await this.teamMembersRepository.create(teamMember);
-        await this.grantWorkspaceConnections(
-            teamMember?.user?.uuid,
-            teamMember?.team?.uuid,
-        );
-        return created;
-    }
-
     /**
-     * A member joining a workspace reads its Git connections; connections
+     * A member joining a workspace reads its Git connections, granted in the
+     * same transaction: a member is never created without them. Connections
      * added later start with owners only and are granted one by one.
      */
-    private async grantWorkspaceConnections(
-        userId?: string,
-        teamId?: string,
-    ): Promise<void> {
-        if (!userId || !teamId) return;
-        try {
-            await this.connectionAccess.grantWorkspaceConnections(
-                userId,
-                teamId,
-            );
-        } catch (error) {
-            this.logger.error({
-                message:
-                    'Could not grant a new member the workspace connections',
-                context: TeamMemberService.name,
-                error,
-                metadata: { userId, teamId },
-            });
+    async create(teamMember: ITeamMember): Promise<any> {
+        const userId = teamMember?.user?.uuid;
+        const teamId = teamMember?.team?.uuid;
+        if (!userId || !teamId) {
+            return this.teamMembersRepository.create(teamMember);
         }
+        const created = await this.teamMembersRepository.create(teamMember, {
+            alsoWithin: (runner) =>
+                this.connectionAccess.grantWorkspaceConnectionsWithin(
+                    runner,
+                    userId,
+                    teamId,
+                ),
+        });
+        this.connectionAccess.forgetUsers([userId]);
+        return created;
     }
 
     async update(

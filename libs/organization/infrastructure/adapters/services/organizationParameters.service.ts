@@ -78,6 +78,18 @@ export class OrganizationParametersService implements IOrganizationParametersSer
         );
     }
 
+    seedBotIds(
+        organizationId: string,
+        botIds: string[],
+        options?: { connectionId?: string },
+    ): Promise<void> {
+        return this.organizationParametersRepository.seedBotIds(
+            organizationId,
+            botIds,
+            options,
+        );
+    }
+
     async findByKey(
         configKey: OrganizationParametersKey,
         organizationAndTeamData: OrganizationAndTeamData,

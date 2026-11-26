@@ -25,6 +25,17 @@ export interface IOrganizationParametersRepository {
         patch: Record<string, unknown>,
         options?: ConfigValueMerge,
     ): Promise<void>;
+    /**
+     * Adds the bots found on a connection to the PR author lists (the
+     * connection's own, or the organization's when none is named) in one
+     * statement: only bots never seeded before are ignored, and the allow
+     * list is never written.
+     */
+    seedBotIds(
+        organizationId: string,
+        botIds: string[],
+        options?: { connectionId?: string },
+    ): Promise<void>;
     find(
         filter?: Partial<IOrganizationParameters>,
     ): Promise<OrganizationParametersEntity[]>;

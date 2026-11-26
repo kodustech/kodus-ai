@@ -45,7 +45,12 @@ type StoredRepository = {
     organizationName?: string;
 };
 
-/** Grants change rarely; a short memory spares a query on every check. */
+/**
+ * Grants change rarely; a short memory spares a query on every check. The
+ * memory is per process: a grant change is seen at once by the process that
+ * made it, and by the other API tasks and the workers within this window. A
+ * connection added or removed is seen within it too.
+ */
 const SCOPE_TTL_MS = 15_000;
 
 const NO_CONNECTION: ConnectionReadScope = {
@@ -299,16 +304,24 @@ export class ConnectionAccessService {
         return diff;
     }
 
-    /** A member who joins a workspace reads its Git connections. */
-    async grantWorkspaceConnections(
+    /**
+     * A member who joins a workspace reads its Git connections. Run inside
+     * the member's insert (`runner`), so a member is never created without
+     * them; call `forgetUsers` once that transaction is done.
+     */
+    grantWorkspaceConnectionsWithin(
+        runner: {
+            query(sql: string, parameters?: unknown[]): Promise<unknown>;
+        },
         userId: string,
         teamId: string,
     ): Promise<void> {
-        const connections = await this.access.workspaceConnectionIds(teamId);
-        await this.access.grant(
-            connections.map((integrationId) => ({ userId, integrationId })),
-        );
-        this.forget([userId]);
+        return this.access.grantWorkspaceConnections(userId, teamId, runner);
+    }
+
+    /** Reads of these users' access start over, here (see SCOPE_TTL_MS). */
+    forgetUsers(userIds: string[]): void {
+        this.forget(userIds);
     }
 
     /** Every member of the workspace reads the connection. */

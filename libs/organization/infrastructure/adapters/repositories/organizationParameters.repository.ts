@@ -285,38 +285,131 @@ export class OrganizationParametersRepository implements IOrganizationParameters
         };
         if (await merge(manager)) return;
 
-        // No row yet: writers that find none take turns, so the first one
-        // creates it and every later one merges into it.
-        await manager.transaction(async (transaction) => {
-            await transaction.query(
-                `SELECT pg_advisory_xact_lock(hashtext($1))`,
-                [`organization_parameters:${organizationId}:${configKey}`],
-            );
-            if (await merge(transaction)) return;
+        await this.createUnlessPresent(
+            organizationId,
+            configKey,
+            merge,
+            connectionId ? { connections: { [connectionId]: patch } } : patch,
+        );
+    }
 
-            const existing = (await transaction.query(
-                `SELECT 1 FROM "organization_parameters"
-                  WHERE "organization_id" = $1 AND "configKey" = $2
-                  LIMIT 1`,
-                [organizationId, configKey],
-            )) as unknown[];
-            if (existing.length) return;
+    async seedBotIds(
+        organizationId: string,
+        botIds: string[],
+        options: { connectionId?: string } = {},
+    ): Promise<void> {
+        const configKey = OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT;
+        const bots = [...new Set(botIds.map(String))];
+        if (!bots.length) return;
+        const { connectionId } = options;
+        const lists = connectionId
+            ? `op."configValue"->'connections'->$4::text`
+            : `op."configValue"`;
+        // Existing entries stay as stored; ids are compared as text.
+        const appended = (array: string, added: string) => `(
+            SELECT COALESCE(jsonb_agg(s.e ORDER BY s.o), '[]'::jsonb) FROM (
+                SELECT t.e, t.o
+                  FROM jsonb_array_elements(COALESCE(${array}, '[]'::jsonb)) WITH ORDINALITY AS t(e, o)
+                UNION ALL
+                SELECT to_jsonb(n.v), 1000000000 + n.o
+                  FROM unnest(${added}) WITH ORDINALITY AS n(v, o)
+                 WHERE NOT EXISTS (
+                     SELECT 1 FROM jsonb_array_elements_text(COALESCE(${array}, '[]'::jsonb)) x
+                      WHERE x = n.v)
+            ) s)`;
+        // Only bots never seeded before are ignored: one an admin chose to
+        // review stays reviewed. The allow list is never written.
+        const neverSeeded = `ARRAY(
+            SELECT b FROM unnest($3::text[]) b
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM jsonb_array_elements_text(COALESCE(${lists}->'seededBotIds', '[]'::jsonb)) x
+                  WHERE x = b))`;
+        const seeded = `jsonb_build_object(
+            'ignoredUsers', ${appended(`${lists}->'ignoredUsers'`, neverSeeded)},
+            'seededBotIds', ${appended(`${lists}->'seededBotIds'`, '$3::text[]')})`;
 
-            await transaction.query(
-                `INSERT INTO "organization_parameters" ("uuid", "configKey", "configValue", "organization_id")
-                 VALUES ($1, $2, $3::jsonb, $4)`,
-                [
-                    uuidv4(),
-                    configKey,
-                    JSON.stringify(
-                        connectionId
-                            ? { connections: { [connectionId]: patch } }
-                            : patch,
-                    ),
-                    organizationId,
-                ],
-            );
-        });
+        const seed = async (runner: Pick<EntityManager, 'query'>) => {
+            const [, affected] = (
+                connectionId
+                    ? await runner.query(
+                          `UPDATE "organization_parameters" op
+                              SET "configValue" = jsonb_set(
+                                      COALESCE(op."configValue", '{}'::jsonb)
+                                          || jsonb_build_object('connections', COALESCE(op."configValue"->'connections', '{}'::jsonb)),
+                                      ARRAY['connections', $4::text],
+                                      COALESCE(${lists}, '{"allowedUsers": []}'::jsonb) || ${seeded}
+                                  ),
+                                  "updatedAt" = now()
+                            WHERE op."organization_id" = $1
+                              AND op."configKey" = $2`,
+                          [organizationId, configKey, bots, connectionId],
+                      )
+                    : await runner.query(
+                          `UPDATE "organization_parameters" op
+                              SET "configValue" = COALESCE(op."configValue", '{}'::jsonb) || ${seeded},
+                                  "updatedAt" = now()
+                            WHERE op."organization_id" = $1
+                              AND op."configKey" = $2`,
+                          [organizationId, configKey, bots],
+                      )
+            ) as [unknown, number];
+            return affected > 0;
+        };
+        if (await seed(this.organizationParametersRepository.manager)) return;
+
+        const initial = { ignoredUsers: bots, seededBotIds: bots };
+        await this.createUnlessPresent(
+            organizationId,
+            configKey,
+            seed,
+            connectionId
+                ? {
+                      connections: {
+                          [connectionId]: { allowedUsers: [], ...initial },
+                      },
+                  }
+                : initial,
+        );
+    }
+
+    /**
+     * No row yet: writers that find none take turns, so the first one
+     * creates it and every later one applies its change to it.
+     */
+    private async createUnlessPresent(
+        organizationId: string,
+        configKey: OrganizationParametersKey,
+        apply: (runner: Pick<EntityManager, 'query'>) => Promise<boolean>,
+        initialValue: Record<string, unknown>,
+    ): Promise<void> {
+        await this.organizationParametersRepository.manager.transaction(
+            async (transaction) => {
+                await transaction.query(
+                    `SELECT pg_advisory_xact_lock(hashtext($1))`,
+                    [`organization_parameters:${organizationId}:${configKey}`],
+                );
+                if (await apply(transaction)) return;
+
+                const existing = (await transaction.query(
+                    `SELECT 1 FROM "organization_parameters"
+                      WHERE "organization_id" = $1 AND "configKey" = $2
+                      LIMIT 1`,
+                    [organizationId, configKey],
+                )) as unknown[];
+                if (existing.length) return;
+
+                await transaction.query(
+                    `INSERT INTO "organization_parameters" ("uuid", "configKey", "configValue", "organization_id")
+                     VALUES ($1, $2, $3::jsonb, $4)`,
+                    [
+                        uuidv4(),
+                        configKey,
+                        JSON.stringify(initialValue),
+                        organizationId,
+                    ],
+                );
+            },
+        );
     }
 
     async findByKey(
