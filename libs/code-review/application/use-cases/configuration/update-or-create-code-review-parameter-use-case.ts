@@ -136,6 +136,7 @@ import {
     resolveReviewSettings,
 } from '@libs/code-review/domain/approval/migrate-review-settings';
 import { routesForLegacyMode } from '@libs/code-review/domain/review-mode';
+import { UltraReviewGate } from '@libs/ee/ultra-review/ultra-review-gate';
 import { approvalPoliciesSchema } from '@libs/core/infrastructure/config/types/general/approval-policies';
 import { REVIEW_SETTINGS_INHERITABLE_FIELDS } from '@libs/core/infrastructure/config/types/general/risk-assessment';
 
@@ -174,6 +175,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         private readonly licenseService: ILicenseService,
         private readonly telemetry: TelemetryService,
         @Optional() private readonly codeManagement?: CodeManagementService,
+        // Without it no Ultra mode is saved: Ultra is in alpha.
+        @Optional() private readonly ultraReviewGate?: UltraReviewGate,
     ) {}
 
     async execute(
@@ -975,7 +978,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 reason: HEAVY_MODE_SAVE_PLAN_REQUIRED,
             });
         }
-        if (asks('ultra')) {
+        if (
+            asks('ultra') &&
+            (await this.ultraReviewGate?.isEnabledFor(
+                organizationAndTeamData.organizationId,
+            )) !== true
+        ) {
+            refusals.push({
+                mode: 'ultra',
+                reason: ultraSaveRefusalMessage('not_enabled'),
+            });
+        } else if (asks('ultra')) {
             const planAccess = await ultraReviewPlanAccess(
                 this.licenseService,
                 organizationAndTeamData,
