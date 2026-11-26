@@ -2092,6 +2092,59 @@ describe('SandboxLeaseManager', () => {
             expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
         });
 
+        // A process that exits right after a release (a security-scan slice
+        // child closes Nest, then exits) must still decrement the lease
+        describe('at shutdown', () => {
+            it('finishes a release still in its quiet window before Mongo closes', async () => {
+                const { sandbox, leaseId } = await acquireCreated();
+                await sandbox.run('git log -1');
+
+                releasedWith(0);
+                await manager.release(leaseId, { idleMs: 30_000 });
+                expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+                await manager.beforeApplicationShutdown();
+
+                expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+                expect(leaseRepo.setKillAt).toHaveBeenCalledTimes(1);
+            });
+
+            it('stops waiting for a command that is still running', async () => {
+                const { sandbox, leaseId } = await acquireCreated();
+                const provided = await (sandboxProvider.createSandboxWithRepo
+                    .mock.results[0].value as Promise<SandboxInstance>);
+                (provided.run as jest.Mock).mockReturnValueOnce(
+                    new Promise(() => {}),
+                );
+                void sandbox.run('hangs');
+
+                releasedWith(0);
+                await manager.release(leaseId, { idleMs: 30_000 });
+                await manager.beforeApplicationShutdown();
+
+                expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+                const warn = (manager as any).logger.warn as jest.Mock;
+                expect(
+                    warn.mock.calls.filter(
+                        ([entry]) =>
+                            entry.message ===
+                            `SandboxLeaseManager: release stopped waiting for the holder's running commands at shutdown leaseId="${leaseId}" prKey="${prKey}"`,
+                    ),
+                ).toHaveLength(1);
+            });
+
+            it('gives back at once a release that arrives during shutdown', async () => {
+                const { sandbox, leaseId } = await acquireCreated();
+                await sandbox.run('git log -1');
+                await manager.beforeApplicationShutdown();
+
+                releasedWith(0);
+                await manager.release(leaseId, { idleMs: 30_000 });
+
+                expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+            });
+        });
+
         it('decrements only the lease on the sandbox it was given', async () => {
             const { sandbox, leaseId } = await acquireCreated();
             await goQuiet();

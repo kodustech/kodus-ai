@@ -19,7 +19,12 @@ import {
     toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import {
+    BeforeApplicationShutdown,
+    Inject,
+    Injectable,
+    Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Sandbox } from 'e2b';
 import { randomUUID } from 'crypto';
@@ -92,6 +97,12 @@ const IN_FLIGHT_DRAIN_MAX_MS = 6 * 60 * 1000;
  * the holder being done.
  */
 const IN_FLIGHT_QUIET_MS = 1_000;
+
+/**
+ * How long shutdown waits for the releases still running in the background.
+ * Each is a few Mongo writes once the drain stops waiting.
+ */
+const SHUTDOWN_RELEASES_MAX_MS = 10_000;
 
 /**
  * Default lease TTL: 30 minutes. The reaper will clean up any lease whose
@@ -188,8 +199,18 @@ interface InFlightCommands {
 }
 
 @Injectable()
-export class SandboxLeaseManager implements ISandboxLeaseManager {
+export class SandboxLeaseManager
+    implements ISandboxLeaseManager, BeforeApplicationShutdown
+{
     private readonly logger = createLogger(SandboxLeaseManager.name);
+
+    /**
+     * Releases giving a sandbox back in the background (the holder still had
+     * commands running). Shutdown stops their wait and awaits them, so a
+     * process that exits right after a release still decrements the lease.
+     */
+    private readonly backgroundReleases = new Set<Promise<void>>();
+    private readonly shuttingDown = new AbortController();
 
     /**
      * Lease invariants:
@@ -653,8 +674,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         // are given back once it ends, so the checkout is not deleted or
         // paused under it; the caller does not wait for that, so a pipeline
         // that awaits its release still finishes on time (#2628).
-        if (inFlight && this.isBusy(inFlight)) {
-            void this.drainInFlight(inFlight, leaseId, prKey)
+        if (
+            inFlight &&
+            this.isBusy(inFlight) &&
+            !this.shuttingDown.signal.aborted
+        ) {
+            const background = this.drainInFlight(inFlight, leaseId, prKey)
                 .then(() =>
                     this.giveBack(leaseId, prKey, sandboxId, held, use, opts),
                 )
@@ -665,7 +690,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                         error: err as Error,
                         metadata: { leaseId, prKey },
                     }),
-                );
+                )
+                .finally(() => this.backgroundReleases.delete(background));
+            this.backgroundReleases.add(background);
             return;
         }
 
@@ -849,6 +876,41 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         }
     }
 
+    /**
+     * Runs before Mongoose closes its connection (onApplicationShutdown): the
+     * background releases stop waiting for the holder's commands and finish
+     * their Mongo writes. Without this, a process that exits right after a
+     * release (a security-scan slice child) never decrements its lease and
+     * the sandbox runs until the lease TTL (#2628).
+     */
+    async beforeApplicationShutdown(): Promise<void> {
+        this.shuttingDown.abort();
+        if (this.backgroundReleases.size === 0) return;
+
+        const pending = this.backgroundReleases.size;
+        let timer: NodeJS.Timeout | undefined;
+        const finished = await Promise.race([
+            Promise.allSettled([...this.backgroundReleases]).then(() => true),
+            new Promise<false>((resolve) => {
+                timer = setTimeout(
+                    () => resolve(false),
+                    SHUTDOWN_RELEASES_MAX_MS,
+                );
+                timer.unref?.();
+            }),
+        ]);
+        clearTimeout(timer);
+
+        const log = finished ? this.logger.log : this.logger.warn;
+        log.call(this.logger, {
+            message: finished
+                ? 'SandboxLeaseManager: finished the background releases before shutdown'
+                : 'SandboxLeaseManager: background releases still running at shutdown; the lease TTL reaper frees them',
+            context: SandboxLeaseManager.name,
+            metadata: { pending, stillPending: this.backgroundReleases.size },
+        });
+    }
+
     /** A command is running, or one settled less than the quiet window ago. */
     private isBusy(inFlight: InFlightCommands): boolean {
         return (
@@ -873,7 +935,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         const deadline = startedAt + IN_FLIGHT_DRAIN_MAX_MS;
 
         let drained = false;
-        while (Date.now() < deadline) {
+        while (Date.now() < deadline && !this.shuttingDown.signal.aborted) {
             if (inFlight.running > 0) {
                 await this.waitWithin(
                     new Promise<void>((resolve) =>
@@ -898,7 +960,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         log.call(this.logger, {
             message: drained
                 ? `SandboxLeaseManager: release waited for the holder's running commands leaseId="${leaseId}" prKey="${prKey}"`
-                : `SandboxLeaseManager: release gave up waiting for the holder's running commands leaseId="${leaseId}" prKey="${prKey}"`,
+                : this.shuttingDown.signal.aborted
+                  ? `SandboxLeaseManager: release stopped waiting for the holder's running commands at shutdown leaseId="${leaseId}" prKey="${prKey}"`
+                  : `SandboxLeaseManager: release gave up waiting for the holder's running commands leaseId="${leaseId}" prKey="${prKey}"`,
             context: SandboxLeaseManager.name,
             metadata: {
                 leaseId,
@@ -916,14 +980,24 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         ms: number,
     ): Promise<void> {
         let timer: NodeJS.Timeout | undefined;
+        let onShutdown: (() => void) | undefined;
         await Promise.race([
             ...(settled ? [settled] : []),
             new Promise<void>((resolve) => {
                 timer = setTimeout(resolve, Math.max(ms, 0));
                 timer.unref?.();
             }),
+            new Promise<void>((resolve) => {
+                onShutdown = () => resolve();
+                this.shuttingDown.signal.addEventListener('abort', onShutdown, {
+                    once: true,
+                });
+            }),
         ]);
         clearTimeout(timer);
+        if (onShutdown) {
+            this.shuttingDown.signal.removeEventListener('abort', onShutdown);
+        }
     }
 
     /**
