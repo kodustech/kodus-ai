@@ -187,6 +187,16 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
         const platformType =
             await this.codeManagementService.getTypeIntegration(
                 organizationAndTeamData,
+                input.repositoryId || input.repository
+                    ? {
+                          ...(input.repositoryId
+                              ? { id: input.repositoryId }
+                              : {}),
+                          ...(input.repository
+                              ? { name: input.repository }
+                              : {}),
+                      }
+                    : undefined,
             );
 
         const executionContext =

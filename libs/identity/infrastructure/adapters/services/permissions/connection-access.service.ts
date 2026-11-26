@@ -174,8 +174,9 @@ export class ConnectionAccessService {
 
     /**
      * Repository ids and names repeat across servers. One listed by a
-     * connection the member is not granted is left out: records keyed by
-     * the bare id cannot tell the two repositories apart.
+     * connection the member is not granted, disabled ones included (their
+     * records remain), is left out: records keyed by the bare id cannot tell
+     * the two repositories apart.
      */
     private async loadScopes(
         organizationId: string,
@@ -195,7 +196,10 @@ export class ConnectionAccessService {
                     .length !== connections.length,
         );
         const lists = anyPartial
-            ? await this.access.repositoryLists(organizationId, connections)
+            ? await this.access.repositoryLists(
+                  organizationId,
+                  await this.access.allConnectionIds(organizationId),
+              )
             : [];
 
         const scopes = new Map<string, ConnectionReadScope>();

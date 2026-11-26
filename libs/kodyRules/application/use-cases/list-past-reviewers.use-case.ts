@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
 
@@ -38,17 +38,42 @@ export class ListPastReviewersUseCase {
         },
     ) {}
 
+    /**
+     * `readableConnectionIds`: the Git connections a member granted only some
+     * of them reads. Such a member names a repository whose connection, in
+     * the named workspace, is one of them: the list spans its members.
+     */
     async execute(params: {
         teamId: string;
         repositoryId?: string;
         months?: number;
+        readableConnectionIds?: ReadonlySet<string> | null;
     }): Promise<PastReviewer[]> {
-        const { teamId, repositoryId } = params;
+        const { teamId, repositoryId, readableConnectionIds } = params;
         const months = this.normalizeMonths(params.months);
-        const organizationAndTeamData: OrganizationAndTeamData = {
+        const workspace: OrganizationAndTeamData = {
             organizationId: this.request.user.organization.uuid,
             teamId,
         };
+        const repositoryConnectionId =
+            repositoryId && repositoryId !== 'global'
+                ? await this.codeManagementService.connectionIdFor(workspace, {
+                      id: repositoryId,
+                  })
+                : undefined;
+        if (
+            readableConnectionIds &&
+            (!repositoryConnectionId ||
+                !readableConnectionIds.has(repositoryConnectionId))
+        ) {
+            throw new ForbiddenException(
+                'Name a repository of the Git connections you are granted.',
+            );
+        }
+        const organizationAndTeamData: OrganizationAndTeamData =
+            repositoryConnectionId
+                ? { ...workspace, integrationId: repositoryConnectionId }
+                : workspace;
 
         const cacheKey = `past_reviewers_${organizationAndTeamData.organizationId}_${teamId}_${repositoryId ?? 'all'}_${months}`;
 

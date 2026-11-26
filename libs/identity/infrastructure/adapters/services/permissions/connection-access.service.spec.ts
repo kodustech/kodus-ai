@@ -10,6 +10,8 @@ const user = { uuid: 'user-1', organization: { uuid: 'org-1' } };
 
 const build = (opts: {
     connections: string[];
+    /** Disabled connections: they still have records of their repositories. */
+    inactive?: string[];
     granted: string[];
     reposByConnection?: Record<string, Array<{ id: string | number }>>;
 }) => {
@@ -18,7 +20,10 @@ const build = (opts: {
             sql.includes('FROM "integrations"') &&
             !sql.includes('integration_configs')
         ) {
-            return opts.connections.map((uuid) => ({ uuid }));
+            const ids = sql.includes('"status" = true')
+                ? opts.connections
+                : [...opts.connections, ...(opts.inactive ?? [])];
+            return ids.map((uuid) => ({ uuid }));
         }
         if (sql.includes('FROM "user_connection_access"')) {
             const users = params[0] as string[];
@@ -233,6 +238,29 @@ describe('ConnectionAccessService — ids and names repeated across connections'
         expect(restriction?.allowsRepository({ name: 'acme/web' })).toBe(false);
         expect(restriction?.allowsRepository({ id: 4 })).toBe(true);
         expect(restriction?.allowsRepository({ name: 'acme/api' })).toBe(true);
+    });
+
+    it('also leaves out ids a disabled connection lists, whose records remain', async () => {
+        const { service } = build({
+            connections: ['gl-a', 'gl-b'],
+            inactive: ['gl-old'],
+            granted: ['gl-a'],
+            reposByConnection: {
+                'gl-a': [
+                    { id: 3, full_name: 'acme/api' },
+                    { id: 4, full_name: 'acme/web' },
+                ] as any,
+                'gl-old': [{ id: 3, full_name: 'other/api' }] as any,
+            },
+        });
+
+        const restriction = await service.restrictionFor({
+            ...user,
+            role: 'contributor',
+        });
+
+        expect(restriction?.allowsRepository({ id: 3 })).toBe(false);
+        expect(restriction?.allowsRepository({ id: 4 })).toBe(true);
     });
 });
 

@@ -638,6 +638,8 @@ export class OrganizationParametersController {
 
     @Get('/llm-config/status')
     @UseGuards(PolicyGuard)
+    // The organization's LLM settings: nothing of any Git connection.
+    @AppliesConnectionScope()
     @CheckPolicies(
         // Non-sensitive descriptor (never the API key). Code review settings
         // editors need the BYOK provider/model to render the model selector,
@@ -672,6 +674,8 @@ export class OrganizationParametersController {
 
     @Get('/byok/providers')
     @UseGuards(PolicyGuard)
+    // The organization's LLM settings: nothing of any Git connection.
+    @AppliesConnectionScope()
     @CheckPolicies(
         // Static, non-sensitive descriptor of the connectable BYOK providers
         // (registry-driven; never a secret). Same read gate as

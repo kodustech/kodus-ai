@@ -122,10 +122,11 @@ export const checkAnyPermission = (
                 ability.can(action, resource),
             );
         },
-        options.length > 0 &&
-            options.every(({ action, resource }) =>
-                isConnectionScopedRead(action, resource),
-            ),
+        // Any scoped option makes the whole choice one: the handler may
+        // serve the scoped data to whoever passes.
+        options.some(({ action, resource }) =>
+            isConnectionScopedRead(action, resource),
+        ),
     );
 };
 

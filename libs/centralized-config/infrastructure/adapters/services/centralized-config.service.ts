@@ -2474,7 +2474,13 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         centralizedConfig: {
                             path: ruleFileMeta.path,
                             status: KodyRuleCentralizedStatus.SYNCED,
-                            ...centralizedSourceStamp(source),
+                            ...centralizedSourceStamp(
+                                source,
+                                existingMatch
+                                    ? existingRuleByUuid.get(existingMatch.uuid)
+                                          ?.centralizedConfig
+                                    : undefined,
+                            ),
                         },
                         origin:
                             existingMatch?.origin ??
@@ -2674,6 +2680,22 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 return singleSource;
             };
 
+            let teamRepositoryIds: Set<string> | undefined;
+            const discoverableHere = async (repositoryId?: string) => {
+                if (!repositoryId || repositoryId === 'global') return true;
+                teamRepositoryIds ??= new Set(
+                    (
+                        (await this.integrationConfigService.findIntegrationConfigFormatted<
+                            Array<{ id: string | number }>
+                        >(
+                            IntegrationConfigKey.REPOSITORIES,
+                            organizationAndTeamData,
+                        )) ?? []
+                    ).map((repository) => String(repository?.id)),
+                );
+                return teamRepositoryIds.has(String(repositoryId));
+            };
+
             const existingEntity =
                 await this.kodyRulesService.findByOrganizationId(
                     organizationAndTeamData.organizationId,
@@ -2760,6 +2782,12 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     // another team's or connection's are reconciled by its
                     // own sync (#2215).
                     if (!(await ownsRule(rule.centralizedConfig))) {
+                        continue;
+                    }
+                    // Discovery only resolves folders of the syncing team's
+                    // repositories: another team reading the same config
+                    // repository keeps the rules of the ones it lists.
+                    if (!(await discoverableHere(rule.repositoryId))) {
                         continue;
                     }
 

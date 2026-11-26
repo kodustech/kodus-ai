@@ -317,6 +317,12 @@ export class KodyRulesRepository implements IKodyRulesRepository {
                     directoryId: '$rules.directoryId',
                     type: '$rules.type',
                     status: '$rules.status',
+                    centralizedConfig: {
+                        connectionScoped:
+                            '$rules.centralizedConfig.connectionScoped',
+                        sourceConnectionId:
+                            '$rules.centralizedConfig.sourceConnectionId',
+                    },
                 },
             },
         ];

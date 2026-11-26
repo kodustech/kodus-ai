@@ -59,6 +59,8 @@ function build(opts: {
     rules: any[];
     sources?: Array<ReturnType<typeof centralized>>;
     centralizedValue?: Record<string, unknown>;
+    /** The syncing team's repositories. */
+    teamRepositories?: Array<{ id: string; name: string }>;
 }) {
     const createOrUpdate = { execute: jest.fn().mockResolvedValue({}) };
     const deleteRule = { execute: jest.fn().mockResolvedValue(true) };
@@ -83,7 +85,9 @@ function build(opts: {
         {
             findIntegrationConfigFormatted: jest
                 .fn()
-                .mockResolvedValue([{ id: 'repo-1', name: 'repo-1' }]),
+                .mockResolvedValue(
+                    opts.teamRepositories ?? [{ id: 'repo-1', name: 'repo-1' }],
+                ),
         } as any,
         { connectionServerKey: jest.fn() } as any,
         { execute: jest.fn() } as any,
@@ -133,6 +137,28 @@ describe('#2215 centralized rules belong to the config repository they came from
             });
 
             expect(deleteRule.execute).not.toHaveBeenCalled();
+        });
+
+        it('leaves a rule of a repository the syncing team does not list, which its discovery cannot see', async () => {
+            // Two teams read the same config repository with different lists.
+            const { service, deleteRule } = build({
+                rules: [
+                    rule('of-api', fromB),
+                    { ...rule('global-gone', fromB), repositoryId: 'global' },
+                ],
+                teamRepositories: [{ id: 'repo-web', name: 'web' }],
+            });
+
+            await service.removeStaleKodyRules({
+                organizationAndTeamData: teamB,
+                ruleFiles: [],
+                configFiles,
+                actor,
+            });
+
+            expect(deleteRule.execute.mock.calls).toEqual([
+                ['uuid-global-gone', actor],
+            ]);
         });
 
         it('deletes its own rule whose file is gone', async () => {
@@ -238,6 +264,31 @@ describe('#2215 centralized rules belong to the config repository they came from
                 sourceRepositoryId: 'cfg-b',
                 sourceConnectionId: 'gl-b',
                 connectionScoped: true,
+            });
+        });
+
+        it("keeps a rule's recorded server when this sync cannot tell it", async () => {
+            const stored = rule('kept', {
+                sourceRepositoryId: 'cfg-b',
+                sourceServerKey: 'GITHUB|github.com',
+            });
+            const { service, createOrUpdate } = build({
+                rules: [{ ...stored, rule: 'old text' }],
+            });
+
+            await service.synchronizeKodyRules({
+                organizationAndTeamData: teamB,
+                ruleFiles: [meta('kept')],
+                actor,
+            });
+
+            expect(
+                createOrUpdate.execute.mock.calls[0][0].centralizedConfig,
+            ).toEqual({
+                path: pathOf('kept'),
+                status: KodyRuleCentralizedStatus.SYNCED,
+                sourceRepositoryId: 'cfg-b',
+                sourceServerKey: 'GITHUB|github.com',
             });
         });
 

@@ -14,23 +14,36 @@ const fileOf = (path?: string) => (path || '').split('#')[0];
 /**
  * A repository id names one repository per server, so repository + server
  * is the source. Only a connection's own config records the connection: its
- * global rules review that connection alone.
+ * global rules review that connection alone. A sync that could not read the
+ * server keeps the one the rule recorded from the same repository.
  */
 export const centralizedSourceStamp = (
     source: CentralizedRuleSource,
+    previous?: IKodyRuleCentralizedConfig | null,
 ): Pick<
     IKodyRuleCentralizedConfig,
     | 'sourceRepositoryId'
     | 'sourceServerKey'
     | 'sourceConnectionId'
     | 'connectionScoped'
-> => ({
-    sourceRepositoryId: source.repositoryId,
-    ...(source.serverKey ? { sourceServerKey: source.serverKey } : {}),
-    ...(source.connectionScoped && source.connectionId
-        ? { sourceConnectionId: source.connectionId, connectionScoped: true }
-        : {}),
-});
+> => {
+    const serverKey =
+        source.serverKey ??
+        (previous?.sourceServerKey &&
+        String(previous.sourceRepositoryId) === String(source.repositoryId)
+            ? previous.sourceServerKey
+            : undefined);
+    return {
+        sourceRepositoryId: source.repositoryId,
+        ...(serverKey ? { sourceServerKey: serverKey } : {}),
+        ...(source.connectionScoped && source.connectionId
+            ? {
+                  sourceConnectionId: source.connectionId,
+                  connectionScoped: true,
+              }
+            : {}),
+    };
+};
 
 /**
  * Whose sync a rule belongs to. Two teams reading one config repository on
@@ -113,5 +126,21 @@ export const ruleAppliesToConnection = (
     return (
         !centralized.sourceConnectionId ||
         centralized.sourceConnectionId === integrationId
+    );
+};
+
+/**
+ * A member granted only some Git connections reads a connection's own global
+ * rules only when granted that connection; `null` reads every rule.
+ */
+export const ruleVisibleToConnections = (
+    rule: { centralizedConfig?: IKodyRuleCentralizedConfig | null },
+    connectionIds: ReadonlySet<string> | null | undefined,
+): boolean => {
+    const centralized = rule.centralizedConfig;
+    if (!connectionIds || !centralized?.connectionScoped) return true;
+    return (
+        !centralized.sourceConnectionId ||
+        connectionIds.has(centralized.sourceConnectionId)
     );
 };

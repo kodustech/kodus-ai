@@ -62,6 +62,11 @@ export interface IKodyRuleIndexEntry {
     directoryId?: string;
     type?: KodyRulesType;
     status: KodyRulesStatus;
+    /** Read to decide who sees the rule; not returned to callers. */
+    centralizedConfig?: Pick<
+        IKodyRuleCentralizedConfig,
+        'connectionScoped' | 'sourceConnectionId'
+    > | null;
 }
 
 export type KodyRuleAutoPauseState = 'ignored' | 'noisy';

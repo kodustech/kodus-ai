@@ -2968,6 +2968,7 @@ ${reviewOptions}
                 platformType ??
                 (await this.codeManagementService.getTypeIntegration(
                     organizationAndTeamData,
+                    { id: repository.id, name: repository.name },
                 ));
 
             const commentResults = [];

@@ -481,7 +481,7 @@ describe('NotificationDispatcherService', () => {
             ).toEqual(['owner-1']);
         });
 
-        it('reaches nobody of the audience when their access cannot be read', async () => {
+        it('still reaches owners, and no one else, when access cannot be read', async () => {
             const t = makeDispatcher();
             const dispatcher = new NotificationDispatcherService(
                 [t.emailAdapter, t.inAppAdapter],
@@ -498,6 +498,14 @@ describe('NotificationDispatcherService', () => {
             );
             t.usersService.find.mockResolvedValueOnce([
                 { uuid: 'owner-1', email: 'o@a.com', role: 'owner' } as any,
+                { uuid: 'c-1', email: 'c@a.com', role: 'contributor' } as any,
+            ]);
+            t.routingRuleRepo.findByOrganization.mockResolvedValueOnce([
+                {
+                    event: SPEND_THRESHOLD,
+                    role: '*',
+                    channels: { email: true, in_app: false },
+                } as any,
             ]);
 
             await dispatcher.dispatch(
@@ -508,7 +516,12 @@ describe('NotificationDispatcherService', () => {
                 }),
             );
 
-            expect(t.emailAdapter.deliver).not.toHaveBeenCalled();
+            // Owners read every connection: no access read is needed for them.
+            expect(
+                t.emailAdapter.deliver.mock.calls.map(
+                    ([delivery]) => delivery.userEmail,
+                ),
+            ).toEqual(['o@a.com']);
         });
 
         it('applies a "*" rule to every role (literal all-roles baseline)', async () => {

@@ -159,6 +159,38 @@ describe('repository scope — kody rules', () => {
         expect(execute).not.toHaveBeenCalled();
     });
 
+    it('GET /kody-rules/past-reviewers takes no `global` as a scoped repository, and passes the granted connections', async () => {
+        const execute = jest.fn().mockResolvedValue([]);
+        const controller = make(KodyRulesController, {
+            listPastReviewersUseCase: { execute },
+            connectionAccess: {
+                restrictionFor: jest
+                    .fn()
+                    .mockResolvedValue({ connectionIds: new Set(['gh-a']) }),
+            },
+        });
+        controller.authorizationService.getRepositoryScope.mockResolvedValue([
+            ALLOWED,
+            'global',
+        ]);
+
+        await expect(
+            controller.listPastReviewers('team-2', 'global'),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        await controller.listPastReviewers('team-2', ALLOWED);
+
+        expect(execute.mock.calls).toEqual([
+            [
+                {
+                    teamId: 'team-2',
+                    repositoryId: ALLOWED,
+                    months: undefined,
+                    readableConnectionIds: new Set(['gh-a']),
+                },
+            ],
+        ]);
+    });
+
     it('GET /kody-rules/find-by-organization-id hides rules of repositories outside the scope', async () => {
         const rule = (repositoryId: string) => ({
             uuid: `rule-${repositoryId}`,

@@ -744,7 +744,8 @@ export class NotificationDispatcherService {
     /**
      * Members who can read every repository the event names: one granted
      * only some Git connections hears about their repositories only. Read in
-     * one pass; when access cannot be read, no member is reached.
+     * one pass; when access cannot be read, only owners (who read every
+     * connection) are reached.
      */
     private async readersOf(
         members: ResolvedRecipient[],
@@ -772,7 +773,7 @@ export class NotificationDispatcherService {
                 error,
                 metadata: { organizationId, memberCount: members.length },
             });
-            return [];
+            return members.filter((member) => member.role === Role.OWNER);
         }
         return members.filter((member) => {
             if (!member.userId || !restrictions.has(member.userId)) {

@@ -4,6 +4,7 @@ import {
     centralizedSourceStamp,
     keepCentralizedSource,
     ruleAppliesToConnection,
+    ruleVisibleToConnections,
 } from './centralized-rule-source';
 
 const synced = KodyRuleCentralizedStatus.SYNCED;
@@ -226,5 +227,29 @@ describe('centralized rule source', () => {
                 'gh-a',
             ),
         ).toBe(true);
+    });
+
+    it("shows a connection's own global rule only to members granted that connection", () => {
+        const scoped = {
+            repositoryId: 'global',
+            centralizedConfig: {
+                path: 'rules/a.yml',
+                status: synced,
+                sourceRepositoryId: 'cfg-b',
+                sourceConnectionId: 'gl-b',
+                connectionScoped: true,
+            },
+        };
+        const workspaceWide = {
+            repositoryId: 'global',
+            centralizedConfig: { path: 'rules/b.yml', status: synced },
+        };
+
+        expect(ruleVisibleToConnections(scoped, new Set(['gh-a']))).toBe(false);
+        expect(ruleVisibleToConnections(scoped, new Set(['gl-b']))).toBe(true);
+        expect(ruleVisibleToConnections(scoped, null)).toBe(true);
+        expect(ruleVisibleToConnections(workspaceWide, new Set(['gh-a']))).toBe(
+            true,
+        );
     });
 });

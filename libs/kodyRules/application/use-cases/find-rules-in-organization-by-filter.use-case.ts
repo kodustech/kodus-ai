@@ -25,6 +25,7 @@ import {
 import { createLogger } from '@libs/core/log/logger';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { enrichRulesWithContextReferences } from './utils/enrich-rules-with-context-references.util';
+import { ruleVisibleToConnections } from '@libs/kodyRules/domain/utils/centralized-rule-source';
 
 @Injectable()
 export class FindRulesInOrganizationByRuleFilterKodyRulesUseCase implements IUseCase {
@@ -114,13 +115,8 @@ export class FindRulesInOrganizationByRuleFilterKodyRulesUseCase implements IUse
                 ? await this.connectionAccess.restrictionFor(this.request.user)
                 : null;
             if (restriction) {
-                filteredRules = filteredRules.filter(
-                    (rule) =>
-                        !rule.centralizedConfig?.connectionScoped ||
-                        !rule.centralizedConfig.sourceConnectionId ||
-                        restriction.connectionIds.has(
-                            rule.centralizedConfig.sourceConnectionId,
-                        ),
+                filteredRules = filteredRules.filter((rule) =>
+                    ruleVisibleToConnections(rule, restriction.connectionIds),
                 );
             }
 

@@ -738,13 +738,31 @@ describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
             publisher as any,
             runs as any,
         );
-        return { useCase, service, publisher, runs };
+        return { useCase, service, publisher, runs, code };
     }
 
     const organizationAndTeamData = {
         organizationId: 'org-1',
         teamId: 'team-1',
     };
+
+    it('resolves the platform of the named repository, not of the workspace', async () => {
+        const { useCase, code } = build();
+
+        await useCase.execute({
+            organizationAndTeamData,
+            input: {
+                repositoryId: 'repo-1',
+                repository: 'acme/notes',
+                prNumber: 47,
+            },
+        });
+
+        expect(code.getTypeIntegration.mock.calls[0]).toEqual([
+            organizationAndTeamData,
+            { id: 'repo-1', name: 'acme/notes' },
+        ]);
+    });
 
     it('runs with the settings on screen and writes nothing', async () => {
         const { useCase, service, publisher, runs } = build();

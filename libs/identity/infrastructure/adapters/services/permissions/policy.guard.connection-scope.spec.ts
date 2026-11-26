@@ -118,10 +118,6 @@ describe('PolicyGuard — reads of connection-scoped data', () => {
                 action: Action.Read,
                 resource: ResourceType.UserSettings,
             }),
-            checkAnyPermission([
-                { action: Action.Read, resource: ResourceType.PullRequests },
-                { action: Action.Read, resource: ResourceType.UserSettings },
-            ]),
         ]) {
             const { guard, context, abilityFactory } = guardFor(
                 route(CheckPolicies(policy)),
@@ -132,6 +128,25 @@ describe('PolicyGuard — reads of connection-scoped data', () => {
                 abilityFactory.isConnectionRestricted,
             ).not.toHaveBeenCalled();
         }
+    });
+
+    it('holds a choice that includes any connection-scoped read to the same rule, unless the handler narrows it', async () => {
+        const mixed = CheckPolicies(
+            checkAnyPermission([
+                { action: Action.Read, resource: ResourceType.PullRequests },
+                { action: Action.Read, resource: ResourceType.UserSettings },
+            ]),
+        );
+
+        const unmarked = guardFor(route(mixed), true);
+        await expect(
+            unmarked.guard.canActivate(unmarked.context),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+
+        const marked = guardFor(route(AppliesConnectionScope(), mixed), true);
+        await expect(marked.guard.canActivate(marked.context)).resolves.toBe(
+            true,
+        );
     });
 
     it('treats a choice between connection-scoped reads as one', async () => {

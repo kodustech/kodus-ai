@@ -43,6 +43,34 @@ describe('FindByOrganizationIdKodyRulesUseCase', () => {
         );
     });
 
+    it("omits another connection's own global rules for a member not granted it", async () => {
+        kodyRulesService.findByOrganizationId.mockResolvedValueOnce({
+            organizationId: ORG_ID,
+            rules: [
+                {
+                    uuid: 'r-other-connection',
+                    repositoryId: 'global',
+                    status: KodyRulesStatus.ACTIVE,
+                    centralizedConfig: {
+                        sourceConnectionId: 'gl-b',
+                        connectionScoped: true,
+                    },
+                },
+                {
+                    uuid: 'r-workspace',
+                    repositoryId: 'global',
+                    status: KodyRulesStatus.ACTIVE,
+                },
+            ],
+        });
+
+        const result = (await useCase.execute({
+            connectionIds: new Set(['gh-a']),
+        })) as { rules: any[] };
+
+        expect(result.rules.map((r) => r.uuid)).toEqual(['r-workspace']);
+    });
+
     it('omits DELETED rules from the response', async () => {
         kodyRulesService.findByOrganizationId.mockResolvedValueOnce({
             organizationId: ORG_ID,

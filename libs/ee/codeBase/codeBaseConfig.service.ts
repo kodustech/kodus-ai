@@ -846,6 +846,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         const hasIntegration =
             await this.codeManagementService.getTypeIntegration(
                 organizationAndTeamData,
+                { id: repository.id, name: repository.name },
             );
         if (!hasIntegration) return;
 

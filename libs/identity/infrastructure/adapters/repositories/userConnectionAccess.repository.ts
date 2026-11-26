@@ -30,6 +30,18 @@ export class UserConnectionAccessRepository {
         return rows.map((row) => row.uuid);
     }
 
+    /** Every Git connection of the organization, disabled ones included. */
+    async allConnectionIds(organizationId: string): Promise<string[]> {
+        const rows = (await this.repository.manager.query(
+            `SELECT i."uuid"
+               FROM "integrations" i
+              WHERE i."organization_id" = $1
+                AND i."integrationCategory" = 'CODE_MANAGEMENT'`,
+            [organizationId],
+        )) as Array<{ uuid: string }>;
+        return rows.map((row) => row.uuid);
+    }
+
     /** The connections each of the given users is granted. */
     async grantsOf(userIds: string[]): Promise<Map<string, string[]>> {
         const grants = new Map<string, string[]>();

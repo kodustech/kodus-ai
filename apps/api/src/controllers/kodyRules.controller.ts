@@ -103,6 +103,7 @@ import {
 } from '../dtos/kody-rules-response.dto';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 
 @ApiTags('Kody Rules')
 @ApiStandardResponses()
@@ -145,6 +146,7 @@ export class KodyRulesController {
         private readonly request: UserRequest,
 
         private readonly authorizationService: AuthorizationService,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     /**
@@ -239,7 +241,10 @@ export class KodyRulesController {
             );
         }
 
-        return this.getKodyRulesIndexUseCase.execute(organizationId);
+        return this.getKodyRulesIndexUseCase.execute(
+            organizationId,
+            await this.connectionAccess.restrictionFor(this.request.user),
+        );
     }
 
     @Get('/find-by-organization-id')
@@ -257,7 +262,9 @@ export class KodyRulesController {
     })
     @ApiOkResponse({ type: KodyRulesFindByOrgResponseDto })
     public async findByOrganizationId() {
-        return this.findByOrganizationIdKodyRulesUseCase.execute();
+        return this.findByOrganizationIdKodyRulesUseCase.execute(
+            await this.connectionAccess.restrictionFor(this.request.user),
+        );
     }
 
     @ApiBearerAuth('jwt')
@@ -687,22 +694,29 @@ export class KodyRulesController {
         @Query('repositoryId') repositoryId?: string,
         @Query('months') months?: string,
     ) {
-        // A member granted some connections names one of their
-        // repositories: the list spans the connection's members and authors.
+        // A member scoped to some repositories names one of them (`global`
+        // is no repository); the list spans its connection's members and
+        // authors, and the use case holds that connection to the grants.
         const readable = await this.readableRepositories();
         if (
             readable !== null &&
-            (!repositoryId || !readable.includes(String(repositoryId)))
+            (!repositoryId ||
+                repositoryId === 'global' ||
+                !readable.includes(String(repositoryId)))
         ) {
             throw new ForbiddenException(
                 'Name a repository of the Git connections you are granted.',
             );
         }
+        const restriction = await this.connectionAccess.restrictionFor(
+            this.request.user,
+        );
         // Just parse the query string here; the use-case validates/bounds it.
         return this.listPastReviewersUseCase.execute({
             teamId,
             repositoryId,
             months: months !== undefined ? Number(months) : undefined,
+            readableConnectionIds: restriction?.connectionIds ?? null,
         });
     }
 

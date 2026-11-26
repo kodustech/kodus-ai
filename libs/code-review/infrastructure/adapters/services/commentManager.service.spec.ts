@@ -2037,6 +2037,17 @@ describe('CommentManagerService.createPrLevelReviewComments carries the kody-cod
             platformType,
         );
 
+    it('resolves the platform of the repository the comments are on when the caller does not name it', async () => {
+        await call();
+
+        expect(codeManagementService.getTypeIntegration.mock.calls).toEqual([
+            [
+                { organizationId: 'org-1', teamId: 'team-1' },
+                { id: 'repo-id', name: 'sample' },
+            ],
+        ]);
+    });
+
     it('appends the marker to a PR-level comment body that lacks it', async () => {
         const { commentResults } = await call();
 
