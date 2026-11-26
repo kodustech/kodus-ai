@@ -473,6 +473,13 @@ function looksLikeQuota(lower: string): boolean {
         // OpenRouter's per-key spend cap: "Key limit exceeded (monthly
         // limit) ... $10.02 of $10.00 used; resets 2026-12-01".
         lower.includes('key limit exceeded') ||
+        // Google AI Studio's project cap, a 429: "Your project has exceeded
+        // its monthly spending cap". 4,593 kody-rules shards were retried
+        // against it in one day (Nov 2026).
+        lower.includes('monthly spending cap') ||
+        // A subscription account's weekly allowance: "you (<user>) have
+        // reached your weekly usage limit". It reopens in days, not minutes.
+        lower.includes('reached your weekly usage limit') ||
         lower.includes('failure to pay') ||
         lower.includes('past invoices') ||
         lower.includes('past due')

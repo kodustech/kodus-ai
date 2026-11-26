@@ -52,6 +52,7 @@ import {
 } from './write-authorization';
 import { WriteGatePolicy } from './write-gate.policy';
 import { WriteTruthPolicy } from './write-truth.policy';
+import { DecisionLoopPolicy } from './decision-loop.policy';
 import { conversationCompression } from './conversation-window';
 import {
     buildSystemPrompt,
@@ -264,6 +265,7 @@ export class ConversationAgentProvider {
             policies: [
                 new WriteGatePolicy(prompt, writeAuthorization),
                 new WriteTruthPolicy(writeToolPredicate(mcp.metadata)),
+                new DecisionLoopPolicy(),
                 // A PR diff a tool read is re-sent on every step: without
                 // this, one large PR overflowed the model's window (#2233).
                 await conversationCompression({

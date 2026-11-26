@@ -24,6 +24,7 @@ import { jsonSchema, type Schema } from 'ai';
 import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { z } from 'zod';
 import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
+import { classifyLLMError, isTerminalCategory } from '@libs/llm/error-classifier';
 import { recoverRuleUuid } from './finding-mapper';
 import {
     extensionScopeAppliesToFile,
@@ -380,6 +381,9 @@ export type RunJudge = (args: {
  * keep it modest.
  */
 export const SHARD_CONCURRENCY_DEFAULT = 4;
+
+/** Terminal provider failures (see isTerminalCategory) before the rest are skipped. */
+export const TERMINAL_FAILURES_TO_STOP = 2;
 
 export interface ShardedJudgeInput {
     changedFiles: FileChange[];
@@ -1477,6 +1481,28 @@ export async function judgeKodyRulesSharded(
 
     let shardsRun = 0;
     let shardsErrored = 0;
+    // The provider refused the review's model for a reason no retry fixes
+    // (a spent cap, a revoked key, a model it does not serve). Every shard
+    // calls the same model, so the rest would fail the same way: up to
+    // hundreds of calls per review, 14k shard failures in one day (Nov 2026).
+    // Once TERMINAL_FAILURES_TO_STOP shards fail like that, the remaining
+    // ones count as failed without a call; the provider reports the run the
+    // same way it reports any failed shard.
+    let terminalFailures = 0;
+    let stoppedFor: string | undefined;
+    const stopAfterTerminal = (err: unknown): void => {
+        const category = classifyLLMError(err).category;
+        if (!isTerminalCategory(category)) return;
+        terminalFailures++;
+        if (!stoppedFor && terminalFailures >= TERMINAL_FAILURES_TO_STOP) {
+            stoppedFor = category;
+            logger?.warn({
+                message: `[kody-rules-shard] the model provider refused this review (${category}); the remaining shards are skipped instead of called`,
+                context: 'kody-rules-sharded',
+                metadata: { category, terminalFailures },
+            });
+        }
+    };
     const violations: ShardViolation[] = [];
     const referenceStats: ShardReferenceStats = {
         shards: 0,
@@ -1547,6 +1573,10 @@ export async function judgeKodyRulesSharded(
         async (shard, cacheable) => {
             const { file, applicable } = shard;
             shardsRun++;
+            if (stoppedFor) {
+                shardsErrored++;
+                return [] as ShardViolation[];
+            }
             // Index-aligned with the rules `ruleBlock` presents (a ruleId of N
             // maps to applicable[N-1]); keep '' holes rather than filtering so
             // the indices don't shift.
@@ -1598,6 +1628,7 @@ export async function judgeKodyRulesSharded(
                 }));
             } catch (err) {
                 shardsErrored++;
+                stopAfterTerminal(err);
                 logger?.warn({
                     message: `[kody-rules-shard] file shard failed for ${file.filename} (${applicable.length} rule(s)) — degrading to zero findings: ${err instanceof Error ? err.message : String(err)}`,
                     // SimpleLogger silently drops entries without a context
@@ -1623,7 +1654,10 @@ export async function judgeKodyRulesSharded(
     };
 
     // ── PR-scope shard: one call over the whole PR ──────────────────────────
-    if (prRules.length > 0) {
+    if (prRules.length > 0 && stoppedFor) {
+        shardsRun++;
+        shardsErrored++;
+    } else if (prRules.length > 0) {
         shardsRun++;
         const ruleUuids = prRules.map((r) => r.uuid ?? '');
         const referenceSection = referenceSectionFor(prRules);
