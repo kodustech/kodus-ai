@@ -1370,3 +1370,56 @@ describe('CreateOrUpdateOrganizationParametersUseCase — Vertex key type', () =
         expect(createOrUpdateConfig).toHaveBeenCalled();
     });
 });
+
+// Review on #2709 (sartorijr92, round 3): @ai-sdk/google-vertex builds the host
+// from the location (`https://<location>-aiplatform.googleapis.com`), so a
+// "location" that is a host and a path is refused before it is saved.
+describe('CreateOrUpdateOrganizationParametersUseCase — Vertex location', () => {
+    const vertexAt = (vertexLocation: string) =>
+        v2({
+            credentials: [
+                {
+                    id: 'cred-vertex',
+                    provider: 'google_vertex',
+                    apiKey: Buffer.from(
+                        JSON.stringify({
+                            type: 'service_account',
+                            project_id: 'proj-test-123',
+                        }),
+                    ).toString('base64'),
+                    settings: { vertexLocation },
+                } as any,
+            ],
+            models: [
+                {
+                    id: 'model-a',
+                    credentialId: 'cred-vertex',
+                    model: 'gemini-3.5-flash',
+                },
+            ],
+        });
+
+    it.each(['x.attacker.test/#', 'localhost:8443/#', 'us-central1.evil'])(
+        'refuses %s',
+        async (location) => {
+            const { useCase, createOrUpdateConfig } = buildUseCase();
+            await expect(saveByok(useCase, vertexAt(location))).rejects.toThrow(
+                /not a Vertex location/,
+            );
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([
+        'global',
+        'us',
+        'eu',
+        'us-central1',
+        'europe-west4',
+        ' northamerica-northeast1 ',
+    ])('accepts %s', async (location) => {
+        const { useCase, createOrUpdateConfig } = buildUseCase();
+        await saveByok(useCase, vertexAt(location));
+        expect(createOrUpdateConfig).toHaveBeenCalled();
+    });
+});

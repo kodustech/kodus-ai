@@ -284,3 +284,48 @@ describe('a Vertex BYOK key is a service account key', () => {
         expect(() => buildModelFromSlot(slot)).not.toThrow();
     });
 });
+
+// Review on #2709 (sartorijr92, round 3): Vertex takes no base URL, but
+// @ai-sdk/google-vertex builds its host from the location the org typed.
+describe('a Vertex location is a location, not a host', () => {
+    const saKey = Buffer.from(
+        JSON.stringify({
+            type: 'service_account',
+            project_id: 'proj-test-123',
+            client_email: 'x@proj-test-123.iam.gserviceaccount.com',
+            private_key: 'k',
+        }),
+    ).toString('base64');
+    const slotAt = (vertexLocation: string) =>
+        ({
+            provider: 'google_vertex',
+            apiKey: saKey,
+            model: 'gemini-3.5-flash',
+            vertexLocation,
+        }) as unknown as NormalizedModel;
+
+    it.each(['x.attacker.test/#', 'localhost:PORT/#', 'us-central1.evil'])(
+        'vertexLocation %s: refused as configuration before any request',
+        (template) => {
+            let error: unknown;
+            try {
+                buildModelFromSlot(
+                    slotAt(template.replace('PORT', String(port))),
+                );
+            } catch (e) {
+                error = e;
+            }
+            expect(requests).toEqual([]);
+            const info = classifyLLMError(error, 'google_vertex');
+            expect(info.category).toBe(LlmErrorCategory.CONFIG_INVALID);
+            expect(info.friendlyMessage).toMatch(/not a Vertex location/);
+        },
+    );
+
+    it.each(['global', 'us', 'eu', 'us-central1', 'europe-west4'])(
+        'vertexLocation %s builds',
+        (location) => {
+            expect(() => buildModelFromSlot(slotAt(location))).not.toThrow();
+        },
+    );
+});

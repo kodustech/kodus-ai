@@ -18,6 +18,7 @@ import {
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 import { bedrockRegion } from '@libs/llm/providers/bedrock/region';
 import { assertVertexServiceAccountKey } from '@libs/llm/providers/vertex/credential-type';
+import { vertexLocation } from '@libs/llm/providers/vertex/location';
 import { describeProtocolMismatch } from '@libs/llm/base-url-hygiene';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
@@ -392,6 +393,20 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             ) {
                 try {
                     bedrockRegion(awsRegion);
+                } catch (err) {
+                    throw new BadRequestException((err as Error).message);
+                }
+            }
+            // Vertex builds its host from the location (providers/vertex/location.ts).
+            const location = (cred?.settings as { vertexLocation?: unknown })
+                ?.vertexLocation;
+            if (
+                cred?.provider === 'google_vertex' &&
+                typeof location === 'string' &&
+                location.trim()
+            ) {
+                try {
+                    vertexLocation(location);
                 } catch (err) {
                     throw new BadRequestException((err as Error).message);
                 }
