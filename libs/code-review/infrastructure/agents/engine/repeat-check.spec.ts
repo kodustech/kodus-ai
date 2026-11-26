@@ -724,15 +724,21 @@ describe('checkRepeats', () => {
         expect(result.repeats.map((r) => r.finding)).toEqual([byCode]);
     });
 
-    it("without a verdict, holds a finder-linked finding on its comment's file and an answered point raised again in its file, and posts the rest", async () => {
+    it("without a verdict, holds a finder-linked finding on its comment's file and an answered point raised again in its file, moved or reworded, and posts the rest", async () => {
         const answered = earlier({
             suggestionId: 'answered',
             relevantFile: 'src/label.ts',
             relevantLinesStart: 4,
             relevantLinesEnd: 5,
             answered: true,
-            suggestionContent:
+            suggestionContent: [
                 'authorLabel renders undefined for a missing user.',
+                '',
+                '**Also found in:**',
+                '- `lib/profile/avatar.tsx:12-14`',
+                '- `lib/feed/item.tsx:30-31`',
+                '- `lib/inbox/row.tsx:8-9`',
+            ].join('\n'),
         });
         const linked = {
             label: 'bug',
@@ -754,6 +760,15 @@ describe('checkRepeats', () => {
             suggestionContent:
                 'authorLabel renders undefined when the user is missing.',
         };
+        // On its lines, in other words.
+        const reworded = {
+            label: 'bug',
+            relevantFile: 'src/label.ts',
+            relevantLinesStart: 4,
+            relevantLinesEnd: 4,
+            suggestionContent:
+                'authorLabel reads name from a user that can be missing, so the header shows undefined.',
+        };
         // On the answered lines, but another problem.
         const elsewhere = {
             label: 'bug',
@@ -768,13 +783,13 @@ describe('checkRepeats', () => {
         );
 
         const result = await checkRepeats(
-            [linked, linkedElsewhere, reraise, elsewhere],
+            [linked, linkedElsewhere, reraise, reworded, elsewhere],
             [bugComment, answered],
             { organizationId: 'org-1', byokConfig: slot },
         );
 
         expect(result.model).toBe('failed');
-        expect(result.withheld).toEqual([linked, reraise]);
+        expect(result.withheld).toEqual([linked, reraise, reworded]);
         expect(result.kept).toEqual([linkedElsewhere, elsewhere]);
     });
 

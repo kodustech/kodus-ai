@@ -38,6 +38,7 @@ import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 
 import { contentSimilarity } from './dedup-prompt';
 import { withoutCommentsOrStrings } from './is-usable-fix';
+import { OTHER_LOCATIONS_HEADING } from './kody-rules-merge';
 
 const logger = createLogger('RepeatCheck');
 
@@ -537,20 +538,54 @@ function heldWithoutVerdict(
 
 /** The answered point raised again in its file, wherever its lines moved:
  *  matched by what it says, not by the lines stored in an earlier round, so a
- *  different problem on those lines is still posted. Re-raises of an answered
- *  point measured 0.42-0.48 against it; different problems on the same lines
- *  0.03-0.17. */
+ *  different problem on those lines is still posted. On human-labeled pairs,
+ *  the same bug written again scored a median near 0.3 against it and a
+ *  different bug on the same lines rarely reached 0.2; off those lines the
+ *  text alone has to carry more. */
 const ANSWERED_SIMILARITY = 0.3;
+const ANSWERED_SIMILARITY_ON_ITS_LINES = 0.2;
 
 function answeredPointAgain(
     finding: RepeatCheckFinding,
     earlier: PrDecisionRecord,
 ): boolean {
     const file = normalizePath(finding.relevantFile);
+    if (!file || file !== normalizePath(earlier.relevantFile)) return false;
+    const similarity = contentSimilarity(finding, {
+        ...earlier,
+        suggestionContent: withoutOtherLocations(earlier.suggestionContent),
+    });
     return (
-        !!file &&
-        file === normalizePath(earlier.relevantFile) &&
-        contentSimilarity(finding, earlier) >= ANSWERED_SIMILARITY
+        similarity >=
+        (linesOverlap(finding, earlier)
+            ? ANSWERED_SIMILARITY_ON_ITS_LINES
+            : ANSWERED_SIMILARITY)
+    );
+}
+
+/** The "Also found in" list dedup appends is paths, not the point made. */
+function withoutOtherLocations(text?: string): string | undefined {
+    if (!text) return text;
+    const at = text.indexOf(OTHER_LOCATIONS_HEADING);
+    if (at < 0) return text;
+    const rest = text
+        .slice(at + OTHER_LOCATIONS_HEADING.length)
+        .split('\n')
+        .filter((line) => line.trim() && !line.trim().startsWith('- '));
+    return [text.slice(0, at), ...rest].join('\n').trim();
+}
+
+function linesOverlap(
+    finding: RepeatCheckFinding,
+    earlier: PrDecisionRecord,
+): boolean {
+    const start = finding.relevantLinesStart;
+    const oldStart = earlier.relevantLinesStart;
+    return (
+        start != null &&
+        oldStart != null &&
+        start <= (earlier.relevantLinesEnd ?? oldStart) &&
+        oldStart <= (finding.relevantLinesEnd ?? start)
     );
 }
 
@@ -572,13 +607,8 @@ function plausibleRepeat(
             claim === earlier.suggestionContent?.trim()
         );
     }
-    const start = finding.relevantLinesStart;
-    const oldStart = earlier.relevantLinesStart;
     return (
-        start != null &&
-        oldStart != null &&
-        start <= (earlier.relevantLinesEnd ?? oldStart) &&
-        oldStart <= (finding.relevantLinesEnd ?? start) &&
+        linesOverlap(finding, earlier) &&
         contentSimilarity(finding, earlier) >= 0.4
     );
 }
