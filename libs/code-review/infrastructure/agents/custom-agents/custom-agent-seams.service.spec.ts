@@ -218,6 +218,7 @@ describe('CustomAgentTryRunnerService', () => {
             createSandboxStage,
             orchestrator,
             codeBaseConfig,
+            cm,
         };
     };
 
@@ -335,6 +336,17 @@ describe('CustomAgentTryRunnerService', () => {
                 command.includes('refs/remotes/origin/main'),
             ),
         ).toBe(true);
+    });
+
+    it("reads the platform of the repository's own Git connection", async () => {
+        const { runner, cm } = setup();
+
+        await run(runner);
+
+        expect(cm.getTypeIntegration).toHaveBeenCalledWith(
+            org,
+            expect.objectContaining({ id: 'repo-1' }),
+        );
     });
 
     it('reports what the agent did, with the warnings a review would carry, and releases the sandbox', async () => {

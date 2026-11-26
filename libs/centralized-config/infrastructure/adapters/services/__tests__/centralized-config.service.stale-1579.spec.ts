@@ -325,7 +325,10 @@ async function buildHarness(opts: {
             },
             {
                 provide: CodeManagementService,
-                useValue: { getRepositoryTree: jest.fn() },
+                useValue: {
+                    getRepositoryTree: jest.fn(),
+                    connectionServerKey: jest.fn(),
+                },
             },
             {
                 provide: UpdateOrCreateCodeReviewParameterUseCase,

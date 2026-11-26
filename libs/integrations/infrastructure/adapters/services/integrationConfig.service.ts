@@ -8,6 +8,7 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import {
     IIntegrationConfigRepository,
     INTEGRATION_CONFIG_REPOSITORY_TOKEN,
+    RepositoryListing,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.repository.contracts';
 import { IIntegrationConfigService } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
@@ -96,6 +97,14 @@ export class IntegrationConfigService implements IIntegrationConfigService {
                     String(repository?.id),
                 ),
         );
+    }
+
+    findRepositoryListings(params: {
+        teamId: string;
+        integrationIds: string[];
+        repository: { id?: string | number; name?: string; fullName?: string };
+    }): Promise<RepositoryListing[]> {
+        return this.integrationConfigRepository.findRepositoryListings(params);
     }
 
     findAllOfTeamByConfigKey(

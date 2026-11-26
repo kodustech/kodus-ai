@@ -3028,15 +3028,31 @@ export class AzureReposService implements Omit<
             // had expired got deleted by the create side and again by the
             // prune, while its freshly created replacement turned into a new
             // duplicate.
-            const { removed: pruned, surviving } =
-                await this.pruneSubscriptionsOutsideSelection({
-                    passId,
-                    orgName: azureAuthDetail.orgName,
-                    token: azureAuthDetail.token,
-                    selection,
-                    existingSubscriptions,
-                    teamId: organizationAndTeamData?.teamId,
+            //
+            // Subscriptions carry the team, not the connection, so the prune
+            // keeps whatever any Azure connection of the team selects: one
+            // connection's pass must not unsubscribe another's repositories.
+            // Unreadable selections prune nothing.
+            const teamSelection = await this.teamAzureSelection(
+                organizationAndTeamData,
+            );
+            if (!teamSelection) {
+                this.logger.warn({
+                    message: `[AZURE-HOOKS] pass ${passId} | the team's Azure selections could not be read; nothing pruned`,
+                    context: this.createWebhook.name,
+                    metadata: { passId, organizationAndTeamData },
                 });
+            }
+            const { removed: pruned, surviving } = teamSelection
+                ? await this.pruneSubscriptionsOutsideSelection({
+                      passId,
+                      orgName: azureAuthDetail.orgName,
+                      token: azureAuthDetail.token,
+                      selection: [...selection, ...teamSelection],
+                      existingSubscriptions,
+                      teamId: organizationAndTeamData?.teamId,
+                  })
+                : { removed: 0, surviving: existingSubscriptions };
 
             // One index for the whole pass. The create side used to rescan the
             // organization-wide snapshot once per repository per event type,
@@ -3092,6 +3108,41 @@ export class AzureReposService implements Omit<
                     organizationAndTeamData,
                 },
             });
+        }
+    }
+
+    /**
+     * Every repository the team's active Azure connections select, or null
+     * when a selection cannot be read.
+     */
+    private async teamAzureSelection(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<Repositories[] | null> {
+        try {
+            const configs =
+                (await this.integrationConfigService.findAllOfTeamByConfigKey(
+                    IntegrationConfigKey.REPOSITORIES,
+                    organizationAndTeamData,
+                )) ?? [];
+            return configs
+                .filter(
+                    (config) =>
+                        config?.integration?.platform ===
+                        PlatformType.AZURE_REPOS,
+                )
+                .flatMap((config) =>
+                    Array.isArray(config.configValue)
+                        ? (config.configValue as Repositories[])
+                        : [],
+                );
+        } catch (error) {
+            this.logger.error({
+                message: "Could not read the team's Azure selections",
+                context: AzureReposService.name,
+                error,
+                metadata: { organizationAndTeamData },
+            });
+            return null;
         }
     }
 

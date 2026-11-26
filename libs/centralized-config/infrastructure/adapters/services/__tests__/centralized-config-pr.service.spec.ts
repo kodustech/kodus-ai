@@ -310,6 +310,70 @@ describe('CentralizedConfigPrService', () => {
             ).not.toHaveBeenCalled();
         });
 
+        it("routes a change to a connection's own global rule to that connection's config", async () => {
+            const { service, parametersService } = buildService({
+                teamRepositoryConfigs: configs,
+            });
+
+            await expect(
+                service.scopeToRepositoryConnection(
+                    organizationAndTeamData,
+                    'global',
+                    {
+                        path: 'x.yml',
+                        status: 'synced',
+                        sourceRepositoryId: 'cfg-b',
+                        sourceConnectionId: 'gl-b',
+                        connectionScoped: true,
+                    } as any,
+                ),
+            ).resolves.toEqual({
+                ...organizationAndTeamData,
+                integrationId: 'gl-b',
+            });
+
+            await service
+                .createMutationPullRequestIfEnabled({
+                    organizationAndTeamData,
+                    repositoryId: 'global',
+                    ruleSource: {
+                        path: 'x.yml',
+                        status: 'synced',
+                        sourceConnectionId: 'gl-b',
+                        connectionScoped: true,
+                    },
+                    files: [],
+                    title: 't',
+                    description: 'd',
+                    commitMessage: 'c',
+                } as any)
+                .catch(() => undefined);
+
+            expect(parametersService.findByKey).toHaveBeenCalledWith(
+                expect.anything(),
+                { ...organizationAndTeamData, integrationId: 'gl-b' },
+            );
+        });
+
+        it('keeps a workspace global rule on the workspace config', async () => {
+            const { service } = buildService({
+                teamRepositoryConfigs: configs,
+            });
+
+            await expect(
+                service.scopeToRepositoryConnection(
+                    organizationAndTeamData,
+                    'global',
+                    {
+                        path: 'x.yml',
+                        status: 'synced',
+                        sourceRepositoryId: 'cfg',
+                        sourceServerKey: 'GITHUB|github.com',
+                    } as any,
+                ),
+            ).resolves.toEqual(organizationAndTeamData);
+        });
+
         it('opens the mutation pull request on the connection that lists the repository', async () => {
             const { service, parametersService } = buildService({
                 teamRepositoryConfigs: configs,

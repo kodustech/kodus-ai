@@ -93,10 +93,16 @@ export class CentralizedConfigSyncUseCase implements IUseCase {
                 });
             }
 
-            const configScopesToSync = this.mergeConfigScopes(
+            // Its global rule files still sync as rules, but never as a
+            // global config scope: that scope rebuilds the workspace's
+            // global level and custom messages from the file.
+            const mergedScopes = this.mergeConfigScopes(
                 appliedConfigFiles,
                 ruleFilesMeta,
             );
+            const configScopesToSync = source.connectionScoped
+                ? mergedScopes.filter((scope) => scope.repositoryId)
+                : mergedScopes;
 
             // Synchronize configs
             const syncResult =
@@ -128,6 +134,7 @@ export class CentralizedConfigSyncUseCase implements IUseCase {
                     organizationAndTeamData,
                     ruleFiles: ruleFilesMeta,
                     actor,
+                    source,
                 });
 
             if (!syncRulesResult.success) {
@@ -168,6 +175,7 @@ export class CentralizedConfigSyncUseCase implements IUseCase {
                     // them rather than the read having failed.
                     configFiles: configFilesMeta,
                     actor,
+                    source,
                 });
 
             if (!cleanupRulesResult.success) {

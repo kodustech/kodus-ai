@@ -9,7 +9,18 @@ export const INTEGRATION_CONFIG_REPOSITORY_TOKEN = Symbol(
     'IntegrationConfigRepository',
 );
 
+/** One entry of a connection's repository list. */
+export type RepositoryListing = {
+    integrationId: string;
+    repository: Record<string, unknown>;
+};
+
 export interface IIntegrationConfigRepository {
+    findRepositoryListings(params: {
+        teamId: string;
+        integrationIds: string[];
+        repository: { id?: string | number; name?: string; fullName?: string };
+    }): Promise<RepositoryListing[]>;
     find(
         filter?: Partial<IIntegrationConfig>,
     ): Promise<IntegrationConfigEntity[]>;

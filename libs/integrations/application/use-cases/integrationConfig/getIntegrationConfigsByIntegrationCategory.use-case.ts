@@ -120,17 +120,25 @@ export class GetIntegrationConfigsByIntegrationCategoryUseCase implements IUseCa
         const readable = readableConnectionIds
             ? new Set(readableConnectionIds)
             : null;
-        const byKey = new Map<string, unknown>();
-        for (const connection of connections.filter(
+        const listed = connections.filter(
             (connection) =>
                 connection && (!readable || readable.has(connection.uuid)),
-        )) {
-            const configs =
-                (await this.integrationConfigService.find({
-                    integration: { uuid: connection.uuid },
-                    team: { uuid: organizationAndTeamData.teamId },
-                })) ?? [];
-            for (const config of configs) {
+        );
+        // Read together; merged oldest connection first, so a key only one
+        // connection can hold answers the same way on every call. One
+        // unreadable connection fails the answer rather than hiding its part.
+        const configsByConnection = await Promise.all(
+            listed.map(
+                async (connection) =>
+                    (await this.integrationConfigService.find({
+                        integration: { uuid: connection.uuid },
+                        team: { uuid: organizationAndTeamData.teamId },
+                    })) ?? [],
+            ),
+        );
+        const byKey = new Map<string, unknown>();
+        for (const [index, connection] of listed.entries()) {
+            for (const config of configsByConnection[index]) {
                 if (
                     config.configKey === IntegrationConfigKey.REPOSITORIES &&
                     Array.isArray(config.configValue)

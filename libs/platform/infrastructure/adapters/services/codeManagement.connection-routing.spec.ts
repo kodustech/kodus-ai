@@ -185,6 +185,132 @@ describe('CodeManagementService — connection routing', () => {
         );
     });
 
+    it('looks nothing up when the params carry no workspace, keeping the given platform', async () => {
+        const { service, provider, resolveCodeManagementConnection } = build({
+            platform: PlatformType.GITHUB,
+            ambiguous: false,
+        });
+        const params = {
+            organizationAndTeamData: {
+                organizationId: undefined,
+                teamId: undefined,
+            },
+            repository: { id: '1', name: 'api' },
+            file: {},
+            pullRequest: {},
+        };
+
+        await service.getRepositoryContentFile(
+            params as any,
+            PlatformType.GITHUB,
+        );
+
+        expect(resolveCodeManagementConnection).not.toHaveBeenCalled();
+        expect(provider.getRepositoryContentFile).toHaveBeenCalledWith(params);
+    });
+
+    it('answers the platform of the connection listing the given repository', async () => {
+        const { service, resolveCodeManagementConnection } = build({
+            integration: { uuid: 'gl-b', platform: PlatformType.GITLAB },
+            platform: PlatformType.GITLAB,
+            ambiguous: false,
+        });
+
+        const type = await service.getTypeIntegration(orgTeam(), {
+            id: '22',
+            name: 'web',
+        });
+
+        expect(type).toBe(PlatformType.GITLAB);
+        expect(resolveCodeManagementConnection).toHaveBeenCalledWith(
+            orgTeam(),
+            { repository: { id: '22', name: 'web' } },
+        );
+    });
+
+    it("asks the repository's own connection whether it has issues", async () => {
+        const supportsIssues = jest.fn().mockResolvedValue(true);
+        const {
+            service,
+            getCodeManagementService,
+            resolveCodeManagementConnection,
+        } = build({
+            integration: { uuid: 'bb-dc', platform: PlatformType.BITBUCKET },
+            platform: PlatformType.BITBUCKET,
+            ambiguous: false,
+        });
+        getCodeManagementService.mockReturnValue({
+            listIssues: jest.fn(),
+            supportsIssues,
+        });
+
+        await service.isIssuesSupported(orgTeam(), { id: '3', name: 'core' });
+
+        expect(resolveCodeManagementConnection).toHaveBeenCalledWith(
+            orgTeam(),
+            expect.objectContaining({
+                repository: { id: '3', name: 'core' },
+            }),
+        );
+        expect(supportsIssues).toHaveBeenCalledWith({
+            ...orgTeam(),
+            integrationId: 'bb-dc',
+        });
+    });
+
+    it('asks the routed connection what CI evidence it reports', async () => {
+        const supportsCheckEvidence = jest
+            .fn()
+            .mockResolvedValue({ statuses: true, annotations: true });
+        const { service, getCodeManagementService } = build({
+            integration: { uuid: 'bb-dc', platform: PlatformType.BITBUCKET },
+            platform: PlatformType.BITBUCKET,
+            ambiguous: false,
+        });
+        getCodeManagementService.mockReturnValue({
+            getCheckEvidence: jest.fn(),
+            supportsCheckEvidence,
+        });
+
+        await service.supportsCheckEvidence(orgTeam(), undefined, {
+            id: '3',
+            name: 'core',
+        });
+
+        expect(supportsCheckEvidence).toHaveBeenCalledWith({
+            ...orgTeam(),
+            integrationId: 'bb-dc',
+        });
+    });
+
+    it('names the connection listing a repository, and none when several or the lookup fails', async () => {
+        const listing = build({
+            integration: { uuid: 'gl-b', platform: PlatformType.GITLAB },
+            platform: PlatformType.GITLAB,
+            ambiguous: false,
+        });
+        await expect(
+            listing.service.connectionIdFor(orgTeam(), { id: '22' }),
+        ).resolves.toBe('gl-b');
+        expect(listing.resolveCodeManagementConnection).toHaveBeenCalledWith(
+            orgTeam(),
+            { repository: { id: '22' } },
+        );
+
+        const ambiguous = build({ platform: null, ambiguous: true });
+        await expect(
+            ambiguous.service.connectionIdFor(orgTeam(), { id: '22' }),
+        ).resolves.toBeUndefined();
+
+        const failing = build({ platform: null, ambiguous: false });
+        failing.resolveCodeManagementConnection.mockRejectedValue(
+            new Error('pg down'),
+        );
+        await expect(
+            failing.service.connectionIdFor(orgTeam(), { id: '22' }),
+        ).resolves.toBeUndefined();
+    });
+
     describe('listing repositories with several connections and none named', () => {
         const fanOut = (failing?: string) => {
             const providers: Record<string, { getRepositories: jest.Mock }> = {

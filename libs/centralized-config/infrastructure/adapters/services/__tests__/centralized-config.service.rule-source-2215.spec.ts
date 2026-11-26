@@ -85,7 +85,7 @@ function build(opts: {
                 .fn()
                 .mockResolvedValue([{ id: 'repo-1', name: 'repo-1' }]),
         } as any,
-        {} as any,
+        { connectionServerKey: jest.fn() } as any,
         { execute: jest.fn() } as any,
         {} as any,
         {} as any,

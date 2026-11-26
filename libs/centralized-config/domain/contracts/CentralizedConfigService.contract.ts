@@ -131,6 +131,8 @@ export interface ICentralizedConfigService {
             userEmail: string;
             userId: string;
         };
+        /** Read once by the caller; looked up when absent. */
+        source?: CentralizedRuleSource;
     }): Promise<{
         success: boolean;
         message: string;
@@ -156,6 +158,8 @@ export interface ICentralizedConfigService {
             userEmail: string;
             userId: string;
         };
+        /** Read once by the caller; looked up when absent. */
+        source?: CentralizedRuleSource;
     }): Promise<{
         success: boolean;
         message: string;

@@ -4,26 +4,40 @@ import { IKodyRuleCentralizedConfig } from '../interfaces/kodyRules.interface';
 export type CentralizedRuleSource = {
     repositoryId: string;
     connectionId?: string;
+    /** `PLATFORM|host` of the server holding the repository, when known. */
+    serverKey?: string;
     connectionScoped: boolean;
 };
 
 const fileOf = (path?: string) => (path || '').split('#')[0];
 
+/**
+ * A repository id names one repository per server, so repository + server
+ * is the source. Only a connection's own config records the connection: its
+ * global rules review that connection alone.
+ */
 export const centralizedSourceStamp = (
     source: CentralizedRuleSource,
 ): Pick<
     IKodyRuleCentralizedConfig,
-    'sourceRepositoryId' | 'sourceConnectionId' | 'connectionScoped'
+    | 'sourceRepositoryId'
+    | 'sourceServerKey'
+    | 'sourceConnectionId'
+    | 'connectionScoped'
 > => ({
     sourceRepositoryId: source.repositoryId,
-    ...(source.connectionId ? { sourceConnectionId: source.connectionId } : {}),
-    ...(source.connectionScoped ? { connectionScoped: true } : {}),
+    ...(source.serverKey ? { sourceServerKey: source.serverKey } : {}),
+    ...(source.connectionScoped && source.connectionId
+        ? { sourceConnectionId: source.connectionId, connectionScoped: true }
+        : {}),
 });
 
 /**
- * Whose sync a rule belongs to. A connection recorded on only one side
- * proves nothing: syncs started without a connection (the CLI on a
- * single-connection workspace) stamp none.
+ * Whose sync a rule belongs to. Two teams reading one config repository on
+ * one server share its rules. A connection settles it only for a
+ * connection's own config, or when either side lacks the server, and then
+ * only when both sides record one: syncs started without a connection (the
+ * CLI on a single-connection workspace) stamp none.
  */
 export const centralizedRuleOwner = (
     centralizedConfig: IKodyRuleCentralizedConfig | undefined | null,
@@ -36,7 +50,21 @@ export const centralizedRuleOwner = (
     ) {
         return 'other';
     }
+    const serversKnown = Boolean(
+        centralizedConfig.sourceServerKey && source.serverKey,
+    );
     if (
+        serversKnown &&
+        centralizedConfig.sourceServerKey !== source.serverKey
+    ) {
+        return 'other';
+    }
+    const connectionDecides =
+        !serversKnown ||
+        centralizedConfig.connectionScoped === true ||
+        source.connectionScoped;
+    if (
+        connectionDecides &&
         centralizedConfig.sourceConnectionId &&
         source.connectionId &&
         centralizedConfig.sourceConnectionId !== source.connectionId
@@ -62,6 +90,9 @@ export const keepCentralizedSource = (
     return {
         ...next,
         sourceRepositoryId: previous.sourceRepositoryId,
+        ...(previous.sourceServerKey
+            ? { sourceServerKey: previous.sourceServerKey }
+            : {}),
         ...(previous.sourceConnectionId
             ? { sourceConnectionId: previous.sourceConnectionId }
             : {}),

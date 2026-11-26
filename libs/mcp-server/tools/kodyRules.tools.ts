@@ -1175,11 +1175,18 @@ export class KodyRulesTools {
             }),
             execute: wrapToolHandler(
                 async (args: InputType): Promise<FindMemoriesResponse> => {
+                    // A repository's search sees its own connection's
+                    // memories, not another connection's own global ones.
+                    const organizationAndTeamData =
+                        await this.centralizedConfigPrService.scopeToRepositoryConnection(
+                            {
+                                organizationId: args.organizationId,
+                                teamId: args.teamId,
+                            },
+                            args.repositoryId,
+                        );
                     const memories = await this.kodyRulesService.findMemories(
-                        {
-                            organizationId: args.organizationId,
-                            teamId: args.teamId,
-                        },
+                        organizationAndTeamData,
                         {
                             repositoryId: args.repositoryId,
                             directoryId: args.directoryId,

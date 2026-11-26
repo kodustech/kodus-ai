@@ -56,6 +56,51 @@ describe('GetIntegrationConfigsByIntegrationCategoryUseCase — Git connections'
         ]);
     });
 
+    it('reads the connections together and answers a shared key from the oldest one', async () => {
+        const integrationService = {
+            find: jest
+                .fn()
+                .mockResolvedValue([{ uuid: 'gh-old' }, { uuid: 'gl-new' }]),
+        };
+        let inFlight = 0;
+        let peak = 0;
+        const integrationConfigService = {
+            find: jest.fn(async (filter: any) => {
+                inFlight += 1;
+                peak = Math.max(peak, inFlight);
+                // The oldest connection answers last.
+                await new Promise((resolve) =>
+                    setTimeout(
+                        resolve,
+                        filter.integration.uuid === 'gh-old' ? 20 : 0,
+                    ),
+                );
+                inFlight -= 1;
+                return [
+                    {
+                        configKey: 'installationId',
+                        configValue: filter.integration.uuid,
+                    },
+                ];
+            }),
+        };
+        const useCase = new GetIntegrationConfigsByIntegrationCategoryUseCase(
+            integrationService as any,
+            integrationConfigService as any,
+            { user: { organization: { uuid: 'org-1' } } } as any,
+        );
+
+        const result = await useCase.execute({
+            teamId: 'team-1',
+            integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+        });
+
+        expect(peak).toBe(2);
+        expect(result).toEqual([
+            { configKey: 'installationId', configValue: 'gh-old' },
+        ]);
+    });
+
     it('lists only the named connection’s configs', async () => {
         const { useCase } = build({
             'gh-a': [{ id: '1' }],

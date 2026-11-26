@@ -21,9 +21,17 @@ import {
 import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
 import { IIntegration } from '@libs/integrations/domain/integrations/interfaces/integration.interface';
 
+/** Long enough for one request or cron step, short enough to see a reset. */
+const RESOLUTION_MEMO_TTL_MS = 5_000;
+const RESOLUTION_MEMO_MAX = 5_000;
+
 @Injectable()
 export class IntegrationService implements IIntegrationService {
     private readonly logger = createLogger(IntegrationService.name);
+    private readonly resolutions = new Map<
+        string,
+        { answer: Promise<ResolvedConnection>; expiresAt: number }
+    >();
 
     constructor(
         @Inject(INTEGRATION_REPOSITORY_TOKEN)
@@ -111,19 +119,33 @@ export class IntegrationService implements IIntegrationService {
         return this.integrationRepository.findById(uuid);
     }
 
-    create(integration: IIntegration): Promise<IntegrationEntity> {
-        return this.integrationRepository.create(integration);
+    // A write changes which connection answers; this process forgets its
+    // answers at once, others within the memo's few seconds.
+    async create(integration: IIntegration): Promise<IntegrationEntity> {
+        try {
+            return await this.integrationRepository.create(integration);
+        } finally {
+            this.resolutions.clear();
+        }
     }
 
-    update(
+    async update(
         filter: Partial<IIntegration>,
         data: Partial<IIntegration>,
     ): Promise<IntegrationEntity> {
-        return this.integrationRepository.update(filter, data);
+        try {
+            return await this.integrationRepository.update(filter, data);
+        } finally {
+            this.resolutions.clear();
+        }
     }
 
-    delete(uuid: string): Promise<void> {
-        return this.integrationRepository.delete(uuid);
+    async delete(uuid: string): Promise<void> {
+        try {
+            return await this.integrationRepository.delete(uuid);
+        } finally {
+            this.resolutions.clear();
+        }
     }
 
     async getPlatformAuthDetails<T>(
@@ -166,8 +188,9 @@ export class IntegrationService implements IIntegrationService {
 
     /**
      * The workspace's connection on `platform`. A named connection
-     * (`integrationId`) wins; otherwise a workspace with several on the same
-     * platform gets the first one, logged, until the caller names it.
+     * (`integrationId`) wins; otherwise the platform's only active connection
+     * (or only row). Several and none named answers nothing, logged, so no
+     * call runs with another connection's credentials.
      */
     private async findPlatformConnection(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -186,7 +209,9 @@ export class IntegrationService implements IIntegrationService {
             });
         }
 
-        const candidates = (await this.find(scope)) ?? [];
+        const rows = (await this.find(scope)) ?? [];
+        const active = rows.filter((row) => row.status !== false);
+        const candidates = active.length ? active : rows;
 
         if (candidates.length > 1) {
             this.logger.warn({
@@ -199,18 +224,71 @@ export class IntegrationService implements IIntegrationService {
                     candidateIds: candidates.map((c) => c.uuid),
                 },
             });
+            return undefined;
         }
 
         return candidates[0];
     }
 
-    async resolveCodeManagementConnection(
+    /**
+     * Which connection a call is for. The same question asked again within a
+     * few seconds (a cron walking a PR, one request routing several calls)
+     * gets the same answer without new queries.
+     */
+    resolveCodeManagementConnection(
         organizationAndTeamData: OrganizationAndTeamData,
         hint: {
             platform?: PlatformType;
             repository?: ConnectionRepositoryHint;
         } = {},
     ): Promise<ResolvedConnection> {
+        const key = JSON.stringify([
+            organizationAndTeamData?.organizationId,
+            organizationAndTeamData?.teamId,
+            organizationAndTeamData?.integrationId,
+            hint.platform,
+            hint.repository?.id != null ? String(hint.repository.id) : null,
+            hint.repository?.fullName ?? null,
+            hint.repository?.name ?? null,
+        ]);
+        const now = Date.now();
+        const cached = this.resolutions.get(key);
+        if (cached && cached.expiresAt > now) return cached.answer;
+
+        if (this.resolutions.size >= RESOLUTION_MEMO_MAX) {
+            for (const [entry, value] of this.resolutions) {
+                if (value.expiresAt <= now) this.resolutions.delete(entry);
+            }
+            if (this.resolutions.size >= RESOLUTION_MEMO_MAX) {
+                this.resolutions.clear();
+            }
+        }
+
+        const answer = this.resolveConnection(organizationAndTeamData, hint);
+        this.resolutions.set(key, {
+            answer,
+            expiresAt: now + RESOLUTION_MEMO_TTL_MS,
+        });
+        answer.catch(() => this.resolutions.delete(key));
+        return answer;
+    }
+
+    private async resolveConnection(
+        organizationAndTeamData: OrganizationAndTeamData,
+        hint: {
+            platform?: PlatformType;
+            repository?: ConnectionRepositoryHint;
+        },
+    ): Promise<ResolvedConnection> {
+        // No workspace, no lookup: an unscoped query would read every
+        // organization's (or team's) connections.
+        if (
+            !organizationAndTeamData?.organizationId ||
+            !organizationAndTeamData?.teamId
+        ) {
+            return { integration: undefined, platform: null, ambiguous: false };
+        }
+
         const scope = {
             organization: { uuid: organizationAndTeamData.organizationId },
             team: { uuid: organizationAndTeamData.teamId },
@@ -279,39 +357,51 @@ export class IntegrationService implements IIntegrationService {
         };
     }
 
+    /**
+     * The candidates whose repository list holds the repository. A repository
+     * id listed by several (ids repeat across servers) is settled by its full
+     * name when the hint carries one.
+     */
     private async connectionsListingRepository(
         candidates: IntegrationEntity[],
         organizationAndTeamData: OrganizationAndTeamData,
         repository: ConnectionRepositoryHint,
     ): Promise<IntegrationEntity[]> {
-        const id = repository.id != null ? String(repository.id) : undefined;
-        const lists = await Promise.allSettled(
-            candidates.map((candidate) =>
-                this.integrationConfigService.findOne({
-                    integration: { uuid: candidate.uuid },
-                    team: { uuid: organizationAndTeamData.teamId },
-                    configKey: IntegrationConfigKey.REPOSITORIES,
-                }),
-            ),
-        );
+        const listings =
+            (await this.integrationConfigService.findRepositoryListings({
+                teamId: organizationAndTeamData.teamId,
+                integrationIds: candidates.map((candidate) => candidate.uuid),
+                repository,
+            })) ?? [];
 
-        return candidates.filter((_, index) => {
-            const result = lists[index];
-            if (result.status !== 'fulfilled') return false;
-            const repos = Array.isArray(result.value?.configValue)
-                ? (result.value.configValue as Array<{
-                      id?: string | number;
-                      name?: string;
-                      full_name?: string;
-                  }>)
-                : [];
-            return repos.some((repo) =>
-                id !== undefined
-                    ? String(repo?.id) === id
-                    : repository.fullName
-                      ? repo?.full_name === repository.fullName
-                      : !!repository.name && repo?.name === repository.name,
+        let matched = new Set(listings.map((listing) => listing.integrationId));
+        const fullName = repository.fullName?.toLowerCase();
+        if (matched.size > 1 && fullName) {
+            const byFullName = new Set(
+                listings
+                    .filter((listing) =>
+                        fullNamesOf(listing.repository).includes(fullName),
+                    )
+                    .map((listing) => listing.integrationId),
             );
-        });
+            if (byFullName.size) matched = byFullName;
+        }
+
+        return candidates.filter((candidate) => matched.has(candidate.uuid));
     }
 }
+
+/** The owner/name forms a stored repository goes by, lower-cased. */
+const fullNamesOf = (repository: Record<string, unknown>): string[] =>
+    [
+        repository?.full_name,
+        repository?.organizationName && repository?.name
+            ? `${repository.organizationName}/${repository.name}`
+            : undefined,
+        repository?.name,
+    ]
+        .filter(
+            (name): name is string =>
+                typeof name === 'string' && name.includes('/'),
+        )
+        .map((name) => name.toLowerCase());

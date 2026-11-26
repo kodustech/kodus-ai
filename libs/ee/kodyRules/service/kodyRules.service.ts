@@ -105,7 +105,10 @@ import {
     INTEGRATION_CONFIG_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 
-import { keepCentralizedSource } from '@libs/kodyRules/domain/utils/centralized-rule-source';
+import {
+    keepCentralizedSource,
+    ruleAppliesToConnection,
+} from '@libs/kodyRules/domain/utils/centralized-rule-source';
 @Injectable()
 export class KodyRulesService implements IKodyRulesService {
     private readonly logger = createLogger(KodyRulesService.name);
@@ -2472,6 +2475,12 @@ Analyze the suggestions and recommend the most relevant rules.`;
                 );
 
             const filteredMemories = inheritedMemories
+                .filter((rule) =>
+                    ruleAppliesToConnection(
+                        rule,
+                        organizationAndTeamData.integrationId,
+                    ),
+                )
                 .filter((rule): rule is IKodyRule => {
                     if (normalizedKeywords.length === 0) {
                         return true;

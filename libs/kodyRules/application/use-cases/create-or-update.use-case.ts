@@ -480,6 +480,9 @@ export class CreateOrUpdateKodyRulesUseCase {
                     ruleContent: effectiveRule,
                     ruleType,
                     operation: kodyRule.uuid ? 'update' : 'create',
+                    ruleSource: existingRule
+                        ? (existingRule as Partial<IKodyRule>).centralizedConfig
+                        : undefined,
                 }),
             );
 

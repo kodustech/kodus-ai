@@ -1,3 +1,4 @@
+import { IKodyRuleCentralizedConfig } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
@@ -60,6 +61,8 @@ export interface CentralizedMutationPullRequestRequest {
     sourceBranch: Resolvable<string>;
     author?: { name: string; email?: string };
     centralizedModeMessage?: string;
+    /** The changed rule's sync source: a connection's own global rule goes back to that connection's config. */
+    ruleSource?: IKodyRuleCentralizedConfig | null;
 }
 
 export interface BuildCentralizedPathParams {
@@ -197,7 +200,18 @@ export class CentralizedConfigPrService {
     async scopeToRepositoryConnection(
         organizationAndTeamData: OrganizationAndTeamData,
         repositoryId?: string,
+        ruleSource?: IKodyRuleCentralizedConfig | null,
     ): Promise<OrganizationAndTeamData> {
+        if (
+            !organizationAndTeamData.integrationId &&
+            ruleSource?.connectionScoped &&
+            ruleSource.sourceConnectionId
+        ) {
+            return {
+                ...organizationAndTeamData,
+                integrationId: ruleSource.sourceConnectionId,
+            };
+        }
         if (
             organizationAndTeamData.integrationId ||
             !organizationAndTeamData.teamId ||
@@ -264,6 +278,7 @@ export class CentralizedConfigPrService {
             organizationAndTeamData: await this.scopeToRepositoryConnection(
                 request.organizationAndTeamData,
                 request.repositoryId,
+                request.ruleSource,
             ),
         };
         const centralizedConfig = await this.getCentralizedConfigParameter(

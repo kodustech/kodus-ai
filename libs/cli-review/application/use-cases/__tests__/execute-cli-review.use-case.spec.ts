@@ -72,6 +72,7 @@ function createMocks() {
     const codeManagementService = {
         getTypeIntegration: jest.fn().mockResolvedValue(null),
         getDefaultBranch: jest.fn().mockResolvedValue('develop'),
+        connectionIdFor: jest.fn().mockResolvedValue(undefined),
     };
 
     // Default: what the stored global and repository levels say, i.e. no
@@ -640,7 +641,13 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(result.config.kodyRules).toHaveLength(2);
             expect(
                 kodyRulesValidationService.filterKodyRules,
-            ).toHaveBeenCalledWith([globalRule, repoRule], '123');
+            ).toHaveBeenCalledWith(
+                [globalRule, repoRule],
+                '123',
+                undefined,
+                undefined,
+                undefined,
+            );
         });
 
         it.each([
@@ -786,7 +793,13 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(result.repositoryName).toBeNull();
             expect(
                 kodyRulesValidationService.filterKodyRules,
-            ).toHaveBeenCalledWith([], 'global');
+            ).toHaveBeenCalledWith(
+                [],
+                'global',
+                undefined,
+                undefined,
+                undefined,
+            );
         });
 
         it('should return default config on error', async () => {
@@ -857,7 +870,13 @@ describe('ExecuteCliReviewUseCase', () => {
             // filterKodyRules must see the SYNCED (ACTIVE) rule, not the parked one.
             expect(
                 kodyRulesValidationService.filterKodyRules,
-            ).toHaveBeenCalledWith([unlockedRule], 'global');
+            ).toHaveBeenCalledWith(
+                [unlockedRule],
+                'global',
+                undefined,
+                undefined,
+                undefined,
+            );
         });
     });
 
@@ -1205,7 +1224,13 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(result.issues).toHaveLength(1);
             expect(
                 kodyRulesValidationService.filterKodyRules,
-            ).toHaveBeenCalledWith(expect.any(Array), 'repo-555');
+            ).toHaveBeenCalledWith(
+                expect.any(Array),
+                'repo-555',
+                undefined,
+                undefined,
+                undefined,
+            );
 
             mockExecute.mockRestore();
         });
@@ -1279,5 +1304,55 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(captured.reviewDirective).toBeUndefined();
             mockExecute.mockRestore();
         });
+    });
+});
+
+describe('ExecuteCliReviewUseCase — rules of several Git connections', () => {
+    const org = { organizationId: 'org-1', teamId: 'team-1' };
+    const rules = [makeRule()];
+
+    it("filters the rules by the reviewed repository's own connection", async () => {
+        const { useCase, codeManagementService, kodyRulesValidationService } =
+            createMocks();
+        codeManagementService.connectionIdFor.mockResolvedValue('gl-b');
+
+        await (useCase as any).rulesForRepository(org, rules, {
+            id: 'repo-1',
+            name: 'api',
+        });
+
+        expect(codeManagementService.connectionIdFor).toHaveBeenCalledWith(
+            org,
+            { id: 'repo-1', name: 'api' },
+        );
+        expect(kodyRulesValidationService.filterKodyRules).toHaveBeenCalledWith(
+            rules,
+            'repo-1',
+            undefined,
+            undefined,
+            'gl-b',
+        );
+    });
+
+    it('keeps a connection the key already names, and asks nothing for an unknown repository', async () => {
+        const { useCase, codeManagementService, kodyRulesValidationService } =
+            createMocks();
+
+        await (useCase as any).rulesForRepository(
+            { ...org, integrationId: 'gh-a' },
+            rules,
+            { id: 'repo-1', name: 'api' },
+        );
+        await (useCase as any).rulesForRepository(org, rules, {
+            id: 'global',
+            name: null,
+        });
+
+        expect(codeManagementService.connectionIdFor).not.toHaveBeenCalled();
+        expect(
+            kodyRulesValidationService.filterKodyRules.mock.calls.map(
+                (call) => call[4],
+            ),
+        ).toEqual(['gh-a', undefined]);
     });
 });

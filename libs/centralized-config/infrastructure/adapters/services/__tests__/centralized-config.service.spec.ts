@@ -65,6 +65,7 @@ describe('CentralizedConfigService', () => {
         };
 
         mockCodeManagementService = {
+            connectionServerKey: jest.fn(),
             getRepositoryTree: jest.fn(),
             getRepositoryContentFile: jest.fn(),
             getDefaultBranch: jest.fn(),
@@ -2187,7 +2188,7 @@ describe('CentralizedConfigService.synchronizeKodyRules — rejected rule files'
             {
                 findIntegrationConfigFormatted: jest.fn().mockResolvedValue([]),
             } as any,
-            {} as any, // codeManagementService
+            { connectionServerKey: jest.fn() } as any, // codeManagementService
             { execute: jest.fn() } as any, // updateOrCreateCodeReviewParameterUseCase
             {} as any,
             {} as any,

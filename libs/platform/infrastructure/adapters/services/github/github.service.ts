@@ -1,3 +1,4 @@
+import { connectionCacheScope } from '@libs/integrations/domain/integrations/utils/connection-cache-scope';
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import { webhookConfigsOfInstance } from '@libs/common/utils/webhooks/webhook-source-host';
@@ -6668,7 +6669,7 @@ This is an experimental feature that generates committable changes. Review the d
         // single worker serves many PRs from the same repo. Memory store,
         // so caches are independent per container — that's fine here, the
         // worst case is each container does one fetch per repo per hour.
-        const cacheKey = `gh:default-branch:${organizationAndTeamData?.organizationId ?? 'no-org'}:${repository?.id ?? repository?.name ?? 'no-repo'}`;
+        const cacheKey = `gh:default-branch:${connectionCacheScope(organizationAndTeamData)}:${repository?.id ?? repository?.name ?? 'no-repo'}`;
         const cached = await this.cacheService.getFromCache<string>(cacheKey);
         if (cached) {
             return cached;
@@ -8035,7 +8036,7 @@ This is an experimental feature that generates committable changes. Review the d
     }): Promise<any> {
         const { organizationAndTeamData, username } = params;
 
-        const cacheKey = `gh:user:${organizationAndTeamData.organizationId}:${username.toLowerCase()}`;
+        const cacheKey = `gh:user:${connectionCacheScope(organizationAndTeamData)}:${username.toLowerCase()}`;
         const cached = await this.cacheService.getFromCache<any | null>(
             cacheKey,
         );
@@ -8096,7 +8097,7 @@ This is an experimental feature that generates committable changes. Review the d
 
     // Batch-fetch many users in a single GraphQL request using login
     // aliases. Reads from the same Redis cache as `getUserByUsername`
-    // (key `gh:user:{orgId}:{login}`), so an entry warmed by either
+    // (key `gh:user:{orgId}:{connection}:{login}`), so an entry warmed by either
     // path is reused by both. Designed to be called as a pre-flight
     // before extractUser/extractUsers fans out per-user, eliminating
     // the N parallel REST round-trips during PR saves.
@@ -8123,7 +8124,7 @@ This is an experimental feature that generates committable changes. Review the d
         );
 
         const makeCacheKey = (login: string) =>
-            `gh:user:${organizationAndTeamData?.organizationId}:${login}`;
+            `gh:user:${connectionCacheScope(organizationAndTeamData)}:${login}`;
 
         // 1. Cache lookup. Matches existing getUserByUsername semantics:
         //    cached null falls through to refetch (the function reads

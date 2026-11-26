@@ -51,6 +51,7 @@ import {
     UNKNOWN_REPOSITORY_ACCESS,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import { connectionServerKey } from '@libs/integrations/domain/integrations/utils/connection-host';
 import { PlatformIntegrationFactory } from './platformIntegration.factory';
 import type {
     ApprovalTeamMembership,
@@ -75,7 +76,7 @@ export class CodeManagementService implements ICodeManagementService {
      */
     async findTypeIntegration(
         organizationAndTeamData: OrganizationAndTeamData,
-        repository?: { id?: string; name?: string; fullName?: string },
+        repository?: ConnectionRepositoryHint,
     ): Promise<PlatformType | null> {
         const resolved =
             await this.integrationService.resolveCodeManagementConnection(
@@ -98,6 +99,15 @@ export class CodeManagementService implements ICodeManagementService {
 
         if (organizationAndTeamData?.integrationId && type) {
             return { type, params };
+        }
+        // Lookups that find the workspace itself (by repository and host)
+        // carry none yet: nothing to resolve, and an unscoped resolve would
+        // read every tenant's connections.
+        if (
+            !organizationAndTeamData?.organizationId ||
+            !organizationAndTeamData?.teamId
+        ) {
+            return { type: type ?? null, params };
         }
 
         try {
@@ -141,11 +151,82 @@ export class CodeManagementService implements ICodeManagementService {
         }
     }
 
+    /**
+     * The connection listing the repository, or undefined when none or
+     * several do. Never throws.
+     */
+    async connectionIdFor(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: ConnectionRepositoryHint,
+    ): Promise<string | undefined> {
+        try {
+            const { integration } =
+                await this.integrationService.resolveCodeManagementConnection(
+                    organizationAndTeamData,
+                    { repository },
+                );
+            return integration?.uuid;
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not resolve the Git connection of a repository',
+                context: CodeManagementService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    repository,
+                },
+            });
+            return undefined;
+        }
+    }
+
+    /**
+     * `PLATFORM|host` of the connection a call would use, or undefined when
+     * none answers. Never throws.
+     */
+    async connectionServerKey(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<string | undefined> {
+        try {
+            const { integration } =
+                await this.integrationService.resolveCodeManagementConnection(
+                    organizationAndTeamData,
+                );
+            return integration
+                ? connectionServerKey(
+                      integration.platform,
+                      integration.authIntegration?.authDetails,
+                  )
+                : undefined;
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not resolve the server of the Git connection',
+                context: CodeManagementService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    integrationId: organizationAndTeamData?.integrationId,
+                },
+            });
+            return undefined;
+        }
+    }
+
+    /**
+     * With several connections, pass the repository the caller is about:
+     * without it the answer is null unless they share one platform.
+     */
     async getTypeIntegration(
         organizationAndTeamData: OrganizationAndTeamData,
+        repository?: ConnectionRepositoryHint,
     ): Promise<PlatformType> {
         try {
-            return await this.findTypeIntegration(organizationAndTeamData);
+            return await this.findTypeIntegration(
+                organizationAndTeamData,
+                repository,
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Failed to resolve integration type',
@@ -231,8 +312,13 @@ export class CodeManagementService implements ICodeManagementService {
      */
     async isIssuesSupported(
         organizationAndTeamData: OrganizationAndTeamData,
+        repository?: ConnectionRepositoryHint,
     ): Promise<boolean> {
-        const type = await this.getTypeIntegration(organizationAndTeamData);
+        const routed = await this.route({
+            organizationAndTeamData,
+            repository,
+        });
+        const type = routed.type;
 
         if (!type) {
             return false;
@@ -247,7 +333,7 @@ export class CodeManagementService implements ICodeManagementService {
 
         if (typeof codeManagementService.supportsIssues === 'function') {
             return codeManagementService.supportsIssues(
-                organizationAndTeamData,
+                routed.params.organizationAndTeamData,
             );
         }
 
@@ -343,15 +429,19 @@ export class CodeManagementService implements ICodeManagementService {
     async supportsCheckEvidence(
         organizationAndTeamData: OrganizationAndTeamData,
         type?: PlatformType,
+        repository?: ConnectionRepositoryHint,
     ): Promise<CheckEvidenceSupport> {
         const none: CheckEvidenceSupport = {
             statuses: false,
             annotations: false,
         };
 
-        if (!type) {
-            type = await this.getTypeIntegration(organizationAndTeamData);
-        }
+        const routed = await this.route(
+            { organizationAndTeamData, repository },
+            type,
+        );
+        type = routed.type;
+        organizationAndTeamData = routed.params.organizationAndTeamData;
 
         if (!type) {
             return none;

@@ -1356,3 +1356,65 @@ describe('KodyRulesService — LLM.run contract: memory resolution (B2)', () => 
         expect((await resolve(genMemory())).action).toBe('create');
     });
 });
+
+describe("KodyRulesService.findMemories — a connection's own global memories", () => {
+    const memory = (
+        uuid: string,
+        centralizedConfig?: Record<string, unknown>,
+    ) => ({
+        uuid,
+        title: uuid,
+        rule: 'remember this',
+        repositoryId: 'global',
+        type: 'memory',
+        status: KodyRulesStatus.ACTIVE,
+        ...(centralizedConfig ? { centralizedConfig } : {}),
+    });
+    const rules = [
+        memory('workspace-wide'),
+        memory('gitlab-only', {
+            path: 'x.yml',
+            status: 'synced',
+            sourceConnectionId: 'gl-b',
+            connectionScoped: true,
+        }),
+    ];
+
+    const service = () =>
+        new KodyRulesService(
+            {
+                findByOrganizationId: jest.fn().mockResolvedValue({ rules }),
+            } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {
+                getMemoryRulesForContext: jest.fn((_path, all) => all),
+            } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            undefined,
+        );
+
+    it("finds another connection's own global memory only for that connection", async () => {
+        const onGithub = await service().findMemories({
+            organizationId: 'org-1',
+            teamId: 'team-1',
+            integrationId: 'gh-a',
+        });
+        const onGitlab = await service().findMemories({
+            organizationId: 'org-1',
+            teamId: 'team-1',
+            integrationId: 'gl-b',
+        });
+
+        expect(onGithub.map((m) => m.title)).toEqual(['workspace-wide']);
+        expect(onGitlab.map((m) => m.title).sort()).toEqual([
+            'gitlab-only',
+            'workspace-wide',
+        ]);
+    });
+});

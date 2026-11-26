@@ -1,6 +1,7 @@
 import { KodyRuleCentralizedStatus } from '../interfaces/kodyRules.interface';
 import {
     centralizedRuleOwner,
+    centralizedSourceStamp,
     keepCentralizedSource,
     ruleAppliesToConnection,
 } from './centralized-rule-source';
@@ -13,6 +14,111 @@ const source = {
 };
 
 describe('centralized rule source', () => {
+    it("owns another team's copy of the same config repository on the same server", () => {
+        expect(
+            centralizedRuleOwner(
+                {
+                    path: 'x.yml',
+                    status: synced,
+                    sourceRepositoryId: 'cfg-a',
+                    sourceServerKey: 'GITHUB|github.com',
+                    sourceConnectionId: 'team-a-conn',
+                },
+                {
+                    repositoryId: 'cfg-a',
+                    connectionId: 'team-b-conn',
+                    serverKey: 'GITHUB|github.com',
+                    connectionScoped: false,
+                },
+            ),
+        ).toBe('own');
+    });
+
+    it('does not own the same repository id on another server', () => {
+        expect(
+            centralizedRuleOwner(
+                {
+                    path: 'x.yml',
+                    status: synced,
+                    sourceRepositoryId: '5',
+                    sourceServerKey: 'GITLAB|git.a.io',
+                },
+                {
+                    repositoryId: '5',
+                    serverKey: 'GITLAB|git.b.io',
+                    connectionScoped: false,
+                },
+            ),
+        ).toBe('other');
+    });
+
+    it("does not own another connection's own config, even on the same server", () => {
+        expect(
+            centralizedRuleOwner(
+                {
+                    path: 'x.yml',
+                    status: synced,
+                    sourceRepositoryId: 'cfg-a',
+                    sourceServerKey: 'GITHUB|github.com',
+                    sourceConnectionId: 'gh-acme',
+                    connectionScoped: true,
+                },
+                {
+                    repositoryId: 'cfg-a',
+                    connectionId: 'gh-beta',
+                    serverKey: 'GITHUB|github.com',
+                    connectionScoped: true,
+                },
+            ),
+        ).toBe('other');
+    });
+
+    it('stamps the server, and the connection only for a connection-scoped source', () => {
+        expect(
+            centralizedSourceStamp({
+                repositoryId: 'cfg-a',
+                connectionId: 'gh-a',
+                serverKey: 'GITHUB|github.com',
+                connectionScoped: false,
+            }),
+        ).toEqual({
+            sourceRepositoryId: 'cfg-a',
+            sourceServerKey: 'GITHUB|github.com',
+        });
+        expect(
+            centralizedSourceStamp({
+                repositoryId: 'cfg-b',
+                connectionId: 'gl-b',
+                serverKey: 'GITLAB|gitlab.com',
+                connectionScoped: true,
+            }),
+        ).toEqual({
+            sourceRepositoryId: 'cfg-b',
+            sourceServerKey: 'GITLAB|gitlab.com',
+            sourceConnectionId: 'gl-b',
+            connectionScoped: true,
+        });
+    });
+
+    it('keeps the server stamp when a writer replaces the centralized fields of the same file', () => {
+        expect(
+            keepCentralizedSource(
+                {
+                    path: 'x.yml',
+                    status: synced,
+                    sourceRepositoryId: 'cfg-a',
+                    sourceServerKey: 'GITHUB|github.com',
+                },
+                { path: 'x.yml', status: synced },
+            ),
+        ).toEqual({
+            path: 'x.yml',
+            status: synced,
+            sourceRepositoryId: 'cfg-a',
+            sourceServerKey: 'GITHUB|github.com',
+        });
+    });
+
     it('owns a rule synced from the same config repository', () => {
         expect(
             centralizedRuleOwner(

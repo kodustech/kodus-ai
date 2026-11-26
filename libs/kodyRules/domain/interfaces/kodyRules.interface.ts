@@ -265,7 +265,9 @@ export interface IKodyRuleCentralizedConfig {
     status: KodyRuleCentralizedStatus;
     /** The centralized config repository the rule was synced from. */
     sourceRepositoryId?: string;
-    /** The Git connection of that repository, when known. */
+    /** `PLATFORM|host` of the server holding that repository. */
+    sourceServerKey?: string;
+    /** The Git connection whose own config the rule came from. */
     sourceConnectionId?: string;
     /**
      * Synced from a Git connection's own centralized config: a global rule

@@ -195,20 +195,28 @@ export class CentralizedConfigService implements ICentralizedConfigService {
     async getCentralizedSource(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<CentralizedRuleSource> {
-        const repository = await this.getCentralizedConfigRepository(
-            organizationAndTeamData,
-        );
         const configValue = (
             await this.parametersService.findByKey(
                 ParametersKey.CENTRALIZED_CONFIG,
                 organizationAndTeamData,
             )
         )?.configValue;
+        const repository =
+            configValue?.repository ??
+            (await this.getCentralizedConfigRepository(
+                organizationAndTeamData,
+            ));
+        const connectionId =
+            organizationAndTeamData.integrationId ?? configValue?.integrationId;
+        const serverKey = await this.codeManagementService.connectionServerKey(
+            connectionId
+                ? { ...organizationAndTeamData, integrationId: connectionId }
+                : organizationAndTeamData,
+        );
         return {
             repositoryId: String(repository.id),
-            connectionId:
-                organizationAndTeamData.integrationId ??
-                configValue?.integrationId,
+            connectionId,
+            ...(serverKey ? { serverKey } : {}),
             connectionScoped: configValue?.connectionScoped === true,
         };
     }
@@ -2143,6 +2151,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             userEmail: string;
             userId: string;
         };
+        source?: CentralizedRuleSource;
     }): Promise<{
         success: boolean;
         message: string;
@@ -2156,9 +2165,9 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 await this.getCentralizedConfigRepository(
                     organizationAndTeamData,
                 );
-            const source = await this.getCentralizedSource(
-                organizationAndTeamData,
-            );
+            const source =
+                params.source ??
+                (await this.getCentralizedSource(organizationAndTeamData));
 
             let syncedCount = 0;
             const failureDetails: Array<{ file: string; error: string }> = [];
@@ -2640,6 +2649,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             userEmail: string;
             userId: string;
         };
+        source?: CentralizedRuleSource;
     }): Promise<{
         success: boolean;
         message: string;
@@ -2649,9 +2659,9 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             params;
 
         try {
-            const source = await this.getCentralizedSource(
-                organizationAndTeamData,
-            );
+            const source =
+                params.source ??
+                (await this.getCentralizedSource(organizationAndTeamData));
             let singleSource: boolean | undefined;
             const ownsRule = async (
                 centralizedConfig: IKodyRule['centralizedConfig'],

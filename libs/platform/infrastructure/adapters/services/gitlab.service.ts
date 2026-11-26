@@ -1,3 +1,4 @@
+import { connectionCacheScope } from '@libs/integrations/domain/integrations/utils/connection-cache-scope';
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
 import { instanceConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
@@ -5069,10 +5070,11 @@ export class GitlabService implements Omit<
     ): Promise<any | null> {
         const { userName, email } = params;
 
-        // Scoped by organization: each org resolves against its own GitLab
-        // (and credentials), so a user found for one must never answer another.
+        // Scoped by organization and connection: each resolves against its
+        // own GitLab (and credentials), so a user found for one must never
+        // answer another.
         // The entry wraps the result so "not found" is cacheable too.
-        const cacheKey = `gitlab-user-${params.organizationAndTeamData?.organizationId}-${email || 'no-email'}-${userName}`;
+        const cacheKey = `gitlab-user-${connectionCacheScope(params.organizationAndTeamData)}-${email || 'no-email'}-${userName}`;
         const remember = async (user: any, ttl: number) => {
             try {
                 await this.cacheService.addToCache(cacheKey, { user }, ttl);
@@ -5346,7 +5348,7 @@ export class GitlabService implements Omit<
             return null;
         }
 
-        const cacheKey = `gitlab-mr-author-${organizationAndTeamData.organizationId}-${authorId}`;
+        const cacheKey = `gitlab-mr-author-${connectionCacheScope(organizationAndTeamData)}-${authorId}`;
 
         try {
             const cached = await this.cacheService.getFromCache<any>(cacheKey);

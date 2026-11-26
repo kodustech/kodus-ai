@@ -20,6 +20,8 @@ interface BuildKodyRuleCentralizedMutationRequestParams {
     ruleContent: Partial<IKodyRule>;
     ruleType: KodyRulesType;
     operation: KodyRuleMutationOperation;
+    /** Where the stored rule was synced from, when a caller's payload replaced it. */
+    ruleSource?: IKodyRule['centralizedConfig'];
 }
 
 export function buildKodyRuleCentralizedMutationRequest(
@@ -33,6 +35,7 @@ export function buildKodyRuleCentralizedMutationRequest(
     return {
         organizationAndTeamData: params.organizationAndTeamData,
         repositoryId: params.repositoryId,
+        ruleSource: params.ruleSource ?? params.ruleContent.centralizedConfig,
         files: ({ repositoryFolder }) => {
             const path = buildKodyRuleCentralizedFilePath({
                 centralizedConfigPrService: params.centralizedConfigPrService,
