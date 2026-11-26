@@ -1,4 +1,4 @@
-export { balanceSpecs, estimateDurations, estimateTotalMs, shardCount, TARGET_SHARD_MS } from './balance';
+export { balanceSpecs, estimateDurations, estimateTotalMs, perSpecOverheadMs, shardCount, shardTargetMs, TARGET_SHARD_MS } from './balance';
 export type { BalancedPlan, ShardCountInput, SpecBin, SpecStat, SpecStats, SuiteSpecFile } from './balance';
 export { ERROR_SIGNATURE_MAX, errorSignature } from './error-signature';
 export { parseJUnit } from './junit';

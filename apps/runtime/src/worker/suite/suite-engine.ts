@@ -17,9 +17,11 @@ import {
     orderBin,
     parseJUnit,
     parseMochawesome,
+    perSpecOverheadMs,
     planReruns,
     type Rerun,
     shardCount,
+    shardTargetMs,
     spreadOnto,
     suiteDigestOf,
     type SpecResult,
@@ -251,6 +253,11 @@ interface ShardRun {
     missing: Map<string, 'not_run' | 'infra'>;
     /** Why the runner reported nothing (Ran.cause), stored with each `infra` spec. */
     cause?: string;
+    /** When the shard's claim turned ready, and when its last result was read: the wall time the stats learn each spec's cost from. */
+    startedAt?: number;
+    lastResultAt?: number;
+    /** The claim was refused: its specs stay up for the siblings, and are `infra` if none takes them. */
+    blocked?: boolean;
 }
 
 interface RunCtx {
@@ -280,6 +287,14 @@ interface RunCtx {
     artifactChain: Promise<void>;
     /** A canary was found in an artifact. */
     leaked: boolean;
+    /**
+     * The specs of shards whose command has not started (the claim is still booting, or was refused), by the shard that owns them. A
+     * shard that finishes early takes a share of them and runs them on the PR build it holds; the late shard then runs what is left.
+     */
+    pending: Map<string, number>;
+    /** Resolved when every spec of a shard was taken by a sibling: its claim is no longer waited for. */
+    drained: Map<number, () => void>;
+    cleaned: boolean;
     /** The time the run's hosts were held, summed over hosts (a baseline and a first pass count as `firstPass`). */
     hostMs: { firstPass: number; rerun: number };
 }
@@ -327,6 +342,9 @@ export class SuiteEngine {
             artifactBytes: 0,
             artifactChain: Promise.resolve(),
             leaked: false,
+            pending: new Map(),
+            drained: new Map(),
+            cleaned: false,
             hostMs: { firstPass: 0, rerun: 0 },
         };
         try {
@@ -364,7 +382,15 @@ export class SuiteEngine {
     private async firstPass(ctx: RunCtx): Promise<void> {
         const { req, inputs } = ctx;
         const headroom = (await this.d.headroom?.()) ?? Number.MAX_SAFE_INTEGER;
-        const wanted = shardCount({ totalMs: estimateTotalMs(inputs.specs, ctx.stats), maxShards: inputs.config.maxShards, headroom, specCount: inputs.specs.length });
+        // The stored times are the wall time a spec costs a shard, the runner's own start included (stats are learned that way, see `conclude`).
+        const timeLeftMs = inputs.deadlineAt !== undefined ? inputs.deadlineAt - clockNow(this.d) : undefined;
+        const wanted = shardCount({
+            totalMs: estimateTotalMs(inputs.specs, ctx.stats),
+            maxShards: inputs.config.maxShards,
+            headroom,
+            specCount: inputs.specs.length,
+            targetShardMs: shardTargetMs({ shardTimeoutMs: inputs.config.shardTimeoutMs, ...(timeLeftMs !== undefined ? { timeLeftMs } : {}) }),
+        });
         const asked = hostsToAsk(wanted, headroom);
         const shards = Array.from({ length: asked }, (_, i) => i);
         const first = balanceSpecs(inputs.specs, ctx.stats, asked);
@@ -384,6 +410,7 @@ export class SuiteEngine {
         if (plan.length === 0) {
             for (const p of runs[0].planned) runs[0].missing.set(p, 'infra');
         } else {
+            for (const r of runs) for (const spec of r.planned) ctx.pending.set(spec, r.shard);
             await Promise.all(runs.map(async (r) => {
                 await this.held(ctx, 'firstPass', async () => {
                     await this.driveShard(ctx, r);
@@ -391,6 +418,12 @@ export class SuiteEngine {
                 });
             }));
         }
+        // What no shard took: a shard whose claim was refused leaves its specs `infra` (the fresh host retries them), the rest `not_run`.
+        for (const [spec, owner] of ctx.pending) {
+            const shard = ctx.shards.get(owner);
+            if (shard && !shard.missing.has(spec)) shard.missing.set(spec, shard.blocked ? 'infra' : 'not_run');
+        }
+        ctx.pending.clear();
         await this.recordMissing(ctx);
     }
 
@@ -490,15 +523,20 @@ export class SuiteEngine {
 
     private async driveShard(ctx: RunCtx, shard: ShardRun): Promise<void> {
         const { req } = ctx;
-        const runnable = shard.planned.filter((s) => SPEC_SAFE.test(s));
-        for (const s of shard.planned) if (!SPEC_SAFE.test(s)) shard.missing.set(s, 'not_run');
-        if (runnable.length === 0) return;
+        for (const s of shard.planned) {
+            if (!SPEC_SAFE.test(s)) {
+                shard.missing.set(s, 'not_run');
+                ctx.pending.delete(s);
+            }
+        }
+        if (shard.planned.every((s) => !SPEC_SAFE.test(s))) return;
         // Fail fast stopped the first pass before this shard got its host: no claim, nothing runs.
         if (ctx.stop.signal.aborted || this.cancelled(ctx)) {
-            for (const s of runnable) shard.missing.set(s, 'not_run');
+            for (const s of shard.planned) if (SPEC_SAFE.test(s)) shard.missing.set(s, 'not_run');
+            for (const s of shard.planned) ctx.pending.delete(s);
             return;
         }
-        const claim = await acquireSuiteClaim(this.d.env, {
+        const acquiring = acquireSuiteClaim(this.d.env, {
             organizationId: req.organizationId,
             environmentId: req.environmentId,
             runId: req.suiteRunId,
@@ -508,19 +546,79 @@ export class SuiteEngine {
             suiteRunId: req.suiteRunId,
             shard: shard.shard,
         }, this.d.clock, this.claimDeadline(ctx));
-        if (isBlocked(claim)) {
-            for (const s of runnable) shard.missing.set(s, 'infra');
+        // A claim that boots for long (the PR build on its host) is not waited for once siblings have taken all of its specs.
+        const drained = new Promise<'drained'>((resolve) => ctx.drained.set(shard.shard, () => resolve('drained')));
+        const claim = await Promise.race([acquiring, drained]);
+        if (claim === 'drained') {
+            // It still comes up some day: released the moment it does.
+            void acquiring.then((c) => this.adopt(ctx, c, false)).catch(() => undefined);
             return;
         }
+        if (isBlocked(claim)) {
+            // Its specs stay up for the siblings that are still running; what nobody takes is `infra` at the end of the pass.
+            shard.blocked = true;
+            return;
+        }
+        this.adopt(ctx, claim, true);
         shard.claimId = claim.claimId;
-        ctx.claims.push(claim.claimId);
+        shard.startedAt = this.d.clock.now();
+        // What a sibling took while the claim booted is theirs; the rest is this shard's from now on.
+        for (const s of shard.planned) ctx.pending.delete(s);
+        const runnable = shard.planned.filter((s) => SPEC_SAFE.test(s));
         // The claim is ready (the app is up on the host): from here to the end is the shard's own time, as the page shows it.
         await this.markShard(ctx, shard.shard, 'running');
         try {
-            await this.runShard(ctx, shard, claim.claimId, runnable);
+            if (runnable.length > 0) await this.runShard(ctx, shard, claim.claimId, runnable);
+            await this.stealPending(ctx, shard, claim.claimId);
         } finally {
             await this.markShard(ctx, shard.shard, 'finished');
         }
+    }
+
+    /** A claim that came up: held (and released at the end), or, after the run ended or when it is not wanted, released now. */
+    private adopt(ctx: RunCtx, claim: Claim | Blocked, wanted: boolean): void {
+        if (isBlocked(claim)) return;
+        if (wanted && !ctx.cleaned) ctx.claims.push(claim.claimId);
+        else void this.d.env.release(claim.claimId).catch(() => undefined);
+    }
+
+    /**
+     * A shard that finished its own specs takes half of the specs of shards whose command has not started, and runs them in its claim
+     * (it holds the PR build): a host that boots late no longer leaves its specs `not_run` while the siblings sit idle. It goes on while
+     * the shard's own cap and the suite's deadline leave time, and takes nothing once the run is cut short.
+     */
+    private async stealPending(ctx: RunCtx, shard: ShardRun, claimId: string): Promise<void> {
+        if (this.collectsCoverage(ctx)) return;
+        for (let round = 1; ; round++) {
+            if (ctx.stop.signal.aborted || this.cancelled(ctx) || ctx.leaked) return;
+            const left = Math.min(ctx.inputs.config.shardTimeoutMs - (this.d.clock.now() - (shard.startedAt ?? this.d.clock.now())), (ctx.inputs.deadlineAt ?? Infinity) - this.d.clock.now());
+            if (left <= 0 || ctx.pending.size === 0) return;
+            const taken = this.takeShare(ctx, shard);
+            if (taken.length === 0) return;
+            await this.d.runs.savePlan(ctx.req.organizationId, ctx.req.suiteRunId, [...ctx.shards.values()].map((s) => ({ shard: s.shard, specs: s.planned })));
+            const durations = estimateDurations(ctx.inputs.specs, ctx.stats);
+            const ordered = orderBin(taken, { failedBefore: ctx.inputs.order?.failedBefore ?? [], diffCoverage: ctx.inputs.order?.diffCoverage ?? {}, durations: Object.fromEntries(durations ?? []) });
+            const ran = await this.runSpecs(ctx, { claimId, shard: shard.shard }, 'shard', ordered, `${ctx.req.suiteRunId}-${shard.shard}-t${round}`, { timeoutMs: left, crashRetries: 1, clear: false });
+            for (const [spec, r] of ran.done) shard.done.set(spec, r);
+            for (const [spec, why] of ran.missing) shard.missing.set(spec, why);
+            if (ran.cause) shard.cause = ran.cause;
+        }
+    }
+
+    /** Half of the pending specs (every other one, longest first, so both halves weigh alike; the last one whole), moved to `shard`'s plan. */
+    private takeShare(ctx: RunCtx, shard: ShardRun): string[] {
+        const durations = estimateDurations(ctx.inputs.specs, ctx.stats);
+        const weight = (s: string) => durations?.get(s) ?? 0;
+        const pending = [...ctx.pending.keys()].filter((s) => SPEC_SAFE.test(s)).sort((a, b) => weight(b) - weight(a) || (a < b ? -1 : 1));
+        const taken = pending.length === 1 ? pending : pending.filter((_, i) => i % 2 === 0);
+        for (const spec of taken) {
+            const owner = ctx.shards.get(ctx.pending.get(spec)!);
+            ctx.pending.delete(spec);
+            if (owner) owner.planned = owner.planned.filter((s) => s !== spec);
+            shard.planned.push(spec);
+            if (owner && owner.planned.length === 0) ctx.drained.get(owner.shard)?.();
+        }
+        return taken;
     }
 
     /** When a shard's claim was ready and when its specs ended: best effort, a failed write never fails the run. */
@@ -673,6 +771,8 @@ export class SuiteEngine {
             }
         }
         if (fresh.length === 0) return;
+        const first = col.phase === 'shard' && col.shard !== FRESH_HOST_SHARD ? ctx.shards.get(col.shard) : undefined;
+        if (first) first.lastResultAt = this.d.clock.now();
         await this.d.runs.recordResults(ctx.req.organizationId, ctx.req.suiteRunId, { phase: col.phase, shard: col.shard }, fresh.map((r) => ({ spec: r.spec, status: r.status, durationMs: r.durationMs, ...(r.errorSignature ? { errorSignature: r.errorSignature } : {}), tests: r.tests })));
         this.checkFailFast(ctx, col);
     }
@@ -908,7 +1008,7 @@ export class SuiteEngine {
         await this.d.stats.record(
             { organizationId: ctx.req.organizationId, environmentId: ctx.req.environmentId },
             ctx.sha,
-            firstPass.filter((s) => s.result).map((s) => ({ spec: s.spec, status: s.result!.status, durationMs: s.result!.durationMs })),
+            this.wallObservations(ctx, firstPass),
         );
         if (ctx.req.mode === 'baseline') {
             await this.recordBaseline(ctx, firstPass);
@@ -917,6 +1017,23 @@ export class SuiteEngine {
         const state = this.stateOf(ctx, firstPass, classification);
         await this.d.runs.finish(ctx.req.organizationId, ctx.req.suiteRunId, state, new Date(this.d.clock.now()), { ...this.machineOf(ctx), ...(classification ? { classification } : {}), ...(ctx.judged ? { ...(ctx.judged.baselineSha ? { baselineSha: ctx.judged.baselineSha } : {}), baseDrift: ctx.judged.baseDrift } : {}) });
         return { suiteRunId: ctx.req.suiteRunId, state, replayed: false, firstPass, ...(classification ? { classification } : {}) };
+    }
+
+    /**
+     * What the stats learn: each spec at the wall time it cost its shard. The runner's report counts the spec's own run, not
+     * its start (Cypress opens a browser per spec, slowly under gVisor), so the shard's wall time, from its claim ready to its
+     * last result, less the durations it reported, is shared by the specs that reported: that is added to each spec's duration. A spec that ran
+     * on the fresh host, or on a shard with nothing to measure, takes the average overhead of the shards that were measured.
+     */
+    private wallObservations(ctx: RunCtx, firstPass: readonly FirstPassSpec[]): Array<{ spec: string; status: SpecResult['status']; durationMs: number }> {
+        const overheadOf = new Map<number, number>();
+        for (const sh of ctx.shards.values()) {
+            if (sh.shard === FRESH_HOST_SHARD || sh.startedAt === undefined || sh.lastResultAt === undefined || sh.done.size === 0) continue;
+            overheadOf.set(sh.shard, perSpecOverheadMs({ wallMs: sh.lastResultAt - sh.startedAt, durationsMs: [...sh.done.values()].map((r) => r.durationMs) }));
+        }
+        const measured = [...overheadOf.values()];
+        const average = measured.length > 0 ? Math.round(measured.reduce((a, b) => a + b, 0) / measured.length) : 0;
+        return firstPass.filter((s) => s.result).map((s) => ({ spec: s.spec, status: s.result!.status, durationMs: s.result!.durationMs + (overheadOf.get(s.shard) ?? average) }));
     }
 
     /** A canary in an artifact ends the suite `failed` (a security event, never green or neutral): no classification, no baseline, no durations. */
@@ -979,7 +1096,10 @@ export class SuiteEngine {
     }
 
     private async cleanup(ctx: RunCtx): Promise<void> {
+        ctx.cleaned = true;
         for (const claimId of ctx.claims) await this.d.env.release(claimId).catch(() => undefined);
         await this.d.demand.end().catch(() => undefined);
     }
 }
+
+const clockNow = (d: Pick<SuiteEngineDeps, 'clock'>) => d.clock.now();

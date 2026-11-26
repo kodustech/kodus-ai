@@ -321,6 +321,10 @@ export interface FakeSuiteWorld {
     refusesService?: boolean;
     /** What the runner prints last on every poll (its log tail), after the fake's own clock line. */
     log?: string;
+    /** What the runner spends before each spec beyond the spec's own duration (the browser start): the report's duration does not count it. */
+    overheadMs?: number;
+    /** An acquire this answers a number for takes that long to be ready (a slow boot of the PR build on its host). */
+    acquireDelayMs?: (req: AcquireRequest) => number | undefined;
 }
 
 interface FakeProcess {
@@ -360,7 +364,7 @@ export class FakeSuiteCell {
     private readonly lost = new Set<string>();
 
     constructor(
-        private readonly clock: { now(): number },
+        private readonly clock: { now(): number; sleep?(ms: number): Promise<void> },
         private readonly world: FakeSuiteWorld,
     ) {}
 
@@ -372,6 +376,12 @@ export class FakeSuiteCell {
     async acquire(req: AcquireRequest): Promise<Claim | Blocked> {
         this.acquires.push(req);
         if (this.world.blocked?.(req)) return { status: 'blocked', blockers: [{ kind: 'resources', signature: 'no_capacity', message: 'no host' }] };
+        const delay = this.world.acquireDelayMs?.(req);
+        if (delay && this.clock.sleep) {
+            // Ready when the shared fake clock reaches it, whoever advances it.
+            const readyAt = this.clock.now() + delay;
+            while (this.clock.now() < readyAt) await this.clock.sleep(1_000);
+        }
         const claimId = `claim:${req.idempotencyKey}`;
         this.claims.set(claimId, { claimId, side: req.ref.side, sha: req.ref.sha, ...(req.shard !== undefined ? { shard: req.shard } : {}), released: false, key: req.idempotencyKey });
         return { claimId, cellId: 'cell-fake', cellOwner: 'kodus', leaseExpiresAt: '2099-01-01T00:00:00Z', hardExpiresAt: '2099-01-01T00:00:00Z', observer: { id: 'o', state: 'ready' }, manifest: { services: [], expose: [], imageId: 'img', seedSha: 's' } } as Claim;
@@ -446,7 +456,7 @@ export class FakeSuiteCell {
                 proc.diesAt = t;
                 break;
             }
-            t += plan.ms ?? 20_000;
+            t += (this.world.overheadMs ?? 0) + (plan.ms ?? 20_000);
             const failed = typeof outcome === 'object';
             if (failed) proc.exitCode = 1;
             const path = fileOf(spec);

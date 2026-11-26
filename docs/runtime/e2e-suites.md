@@ -177,13 +177,27 @@ The engine then splits them:
 
 1. **Durations.** `runtime_suite_spec_stats(environment, spec) -> {p50Ms, lastMs, samples, lastSeenSha}`, an
    exponential average of the last 10 passing runs, updated by every baseline and PR run. Failed or timed-out specs do
-   not update it (a crash is short).
+   not update it (a crash is short). The stored time is **the wall time a spec costs a shard**, not the duration the
+   runner reports: a runner that starts per spec (Cypress opens its browser for each one, 50 s or more under gVisor) does
+   not count that start in its own duration, and a plan from reported durations sizes shards at half what they take.
+   When a run ends the engine takes each shard's wall time (claim ready to its last result), subtracts the durations the
+   shard reported and shares the rest among the specs that reported (`perSpecOverheadMs`); a passing spec is stored at
+   its duration plus that overhead (the first spec included; a failed or timed-out spec still stores nothing; a spec
+   from the fresh host, or from a shard with nothing to measure, takes the average of the measured shards).
 2. **Balance.** Longest-processing-time-first onto N bins: sort specs by `p50Ms` descending, put each in the lightest
    bin. A spec with no stat gets the average of the known ones (the rule `cypress-split` uses for new specs, source
    below). Without any stat (first run), split by file size in bytes, round-robin in sorted order; the first run
    writes the stats.
 3. **Shard count.** `N = clamp(ceil(totalMs / targetShardMs), 1, suite.shards, pool headroom)` with `targetShardMs` of
-   8 min: a small suite is not spread over 3 hosts that each pay a PR build.
+   8 min: a small suite is not spread over 3 hosts that each pay a PR build. The target is cut to 80% of the shard cap
+   and, in Run mode, of the time left to the Run's deadline (`shardTargetMs`), so a plan never gives a shard more work
+   than it may use; `suite.shards` stays the ceiling, and a suite that does not fit even there is the recipe's to widen.
+6. **A shard that boots late.** A shard's specs are `pending` until its command starts. A shard that has finished its own
+   specs takes half of the pending specs (every other one, longest first) and runs them in its claim, which holds the PR
+   build, while its cap and the Run's deadline leave time; the late shard then runs what is left, and when siblings took
+   all of it its claim is not waited for (it is released when it comes up). A shard whose claim is refused leaves its
+   specs pending the same way; what nobody takes is `infra` (fresh host) or `not_run`. The plan stored in the run is
+   rewritten to who ran what. There is no scheduler beyond this: a shard that has started keeps its list.
 4. **Playwright.** The engine passes explicit files, the same as Cypress. `--shard=i/n` is only the fallback when the
    spec list cannot be listed; without `fullyParallel` it shards per file, so uneven files give uneven shards
    ([Playwright sharding](https://playwright.dev/docs/test-sharding)).
@@ -491,7 +505,7 @@ as one step group; CI mode and baseline start it from their own command (`Runtim
 | Cap | Default | Where |
 |---|---|---|
 | per spec | 5 min (recipe `timeout.spec`) | the runner's own, plus a host-side kill |
-| per shard | 25 min | engine kills the shard, `not_run` for the rest |
+| per shard | 25 min, from the shard's own claim ready (a late shard gets the full cap, never past the Run's deadline) | engine kills the shard, `not_run` for the rest; an early finisher's second command (6.6) takes what is left of the cap |
 | first pass | 40 min | below the per-boot 45 min (`RUN_TIMEOUT_MS`, `run-orchestrator.ts:120`) and the host's `maxRunMinutes` 120 |
 | re-run phase | 12 min | 9.4 |
 | suite run total | 60 min | then `timed_out` |

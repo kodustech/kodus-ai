@@ -91,3 +91,20 @@ export function shardCount(i: ShardCountInput): number {
     const wanted = Math.ceil(i.totalMs / (i.targetShardMs ?? TARGET_SHARD_MS));
     return Math.max(1, Math.min(wanted, ceiling));
 }
+
+/**
+ * What a spec costs in a shard beyond its own `durationMs`: the runner's per-spec start (Cypress opens the browser for every
+ * spec, slowly under gVisor). `wallMs` runs from the shard's claim ready to its last result, `durationsMs` are the specs that
+ * reported in it. Stored with each spec's duration, so the stored time is the wall time a spec costs a shard.
+ */
+export function perSpecOverheadMs(i: { wallMs: number; durationsMs: readonly number[] }): number {
+    if (i.durationsMs.length === 0) return 0;
+    const sum = i.durationsMs.reduce((a, b) => a + b, 0);
+    return Math.max(0, Math.round((i.wallMs - sum) / i.durationsMs.length));
+}
+
+/** The work one shard is planned to take: the target, cut to 80% of the shard's cap and of the time left to the suite's deadline, so a plan never promises a shard more than it may use. */
+export function shardTargetMs(i: { shardTimeoutMs: number; timeLeftMs?: number }): number {
+    const room = Math.min(i.shardTimeoutMs, i.timeLeftMs ?? Infinity);
+    return Math.max(1, Math.min(TARGET_SHARD_MS, Math.floor(room * 0.8)));
+}

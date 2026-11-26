@@ -1,4 +1,4 @@
-import { balanceSpecs, estimateTotalMs, shardCount } from './balance';
+import { balanceSpecs, estimateTotalMs, perSpecOverheadMs, shardCount, shardTargetMs, TARGET_SHARD_MS } from './balance';
 
 const spec = (path: string, sizeBytes = 1000) => ({ path, sizeBytes });
 const stats = (o: Record<string, number>) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { p50Ms: v }]));
@@ -77,5 +77,33 @@ describe('shardCount', () => {
     });
     it('takes another target shard time when given', () => {
         expect(shardCount({ totalMs: 10 * MIN, maxShards: 9, headroom: 9, specCount: 50, targetShardMs: 2 * MIN })).toBe(5);
+    });
+});
+
+describe('perSpecOverheadMs', () => {
+    it('is what each spec cost beyond its own duration: the shard wall time less the durations, over the specs that reported', () => {
+        // 6 specs of 30 s reported over 8 minutes: the runner spent 50 s of each spec outside its own duration.
+        expect(perSpecOverheadMs({ wallMs: 480_000, durationsMs: Array(6).fill(30_000) })).toBe(50_000);
+    });
+
+    it('is zero with no spec reported, and never negative when the durations add up to more than the wall time', () => {
+        expect(perSpecOverheadMs({ wallMs: 90_000, durationsMs: [] })).toBe(0);
+        expect(perSpecOverheadMs({ wallMs: 10_000, durationsMs: [30_000, 30_000] })).toBe(0);
+    });
+
+    it('counts the first spec like the others: one spec that took 40 s of a 100 s wall carries 60 s', () => {
+        expect(perSpecOverheadMs({ wallMs: 100_000, durationsMs: [40_000] })).toBe(60_000);
+    });
+});
+
+describe('shardTargetMs', () => {
+    it('is the 8 minute target while the shard cap and the time left are roomy', () => {
+        expect(shardTargetMs({ shardTimeoutMs: 25 * 60_000 })).toBe(TARGET_SHARD_MS);
+    });
+
+    it('is 80% of the shard cap when the cap is shorter than the target allows, and 80% of the time left to the deadline', () => {
+        expect(shardTargetMs({ shardTimeoutMs: 5 * 60_000 })).toBe(4 * 60_000);
+        expect(shardTargetMs({ shardTimeoutMs: 25 * 60_000, timeLeftMs: 10 * 60_000 })).toBe(8 * 60_000);
+        expect(shardTargetMs({ shardTimeoutMs: 25 * 60_000, timeLeftMs: 5 * 60_000 })).toBe(4 * 60_000);
     });
 });

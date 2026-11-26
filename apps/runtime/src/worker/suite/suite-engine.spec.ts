@@ -156,14 +156,17 @@ describe('the first pass of a suite run', () => {
         expect(plan.flatMap((s) => s.specs).sort()).toEqual(['a', 'b', 'c', 'd', 'e', 'f'].map((n) => `${n}.cy.ts`));
     });
 
-    it('a shard whose claim is blocked has its specs as infra while the others run (and no fresh host to retry them on)', async () => {
+    it('a shard whose claim is blocked has its specs as infra when no sibling can take them (and no fresh host to retry them on)', async () => {
+        const w = world({ specs: Object.fromEntries(['a', 'b', 'c'].map((n) => [`${n}.cy.ts`, { ms: 4 * MIN }])), blocked: () => true }, { maxShards: 1 });
+        const out = await w.engine.run(request(), w.inputs(['a', 'b', 'c'].map((n) => `${n}.cy.ts`)));
+        expect(Object.values(statusOf(out))).toEqual(['infra', 'infra', 'infra']);
+    });
+
+    it('a shard whose claim is blocked has its specs run by the siblings that finish, on the PR build they hold', async () => {
         const w = world({ specs: Object.fromEntries(['a', 'b', 'c'].map((n) => [`${n}.cy.ts`, { ms: 4 * MIN }])), blocked: (r) => r.shard === 1 || r.shard === 62 });
         const out = await w.engine.run(request(), w.inputs(['a', 'b', 'c'].map((n) => `${n}.cy.ts`)));
-        const bySpec = Object.fromEntries(out.firstPass.map((s) => [s.spec, s]));
-        const infra = out.firstPass.filter((s) => s.status === 'infra');
-        expect(infra.length).toBeGreaterThan(0);
-        expect(infra.every((s) => s.shard === 1)).toBe(true);
-        expect(out.firstPass.filter((s) => s.status === 'passed').every((s) => bySpec[s.spec].shard !== 1)).toBe(true);
+        expect(Object.values(statusOf(out))).toEqual(['passed', 'passed', 'passed']);
+        expect(out.firstPass.every((s) => s.shard !== 1)).toBe(true);
     });
 
     it('asks for its hosts again while it runs, so the demand row (120 s) never lapses under a long shard', async () => {
@@ -281,5 +284,72 @@ describe('the first pass of a suite run', () => {
             expect(w.cell.starts).toEqual([]);
             expect(w.demand.ended).toBe(1);
         });
+    });
+});
+
+describe('the time a spec costs a shard', () => {
+    it('stores a passing spec at the wall time it cost, the runner\'s start for each spec included, not at the duration the report gives', async () => {
+        // Cypress under gVisor: every spec reports 30 s but costs 80 s of the shard (50 s opening the browser).
+        const w = world({ overheadMs: 50_000, specs: Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'f'].map((n) => [`${n}.cy.ts`, { ms: 30_000 }])) }, { maxShards: 1 });
+        await w.engine.run(request(), w.inputs(['a', 'b', 'c', 'd', 'e', 'f'].map((n) => `${n}.cy.ts`)));
+        for (const n of ['a', 'b', 'c', 'd', 'e', 'f']) expect(Math.abs(w.stats.rows.get(`${ORG}|${ENV}|${n}.cy.ts`)!.p50Ms - 80_000)).toBeLessThanOrEqual(5_000);
+    });
+
+    it('plans one more shard when the stored wall times no longer fit the target in the shards it had', async () => {
+        const specs = Array.from({ length: 12 }, (_, i) => `s${i}.cy.ts`);
+        const w = world({ specs: Object.fromEntries(specs.map((s) => [s, { ms: 30_000 }])) }, { maxShards: 8 });
+        // 12 specs at 80 s is 16 min of work: two 8 minute shards.
+        for (const s of specs) await w.stats.record({ organizationId: ORG, environmentId: ENV }, 'x', [{ spec: s, status: 'passed', durationMs: 80_000 }]);
+        await w.engine.run(request(), w.inputs(specs));
+        expect(w.demand.requested[0]).toEqual([0, 1]);
+    });
+
+    it('plans for the shard cap, not only the target: a shard that may run 5 minutes is planned 4 minutes of work', async () => {
+        const specs = Array.from({ length: 10 }, (_, i) => `s${i}.cy.ts`);
+        const w = world({ specs: Object.fromEntries(specs.map((s) => [s, { ms: 30_000 }])) }, { maxShards: 8, shardTimeoutMs: 5 * MIN });
+        for (const s of specs) await w.stats.record({ organizationId: ORG, environmentId: ENV }, 'x', [{ spec: s, status: 'passed', durationMs: 60_000 }]);
+        await w.engine.run(request(), w.inputs(specs));
+        // 10 minutes of work: two shards by the 8 minute target, three by the 4 minutes the cap allows.
+        expect(w.demand.requested[0]).toEqual([0, 1, 2]);
+    });
+});
+
+describe('a shard whose host is ready late', () => {
+    const six = ['a', 'b', 'c', 'd', 'e', 'f'].map((n) => `${n}.cy.ts`);
+    const late = () => {
+        const w = world({ acquireDelayMs: (r) => (r.shard === 0 ? 20 * MIN : undefined), specs: Object.fromEntries(six.map((s) => [s, { ms: MIN }])) }, { maxShards: 3 });
+        return w;
+    };
+    const seed = async (w: ReturnType<typeof late>) => {
+        for (const s of six) await w.stats.record({ organizationId: ORG, environmentId: ENV }, 'x', [{ spec: s, status: 'passed', durationMs: 4 * MIN }]);
+    };
+
+    it('has its specs run by the siblings that finished, on the PR build they hold, instead of leaving them not_run', async () => {
+        const w = late();
+        await seed(w);
+        const started = w.clock.now();
+        const out = await w.engine.run(request(), w.inputs(six));
+        expect(Object.values(statusOf(out))).toEqual(Array(6).fill('passed'));
+        // Not waited for: the run ends long before the late host would have been ready.
+        expect(w.clock.now() - started).toBeLessThan(12 * MIN);
+        const lateSpecs = (await w.runs.shards(ORG, 'sr-1')).find((s) => s.shard === 0)!.specs;
+        expect(lateSpecs).toEqual([]);
+        expect(out.firstPass.filter((s) => s.shard === 0)).toEqual([]);
+    });
+
+    it('runs what is left of its own specs when its host comes up while a sibling is still busy, and no spec runs twice', async () => {
+        const w = world({ acquireDelayMs: (r) => (r.shard === 0 ? 3 * MIN : undefined), specs: Object.fromEntries(six.map((s) => [s, { ms: MIN }])) }, { maxShards: 3 });
+        await seed(w as never);
+        const out = await w.engine.run(request(), w.inputs(six));
+        expect(Object.values(statusOf(out))).toEqual(Array(6).fill('passed'));
+        const ran = w.cell.starts.flatMap((s) => s.specs);
+        expect([...ran].sort()).toEqual([...six].sort());
+    });
+
+    it('a late host that never comes (blocked) leaves its specs to the siblings, and with no sibling free they are infra for the fresh host', async () => {
+        const w = world({ blocked: (r) => r.shard === 0, specs: Object.fromEntries(six.map((s) => [s, { ms: MIN }])) }, { maxShards: 3 });
+        await seed(w as never);
+        const out = await w.engine.run(request(), w.inputs(six));
+        expect(Object.values(statusOf(out))).toEqual(Array(6).fill('passed'));
     });
 });
