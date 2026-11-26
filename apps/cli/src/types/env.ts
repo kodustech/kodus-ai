@@ -17,7 +17,7 @@ export type EnvBlockerGroup = {
     count: number;
     lastAt?: string;
     lastPr?: number;
-    evidence?: { lines: string[]; service?: string };
+    evidence?: { lines: string[]; service?: string; step?: string };
     fixes: EnvFixView[];
 };
 

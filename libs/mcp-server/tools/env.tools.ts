@@ -169,7 +169,7 @@ export const ENV_TOOLS: EnvToolDefinition[] = [
     {
         name: 'env_blockers',
         description:
-            "Why the environment does not boot: each blocker with its evidence and the catalog's fixes, the recommended one first (what worked before in this repo comes first). Needs env:exec or env:fix.",
+            "Why the environment does not boot: each blocker with its evidence and the catalog's fixes, the recommended one first (what worked before in this repo comes first). For a failed build or boot the evidence names the failing `step` and carries its last lines, redacted (a compiler error is there whole). Needs env:exec or env:fix.",
         inputSchema: target,
         annotations: {
             readOnlyHint: true,

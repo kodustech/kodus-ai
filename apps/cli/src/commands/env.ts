@@ -52,7 +52,11 @@ export function formatEnvStatus(status: EnvStatus): string[] {
         lines.push('');
         lines.push(`${i + 1}. ${b.title} (${seen})`);
         lines.push(`   signature: ${b.signature}`);
-        for (const line of b.evidence?.lines?.slice(0, 3) ?? []) {
+        // Every line: a failed build is fixed from what its step printed, not from its first three lines.
+        if (b.evidence?.step) {
+            lines.push(`   failed step: ${b.evidence.step}`);
+        }
+        for (const line of b.evidence?.lines ?? []) {
             lines.push(chalk.dim(`   | ${line}`));
         }
         b.fixes.forEach((f, j) => {

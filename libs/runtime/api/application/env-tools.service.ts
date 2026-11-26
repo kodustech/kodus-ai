@@ -474,7 +474,7 @@ export class RuntimeEnvToolsService {
             this.views.environmentRuns(env.organizationId, env.environmentId),
         ]);
         const mine = runs.filter((r) => r.organizationId === env.organizationId && r.environmentId === env.environmentId);
-        return { setup, groups: blockerGroups(setup, mine, await memoryFor(this.lessons, env)) };
+        return { setup, groups: blockerGroups(setup, mine, await memoryFor(this.lessons, env), { fullEvidence: true }) };
     }
 
     /** env_blockers: the environment's blockers with evidence and the catalog's fixes (the same read as the Runtime page). */

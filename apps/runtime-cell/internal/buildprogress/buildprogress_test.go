@@ -132,9 +132,10 @@ func TestATrackerKeepsAtMostMaxSteps(t *testing.T) {
 	}
 }
 
-// A failed npm install: the first lines that say why come out of the step's
-// output; the docker command around the build used to be all the error had.
-func TestFailureKeepsTheFirstErrorLinesOfTheFailedStep(t *testing.T) {
+// A failed npm install: the lines that say why come out of the step's
+// output, in the order it printed them; the docker command around the build
+// used to be all the error had.
+func TestFailureKeepsTheLinesOfTheFailedStepInOrder(t *testing.T) {
 	tr := New()
 	feed(tr, `#6 [deps 3/5] RUN --mount=type=cache,target=/root/.npm npm ci
 #6 0.812 npm WARN deprecated inflight@1.0.6
@@ -152,13 +153,9 @@ error: failed to solve: process "/bin/sh -c npm ci" did not complete successfull
 	if !ok || f.Step != "[deps 3/5] RUN --mount=type=cache,target=/root/.npm npm ci" || !f.ProcessExit || !f.CacheMount {
 		t.Fatalf("failure %+v", f)
 	}
-	if len(f.Lines) != 6 || f.Lines[0] != "npm ERR! code ENOTFOUND" || !strings.HasPrefix(f.Lines[5], "ERROR: process") {
+	// Everything the step printed fits the tail: each line once, in order, then BuildKit's own.
+	if len(f.Lines) != 7 || f.Lines[0] != "npm WARN deprecated inflight@1.0.6" || f.Lines[1] != "npm ERR! code ENOTFOUND" || !strings.HasPrefix(f.Lines[6], "ERROR: process") {
 		t.Fatalf("lines %q", f.Lines)
-	}
-	for _, l := range f.Lines {
-		if strings.Contains(l, "WARN deprecated") {
-			t.Fatalf("a warning was kept as an error: %q", l)
-		}
 	}
 	if !tr.SolveFailed() {
 		t.Fatal("the solve failure was not seen")
@@ -167,16 +164,32 @@ error: failed to solve: process "/bin/sh -c npm ci" did not complete successfull
 
 // A step whose output says nothing that reads as an error still names its
 // last lines, so the failure has some text of its own.
-func TestFailureFallsBackToTheStepsLastLines(t *testing.T) {
+func TestFailureNamesTheStepsLastLines(t *testing.T) {
 	tr := New()
 	tr.Line("#3 [b 1/1] RUN ./build.sh")
-	for i := range 10 {
+	for i := range MaxTailLines + 10 {
 		tr.Line("#3 1.00" + strconv.Itoa(i) + " step " + strconv.Itoa(i))
 	}
 	tr.Line("#3 ERROR: process \"/bin/sh -c ./build.sh\" did not complete successfully: exit code: 2")
 	f, ok := tr.Failure()
-	if !ok || len(f.Lines) != MaxTailLines+1 || f.Lines[0] != "step 6" || f.CacheMount {
+	if !ok || len(f.Lines) != MaxTailLines+1 || f.Lines[0] != "step 10" || f.Lines[MaxTailLines-1] != "step "+strconv.Itoa(MaxTailLines+9) || f.CacheMount {
 		t.Fatalf("%+v", f)
+	}
+}
+
+// A compiler prints its errors and then a long summary: the first error lines
+// that scrolled out of the last lines come first, the tail after them, no line twice.
+func TestFailureKeepsTheFirstErrorsThatScrolledOutOfTheTail(t *testing.T) {
+	tr := New()
+	tr.Line("#4 [build 1/1] RUN npm run build")
+	tr.Line("#4 5.000 src/a.ts(1,1): error TS2322: Type 'string' is not assignable to type 'number'.")
+	for i := range MaxTailLines + 5 {
+		tr.Line("#4 6.00" + strconv.Itoa(i) + " detail " + strconv.Itoa(i))
+	}
+	tr.Line("#4 ERROR: process \"/bin/sh -c npm run build\" did not complete successfully: exit code: 2")
+	f, _ := tr.Failure()
+	if len(f.Lines) != MaxTailLines+2 || !strings.Contains(f.Lines[0], "error TS2322") || f.Lines[1] != "detail 5" {
+		t.Fatalf("%d lines, first %q, second %q", len(f.Lines), f.Lines[0], f.Lines[1])
 	}
 }
 
@@ -190,7 +203,8 @@ func TestFailureLinesAreRedactedAndBounded(t *testing.T) {
 	}
 	tr.Line("#2 ERROR: failed")
 	f, _ := tr.Failure()
-	if len(f.Lines) != MaxErrorLines+1 || f.ProcessExit {
+	// All 25 printed lines fit the tail, so none is told twice; the first was cut to MaxLine.
+	if len(f.Lines) != 3*MaxErrorLines+2 || f.ProcessExit {
 		t.Fatalf("%d lines, exit %v", len(f.Lines), f.ProcessExit)
 	}
 	if l := f.Lines[0]; strings.Contains(l, "hunter2") || strings.Contains(l, "ghp_") || len(l) > MaxLine {

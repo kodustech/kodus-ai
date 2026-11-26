@@ -251,6 +251,15 @@ anything (`environment-setup.service.ts:981-1004`).
 - `classifyBlocker` turns it into a card with title, evidence and fixes (`libs/runtime/blockers/catalog.ts:579`).
   Cards added in this round: `environment_not_prepared`, `builder_failed`, `image_load` (platform, retry),
   `image_too_large` (resources), `compose_refused` (toolchain).
+- **Evidence for a developer's agent.** A card's evidence is one line, enough for the page. `env_blockers` (and so
+  `kodus env status` and `submit --wait`) carries more for a failed build or boot (signature `compose_up`):
+  `evidence.step`, the failed build step, and `evidence.lines`, its output (`libs/runtime/blockers/evidence.ts`
+  `fullEvidenceOf`, chosen by `blockerGroups(..., { fullEvidence: true })`). The bounds, from the build to the tool:
+  the cell keeps a failed step's last 40 lines and its first 8 error lines that scrolled out (`buildprogress`
+  `MaxTailLines`, `MaxErrorLines`), each at most 500 bytes (`MaxLine`), redacted; the failure bundle's `boot output`
+  entry carries them (500 lines of 2048 bytes); the blocker message is kept to 2000 characters
+  (`BLOCKER_MESSAGE_MAX`) and a step's detail to 2000 (`STEP_DETAIL_MAX`), up from 500 and 300; the evidence is at most
+  49 lines (`FULL_EVIDENCE_LINES`). A boot with no step named gets the last lines of the boot output instead.
 - A builder that prints nothing for 5 minutes while no step of the Dockerfile runs (`[stage N/M] RUN|COPY|...`) is
   stopped by the cell as `builder_failed` (`dockergvisor/build.go` `watchBuildStall`): a builder that hangs between
   BuildKit's own steps is the platform's, and before this it waited out the worker's boot limit, which read as the

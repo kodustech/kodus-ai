@@ -141,6 +141,23 @@ describe('kodus env', () => {
         expect(out).toContain('kodus env fix <signature> --fix <fix-id>');
     });
 
+    it('prints the failed step and every evidence line, not the first three', () => {
+        const lines = Array.from({ length: 40 }, (_, i) => `error TS2322: line ${i}`);
+        const status = {
+            ...STATUS,
+            blockers: [
+                {
+                    ...STATUS.blockers[0],
+                    evidence: { lines, step: '[build 3/5] RUN npm run build' },
+                },
+            ],
+        };
+        const out = formatEnvStatus(status).join('\n');
+        expect(out).toContain('failed step: [build 3/5] RUN npm run build');
+        expect(out).toContain('error TS2322: line 0');
+        expect(out).toContain('error TS2322: line 39');
+    });
+
     it('prints what a fix did', () => {
         expect(
             formatEnvFix(

@@ -467,6 +467,20 @@ describe('RuntimeEnvToolsService (/mcp/env)', () => {
         expect(h.audit.rows.map((r) => r.kind)).toEqual(['env_fix', 'env_fix']);
     });
 
+    it('env_blockers names the failed build step and carries its output, where the Runtime page keeps one line', async () => {
+        const lines = ['step [build 3/5] RUN npm run build failed:', ...Array.from({ length: 30 }, (_, i) => `  src/a.ts(${i},1): error TS2322: line ${i}`), 'docker build: exit status 1: ERROR: failed to solve'];
+        const failed: EnvironmentSetupRecord = {
+            ...blockedSetup,
+            blockers: [{ kind: 'toolchain', signature: 'compose_up', message: lines[0], at: '2026-11-03T00:00:00Z' } as any],
+            failureBundle: { services: [{ name: 'boot output', state: 'failed', logTail: lines }], ports: [], disk: [], deniedEgress: [], redactions: 0, truncated: false, collectedAt: '2026-11-03T00:00:00.000Z' } as any,
+        };
+        const view = await harness({ setup: failed }).service.blockers(KEY, { environmentId: 'env-a' });
+        const evidence = view.blockers[0].evidence!;
+        expect(evidence.step).toBe('[build 3/5] RUN npm run build');
+        expect(evidence.lines).toHaveLength(30);
+        expect(evidence.lines.at(-1)).toBe('src/a.ts(29,1): error TS2322: line 29');
+    });
+
     it('env_fix never approves an egress host (S-27, S-40)', async () => {
         const h = harness({ setup: { ...blockedSetup, failureBundle: { deniedEgress: [{ host: 'api.stripe.com', port: 443 }] } as any } });
         const view = await h.service.blockers(KEY, { environmentId: 'env-a' });

@@ -4,7 +4,7 @@ Reads BuildKit's plain progress output (`buildctl --progress plain`) into per-st
 
 ## Owns
 - `buildprogress.go` `Tracker.Line`: one line of progress (a step's header, a status line, a printed line, `DONE`, `CACHED`, `ERROR`, `CANCELED`); anything else is ignored.
-- `Tracker.Summary`: the slowest steps, cached and failed counts. `Tracker.Failure`: the failed step's first error lines and its last few lines; `SolveFailed`.
+- `Tracker.Summary`: the slowest steps, cached and failed counts. `Tracker.Failure`: the failed step's last `MaxTailLines` (40) lines, preceded by its first error lines that scrolled out of them (the evidence a developer's coding agent reads, `libs/runtime/blockers/evidence.ts`); `SolveFailed`.
 - `phases.go` `Tracker.Phases`: steps named by what they did (the base image, a RUN's command, a COPY's arguments), with the export step split into BuildKit's sub-timers; a step still running counts until the read and is `Running`.
 
 ## Does not own
@@ -13,7 +13,7 @@ Reads BuildKit's plain progress output (`buildctl --progress plain`) into per-st
 
 ## Rules and limits
 - It keeps no output: only each step's name, how it ended, and the bounded error and tail lines of a step.
-- Names and kept lines are redacted (`redact.Patterns`) and clipped: `MaxName`, `MaxLine`, `MaxErrorLines`, `MaxTailLines`, `MaxPhaseName`. At most `MaxSteps` steps; later steps go uncounted.
+- Names and kept lines are redacted (`redact.Patterns`) and clipped: `MaxName`, `MaxLine`, `MaxErrorLines`, `MaxTailLines`, `MaxPhaseName` (`MaxLine` is 500 bytes). At most `MaxSteps` steps; later steps go uncounted.
 - A builder that dies without a failed step leaves no `Failure`.
 
 ## Where new code goes
