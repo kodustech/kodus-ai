@@ -469,7 +469,10 @@ const contradictionCases = [
     {
         id: 'R22-check-timeout', family: 'rounds', repo: archiveRepo, changedFiles: archiveDiff, sandbox: 'alive', repeatCheckFault: 'timeout',
         previousDecisions: [archiveDecision],
-        claims: [{ ...archiveClaims[1], id: 'lifetime-value-unjudged' }],
+        claims: [
+            { ...archiveClaims[0], id: 'readmit-archived-unjudged' },
+            { ...archiveClaims[1], id: 'lifetime-value-unjudged' },
+        ],
     },
     // Heavy mode: the lenses never see the history; the check is their gate.
     {
