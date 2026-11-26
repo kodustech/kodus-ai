@@ -5,6 +5,8 @@ import {
     buildAgentTools,
     MAX_GREP_GROUPS,
     PARTIAL_GREP_NO_VISIBLE_MATCH,
+    PARTIAL_GREP_STOPPED_EMPTY,
+    PARTIAL_NAMES_NOTE,
 } from './agent-tools.factory';
 
 // The real filter, recorded: the test checks how much of an answer it reads.
@@ -41,6 +43,20 @@ describe('agent tools — grep reads a bounded head of a huge rg answer', () => 
 
     beforeEach(() => filter.mockClear());
 
+    const HIDDEN_NOTE =
+        " more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)";
+    /** What the tool answers for what the filter kept: 40 groups and a floor. */
+    const expectedAnswer = () => {
+        // The first filter call reads the search head; later ones see the answer.
+        const kept = (filter.mock.results[0].value as string)
+            .trim()
+            .split('\n--\n');
+        return (
+            kept.slice(0, MAX_GREP_GROUPS).join('\n--\n') +
+            `\n... (${kept.length - MAX_GREP_GROUPS}+${HIDDEN_NOTE}`
+        );
+    };
+
     it('filters only the head and still returns the capped groups', async () => {
         const rc: any = {
             exec: jest.fn().mockResolvedValue({ stdout, exitCode: 0 }),
@@ -55,15 +71,8 @@ describe('agent tools — grep reads a bounded head of a huge rg answer', () => 
         expect(read.length).toBeGreaterThan(0);
         expect(Math.max(...read)).toBeLessThanOrEqual(MAX_TOOL_SCAN_CHARS);
         expect(out).not.toContain('FAKE_VALUE_7f3a');
-        expect(out.split('\n--\n').length).toBe(MAX_GREP_GROUPS);
-        // The count is a floor: the rest of the answer was never read.
-        const shownGroups = MAX_GREP_GROUPS;
-        const readGroups = (filter.mock.results[0].value as string)
-            .trim()
-            .split('\n--\n').length;
-        expect(out).toContain(
-            `... (${readGroups - shownGroups}+ more matches hidden`,
-        );
+        // The count is a floor ("N+"): the rest of the answer was never read.
+        expect(out).toBe(expectedAnswer());
     });
 
     // The sandbox stops rg at its output cap and reports the kill's exit
@@ -86,7 +95,7 @@ describe('agent tools — grep reads a bounded head of a huge rg answer', () => 
         })) as string;
 
         expect(rc.grep).not.toHaveBeenCalled();
-        expect(out.split('\n--\n').length).toBe(MAX_GREP_GROUPS);
+        expect(out).toBe(expectedAnswer());
     });
 
     it('does not answer "no matches" when the part read held only secret files', async () => {
@@ -106,5 +115,42 @@ describe('agent tools — grep reads a bounded head of a huge rg answer', () => 
         const out = await buildAgentTools(rc).grep.execute({ pattern: 'TOKEN' });
 
         expect(out).toBe(PARTIAL_GREP_NO_VISIBLE_MATCH);
+    });
+
+    it('does not blame secret files when the cut came from stderr alone', async () => {
+        const rc: any = {
+            exec: jest.fn().mockResolvedValue({
+                stdout: '',
+                stderr: 'rg: permission denied\n'.repeat(100_000),
+                exitCode: -1,
+                truncated: true,
+            }),
+            grep: jest.fn().mockResolvedValue(''),
+        };
+
+        const out = await buildAgentTools(rc).grep.execute({ pattern: 'x' });
+
+        expect(out).toBe(PARTIAL_GREP_STOPPED_EMPTY);
+        expect(rc.grep).not.toHaveBeenCalled();
+    });
+
+    it('says a cut file-name list may be incomplete', async () => {
+        const names = Array.from({ length: 3 }, (_, i) => `src/f${i}.ts`).join('\n');
+        const rc: any = {
+            exec: jest.fn().mockResolvedValue({
+                stdout: names,
+                stderr: '',
+                exitCode: -1,
+                truncated: true,
+            }),
+            grep: jest.fn().mockResolvedValue(''),
+        };
+
+        const out = await buildAgentTools(rc).grep.execute({
+            pattern: 'x',
+            namesOnly: true,
+        });
+
+        expect(out).toBe(`${names}\n${PARTIAL_NAMES_NOTE}`);
     });
 });

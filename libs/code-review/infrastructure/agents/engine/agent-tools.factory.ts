@@ -29,13 +29,7 @@ import {
 const logger = createLogger('AgentTools');
 
 export const MAX_GREP_MATCHES = 50;
-/**
- * Cap on distinct match GROUPS returned by the rg context search (groups are
- * separated by `--` lines under `-C`). Capping by match groups instead of raw
- * lines — paired with a tighter `-C 2` context — lets the agent see ~10x more
- * distinct locations for the same token budget, so a definition is not buried
- * beyond the cutoff when a symbol has many usages.
- */
+
 /**
  * A grep whose output was cut where every line read so far came from a
  * secret file: there are matches, so "No matches found" would be false.
@@ -43,6 +37,24 @@ export const MAX_GREP_MATCHES = 50;
 export const PARTIAL_GREP_NO_VISIBLE_MATCH =
     'Matches were found, but the part of the output that was read only had matches in secret files, which are not shown. Narrow the search with a path, a glob or a more specific regex.';
 
+/**
+ * A search stopped at the sandbox's output cap before it printed any match
+ * (its stderr filled the cap): whether anything matches is unknown.
+ */
+export const PARTIAL_GREP_STOPPED_EMPTY =
+    'The search was stopped at the output limit before it printed any match, so whether anything matches is unknown. Narrow the search with a path, a glob or a more specific regex.';
+
+/** Appended to a file-name list read from a cut search. */
+export const PARTIAL_NAMES_NOTE =
+    '... (the search output was cut: more files may match — narrow with a path or glob)';
+
+/**
+ * Cap on distinct match GROUPS returned by the rg context search (groups are
+ * separated by `--` lines under `-C`). Capping by match groups instead of raw
+ * lines — paired with a tighter `-C 2` context — lets the agent see ~10x more
+ * distinct locations for the same token budget, so a definition is not buried
+ * beyond the cutoff when a symbol has many usages.
+ */
 export const MAX_GREP_GROUPS = 40;
 export const MAX_READ_LENGTH = 8_000;
 export const MAX_LIST_LENGTH = 4_000;
@@ -503,7 +515,9 @@ export function buildAgentTools(
                         const raw = withoutSecretFileLines(head).trim();
                         const partial = unread > 0 || !!truncated;
                         if (!raw && partial) {
-                            return PARTIAL_GREP_NO_VISIBLE_MATCH;
+                            return head.trim()
+                                ? PARTIAL_GREP_NO_VISIBLE_MATCH
+                                : PARTIAL_GREP_STOPPED_EMPTY;
                         }
                         if ((exitCode === 1 && !truncated) || !raw) {
                             return `No matches found in linked repo ${linked.repository}.`;
@@ -519,10 +533,13 @@ export function buildAgentTools(
                             )
                             .join('\n');
                         if (namesOnly) {
-                            return tagged
+                            const names = tagged
                                 .split('\n')
                                 .slice(0, MAX_GREP_MATCHES)
                                 .join('\n');
+                            return partial
+                                ? `${names}\n${PARTIAL_NAMES_NOTE}`
+                                : names;
                         }
                         const groups = tagged.split(/\n--\n/);
                         if (groups.length > MAX_GREP_GROUPS) {
@@ -597,7 +614,9 @@ export function buildAgentTools(
                         // Matches exist, but none in the part that was read
                         // survived the secret filter: not "no matches".
                         if (!raw && partial) {
-                            return PARTIAL_GREP_NO_VISIBLE_MATCH;
+                            return head.trim()
+                                ? PARTIAL_GREP_NO_VISIBLE_MATCH
+                                : PARTIAL_GREP_STOPPED_EMPTY;
                         }
                         // exit code 1 = no matches (not an error)
                         if ((exitCode === 1 && !truncated) || !raw) {
@@ -608,10 +627,13 @@ export function buildAgentTools(
                         }
                         if (exitCode === 0 || truncated) {
                             if (namesOnly) {
-                                return raw
+                                const names = raw
                                     .split('\n')
                                     .slice(0, MAX_GREP_MATCHES)
                                     .join('\n');
+                                return partial
+                                    ? `${names}\n${PARTIAL_NAMES_NOTE}`
+                                    : names;
                             }
                             // Cap by match GROUPS (rg separates them with `--`
                             // under -C), not raw lines, so many distinct match
@@ -684,7 +706,10 @@ export function buildAgentTools(
                                 .filter(Boolean),
                         ),
                     ];
-                    return files.slice(0, MAX_GREP_MATCHES).join('\n');
+                    const names = files.slice(0, MAX_GREP_MATCHES).join('\n');
+                    return scanned.unread > 0
+                        ? `${names}\n${PARTIAL_NAMES_NOTE}`
+                        : names;
                 }
                 const lines = result.split('\n');
                 if (lines.length > MAX_GREP_MATCHES) {
