@@ -36,16 +36,31 @@ export interface AuthoredFile {
     content: string;
 }
 
-export type AuthoredFileKind = 'dockerfile' | 'compose';
+export type AuthoredFileKind = 'dockerfile' | 'compose' | 'dockerignore';
 
 /** A name directly under .kodus/: one segment, plain characters. */
 const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const DOCKERFILE_NAME = /^(Dockerfile(\.[A-Za-z0-9_-]+)?|[A-Za-z0-9_-]+\.Dockerfile)$/;
 const COMPOSE_NAME = /\.ya?ml$/;
 
+const DOCKERIGNORE_SUFFIX = '.dockerignore';
+
+/**
+ * The Dockerfile a `<Dockerfile>.dockerignore` belongs to, or null for any other name. BuildKit reads that file, next to
+ * the Dockerfile, instead of the build context's .dockerignore: Kody's own build can take a file the repository's
+ * .dockerignore leaves out of every build (kr-mono's cypress/, which its CI runs outside Docker).
+ */
+export function dockerignoreOwner(path: string): string | null {
+    if (!path.endsWith(DOCKERIGNORE_SUFFIX)) return null;
+    const owner = path.slice(0, -DOCKERIGNORE_SUFFIX.length);
+    return DOCKERFILE_NAME.test(posix.basename(owner)) ? owner : null;
+}
+
 /** What kind of file the name says, or null for a name Kody does not write. */
 export function authoredFileKind(path: string): AuthoredFileKind | null {
     const name = posix.basename(path);
+    // Before the Dockerfile names: Dockerfile.dockerignore would read as a Dockerfile with the extension "dockerignore".
+    if (dockerignoreOwner(path)) return 'dockerignore';
     if (DOCKERFILE_NAME.test(name)) return 'dockerfile';
     if (COMPOSE_NAME.test(name)) return 'compose';
     return null;
@@ -138,6 +153,20 @@ export function imageProblem(image: string): string | null {
     if (!OCI_TAG.test(tag)) return `${JSON.stringify(image)} has a malformed tag`;
     if (tag === 'latest') return `${JSON.stringify(image)} uses latest; name a version tag so every boot builds the same image`;
     return null;
+}
+
+// --- .dockerignore ----------------------------------------------------------------------------
+
+/**
+ * Each rule a Dockerfile's own .dockerignore breaks: it belongs to a Dockerfile Kody submits (BuildKit reads it only
+ * next to the Dockerfile the build names), and it holds patterns only (no parser directive, nothing but text lines).
+ */
+export function checkAuthoredDockerignore(path: string, content: string, authored: ReadonlySet<string>): string[] {
+    const owner = dockerignoreOwner(path);
+    const errors: string[] = [];
+    if (!owner || !authored.has(owner)) errors.push(`${path} is the .dockerignore of ${owner ?? 'no Dockerfile'}, which you do not submit; a build reads it only next to its own Dockerfile`);
+    if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(content)) errors.push(`${path} holds control characters; a .dockerignore is one pattern per line`);
+    return errors;
 }
 
 // --- Dockerfile -------------------------------------------------------------------------------
@@ -1400,7 +1429,7 @@ export async function checkAuthoredSubmission(
             continue;
         }
         if (!authoredFileKind(p)) {
-            errors.push(`files: ${p} is neither a Dockerfile (Dockerfile, Dockerfile.dev, app.Dockerfile) nor a compose file (.yaml)`);
+            errors.push(`files: ${p} is neither a Dockerfile (Dockerfile, Dockerfile.dev, app.Dockerfile), a compose file (.yaml) nor the .dockerignore of one of your Dockerfiles (.kodus/Dockerfile.e2e.dockerignore)`);
             continue;
         }
         if (byPath.has(p)) {
@@ -1444,7 +1473,9 @@ export async function checkAuthoredSubmission(
     const buildContexts = new Map<string, string>();
     const repositoryCode = { used: false };
     for (const f of byPath.values()) {
-        if (authoredFileKind(f.path) === 'dockerfile') errors.push(...checkAuthoredDockerfile(f.path, f.content));
+        const kind = authoredFileKind(f.path);
+        if (kind === 'dockerfile') errors.push(...checkAuthoredDockerfile(f.path, f.content));
+        else if (kind === 'dockerignore') errors.push(...checkAuthoredDockerignore(f.path, f.content, authored));
         else {
             const r = await checkAuthoredCompose(f.path, f.content, { authored, exists, buildContexts, repositoryCode, ...(composeWs ? { workspace: composeWs } : {}) });
             errors.push(...r.errors);

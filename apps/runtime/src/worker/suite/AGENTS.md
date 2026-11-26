@@ -75,5 +75,6 @@ Imported by:
 - [`apps/runtime/src/worker/commands`](../commands/AGENTS.md)
 - [`apps/runtime/src/worker/dbos`](../dbos/AGENTS.md)
 - [`apps/runtime/src/worker/publish`](../publish/AGENTS.md)
+- [`apps/runtime/src/worker/setup`](../setup/AGENTS.md)
 
 <!-- module-map:end -->

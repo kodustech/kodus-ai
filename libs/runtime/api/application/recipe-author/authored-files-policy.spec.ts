@@ -1,5 +1,6 @@
 import {
     AUTHORED_FILE_LIMITS,
+    authoredFileKind,
     type AuthoredFile,
     checkAuthoredCompose,
     checkAuthoredDockerfile,
@@ -79,6 +80,23 @@ describe('authored files: what is accepted', () => {
         expect(r.errors).toEqual([]);
         // The cell passes CI=true to every build: the stages that run something declare it.
         expect(r).toMatchObject({ ok: true, files: [{ path: '.kodus/Dockerfile', content: DOCKERFILE.replace('AS build\n', 'AS build\nARG CI\n') }, FILES[1]] });
+    });
+
+    // kr-mono: the repository's .dockerignore leaves cypress/ out of every build (its CI runs Cypress outside Docker), so the
+    // suite's image Kody wrote held no spec. A Dockerfile's own .dockerignore is what BuildKit reads instead of the context's.
+    it("accepts the .dockerignore of one of Kody's Dockerfiles, and keeps it as written", async () => {
+        const ignore = { path: '.kodus/Dockerfile.dockerignore', content: 'node_modules\n**/node_modules\n.git\n' };
+        const r = await submit([...FILES, ignore]);
+        expect(r.errors).toEqual([]);
+        expect(r.files).toContainEqual(ignore);
+        expect(authoredFileKind('.kodus/Dockerfile.dockerignore')).toBe('dockerignore');
+        expect(authoredFileKind('.kodus/Dockerfile.e2e.dockerignore')).toBe('dockerignore');
+        expect(authoredFileKind('.kodus/Dockerfile.e2e')).toBe('dockerfile');
+    });
+
+    it('refuses a .dockerignore whose Dockerfile Kody does not submit, and one of no Dockerfile at all', async () => {
+        expect(await errorsOf([...FILES, { path: '.kodus/Dockerfile.e2e.dockerignore', content: 'node_modules\n' }])).toMatch(/is the \.dockerignore of \.kodus\/Dockerfile\.e2e, which you do not submit/);
+        expect(await errorsOf([...FILES, { path: '.kodus/build.dockerignore', content: 'node_modules\n' }])).toMatch(/nor the \.dockerignore of one of your Dockerfiles/);
     });
 
     it('a recipe without files is checked exactly as before', async () => {

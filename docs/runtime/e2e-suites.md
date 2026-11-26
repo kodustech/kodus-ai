@@ -567,6 +567,8 @@ reason, like `MachineMinutesChanged`.
 | Hub or worker restart | The DBOS workflow resumes; shards have stable step ids; a shard already finished is not re-run (its results are stored per spec as they arrive) |
 | Spec list changes between shards (same PR) | The plan is stored; a push cancels the suite run (a new head, a new run) as Runs do |
 | Duplicated demand / double start | idempotent by `suiteRunId` + shard index (the DBOS key) and the host's `Idempotency-Key` |
+| The recipe's suite cannot run in its service (no spec there, or a runner that leaves no result file) | Caught by the setup, not by the Runs: after the ready check the setup runs one spec of the suite in `suite.service` on the default branch (`worker/setup/suite-check.ts`, step `suite`). A suite that cannot run blocks the setup with `suite_unrunnable` (kind `toolchain`), its evidence the runner's own lines, so Kody's author gets it back inside the same setup and rewrites the recipe (kr-mono on dev: the repository's `.dockerignore` left `cypress/` out of the suite's image, and every spec of every Run was `infra`). A spec that ran red is a suite that runs; a timeout, a lost transport or a cell without `execService` is no verdict |
+| Shard claims booted without the environment's recipe | Every suite acquire carries the recipe and machine size the setup recorded, Kody's files included (`suite-environment.ts` `bootingAsRuns`, `setup/recipe-for-claim.ts`), as a Run's claims do |
 
 ## 15. What changes where
 

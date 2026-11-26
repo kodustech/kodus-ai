@@ -23,7 +23,7 @@ import { noRecipeRule, platformStepRule, recipeNeedsRule, recipeOutdatedRule, se
 import { buildEgressRule, credentialRule, egressRule, platformDeniedRule } from './rules/egress';
 import { LOG_BLOCKER_RULES } from './rules/log';
 import { type BlockerRule, linesOf } from './rules/rule';
-import { fallbackRule, notReadyRule, recipeStepRule, serviceExitedRule, setupSignatureRule } from './rules/setup';
+import { fallbackRule, notReadyRule, recipeStepRule, serviceExitedRule, setupSignatureRule, suiteUnrunnableRule } from './rules/setup';
 
 // The classifier of blockers and its catalog of fixes (docs §4, ADR-015):
 // what blocked an environment, read from what the cell and the worker saw
@@ -136,7 +136,7 @@ export { MAX_HEALTH_TIMEOUT_SECONDS };
 // The rules and the helpers callers import from this path (README "Who imports what").
 export { credentialNeeded, deniedEgressBundle, FULL_ACCESS_FIX_PREFIX, isApprovableDeniedHost, isPackageRegistry, MAX_PR_DENIED_HOSTS, prOnlyDeniedHosts } from './rules/egress';
 export { matchedBlockerLine, testValueFor } from './rules/log';
-export { notReadyWaited } from './rules/setup';
+export { notReadyWaited, SUITE_UNRUNNABLE_SIGNATURE } from './rules/setup';
 export type { BlockerRule } from './rules/rule';
 
 /**
@@ -182,6 +182,8 @@ export const BLOCKER_RULES: readonly BlockerRule[] = [
     platformDeniedRule,
     buildEgressRule,
     egressRule,
+    // Before the log rules: its evidence is the runner's output, which they would read as another failure.
+    suiteUnrunnableRule,
     ...LOG_BLOCKER_RULES,
     notReadyRule,
     setupSignatureRule,

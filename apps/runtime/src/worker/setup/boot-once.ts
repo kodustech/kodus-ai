@@ -13,6 +13,8 @@ import { stableStepId } from '../run/step-id';
 import { isCancellation } from '../workflow-cancellation';
 import { blockerMessage } from './blocker-message';
 import { setupBootPhases } from './boot-phases';
+import { suiteStepId } from '../suite/suite-environment';
+import { checkSuite, SUITE_CHECK_TIMEOUT_MS } from './suite-check';
 import { envFor, SETUP_IMAGE, type SetupDeps, type SetupExpose, setupLogger, type SetupRun, type SetupStepRunner } from './setup-scope';
 import { askTokens, useTokens } from './setup-tokens';
 
@@ -102,6 +104,7 @@ export async function bootOnce(run: SetupRun, bootEnv: EnvironmentRuntime, attem
         claimId = claim.claimId;
         await recordBootedClaim(run, b, claim);
         if (!(await checkReady(run, b, claim))) return { claimFailed };
+        if (!(await checkSuiteRuns(run, b, claim))) return { claimFailed };
         const baked = await bake(run, b, claim);
         await fillPool(run, b, claim, baked);
         rec.state = 'active';
@@ -246,6 +249,45 @@ async function recordBootedClaim(run: SetupRun, b: BootAttempt, claim: Claim): P
     if (claim.timing) rec.bootTiming = claim.timing;
     await run.journal.done(b.step, `cell ${claim.cellId}`);
     rec.boots = withSetupBoot(rec.boots, b.step, 'ready');
+}
+
+/** What the suite check leaves of the claim for the bake, the pool and the release after it. */
+export const SUITE_CHECK_BAKE_RESERVE_MS = 10 * 60_000;
+
+/**
+ * The `suite` step, for a recipe that declares a suite (suite-check.ts): one spec run in the suite's service. A suite
+ * that cannot run blocks the setup on the recipe's account, so Kody's author gets the runner's words back and rewrites
+ * the recipe (authorRepair). False when the setup ended blocked on it; no step at all for a recipe with no suite, nor
+ * for a template build.
+ */
+async function checkSuiteRuns(run: SetupRun, b: BootAttempt, claim: Claim): Promise<boolean> {
+    const { cmd, rec, journal, deps } = run;
+    const content = rec.recipe?.state === 'found' && typeof rec.recipe.content === 'string' ? rec.recipe.content : undefined;
+    // A template build boots the recipe the environment's own setup already checked, and its record is kept apart: a
+    // repair there would never become the environment's recipe.
+    if (!content || !/^suite:/m.test(content) || cmd.key.startsWith('template:')) return true;
+    const step = await journal.start('suite');
+    const ceilingMs = Date.parse(claim.hardExpiresAt) - READY_CHECK_CEILING_MARGIN_SECONDS * 1_000 - SUITE_CHECK_BAKE_RESERVE_MS;
+    const out = await run.step(b.named('suite'), async () =>
+        checkSuite({
+            // The hub takes a step id only as a UUID: each of the check's steps is named by what it does, the same name the same UUID.
+            env: { exec: (claimId, req) => b.env.exec(claimId, { ...req, stepId: suiteStepId(req.stepId) }) },
+            claimId: claim.claimId,
+            key: b.key,
+            recipe: content,
+            // A claim with no readable ceiling (a fake, an old reply) gets the check's own bound.
+            budgetMs: Number.isFinite(ceilingMs) ? ceilingMs - deps.now().getTime() : SUITE_CHECK_TIMEOUT_MS,
+            now: () => deps.now().getTime(),
+            sleep: deps.sleep,
+        }),
+    );
+    if (out.state === 'failed') {
+        await journal.block(step, out.blocker);
+        return false;
+    }
+    if (out.state === 'skipped') await journal.finish(step, 'skipped', out.detail);
+    else await journal.done(step, out.detail);
+    return true;
 }
 
 /** The `ready` step: the exposed app answers. False when the setup ended blocked on it. */

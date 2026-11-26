@@ -271,6 +271,7 @@ const SETUP_STEP_LABEL: Record<EnvironmentSetupStepName, string> = {
     recipe: "Read the setup file",
     boot: "Boot on a machine",
     ready: "Ready check",
+    suite: "Run one test of the suite",
     bake: "Bake the image",
     pool: "Keep machines ready",
     release: "Release the machine",

@@ -224,6 +224,16 @@ export const RULE_EXAMPLES: RuleExample[] = [
         },
     },
     {
+        rule: 'suite_unrunnable',
+        behavior: "reads a suite whose runner gave nothing to read in its service as the recipe's, its output as the evidence",
+        card: { kind: 'toolchain', signature: 'suite_unrunnable', fixes: ['fix_recipe'] },
+        input: {
+            kind: 'toolchain',
+            signature: 'suite_unrunnable',
+            message: 'npx cypress run in service e2e left no result file (exit 1)\nError: Your supportFile is missing or invalid: cypress/support/e2e.ts',
+        },
+    },
+    {
         rule: 'log:lockfile_outdated',
         behavior: 'reads a frozen install that would change the lockfile as a lockfile to commit',
         card: { kind: 'toolchain', signature: 'toolchain:lockfile_outdated:pnpm', fixes: ['fix_recipe'] },

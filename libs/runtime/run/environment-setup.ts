@@ -14,7 +14,7 @@ import type { RecipeInferenceGap, SetupRecipeOrigin } from '@libs/runtime/contra
 import type { BootPhases, FailureBundle, MessageBody } from '@libs/runtime/protocol';
 
 export type EnvironmentSetupState = 'setting_up' | 'active' | 'blocked';
-export type EnvironmentSetupStepName = 'requested' | 'resolve_ref' | 'recipe' | 'boot' | 'ready' | 'bake' | 'pool' | 'release';
+export type EnvironmentSetupStepName = 'requested' | 'resolve_ref' | 'recipe' | 'boot' | 'ready' | 'suite' | 'bake' | 'pool' | 'release';
 export type EnvironmentSetupStepState = 'running' | 'done' | 'failed' | 'skipped';
 
 export interface EnvironmentSetupStep {

@@ -5,6 +5,8 @@ The environment setup: boot the default-branch head the product resolved with th
 ## Owns
 - The workflow body: `environment-setup.service.ts` `EnvironmentSetupService.run` (load, checks before boot, commit, recipe, boots and repairs, settle, learn). A command delivered twice answers the first record.
 - The phases, each a function over the setup's scope (`setup-scope.ts` `SetupScope`, `SetupRun`, `openSetup`, `atCommit`, `envFor`, `settle`): `resolve-ref.ts` (`refusedBeforeBoot`, `resolveRef`), `resolve-recipe.ts` (`resolveRecipe`: the product's recipe, Kodus's inferred one, the last authored recipe kept or reused, or Kody's author), `boot-once.ts` (`bootOnce`: acquire with capacity wait, progress, ready check, `bake`, `fillPool`, failure bundle and diagnostic hold), `author-repair.ts` (`authorRepair`: Kody rewrites a recipe that failed on its own account, up to `SETUP_AUTHOR_REPAIRS_DEFAULT`).
+- The suite check (`suite-check.ts` `checkSuite`, step `suite` in `boot-once.ts`, after the ready check and before the bake): for a recipe that declares a suite, one spec run in `suite.service`; no spec there or no result file blocks the setup with `suite_unrunnable` on the recipe's account (Kody repairs it), anything it cannot ask is skipped. Bounded by `SUITE_CHECK_TIMEOUT_MS` and by the claim's ceiling less `SUITE_CHECK_BAKE_RESERVE_MS`.
+- The recipe a claim boots with, shared by the Run's handler and the suite: `recipe-for-claim.ts` `recipeForClaimOf`.
 - What a setup learns: `learn-from-failure.ts` `learnFromSetup` (a clean boot after a blocked setup becomes a lesson) and `learn-loop.ts` `SetupLearnLoop` (one typed recipe change per hypothesis, booted on its own clean claim, at most `MAX_HYPOTHESES_PER_BLOCKER` per blocker signature).
 - The record's journal: `setup-journal.ts` `SetupJournal` (every clock read `clock:<n>` and save `record:<n>` is a step), `countSetupOutcome`.
 - Fresh download tokens for later boots: `setup-tokens.ts` (`askTokens`, `learnTokens`; the cell revokes a token after its first download).
@@ -38,7 +40,7 @@ The environment setup: boot the default-branch head the product resolved with th
 
 ## Module map
 
-Files (18, tests apart): `author-repair.ts`, `blocker-message.ts`, `boot-once.ts`, `boot-phases.ts`, `environment-setup.service.ts`, `environment-setup.store.ts`, `learn-from-failure.ts`, `learn-loop.ts`, `lesson.store.ts`, `recipe-failure.ts`, `recipe-for-claim.ts`, `resolve-recipe.ts`, `resolve-ref.ts`, `setup-journal.ts`, `setup-scope.ts`, `setup-tokens.ts`, `template-routing-setup.store.ts`, `testing.ts`
+Files (19, tests apart): `author-repair.ts`, `blocker-message.ts`, `boot-once.ts`, `boot-phases.ts`, `environment-setup.service.ts`, `environment-setup.store.ts`, `learn-from-failure.ts`, `learn-loop.ts`, `lesson.store.ts`, `recipe-failure.ts`, `recipe-for-claim.ts`, `resolve-recipe.ts`, `resolve-ref.ts`, `setup-journal.ts`, `setup-scope.ts`, `setup-tokens.ts`, `suite-check.ts`, `template-routing-setup.store.ts`, `testing.ts`
 
 Imports these Runtime modules:
 
@@ -48,6 +50,7 @@ Imports these Runtime modules:
 - [`apps/runtime/src/worker/agent`](../agent/AGENTS.md)
 - [`apps/runtime/src/worker/env`](../env/AGENTS.md)
 - [`apps/runtime/src/worker/run`](../run/AGENTS.md)
+- [`apps/runtime/src/worker/suite`](../suite/AGENTS.md)
 - [`libs/runtime/api/domain`](../../../../../libs/runtime/api/domain/AGENTS.md)
 - [`libs/runtime/blockers`](../../../../../libs/runtime/blockers/AGENTS.md)
 - [`libs/runtime/contracts`](../../../../../libs/runtime/contracts/AGENTS.md)

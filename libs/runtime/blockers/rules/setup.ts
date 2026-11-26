@@ -84,6 +84,39 @@ export const setupSignatureRule: BlockerRule = {
             : null,
 };
 
+/** The signature the setup's suite check writes (worker setup/suite-check.ts): the recipe's suite did not run in its service. */
+export const SUITE_UNRUNNABLE_SIGNATURE = 'suite_unrunnable';
+
+/**
+ * The setup ran the recipe's suite on one spec in its service and the runner gave nothing to read (no spec found there,
+ * or no result file): a recipe that boots but whose suite cannot run, which a Run would report as every spec infra. The
+ * evidence is what the check saw, line by line, so the recipe's author reads the runner's own words.
+ */
+export const suiteUnrunnableRule: BlockerRule = {
+    id: 'suite_unrunnable',
+    classify: ({ input }) =>
+        input.signature === SUITE_UNRUNNABLE_SIGNATURE
+            ? {
+                  kind: 'toolchain',
+                  signature: SUITE_UNRUNNABLE_SIGNATURE,
+                  title: "The recipe's suite does not run in its service",
+                  evidence: {
+                      lines: input.message
+                          .split('\n')
+                          .map((l) => l.trim())
+                          .filter(Boolean)
+                          .slice(-20)
+                          .map((l) => l.slice(0, 500)),
+                  },
+                  fixes: [
+                      fixRecipe(
+                          "Make the suite's service hold what its runner needs (the spec files, the runner's support files and config) and run suite.command from suite.cwd there. The setup runs one spec of the suite in that service after the ready check.",
+                      ),
+                  ],
+              }
+            : null,
+};
+
 /** The cell's signatures for a failed recipe boot step (agent runRecipe), by the recipe key it names. */
 const RECIPE_STEP_SIGNATURES: Record<string, string> = { recipe_setup: 'setup', recipe_migrate: 'data.migrate', recipe_seed: 'data.seed' };
 

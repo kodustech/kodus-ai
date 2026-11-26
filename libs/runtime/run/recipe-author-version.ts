@@ -71,6 +71,12 @@ export const RECIPE_AUTHOR_REVISIONS: readonly RecipeAuthorRevision[] = [
         reason: 'a Cypress suite runs in a service built from cypress/included, where Kodus forwards localhost to the exposed services',
         appliesTo: cypressWithoutSuiteService,
     },
+    {
+        // Existing recipes are not written again for it: the setup's suite check sends a suite that cannot run back to Kody.
+        version: 6,
+        reauthor: false,
+        reason: "Kody may write a .dockerignore for one of its Dockerfiles, which that build reads instead of the repository's",
+    },
 ];
 
 /** The version the author writes with now. */
