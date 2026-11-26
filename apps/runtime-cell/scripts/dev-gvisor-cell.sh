@@ -102,7 +102,17 @@ ENFORCERS_SUBNET="${ENFORCERS_SUBNET:-10.214.0.0/29}"
 EGRESS_ENFORCER_IP="${EGRESS_ENFORCER_IP:-10.214.0.2}"
 INJECTOR_ENFORCER_IP="${INJECTOR_ENFORCER_IP:-10.214.0.3}"
 [ "$(id -u)" = 0 ] || { echo "run as root: the cell drives Docker and runsc" >&2; exit 1; }
-docker info --format '{{range $k, $v := .Runtimes}}{{$k}} {{end}}' | grep -qw runsc || { echo "runsc is not a Docker runtime here" >&2; exit 1; }
+# A host restored from a snapshot can run a Docker daemon that started before
+# runsc was registered: `docker info` then lacks the runtime until Docker
+# restarts. Restart it once (this script runs as root on a dev host, and no
+# claim exists yet), wait a bounded time for it, and look again.
+has_runsc() { docker info --format '{{range $k, $v := .Runtimes}}{{$k}} {{end}}' 2>/dev/null | grep -qw runsc; }
+if ! has_runsc; then
+  echo "runsc is not listed by Docker: restarting Docker once" >&2
+  systemctl restart docker || { echo "runsc is not a Docker runtime here, and Docker did not restart" >&2; exit 1; }
+  for _ in $(seq 1 30); do has_runsc && break; sleep 1; done
+  has_runsc || { echo "runsc is not a Docker runtime here, even after a Docker restart: register it (runsc install) and restart Docker" >&2; exit 1; }
+fi
 
 # The binaries run from a root-owned directory that every user can read and
 # enter: the extractor runs as another user, and a binary under the operator's

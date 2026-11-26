@@ -627,6 +627,12 @@ Rules:
   and the cell boots the microVM cold, then resets in under a second as today.
 - **The plan.** A saved snapshot needs a paid plan: the $20 plan includes 10, then $0.056 a day each from the wallet.
   The free trial has none. With one template per environment, ten environments fit the $20 plan.
+- **runsc after a restore.** On a docker-gvisor host restored from a snapshot, `docker info` did not list `runsc` until
+  Docker restarted. The cell never restarts a Docker it shares with the host's owner: it refuses to start with
+  `ErrNoRuntime` (`internal/isolation/gvisor/gvisor.go`) and `cell preflight` names the fix. The bootstrap that owns the
+  daemon does the restart: `apps/runtime-cell/scripts/dev-gvisor-cell.sh` restarts Docker once when `runsc` is
+  missing, waits up to 30 s, and exits with a clear message if it is still missing. A template's own first-boot script
+  (outside this repository) needs the same step before it starts the cell.
 - A template never holds an identity: the seal step removes the key, the certificate and the token file before the
   save, and a host made from it registers with its own token.
 
