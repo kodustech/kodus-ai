@@ -244,6 +244,28 @@ export function stripReasoningBlocks(text: string): string | null {
 }
 
 /**
+ * The first markdown code fence: the first ``` that a later ``` closes, with
+ * what lies between them (`inner`, tag included). A linear scan: the regex
+ * forms (`/```(?:json)?\s*([\s\S]*?)```/`) backtrack over a run of
+ * whitespace after an unclosed fence once per character, quadratic in
+ * model-generated text.
+ */
+function firstFence(
+    text: string,
+): { start: number; end: number; inner: string } | null {
+    const start = text.indexOf('```');
+    if (start < 0) return null;
+    const close = text.indexOf('```', start + 3);
+    if (close < 0) return null;
+    return { start, end: close + 3, inner: text.slice(start + 3, close) };
+}
+
+/** A fence's body as the `(?:json)?\s*` prefix leaves it. */
+function fenceBody(inner: string): string {
+    return inner.replace(/^(?:json)?/i, '').trimStart();
+}
+
+/**
  * Pull the JSON value out of free-form LLM text: unwrap a ```json fence, drop any
  * prose before/after the outermost balanced `{…}`/`[…]` (string-aware), and strip
  * trailing commas. Returns the JSON substring — even when the input was ALREADY
@@ -261,8 +283,9 @@ export function extractJsonFromText(text: string): string | null {
     let s = stripped;
 
     // 1. Unwrap a markdown code fence.
-    const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fence?.[1]) s = fence[1].trim();
+    const fence = firstFence(s);
+    const fenced = fence ? fenceBody(fence.inner) : '';
+    if (fenced) s = fenced.trim();
 
     // 2. Drop any prose before/after the outermost balanced JSON value.
     const sliced = sliceBalancedJson(s);
@@ -626,9 +649,9 @@ function windowStartAfterCutSpans(text: string): number {
  *  be established (no fence, no balanced slice from the first delimiter) —
  *  the conservative no-floor. */
 function primarySpanEnd(text: string): number | null {
-    const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fence?.[1]) {
-        return (fence.index ?? 0) + fence[0].length;
+    const fence = firstFence(text);
+    if (fence && fenceBody(fence.inner)) {
+        return fence.end;
     }
     const start = text.search(/[{[]/);
     if (start < 0) {
@@ -897,18 +920,18 @@ export async function repairAndValidate<T = unknown>(
     // or not: code with `{ b() }` in it made a primary candidate that failed,
     // and without this the `Empty would be {…}` after it beat the answer
     // before it.
-    const fence = /```([\w+-]*)\s*([\s\S]*?)```/.exec(stripped);
+    const fence = firstFence(stripped);
     // Only a quote of code lets the object before it stand alone. A fence the
-    // model tagged ```json, or an untagged one whose body opens on a bracket,
-    // is its own answer, invalid: taking the object before it would ship the
-    // prompt's example instead. Judged on the fence itself, not on a span the
-    // extractor slices from inside it: `request.args["id"]` in a ```python
-    // quote has a span that parses, and it is still code.
-    const fenceTag = fence?.[1].toLowerCase();
+    // model tagged as JSON (json, jsonc, json5), or an untagged one whose body
+    // opens on a bracket, is its own answer, invalid: taking the object before
+    // it would ship the prompt's example instead. Judged on the fence itself,
+    // not on a span the extractor slices from inside it: `request.args["id"]`
+    // in a ```python quote has a span that parses, and it is still code.
+    const fenceTag = fence ? /^[\w+-]*/.exec(fence.inner)![0] : '';
     const fenceIsJson =
         fence !== null &&
-        (fenceTag === 'json' ||
-            (fenceTag === '' && /^[{[]/.test(fence[2].trim())));
+        (/^json/i.test(fenceTag) ||
+            (fenceTag === '' && /^\s*[{[]/.test(fence.inner)));
     return firstValidatingObjectAfter<T>(
         stripped,
         validate,

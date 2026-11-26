@@ -1866,6 +1866,50 @@ describe('repairAndValidate: review on #2700', () => {
         ).resolves.toEqual(JSON.parse(example));
     });
 
+    it('last chance: a jsonc or json5 fence is the model answer, not a quote', async () => {
+        const strict = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    suggestions: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: { line: { type: 'integer' } },
+                            required: ['line'],
+                        },
+                    },
+                },
+                required: ['suggestions'],
+            } as any),
+        );
+        for (const tag of ['jsonc', 'json5', 'JSON']) {
+            const text = `If no violations: {"suggestions":[]}\n\n\`\`\`${tag}\n{"suggestions":[{"line":"42"}]}\n\`\`\``;
+            await expect(
+                repairAndValidate(strict, text, { lastChance: true }),
+            ).resolves.toBeUndefined();
+        }
+    });
+
+    it('an unclosed fence followed by a long run of spaces is read in linear time', async () => {
+        // Kody on #2700: the fence regexes backtracked over the run once per
+        // space, quadratic in model-generated text.
+        const strict = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: { ok: { type: 'boolean' } },
+                required: ['ok'],
+            } as any),
+        );
+        const text = `{"ok":true} \`\`\`${' '.repeat(200_000)}x`;
+        const start = performance.now();
+        await expect(
+            repairAndValidate(strict, text, { lastChance: true }),
+        ).resolves.toEqual({ ok: true });
+        expect(extractJsonFromText(text)).toBe('{"ok":true}');
+        expect(performance.now() - start).toBeLessThan(1000);
+    });
+
     it('last chance: a quoted code fence with a parseable bracket in it is still a quote', async () => {
         // Round 3: the answer, then the offending line quoted in a fence of
         // code whose first bracket span happens to parse as JSON.
@@ -1915,9 +1959,13 @@ describe('repairAndValidate: review on #2700', () => {
         ];
         for (const fence of answers) {
             await expect(
-                repairAndValidate(strict, `If no violations: ${example}\n\n${fence}`, {
-                    lastChance: true,
-                }),
+                repairAndValidate(
+                    strict,
+                    `If no violations: ${example}\n\n${fence}`,
+                    {
+                        lastChance: true,
+                    },
+                ),
             ).resolves.toBeUndefined();
         }
     });

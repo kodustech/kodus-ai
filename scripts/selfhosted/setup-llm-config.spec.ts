@@ -534,9 +534,11 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
             API_OPEN_AI_API_KEY: 'sk-proj-embeddings',
         });
         const declared = resolveDeclaredEnvProvider(vmEnv);
-        expect(declared.kind === 'declared' && declared.config).toMatchObject({
+        expect(declared.kind === 'declared' && declared.config).toEqual({
+            provider: 'openai_compatible',
             apiKey: 'sk-fake-moonshot',
             baseURL: 'https://api.moonshot.ai/v1',
+            model: 'kimi-k2.6',
         });
     });
 
@@ -556,8 +558,11 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
             API_LLM_PROVIDER_MODEL: 'gpt-6-sol',
         });
         const declared = resolveDeclaredEnvProvider(vmEnv);
-        expect(declared.kind === 'declared' && declared.config).toMatchObject({
+        expect(declared.kind === 'declared' && declared.config).toEqual({
+            provider: 'openai',
             apiKey: 'sk-proj-caller',
+            baseURL: 'https://api.openai.com/v1',
+            model: 'gpt-6-sol',
         });
         // The config's endpoint went with its key: the caller's key is not
         // sent to Moonshot.
@@ -581,8 +586,11 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
             API_LLM_PROVIDER_MODEL: 'gpt-6-sol',
         });
         const declared = resolveDeclaredEnvProvider(vmEnv);
-        expect(declared.kind === 'declared' && declared.config).toMatchObject({
+        expect(declared.kind === 'declared' && declared.config).toEqual({
+            provider: 'openai',
             apiKey: 'sk-proj-embed',
+            baseURL: 'https://api.openai.com/v1',
+            model: 'gpt-6-sol',
         });
         expect(vmEnv.API_LLM_BASE_URL).toBeUndefined();
     });
@@ -602,9 +610,11 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
         });
         const declared = resolveDeclaredEnvProvider(vmEnv);
         expect(declared.kind).toBe('declared');
-        expect(declared.kind === 'declared' && declared.config).toMatchObject({
+        expect(declared.kind === 'declared' && declared.config).toEqual({
+            provider: 'openai_compatible',
             apiKey: 'sk-fake-moonshot',
             baseURL: 'https://api.moonshot.ai/v1',
+            model: 'kimi-k2.6',
         });
     });
 
@@ -624,9 +634,11 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
             API_LLM_BASE_URL: 'https://api.fireworks.ai/inference/v1',
         });
         const declared = resolveDeclaredEnvProvider(vmEnv);
-        expect(declared.kind === 'declared' && declared.config).toMatchObject({
+        expect(declared.kind === 'declared' && declared.config).toEqual({
+            provider: 'openai_compatible',
             apiKey: 'fw-fake-caller',
             baseURL: 'https://api.fireworks.ai/inference/v1',
+            model: 'kimi-k2.6',
         });
     });
 
@@ -672,12 +684,14 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
                 });
                 const declared = resolveDeclaredEnvProvider(vmEnv);
                 expect(declared.kind).toBe('declared');
-                expect(
-                    declared.kind === 'declared' && declared.config,
-                ).toMatchObject({
-                    apiKey: 'fw-fake-e2e',
-                    baseURL: 'https://api.fireworks.ai/inference/v1',
-                });
+                expect(declared.kind === 'declared' && declared.config).toEqual(
+                    {
+                        provider: 'openai_compatible',
+                        apiKey: 'fw-fake-e2e',
+                        baseURL: 'https://api.fireworks.ai/inference/v1',
+                        model: 'accounts/fireworks/models/deepseek-v4p1-flash',
+                    },
+                );
             },
         );
 
@@ -711,11 +725,11 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
                 API_LLM_PROVIDER_MODEL: 'gpt-6-sol',
             });
             const declared = resolveDeclaredEnvProvider(vmEnv);
-            expect(
-                declared.kind === 'declared' && declared.config,
-            ).toMatchObject({
+            expect(declared.kind === 'declared' && declared.config).toEqual({
+                provider: 'openai',
                 apiKey: 'sk-proj-embed',
                 baseURL: 'https://api.openai.com/v1',
+                model: 'gpt-6-sol',
             });
         });
 
@@ -730,11 +744,11 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
                 API_OPEN_AI_API_KEY: 'sk-proj-other-embed',
             });
             const declared = resolveDeclaredEnvProvider(vmEnv);
-            expect(
-                declared.kind === 'declared' && declared.config,
-            ).toMatchObject({
+            expect(declared.kind === 'declared' && declared.config).toEqual({
+                provider: 'openai_compatible',
                 apiKey: 'sk-fake-moonshot',
                 baseURL: 'https://api.moonshot.ai/v1',
+                model: 'kimi-k2.6',
             });
         });
     });

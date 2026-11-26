@@ -107,10 +107,9 @@ describe('an unreachable provider, rebuilt from what the runner keeps', () => {
                 'openai_compatible',
             );
             expect(info.category).toBe(LlmErrorCategory.TRANSIENT);
-            expect(info.friendlyMessage).toContain(
-                `ECONNREFUSED 127.0.0.1:${closedPort}`,
+            expect(info.friendlyMessage).toBe(
+                `Couldn't connect to the provider (openai_compatible): ECONNREFUSED 127.0.0.1:${closedPort}. If it keeps failing, check the base URL.`,
             );
-            expect(info.friendlyMessage).toContain('check the base URL');
         },
         30_000,
     );
@@ -127,7 +126,9 @@ describe('an unreachable provider, rebuilt from what the runner keeps', () => {
             'openai_compatible',
         );
         expect(info.category).toBe(LlmErrorCategory.TRANSIENT);
-        expect(info.friendlyMessage).toContain('ENOTFOUND llm.example.invalid');
+        expect(info.friendlyMessage).toBe(
+            "Couldn't connect to the provider (openai_compatible): ENOTFOUND llm.example.invalid. If it keeps failing, check the base URL.",
+        );
     });
 
     it('only the code and host are published, not what follows them', () => {
@@ -139,8 +140,9 @@ describe('an unreachable provider, rebuilt from what the runner keeps', () => {
                     'Cannot connect to API: getaddrinfo ENOTFOUND gw.example.test?key=AQ.secretsecret',
             }),
         );
-        expect(info.friendlyMessage).toContain('ENOTFOUND gw.example.test');
-        expect(info.friendlyMessage).not.toContain('secret');
+        expect(info.friendlyMessage).toBe(
+            "Couldn't connect to the provider: ENOTFOUND gw.example.test. If it keeps failing, check the base URL.",
+        );
     });
 
     it('a validation error quoting the SDK sentence is not a connect failure', () => {
@@ -152,6 +154,8 @@ describe('an unreachable provider, rebuilt from what the runner keeps', () => {
                     'Cannot connect to API: getaddrinfo ENOTFOUND llm.example.invalid',
             }),
         );
-        expect(info.friendlyMessage ?? '').not.toContain("Couldn't connect");
+        expect(info.friendlyMessage).toBe(
+            'Unexpected error while running the code review.',
+        );
     });
 });
