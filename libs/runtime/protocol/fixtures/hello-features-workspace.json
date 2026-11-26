@@ -55,7 +55,8 @@
         "buildStateDiskFacts",
         "suite",
         "execService",
-        "skipBake"
+        "skipBake",
+        "serviceStates"
       ],
       "maxClaimSize": {
         "memoryMb": 16384,

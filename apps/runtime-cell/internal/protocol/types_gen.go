@@ -1176,6 +1176,13 @@ type ProbeResult struct {
 	Evidence   *ProbeEvidence       `json:"evidence,omitempty"`
 }
 
+type StepResultBodyServicesItem struct {
+	Name     string   `json:"name"`
+	State    string   `json:"state"`
+	ExitCode int64    `json:"exitCode"`
+	LogTail  []string `json:"logTail"`
+}
+
 type BrowserExploreStatus string
 
 const (
@@ -1254,18 +1261,19 @@ type StepResultBodyExercised struct {
 }
 
 type StepResultBody struct {
-	StepID             string                   `json:"stepId"`
-	Executor           Executor                 `json:"executor"`
-	ImageID            string                   `json:"imageId"`
-	VMHealth           VMHealth                 `json:"vmHealth"`
-	Exec               *ExecResult              `json:"exec,omitempty"`
-	Probe              *ProbeResult             `json:"probe,omitempty"`
-	BrowserExploration *BrowserExploreResult    `json:"browserExploration,omitempty"`
-	Sandbox            *SandboxResult           `json:"sandbox,omitempty"`
-	Snapshot           *StepResultBodySnapshot  `json:"snapshot,omitempty"`
-	Exercised          *StepResultBodyExercised `json:"exercised,omitempty"`
-	Redactions         *int64                   `json:"redactions,omitempty"`
-	DurationMs         *int64                   `json:"durationMs,omitempty"`
+	StepID             string                       `json:"stepId"`
+	Executor           Executor                     `json:"executor"`
+	ImageID            string                       `json:"imageId"`
+	VMHealth           VMHealth                     `json:"vmHealth"`
+	Exec               *ExecResult                  `json:"exec,omitempty"`
+	Probe              *ProbeResult                 `json:"probe,omitempty"`
+	Services           []StepResultBodyServicesItem `json:"services,omitempty"`
+	BrowserExploration *BrowserExploreResult        `json:"browserExploration,omitempty"`
+	Sandbox            *SandboxResult               `json:"sandbox,omitempty"`
+	Snapshot           *StepResultBodySnapshot      `json:"snapshot,omitempty"`
+	Exercised          *StepResultBodyExercised     `json:"exercised,omitempty"`
+	Redactions         *int64                       `json:"redactions,omitempty"`
+	DurationMs         *int64                       `json:"durationMs,omitempty"`
 }
 
 type StepStreamBody struct {

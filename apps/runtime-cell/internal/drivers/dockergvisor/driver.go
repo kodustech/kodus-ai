@@ -376,6 +376,9 @@ type testHooks struct {
 	// (watchBuildStall); zero: the defaults.
 	buildStallAfter time.Duration
 	buildStallEvery time.Duration
+	// buildExportStallAfter replaces how long a builder may print nothing
+	// while it exports its image; zero: the default.
+	buildExportStallAfter time.Duration
 	// adoptPollEvery and adoptWait replace how often and how long a restored
 	// disk's images are waited for (awaitDiskImages); zero: the defaults.
 	adoptPollEvery time.Duration
@@ -664,7 +667,7 @@ func (d *Driver) Parts() driver.Parts {
 		Baker: d, BakePinner: d, BakeCatalog: d, Resetter: d,
 		Composer: d, Recipes: d, Pooler: d, Memory: d,
 		Diagnoser: d, ServiceLogs: d, BootTimes: d, BootPhases: d, BuildStates: d,
-		SQLObservers: d, Sweeper: d, Coverage: d, DiskUsers: d,
+		SQLObservers: d, Sweeper: d, Coverage: d, DiskUsers: d, BuildCache: d, ExitedServices: d,
 	}
 	if d.SandboxesEnabled() {
 		p.Sandboxes = d

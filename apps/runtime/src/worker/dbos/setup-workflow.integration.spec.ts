@@ -67,6 +67,11 @@ const cmd = (key: string): RuntimeEnvironmentSetupRequested => ({
     repoToken: sealSecret('ghs_x', devSealKey(), key),
 });
 
+const sameEnvironment = (environmentId: string, requestedAt: string): RuntimeEnvironmentSetupRequested => {
+    const key = `${environmentId}:${requestedAt}`;
+    return { ...cmd(key), environmentId, requestedAt };
+};
+
 (skip ? describe.skip : describe)('environment setup workflow (integration, real Postgres)', () => {
     beforeAll(async () => {
         process.env.RUNTIME_SWEEPER = 'false';
@@ -117,5 +122,35 @@ const cmd = (key: string): RuntimeEnvironmentSetupRequested => ({
         openGate();
         const results: any[] = await Promise.all(ids.map((id) => DBOS.retrieveWorkflow(id).getResult()));
         expect(results.map((r) => r.state)).toEqual(['active', 'active', 'active']);
+    }, 60_000);
+
+    it('runs one setup of an environment at a time: a second request waits for the live one and records after it', async () => {
+        gate = new Promise<void>((r) => (openGate = r));
+        const environmentId = `env-serial-${Date.now()}`;
+        // The default keys the product mints: `<environmentId>:<requestedAt>`, held by the ':held-' marker.
+        const first = sameEnvironment(environmentId, `held-1`);
+        const second = sameEnvironment(environmentId, `held-2`);
+        const id1 = (await engine.startSetup(first)) as string;
+        const deadline = Date.now() + 20_000;
+        while (!acquires.includes(`setup:${first.key}`) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100));
+        const id2 = (await engine.startSetup(second)) as string;
+        // The queue (setupPerOrg 2) starts the second; it must not build beside the first.
+        const started = Date.now() + 30_000;
+        while ((await DBOS.getWorkflowStatus(id2))?.status === 'ENQUEUED' && Date.now() < started) await new Promise((r) => setTimeout(r, 200));
+        await new Promise((r) => setTimeout(r, 1_500));
+        expect((await DBOS.getWorkflowStatus(id2))?.status).toBe('PENDING');
+        // Another environment's setup never waits for this one's.
+        // (Of another organization here: the waiting setup holds one of this organization's setup slots.)
+        const other = { ...sameEnvironment(`${environmentId}-other`, 'free-1'), organizationId: 'org-other' };
+        const id3 = (await engine.startSetup(other)) as string;
+        const until = Date.now() + 30_000;
+        while (!acquires.includes(`setup:${other.key}`) && Date.now() < until) await new Promise((r) => setTimeout(r, 200));
+        expect(acquires).toContain(`setup:${other.key}`);
+        expect(acquires).not.toContain(`setup:${second.key}`);
+
+        openGate();
+        const results: any[] = await Promise.all([id1, id2, id3].map((id) => DBOS.retrieveWorkflow(id).getResult()));
+        expect(results.map((r) => r.state)).toEqual(['active', 'active', 'active']);
+        expect(acquires.indexOf(`setup:${first.key}`)).toBeLessThan(acquires.indexOf(`setup:${second.key}`));
     }, 60_000);
 });

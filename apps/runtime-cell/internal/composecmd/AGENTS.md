@@ -5,7 +5,8 @@ The docker compose command line every driver runs, as argv without the docker bi
 ## Owns
 - The argv per verb: `composecmd.go` `Project` (`Args`, `UpPrebuilt`, `UpBuild`, `BuildWith`, `UpBuilt`, `Exec`), `Ps`, `LogsWindow`, `Down`.
 - Shell quoting for a guest line: `ShellQuote`, `ShellJoin`, `DockerLine`.
-- Reading output: `parse.go` `ParseComposePs` (`ServiceState`), `ParseTimestampedLogs` (`TimedLine`).
+- Reading output: `parse.go` `ParseComposePs` (`ServiceState`, with `Exited` and `ExitCode`), `ParseTimestampedLogs` (`TimedLine`).
+- The services that exited, with exit code and log tail: `service_logs.go` `ExitedServices` on an `ExitedRunner`.
 - Service logs over any runner: `service_logs.go` `ServiceLogs` on a `LogRunner`, into `driver.ServiceLogLine`.
 
 ## Does not own

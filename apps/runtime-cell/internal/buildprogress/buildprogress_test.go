@@ -316,3 +316,25 @@ func TestFailureCarriesTheExitCodeOfTheStepsCommand(t *testing.T) {
 		})
 	}
 }
+
+// A big image's export prints nothing while it writes its layers (17 minutes on
+// a design partner's monorepo): the cell's watchdog must be able to tell that
+// step from a builder that hung between BuildKit's own steps.
+func TestATrackerSaysWhenTheExportIsRunning(t *testing.T) {
+	tr := New()
+	tr.Line("#9 [api 5/5] COPY . .")
+	tr.Line("#9 DONE 1.0s")
+	if tr.ExportRunning() {
+		t.Fatal("a finished project step read as the export")
+	}
+	tr.Line("#10 exporting to image")
+	tr.Line("#10 exporting layers")
+	if !tr.ExportRunning() {
+		t.Fatal("a running export is not read as one")
+	}
+	tr.Line("#10 exporting layers 1021.4s done")
+	tr.Line("#10 DONE 1024.0s")
+	if tr.ExportRunning() {
+		t.Fatal("a finished export is still running")
+	}
+}

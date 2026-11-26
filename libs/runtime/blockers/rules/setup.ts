@@ -33,6 +33,18 @@ export const notReadyRule: BlockerRule = {
     id: 'not_ready',
     classify: ({ input, lines }) => {
         if (input.kind !== 'not_ready') return null;
+        // The public service exited before it answered: the app died, so no longer wait is proposed. The message
+        // carries its exit code and the last lines it logged.
+        const exited = /^setup:not_ready_exited:([^:]+):\d+(\/.*)?$/.exec(input.signature);
+        if (exited) {
+            return {
+                kind: 'not_ready',
+                signature: input.signature,
+                title: input.message.split('\n')[0].slice(0, 200),
+                evidence: { lines: input.message.split('\n').slice(1).filter((l) => l && !l.startsWith('Last log lines')).map((l) => l.slice(0, 500)), ...(SERVICE.test(exited[1]) ? { service: exited[1] } : {}) },
+                fixes: [retry],
+            };
+        }
         const m = /^setup:not_ready:([^:]+):(\d+)(\/.*)?$/.exec(input.signature);
         const service = m && SERVICE.test(m[1]) ? m[1] : undefined;
         const port = m ? Number(m[2]) : undefined;

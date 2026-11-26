@@ -395,6 +395,11 @@ export const CELL_FEATURES = [
     // no shared image, and builds from the recipe at its commit. The hub sends the field only to a cell that names this, and
     // the worker keeps its verdict as before for a cell that does not. At the end, like the features before it.
     'skipBake',
+    // step.result services (a probe that got no HTTP answer): the compose services that have exited, each with its exit
+    // code and the last lines it logged, redacted like the failure bundle, so a ready check ends at once on an app that
+    // died instead of polling to its timeout. Cell to hub: sent only to a hub whose hello ack accepts it. At the end,
+    // like the features before it.
+    'serviceStates',
 ] as const;
 export type CellFeature = (typeof CELL_FEATURES)[number];
 
@@ -467,7 +472,7 @@ export type ExercisedResult = z.infer<typeof ExercisedResultSchema>;
  * without `accepts`, so it never sees the field; an older cell never names
  * it, so it never gets an ack with `accepts` it would refuse.
  */
-export const HUB_ACCEPTED_FEATURES = ['readyBuildSteps', 'bootPhases', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore', 'readyStart', 'buildStateEvicted', 'snapshots', 'hostHardening', 'buildStateRebuildCost', 'bakeShare', 'sandboxPool', 'buildStateDiskFacts'] as const satisfies readonly CellFeature[];
+export const HUB_ACCEPTED_FEATURES = ['readyBuildSteps', 'bootPhases', 'cellMemory', 'timedRequests', 'serviceLogs', 'dbEffects', 'outboundCalls', 'execCast', 'browser', 'browserExplore', 'readyStart', 'buildStateEvicted', 'snapshots', 'hostHardening', 'buildStateRebuildCost', 'bakeShare', 'sandboxPool', 'buildStateDiskFacts', 'serviceStates'] as const satisfies readonly CellFeature[];
 export type HubAcceptedFeature = (typeof HUB_ACCEPTED_FEATURES)[number];
 
 /** What a hello ack's `accepts` names: the cell's features this hub accepts fields of. Empty: send `accepts` not at all. */
@@ -705,6 +710,15 @@ export { BLOCKER_KINDS };
  * o Blocker não explica"), redacted like any other output (S-51). The cell
  * keeps it under the frame limit by dropping the oldest log lines first.
  */
+/** A compose service that exited, as a probe that got no answer reports it (step.result services). */
+export const ExitedServiceSchema = z.strictObject({
+    name: z.string().min(1).max(128),
+    state: z.string().max(128),
+    exitCode: z.number().int().min(0).max(255),
+    logTail: z.array(z.string().max(LOG_LINE_MAX)).max(100),
+});
+export type ExitedService = z.infer<typeof ExitedServiceSchema>;
+
 export const FailureBundleSchema = z.strictObject({
     services: z
         .array(
@@ -1163,6 +1177,8 @@ export const MessageBodySchemas = {
             })
             .optional(),
         probe: ProbeResultSchema.optional(),
+        // feature serviceStates: the services that exited, on a probe that got no HTTP answer.
+        services: z.array(ExitedServiceSchema).max(32).optional(),
         browserExploration: BrowserExploreResultSchema.optional(),
         // A sandbox.op's result, as the guest agent gave it (executor vm, nothing else).
         sandbox: SandboxResultSchema.optional(),

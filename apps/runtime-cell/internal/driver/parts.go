@@ -71,6 +71,12 @@ type Parts struct {
 	// DiskUsers says what each claim holds on Docker's disk, so the disk
 	// watchdog stops the claim that fills it first; nil: it stops them all.
 	DiskUsers DiskUsageReader
+	// BuildCache drops build cache no live build holds, so the disk watchdog
+	// gives the room back before it stops a claim; nil: it drops none.
+	BuildCache BuildCachePruner
+	// ExitedServices names the services that exited, for a probe that got no
+	// answer; nil: the cell announces no serviceStates feature.
+	ExitedServices ExitedServiceReader
 }
 
 // Bakes says the driver builds environment images (image.bake).

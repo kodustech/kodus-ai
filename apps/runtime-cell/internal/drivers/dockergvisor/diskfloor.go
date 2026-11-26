@@ -87,6 +87,14 @@ func (d *Driver) ClaimDiskUsage(ctx context.Context) (map[string]int64, error) {
 	return out, nil
 }
 
+// PruneBuildCache is driver.BuildCachePruner's: the host Docker's build cache
+// no running build holds, not used for olderThan or longer.
+func (d *Driver) PruneBuildCache(ctx context.Context, olderThan time.Duration) (int64, error) {
+	return d.d.BuilderPrune(ctx, olderThan)
+}
+
+var _ driver.BuildCachePruner = (*Driver)(nil)
+
 // dataRootRetry is how long a daemon that did not say its data root is left
 // before it is asked again.
 const dataRootRetry = time.Minute

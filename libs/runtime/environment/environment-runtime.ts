@@ -4,7 +4,7 @@ import type { BlockerKind, CellOwner, ClaimConsumer, ClaimSide, Expose as Shared
 import type { EvidenceRef, Probe, ProbeResult } from '@libs/runtime/probe';
 import type { MachineSize } from '@libs/runtime/contracts/machine-size';
 import type { IsolationMinimum } from '@libs/runtime/contracts/isolation';
-import type { BootPhases, BuildSteps, ClaimCanary, ClaimRunIdentity, EvidenceRequest, ExercisedRequest, ExercisedResult, FailureBundle } from '@libs/runtime/protocol';
+import type { BootPhases, BuildSteps, ClaimCanary, ExitedService, ClaimRunIdentity, EvidenceRequest, ExercisedRequest, ExercisedResult, FailureBundle } from '@libs/runtime/protocol';
 
 // The one door every consumer uses to get "this app up at this SHA"
 // (docs §5, ADR-002). The control plane never talks to a cloud or a machine:
@@ -263,7 +263,11 @@ export const POOL_SIZE_UNSUPPORTED = 'pool_size_unsupported';
 export type VmHealth = SharedVmHealth;
 
 /** A probe result with the health of the machine it ran against (step.result.vmHealth). */
-export type ProbeOutcome = ProbeResult & { vmHealth: VmHealth };
+export type ProbeOutcome = ProbeResult & {
+    vmHealth: VmHealth;
+    /** The compose services that had exited when the probe got no HTTP answer (a cell that names serviceStates); absent otherwise. */
+    services?: ExitedService[];
+};
 
 export type EnvError =
     /** This current cell cannot prove exec stays inside an isolated workload. */
@@ -275,7 +279,7 @@ export type EnvError =
     | { code: 'vm_unhealthy'; stepId: string; vmHealth: Exclude<VmHealth, 'ok'> }
     | { code: 'cell_unavailable'; cellId: string }
     | { code: 'timeout'; afterMs: number }
-    | { code: 'transport_lost'; stepId: string }
+    | { code: 'transport_lost'; stepId: string; services?: ExitedService[] }
     /** The cell saw the claim's code exfiltrate (blocked security_violation): the claim runs nothing more. */
     | { code: 'security_violation'; claimId: string; signature: string }
     /** The claim's cell cannot take files (it answered the upload not_implemented or not_supported): nothing was written. */

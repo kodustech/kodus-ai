@@ -735,6 +735,30 @@ type DiskUsageReader interface {
 	ClaimDiskUsage(ctx context.Context) (map[string]int64, error)
 }
 
+// ExitedServiceReader says which services of a claim's workload have exited,
+// each with its exit code and the tail of its log, so a ready check can tell an
+// app that died from one still starting. Raw lines from untrusted code: the
+// agent redacts and caps them before any leaves the cell. Only this cell's machines.
+type ExitedServiceReader interface {
+	ExitedServices(ctx context.Context, ref MachineRef, tail int) ([]ExitedService, error)
+}
+
+// ExitedService is one service that ran and stopped.
+type ExitedService struct {
+	Name     string
+	State    string
+	ExitCode int
+	Log      []string
+}
+
+// BuildCachePruner drops the host's build cache that no live build holds
+// (BuildKit never removes a record a running build uses), the records not used
+// for olderThan or longer; zero drops all of them. It returns the bytes freed.
+// The disk watchdog calls it oldest first before it stops a claim.
+type BuildCachePruner interface {
+	PruneBuildCache(ctx context.Context, olderThan time.Duration) (int64, error)
+}
+
 // Diagnoser is a driver that can tell why a setup failed when its blocker
 // does not explain it: service states, the last log
 // lines of each service, the exposed ports and the disk. The agent redacts

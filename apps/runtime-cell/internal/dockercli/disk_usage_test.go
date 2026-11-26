@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The disk watchdog's measure of each claim's disk (R3-03): one docker
@@ -40,5 +41,25 @@ func TestHumanBytesReadsDockersSizes(t *testing.T) {
 		if got := humanBytes(in); got != want {
 			t.Errorf("%q: %d, want %d", in, got, want)
 		}
+	}
+}
+
+// The disk watchdog drops build cache before it stops a claim: docker builder
+// prune, for the cache older than the age asked, and the bytes docker says it freed.
+func TestBuilderPruneDropsTheCacheOlderThanTheAgeAndReadsWhatItFreed(t *testing.T) {
+	var args []string
+	c := CLI{Run: func(_ context.Context, _ []byte, _ string, a ...string) ([]byte, error) {
+		args = a
+		return []byte("ID  RECLAIMABLE  SIZE\nabc  true  1.2GB\nTotal:\t7.6GB\n"), nil
+	}}
+	got, err := c.BuilderPrune(context.Background(), 24*time.Hour)
+	if err != nil || got != 7_600_000_000 {
+		t.Fatalf("freed %d, %v", got, err)
+	}
+	if strings.Join(args, " ") != "builder prune --force --all --filter until=24h" {
+		t.Fatalf("docker %v", args)
+	}
+	if _, err := c.BuilderPrune(context.Background(), 0); err != nil || strings.Join(args, " ") != "builder prune --force --all" {
+		t.Fatalf("docker %v, %v", args, err)
 	}
 }

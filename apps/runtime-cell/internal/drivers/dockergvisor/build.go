@@ -947,6 +947,11 @@ func (d *Driver) buildOnce(ctx context.Context, ref driver.MachineRef, b sandbox
 const (
 	defaultBuildStallAfter = 5 * time.Minute
 	defaultBuildStallEvery = 15 * time.Second
+	// defaultBuildExportStallAfter is how long it may print nothing while it
+	// exports the image: the exporter writes the layers without a line, and a
+	// design partner's monorepo image took 17 minutes at it. A progress limit,
+	// not a total one: a builder that prints again starts the count over.
+	defaultBuildExportStallAfter = 30 * time.Minute
 )
 
 // watchBuildStall stops a build whose builder printed nothing for the stall
@@ -955,7 +960,7 @@ const (
 // under it for over ten minutes) is the cell's, and without this it waited
 // out the worker's boot limit, which reads as the pull request's boot_timeout.
 // Silence inside a project step (a RUN, a COPY) is the project's and never
-// stops it. The returned func ends the watch and says why it stopped the
+// stops it; silence inside the image's export waits the longer export limit. The returned func ends the watch and says why it stopped the
 // build: driver.ErrBuilderFailed, the platform's (builder_failed); nil when
 // it did not.
 func (d *Driver) watchBuildStall(ctx context.Context, steps *buildprogress.Tracker) (context.Context, func() error) {
@@ -966,6 +971,10 @@ func (d *Driver) watchBuildStall(ctx context.Context, steps *buildprogress.Track
 	}
 	if d.hooks != nil && d.hooks.buildStallEvery > 0 {
 		every = d.hooks.buildStallEvery
+	}
+	exportAfter := defaultBuildExportStallAfter
+	if d.hooks != nil && d.hooks.buildExportStallAfter > 0 {
+		exportAfter = d.hooks.buildExportStallAfter
 	}
 	// The wall clock, as the tracker's lines are stamped (buildprogress.New).
 	started := time.Now()
@@ -987,7 +996,11 @@ func (d *Driver) watchBuildStall(ctx context.Context, steps *buildprogress.Track
 			if last.IsZero() {
 				last = started
 			}
-			if quiet := time.Since(last); quiet >= after && !steps.ProjectStepRunning() {
+			limit := after
+			if steps.ExportRunning() {
+				limit = exportAfter
+			}
+			if quiet := time.Since(last); quiet >= limit && !steps.ProjectStepRunning() {
 				stalled = fmt.Errorf("%w: the builder printed nothing for %s outside the project's steps", driver.ErrBuilderFailed, quiet.Round(time.Second))
 				cancel(stalled)
 				return

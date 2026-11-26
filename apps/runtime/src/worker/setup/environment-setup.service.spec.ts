@@ -456,6 +456,39 @@ describe('EnvironmentSetupService', () => {
         expect(tries).toBe(3); // 15 s / 5 s
     });
 
+    // A design partner's app exited with an error in its seed step, and the check kept asking its health path
+    // every few seconds until health_timeout. A probe that reports the public service exited ends the check at once.
+    it('ends the ready check at once, blocked, when the public service has exited, naming its exit code and log tail', async () => {
+        const { env } = fakeEnv();
+        let tries = 0;
+        env.probe = async () => {
+            tries++;
+            return { transport: 'lost', requests: [], vmHealth: 'ok', services: [{ name: 'app', state: 'Exited (1) 3 seconds ago', exitCode: 1, logTail: ['migrating', 'seed failed: no such table'] }] } as any;
+        };
+        const rec = await testSetupService({ envForSetup: () => env }, new InMemoryEnvironmentSetupStore()).run(cmd());
+        expect(tries).toBe(1);
+        expect(rec.state).toBe('blocked');
+        expect(rec.blockers[0]).toMatchObject({ kind: 'not_ready', signature: 'setup:not_ready_exited:app:3000/ready' });
+        expect(rec.blockers[0].message).toContain('app exited with code 1');
+        expect(rec.blockers[0].message).toContain('seed failed: no such table');
+        const card = classifyBlocker(rec.blockers[0]);
+        expect(card.fixes.map((f) => f.action)).not.toContain('raise_health_timeout');
+        expect(card.evidence.lines.join('\n')).toContain('seed failed: no such table');
+    });
+
+    it('keeps waiting when the exited service is not the public one, or only a lost transport carries it', async () => {
+        const { env } = fakeEnv();
+        let tries = 0;
+        env.probe = async () => {
+            tries++;
+            if (tries === 1) return { code: 'transport_lost', stepId: 's', services: [{ name: 'migrate', state: 'Exited (0)', exitCode: 0, logTail: [] }] } as any;
+            return { http: { status: 200 }, vmHealth: 'ok' } as any;
+        };
+        const rec = await testSetupService({ envForSetup: () => env }, new InMemoryEnvironmentSetupStore()).run(cmd());
+        expect(rec.state).toBe('active');
+        expect(tries).toBe(2);
+    });
+
     // kr-remix on release v1l: one try, then "failed (transport_lost) after 300 s" at 0.7 s.
     it('a ready check that stops at its first try says no wait it did not do', async () => {
         const { env } = fakeEnv();

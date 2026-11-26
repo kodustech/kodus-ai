@@ -14,12 +14,19 @@ import (
 type ServiceState struct {
 	Service string
 	State   string
+	// Exited is true for a container that ran and stopped, with the code it
+	// exited with (compose ps ExitCode); a created or running one is not.
+	Exited   bool
+	ExitCode int
 }
 
 // ParseComposePs reads `compose ps --format json`: one JSON object per line or one
 // array, depending on the compose version.
 func ParseComposePs(raw []byte) ([]ServiceState, error) {
-	type row struct{ Service, State, Status string }
+	type row struct {
+		Service, State, Status string
+		ExitCode               int
+	}
 	var rows []row
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
@@ -46,7 +53,7 @@ func ParseComposePs(raw []byte) ([]ServiceState, error) {
 		if r.Status != "" {
 			state = r.Status
 		}
-		out = append(out, ServiceState{Service: r.Service, State: state})
+		out = append(out, ServiceState{Service: r.Service, State: state, Exited: strings.EqualFold(r.State, "exited"), ExitCode: r.ExitCode})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Service < out[j].Service })
 	return out, nil

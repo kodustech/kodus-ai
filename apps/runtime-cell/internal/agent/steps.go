@@ -222,6 +222,7 @@ func (a *Agent) runProbe(ctx context.Context, frameID string, c *claims.Claim, b
 		// What the app did in [t0, t1]; never anything the gate compares.
 		a.evidence.AttachProbe(ctx, evidenceOf(c), b, res.Probe, t0, t1)
 	}
+	a.attachExitedServices(ctx, c, b, res)
 	a.sendStepResult(ctx, c, "probe.run", res)
 }
 

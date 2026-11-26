@@ -228,6 +228,19 @@ func (t *Tracker) ProjectStepRunning() bool {
 	return false
 }
 
+// ExportRunning says whether BuildKit is exporting: the image or the cache, named
+// "exporting ...", and not yet done. The exporter prints nothing while it writes the layers.
+func (t *Tracker) ExportRunning() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, s := range t.steps {
+		if !s.done && !s.Cached && !s.Errored && !s.Canceled && strings.HasPrefix(s.Name, "exporting ") {
+			return true
+		}
+	}
+	return false
+}
+
 // parseSecs is BuildKit's "12.345" seconds, in ms.
 func parseSecs(s string) int64 {
 	secs, _ := strconv.ParseFloat(s, 64)
