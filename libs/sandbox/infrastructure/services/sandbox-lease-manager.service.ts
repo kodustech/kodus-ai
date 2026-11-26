@@ -608,16 +608,18 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * 5min default because the user is interactive.
      */
     async release(leaseId: string, opts?: { idleMs?: number }): Promise<void> {
-        // Free the worker slot first: whatever happens to the lease doc
-        // below, this process no longer holds the sandbox.
+        // Claim the release before any await: a second release of the same
+        // lease finds neither the prKey nor the slot, so it cannot decrement
+        // the count twice or free the slot early.
         const held = this.leaseIdToSlot.get(leaseId);
-        if (held) {
-            this.leaseIdToSlot.delete(leaseId);
-            this.dropSlot(held.prKey, held.slot);
-        }
-
+        this.leaseIdToSlot.delete(leaseId);
         const prKey = this.leaseIdToPrKey.get(leaseId);
+        this.leaseIdToPrKey.delete(leaseId);
+        const inFlight = this.leaseIdToInFlight.get(leaseId);
+        this.leaseIdToInFlight.delete(leaseId);
+
         if (!prKey) {
+            if (held) this.dropSlot(held.prKey, held.slot);
             this.logger.warn({
                 message: `SandboxLeaseManager: release called with unknown leaseId="${leaseId}"`,
                 context: SandboxLeaseManager.name,
@@ -633,12 +635,41 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         if (use) use.releasedAt = new Date();
 
         // The holder is done, but a command it started may still be running
-        // (an orchestrator that timed out): the sandbox is given back once it
-        // ends, so the checkout is not deleted or paused under it (#2628).
-        await this.drainInFlight(leaseId, prKey);
+        // (an orchestrator that timed out). The sandbox and the worker slot
+        // are given back once it ends, so the checkout is not deleted or
+        // paused under it; the caller does not wait for that, so a pipeline
+        // that awaits its release still finishes on time (#2628).
+        if (inFlight && inFlight.running > 0) {
+            void this.drainInFlight(inFlight, leaseId, prKey)
+                .then(() => this.giveBack(leaseId, prKey, held, use, opts))
+                .catch((err) =>
+                    this.logger.warn({
+                        message: `SandboxLeaseManager: release after the holder's running commands failed leaseId="${leaseId}" prKey="${prKey}"; the lease TTL reaper frees it`,
+                        context: SandboxLeaseManager.name,
+                        error: err as Error,
+                        metadata: { leaseId, prKey },
+                    }),
+                );
+            return;
+        }
+
+        await this.giveBack(leaseId, prKey, held, use, opts);
+    }
+
+    /**
+     * Free the worker slot, decrement the lease, and when nobody holds it any
+     * more stop the sandbox (local) or schedule its idle-kill (E2B).
+     */
+    private async giveBack(
+        leaseId: string,
+        prKey: string,
+        held: { prKey: string; slot: WorkerSlot } | undefined,
+        use: SandboxUsage | undefined,
+        opts?: { idleMs?: number },
+    ): Promise<void> {
+        if (held) this.dropSlot(held.prKey, held.slot);
 
         const updated = await this.leaseRepo.decrementLease(prKey);
-        this.leaseIdToPrKey.delete(leaseId);
 
         this.logger.log({
             message: `SandboxLeaseManager: released leaseId="${leaseId}" prKey="${prKey}" leaseCount=${updated?.leaseCount ?? 'unknown'}`,
@@ -797,11 +828,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             // Not awaited: the lease is already released, and a review that
             // releases before publishing must not wait on E2B (60s request
             // timeout) to post its comments (#2628).
-            const apiKey = this.configService.get<string>('API_E2B_KEY');
-            const sandboxId = updated.sandboxId;
-            if (apiKey) {
-                void this.setIdleTimeout(prKey, sandboxId, idleMs, apiKey);
-            }
+            void this.setIdleTimeout(prKey, updated.sandboxId, idleMs);
         }
     }
 
@@ -810,11 +837,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * sandbox, at most IN_FLIGHT_DRAIN_MAX_MS. Commands have their own
      * timeouts, so the cap only bounds a command that never settles.
      */
-    private async drainInFlight(leaseId: string, prKey: string): Promise<void> {
-        const inFlight = this.leaseIdToInFlight.get(leaseId);
-        this.leaseIdToInFlight.delete(leaseId);
-        if (!inFlight || inFlight.running === 0) return;
-
+    private async drainInFlight(
+        inFlight: InFlightCommands,
+        leaseId: string,
+        prKey: string,
+    ): Promise<void> {
         const running = inFlight.running;
         const startedAt = Date.now();
         let timer: NodeJS.Timeout | undefined;
@@ -861,8 +888,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         prKey: string,
         sandboxId: string,
         idleMs: number,
-        apiKey: string,
     ): Promise<void> {
+        const apiKey = this.configService.get<string>('API_E2B_KEY');
+        if (!apiKey) return;
         try {
             await Sandbox.setTimeout(sandboxId, idleMs, { apiKey });
         } catch (err) {

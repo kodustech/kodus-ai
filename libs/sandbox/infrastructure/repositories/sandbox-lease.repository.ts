@@ -284,6 +284,57 @@ export class SandboxLeaseRepository {
     }
 
     /**
+     * Take an idle lease off its prKey before the idle-kill cron kills its
+     * sandbox. findReadyToKill is a read: a holder can join between it and
+     * the kill. The delete only matches while nobody holds the lease and its
+     * killAt has passed, so a joiner either got in first (the lease stays,
+     * nothing is killed) or arrives after it and creates a new sandbox. The
+     * kill then runs against a retired doc (as in retire()), which no acquire
+     * matches, and which keeps the sandbox tracked if the kill fails.
+     *
+     * Returns the id of the doc the kill goes on, or null when a holder
+     * joined. A retired doc is returned as is.
+     */
+    async detachIdle(
+        leaseId: string,
+        sandboxId: string,
+        now: Date,
+    ): Promise<string | null> {
+        if (leaseId.split(':')[1] === 'retired') return leaseId;
+
+        const detached = await this.leaseModel
+            .findOneAndDelete({
+                _id: leaseId,
+                sandboxId,
+                killAt: { $lte: now },
+                leaseCount: { $not: { $gt: 0 } },
+            })
+            .select('killRetryCount')
+            .lean();
+        if (!detached) return null;
+
+        const orgSegment = leaseId.split(':')[0];
+        const retiredId = `${orgSegment}:retired:${sandboxId}`;
+        await this.leaseModel.updateOne(
+            { _id: retiredId },
+            {
+                $setOnInsert: {
+                    sandboxId,
+                    state: 'READY',
+                    leaseCount: 0,
+                    createdAt: now,
+                    expiresAt: now,
+                    killAt: now,
+                    organizationId: orgSegment,
+                    killRetryCount: detached.killRetryCount ?? 0,
+                },
+            },
+            { upsert: true },
+        );
+        return retiredId;
+    }
+
+    /**
      * Which of these sandbox ids still have a lease doc (active or retired).
      * The orphan sweep kills only the ids NOT in this set.
      */
