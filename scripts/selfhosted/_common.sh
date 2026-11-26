@@ -68,13 +68,15 @@ __from_config API_OPENAI_FORCE_BASE_URL __snap_API_OPENAI_FORCE_BASE_URL
 __from_config API_LLM_PROVIDER          __snap_API_LLM_PROVIDER
 __from_config API_LLM_API_KEY           __snap_API_LLM_API_KEY
 __from_config API_LLM_BASE_URL          __snap_API_LLM_BASE_URL
-# The config's API_OPEN_AI_API_KEY is the embeddings key, an OpenAI key: a
-# caller moving the LLM to OpenAI passes that same key, beside a provider or
-# endpoint of its own. There it is the caller's; only without one is an equal
-# key the config's.
-case "$__snap_API_OPENAI_FORCE_BASE_URL$__snap_API_LLM_BASE_URL$__snap_API_LLM_PROVIDER" in
-    *__SET__*) ;;
-    *) __from_config API_OPEN_AI_API_KEY __snap_API_OPEN_AI_API_KEY ;;
+# The config's API_OPEN_AI_API_KEY is the embeddings key, an OpenAI key, and
+# direnv exports it to every caller. An equal key is the caller's LLM key only
+# when the caller moves the LLM to OpenAI: the legacy endpoint (run.sh's trio)
+# or provider openai. Beside any other provider or endpoint it is the config's,
+# so it never replaces the configured LLM key nor leaves for another host.
+case "$__snap_API_OPENAI_FORCE_BASE_URL" in
+    __SET__*) ;;
+    *) [ "$__snap_API_LLM_PROVIDER" = "__SET__openai" ] \
+        || __from_config API_OPEN_AI_API_KEY __snap_API_OPEN_AI_API_KEY ;;
 esac
 
 # Restore caller's pre-existing values on top (caller wins).

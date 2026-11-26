@@ -757,6 +757,50 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
             });
         });
 
+        it('under direnv, a caller moving the transport keeps the configured LLM key', () => {
+            // Review, PR #2700 round 4: direnv exports the embeddings key, so
+            // it is in the caller's env beside a provider and endpoint that
+            // are not OpenAI; it must not take the LLM key's place.
+            const box = sandbox();
+            writeConfig(box, [
+                ...configs.moonshot,
+                'API_OPEN_AI_API_KEY=sk-proj-embed',
+            ]);
+            const vmEnv = vmLlmEnv(box, {
+                ...exported(configs.moonshot),
+                API_LLM_PROVIDER: 'anthropic_compatible',
+                API_LLM_BASE_URL: 'https://api.moonshot.ai/anthropic',
+            });
+            expect(vmEnv.API_LLM_API_KEY).toBe('sk-fake-moonshot');
+            const declared = resolveDeclaredEnvProvider(vmEnv);
+            expect(declared.kind).toBe('declared');
+            expect(declared.kind === 'declared' && declared.config).toEqual({
+                provider: 'anthropic_compatible',
+                apiKey: 'sk-fake-moonshot',
+                baseURL: 'https://api.moonshot.ai/anthropic',
+                model: 'kimi-k2.6',
+            });
+        });
+
+        it('under direnv, a caller setting only an endpoint does not send it the embeddings key', () => {
+            const box = sandbox();
+            writeConfig(box, [
+                ...configs.moonshot,
+                'API_OPEN_AI_API_KEY=sk-proj-embed',
+            ]);
+            const vmEnv = vmLlmEnv(box, {
+                ...exported(configs.moonshot),
+                API_LLM_BASE_URL: 'https://proxy.example.test/v1',
+            });
+            const declared = resolveDeclaredEnvProvider(vmEnv);
+            expect(declared.kind === 'declared' && declared.config).toEqual({
+                provider: 'openai_compatible',
+                apiKey: 'sk-fake-moonshot',
+                baseURL: 'https://proxy.example.test/v1',
+                model: 'kimi-k2.6',
+            });
+        });
+
         it('under direnv, overriding only the embeddings key keeps the configured LLM key', () => {
             const box = sandbox();
             writeConfig(box, [
