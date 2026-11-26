@@ -10,8 +10,8 @@
 // sandbox), so whatever the builder can reach, the pull request can.
 //
 //   - Reach. The registry is one container per build, on two networks: the
-//     claim's own (at a fixed address, registryHost), where only that
-//     claim's builder is, for the length of the build; and the cell's
+//     claim's own (at the address the driver gives it, next to its builder's), where only that
+//     claim's builders are, for the length of the build; and the cell's
 //     registry network, internal, with the host on it and no traffic
 //     between its containers, where only the cell dials it. It has no way
 //     out (both networks are internal), and no other claim reaches it. It is
@@ -64,6 +64,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/dockercli"
@@ -163,17 +164,9 @@ func (s *Registries) Clear() error {
 	return nil
 }
 
-// registryHost is the registry's fixed address in the claim subnet, next to
-// the builder's and below the services'.
-const registryHost = 8
-
-func registryAddress(subnet netip.Prefix) netip.Addr {
-	a := subnet.Masked().Addr()
-	for range registryHost {
-		a = a.Next()
-	}
-	return a
-}
+// registrySeq tells apart the names of registries started in the same
+// instant (a claim's builds start side by side).
+var registrySeq atomic.Int64
 
 // Registry is the registry of one build.
 type Registry struct {
@@ -209,8 +202,9 @@ func (r *Registry) Pushed() (int64, error) {
 }
 
 // Start runs the build's registry on its storage and waits until it
-// answers. seeds: the build writes the environment's seed storage.
-func (s *Registries) Start(ctx context.Context, ref driver.MachineRef, service, network string, subnet netip.Prefix, seeds bool) (*Registry, error) {
+// answers. addr is its address on the claim network, where the builder
+// pushes. seeds: the build writes the environment's seed storage.
+func (s *Registries) Start(ctx context.Context, ref driver.MachineRef, service, network string, addr netip.Addr, seeds bool) (*Registry, error) {
 	if s.cfg.Image == "" {
 		return nil, errors.New("dockergvisor: the registry image transfer needs a registry image (-gvisor-registry-image)")
 	}
@@ -218,7 +212,7 @@ func (s *Registries) Start(ctx context.Context, ref driver.MachineRef, service, 
 	seedDir := filepath.Join(s.cfg.Root, key, "seed")
 	r := &Registry{
 		s: s, seed: seeds, envKey: key, repo: Repo(service), tag: registryTag(ref.MachineID),
-		name: "kodus-registry-" + strconv.FormatInt(s.cfg.Now().UnixNano(), 36),
+		name: "kodus-registry-" + strconv.FormatInt(s.cfg.Now().UnixNano(), 36) + "-" + strconv.FormatInt(registrySeq.Add(1), 36),
 	}
 	r.release = s.hold(key, seedDir)
 	fail := func(err error) (*Registry, error) {
@@ -262,7 +256,7 @@ func (s *Registries) Start(ctx context.Context, ref driver.MachineRef, service, 
 	if err != nil {
 		return fail(err)
 	}
-	r.claimAddr = registryAddress(subnet).String()
+	r.claimAddr = addr.String()
 	uid, gid := s.cfg.Dirs.Builder()
 	c, err := s.cfg.Docker.RunRegistry(ctx, dockercli.RegistrySpec{
 		Name: r.name, Image: s.cfg.Image, Runtime: s.cfg.Runtime, Network: regNet, ClaimNetwork: network, ClaimIP: r.claimAddr, StorageDir: r.dir,

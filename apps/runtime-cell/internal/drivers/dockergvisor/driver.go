@@ -221,6 +221,13 @@ type Config struct {
 	// and PR timings the gate compares (G5). 0: half the host's CPUs, at
 	// least one.
 	MaxBuilds int
+	// ClaimBuilds is how many builds of one claim run at once (4 when 0,
+	// the most: the addresses below the services hold four builders and
+	// their registries; build_lanes.go). They share the claim's memory,
+	// each at least 2 GB, so a claim with less runs fewer; a setup that
+	// seeds builds one at a time. MaxBuilds bounds them with every other
+	// claim's.
+	ClaimBuilds int
 	// ObserverImage holds the observer server at /observer (cmd/observer,
 	// static), by digest. An observer machine runs it under Runtime on the
 	// claim network, where it reaches the claim's services and nothing

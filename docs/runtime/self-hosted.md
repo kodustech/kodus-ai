@@ -139,7 +139,8 @@ anyway. A cell-local client certificate for the agent would remove that edge; it
   asks no size still gets the default; only the ceiling (and the hello's `maxClaimSize`) follows the host.
   Admission counts memory only; CPU is bounded where it saturates first, the builds: `-gvisor-max-builds` (0: half
   the host's CPUs, at least one) is how many image builds the cell runs at once, and a build past it waits for a slot
-  (`build.slot.waited` in the cell's log).
+  (`build.slot.waited` in the cell's log). `-gvisor-claim-builds` (0: 4, the most) is how many of one claim's builds
+  run at once under that bound; they share the claim's memory, each at least 2 GB.
 
 ## Sizing sandbox capacity
 

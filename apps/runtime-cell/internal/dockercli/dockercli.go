@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/kodustech/kodus-ai/apps/runtime-cell/internal/buildmirror"
@@ -897,6 +898,10 @@ func buildSecretEnv(i int) string { return "KODUS_BUILD_SECRET_" + strconv.Itoa(
 // BuildTarball is where RunBuild leaves the image, inside Out.
 const BuildTarball = "image.tar"
 
+// builderSeq tells apart the names of builders started in the same instant
+// (a claim's builds start side by side).
+var builderSeq atomic.Int64
+
 func (c CLI) RunBuild(ctx context.Context, b BuildRun) error {
 	if err := ValidateCgroupParent(b.CgroupParent); err != nil {
 		return err
@@ -910,7 +915,7 @@ func (c CLI) RunBuild(ctx context.Context, b BuildRun) error {
 	}
 	// Named, so it can be removed: a canceled docker CLI leaves its
 	// container running (a build that outlived its claim's ceiling).
-	name := "kodus-build-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	name := "kodus-build-" + strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + strconv.FormatInt(builderSeq.Add(1), 36)
 	flags := "--oci-worker-no-process-sandbox"
 	var conf []byte
 	if b.RegistryMirror != "" {

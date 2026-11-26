@@ -4,7 +4,7 @@ docker-gvisor's registry image transfer (`-gvisor-image-transfer registry`): Bui
 
 ## Owns
 - `registry.go` `Registries` (`New`, `Config`, `Clear`): the cell's registries and the count of builds on each environment's seed storage.
-- `Registries.Start`: one registry container per build, on the claim's network (at `registryHost`) and the cell's internal registry network; seed storage for a seeding build, storage of its own (with the seed's sealed blobs linked in) for any other; `ErrUnseeded` when there is no seed to link.
+- `Registries.Start`: one registry container per build, on the claim's network (at the address the driver gives it: one pair of addresses per build running together on a claim) and the cell's internal registry network; seed storage for a seeding build, storage of its own (with the seed's sealed blobs linked in) for any other; `ErrUnseeded` when there is no seed to link.
 - `Registry.Push` (BuildKit's push target), `Registry.Pull` (by digest only, bounded by the image bound, over a loopback port the cell forwards), `Registry.Stop`, `Discard`, `Pushed`.
 - Storage accounting: `TreeBytes`, `MaxStorageEntries`, `EntriesError`; the seed wiped past `Config.KeepBytes` with no build holding it.
 

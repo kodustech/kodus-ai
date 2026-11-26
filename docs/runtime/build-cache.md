@@ -193,6 +193,20 @@ one line each), and every part between the claim asking to boot and the app answ
 | `claim sandbox`, `coverage setup`, `render compose`, `pull images` | Up's own steps |
 | `compose up`, `first healthy` | as before |
 
+**Builds of one claim run side by side** (`build_lanes.go`). A claim's services used to build one after the other, so a
+cold boot of a repo with four built services took the sum of their builds. They now run in lanes: each build holds a
+pair of addresses on the claim network (its registry's and its builder's: hosts 8 and 9 for the first, then 6 and 7, 4
+and 5, 2 and 3, all below the services, and all named in the claim's policy from the start) and an equal part of the
+claim's memory. The bound is the least of `-gvisor-claim-builds` (at most 4, the addresses there are), the builds that
+need the builder, and the claim's memory in blocks of 2 GB (a 4 GB claim builds two at once, not four smaller ones);
+the cell's build slots (`-gvisor-max-builds`) still bound every claim together. What stays one at a time: a setup that
+seeds (the default branch's build writes the environment's one BuildKit state and registry seed), and services that
+name the same build, which make one image and tag it for the others. A build that fails stops the builds after it in
+the project's order at once and leaves the earlier ones running, and the boot reports the first failing service in
+that order, whatever finished first. While builds run together their output lines carry `[service]`, and the live
+phases of `claim.progress` (which read one build's steps after another's) skip them; the final `timing.buildSteps` and
+`build.timing` per service are unchanged.
+
 The agent then adds `not measured`: the claim's time from acquire to ready (or to now) minus every phase, when it is a
 second or more. BuildKit steps that ran side by side add up to more than the wall time, so it is a lower bound; it
 is never negative. A Run whose `not measured` grows has a step nobody times: name it here. The claim.* frames still carry

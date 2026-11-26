@@ -245,6 +245,8 @@ type settings struct {
 	GVisorMemMax    string
 	GVisorCPUsMax   int
 	GVisorMaxBuilds int
+	// GVisorClaimBuilds is how many builds of one claim run at once.
+	GVisorClaimBuilds int
 	// GVisorMemReady is the least ceiling a ready docker-gvisor claim keeps
 	// under claim limits ("2g" when empty; ADR-070).
 	GVisorMemReady string
@@ -428,6 +430,7 @@ func (s *settings) register(fs *flag.FlagSet) {
 	fs.IntVar(&s.MemoryReserveMB, "memory-reserve-mb", 1024, "memory the admission leaves to the host (Docker, the cell, the egress and mirror containers), in MB, from the host's MemTotal")
 	fs.IntVar(&s.MemoryAllocatableMB, "memory-allocatable-mb", 0, "memory the cell may commit to claims, in MB; 0: the host's MemTotal less -memory-reserve-mb")
 	fs.IntVar(&s.GVisorMaxBuilds, "gvisor-max-builds", 0, "docker-gvisor: how many image builds the cell runs at once, whichever claims they are for (each builder takes its claim's CPUs, 2 by default); a build past it waits for a slot (0: half the host's CPUs, at least one)")
+	fs.IntVar(&s.GVisorClaimBuilds, "gvisor-claim-builds", 0, "docker-gvisor: how many of one claim's image builds run at once, at most 4 (0: 4); they share the claim's memory, each at least 2 GB, so a smaller claim runs fewer, and a setup that seeds the build state builds one at a time; the cell's -gvisor-max-builds still bounds every claim together")
 	fs.IntVar(&s.GVisorCPUsMax, "gvisor-cpus-max", 0, "docker-gvisor: the most CPUs one claim may ask for its builds and services (0: the host's CPU count, never below the default 2)")
 	fs.StringVar(&s.GVisorHelperImage, "gvisor-helper-image", "", "docker-gvisor: image with sh and cp that copies a bake's data volumes under gVisor, pinned by digest (repo@sha256:..., refused otherwise; busybox:1.36 pinned by digest when empty)")
 	fs.StringVar(&s.GVisorObserverImage, "gvisor-observer-image", "", "docker-gvisor: the observer image (cmd/observer at /observer), by digest; each claim's observer runs it under gVisor on the claim network (-observer http)")

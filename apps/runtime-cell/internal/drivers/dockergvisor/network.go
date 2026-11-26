@@ -32,7 +32,10 @@ func (d *Driver) PrepareClaim(ctx context.Context, spec driver.ClaimNetworkSpec)
 	d.rememberSubnet(name, subnet)
 	n := driver.ClaimNetwork{WorkloadGroupID: name, ObserverGroupID: name}
 	if d.cfg.BuilderImage != "" {
-		n.Sources = []string{builderAddress(subnet).String()}
+		// Every address a builder of the claim may take (build_lanes.go).
+		for lane := range d.claimBuilds() {
+			n.Sources = append(n.Sources, builderAddress(subnet, lane).String())
+		}
 		n.SourcesTrustCellCA = d.builderTrusted()
 	}
 	if d.cfg.EgressContainer == "" {

@@ -33,16 +33,33 @@ import (
 // builder image (-gvisor-builder-image).
 var ErrNoBuilder = errors.New("dockergvisor: the project builds images and this cell has no image builder")
 
-// builderHost is the builder's fixed address in the claim subnet: below
-// the services' (sandbox), so the claim's policy can name it before Up.
+// builderHost is the first builder's fixed address in the claim subnet,
+// and the one below it its registry's: below the services' (sandbox), so the
+// claim's policy can name it before Up. A builder that runs beside another
+// of its claim (a lane, buildLanes) takes the next pair down: lane 1 the
+// hosts 6 and 7, lane 2 the 4 and 5, lane 3 the 2 and 3; the gateway is 1.
 const builderHost = 9
 
-func builderAddress(subnet netip.Prefix) netip.Addr {
+// maxClaimBuilds is how many builders of one claim the addresses below the
+// services hold.
+const maxClaimBuilds = 4
+
+func laneAddress(subnet netip.Prefix, host, lane int) netip.Addr {
 	a := subnet.Masked().Addr()
-	for range builderHost {
+	for range host - 2*lane {
 		a = a.Next()
 	}
 	return a
+}
+
+func builderAddress(subnet netip.Prefix, lane int) netip.Addr {
+	return laneAddress(subnet, builderHost, lane)
+}
+
+// registryAddress is where a build's registry sits on the claim network:
+// next to its builder, one address below.
+func registryAddress(subnet netip.Prefix, lane int) netip.Addr {
+	return laneAddress(subnet, builderHost-1, lane)
 }
 
 func builtTag(machine, service string) string {
@@ -61,10 +78,15 @@ type builtImage struct {
 // machine's claim tag. A build whose fingerprint matches an image the
 // environment baked from its default branch takes that image (a new name
 // for it, so a later bake can drop the old one without touching this
-// claim); any other runs in the sandbox, one after the other at the
-// builder's address, and is loaded. What the machine holds is removed with
-// it, unless a bake pinned it first.
+// claim); any other runs in the sandbox, at a builder address of its own,
+// and is loaded. Builds that need the builder run side by side (buildLanes
+// says how many); services that name the same build make one image. What the
+// machine holds is removed with it, unless a bake pinned it first.
 // It also says where the builds that ran spent their time (BuildSteps).
+//
+// A build that fails stops the builds after it in the project's order and
+// leaves the ones before it running: the error is the first failing service
+// in that order, whatever the timing, as when they ran one after the other.
 func (d *Driver) build(ctx context.Context, ref driver.MachineRef, builds []sandbox.Build, network, resolv string, subnet netip.Prefix, secrets map[string]string, shared []driver.SharedImage) (map[string]string, driver.BuildSteps, error) {
 	var steps driver.BuildSteps
 	d.machineOutput(ref.MachineID)
@@ -80,98 +102,187 @@ func (d *Driver) build(ctx context.Context, ref driver.MachineRef, builds []sand
 		defer release()
 		selected = &g
 	}
-	built := map[string]string{}
 	// Services that name the same build (one Dockerfile and target for an
-	// api and its worker) share the image this call made for the first of
-	// them: same fingerprint and the same secrets asked for (S-28).
-	madeHere := map[string]string{}
-	for _, b := range builds {
-		tag := builtTag(ref.MachineID, b.Service)
-		fp, err := buildfingerprint.Of(b, d.cfg.BuilderImage)
-		if err != nil {
+	// api and its worker) share the image the first of them made: same
+	// fingerprint and the same secrets asked for (S-28). The first is the
+	// leader; the others wait for it, then tag its image.
+	units := make([]*buildUnit, len(builds))
+	leaders := map[string]*buildUnit{}
+	for i, b := range builds {
+		u := &buildUnit{b: b, tag: builtTag(ref.MachineID, b.Service), done: make(chan struct{})}
+		var err error
+		if u.fp, err = buildfingerprint.Of(b, d.cfg.BuilderImage); err != nil {
 			d.log().Warn("build.fingerprint.failed", "machine", ref.MachineID, "service", b.Service, "err", err)
-			fp = ""
+			u.fp = ""
 		}
-		key := sharedBuildKey(fp, b.Secrets)
-		if from, ok := madeHere[key]; ok && key != "" {
-			// A failed tag only costs this service its own build.
-			if err := d.d.TagImage(ctx, from, tag); err != nil {
-				d.log().Warn("build.share.failed", "machine", ref.MachineID, "service", b.Service, "err", err)
-			} else {
-				d.log().Info("build.done", "machine", ref.MachineID, "service", b.Service, "reused", true, "source", "service", "fingerprint", short(fp))
-				o := d.machineOutput(ref.MachineID)
-				d.mu.Lock()
-				o.images = append(o.images, builtImage{service: b.Service, tag: tag, fp: fp})
-				d.mu.Unlock()
-				built[b.Service] = tag
-				continue
+		u.key = sharedBuildKey(u.fp, b.Secrets)
+		if lead, ok := leaders[u.key]; ok && u.key != "" {
+			u.leader = lead
+		} else {
+			leaders[u.key] = u
+		}
+		units[i] = u
+	}
+	lanes := d.newBuildLanes(ref, len(leaders))
+	// Each build has a context of its own: one that fails ends the builds
+	// after it, never the ones before it.
+	ctxs := make([]context.Context, len(units))
+	cancels := make([]context.CancelCauseFunc, len(units))
+	for i := range units {
+		ctxs[i], cancels[i] = context.WithCancelCause(ctx)
+	}
+	defer func() {
+		for _, cancel := range cancels {
+			cancel(nil)
+		}
+	}()
+	var wg sync.WaitGroup
+	for i, u := range units {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer close(u.done)
+			u.err = d.buildUnit(ctxs[i], ref, u, selected, lanes, network, resolv, subnet, secrets, shared)
+			if u.err != nil {
+				for _, cancel := range cancels[i+1:] {
+					cancel(errSiblingBuildFailed)
+				}
 			}
+		}()
+	}
+	wg.Wait()
+	built := map[string]string{}
+	var first error
+	for _, u := range units {
+		if len(u.pulled) > 0 {
+			steps.Phases = driver.MergePhases(-1, steps.Phases, u.pulled)
 		}
-		// A reset brings the same checkout up again: the machine's own image
-		// of this build stands, as long as the input is still the same.
-		if fp != "" && d.hasBuilt(ref.MachineID, b.Service, fp) {
-			d.log().Info("build.done", "machine", ref.MachineID, "service", b.Service, "reused", true, "source", "machine", "fingerprint", short(fp))
-			built[b.Service] = tag
-			continue
+		if u.ranBuild {
+			steps = addBuildSteps(steps, u.b.Service, u.ran)
 		}
-		reused := false
-		if selected != nil && fp != "" {
-			from := selected.Images[fp]
-			var reuseErr error
-			if from == "" {
-				reuseErr = dockercli.ErrNoSuchImage
-			} else {
-				reuseErr = d.d.TagImage(ctx, from, tag)
-			}
-			if from != "" && errors.Is(reuseErr, dockercli.ErrNoSuchImage) {
-				return nil, steps, ErrBakeDataUnavailable
-			}
-			switch err := reuseErr; {
-			case err == nil:
-				reused = true
-			case !errors.Is(err, dockercli.ErrNoSuchImage):
-				return nil, steps, fmt.Errorf("dockergvisor: baked image for %s: %w", b.Service, err)
-			}
+		if u.err != nil && first == nil {
+			first = u.err
 		}
-		// Another cell of the org baked this build (UpRequest.SharedImages):
-		// its image by the hub's digest, before building it here.
-		fromShare := false
-		if !reused && fp != "" {
-			if digest := sharedDigest(shared, fp); digest != "" {
-				at := d.clock.Now()
-				fromShare = d.takeShared(ctx, ref, b.Service, fp, digest, tag, shared)
-				steps.Phases = driver.MergePhases(-1, steps.Phases, []driver.BootPhase{{Name: PhasePullShared, Ms: d.clock.Now().Sub(at).Milliseconds()}})
-				reused = fromShare
-			}
-		}
-		cache := ""
-		if !reused {
-			var err error
-			var ran buildprogress.Summary
-			cache, ran, err = d.runBuild(ctx, ref, b, tag, network, resolv, subnet, secrets)
-			steps = addBuildSteps(steps, b.Service, ran)
-			if err != nil {
-				return nil, steps, err
-			}
-		}
-		source := "build"
-		switch {
-		case fromShare:
-			source = "shared"
-		case reused:
-			source = "environment"
-		}
-		d.log().Info("build.done", "machine", ref.MachineID, "service", b.Service, "reused", reused, "source", source, "fingerprint", short(fp))
-		o := d.machineOutput(ref.MachineID)
-		d.mu.Lock()
-		o.images = append(o.images, builtImage{service: b.Service, tag: tag, fp: fp, cache: cache})
-		d.mu.Unlock()
-		built[b.Service] = tag
-		if key != "" {
-			madeHere[key] = tag
-		}
+		built[u.b.Service] = u.tag
+	}
+	if first != nil {
+		return nil, steps, first
 	}
 	return built, steps, nil
+}
+
+// errSiblingBuildFailed is why a build was stopped: an earlier service's
+// build failed (the cause of its context).
+var errSiblingBuildFailed = errors.New("dockergvisor: an earlier service's build failed")
+
+// buildUnit is one service's build section in a call to build: what it is,
+// and what came of it.
+type buildUnit struct {
+	b       sandbox.Build
+	tag     string
+	fp, key string
+	// leader is the first service that names this same build; nil for that
+	// one, and for a build nobody shares.
+	leader *buildUnit
+	done   chan struct{}
+	// What came of it, read once done is closed.
+	err      error
+	ran      buildprogress.Summary
+	ranBuild bool
+	pulled   []driver.BootPhase
+}
+
+// buildUnit gets one service's image: from its leader's, the machine's own,
+// the environment's bake, another cell's, or a build of its own.
+func (d *Driver) buildUnit(ctx context.Context, ref driver.MachineRef, u *buildUnit, selected *bakecatalog.Generation, lanes *buildLanes, network, resolv string, subnet netip.Prefix, secrets map[string]string, shared []driver.SharedImage) error {
+	b, tag, fp := u.b, u.tag, u.fp
+	if u.leader != nil {
+		select {
+		case <-u.leader.done:
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		}
+		if u.leader.err != nil {
+			return u.leader.err
+		}
+		// A failed tag only costs this service its own build.
+		if err := d.d.TagImage(ctx, u.leader.tag, tag); err != nil {
+			d.log().Warn("build.share.failed", "machine", ref.MachineID, "service", b.Service, "err", err)
+		} else {
+			d.log().Info("build.done", "machine", ref.MachineID, "service", b.Service, "reused", true, "source", "service", "fingerprint", short(fp))
+			d.recordBuilt(ref, builtImage{service: b.Service, tag: tag, fp: fp})
+			return nil
+		}
+	}
+	// A reset brings the same checkout up again: the machine's own image
+	// of this build stands, as long as the input is still the same.
+	if fp != "" && d.hasBuilt(ref.MachineID, b.Service, fp) {
+		d.log().Info("build.done", "machine", ref.MachineID, "service", b.Service, "reused", true, "source", "machine", "fingerprint", short(fp))
+		return nil
+	}
+	reused := false
+	if selected != nil && fp != "" {
+		from := selected.Images[fp]
+		var reuseErr error
+		if from == "" {
+			reuseErr = dockercli.ErrNoSuchImage
+		} else {
+			reuseErr = d.d.TagImage(ctx, from, tag)
+		}
+		if from != "" && errors.Is(reuseErr, dockercli.ErrNoSuchImage) {
+			return ErrBakeDataUnavailable
+		}
+		switch err := reuseErr; {
+		case err == nil:
+			reused = true
+		case !errors.Is(err, dockercli.ErrNoSuchImage):
+			return fmt.Errorf("dockergvisor: baked image for %s: %w", b.Service, err)
+		}
+	}
+	// Another cell of the org baked this build (UpRequest.SharedImages):
+	// its image by the hub's digest, before building it here.
+	fromShare := false
+	if !reused && fp != "" {
+		if digest := sharedDigest(shared, fp); digest != "" {
+			at := d.clock.Now()
+			fromShare = d.takeShared(ctx, ref, b.Service, fp, digest, tag, shared)
+			u.pulled = []driver.BootPhase{{Name: PhasePullShared, Ms: d.clock.Now().Sub(at).Milliseconds()}}
+			reused = fromShare
+		}
+	}
+	cache := ""
+	if !reused {
+		lane, release, err := lanes.take(ctx)
+		if err != nil {
+			return err
+		}
+		defer release()
+		bctx := prefixedOutput(withBuildLane(ctx, lane, lanes.size), lanes.size, b.Service)
+		var ran buildprogress.Summary
+		cache, ran, err = d.runBuild(bctx, ref, b, tag, network, resolv, subnet, secrets)
+		u.ran, u.ranBuild = ran, true
+		if err != nil {
+			return err
+		}
+	}
+	source := "build"
+	switch {
+	case fromShare:
+		source = "shared"
+	case reused:
+		source = "environment"
+	}
+	d.log().Info("build.done", "machine", ref.MachineID, "service", b.Service, "reused", reused, "source", source, "fingerprint", short(fp))
+	d.recordBuilt(ref, builtImage{service: b.Service, tag: tag, fp: fp, cache: cache})
+	return nil
+}
+
+// recordBuilt adds an image to what the machine holds.
+func (d *Driver) recordBuilt(ref driver.MachineRef, im builtImage) {
+	o := d.machineOutput(ref.MachineID)
+	d.mu.Lock()
+	o.images = append(o.images, im)
+	d.mu.Unlock()
 }
 
 // sharedBuildKey is what two services' builds must agree on to share one
@@ -262,13 +373,15 @@ func (d *Driver) buildRun(ctx context.Context, ref driver.MachineRef, b sandbox.
 		return dockercli.BuildRun{}, "", err
 	}
 	mem, cpus := d.limits(ref.MachineID)
+	lane, lanes := buildLane(ctx)
+	mem = laneMemory(mem, lanes)
 	dockerfileDir, err := declaredDockerfile(b, args, out)
 	if err != nil {
 		return dockercli.BuildRun{}, "", err
 	}
 	run := dockercli.BuildRun{
 		CgroupParent: parent, DockerfileDir: dockerfileDir,
-		Image: d.cfg.BuilderImage, Runtime: d.cfg.Runtime, Network: network, Address: builderAddress(subnet).String(), Resolv: resolv,
+		Image: d.cfg.BuilderImage, Runtime: d.cfg.Runtime, Network: network, Address: builderAddress(subnet, lane).String(), Resolv: resolv,
 		Context: b.Context, Dockerfile: b.Dockerfile, Target: b.Target, Args: args, Tag: tag, Out: out,
 		PidsLimit: d.cfg.PidsLimit, MemLimit: mem, CPUs: cpus, RegistryMirror: d.cfg.MirrorRegistry, DiskSize: d.cfg.ContainerDiskSize,
 		Labels: toLabels(map[string]string{driver.TagCell: d.cfg.CellID, driver.TagClaim: ref.Tags[driver.TagClaim], driver.TagHardExpires: ref.Tags[driver.TagHardExpires]}),
@@ -471,6 +584,11 @@ const (
 	PhasePullShared  = "pull shared image"
 )
 
+func laneIndex(ctx context.Context) int {
+	i, _ := buildLane(ctx)
+	return i
+}
+
 func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sandbox.Build, tag, network, resolv string, subnet netip.Prefix, secrets map[string]string, late *[]buildprogress.Phase) (string, buildprogress.Summary, error) {
 	var none buildprogress.Summary
 	if d.cfg.BuilderImage == "" {
@@ -514,7 +632,7 @@ func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sa
 		m := d.peek(ref.MachineID)
 		at := d.clock.Now()
 		var err error
-		switch reg, err = d.registries.Start(ctx, ref, b.Service, network, subnet, m.setup && m.seeds); {
+		switch reg, err = d.registries.Start(ctx, ref, b.Service, network, registryAddress(subnet, laneIndex(ctx)), m.setup && m.seeds); {
 		case errors.Is(err, registry.ErrUnseeded):
 			d.log().Info("build.registry.unseeded", "machine", ref.MachineID, "service", b.Service, "transfer", TransferTarball)
 			reg = nil

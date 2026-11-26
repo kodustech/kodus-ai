@@ -32,9 +32,9 @@ func TestBuildsRunOnTheClaimNetworkAndGoWithTheMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 	subnet := netip.MustParsePrefix(docker.subnets[n.WorkloadGroupID])
-	want := builderAddress(subnet).String()
-	if len(n.Sources) != 1 || n.Sources[0] != want {
-		t.Fatalf("network sources %v, want the builder %s", n.Sources, want)
+	want := builderAddress(subnet, 0).String()
+	if len(n.Sources) != d.claimBuilds() || n.Sources[0] != want {
+		t.Fatalf("network sources %v, want the first builder %s and one per lane", n.Sources, want)
 	}
 	ref := driver.MachineRef{MachineID: "kodus-claim-1-workload", Tags: map[string]string{driver.TagClaim: "claim-1"}}
 	built, _, err := d.build(ctx, ref, []sandbox.Build{{Service: "api", Context: t.TempDir(), Dockerfile: "Dockerfile"}}, n.WorkloadGroupID, d.resolvPath(n.WorkloadGroupID), subnet, nil, nil)
