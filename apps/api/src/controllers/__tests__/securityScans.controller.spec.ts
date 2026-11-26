@@ -163,3 +163,39 @@ describe('SecurityScansController.cancel', () => {
         expect(cancelSecurityScan.execute).not.toHaveBeenCalled();
     });
 });
+
+describe('SecurityScansController — reads by a member granted some Git connections', () => {
+    // The guard lets a connection-scoped read through only to a handler that
+    // narrows it itself: these read the repositories the caller can see,
+    // which for such a member are the granted connections' repositories.
+    it.each(['list', 'get', 'listSchedules'] as const)(
+        '%s narrows itself to the visible repositories',
+        (handler) => {
+            expect(
+                Reflect.getMetadata(
+                    'applies_connection_scope',
+                    SecurityScansController.prototype[handler],
+                ),
+            ).toBe(true);
+        },
+    );
+
+    it('lists the schedules of the visible repositories only', async () => {
+        const schedules = { list: jest.fn().mockResolvedValue([]) };
+        const controller = new SecurityScansController(
+            { user: { organization: { uuid: 'org-1' } } } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {
+                getRepositoryScope: jest.fn().mockResolvedValue(['repo-gh']),
+            } as any,
+            { isEnabledFor: jest.fn().mockResolvedValue(true) } as any,
+            schedules as any,
+        );
+
+        await controller.listSchedules();
+
+        expect(schedules.list).toHaveBeenCalledWith('org-1', ['repo-gh']);
+    });
+});

@@ -41,6 +41,7 @@ describe('OrganizationParametersController.testByokConnection — body passthrou
             undefined as any, // getFixedEgressIpUseCase
             undefined as any, // setFixedEgressIpUseCase
             { user: { organization: { uuid: 'org-1' } } } as any, // request
+            undefined as any, // updateAuthorFiltersUseCase
         );
     });
 

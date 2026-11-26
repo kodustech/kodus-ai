@@ -11,6 +11,7 @@ import {
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -43,6 +44,8 @@ export class RiskAssessmentController {
      */
     @Get('default-criteria')
     @UseGuards(PolicyGuard)
+    // Kodus's defaults: nothing of any connection to narrow.
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,

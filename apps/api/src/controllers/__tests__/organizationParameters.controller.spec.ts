@@ -20,8 +20,8 @@ describe('OrganizationParametersController.deleteByokConfig — v2 { modelId } r
         request = {
             user: { organization: { uuid: orgId } },
         };
-        // Only deleteByokConfigUseCase (arg 5) and request (last arg) are
-        // exercised by this route; the rest are irrelevant here.
+        // Only deleteByokConfigUseCase (arg 5) and request are exercised by
+        // this route; the rest are irrelevant here.
         controller = new OrganizationParametersController(
             undefined as any, // createOrUpdateOrganizationParametersUseCase
             undefined as any, // findByKeyOrganizationParametersUseCase
@@ -41,6 +41,7 @@ describe('OrganizationParametersController.deleteByokConfig — v2 { modelId } r
             undefined as any, // getFixedEgressIpUseCase
             undefined as any, // setFixedEgressIpUseCase
             request as any,
+            undefined as any, // updateAuthorFiltersUseCase
         );
     }
 

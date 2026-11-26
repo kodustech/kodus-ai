@@ -297,6 +297,7 @@ export class SecurityScansController {
             'The schedules of the repositories you can see: cadence, limit, mode, model, next and last run.',
     })
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(canReadScans)
     async listSchedules() {
         return this.schedules.list(
