@@ -9,4 +9,10 @@ describe('advisoryLockId', () => {
     ])('gives %s the key the previous release locks', (key, expected) => {
         expect(advisoryLockId(key)).toEqual(expected);
     });
+
+    it('refuses a key that is not a string, whatever length it claims', () => {
+        expect(() =>
+            advisoryLockId({ length: 1e12 } as unknown as string),
+        ).toThrow(TypeError);
+    });
 });

@@ -95,6 +95,11 @@ export class AdvisoryLockRepository implements IDistributedLockRepository {
  * deploy hands the same key to an old and a new pod.
  */
 export function advisoryLockId(key: string): [number, number] {
+    // Keys are built from webhook data; only a real string has a length
+    // that bounds the loops below.
+    if (typeof key !== 'string') {
+        throw new TypeError('A lock key must be a string');
+    }
     let hash1 = 5381;
     for (let i = 0; i < key.length; i++) {
         hash1 = (hash1 << 5) + hash1 + key.charCodeAt(i);
