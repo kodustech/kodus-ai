@@ -1104,7 +1104,14 @@ describe('IssuesRepository — one issue per root cause', () => {
 
         expect(result?.outcome).toBe('merged');
         const [filter, update] = model.findOneAndUpdate.mock.calls[0] as any;
-        expect(filter).toMatchObject({ _id: 'i-1', status: IssueStatus.OPEN });
+        // Only over the places and severities it worked from.
+        expect(filter).toEqual({
+            _id: 'i-1',
+            status: IssueStatus.OPEN,
+            occurrences: { $exists: false },
+            severity: 'high',
+            ownSeverity: { $exists: false },
+        });
         expect(update.$set).toMatchObject({
             occurrences: [{ ...place, lastSeenScanId: 'scan-3' }],
             fingerprintAliases: ['fp-route'],
@@ -1238,7 +1245,12 @@ describe('IssuesRepository — one issue per root cause', () => {
         expect(folded).toBe(true);
         const [holderFilter, holderUpdate] = model.updateOne.mock
             .calls[0] as any;
-        expect(holderFilter._id).toBe('i-1');
+        expect(holderFilter).toEqual({
+            _id: 'i-1',
+            occurrences: { $exists: false },
+            severity: 'medium',
+            ownSeverity: { $exists: false },
+        });
         expect(holderUpdate.$set.fingerprintAliases).toEqual([
             'fp-dos',
             'fp-route',

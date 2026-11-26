@@ -544,6 +544,7 @@ export class IssuesRepository implements IIssuesRepository {
                     _id: holder._id,
                     status: holder.status,
                     occurrences: holder.occurrences ?? { $exists: false },
+                    ...sameSeverity(holder),
                 },
                 {
                     $set: {
@@ -626,6 +627,7 @@ export class IssuesRepository implements IIssuesRepository {
             {
                 _id: holder._id,
                 occurrences: holder.occurrences ?? { $exists: false },
+                ...sameSeverity(holder),
             },
             { $set: update },
         );
@@ -1005,6 +1007,17 @@ function sameOccurrences(issue: { occurrences?: IIssueOccurrence[] }) {
         occurrences: issue.occurrences?.length
             ? issue.occurrences
             : { $in: [null, []] },
+    };
+}
+
+/**
+ * The issue's severities as read: a write that works them out from them must
+ * not land over a sighting that changed them in between.
+ */
+function sameSeverity(issue: { severity?: string; ownSeverity?: string }) {
+    return {
+        severity: issue.severity ?? { $exists: false },
+        ownSeverity: issue.ownSeverity ?? { $exists: false },
     };
 }
 
