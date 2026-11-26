@@ -1,5 +1,10 @@
 import { createLogger } from '@libs/core/log/logger';
-import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import {
+    ForbiddenException,
+    Inject,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
 
@@ -70,12 +75,23 @@ export class ListPastReviewersUseCase {
                 'Name a repository of the Git connections you are granted.',
             );
         }
+        // A named repository is read on its own connection, or not at all:
+        // the whole workspace could answer with another connection's people.
+        if (
+            repositoryId &&
+            repositoryId !== 'global' &&
+            !repositoryConnectionId
+        ) {
+            throw new NotFoundException(
+                'This repository is not on a Git connection of the workspace.',
+            );
+        }
         const organizationAndTeamData: OrganizationAndTeamData =
             repositoryConnectionId
                 ? { ...workspace, integrationId: repositoryConnectionId }
                 : workspace;
 
-        const cacheKey = `past_reviewers_${organizationAndTeamData.organizationId}_${teamId}_${repositoryId ?? 'all'}_${months}`;
+        const cacheKey = `past_reviewers_${organizationAndTeamData.organizationId}_${teamId}_${repositoryConnectionId ?? 'workspace'}_${repositoryId ?? 'all'}_${months}`;
 
         try {
             const cached =

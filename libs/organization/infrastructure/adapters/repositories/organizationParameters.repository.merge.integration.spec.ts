@@ -289,6 +289,44 @@ const KEY = OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT;
                 ]);
             });
 
+            it("never touches another organization's lists", async () => {
+                if (!ds) return;
+                const neighbour = await organizationWith({
+                    ignoredUsers: ['x'],
+                    seededBotIds: ['b0'],
+                    connections: { 'gh-a': { ignoredUsers: ['y'] } },
+                });
+                const organizationId = await organizationWith({
+                    ignoredUsers: [],
+                    connections: { 'gh-a': { ignoredUsers: [] } },
+                });
+
+                await repository.seedBotIds(organizationId, ['b1']);
+                await repository.seedBotIds(organizationId, ['b2'], {
+                    connectionId: 'gh-a',
+                });
+
+                expect(await stored(organizationId)).toEqual([
+                    {
+                        ignoredUsers: ['b1'],
+                        seededBotIds: ['b1'],
+                        connections: {
+                            'gh-a': {
+                                ignoredUsers: ['b2'],
+                                seededBotIds: ['b2'],
+                            },
+                        },
+                    },
+                ]);
+                expect(await stored(neighbour)).toEqual([
+                    {
+                        ignoredUsers: ['x'],
+                        seededBotIds: ['b0'],
+                        connections: { 'gh-a': { ignoredUsers: ['y'] } },
+                    },
+                ]);
+            });
+
             it('creates the row for an organization that has none', async () => {
                 if (!ds) return;
                 const fresh = await organizationWith();

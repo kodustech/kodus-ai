@@ -141,6 +141,7 @@ import {
     WebhookSetupResult,
 } from '../webhook-setup/webhook-setup';
 import { recordWebhookSetupOutcome } from '../webhook-setup/webhook-setup-failures.service';
+import { AmbiguousConnectionException } from '@libs/integrations/domain/integrations/errors/ambiguous-connection.exception';
 
 /** Bound on the pages `readAllPages` follows before calling a read incomplete. */
 const MAX_PAGES = 200;
@@ -4309,6 +4310,8 @@ export class BitbucketCloudService implements Omit<
                 integrationId,
             };
         } catch (err) {
+            // Not a bad token: which connection to rewrite is the user's to say.
+            if (err instanceof AmbiguousConnectionException) throw err;
             this.logger.error({
                 message: 'Error to authenticate with token',
                 context: BitbucketCloudService.name,

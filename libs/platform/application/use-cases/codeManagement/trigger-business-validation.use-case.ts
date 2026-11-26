@@ -322,15 +322,19 @@ export class TriggerBusinessValidationUseCase implements IUseCase {
     }): Promise<BusinessLogicTestResult> {
         const { organizationAndTeamData } = params;
         const taskInput = params.taskInput?.trim() || undefined;
-        const [platformType, executionContext] = await Promise.all([
-            this.codeManagementService.getTypeIntegration(
+        // The PR's repository first: its own connection says the platform.
+        const executionContext = await this.resolvePullRequestContext({
+            organizationAndTeamData,
+            input: { prUrl: params.prUrl },
+        });
+        const platformType =
+            await this.codeManagementService.getTypeIntegration(
                 organizationAndTeamData,
-            ),
-            this.resolvePullRequestContext({
-                organizationAndTeamData,
-                input: { prUrl: params.prUrl },
-            }),
-        ]);
+                {
+                    id: executionContext.repository.id,
+                    name: executionContext.repository.name,
+                },
+            );
         await params.authorize?.(executionContext.repository.id);
         const config = await this.businessLogicPublisher.configFor(
             organizationAndTeamData,

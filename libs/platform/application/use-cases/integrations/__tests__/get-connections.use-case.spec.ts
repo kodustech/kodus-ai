@@ -115,6 +115,35 @@ describe('GetConnectionsUseCase', () => {
         ]);
     });
 
+    it('checks at most four connections at a time, keeping each answer', async () => {
+        const rows = Array.from({ length: 9 }, (_, i) => ({
+            uuid: `conn-${i}`,
+            platform: 'GITHUB',
+        }));
+        const { useCase, codeManagementService } = build(rows);
+        let inFlight = 0;
+        let peak = 0;
+        codeManagementService.verifyConnection.mockImplementation(
+            async (params: any) => {
+                inFlight += 1;
+                peak = Math.max(peak, inFlight);
+                await new Promise((resolve) => setTimeout(resolve, 5));
+                inFlight -= 1;
+                if (params.organizationAndTeamData.integrationId === 'conn-3') {
+                    throw new Error('provider down');
+                }
+                return { category: 'CODE_MANAGEMENT', hasConnection: true };
+            },
+        );
+
+        const result = await useCase.execute(TEAM);
+
+        expect(peak).toBe(4);
+        expect(result.map(({ connectionId }) => connectionId)).toEqual(
+            rows.map(({ uuid }) => uuid).filter((uuid) => uuid !== 'conn-3'),
+        );
+    });
+
     it('says it could not tell when billing cannot be read', async () => {
         const { useCase } = build([{ uuid: 'gh-a', platform: 'GITHUB' }], null);
 

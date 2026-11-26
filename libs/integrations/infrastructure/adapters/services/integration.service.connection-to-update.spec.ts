@@ -1,6 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
-
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+
+import { AmbiguousConnectionException } from '@libs/integrations/domain/integrations/errors/ambiguous-connection.exception';
 
 import { IntegrationService } from './integration.service';
 
@@ -80,6 +80,6 @@ describe('IntegrationService.connectionToUpdate', () => {
 
         await expect(
             service.connectionToUpdate(workspace, PlatformType.GITLAB),
-        ).rejects.toBeInstanceOf(BadRequestException);
+        ).rejects.toBeInstanceOf(AmbiguousConnectionException);
     });
 });

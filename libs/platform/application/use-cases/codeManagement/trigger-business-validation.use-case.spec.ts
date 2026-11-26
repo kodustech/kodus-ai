@@ -746,7 +746,21 @@ describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
         teamId: 'team-1',
     };
 
-    it('resolves the platform of the named repository, not of the workspace', async () => {
+    it("resolves the platform of the PR's repository, not of the workspace", async () => {
+        const { useCase, code } = build();
+
+        await useCase.testOnPullRequest({
+            organizationAndTeamData,
+            prUrl,
+            settings: { recheckOn: 'push' },
+        });
+
+        expect(code.getTypeIntegration.mock.calls).toEqual([
+            [organizationAndTeamData, { id: 'repo-1', name: 'notes' }],
+        ]);
+    });
+
+    it('resolves the platform of the named repository on the CLI door too', async () => {
         const { useCase, code } = build();
 
         await useCase.execute({

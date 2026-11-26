@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ListPastReviewersUseCase } from './list-past-reviewers.use-case';
 
 jest.mock('@libs/common/utils/transforms/date', () => ({
@@ -81,6 +81,29 @@ describe('ListPastReviewersUseCase', () => {
             }),
         ).rejects.toBeInstanceOf(ForbiddenException);
         expect(codeManagementService.getListMembers).not.toHaveBeenCalled();
+    });
+
+    it('answers not found for a named repository whose connection cannot be resolved, instead of reading the whole workspace', async () => {
+        const { useCase, codeManagementService } = build({});
+        codeManagementService.connectionIdFor.mockResolvedValue(undefined);
+
+        await expect(
+            useCase.execute({ teamId: 't1', repositoryId: 'r-unknown' }),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(codeManagementService.getListMembers).not.toHaveBeenCalled();
+    });
+
+    it("keys the cached list by the repository's connection", async () => {
+        const { useCase, cacheService } = build({
+            repos: [{ id: 'r1', name: 'api' }],
+            repositoryConnection: 'gl-b',
+        });
+
+        await useCase.execute({ teamId: 't1', repositoryId: 'r1' });
+
+        expect(cacheService.getFromCache).toHaveBeenCalledWith(
+            'past_reviewers_org-1_t1_gl-b_r1_3',
+        );
     });
 
     it('refuses a member granted some connections who names no repository of a connection', async () => {

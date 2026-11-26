@@ -24,6 +24,7 @@ import {
     recordedNameMatches,
     repositoryNamesOf,
 } from '@libs/integrations/domain/integrations/utils/repository-names';
+import { AmbiguousConnectionException } from '@libs/integrations/domain/integrations/errors/ambiguous-connection.exception';
 
 /** Long enough for one request or cron step, short enough to see a reset. */
 const RESOLUTION_MEMO_TTL_MS = 5_000;
@@ -160,9 +161,7 @@ export class IntegrationService implements IIntegrationService {
                     connections: active.length,
                 },
             });
-            throw new BadRequestException(
-                'This workspace has several connections to this provider: reconnect one from its card in Settings > Git.',
-            );
+            throw new AmbiguousConnectionException();
         }
         return active[0] ?? connections[0];
     }

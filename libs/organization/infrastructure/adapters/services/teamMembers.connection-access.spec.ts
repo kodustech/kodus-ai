@@ -55,6 +55,21 @@ describe('TeamMemberService — Git connection access', () => {
         );
     });
 
+    it('fails when the member and their grants could not be written, so no invitation claims success', async () => {
+        const { service, repo, connectionAccess } = build();
+        // The repository answers a failed insert with the error, rolled back.
+        repo.create.mockResolvedValueOnce(new Error('grant write failed'));
+
+        await expect(
+            service.create({
+                user: { uuid: 'user-1' },
+                team: { uuid: 'team-1' },
+                organization: { uuid: 'org-1' },
+            } as any),
+        ).rejects.toThrow('grant write failed');
+        expect(connectionAccess.forgetUsers.mock.calls).toEqual([[['user-1']]]);
+    });
+
     it('grants nothing for a member row without a user', async () => {
         const { service, repo, connectionAccess } = build();
 

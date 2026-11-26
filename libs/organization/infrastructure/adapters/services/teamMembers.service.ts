@@ -101,6 +101,9 @@ export class TeamMemberService implements ITeamMemberService {
                 ),
         });
         this.connectionAccess.forgetUsers([userId]);
+        // The repository answers a rolled-back insert with its error: the
+        // member does not exist, and the caller must not invite them.
+        if (created instanceof Error) throw created;
         return created;
     }
 

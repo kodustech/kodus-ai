@@ -163,7 +163,6 @@ describe('LicenseService per Git connection', () => {
             connections: [
                 { connectionId: 'gl-b', ownSubscription: true },
                 { connectionId: 'fj-c', ownSubscription: false },
-                { connectionId: 'az-d' },
             ],
         });
 
@@ -178,6 +177,22 @@ describe('LicenseService per Git connection', () => {
         });
 
         get.mockRejectedValue(new Error('billing down'));
+        await expect(
+            service.getConnectionLicenses(workspace),
+        ).resolves.toBeNull();
+    });
+
+    it('answers unreadable when billing does not say whether a connection has its own subscription', async () => {
+        const { service, get } = makeService();
+        // A billing that predates the flag.
+        get.mockResolvedValue({
+            primaryConnectionId: null,
+            connections: [
+                { connectionId: 'gl-b', ownSubscription: true },
+                { connectionId: 'az-d' },
+            ],
+        });
+
         await expect(
             service.getConnectionLicenses(workspace),
         ).resolves.toBeNull();

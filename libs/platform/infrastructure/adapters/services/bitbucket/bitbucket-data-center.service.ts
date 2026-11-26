@@ -89,6 +89,7 @@ import {
     WebhookSetupResult,
 } from '../webhook-setup/webhook-setup';
 import { recordWebhookSetupOutcome } from '../webhook-setup/webhook-setup-failures.service';
+import { AmbiguousConnectionException } from '@libs/integrations/domain/integrations/errors/ambiguous-connection.exception';
 
 const FILES_PAGE_SIZE = 1000;
 const MAX_FILE_PAGES = 200;
@@ -310,6 +311,8 @@ export class BitbucketDataCenterService implements Omit<
                 integrationId,
             };
         } catch (err) {
+            // Not a bad token: which connection to rewrite is the user's to say.
+            if (err instanceof AmbiguousConnectionException) throw err;
             this.logger.error({
                 message: 'Error authenticating with Data Center token',
                 context: BitbucketDataCenterService.name,

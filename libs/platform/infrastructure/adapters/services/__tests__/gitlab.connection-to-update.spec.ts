@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { BadRequestException } from '@nestjs/common';
+import { AmbiguousConnectionException } from '@libs/integrations/domain/integrations/errors/ambiguous-connection.exception';
 
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
@@ -60,21 +60,16 @@ describe('GitLab connect — which connection it rewrites', () => {
         );
     });
 
-    it('rewrites nothing while several GitLab connections match and none is named', async () => {
-        const service = build(
-            jest
-                .fn()
-                .mockRejectedValue(
-                    new BadRequestException('several connections'),
-                ),
-        );
+    it('rewrites nothing while several GitLab connections match and none is named, and says so instead of blaming the token', async () => {
+        const refusal = new AmbiguousConnectionException();
+        const service = build(jest.fn().mockRejectedValue(refusal));
 
         await expect(
             service.authenticateWithToken({
                 token: 'glpat',
                 organizationAndTeamData: workspace,
             }),
-        ).rejects.toBeInstanceOf(BadRequestException);
+        ).rejects.toBe(refusal);
         expect(service.handleIntegration).not.toHaveBeenCalled();
     });
 });

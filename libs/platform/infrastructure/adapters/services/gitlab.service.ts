@@ -148,6 +148,7 @@ import {
     runWebhookSetup,
     WebhookSetupResult,
 } from './webhook-setup/webhook-setup';
+import { AmbiguousConnectionException } from '@libs/integrations/domain/integrations/errors/ambiguous-connection.exception';
 
 /**
  * Award emojis are the one reaction source that costs a request per comment —
@@ -1446,6 +1447,8 @@ export class GitlabService implements Omit<
                 integrationId,
             };
         } catch (err) {
+            // Not a bad token: which connection to rewrite is the user's to say.
+            if (err instanceof AmbiguousConnectionException) throw err;
             throw new BadRequestException(
                 err.message || 'Error authenticating with PAT.',
             );
@@ -1502,6 +1505,8 @@ export class GitlabService implements Omit<
                 integrationId,
             };
         } catch (err) {
+            // Not a bad token: which connection to rewrite is the user's to say.
+            if (err instanceof AmbiguousConnectionException) throw err;
             // A refused address is not a bad token: say which it was.
             throw (
                 gitServerRefusal(err) ??

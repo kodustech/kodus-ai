@@ -1,3 +1,4 @@
+import pLimit from 'p-limit';
 import { Inject, Injectable, BadRequestException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
@@ -13,6 +14,8 @@ import {
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
 import { CodeManagementService } from '../../../infrastructure/adapters/services/codeManagement.service';
+
+const VERIFICATIONS_AT_ONCE = 4;
 
 @Injectable()
 export class GetConnectionsUseCase implements IUseCase {
@@ -45,17 +48,21 @@ export class GetConnectionsUseCase implements IUseCase {
                 })) ?? [];
 
             if (!connections.length) return [];
+            const verifyAtOnce = pLimit(VERIFICATIONS_AT_ONCE);
 
             const [statuses, licences] = await Promise.all([
+                // Each check calls its provider: a few at a time.
                 Promise.allSettled(
                     connections.map((connection) =>
-                        this.codeManagementService.verifyConnection({
-                            organizationAndTeamData: {
-                                organizationId,
-                                teamId,
-                                integrationId: connection.uuid,
-                            },
-                        }),
+                        verifyAtOnce(() =>
+                            this.codeManagementService.verifyConnection({
+                                organizationAndTeamData: {
+                                    organizationId,
+                                    teamId,
+                                    integrationId: connection.uuid,
+                                },
+                            }),
+                        ),
                     ),
                 ),
                 // A connection billed on its own subscription keeps billing

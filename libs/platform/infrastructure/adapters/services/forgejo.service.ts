@@ -176,6 +176,7 @@ import {
     WebhookSetupResult,
 } from './webhook-setup/webhook-setup';
 import { recordWebhookSetupOutcome } from './webhook-setup/webhook-setup-failures.service';
+import { AmbiguousConnectionException } from '@libs/integrations/domain/integrations/errors/ambiguous-connection.exception';
 
 /**
  * The Forgejo client returns failures instead of throwing. Turns one into an
@@ -1176,6 +1177,8 @@ export class ForgejoService implements Omit<
                 integrationId,
             };
         } catch (err) {
+            // Not a bad token: which connection to rewrite is the user's to say.
+            if (err instanceof AmbiguousConnectionException) throw err;
             const errorMessage =
                 err?.response?.data?.message || err?.message || 'Unknown error';
             this.logger.error({
