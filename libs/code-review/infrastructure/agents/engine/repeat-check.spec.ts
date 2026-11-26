@@ -724,7 +724,7 @@ describe('checkRepeats', () => {
         expect(result.repeats.map((r) => r.finding)).toEqual([byCode]);
     });
 
-    it("without a verdict, holds a finder-linked finding on its comment's file and an answered point on its lines, and posts the rest", async () => {
+    it("without a verdict, holds a finder-linked finding on its comment's file and an answered point raised again in its file, and posts the rest", async () => {
         const answered = earlier({
             suggestionId: 'answered',
             relevantFile: 'src/label.ts',
@@ -745,19 +745,23 @@ describe('checkRepeats', () => {
             relevantFile: 'src/consumer.ts',
             revisesSuggestionId: 'bug-old',
         };
+        // Lines moved since the earlier round: matched by what it says.
         const reraise = {
             label: 'bug',
             relevantFile: 'src/label.ts',
-            relevantLinesStart: 5,
-            relevantLinesEnd: 5,
-            suggestionContent: 'A deleted user prints as "undefined".',
+            relevantLinesStart: 9,
+            relevantLinesEnd: 9,
+            suggestionContent:
+                'authorLabel renders undefined when the user is missing.',
         };
+        // On the answered lines, but another problem.
         const elsewhere = {
             label: 'bug',
             relevantFile: 'src/label.ts',
-            relevantLinesStart: 30,
-            relevantLinesEnd: 31,
-            suggestionContent: 'The cache key ignores the locale.',
+            relevantLinesStart: 4,
+            relevantLinesEnd: 5,
+            suggestionContent:
+                'The SQL built here interpolates userId; use a parameter.',
         };
         runSpy.mockRejectedValue(
             Object.assign(new Error('aborted'), { name: 'AbortError' }),

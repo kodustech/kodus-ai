@@ -515,9 +515,9 @@ function parseVerdicts(
 }
 
 /** Without a verdict, hold a finding the finder linked to an earlier comment
- *  on that comment's file (a revision may be a reversal), a point answered in its thread and raised
- *  on the same lines, and a likely repost. The same rule in a different place,
- *  or a different problem elsewhere, still gets a comment. */
+ *  on that comment's file (a revision may be a reversal), a point answered in
+ *  its thread and raised again in that file, and a likely repost. The same
+ *  rule in a different place, or a different problem, still gets a comment. */
 function heldWithoutVerdict(
     finding: RepeatCheckFinding,
     earlier: PrDecisionRecord,
@@ -531,23 +531,26 @@ function heldWithoutVerdict(
         file === normalizePath(earlier.relevantFile)
     )
         return true;
-    if (earlier.answered && sameLines(finding, earlier)) return true;
+    if (earlier.answered && answeredPointAgain(finding, earlier)) return true;
     return plausibleRepeat(finding, earlier);
 }
 
-function sameLines(
+/** The answered point raised again in its file, wherever its lines moved:
+ *  matched by what it says, not by the lines stored in an earlier round, so a
+ *  different problem on those lines is still posted. Re-raises of an answered
+ *  point measured 0.42-0.48 against it; different problems on the same lines
+ *  0.03-0.17. */
+const ANSWERED_SIMILARITY = 0.3;
+
+function answeredPointAgain(
     finding: RepeatCheckFinding,
     earlier: PrDecisionRecord,
 ): boolean {
     const file = normalizePath(finding.relevantFile);
-    if (!file || file !== normalizePath(earlier.relevantFile)) return false;
-    const start = finding.relevantLinesStart;
-    const oldStart = earlier.relevantLinesStart;
     return (
-        start != null &&
-        oldStart != null &&
-        start <= (earlier.relevantLinesEnd ?? oldStart) &&
-        oldStart <= (finding.relevantLinesEnd ?? start)
+        !!file &&
+        file === normalizePath(earlier.relevantFile) &&
+        contentSimilarity(finding, earlier) >= ANSWERED_SIMILARITY
     );
 }
 
