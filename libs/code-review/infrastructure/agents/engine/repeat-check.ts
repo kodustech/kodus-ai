@@ -636,11 +636,17 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
         if (!options.byokConfig && !hasManagedModelKey()) {
             result.model = 'no-model';
         } else {
-            const slot: NormalizedModel | undefined = options.byokConfig && {
-                ...options.byokConfig,
-                reasoningEffort: REPEAT_CHECK_EFFORT,
-                reasoningConfigOverride: undefined,
-            };
+            // An org's own reasoning override wins: on OpenRouter it also
+            // carries the provider routing (order, zdr, data_collection) that
+            // decides where its code may go.
+            const slot: NormalizedModel | undefined =
+                options.byokConfig &&
+                (options.byokConfig.reasoningConfigOverride
+                    ? options.byokConfig
+                    : {
+                          ...options.byokConfig,
+                          reasoningEffort: REPEAT_CHECK_EFFORT,
+                      });
             const scheduleBatch = pLimit(4);
             const retryable = new Set(toJudge);
             const judgeBatch = async (

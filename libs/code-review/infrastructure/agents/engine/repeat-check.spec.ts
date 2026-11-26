@@ -1028,7 +1028,6 @@ describe('checkRepeats', () => {
                 byokConfig: {
                     ...slot,
                     reasoningEffort: 'high',
-                    reasoningConfigOverride: '{"thinking":{}}',
                 } as NormalizedModel,
             },
         );
@@ -1036,8 +1035,24 @@ describe('checkRepeats', () => {
             provider: 'openai',
             model: 'm',
             reasoningEffort: 'low',
-            reasoningConfigOverride: undefined,
         });
+    });
+
+    it("keeps the org's reasoning override, which can carry its provider routing", async () => {
+        runSpy.mockResolvedValue({ verdicts: [] });
+        const override =
+            '{"openrouter":{"provider":{"order":["deepinfra"],"allow_fallbacks":false,"data_collection":"deny","zdr":true},"reasoning":{"effort":"high"}}}';
+        const team = {
+            ...slot,
+            reasoningEffort: 'high',
+            reasoningConfigOverride: override,
+        } as NormalizedModel;
+        await checkRepeats(
+            [{ label: 'bug', relevantFile: 'src/retry.ts' }],
+            [bugComment],
+            { organizationId: 'org-1', byokConfig: team },
+        );
+        expect(runSpy.mock.calls[0][0].byokConfig).toEqual(team);
     });
 
     it('judges ten findings per call', async () => {
