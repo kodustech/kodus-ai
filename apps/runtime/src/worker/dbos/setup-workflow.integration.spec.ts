@@ -139,11 +139,18 @@ const sameEnvironment = (environmentId: string, requestedAt: string): RuntimeEnv
         while ((await DBOS.getWorkflowStatus(id2))?.status === 'ENQUEUED' && Date.now() < started) await new Promise((r) => setTimeout(r, 200));
         await new Promise((r) => setTimeout(r, 1_500));
         expect((await DBOS.getWorkflowStatus(id2))?.status).toBe('PENDING');
+        // Another environment's setup never waits for this one's.
+        // (Of another organization here: the waiting setup holds one of this organization's setup slots.)
+        const other = { ...sameEnvironment(`${environmentId}-other`, 'free-1'), organizationId: 'org-other' };
+        const id3 = (await engine.startSetup(other)) as string;
+        const until = Date.now() + 30_000;
+        while (!acquires.includes(`setup:${other.key}`) && Date.now() < until) await new Promise((r) => setTimeout(r, 200));
+        expect(acquires).toContain(`setup:${other.key}`);
         expect(acquires).not.toContain(`setup:${second.key}`);
 
         openGate();
-        const results: any[] = await Promise.all([id1, id2].map((id) => DBOS.retrieveWorkflow(id).getResult()));
-        expect(results.map((r) => r.state)).toEqual(['active', 'active']);
+        const results: any[] = await Promise.all([id1, id2, id3].map((id) => DBOS.retrieveWorkflow(id).getResult()));
+        expect(results.map((r) => r.state)).toEqual(['active', 'active', 'active']);
         expect(acquires.indexOf(`setup:${first.key}`)).toBeLessThan(acquires.indexOf(`setup:${second.key}`));
     }, 60_000);
 });

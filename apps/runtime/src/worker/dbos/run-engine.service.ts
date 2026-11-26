@@ -411,7 +411,7 @@ export class RunEngineService implements OnModuleInit, OnApplicationShutdown {
         await dbosStep('setup:turn', async () => {
             for (;;) {
                 const mine = await DBOS.getWorkflowStatus(me);
-                const live = await DBOS.listWorkflows({ workflowIDPrefix: prefix, status: ['PENDING'], loadInput: false, loadOutput: false });
+                const live = await DBOS.listWorkflows({ workflow_id_prefix: prefix, status: ['PENDING'], loadInput: false, loadOutput: false });
                 const earlier = live.filter((w) => w.workflowID !== me && !w.workflowID.endsWith(':admission-rejected') && (w.createdAt < (mine?.createdAt ?? Infinity) || (w.createdAt === mine?.createdAt && w.workflowID < me)));
                 if (!earlier.length) return;
                 const signal = DBOS.stepStatus?.cancelSignal;
