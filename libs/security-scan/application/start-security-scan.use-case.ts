@@ -466,7 +466,9 @@ export class StartSecurityScanUseCase {
         if (!last?.units?.length || !unfinished) {
             return null;
         }
-        if (last.modelName && last.modelName !== modelName) {
+        // `provider:model`, as the scan resolved it: a plan made on another
+        // model, or on one not recorded, is not carried on.
+        if (last.modelName !== modelName) {
             return null;
         }
         // Areas that failed (a provider outage) run again, with the rest.

@@ -886,12 +886,20 @@ export class IssuesRepository implements IIssuesRepository {
         };
         if (params.trackedFiles?.length) {
             const tracked = new Set(params.trackedFiles.map(normalizeScanPath));
-            const places: string[] = await this.issuesModel
-                .distinct('occurrences.filePath', scope)
-                .exec();
-            const gone = places.filter(
-                (path) => !!path && !tracked.has(normalizeScanPath(path)),
-            );
+            // Streamed: the repository's places, one path at a time.
+            const gone: string[] = [];
+            const places = this.issuesModel
+                .aggregate<{ _id: string }>([
+                    { $match: scope },
+                    { $unwind: '$occurrences' },
+                    { $group: { _id: '$occurrences.filePath' } },
+                ])
+                .cursor();
+            for await (const { _id: path } of places) {
+                if (path && !tracked.has(normalizeScanPath(path))) {
+                    gone.push(path);
+                }
+            }
             if (gone.length) {
                 await this.issuesModel.updateMany(scope, {
                     $pull: { occurrences: { filePath: { $in: gone } } },

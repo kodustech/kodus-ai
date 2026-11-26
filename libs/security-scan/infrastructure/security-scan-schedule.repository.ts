@@ -14,7 +14,11 @@ export type SecurityScanScheduleSettings = Pick<
     SecurityScanSchedule,
     'cadence' | 'budget' | 'mode' | 'modelId' | 'teamId'
 > & {
-    nextRunAt: string;
+    /**
+     * Omitted: the stored next run is left as it is, in the write itself, so
+     * an edit never writes back a time the cron moved in between.
+     */
+    nextRunAt?: string;
     createdBy?: SecurityScanSchedule['createdBy'];
     /** Omitted: an existing schedule keeps its state, a new one is enabled. */
     enabled?: boolean;
@@ -98,7 +102,9 @@ export class SecurityScanScheduleRepository implements ISecurityScanScheduleRepo
                             ...(typeof settings.enabled === 'boolean'
                                 ? { enabled: settings.enabled }
                                 : {}),
-                            nextRunAt: new Date(settings.nextRunAt),
+                            ...(settings.nextRunAt
+                                ? { nextRunAt: new Date(settings.nextRunAt) }
+                                : {}),
                             ...(settings.modelId
                                 ? { modelId: settings.modelId }
                                 : {}),

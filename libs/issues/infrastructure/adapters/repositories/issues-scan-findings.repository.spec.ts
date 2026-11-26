@@ -8,6 +8,14 @@ import { IssuesRepository } from './issues.repository';
 
 const exec = (value: unknown) => ({ exec: jest.fn(async () => value) });
 
+/** An aggregation whose cursor yields these rows. */
+const cursorOf = (rows: unknown[]) => ({
+    cursor: () =>
+        (async function* () {
+            yield* rows;
+        })(),
+});
+
 const finding = {
     title: 'Order lookup skips the owner check',
     description: 'Any signed-in user can read any order by id.',
@@ -44,30 +52,50 @@ function modelWith(existing: Record<string, unknown> | null) {
         updateMany: jest.fn(async () => ({ modifiedCount: 3 })),
         distinct: jest.fn(() => exec(['src/a.ts', 'src/gone.ts', ''])),
         updateOne: jest.fn(async () => ({ modifiedCount: 1 })),
+        aggregate: jest.fn(() => cursorOf([])),
     };
 }
 
 describe('IssuesRepository — security-scan findings', () => {
     it('points a sighted issue at the commit the sighting scan read', async () => {
-        const model = modelWith({ _id: 'i-1', status: IssueStatus.OPEN, lastSeenCommitSha: 'old' });
+        const model = modelWith({
+            _id: 'i-1',
+            status: IssueStatus.OPEN,
+            lastSeenCommitSha: 'old',
+        });
         const repository = new IssuesRepository(model as any);
 
-        await repository.upsertScanFinding({ ...finding, lastSeenCommitSha: 'abc123' } as any);
+        await repository.upsertScanFinding({
+            ...finding,
+            lastSeenCommitSha: 'abc123',
+        } as any);
 
-        const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
+        const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [
+            any,
+            any,
+        ];
         expect(update.$set.lastSeenCommitSha).toBe('abc123');
     });
 
     it('refreshes only while no other writer of this scan stored the identity first', async () => {
-        const model = modelWith({ _id: 'i-1', status: IssueStatus.OPEN, lastSeenScanId: 'scan-1' });
+        const model = modelWith({
+            _id: 'i-1',
+            status: IssueStatus.OPEN,
+            lastSeenScanId: 'scan-1',
+        });
         const repository = new IssuesRepository(model as any);
 
         await repository.upsertScanFinding(finding);
 
         // The second writer of scan-2 finds lastSeenScanId moved and goes
         // round again, into the merge, instead of replacing the first's text.
-        const [filter] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
-        expect(filter).toEqual(expect.objectContaining({ lastSeenScanId: 'scan-1' }));
+        const [filter] = model.findOneAndUpdate.mock.calls[0] as unknown as [
+            any,
+            any,
+        ];
+        expect(filter).toEqual(
+            expect.objectContaining({ lastSeenScanId: 'scan-1' }),
+        );
     });
 
     it('keeps a holder as severe as its worst folded place when its own sighting is milder', async () => {
@@ -75,13 +103,25 @@ describe('IssuesRepository — security-scan findings', () => {
             _id: 'i-1',
             status: IssueStatus.OPEN,
             lastSeenScanId: 'scan-1',
-            occurrences: [{ fingerprint: 'fp-a', severity: 'critical', filePath: 'src/a.ts' }],
+            occurrences: [
+                {
+                    fingerprint: 'fp-a',
+                    severity: 'critical',
+                    filePath: 'src/a.ts',
+                },
+            ],
         });
         const repository = new IssuesRepository(model as any);
 
-        await repository.upsertScanFinding({ ...finding, severity: SeverityLevel.MEDIUM } as any);
+        await repository.upsertScanFinding({
+            ...finding,
+            severity: SeverityLevel.MEDIUM,
+        } as any);
 
-        const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
+        const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [
+            any,
+            any,
+        ];
         expect(update.$set.severity).toBe('critical');
     });
 
@@ -100,7 +140,10 @@ describe('IssuesRepository — security-scan findings', () => {
         // Its own issue is refreshed with this scan's sighting, not merged
         // into the holder as one more place.
         expect(outcome).not.toBe('merged');
-        const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
+        const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [
+            any,
+            any,
+        ];
         expect(update.$set.lastSeenScanId).toBe('scan-2');
         expect(update.$set.occurrences).toBeUndefined();
     });
@@ -280,8 +323,14 @@ describe('IssuesRepository — security-scan findings', () => {
         const { outcome } = await repository.upsertScanFinding(finding);
 
         expect(outcome).toBe('still_open');
-        const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
-        expect(update.$set).toEqual({ lastSeenAt: expect.any(String), consecutiveScanMisses: 0 });
+        const [, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [
+            any,
+            any,
+        ];
+        expect(update.$set).toEqual({
+            lastSeenAt: expect.any(String),
+            consecutiveScanMisses: 0,
+        });
     });
 
     it('keeps a second weakness of the same identity in one scan as another occurrence', async () => {
@@ -307,14 +356,17 @@ describe('IssuesRepository — security-scan findings', () => {
         });
 
         expect(outcome).toBe('merged');
-        const [filter, update] = model.findOneAndUpdate.mock.calls[0] as unknown as [any, any];
+        const [filter, update] = model.findOneAndUpdate.mock
+            .calls[0] as unknown as [any, any];
         // Written only if no other occurrence landed since the read.
         expect(filter).toEqual({
             _id: 'i-1',
             status: IssueStatus.OPEN,
             description: 'Injection in the name filter.',
         });
-        expect(update.$set.description).toContain('Injection in the name filter.');
+        expect(update.$set.description).toContain(
+            'Injection in the name filter.',
+        );
         expect(update.$set.description).toContain(
             'Also in this function: Injection in the sort column',
         );
@@ -338,7 +390,9 @@ describe('IssuesRepository — security-scan findings', () => {
         const { outcome } = await repository.upsertScanFinding(finding);
 
         expect(outcome).toBe('merged');
-        const update = (model.findOneAndUpdate.mock.calls[0] as unknown as [any, any])[1];
+        const update = (
+            model.findOneAndUpdate.mock.calls[0] as unknown as [any, any]
+        )[1];
         expect(update.$set.status).toBe(IssueStatus.OPEN);
         expect(update.$unset).toEqual({ resolvedAt: '' });
     });
@@ -433,7 +487,10 @@ describe('IssuesRepository — security-scan findings', () => {
             scanId: 'scan-2',
             // A scan may spell a path as it was found; the issue stores it clean.
             examined: [
-                { vulnerabilityClass: 'authz', filePaths: ['./src/a.ts', 'src\\b.ts'] },
+                {
+                    vulnerabilityClass: 'authz',
+                    filePaths: ['./src/a.ts', 'src\\b.ts'],
+                },
                 { vulnerabilityClass: 'injection', filePaths: [] },
             ],
             scanStartedAt: '2026-11-08T10:00:00.000Z',
@@ -471,7 +528,9 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(model.distinct).toHaveBeenCalledWith('filePath', unseen);
         // Not a model miss: no earlier miss is needed. (The other write
         // prunes the gone file's places from the issues that list them.)
-        const resolutions = model.updateMany.mock.calls.filter((c: any) => !c[1].$pull);
+        const resolutions = model.updateMany.mock.calls.filter(
+            (c: any) => !c[1].$pull,
+        );
         expect(resolutions).toHaveLength(1);
         expect((resolutions[0] as unknown[])[0]).toEqual({
             ...unseen,
@@ -610,12 +669,13 @@ describe('IssuesRepository.findByFileAndStatus', () => {
 describe('IssuesRepository.findOpenScanFindingAreas', () => {
     it("lists each file and class of the repository's open scan findings once", async () => {
         const find = jest.fn(() => ({
-            lean: () => exec([
-                { filePath: './src/a.ts', vulnerabilityClass: 'authz' },
-                { filePath: 'src/a.ts', vulnerabilityClass: 'authz' },
-                { filePath: 'src/a.ts', vulnerabilityClass: 'injection' },
-                { filePath: 'src/b.ts' },
-            ]),
+            lean: () =>
+                exec([
+                    { filePath: './src/a.ts', vulnerabilityClass: 'authz' },
+                    { filePath: 'src/a.ts', vulnerabilityClass: 'authz' },
+                    { filePath: 'src/a.ts', vulnerabilityClass: 'injection' },
+                    { filePath: 'src/b.ts' },
+                ]),
         }));
         const repository = new IssuesRepository({ find } as any);
 
@@ -645,22 +705,31 @@ describe('IssuesRepository.findOpenScanFindingAreas', () => {
 describe('IssuesRepository.findOpenScanFindings', () => {
     it("lists the repository's open scan findings with what identifies each", async () => {
         const find = jest.fn(() => ({
-            lean: () => exec([
-                {
-                    fingerprint: 'fp-dao',
-                    filePath: './src/orders.dao.ts',
-                    vulnerabilityClass: 'injection',
-                    title: 'SQL built from the order id',
-                    description: 'The id reaches the query.',
-                    severity: 'high',
-                    cwe: 'CWE-89',
-                    startLine: 12,
-                    endLine: 14,
-                    evidence: { attackPath: [{ file: 'src/orders.controller.ts', line: 5, note: 'id' }] },
-                },
-                // Stored before fingerprints: nothing to keep the identity of.
-                { filePath: 'src/old.ts', vulnerabilityClass: 'authz' },
-            ]),
+            lean: () =>
+                exec([
+                    {
+                        fingerprint: 'fp-dao',
+                        filePath: './src/orders.dao.ts',
+                        vulnerabilityClass: 'injection',
+                        title: 'SQL built from the order id',
+                        description: 'The id reaches the query.',
+                        severity: 'high',
+                        cwe: 'CWE-89',
+                        startLine: 12,
+                        endLine: 14,
+                        evidence: {
+                            attackPath: [
+                                {
+                                    file: 'src/orders.controller.ts',
+                                    line: 5,
+                                    note: 'id',
+                                },
+                            ],
+                        },
+                    },
+                    // Stored before fingerprints: nothing to keep the identity of.
+                    { filePath: 'src/old.ts', vulnerabilityClass: 'authz' },
+                ]),
         }));
         const repository = new IssuesRepository({ find } as any);
 
@@ -682,7 +751,9 @@ describe('IssuesRepository.findOpenScanFindings', () => {
                 cwe: 'CWE-89',
                 startLine: 12,
                 endLine: 14,
-                attackPath: [{ file: 'src/orders.controller.ts', line: 5, note: 'id' }],
+                attackPath: [
+                    { file: 'src/orders.controller.ts', line: 5, note: 'id' },
+                ],
             },
         ]);
         const [filter] = find.mock.calls[0] as unknown as [any];
@@ -725,7 +796,10 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
         expect(result).toEqual({ sighted: 2, reopened: 0 });
         // Not found again: a resolved one stays resolved.
         expect(updateMany).toHaveBeenCalledTimes(1);
-        const [filter, update] = updateMany.mock.calls[0] as unknown as [any, any];
+        const [filter, update] = updateMany.mock.calls[0] as unknown as [
+            any,
+            any,
+        ];
         // Sighted once per scan: one it already sighted is not counted again.
         expect(filter).toEqual({
             ...identity,
@@ -751,7 +825,10 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
         });
 
         expect(result).toEqual({ sighted: 1, reopened: 1 });
-        const [filter, update] = updateMany.mock.calls[1] as unknown as [any, any];
+        const [filter, update] = updateMany.mock.calls[1] as unknown as [
+            any,
+            any,
+        ];
         expect(filter).toEqual({ ...identity, status: IssueStatus.RESOLVED });
         expect(update.$set.status).toBe(IssueStatus.OPEN);
         // Seen by this scan, so its resolution pass does not close it again.
@@ -765,7 +842,11 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
         const repository = new IssuesRepository({ updateMany } as any);
 
         await expect(
-            repository.markScanFindingsSeen({ ...scope, fingerprints: [], scanId: 'scan-2' }),
+            repository.markScanFindingsSeen({
+                ...scope,
+                fingerprints: [],
+                scanId: 'scan-2',
+            }),
         ).resolves.toEqual({ sighted: 0, reopened: 0 });
         expect(updateMany).not.toHaveBeenCalled();
     });
@@ -774,8 +855,15 @@ describe('IssuesRepository.markScanFindingsSeen', () => {
 describe('pruning places a scan shows are gone', () => {
     it('drops places of a class read again without them, and places whose file left the branch', async () => {
         const updateMany = jest.fn(async () => ({ modifiedCount: 0 }));
-        const distinct = jest.fn(() => exec(['src/orders/kept.ts', 'src/gone.ts']));
-        const repository = new IssuesRepository({ updateMany, distinct } as any);
+        const distinct = jest.fn(() => exec([]));
+        const aggregate = jest.fn(() =>
+            cursorOf([{ _id: 'src/orders/kept.ts' }, { _id: 'src/gone.ts' }]),
+        );
+        const repository = new IssuesRepository({
+            updateMany,
+            distinct,
+            aggregate,
+        } as any);
 
         await repository.resolveUnseenScanFindings({
             organizationId: 'org-1',
@@ -785,18 +873,42 @@ describe('pruning places a scan shows are gone', () => {
             scanId: 'scan-3',
             scanStartedAt: '2026-11-25T00:00:00.000Z',
             trackedFiles: ['src/orders/kept.ts'],
-            examined: [{ vulnerabilityClass: 'authz', filePaths: ['src/orders/kept.ts'] }],
+            examined: [
+                {
+                    vulnerabilityClass: 'authz',
+                    filePaths: ['src/orders/kept.ts'],
+                },
+            ],
         } as any);
 
-        const pulls = updateMany.mock.calls.map((c: any) => c[1].$pull?.occurrences).filter(Boolean);
+        const pulls = updateMany.mock.calls
+            .map((c: any) => c[1].$pull?.occurrences)
+            .filter(Boolean);
         expect(pulls).toContainEqual({ filePath: { $in: ['src/gone.ts'] } });
         expect(pulls).toContainEqual({
             vulnerabilityClass: 'authz',
             filePath: { $in: ['src/orders/kept.ts'] },
             lastSeenScanId: { $ne: 'scan-3' },
         });
-        const [scope] = updateMany.mock.calls.find((c: any) => c[1].$pull) as any;
-        expect(scope).toMatchObject({ 'repository.id': 'repo-1', 'status': IssueStatus.OPEN });
+        // Every prune write is held to this repository's open scan issues.
+        const scope = {
+            'organizationId': 'org-1',
+            'repository.platform': PlatformType.GITHUB,
+            'repository.host': 'github.com',
+            'repository.id': 'repo-1',
+            'source': IssueSource.SECURITY_SCAN,
+            'status': IssueStatus.OPEN,
+            'occurrences': { $exists: true, $ne: [] },
+        };
+        const pruneWrites = updateMany.mock.calls.filter(
+            (c: any) => c[1].$pull,
+        );
+        expect(pruneWrites).toHaveLength(2);
+        for (const [filter] of pruneWrites as any[])
+            expect(filter).toEqual(scope);
+        expect((aggregate.mock.calls[0] as any)[0][0]).toEqual({
+            $match: scope,
+        });
     });
 });
 
@@ -807,7 +919,8 @@ describe('single issue status transition', () => {
 
         await repository.updateStatus('issue-1', IssueStatus.RESOLVED);
 
-        const [id, update, options] = findByIdAndUpdate.mock.calls[0] as unknown as [string, any, any];
+        const [id, update, options] = findByIdAndUpdate.mock
+            .calls[0] as unknown as [string, any, any];
         expect(id).toBe('issue-1');
         expect(update.$set).toEqual({
             status: IssueStatus.RESOLVED,
@@ -818,14 +931,24 @@ describe('single issue status transition', () => {
         expect(options).toEqual({ new: true });
     });
 
-    it.each([IssueStatus.OPEN, IssueStatus.DISMISSED])('clears resolvedAt when moving a single resolved issue to %s', async status => {
-        const findByIdAndUpdate = jest.fn(async () => null);
-        const repository = new IssuesRepository({findByIdAndUpdate} as any);
-        await repository.updateStatus('issue-1', status);
-        expect(findByIdAndUpdate).toHaveBeenCalledWith('issue-1', expect.objectContaining({
-            $set: expect.objectContaining({status}), $unset: {resolvedAt: ''},
-        }), {new: true});
-    });
+    it.each([IssueStatus.OPEN, IssueStatus.DISMISSED])(
+        'clears resolvedAt when moving a single resolved issue to %s',
+        async (status) => {
+            const findByIdAndUpdate = jest.fn(async () => null);
+            const repository = new IssuesRepository({
+                findByIdAndUpdate,
+            } as any);
+            await repository.updateStatus('issue-1', status);
+            expect(findByIdAndUpdate).toHaveBeenCalledWith(
+                'issue-1',
+                expect.objectContaining({
+                    $set: expect.objectContaining({ status }),
+                    $unset: { resolvedAt: '' },
+                }),
+                { new: true },
+            );
+        },
+    );
 });
 
 describe('IssuesRepository — one issue per root cause', () => {
@@ -855,10 +978,15 @@ describe('IssuesRepository — one issue per root cause', () => {
                 query(docs[filter.fingerprint] ?? null),
             ),
             findOneAndUpdate: jest.fn(async (filter: any, update: any) => ({
-                ...docs[Object.keys(docs).find((k) => docs[k]._id === filter._id)!],
+                ...docs[
+                    Object.keys(docs).find((k) => docs[k]._id === filter._id)!
+                ],
                 ...(update.$set ?? {}),
             })),
-            updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+            updateOne: jest.fn(async () => ({
+                matchedCount: 1,
+                modifiedCount: 1,
+            })),
             updateMany: jest.fn(async () => ({ modifiedCount: 1 })),
             create: jest.fn(),
         };
@@ -866,7 +994,12 @@ describe('IssuesRepository — one issue per root cause', () => {
 
     it('records a place of the same root cause on the issue that holds it, as seen', async () => {
         const model = modelOf({
-            'fp-1': { _id: 'i-1', fingerprint: 'fp-1', status: IssueStatus.OPEN, severity: 'high' },
+            'fp-1': {
+                _id: 'i-1',
+                fingerprint: 'fp-1',
+                status: IssueStatus.OPEN,
+                severity: 'high',
+            },
         });
         const repository = new IssuesRepository(model as any);
 
@@ -920,8 +1053,18 @@ describe('IssuesRepository — one issue per root cause', () => {
 
     it('follows an issue folded into another to the one that holds it', async () => {
         const model = modelOf({
-            'fp-old': { _id: 'i-0', fingerprint: 'fp-old', status: IssueStatus.DISMISSED, duplicateOf: 'fp-1' },
-            'fp-1': { _id: 'i-1', fingerprint: 'fp-1', status: IssueStatus.OPEN, severity: 'high' },
+            'fp-old': {
+                _id: 'i-0',
+                fingerprint: 'fp-old',
+                status: IssueStatus.DISMISSED,
+                duplicateOf: 'fp-1',
+            },
+            'fp-1': {
+                _id: 'i-1',
+                fingerprint: 'fp-1',
+                status: IssueStatus.OPEN,
+                severity: 'high',
+            },
         });
         const repository = new IssuesRepository(model as any);
 
@@ -932,11 +1075,18 @@ describe('IssuesRepository — one issue per root cause', () => {
             scanId: 'scan-3',
         });
 
-        expect((model.findOneAndUpdate.mock.calls[0] as any)[0]._id).toBe('i-1');
+        expect((model.findOneAndUpdate.mock.calls[0] as any)[0]._id).toBe(
+            'i-1',
+        );
     });
 
     it('stores a fresh finding at a folded place on the issue that holds it, never as a new issue', async () => {
-        const holder = { _id: 'i-1', fingerprint: 'fp-1', status: IssueStatus.OPEN, severity: 'high' };
+        const holder = {
+            _id: 'i-1',
+            fingerprint: 'fp-1',
+            status: IssueStatus.OPEN,
+            severity: 'high',
+        };
         const model = modelOf({ 'fp-1': holder });
         // Its own identity matches no issue; one issue lists it as a place.
         model.findOne.mockImplementation((filter: any) =>
@@ -974,7 +1124,12 @@ describe('IssuesRepository — one issue per root cause', () => {
                 severity: 'high',
                 occurrences: [place],
             },
-            'fp-1': { _id: 'i-1', fingerprint: 'fp-1', status: IssueStatus.OPEN, severity: 'medium' },
+            'fp-1': {
+                _id: 'i-1',
+                fingerprint: 'fp-1',
+                status: IssueStatus.OPEN,
+                severity: 'medium',
+            },
         });
         const repository = new IssuesRepository(model as any);
 
@@ -985,40 +1140,75 @@ describe('IssuesRepository — one issue per root cause', () => {
         });
 
         expect(folded).toBe(true);
-        const [holderFilter, holderUpdate] = model.updateOne.mock.calls[0] as any;
+        const [holderFilter, holderUpdate] = model.updateOne.mock
+            .calls[0] as any;
         expect(holderFilter._id).toBe('i-1');
-        expect(holderUpdate.$set.fingerprintAliases).toEqual(['fp-dos', 'fp-route']);
-        expect(holderUpdate.$set.occurrences.map((o: any) => o.fingerprint)).toEqual(['fp-dos', 'fp-route']);
+        expect(holderUpdate.$set.fingerprintAliases).toEqual([
+            'fp-dos',
+            'fp-route',
+        ]);
+        expect(
+            holderUpdate.$set.occurrences.map((o: any) => o.fingerprint),
+        ).toEqual(['fp-dos', 'fp-route']);
         expect(holderUpdate.$set.severity).toBe('critical');
-        const [foldedFilter, foldedUpdate] = model.updateOne.mock.calls[1] as any;
+        const [foldedFilter, foldedUpdate] = model.updateOne.mock
+            .calls[1] as any;
         expect(foldedFilter).toEqual({ _id: 'i-2', status: IssueStatus.OPEN });
-        expect(foldedUpdate.$set).toMatchObject({ status: IssueStatus.DISMISSED, duplicateOf: 'fp-1' });
+        expect(foldedUpdate.$set).toMatchObject({
+            status: IssueStatus.DISMISSED,
+            duplicateOf: 'fp-1',
+        });
     });
 
     const foldModel = () =>
         modelOf({
-            'fp-dos': { _id: 'i-2', fingerprint: 'fp-dos', status: IssueStatus.OPEN, filePath: 'a.ts', severity: 'high' },
-            'fp-1': { _id: 'i-1', fingerprint: 'fp-1', status: IssueStatus.OPEN, severity: 'high' },
+            'fp-dos': {
+                _id: 'i-2',
+                fingerprint: 'fp-dos',
+                status: IssueStatus.OPEN,
+                filePath: 'a.ts',
+                severity: 'high',
+            },
+            'fp-1': {
+                _id: 'i-1',
+                fingerprint: 'fp-1',
+                status: IssueStatus.OPEN,
+                severity: 'high',
+            },
         });
 
     it('dismisses the duplicate when the holder already lists its places from an earlier attempt', async () => {
         const model = foldModel();
-        model.updateOne.mockResolvedValueOnce({ matchedCount: 1, modifiedCount: 0 });
+        model.updateOne.mockResolvedValueOnce({
+            matchedCount: 1,
+            modifiedCount: 0,
+        });
         const repository = new IssuesRepository(model as any);
 
         await expect(
-            repository.foldScanIssueInto({ ...scope, fingerprint: 'fp-dos', into: 'fp-1' }),
+            repository.foldScanIssueInto({
+                ...scope,
+                fingerprint: 'fp-dos',
+                into: 'fp-1',
+            }),
         ).resolves.toBe(true);
         expect(model.updateOne).toHaveBeenCalledTimes(2);
     });
 
     it('leaves the duplicate open when the holder changed since it was read', async () => {
         const model = foldModel();
-        model.updateOne.mockResolvedValueOnce({ matchedCount: 0, modifiedCount: 0 });
+        model.updateOne.mockResolvedValueOnce({
+            matchedCount: 0,
+            modifiedCount: 0,
+        });
         const repository = new IssuesRepository(model as any);
 
         await expect(
-            repository.foldScanIssueInto({ ...scope, fingerprint: 'fp-dos', into: 'fp-1' }),
+            repository.foldScanIssueInto({
+                ...scope,
+                fingerprint: 'fp-dos',
+                into: 'fp-1',
+            }),
         ).resolves.toBe(false);
         expect(model.updateOne).toHaveBeenCalledTimes(1);
     });

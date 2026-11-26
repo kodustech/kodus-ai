@@ -104,16 +104,17 @@ export class SecurityScanSchedulesUseCase {
             input.organizationAndTeamData,
             input.repositoryId,
         );
-        // An edit is not a new run: the next run stays where it was while
-        // the cadence is the same, and a new cadence counts from the last
-        // run (a weekly one, a week after it).
+        // An edit is not a new run: the next run is left untouched while the
+        // cadence is the same (not even written, so a time the cron moved in
+        // between stays), and a new cadence counts from the last run (a
+        // weekly one, a week after it).
         const existing = await this.schedules.find(
             input.organizationAndTeamData.organizationId,
             repositoryKey,
         );
         const next =
             existing && existing.cadence === input.cadence
-                ? existing.nextRunAt
+                ? undefined
                 : nextRunAt(
                       input.cadence,
                       now,
@@ -242,13 +243,18 @@ export class SecurityScanSchedulesUseCase {
                 started++;
             } catch (error) {
                 // No room now (the organization's share of running scans is
-                // taken, or this repository is being scanned): the run waits
+                // taken, this repository is being scanned, or the workers are
+                // between deploys): the run waits
                 // a little and tries again instead of losing its turn, or the
                 // same schedules would lose it every day.
                 const busy =
                     error instanceof HttpException &&
-                    (error.getStatus() === HttpStatus.TOO_MANY_REQUESTS ||
-                        error.getStatus() === HttpStatus.CONFLICT);
+                    [
+                        HttpStatus.TOO_MANY_REQUESTS,
+                        HttpStatus.CONFLICT,
+                        // The scan workers are not taking jobs (a deploy).
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                    ].includes(error.getStatus());
                 const retryAt = new Date(now.getTime() + BUSY_RETRY_MS);
                 if (busy && retryAt < next) {
                     const deferred = await this.schedules

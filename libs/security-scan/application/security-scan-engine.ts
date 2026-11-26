@@ -2394,7 +2394,6 @@ function withFingerprint(
     return [...byFingerprint.values()];
 }
 
-/** The surface without these files: what an incremental plan may hold. */
 /**
  * The plan without the classes an earlier scan concluded for each unit's
  * file and that still hold; a unit left with none is dropped.
@@ -2412,6 +2411,7 @@ function withoutHeldClasses(
     });
 }
 
+/** The surface without these files: what an incremental plan may hold. */
 function withoutFiles(
     surface: SurfaceMap,
     files: ReadonlySet<string>,

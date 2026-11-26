@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, HttpException, HttpStatus } from '@nestjs/common';
+import {
+    BadRequestException,
+    ConflictException,
+    HttpException,
+    HttpStatus,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 
 import { SecurityScanSchedulesUseCase } from './security-scan-schedules.use-case';
 import { DEEP_SCAN_NOT_ENABLED_MESSAGE } from './deep-scan.gate';
@@ -20,12 +26,30 @@ const schedule = (over: Record<string, unknown> = {}) => ({
 
 function setup() {
     const schedules = {
-        save: jest.fn(async (_org: string, _key: unknown, s: any) => ({ uuid: 'sch-1', ...s })),
+        save: jest.fn(async (_org: string, _key: unknown, s: any) => ({
+            uuid: 'sch-1',
+            ...s,
+        })),
         find: jest.fn(),
-        list: jest.fn(async () => [schedule(), schedule({ uuid: 'sch-2', repository: { ...repositoryKey, id: 'repo-2' } })]),
+        list: jest.fn(async () => [
+            schedule(),
+            schedule({
+                uuid: 'sch-2',
+                repository: { ...repositoryKey, id: 'repo-2' },
+            }),
+        ]),
         remove: jest.fn(async () => true),
-        setEnabled: jest.fn(async (_org: string, _key: unknown, enabled: boolean, next?: Date) =>
-            schedule({ enabled, ...(next ? { nextRunAt: next.toISOString() } : {}) }),
+        setEnabled: jest.fn(
+            async (
+                _org: string,
+                _key: unknown,
+                enabled: boolean,
+                next?: Date,
+            ) =>
+                schedule({
+                    enabled,
+                    ...(next ? { nextRunAt: next.toISOString() } : {}),
+                }),
         ),
         findDue: jest.fn(async () => [schedule()]),
         claim: jest.fn(async () => true),
@@ -61,7 +85,10 @@ describe('SecurityScanSchedulesUseCase', () => {
         );
         expect(start.execute).toHaveBeenCalledWith(
             expect.objectContaining({
-                organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
                 repositoryId: 'repo-1',
                 budget: { maxUsd: 5 },
                 mode: 'incremental',
@@ -97,8 +124,16 @@ describe('SecurityScanSchedulesUseCase', () => {
 
     it('tries again in 30 minutes when there is no room, instead of losing its turn', async () => {
         for (const busy of [
-            new ConflictException('A security scan of this repository is already running.'),
-            new HttpException('This organization already has 3 deep scans queued or running.', HttpStatus.TOO_MANY_REQUESTS),
+            new ConflictException(
+                'A security scan of this repository is already running.',
+            ),
+            new HttpException(
+                'This organization already has 3 deep scans queued or running.',
+                HttpStatus.TOO_MANY_REQUESTS,
+            ),
+            new ServiceUnavailableException(
+                'The deep scan worker is not taking jobs right now. Try again in a moment.',
+            ),
         ]) {
             const { useCase, schedules, start } = setup();
             start.execute.mockRejectedValue(busy);
@@ -111,20 +146,28 @@ describe('SecurityScanSchedulesUseCase', () => {
                 '2026-11-25T03:00:00.000Z',
                 new Date('2026-11-24T03:31:00.000Z'),
             );
-            expect(schedules.recordError).toHaveBeenCalledWith('sch-1', expect.stringContaining('It tries again at 03:31 UTC.'));
+            expect(schedules.recordError).toHaveBeenCalledWith(
+                'sch-1',
+                `${busy.message} It tries again at 03:31 UTC.`,
+            );
             expect(schedules.recordRun).not.toHaveBeenCalled();
         }
     });
 
     it('says why a due scan did not start, and waits for its next time', async () => {
         const { useCase, schedules, start } = setup();
-        start.execute.mockRejectedValue(new BadRequestException('The model picked for this scan is not in your AI providers any more.'));
+        start.execute.mockRejectedValue(
+            new BadRequestException(
+                'The model picked for this scan is not in your AI providers any more.',
+            ),
+        );
 
         expect(await useCase.runDue(now)).toBe(0);
         expect(schedules.claim).toHaveBeenCalledTimes(1);
         expect(schedules.recordRun).toHaveBeenCalledWith('sch-1', {
             lastRunAt: now.toISOString(),
-            lastError: 'The model picked for this scan is not in your AI providers any more.',
+            lastError:
+                'The model picked for this scan is not in your AI providers any more.',
         });
     });
 
@@ -137,7 +180,9 @@ describe('SecurityScanSchedulesUseCase', () => {
         expect(start.execute).not.toHaveBeenCalled();
         expect(schedules.recordRun).toHaveBeenCalledWith(
             'sch-1',
-            expect.objectContaining({ lastError: DEEP_SCAN_NOT_ENABLED_MESSAGE }),
+            expect.objectContaining({
+                lastError: DEEP_SCAN_NOT_ENABLED_MESSAGE,
+            }),
         );
     });
 
@@ -146,7 +191,10 @@ describe('SecurityScanSchedulesUseCase', () => {
 
         await useCase.save(
             {
-                organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
                 repositoryId: 'repo-1',
                 cadence: 'weekly',
                 budget: { maxUsd: 10 },
@@ -168,7 +216,10 @@ describe('SecurityScanSchedulesUseCase', () => {
     it('leaves the stored state alone when saved without saying, in the write itself', async () => {
         const { useCase, schedules } = setup();
         const input = {
-            organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
             repositoryId: 'repo-1',
             cadence: 'daily' as const,
             budget: { maxUsd: 5 },
@@ -181,26 +232,54 @@ describe('SecurityScanSchedulesUseCase', () => {
         await useCase.save({ ...input, enabled: false });
 
         expect(schedules.save.mock.calls[0][2].enabled).toBeUndefined();
-        expect(schedules.save.mock.calls[1][2]).toMatchObject({ enabled: false });
+        expect(schedules.save.mock.calls[1][2]).toMatchObject({
+            enabled: false,
+        });
     });
 
     it('pauses a schedule without touching its settings', async () => {
         const { useCase, schedules } = setup();
         schedules.find.mockResolvedValue(schedule());
 
-        await useCase.setEnabled({ organizationId: 'org-1', teamId: 'team-1' }, 'repo-1', false, now);
+        await useCase.setEnabled(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            'repo-1',
+            false,
+            now,
+        );
 
-        expect(schedules.setEnabled).toHaveBeenCalledWith('org-1', repositoryKey, false, undefined);
+        expect(schedules.setEnabled).toHaveBeenCalledWith(
+            'org-1',
+            repositoryKey,
+            false,
+            undefined,
+        );
         expect(schedules.save).not.toHaveBeenCalled();
     });
 
     it('resumes a schedule at its next time from now, not at once for the run it missed', async () => {
         const { useCase, schedules } = setup();
-        schedules.find.mockResolvedValue(schedule({ cadence: 'weekly', enabled: false, nextRunAt: '2026-11-01T03:00:00.000Z' }));
+        schedules.find.mockResolvedValue(
+            schedule({
+                cadence: 'weekly',
+                enabled: false,
+                nextRunAt: '2026-11-01T03:00:00.000Z',
+            }),
+        );
 
-        await useCase.setEnabled({ organizationId: 'org-1', teamId: 'team-1' }, 'repo-1', true, now);
+        await useCase.setEnabled(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            'repo-1',
+            true,
+            now,
+        );
 
-        expect(schedules.setEnabled).toHaveBeenCalledWith('org-1', repositoryKey, true, new Date('2026-11-25T03:00:00.000Z'));
+        expect(schedules.setEnabled).toHaveBeenCalledWith(
+            'org-1',
+            repositoryKey,
+            true,
+            new Date('2026-11-25T03:00:00.000Z'),
+        );
     });
 
     it('says when the repository has no schedule to pause', async () => {
@@ -208,18 +287,30 @@ describe('SecurityScanSchedulesUseCase', () => {
         schedules.find.mockResolvedValue(null);
 
         await expect(
-            useCase.setEnabled({ organizationId: 'org-1', teamId: 'team-1' }, 'repo-1', false, now),
+            useCase.setEnabled(
+                { organizationId: 'org-1', teamId: 'team-1' },
+                'repo-1',
+                false,
+                now,
+            ),
         ).rejects.toThrow('This repository has no deep scan schedule.');
         expect(schedules.setEnabled).not.toHaveBeenCalled();
     });
 
     it('refuses a limit the model cannot be held to when saved, not at its first run', async () => {
         const { useCase, schedules, start } = setup();
-        start.scanModelFor.mockRejectedValue(new Error('Your model has no known price, so the scan cannot be capped in USD.'));
+        start.scanModelFor.mockRejectedValue(
+            new Error(
+                'Your model has no known price, so the scan cannot be capped in USD.',
+            ),
+        );
 
         await expect(
             useCase.save({
-                organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
                 repositoryId: 'repo-1',
                 cadence: 'daily',
                 budget: { maxUsd: 5 },
@@ -237,10 +328,17 @@ describe('SecurityScanSchedulesUseCase', () => {
     it('keeps the next run when an edit leaves the cadence as it was, so an edit is not a paid run', async () => {
         const { useCase, schedules } = setup();
         schedules.find.mockResolvedValue(
-            schedule({ cadence: 'weekly', lastRunAt: '2026-11-23T03:00:00.000Z', nextRunAt: '2026-11-30T03:00:00.000Z' }),
+            schedule({
+                cadence: 'weekly',
+                lastRunAt: '2026-11-23T03:00:00.000Z',
+                nextRunAt: '2026-11-30T03:00:00.000Z',
+            }),
         );
         const input = {
-            organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
             repositoryId: 'repo-1',
             budget: { maxUsd: 20 },
         };
@@ -248,9 +346,12 @@ describe('SecurityScanSchedulesUseCase', () => {
         await useCase.save({ ...input, cadence: 'weekly' }, now);
         await useCase.save({ ...input, cadence: 'daily' }, now);
 
-        expect(schedules.save.mock.calls[0][2].nextRunAt).toBe('2026-11-30T03:00:00.000Z');
+        // Not written at all: the stored time stays, whatever moved it.
+        expect(schedules.save.mock.calls[0][2].nextRunAt).toBeUndefined();
         // A new cadence counts from now on: daily, the next 03:00.
-        expect(schedules.save.mock.calls[1][2].nextRunAt).toBe('2026-11-25T03:00:00.000Z');
+        expect(schedules.save.mock.calls[1][2].nextRunAt).toBe(
+            '2026-11-25T03:00:00.000Z',
+        );
     });
 
     it('refuses a schedule without a spend limit', async () => {
@@ -258,7 +359,10 @@ describe('SecurityScanSchedulesUseCase', () => {
 
         await expect(
             useCase.save({
-                organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
                 repositoryId: 'repo-1',
                 cadence: 'daily',
                 budget: {},
