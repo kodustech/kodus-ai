@@ -1,7 +1,19 @@
-// No test reaches a real model: the review's dedup finds no managed key.
+// No test reaches a real model: no managed key is found.
 jest.mock('@libs/llm/managed-slot', () => {
     const actual = jest.requireActual('@libs/llm/managed-slot');
     return { ...actual, hasManagedModelKey: jest.fn(() => false) };
+});
+// The independent check keeps every finding as reported unless a test says otherwise.
+jest.mock('./scan-verifier', () => {
+    const actual = jest.requireActual('./scan-verifier');
+    return {
+        ...actual,
+        verifyScanFinding: jest.fn(async () => ({
+            keep: true,
+            rationale: '',
+            judged: true,
+        })),
+    };
 });
 // No platform embedding key unless a test configures one.
 jest.mock('@libs/common/utils/document', () => {
@@ -14,7 +26,6 @@ import type { SurfaceMap } from '../domain/surface/surface.types';
 import { admitRequest, reportUsage } from '@libs/llm/usage-meter';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 
-import { rankCandidates } from '../domain/scan-units';
 import { SecurityScanEngine } from './security-scan-engine';
 
 const RATES = {
@@ -28,7 +39,11 @@ const RATES = {
  * One model request as the model wrapper and its caller meter it: admitted
  * with its prompt and answer cap, settled with what it billed, recorded.
  */
-async function bill(inputTokens: number, outputTokens: number, runName: string) {
+async function bill(
+    inputTokens: number,
+    outputTokens: number,
+    runName: string,
+) {
     const usage = { inputTokens, outputTokens } as any;
     (
         await admitRequest(() => ({
@@ -99,7 +114,9 @@ const SURFACE: SurfaceMap = {
 
 /** The command a reproduction runs as its own user, unwrapped. */
 function asRepro(command: string): string | undefined {
-    const m = /^unshare --net -- runuser -l kodus-repro -c '([\s\S]*)'$/.exec(command);
+    const m = /^unshare --net -- runuser -l kodus-repro -c '([\s\S]*)'$/.exec(
+        command,
+    );
     return m ? m[1].replace(/'\\''/g, "'") : undefined;
 }
 
@@ -131,7 +148,10 @@ function fakeSandbox(type: 'e2b' | 'local' = 'e2b') {
         },
         run: jest.fn(async (outer: string) => {
             const command = asRepro(outer) ?? outer;
-            const write = /printf '%s' '([^']*)' \| base64 -d > '([^']+)'\)$/.exec(command);
+            const write =
+                /printf '%s' '([^']*)' \| base64 -d > '([^']+)'\)$/.exec(
+                    command,
+                );
             if (write) {
                 written[write[2]] = Buffer.from(write[1], 'base64').toString();
                 return { stdout: '', exitCode: 0 };
@@ -203,9 +223,15 @@ const FINALIZED_CWE: Record<string, string> = {
     misconfiguration: 'CWE 16',
 };
 
-function fakeLlm(plan?: any) {
+/** A root-cause answer: by default no reported finding is the same problem. */
+type RootCauseAnswer = (req: any) => { sameAs: string; reason: string };
+
+function fakeLlm(plan?: any, rootCause?: RootCauseAnswer) {
     return jest.fn(async (req: any) => {
         await bill(1000, 100, req.runName);
+        if (req.runName.endsWith('-root-cause')) {
+            return rootCause?.(req) ?? { sameAs: '', reason: '' };
+        }
         if (req.runName.endsWith('-map')) {
             if (plan instanceof Error) throw plan;
             return plan;
@@ -231,7 +257,8 @@ function fakeLlm(plan?: any) {
         if (req.runName.endsWith('-repro')) {
             return {
                 path: 'src/orders/idor.repro.spec.ts',
-                content: 'test("idor", () => {})',
+                content:
+                    'test("idor", async () => { expect(await readOrder("other-user")).toBeDefined(); })',
                 command: 'npx jest src/orders/idor.repro.spec.ts',
             };
         }
@@ -239,13 +266,9 @@ function fakeLlm(plan?: any) {
     }) as any;
 }
 
-/** A suggestion as the dedup's trace names it. */
-const summaryOf = (x: any) => ({
-    relevantFile: x.relevantFile,
-    relevantLinesStart: x.relevantLinesStart,
-    relevantLinesEnd: x.relevantLinesEnd,
-    oneSentenceSummary: x.oneSentenceSummary,
-});
+/** A finding's own issue identity, as the job computes one. */
+const identify = (f: any) =>
+    `fp:${f.filePath}:${f.vulnerabilityClass}:${f.startLine}`;
 
 const IDOR = {
     label: 'security',
@@ -642,12 +665,14 @@ describe('SecurityScanEngine', () => {
     it('never stores twice a bug a unit stopped mid-way repeats from one folded before it', async () => {
         let now = 0;
         let stored!: () => void;
-        const firstStored = new Promise<void>(resolve => { stored = resolve; });
-        const lens = fakeLens((file, cls) =>
-            cls === 'authz' ? [IDOR] : [],
-        );
+        const firstStored = new Promise<void>((resolve) => {
+            stored = resolve;
+        });
+        const lens = fakeLens((file, cls) => (cls === 'authz' ? [IDOR] : []));
         const runLens = jest.fn(async (input: any, secrets: any) => {
-            const start = /Start from this file:\n`{3,}\n(.+)\n/.exec(input.userPrompt)?.[1];
+            const start = /Start from this file:\n`{3,}\n(.+)\n/.exec(
+                input.userPrompt,
+            )?.[1];
             if (start?.endsWith('orders.service.ts')) {
                 await firstStored;
                 now = 120_000;
@@ -658,9 +683,21 @@ describe('SecurityScanEngine', () => {
             runLens,
             llm: fakeLlm({
                 units: [
-                    { file: 'src/orders/orders.controller.ts', relatedFiles: [], classes: ['authz'], priority: 90, reason: '' },
+                    {
+                        file: 'src/orders/orders.controller.ts',
+                        relatedFiles: [],
+                        classes: ['authz'],
+                        priority: 90,
+                        reason: '',
+                    },
                     // Reports the controller's bug too, then the slice ends.
-                    { file: 'src/orders/orders.service.ts', relatedFiles: [], classes: ['authz', 'injection'], priority: 80, reason: '' },
+                    {
+                        file: 'src/orders/orders.service.ts',
+                        relatedFiles: [],
+                        classes: ['authz', 'injection'],
+                        priority: 80,
+                        reason: '',
+                    },
                 ],
             }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -672,13 +709,19 @@ describe('SecurityScanEngine', () => {
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             deadlineAt: 90_000,
-            onUnitDone: async (_p: any, findings: any[]) => { if (findings.length) stored(); },
+            onUnitDone: async (_p: any, findings: any[]) => {
+                if (findings.length) stored();
+            },
         } as any);
 
-        expect(result.progress.find((p) => p.state === 'pending')).toBeDefined();
+        expect(
+            result.progress.find((p) => p.state === 'pending'),
+        ).toBeDefined();
         expect(
             result.findings.filter(
-                (f) => f.filePath === 'src/orders/orders.controller.ts' && f.startLine === 7,
+                (f) =>
+                    f.filePath === 'src/orders/orders.controller.ts' &&
+                    f.startLine === 7,
             ),
         ).toHaveLength(1);
     });
@@ -703,16 +746,24 @@ describe('SecurityScanEngine', () => {
 
         // Written and run in a worktree of the same commit, never in the
         // checkout the lenses read; the worktree goes once it ran.
-        expect(sandbox.written['/repo/src/orders/idor.repro.spec.ts']).toBeUndefined();
+        expect(
+            sandbox.written['/repo/src/orders/idor.repro.spec.ts'],
+        ).toBeUndefined();
         expect(
             sandbox.written[`${REPRO}/src/orders/idor.repro.spec.ts`],
         ).toBeDefined();
-        const commands = sandbox.run.mock.calls.map((c: any[]) => asRepro(c[0]) ?? (c[0] as string));
-        expect(commands).toContain(`cd '${REPRO}' && npx jest src/orders/idor.repro.spec.ts`);
+        const commands = sandbox.run.mock.calls.map(
+            (c: any[]) => asRepro(c[0]) ?? (c[0] as string),
+        );
+        expect(commands).toContain(
+            `cd '${REPRO}' && npx jest src/orders/idor.repro.spec.ts`,
+        );
         // A clone of its own, sharing the checkout's objects read-only.
         expect(
             commands.some((c) =>
-                c.includes(`git clone -q --shared --no-checkout '/repo' '${REPRO}'`),
+                c.includes(
+                    `git clone -q --shared --no-checkout '/repo' '${REPRO}'`,
+                ),
             ),
         ).toBe(true);
         // The audit checkout, .git included, locked through the root channel.
@@ -727,10 +778,18 @@ describe('SecurityScanEngine', () => {
             expect.objectContaining({ asRoot: true }),
         );
         expect(
-            commands.some((c) => c.startsWith('[ ! -w') && c.includes("mountpoint -q '/repo'")),
+            commands.some(
+                (c) =>
+                    c.startsWith('[ ! -w') &&
+                    c.includes("mountpoint -q '/repo'"),
+            ),
         ).toBe(true);
         // No automatic package downloads in a network-isolated reproduction.
-        expect(commands.some((c) => /npm (?:ci|install)|pnpm install|yarn install/.test(c))).toBe(false);
+        expect(
+            commands.some((c) =>
+                /npm (?:ci|install)|pnpm install|yarn install/.test(c),
+            ),
+        ).toBe(false);
         expect(commands.some((c) => c.startsWith("cd '/repo' &&"))).toBe(false);
         expect(result.findings[0].reproduction).toEqual(
             expect.objectContaining({
@@ -746,7 +805,9 @@ describe('SecurityScanEngine', () => {
         const sandbox = fakeSandbox('e2b');
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -760,14 +821,20 @@ describe('SecurityScanEngine', () => {
 
         const calls = sandbox.run.mock.calls as [string, any][];
         const ofRepro = (needle: string) =>
-            calls.filter(([c]) => c.includes(needle)).every(([c, o]) => !!asRepro(c) && o?.asRoot);
+            calls
+                .filter(([c]) => c.includes(needle))
+                .every(([c, o]) => !!asRepro(c) && o?.asRoot);
         // Every lens command reads the review user's home (git config, shell
         // profile): nothing the test runs may write it.
         for (const step of ['git clone', 'npx jest', 'base64 -d']) {
             expect(calls.some(([c]) => c.includes(step))).toBe(true);
             expect(ofRepro(step)).toBe(true);
         }
-        expect(calls.some(([c]) => c.includes('useradd -m -s /bin/bash kodus-repro'))).toBe(true);
+        expect(
+            calls.some(([c]) =>
+                c.includes('useradd -m -s /bin/bash kodus-repro'),
+            ),
+        ).toBe(true);
         // Checked as that user: not root, and the review user's home is not its to write.
         expect(
             calls.some(([c]) => (asRepro(c) ?? '').includes(`[ ! -w '/' ]`)),
@@ -789,7 +856,9 @@ describe('SecurityScanEngine', () => {
         );
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -801,7 +870,9 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        const commands = sandbox.run.mock.calls.map((c: any[]) => c[0] as string);
+        const commands = sandbox.run.mock.calls.map(
+            (c: any[]) => c[0] as string,
+        );
         expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
     });
 
@@ -810,12 +881,18 @@ describe('SecurityScanEngine', () => {
         const run = sandbox.run.getMockImplementation()!;
         sandbox.run.mockImplementation(async (command: string, opts: any) =>
             command.includes('mount --bind')
-                ? { stdout: '', stderr: 'mount: permission denied', exitCode: 32 }
+                ? {
+                      stdout: '',
+                      stderr: 'mount: permission denied',
+                      exitCode: 32,
+                  }
                 : run(command, opts),
         );
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -827,7 +904,9 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        const commands = sandbox.run.mock.calls.map((c: any[]) => asRepro(c[0]) ?? (c[0] as string));
+        const commands = sandbox.run.mock.calls.map(
+            (c: any[]) => asRepro(c[0]) ?? (c[0] as string),
+        );
         expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
     });
 
@@ -852,7 +931,10 @@ describe('SecurityScanEngine', () => {
             }
             if (command.includes('rev-parse HEAD')) {
                 // The command committed what it patched: HEAD moved.
-                return { stdout: tampered ? 'evil999\n' : 'abc123\n', exitCode: 0 };
+                return {
+                    stdout: tampered ? 'evil999\n' : 'abc123\n',
+                    exitCode: 0,
+                };
             }
             if (command.includes("reset -q --hard 'abc123'")) {
                 tampered = false;
@@ -861,7 +943,9 @@ describe('SecurityScanEngine', () => {
         });
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -875,9 +959,15 @@ describe('SecurityScanEngine', () => {
 
         // Back to the scanned commit, index and branch included: what it
         // staged or committed does not survive.
-        expect(sandbox.run).toHaveBeenCalledWith("git -C '/repo' reset -q --hard 'abc123'", expect.anything());
+        expect(sandbox.run).toHaveBeenCalledWith(
+            "git -C '/repo' reset -q --hard 'abc123'",
+            expect.anything(),
+        );
         // A file it planted goes; what was there before (the install) stays.
-        expect(sandbox.run).toHaveBeenCalledWith("rm -rf -- '/repo/src/planted.ts'", expect.anything());
+        expect(sandbox.run).toHaveBeenCalledWith(
+            "rm -rf -- '/repo/src/planted.ts'",
+            expect.anything(),
+        );
         expect(tampered).toBe(false);
     });
 
@@ -885,11 +975,15 @@ describe('SecurityScanEngine', () => {
         const sandbox = fakeSandbox('e2b');
         const run = sandbox.run.getMockImplementation()!;
         sandbox.run.mockImplementation(async (command: string) =>
-            command.includes('status --porcelain') ? { stdout: '', exitCode: 128 } : run(command),
+            command.includes('status --porcelain')
+                ? { stdout: '', exitCode: 128 }
+                : run(command),
         );
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -901,9 +995,13 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        const commands = sandbox.run.mock.calls.map((c: any[]) => asRepro(c[0]) ?? (c[0] as string));
+        const commands = sandbox.run.mock.calls.map(
+            (c: any[]) => asRepro(c[0]) ?? (c[0] as string),
+        );
         expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
-        expect(result.findings[0].reproduction).toEqual(expect.objectContaining({ executed: false }));
+        expect(result.findings[0].reproduction).toEqual(
+            expect.objectContaining({ executed: false }),
+        );
     });
 
     it('stops the scan when a reproduction changed the checkout and it cannot be put back', async () => {
@@ -916,17 +1014,26 @@ describe('SecurityScanEngine', () => {
                 return { stdout: 'PASS', exitCode: 0 };
             }
             if (command.includes('status --porcelain')) {
-                return { stdout: tampered ? ' M src/auth.ts\0' : '', exitCode: 0 };
+                return {
+                    stdout: tampered ? ' M src/auth.ts\0' : '',
+                    exitCode: 0,
+                };
             }
             // The command left a lock behind: the reset fails.
             if (command.includes('reset -q --hard')) {
-                return { stdout: '', stderr: 'index.lock exists', exitCode: 128 };
+                return {
+                    stdout: '',
+                    stderr: 'index.lock exists',
+                    exitCode: 128,
+                };
             }
             return run(command);
         });
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -957,7 +1064,9 @@ describe('SecurityScanEngine', () => {
         );
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -985,7 +1094,9 @@ describe('SecurityScanEngine', () => {
         sandbox.privilegesDropped = false;
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -997,10 +1108,14 @@ describe('SecurityScanEngine', () => {
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        const commands = sandbox.run.mock.calls.map((c: any[]) => asRepro(c[0]) ?? (c[0] as string));
+        const commands = sandbox.run.mock.calls.map(
+            (c: any[]) => asRepro(c[0]) ?? (c[0] as string),
+        );
         expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
         expect(commands.some((c) => c.startsWith('chown'))).toBe(false);
-        expect(result.findings[0].reproduction).toEqual(expect.objectContaining({ executed: false }));
+        expect(result.findings[0].reproduction).toEqual(
+            expect.objectContaining({ executed: false }),
+        );
     });
 
     it('stops the scan when the checkout path no longer leads to the locked tree', async () => {
@@ -1021,7 +1136,9 @@ describe('SecurityScanEngine', () => {
         });
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -1052,7 +1169,9 @@ describe('SecurityScanEngine', () => {
         });
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -1077,7 +1196,9 @@ describe('SecurityScanEngine', () => {
         );
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -1090,7 +1211,9 @@ describe('SecurityScanEngine', () => {
         } as any);
 
         expect(sandbox.written).toEqual({});
-        expect(result.findings[0].reproduction).toEqual(expect.objectContaining({ executed: false }));
+        expect(result.findings[0].reproduction).toEqual(
+            expect.objectContaining({ executed: false }),
+        );
     });
 
     it('never writes over, runs or removes a file the repository already has', async () => {
@@ -1101,7 +1224,8 @@ describe('SecurityScanEngine', () => {
             req.runName.endsWith('-repro')
                 ? {
                       path: 'src/orders/orders.service.ts',
-                      content: 'test("idor", () => {})',
+                      content:
+                          'test("idor", async () => { expect(await readOrder("other-user")).toBeDefined(); })',
                       command: 'npx jest src/orders/orders.service.ts',
                   }
                 : answer(req),
@@ -1123,11 +1247,15 @@ describe('SecurityScanEngine', () => {
         } as any);
 
         expect(sandbox.written).toEqual({});
-        const commands = sandbox.run.mock.calls.map((c: any[]) => asRepro(c[0]) ?? c[0]);
+        const commands = sandbox.run.mock.calls.map(
+            (c: any[]) => asRepro(c[0]) ?? c[0],
+        );
         // Nothing in the repository's checkout is removed (the reproduction
         // clone beside it is its own).
         expect(
-            commands.some((c: string) => c.startsWith('rm ') && c.includes("'/repo/")),
+            commands.some(
+                (c: string) => c.startsWith('rm ') && c.includes("'/repo/"),
+            ),
         ).toBe(false);
         expect(commands.some((c: string) => c.includes('npx jest'))).toBe(
             false,
@@ -1141,94 +1269,10 @@ describe('SecurityScanEngine', () => {
         );
     });
 
-    it('writes the reproduction test but never runs it outside an isolated sandbox', async () => {
-        const sandbox = fakeSandbox('local');
-        const engine = new SecurityScanEngine({
-            runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz'
-                    ? [IDOR]
-                    : [],
-            ),
-            llm: fakeLlm({ units: [] }),
-            collectSurface: jest.fn(async () => SURFACE),
-        });
-
-        const result = await engine.run({
-            ...baseParams({ reproduce: true }),
-            sandbox,
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
-
-        expect(sandbox.written).toEqual({});
-        expect(
-            sandbox.run.mock.calls.some(([c]: [string]) => c.includes('jest')),
-        ).toBe(false);
-        expect(result.findings[0].reproduction).toEqual(
-            expect.objectContaining({ executed: false }),
-        );
-    });
-
-    it('keeps one finding for an operation two lenses or two units report', async () => {
-        // The review's dedup folds what lands on the same line (deterministic
-        // here; the real one asks the model).
-        const sameLine = jest.fn(async (_deps: any, suggestions: any[]) => {
-            // As the real dedup does, each fold is a group in its trace.
-            const keepOf = new Map<string, any>();
-            const groups: any[] = [];
-            const kept = suggestions.filter((x) => {
-                const key = `${x.relevantFile}:${x.relevantLinesStart}`;
-                const keep = keepOf.get(key);
-                if (keep) {
-                    groups.push({ keep: summaryOf(keep), duplicates: [summaryOf(x)] });
-                    return false;
-                }
-                keepOf.set(key, x);
-                return true;
-            });
-            return { suggestions: kept, trace: { groups } as any };
-        });
-        const engine = new SecurityScanEngine({
-            dedup: sameLine as any,
-            // Both units' lenses, every class, report the same line.
-            runLens: fakeLens(() => [IDOR, { ...IDOR, relevantLinesStart: 6 }]),
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: 'src/orders/orders.controller.ts',
-                        relatedFiles: [],
-                        classes: ['authz', 'data_exposure'],
-                        priority: 90,
-                        reason: '',
-                    },
-                    {
-                        file: 'src/admin/exec.ts',
-                        relatedFiles: [],
-                        classes: ['injection'],
-                        priority: 80,
-                        reason: '',
-                    },
-                ],
-            }),
-            collectSurface: jest.fn(async () => SURFACE),
-        });
-
-        const result = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
-
-        expect(
-            result.findings.filter((f) =>
-                f.filePath.endsWith('orders.controller.ts'),
-            ),
-        ).toHaveLength(1);
-    });
-
-    it("runs the review's dedup on each unit against what earlier units reported", async () => {
+    it("compares each unit's findings with what earlier units reported and folds one the model ties to them", async () => {
         // The controller's IDOR and the service's leak of the same order: two
-        // weaknesses, so it is the review's dedup, not the overlap check,
-        // that sees them together and keeps one.
+        // weaknesses, so it is the root-cause comparison, not the overlap
+        // check, that sees them together.
         const runLens = fakeLens((file, cls) =>
             file.endsWith('orders.controller.ts')
                 ? cls === 'authz'
@@ -1245,70 +1289,61 @@ describe('SecurityScanEngine', () => {
                         },
                     ],
         );
-        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => ({
-            // Keeps the first: the service finding is the controller's bug.
-            suggestions: suggestions.slice(0, 1),
-            trace: {
-                groups: suggestions.length > 1
-                    ? [{ keep: summaryOf(suggestions[0]), duplicates: suggestions.slice(1).map(summaryOf) }]
-                    : [],
-            } as any,
-        }));
+        const asked: string[] = [];
         const engine = new SecurityScanEngine({
             runLens,
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: 'src/orders/orders.controller.ts',
-                        relatedFiles: [],
-                        classes: ['authz'],
-                        priority: 90,
-                        reason: '',
-                    },
-                    {
-                        file: 'src/orders/orders.service.ts',
-                        relatedFiles: [],
-                        classes: ['data_exposure'],
-                        priority: 80,
-                        reason: '',
-                    },
-                ],
-            }),
+            llm: fakeLlm(
+                {
+                    units: [
+                        {
+                            file: 'src/orders/orders.controller.ts',
+                            relatedFiles: [],
+                            classes: ['authz'],
+                            priority: 90,
+                            reason: '',
+                        },
+                        {
+                            file: 'src/orders/orders.service.ts',
+                            relatedFiles: [],
+                            classes: ['data_exposure'],
+                            priority: 80,
+                            reason: '',
+                        },
+                    ],
+                },
+                (req) => {
+                    asked.push(req.user);
+                    return { sameAs: 'c1', reason: 'the leak is the IDOR' };
+                },
+            ),
             collectSurface: jest.fn(async () => SURFACE),
-            dedup: dedup as any,
         });
 
         const result = await engine.run({
             ...baseParams(),
+            identify,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
-        expect(
-            result.findings
-                .filter((f) => f.filePath.startsWith('src/orders'))
-                .map((f) => f.filePath),
-        ).toEqual(['src/orders/orders.controller.ts']);
-        // The second unit's call carries the first unit's finding too.
-        const serviceCall = (
-            dedup.mock.calls as unknown as [unknown, any[]][]
-        ).find(([, s]) =>
-            s.some((x) => x.relevantFile === 'src/orders/orders.service.ts'),
-        );
-        expect(serviceCall?.[1].map((s) => s.relevantFile)).toEqual([
-            'src/orders/orders.controller.ts',
-            'src/orders/orders.service.ts',
-        ]);
+        const controller = result.findings.find((f) =>
+            f.filePath.endsWith('orders.controller.ts'),
+        )!;
+        const service = result.findings.find((f) =>
+            f.filePath.endsWith('orders.service.ts'),
+        )!;
+        // The controller's finding was reported first and stays the issue.
+        expect(controller.occurrenceOf).toBeUndefined();
+        expect(service.occurrenceOf).toBe(identify(controller));
+        // The service unit's comparison carries the controller's finding.
+        expect(asked).toHaveLength(1);
+        expect(asked[0]).toContain('src/orders/orders.controller.ts:7-7');
         expect(result.progress.every((p) => p.state === 'done')).toBe(true);
     });
 
     it('keeps one finding for the route and the query of one missing check', async () => {
         // The service unit's `serviceClass` lens reports a finding whose attack
         // path runs through the controller's flagged line.
-        const keepAll = jest.fn(async (_deps: any, suggestions: any[]) => ({
-            suggestions,
-            trace: {} as any,
-        }));
         const run = (serviceClass: string) =>
             new SecurityScanEngine({
                 runLens: fakeLens((file, cls) =>
@@ -1347,9 +1382,9 @@ describe('SecurityScanEngine', () => {
                     ],
                 }),
                 collectSurface: jest.fn(async () => SURFACE),
-                dedup: keepAll as any,
             }).run({
                 ...baseParams(),
+                identify,
                 sandbox: fakeSandbox(),
                 meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             } as any);
@@ -1367,58 +1402,7 @@ describe('SecurityScanEngine', () => {
         ]);
     });
 
-    it('does not report again what an earlier job of the same scan reported', async () => {
-        const engine = new SecurityScanEngine({
-            runLens: fakeLens(() => [IDOR]),
-            llm: fakeLlm(),
-            collectSurface: jest.fn(async () => SURFACE),
-        });
-
-        const result = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-            units: [
-                {
-                    id: 'b',
-                    file: 'src/orders/orders.controller.ts',
-                    relatedFiles: [],
-                    language: 'typescript',
-                    classes: ['data_exposure'],
-                    priority: 80,
-                    reasons: [],
-                },
-            ],
-            // The previous job's unit flagged the same leak on the same line.
-            reported: [
-                {
-                    vulnerabilityClass: 'data_exposure',
-                    cwe: 'CWE-200',
-                    title: 'Any user can read any order',
-                    description: 'No owner check.',
-                    severity: 'high',
-                    filePath: 'src/orders/orders.controller.ts',
-                    startLine: 6,
-                    endLine: 8,
-                },
-            ],
-        } as any);
-
-        expect(result.findings).toEqual([]);
-        expect(result.progress).toEqual([
-            expect.objectContaining({
-                unitId: 'b',
-                state: 'done',
-                findings: 0,
-            }),
-        ]);
-    });
-
-    it("sends a unit's dedup only the earlier findings near its files", async () => {
-        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => ({
-            suggestions,
-            trace: {} as any,
-        }));
+    it('asks the model only about reported findings that could share the root cause', async () => {
         const far = {
             vulnerabilityClass: 'injection',
             title: 'Shell command from the query',
@@ -1430,20 +1414,26 @@ describe('SecurityScanEngine', () => {
         };
         const near = {
             ...far,
+            title: 'Order list skips the tenant',
             vulnerabilityClass: 'authz',
             filePath: 'src/orders/orders.controller.ts',
             startLine: 40,
             endLine: 41,
         };
+        const asked: string[] = [];
         const engine = new SecurityScanEngine({
             runLens: fakeLens((_file, cls) => (cls === 'authz' ? [IDOR] : [])),
-            llm: fakeLlm(),
+            llm: fakeLlm(undefined, (req) => {
+                asked.push(req.user);
+                return { sameAs: '', reason: 'different checks' };
+            }),
             collectSurface: jest.fn(async () => SURFACE),
-            dedup: dedup as any,
         });
 
-        await engine.run({
+        const result = await engine.run({
             ...baseParams(),
+            // The model sees them and says two fixes are needed.
+            identify,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             units: [
@@ -1460,51 +1450,17 @@ describe('SecurityScanEngine', () => {
             reported: [far, near],
         } as any);
 
-        const sent = (dedup.mock.calls[0] as unknown as [unknown, any[]])[1];
-        expect(sent.map((x) => x.relevantFile)).toEqual([
-            'src/orders/orders.controller.ts',
-            'src/orders/orders.controller.ts',
+        // The IDOR's attack path crosses the controller: only `near` is asked.
+        expect(asked).toHaveLength(1);
+        expect(asked[0]).toContain('Order list skips the tenant');
+        expect(asked[0]).not.toContain('src/admin/exec.ts');
+        // The model named none: the IDOR is its own issue.
+        expect(result.findings).toEqual([
+            expect.not.objectContaining({ occurrenceOf: expect.anything() }),
         ]);
     });
 
-    it('keeps two different weaknesses on the same line apart', async () => {
-        const keepAll = jest.fn(async (_deps: any, suggestions: any[]) => ({
-            suggestions,
-            trace: {} as any,
-        }));
-        const engine = new SecurityScanEngine({
-            // An IDOR and a SQL injection in the same handler line.
-            runLens: fakeLens((_file, cls) =>
-                cls === 'authz' || cls === 'injection' ? [IDOR] : [],
-            ),
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: 'src/orders/orders.controller.ts',
-                        relatedFiles: [],
-                        classes: ['authz', 'injection'],
-                        priority: 90,
-                        reason: '',
-                    },
-                ],
-            }),
-            collectSurface: jest.fn(async () => SURFACE),
-            dedup: keepAll as any,
-        });
-
-        const result = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
-
-        expect(result.findings.map((f) => f.cwe).sort()).toEqual([
-            'CWE-639',
-            'CWE-89',
-        ]);
-    });
-
-    it('keeps every finding when the dedup fails', async () => {
+    it('keeps every finding as its own issue when the comparison fails', async () => {
         const engine = new SecurityScanEngine({
             runLens: fakeLens((_file, cls) =>
                 cls === 'authz'
@@ -1513,30 +1469,34 @@ describe('SecurityScanEngine', () => {
                       ? [{ ...IDOR, relevantFile: 'src/admin/exec.ts' }]
                       : [],
             ),
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: 'src/orders/orders.controller.ts',
-                        relatedFiles: [],
-                        classes: ['authz'],
-                        priority: 90,
-                        reason: '',
-                    },
-                ],
-            }),
+            llm: fakeLlm(
+                {
+                    units: [
+                        {
+                            file: 'src/orders/orders.controller.ts',
+                            relatedFiles: [],
+                            classes: ['authz'],
+                            priority: 90,
+                            reason: '',
+                        },
+                    ],
+                },
+                () => {
+                    throw new Error('root-cause model down');
+                },
+            ),
             collectSurface: jest.fn(async () => SURFACE),
-            dedup: (async () => {
-                throw new Error('dedup model down');
-            }) as any,
         });
 
         const result = await engine.run({
             ...baseParams(),
+            identify,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
         } as any);
 
         expect(result.findings).toHaveLength(2);
+        expect(result.findings.some((f) => f.occurrenceOf)).toBe(false);
     });
 });
 
@@ -1938,7 +1898,10 @@ describe('SecurityScanEngine: failures that must not pass for a clean scan', () 
 
     describe('a test the slice deadline cuts short', () => {
         // Ten seconds of slice left: less than the test's own timeout.
-        const cutAt = async (testRun: { exitCode: number; takesMs: number }) => {
+        const cutAt = async (testRun: {
+            exitCode: number;
+            takesMs: number;
+        }) => {
             let now = 0;
             const sandbox = fakeSandbox('e2b');
             const run = sandbox.run.getMockImplementation()!;
@@ -1949,7 +1912,9 @@ describe('SecurityScanEngine: failures that must not pass for a clean scan', () 
             });
             const engine = new SecurityScanEngine({
                 runLens: fakeLens((file, cls) =>
-                    file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                    file.endsWith('orders.controller.ts') && cls === 'authz'
+                        ? [IDOR]
+                        : [],
                 ),
                 llm: fakeLlm({ units: [] }),
                 collectSurface: jest.fn(async () => SURFACE),
@@ -1965,19 +1930,23 @@ describe('SecurityScanEngine: failures that must not pass for a clean scan', () 
         };
 
         it('is not recorded as run when it had not finished', async () => {
-            await expect(cutAt({ exitCode: 124, takesMs: 10_000 })).resolves.toEqual(
-                expect.objectContaining({ executed: false }),
-            );
+            await expect(
+                cutAt({ exitCode: 124, takesMs: 10_000 }),
+            ).resolves.toEqual(expect.objectContaining({ executed: false }));
         });
 
         it('is recorded as run when it failed before the slice ended', async () => {
-            await expect(cutAt({ exitCode: 1, takesMs: 2_000 })).resolves.toEqual(
+            await expect(
+                cutAt({ exitCode: 1, takesMs: 2_000 }),
+            ).resolves.toEqual(
                 expect.objectContaining({ executed: true, reproduced: false }),
             );
         });
 
         it('is recorded as reproduced when it passed in the time left', async () => {
-            await expect(cutAt({ exitCode: 0, takesMs: 10_000 })).resolves.toEqual(
+            await expect(
+                cutAt({ exitCode: 0, takesMs: 10_000 }),
+            ).resolves.toEqual(
                 expect.objectContaining({ executed: true, reproduced: true }),
             );
         });
@@ -2039,101 +2008,34 @@ describe('SecurityScanEngine: across slices and units', () => {
         },
     };
 
-    it('keeps a finding in a file whose path has non-ASCII characters', async () => {
-        const accented = 'src/pedidos/ação.ts';
-        const sandbox = fakeSandbox();
-        const run = sandbox.run.getMockImplementation()!;
-        // What git prints for it without -z: quoted, with octal escapes.
-        sandbox.run.mockImplementation(async (command: string) =>
-            command.includes('ls-files -z')
-                ? {
-                      stdout: [...Object.keys(FILES), accented].join('\0'),
-                      exitCode: 0,
-                  }
-                : command.includes('ls-files')
-                  ? {
-                        stdout: '"src/pedidos/a\\303\\247\\303\\243o.ts"',
-                        exitCode: 0,
-                    }
-                  : run(command),
-        );
-        const read = sandbox.remoteCommands.read.getMockImplementation()!;
-        sandbox.remoteCommands.read.mockImplementation(async (path: string) =>
-            path.endsWith('ação.ts')
-                ? FILES['src/orders/orders.controller.ts']
-                : read(path),
-        );
-        const engine = new SecurityScanEngine({
-            runLens: fakeLens((file, cls) =>
-                file === accented && cls === 'authz'
-                    ? [{ ...IDOR, relevantFile: accented }]
-                    : [],
-            ),
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: accented,
-                        relatedFiles: [],
-                        classes: ['authz'],
-                        priority: 90,
-                        reason: 'loads orders by id',
-                    },
-                ],
-            }),
-            collectSurface: jest.fn(async () => SURFACE),
-        });
-
-        const result = await engine.run({
-            ...baseParams(),
-            sandbox,
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
-
-        expect(result.findings.map((f) => f.filePath)).toContain(accented);
-    });
-
-    it("dedups on the client's model alone, never embedding findings on the platform key", async () => {
+    it("compares root causes on the client's model alone, never embedding findings on the platform key", async () => {
         // A platform key is configured: the scan must still not use it.
         (buildPlatformEmbedder as jest.Mock).mockReturnValue({});
-        const tiebreak = jest.fn(async () => false);
-        // A merge the wording alone does not settle: past the lexical check,
-        // where an embedding would be asked for.
-        const unsettled = (file: string, text: string) => ({
-            relevantFile: file,
-            label: 'security',
-            oneSentenceSummary: text,
-            suggestionContent: text,
-        });
-        const dedup = jest.fn(async (deps: any, suggestions: any[]) => {
-            await deps.resolveMerge(
-                unsettled('src/a.ts', 'off by one error in the pagination loop'),
-                unsettled('src/b.ts', 'sql query built via string concatenation'),
-                'a',
-                'b',
-                new Map(),
-                tiebreak,
-            );
-            return { suggestions, trace: {} as any };
-        });
+        const slot = { provider: 'openai_compatible', model: 'deepseek' };
+        const llm = fakeLlm({ units: [] });
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
-            llm: fakeLlm({ units: [] }),
+            llm,
             collectSurface: jest.fn(async () => onlyController),
-            dedup: dedup as any,
         });
 
         try {
             await engine.run({
-                ...baseParams(),
+                ...baseParams({
+                    model: { modelName: 'fireworks:deepseek', slot },
+                }),
+                identify,
                 sandbox: fakeSandbox(),
                 meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-                // Reported before in the same file, so the new one is deduped.
+                // Reported before in the same file, so the new one is compared.
                 reported: [
                     {
-                        vulnerabilityClass: 'secret_identity',
-                        cwe: 'CWE-798',
+                        vulnerabilityClass: 'authz',
+                        cwe: 'CWE-639',
                         title: 'Hard-coded API key',
                         description: 'The key is in the source.',
                         severity: 'high',
@@ -2147,7 +2049,10 @@ describe('SecurityScanEngine: across slices and units', () => {
             (buildPlatformEmbedder as jest.Mock).mockReturnValue(null);
         }
 
-        expect(tiebreak).toHaveBeenCalled();
+        const comparison = llm.mock.calls.find(
+            ([req]: any) => req.runName === 'security-scan-root-cause',
+        ) as any;
+        expect(comparison[0].byokConfig).toBe(slot);
         expect(buildPlatformEmbedder).not.toHaveBeenCalled();
     });
 
@@ -2166,15 +2071,21 @@ describe('SecurityScanEngine: across slices and units', () => {
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             revisit: [
-                { filePath: 'src/orders/orders.service.ts', vulnerabilityClass: 'authz' },
+                {
+                    filePath: 'src/orders/orders.service.ts',
+                    vulnerabilityClass: 'authz',
+                },
             ],
         } as any);
 
-        const service = result.units.find((u) => u.file === 'src/orders/orders.service.ts');
+        const service = result.units.find(
+            (u) => u.file === 'src/orders/orders.service.ts',
+        );
         expect(service?.classes).toEqual(expect.arrayContaining(['authz']));
         // Examined for that class: its finding, gone now, can be resolved.
         expect(
-            result.examinedByClass.find((e) => e.vulnerabilityClass === 'authz')?.filePaths,
+            result.examinedByClass.find((e) => e.vulnerabilityClass === 'authz')
+                ?.filePaths,
         ).toContain('src/orders/orders.service.ts');
     });
 
@@ -2211,7 +2122,9 @@ describe('SecurityScanEngine: across slices and units', () => {
                 },
             ],
             progress: [{ unitId: 'u-controller', state: 'done', findings: 0 }],
-            revisit: [{ filePath: controller, vulnerabilityClass: 'injection' }],
+            revisit: [
+                { filePath: controller, vulnerabilityClass: 'injection' },
+            ],
             onPlanned,
         } as any);
 
@@ -2219,15 +2132,25 @@ describe('SecurityScanEngine: across slices and units', () => {
         // The finished area stays finished; the new class is an area of its own.
         expect(onPlanned).toHaveBeenCalledWith(
             [
-                expect.objectContaining({ id: 'u-controller', classes: ['authz'] }),
-                expect.objectContaining({ file: controller, classes: ['injection'] }),
+                expect.objectContaining({
+                    id: 'u-controller',
+                    classes: ['authz'],
+                }),
+                expect.objectContaining({
+                    file: controller,
+                    classes: ['injection'],
+                }),
             ],
             expect.any(Array),
         );
-        expect(result.progress.find((p) => p.unitId === 'u-controller')?.state).toBe('done');
+        expect(
+            result.progress.find((p) => p.unitId === 'u-controller')?.state,
+        ).toBe('done');
         expect(result.progress.every((p) => p.state === 'done')).toBe(true);
         expect(
-            result.examinedByClass.find((e) => e.vulnerabilityClass === 'injection')?.filePaths,
+            result.examinedByClass.find(
+                (e) => e.vulnerabilityClass === 'injection',
+            )?.filePaths,
         ).toEqual([controller]);
     });
 
@@ -2263,7 +2186,9 @@ describe('SecurityScanEngine: across slices and units', () => {
 
         expect(runLens).not.toHaveBeenCalled();
         expect(onPlanned).not.toHaveBeenCalled();
-        expect(result.progress).toEqual([{ unitId: 'u-controller', state: 'done', findings: 0 }]);
+        expect(result.progress).toEqual([
+            { unitId: 'u-controller', state: 'done', findings: 0 },
+        ]);
     });
 
     it('runs on a map with a failed search, and names the language it could not map', async () => {
@@ -2272,7 +2197,13 @@ describe('SecurityScanEngine: across slices and units', () => {
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => ({
                 ...onlyController,
-                errors: [{ language: 'python', patternIds: ['py-sql'], message: 'rg: exit 2' }],
+                errors: [
+                    {
+                        language: 'python',
+                        patternIds: ['py-sql'],
+                        message: 'rg: exit 2',
+                    },
+                ],
             })),
         });
 
@@ -2309,7 +2240,15 @@ describe('SecurityScanEngine: across slices and units', () => {
             runLens: fakeLens(() => []),
             // The planner spends the one place on a file the patterns missed.
             llm: fakeLlm({
-                units: [{ file: 'src/admin/exec.ts', relatedFiles: [], classes: ['injection'], priority: 90, reason: '' }],
+                units: [
+                    {
+                        file: 'src/admin/exec.ts',
+                        relatedFiles: [],
+                        classes: ['injection'],
+                        priority: 90,
+                        reason: '',
+                    },
+                ],
             }),
             collectSurface: jest.fn(async () => onlyController),
         });
@@ -2331,7 +2270,12 @@ describe('SecurityScanEngine: across slices and units', () => {
             ...onlyController,
             files: {
                 ...SURFACE.files,
-                'src/guards/auth.guard.ts': { entryPoints: 0, authChecks: 1, sinks: 0, classes: [] },
+                'src/guards/auth.guard.ts': {
+                    entryPoints: 0,
+                    authChecks: 1,
+                    sinks: 0,
+                    classes: [],
+                },
             },
         } as any;
         const engine = new SecurityScanEngine({
@@ -2355,7 +2299,9 @@ describe('SecurityScanEngine: across slices and units', () => {
         const onUnitDone = jest.fn(async () => undefined);
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => onlyController),
@@ -2387,6 +2333,8 @@ describe('SecurityScanEngine: across slices and units', () => {
             expect.objectContaining({ state: 'done' }),
             [],
             [expect.objectContaining({ fingerprint: 'fp-earlier' })],
+            // No blobs listed by the fake checkout: no conclusion recorded.
+            [],
         );
     });
 
@@ -2422,37 +2370,107 @@ describe('SecurityScanEngine: across slices and units', () => {
 
     it.each([
         ['every other open issue it repeats', [IDOR], ['fp-old-controller']],
-        ['the issue, when the unit already holds the same finding', [IDOR, IDOR], ['fp-old-controller']],
-    ])('stores a finding as the first open issue it repeats, and sights %s', async (_, reported, expectSighted) => {
-        const known = [
-            {
-                fingerprint: 'fp-service',
-                vulnerabilityClass: 'authz' as const,
-                cwe: 'CWE-639',
-                title: 'Any user reads any order',
-                description: 'The service loads any order by id.',
-                severity: 'high' as const,
-                filePath: 'src/orders/orders.service.ts',
-                startLine: 3,
-                endLine: 3,
-                attackPath: [{ file: 'src/orders/orders.controller.ts', line: 7, note: 'id' }],
-            },
-            {
-                fingerprint: 'fp-old-controller',
-                vulnerabilityClass: 'authz' as const,
-                cwe: 'CWE-639',
-                title: 'Any user reads any order',
-                description: 'The controller returns any order.',
-                severity: 'high' as const,
-                filePath: 'src/orders/orders.controller.ts',
-                startLine: 7,
-                endLine: 7,
-            },
-        ];
+        [
+            'the issue, when the unit already holds the same finding',
+            [IDOR, IDOR],
+            ['fp-old-controller', 'fp-service'],
+        ],
+    ])(
+        'stores a finding as the first open issue it repeats, and sights %s',
+        async (_, reported, expectSighted) => {
+            const known = [
+                {
+                    fingerprint: 'fp-service',
+                    vulnerabilityClass: 'authz' as const,
+                    cwe: 'CWE-639',
+                    title: 'Any user reads any order',
+                    description: 'The service loads any order by id.',
+                    severity: 'high' as const,
+                    filePath: 'src/orders/orders.service.ts',
+                    startLine: 3,
+                    endLine: 3,
+                    attackPath: [
+                        {
+                            file: 'src/orders/orders.controller.ts',
+                            line: 7,
+                            note: 'id',
+                        },
+                    ],
+                },
+                {
+                    fingerprint: 'fp-old-controller',
+                    vulnerabilityClass: 'authz' as const,
+                    cwe: 'CWE-639',
+                    title: 'Any user reads any order',
+                    description: 'The controller returns any order.',
+                    severity: 'high' as const,
+                    filePath: 'src/orders/orders.controller.ts',
+                    startLine: 7,
+                    endLine: 7,
+                },
+            ];
+            const onUnitDone = jest.fn(async () => undefined);
+            const engine = new SecurityScanEngine({
+                runLens: fakeLens((file, cls) =>
+                    file.endsWith('orders.controller.ts') && cls === 'authz'
+                        ? reported
+                        : [],
+                ),
+                llm: fakeLlm({ units: [] }),
+                collectSurface: jest.fn(async () => SURFACE),
+            });
+
+            const result = await engine.run({
+                ...baseParams(),
+                sandbox: fakeSandbox(),
+                meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+                known,
+                onUnitDone,
+            } as any);
+
+            // One stored, as the first issue; every other issue it repeats is
+            // found again, so none is resolved as gone.
+            expect(
+                result.findings.map((f: any) => [
+                    f.filePath,
+                    f.startLine,
+                    f.storedAs,
+                ]),
+            ).toEqual([['src/orders/orders.controller.ts', 7, 'fp-service']]);
+            const sighted = (
+                onUnitDone.mock.calls as unknown as [unknown, unknown, any[]?][]
+            ).flatMap(([, , s]) => (s ?? []).map((x) => x.fingerprint));
+            expect(sighted).toEqual(expectSighted);
+        },
+    );
+
+    it('reports a fresh finding kept off as a repeat as found again under its own identity', async () => {
+        // The issue holding it lists it as one of its places: that place is
+        // seen by this scan, so the scan does not prune it.
+        const service = {
+            fingerprint: 'fp-service',
+            vulnerabilityClass: 'authz' as const,
+            cwe: 'CWE-639',
+            title: 'Any user reads any order',
+            description: 'The service loads any order by id.',
+            severity: 'high' as const,
+            filePath: 'src/orders/orders.service.ts',
+            startLine: 3,
+            endLine: 3,
+            attackPath: [
+                {
+                    file: 'src/orders/orders.controller.ts',
+                    line: 7,
+                    note: 'id from the path',
+                },
+            ],
+        };
         const onUnitDone = jest.fn(async () => undefined);
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? reported : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -2462,20 +2480,26 @@ describe('SecurityScanEngine: across slices and units', () => {
             ...baseParams(),
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-            known,
+            known: [service],
+            identify: (f: any) => `fp-own:${f.filePath}:${f.startLine}`,
             onUnitDone,
         } as any);
 
-        // One stored, as the first issue; every other issue it repeats is
-        // found again, so none is resolved as gone.
-        expect(result.findings).toEqual([expect.objectContaining({ storedAs: 'fp-service' })]);
-        const sighted = (onUnitDone.mock.calls as unknown as [unknown, unknown, any[]?][]).flatMap(
-            ([, , s]) => (s ?? []).map((x) => x.fingerprint),
-        );
-        for (const fp of expectSighted) expect(sighted).toContain(fp);
+        const sighted = (
+            onUnitDone.mock.calls as unknown as [unknown, unknown, any[]?][]
+        ).flatMap(([, , s]) => (s ?? []).map((x) => x.fingerprint));
+        // Stored as the service's issue, and its own place found again.
+        expect(
+            result.findings.map((f: any) => [
+                f.filePath,
+                f.startLine,
+                f.storedAs,
+            ]),
+        ).toEqual([['src/orders/orders.controller.ts', 7, 'fp-service']]);
+        expect(sighted).toEqual(['fp-own:src/orders/orders.controller.ts:7']);
     });
 
-    it('stores the same bug found at another place as the open issue it is, with this scan\'s data', async () => {
+    it("stores the same bug found at another place as the open issue it is, with this scan's data", async () => {
         // The earlier scan kept the bug at the service, which the controller
         // reaches; this scan runs the controller first and finds it there.
         const service = {
@@ -2488,12 +2512,20 @@ describe('SecurityScanEngine: across slices and units', () => {
             filePath: 'src/orders/orders.service.ts',
             startLine: 3,
             endLine: 3,
-            attackPath: [{ file: 'src/orders/orders.controller.ts', line: 7, note: 'id from the path' }],
+            attackPath: [
+                {
+                    file: 'src/orders/orders.controller.ts',
+                    line: 7,
+                    note: 'id from the path',
+                },
+            ],
         };
         const onUnitDone = jest.fn(async () => undefined);
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
             ),
             llm: fakeLlm({ units: [] }),
             collectSurface: jest.fn(async () => SURFACE),
@@ -2522,49 +2554,67 @@ describe('SecurityScanEngine: across slices and units', () => {
     it.each([
         ['its CWE cannot be structured', 'finalize'],
         ['its file cannot be read for the function', 'read'],
-    ])('stores no finding and leaves its class unread when %s', async (_, broken) => {
-        const llm = fakeLlm({ units: [] });
-        const answer = llm.getMockImplementation()!;
-        llm.mockImplementation(async (req: any) => {
-            if (broken === 'finalize' && req.runName.endsWith('-finalize')) {
-                throw new Error('provider 500');
+    ])(
+        'stores no finding and leaves its class unread when %s',
+        async (_, broken) => {
+            const llm = fakeLlm({ units: [] });
+            const answer = llm.getMockImplementation()!;
+            llm.mockImplementation(async (req: any) => {
+                if (
+                    broken === 'finalize' &&
+                    req.runName.endsWith('-finalize')
+                ) {
+                    throw new Error('provider 500');
+                }
+                return answer(req);
+            });
+            const sandbox = fakeSandbox();
+            if (broken === 'read') {
+                sandbox.remoteCommands.read.mockRejectedValue(
+                    new Error('sandbox gone'),
+                );
             }
-            return answer(req);
-        });
-        const sandbox = fakeSandbox();
-        if (broken === 'read') {
-            sandbox.remoteCommands.read.mockRejectedValue(new Error('sandbox gone'));
-        }
-        const engine = new SecurityScanEngine({
-            runLens: fakeLens((file, cls) =>
-                file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [],
-            ),
-            llm,
-            collectSurface: jest.fn(async () => SURFACE),
-        });
+            const engine = new SecurityScanEngine({
+                runLens: fakeLens((file, cls) =>
+                    file.endsWith('orders.controller.ts') && cls === 'authz'
+                        ? [IDOR]
+                        : [],
+                ),
+                llm,
+                collectSurface: jest.fn(async () => SURFACE),
+            });
 
-        const result = await engine.run({
-            ...baseParams(),
-            sandbox,
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
+            const result = await engine.run({
+                ...baseParams(),
+                sandbox,
+                meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            } as any);
 
-        // Stored with another CWE or no function, it would be a second issue
-        // beside the one it is, and the class read would resolve that one.
-        expect(result.findings).toEqual([]);
-        expect(
-            result.examinedByClass.find((e) => e.vulnerabilityClass === 'authz')?.filePaths ?? [],
-        ).not.toContain('src/orders/orders.controller.ts');
-    });
+            // Stored with another CWE or no function, it would be a second issue
+            // beside the one it is, and the class read would resolve that one.
+            expect(result.findings).toEqual([]);
+            expect(
+                result.examinedByClass.find(
+                    (e) => e.vulnerabilityClass === 'authz',
+                )?.filePaths ?? [],
+            ).not.toContain('src/orders/orders.controller.ts');
+        },
+    );
 
-    it("counts a related file as examined for resolution only in its own unit", async () => {
+    it('counts a related file as examined for resolution only in its own unit', async () => {
         const controller = 'src/orders/orders.controller.ts';
         const service = 'src/orders/orders.service.ts';
         const engine = new SecurityScanEngine({
             runLens: fakeLens(() => []),
             llm: fakeLlm({
                 units: [
-                    { file: controller, relatedFiles: [service], classes: ['authz'], priority: 90, reason: '' },
+                    {
+                        file: controller,
+                        relatedFiles: [service],
+                        classes: ['authz'],
+                        priority: 90,
+                        reason: '',
+                    },
                 ],
             }),
             collectSurface: jest.fn(async () => onlyController),
@@ -2579,19 +2629,26 @@ describe('SecurityScanEngine: across slices and units', () => {
 
         // The service was followed for the controller's flow, not audited.
         expect(
-            result.examinedByClass.find((e) => e.vulnerabilityClass === 'authz')?.filePaths,
+            result.examinedByClass.find((e) => e.vulnerabilityClass === 'authz')
+                ?.filePaths,
         ).toEqual([controller]);
         expect(result.examinedFiles).toContain(service);
     });
 
     it('keeps a finding in a file listed past the first 20,000, and lists it as tracked', async () => {
         const controller = 'src/orders/orders.controller.ts';
-        const filler = Array.from({ length: 20_000 }, (_, i) => `vendor/f${i}.ts`);
+        const filler = Array.from(
+            { length: 20_000 },
+            (_, i) => `vendor/f${i}.ts`,
+        );
         const sandbox = fakeSandbox();
         const run = sandbox.run.getMockImplementation()!;
         sandbox.run.mockImplementation(async (command: string) =>
             command.includes('ls-files -z')
-                ? { stdout: [...filler, ...Object.keys(FILES)].join('\0'), exitCode: 0 }
+                ? {
+                      stdout: [...filler, ...Object.keys(FILES)].join('\0'),
+                      exitCode: 0,
+                  }
                 : run(command),
         );
         const engine = new SecurityScanEngine({
@@ -2681,287 +2738,121 @@ describe('SecurityScanEngine: across slices and units', () => {
         );
     });
 
-    it('picks a long unit up at its next lens in the next slice, so it gets through', async () => {
-        let now = 0;
-        const lensOf = (input: any) =>
-            input.agentName.replace('security-scan-', '');
-        // Each lens takes 8 minutes; a slice stops starting lenses at 20.
-        const runLens = jest.fn(async (_input: any) => {
-            now += 8 * 60_000;
-            return {
-                findings: { reasoning: '', suggestions: [] },
-                finishReason: 'completed',
-            };
-        });
-        const engine = new SecurityScanEngine({
-            runLens: runLens as any,
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: 'src/orders/orders.controller.ts',
-                        relatedFiles: [],
-                        classes: ['authz'],
-                        priority: 90,
-                        reason: '',
-                    },
-                ],
-            }),
-            collectSurface: jest.fn(async () => onlyController),
-            now: () => now,
-        });
-        const meter = () => new ScanBudgetMeter({ maxUsd: 100 }, RATES);
-
-        const first = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: meter(),
-            deadlineAt: 20 * 60_000,
-            maxUnits: 1,
-        } as any);
-        const classes = first.units[0].classes;
-        expect(classes.length).toBeGreaterThan(3);
-        expect(first.finished).toBe(false);
-        expect(first.progress[0]).toEqual(
-            expect.objectContaining({
-                state: 'pending',
-                lensesRun: classes.slice(0, 2),
-            }),
-        );
-
-        runLens.mockClear();
-        const second = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: meter(),
-            units: first.units,
-            progress: first.progress,
-            deadlineAt: now + 20 * 60_000,
-        } as any);
-
-        // Only the lenses the first slice never reached.
-        expect(runLens.mock.calls.map(([input]) => lensOf(input))).toEqual(
-            classes.slice(2),
-        );
-        expect(second.finished).toBe(true);
-        expect(
-            second.examinedByClass.map((e) => e.vulnerabilityClass).sort(),
-        ).toEqual([...classes].sort());
-    });
-
-    it('keeps the stored finding when the dedup picks a later report of the same bug', async () => {
-        const runLens = fakeLens((file, cls) =>
-            file.endsWith('orders.controller.ts')
-                ? cls === 'authz'
-                    ? [IDOR]
-                    : []
-                : cls !== 'data_exposure'
-                  ? []
-                  : [
-                        {
-                            ...IDOR,
-                            relevantFile: 'src/orders/orders.service.ts',
-                            relevantLinesStart: 1,
-                            relevantLinesEnd: 1,
-                        },
-                    ],
-        );
-        const summary = (x: any) => ({
-            relevantFile: x.relevantFile,
-            relevantLinesStart: x.relevantLinesStart,
-            relevantLinesEnd: x.relevantLinesEnd,
-            oneSentenceSummary: x.oneSentenceSummary,
-        });
-        // Groups the two and keeps the later one, the service's.
-        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => {
-            if (suggestions.length < 2) {
-                return { suggestions, trace: {} as any };
-            }
-            const [earlier, later] = suggestions;
-            return {
-                suggestions: [later],
-                trace: {
-                    groups: [
-                        {
-                            keep: summary(later),
-                            duplicates: [summary(earlier)],
-                        },
-                    ],
-                } as any,
-            };
-        });
-        const engine = new SecurityScanEngine({
-            runLens,
-            llm: fakeLlm({
-                units: [
-                    {
-                        file: 'src/orders/orders.controller.ts',
-                        relatedFiles: [],
-                        classes: ['authz'],
-                        priority: 90,
-                        reason: '',
-                    },
-                    {
-                        file: 'src/orders/orders.service.ts',
-                        relatedFiles: [],
-                        classes: ['data_exposure'],
-                        priority: 80,
-                        reason: '',
-                    },
-                ],
-            }),
-            collectSurface: jest.fn(async () => SURFACE),
-            dedup: dedup as any,
-        });
-
-        const result = await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-        } as any);
-
-        // The controller's finding was stored first and stays the one.
-        expect(
-            result.findings
-                .filter((f) => f.filePath.startsWith('src/orders'))
-                .map((f) => f.filePath),
-        ).toEqual(['src/orders/orders.controller.ts']);
-    });
-
-    it("reads a merge the dedup's trace does not name from where the kept finding says it was", async () => {
+    it('records a finding at a place an open issue already folded in as that issue, without asking', async () => {
         const service = 'src/orders/orders.service.ts';
-        const runLens = fakeLens((file, cls) =>
-            file === service && cls === 'data_exposure'
-                ? [{ ...IDOR, relevantFile: service, relevantLinesStart: 1, relevantLinesEnd: 1 }]
-                : [],
-        );
-        // A malformed answer: the earlier report absorbed the fresh one, but
-        // no group says so; the kept one lists where the other was.
-        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => {
-            const [earlier, fresh] = suggestions;
-            return {
-                suggestions: [
-                    {
-                        ...earlier,
-                        alsoFoundIn: [`${fresh.relevantFile}:${fresh.relevantLinesStart}-${fresh.relevantLinesEnd}`],
-                    },
-                ],
-                trace: { groups: [] } as any,
-            };
-        });
-        const onUnitDone = jest.fn(async () => undefined);
-        const engine = new SecurityScanEngine({
-            runLens,
-            llm: fakeLlm({
-                units: [{ file: service, relatedFiles: [], classes: ['data_exposure'], priority: 80, reason: '' }],
-            }),
-            collectSurface: jest.fn(async () => SURFACE),
-            dedup: dedup as any,
-        });
-
-        await engine.run({
-            ...baseParams(),
-            sandbox: fakeSandbox(),
-            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
-            maxUnits: 1,
-            reported: [
+        const llm = fakeLlm({
+            units: [
                 {
-                    vulnerabilityClass: 'data_exposure',
-                    cwe: 'CWE-200',
-                    title: 'Orders leak to any caller',
-                    description: 'The service returns any order.',
-                    severity: 'high',
-                    filePath: service,
-                    startLine: 40,
-                    endLine: 41,
-                    fingerprint: 'fp-carried',
+                    file: service,
+                    relatedFiles: [],
+                    classes: ['data_exposure'],
+                    priority: 80,
+                    reason: '',
                 },
             ],
-            onUnitDone,
-        } as any);
-
-        // Dropped, and the earlier finding it repeats is sighted.
-        expect(onUnitDone).toHaveBeenCalledWith(expect.anything(), [], [expect.objectContaining({ fingerprint: 'fp-carried' })]);
-    });
-
-    it('keeps a fresh finding the dedup dropped without saying what it repeats', async () => {
-        const service = 'src/orders/orders.service.ts';
-        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => ({
-            suggestions: suggestions.slice(0, 1),
-            trace: { groups: [] } as any,
-        }));
+        });
         const engine = new SecurityScanEngine({
             runLens: fakeLens((file, cls) =>
                 file === service && cls === 'data_exposure'
-                    ? [{ ...IDOR, relevantFile: service, relevantLinesStart: 1, relevantLinesEnd: 1 }]
+                    ? [
+                          {
+                              ...IDOR,
+                              relevantFile: service,
+                              relevantLinesStart: 1,
+                              relevantLinesEnd: 1,
+                          },
+                      ]
                     : [],
             ),
-            llm: fakeLlm({
-                units: [{ file: service, relatedFiles: [], classes: ['data_exposure'], priority: 80, reason: '' }],
-            }),
+            llm,
             collectSurface: jest.fn(async () => SURFACE),
-            dedup: dedup as any,
+        });
+        const own = identify({
+            filePath: service,
+            vulnerabilityClass: 'data_exposure',
+            startLine: 1,
         });
 
         const result = await engine.run({
             ...baseParams(),
+            identify,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             maxUnits: 1,
-            reported: [
+            known: [
                 {
-                    vulnerabilityClass: 'data_exposure',
-                    cwe: 'CWE-200',
-                    title: 'Orders leak to any caller',
-                    description: 'The service returns any order.',
+                    vulnerabilityClass: 'authz',
+                    cwe: 'CWE-639',
+                    title: 'Any user reads any order',
+                    description: 'No owner check.',
                     severity: 'high',
-                    filePath: service,
-                    startLine: 40,
-                    endLine: 41,
+                    filePath: 'src/orders/orders.controller.ts',
+                    startLine: 7,
+                    endLine: 7,
+                    fingerprint: 'fp-holder',
+                    fingerprintAliases: [own],
                 },
             ],
         } as any);
 
-        // A duplicate costs less than a miss.
-        expect(result.findings.filter((f) => f.filePath === service)).toHaveLength(1);
+        // One finding, recorded as a place of that issue, under no identity
+        // of its own.
+        expect(
+            result.findings.map((f: any) => [
+                f.filePath,
+                f.startLine,
+                f.occurrenceOf,
+                f.storedAs,
+            ]),
+        ).toEqual([[service, 1, 'fp-holder', undefined]]);
+        expect(
+            llm.mock.calls.some(
+                ([req]: any) => req.runName === 'security-scan-root-cause',
+            ),
+        ).toBe(false);
     });
 
-    it('says which carried-on finding the dedup folded a fresh one into', async () => {
+    it('records a fresh finding as one more place of the carried-on issue the model ties it to', async () => {
         const service = 'src/orders/orders.service.ts';
         const runLens = fakeLens((file, cls) =>
             file === service && cls === 'data_exposure'
-                ? [{ ...IDOR, relevantFile: service, relevantLinesStart: 1, relevantLinesEnd: 1 }]
+                ? [
+                      {
+                          ...IDOR,
+                          relevantFile: service,
+                          relevantLinesStart: 1,
+                          relevantLinesEnd: 1,
+                      },
+                  ]
                 : [],
         );
-        const summary = (x: any) => ({
-            relevantFile: x.relevantFile,
-            relevantLinesStart: x.relevantLinesStart,
-            relevantLinesEnd: x.relevantLinesEnd,
-            oneSentenceSummary: x.oneSentenceSummary,
-        });
-        // The earlier scan's report and the fresh one are one bug: keeps the earlier.
-        const dedup = jest.fn(async (_deps: any, suggestions: any[]) => {
-            const [earlier, fresh] = suggestions;
-            return {
-                suggestions: [earlier],
-                trace: { groups: [{ keep: summary(earlier), duplicates: [summary(fresh)] }] } as any,
-            };
-        });
         const onUnitDone = jest.fn(async () => undefined);
         const engine = new SecurityScanEngine({
             runLens,
-            llm: fakeLlm({
-                units: [{ file: service, relatedFiles: [], classes: ['data_exposure'], priority: 80, reason: '' }],
-            }),
+            llm: fakeLlm(
+                {
+                    units: [
+                        {
+                            file: service,
+                            relatedFiles: [],
+                            classes: ['data_exposure'],
+                            priority: 80,
+                            reason: '',
+                        },
+                    ],
+                },
+                () => ({ sameAs: 'c1', reason: 'the same leak' }),
+            ),
             collectSurface: jest.fn(async () => SURFACE),
-            dedup: dedup as any,
         });
 
         const result = await engine.run({
             ...baseParams(),
+            identify,
             sandbox: fakeSandbox(),
             meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
             maxUnits: 1,
-            // Not an overlap the cheap check catches: another kind, other lines.
+            // Not an overlap the cheap check catches: other lines.
             reported: [
                 {
                     vulnerabilityClass: 'data_exposure',
@@ -2978,11 +2869,21 @@ describe('SecurityScanEngine: across slices and units', () => {
             onUnitDone,
         } as any);
 
-        expect(result.findings.filter((f) => f.filePath === service)).toEqual([]);
+        // One finding, recorded as a place of that issue, under no identity
+        // of its own.
+        expect(
+            result.findings.map((f: any) => [
+                f.filePath,
+                f.startLine,
+                f.occurrenceOf,
+                f.storedAs,
+            ]),
+        ).toEqual([[service, 1, 'fp-carried', undefined]]);
         expect(onUnitDone).toHaveBeenCalledWith(
             expect.objectContaining({ state: 'done' }),
+            [expect.objectContaining({ occurrenceOf: 'fp-carried' })],
             [],
-            [expect.objectContaining({ fingerprint: 'fp-carried' })],
+            [],
         );
     });
 });
@@ -3051,43 +2952,111 @@ describe('slice cancellation', () => {
         jest.useFakeTimers();
         try {
             const lens = jest.fn(() => new Promise<any>(() => {}));
-            const engine = new SecurityScanEngine({runLens: lens, collectSurface: async () => SURFACE});
-            const pending = engine.run({...baseParams(), sandbox: fakeSandbox(), meter: new ScanBudgetMeter({maxUsd: 100}, RATES),
-                units: [{id: 'only', file: 'src/admin/exec.ts', relatedFiles: [], language: 'typescript', classes: ['injection'], priority: 1, reasons: []}],
-                deadlineAt: Date.now() + 100 } as any);
+            const engine = new SecurityScanEngine({
+                runLens: lens,
+                collectSurface: async () => SURFACE,
+            });
+            const pending = engine.run({
+                ...baseParams(),
+                sandbox: fakeSandbox(),
+                meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+                units: [
+                    {
+                        id: 'only',
+                        file: 'src/admin/exec.ts',
+                        relatedFiles: [],
+                        language: 'typescript',
+                        classes: ['injection'],
+                        priority: 1,
+                        reasons: [],
+                    },
+                ],
+                deadlineAt: Date.now() + 100,
+            } as any);
             await jest.advanceTimersByTimeAsync(99);
             expect(lens).toHaveBeenCalledTimes(1);
             await jest.advanceTimersByTimeAsync(1);
             const result = await pending;
             expect(result.finished).toBe(false);
             expect(result.progress[0].state).toBe('pending');
-            expect((lens.mock.calls[0] as any)[0].parentSignal.aborted).toBe(true);
-        } finally { jest.useRealTimers(); }
+            expect((lens.mock.calls[0] as any)[0].parentSignal.aborted).toBe(
+                true,
+            );
+        } finally {
+            jest.useRealTimers();
+        }
     });
     it('counts a submitted completion-policy stop as examined, as the real harness emits it', async () => {
-        const engine = new SecurityScanEngine({collectSurface: async () => SURFACE, llm: fakeLlm({units: []}),
-            runLens: async () => ({findings: {suggestions: []}, finishReason: 'stopped', submittedResult: true} as any)});
-        const result = await engine.run({...baseParams(), sandbox: fakeSandbox(), meter: new ScanBudgetMeter({maxUsd: 100}, RATES), maxUnits: 1} as any);
+        const engine = new SecurityScanEngine({
+            collectSurface: async () => SURFACE,
+            llm: fakeLlm({ units: [] }),
+            runLens: async () =>
+                ({
+                    findings: { suggestions: [] },
+                    finishReason: 'stopped',
+                    submittedResult: true,
+                }) as any,
+        });
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            maxUnits: 1,
+        } as any);
         expect(result.progress[0].state).toBe('done');
         expect(result.examinedByClass.length).toBeGreaterThan(0);
     });
     it('audits tracked source files even when every pattern misses them', async () => {
-        const engine = new SecurityScanEngine({collectSurface: async () => ({languages: ['typescript'], files: {}, hits: [], errors: []}),
-            llm: fakeLlm({units: []}), runLens: fakeLens(() => [])});
-        const result = await engine.run({...baseParams(), sandbox: fakeSandbox(), meter: new ScanBudgetMeter({maxUsd: 100}, RATES)} as any);
-        expect(result.units.map(u => u.file).sort()).toEqual(['src/admin/exec.ts', 'src/orders/orders.controller.ts', 'src/orders/orders.service.ts', 'src/util/date.ts']);
-        expect(result.progress.every(p => p.state === 'done')).toBe(true);
+        const engine = new SecurityScanEngine({
+            collectSurface: async () => ({
+                languages: ['typescript'],
+                files: {},
+                hits: [],
+                errors: [],
+            }),
+            llm: fakeLlm({ units: [] }),
+            runLens: fakeLens(() => []),
+        });
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+        expect(result.units.map((u) => u.file).sort()).toEqual([
+            'src/admin/exec.ts',
+            'src/orders/orders.controller.ts',
+            'src/orders/orders.service.ts',
+            'src/util/date.ts',
+        ]);
+        expect(result.progress.every((p) => p.state === 'done')).toBe(true);
     });
     it('executes no repository code when repro egress cannot be blocked', async () => {
         const sandbox = fakeSandbox();
         const original = sandbox.run.getMockImplementation()!;
-        sandbox.run.mockImplementation(async (command: string, opts: any) => command.includes('unshare --net') ? {exitCode: 1, stdout: ''} : original(command, opts));
+        sandbox.run.mockImplementation(async (command: string, opts: any) =>
+            command.includes('unshare --net')
+                ? { exitCode: 1, stdout: '' }
+                : original(command, opts),
+        );
         const engine = new SecurityScanEngine() as any;
-        const record = {path: 'test.repro.ts', content: '', command: 'npx jest test.repro.ts', executed: false};
-        await engine.runReproduction({sandbox}, record);
-        expect(sandbox.run.mock.calls.some(([command]: any) => command.includes('unshare --net'))).toBe(true);
+        const record = {
+            path: 'test.repro.ts',
+            content: '',
+            command: 'npx jest test.repro.ts',
+            executed: false,
+        };
+        await engine.runReproduction({ sandbox }, record);
+        expect(
+            sandbox.run.mock.calls.some(([command]: any) =>
+                command.includes('unshare --net'),
+            ),
+        ).toBe(true);
         expect(record.executed).toBe(false);
-        expect(sandbox.run.mock.calls.some(([command]: any) => command.includes('npx jest'))).toBe(false);
+        expect(
+            sandbox.run.mock.calls.some(([command]: any) =>
+                command.includes('npx jest'),
+            ),
+        ).toBe(false);
     });
 });
 
@@ -3095,21 +3064,649 @@ describe('requests after a slice ended', () => {
     it('refuses an uncooperative background caller after the deadline', async () => {
         jest.useFakeTimers();
         let refused = false;
-        const meter = new ScanBudgetMeter({maxUsd: 100}, RATES);
+        const meter = new ScanBudgetMeter({ maxUsd: 100 }, RATES);
         try {
-            const engine = new SecurityScanEngine({collectSurface: async () => SURFACE, runLens: async () => {
-                await new Promise(r => setTimeout(r, 200));
-                try { await bill(1, 1, 'late-dedup'); } catch { refused = true; }
-                return {findings: {suggestions: []}, finishReason: 'completed'} as any;
-            }});
-            const pending = engine.run({...baseParams(), sandbox: fakeSandbox(), meter,
-                units: [{id:'one',file:'src/admin/exec.ts',relatedFiles:[],language:'typescript',classes:['injection'],priority:1,reasons:[]}],
-                deadlineAt: Date.now() + 100} as any);
+            const engine = new SecurityScanEngine({
+                collectSurface: async () => SURFACE,
+                runLens: async () => {
+                    await new Promise((r) => setTimeout(r, 200));
+                    try {
+                        await bill(1, 1, 'late-dedup');
+                    } catch {
+                        refused = true;
+                    }
+                    return {
+                        findings: { suggestions: [] },
+                        finishReason: 'completed',
+                    } as any;
+                },
+            });
+            const pending = engine.run({
+                ...baseParams(),
+                sandbox: fakeSandbox(),
+                meter,
+                units: [
+                    {
+                        id: 'one',
+                        file: 'src/admin/exec.ts',
+                        relatedFiles: [],
+                        language: 'typescript',
+                        classes: ['injection'],
+                        priority: 1,
+                        reasons: [],
+                    },
+                ],
+                deadlineAt: Date.now() + 100,
+            } as any);
             await jest.advanceTimersByTimeAsync(100);
             await pending;
             await jest.advanceTimersByTimeAsync(100);
             expect(refused).toBe(true);
             expect(meter.snapshot().requests).toBe(0);
-        } finally { jest.useRealTimers(); }
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+});
+
+describe('independent verification of each finding', () => {
+    const plan = {
+        units: [
+            {
+                file: 'src/orders/orders.controller.ts',
+                relatedFiles: [],
+                classes: ['authz'],
+                priority: 90,
+                reason: 'loads orders by id',
+            },
+        ],
+    };
+    const authzOnly = (file: string, cls: string) =>
+        file.endsWith('orders.controller.ts') && cls === 'authz' ? [IDOR] : [];
+
+    it('drops a finding the verifier refutes and keeps its rationale', async () => {
+        const verify = jest.fn(async () => ({
+            keep: false,
+            rationale:
+                'OrdersGuard on the module scopes every query to the caller.',
+            judged: true,
+        }));
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(authzOnly),
+            llm: fakeLlm(plan),
+            collectSurface: jest.fn(async () => SURFACE),
+            verify,
+        });
+        const onUnitDone = jest.fn(async () => undefined);
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            onUnitDone,
+        } as any);
+
+        expect(verify).toHaveBeenCalledTimes(1);
+        expect(result.findings).toEqual([]);
+        expect(result.refuted).toEqual([
+            expect.objectContaining({
+                rationale: expect.stringContaining('OrdersGuard'),
+                finding: expect.objectContaining({
+                    filePath: 'src/orders/orders.controller.ts',
+                }),
+            }),
+        ]);
+        // The unit records how many it refuted.
+        const unitIdor = onUnitDone.mock.calls.find(
+            ([p]: any) => p.unitId && p.refuted,
+        ) as any;
+        expect(unitIdor?.[0].refuted).toBe(1);
+    });
+
+    it('takes the severity and assumption the verifier read', async () => {
+        const verify = jest.fn(async (req: any) => {
+            // The verifier starts from the claim, the location and the code.
+            expect(req.userPrompt).toContain('src/orders/orders.controller.ts');
+            expect(req.userPrompt).toContain('Any user reads any order');
+            expect(req.lensInput.agentName).toBe('security-scan-authz');
+            return {
+                keep: true,
+                severity: 'medium' as const,
+                assumption: 'the orders API is exposed to tenants',
+                rationale: 'reached by any logged-in user',
+                judged: true,
+            };
+        });
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(authzOnly),
+            llm: fakeLlm(plan),
+            collectSurface: jest.fn(async () => SURFACE),
+            verify,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings).toEqual([
+            expect.objectContaining({
+                severity: 'medium',
+                assumption: 'the orders API is exposed to tenants',
+            }),
+        ]);
+    });
+
+    it('keeps the finding as reported when the verifier fails', async () => {
+        const verify = jest.fn(async () => {
+            throw new Error('provider down');
+        });
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens(authzOnly),
+            llm: fakeLlm(plan),
+            collectSurface: jest.fn(async () => SURFACE),
+            verify,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings).toEqual([
+            expect.objectContaining({ severity: 'high' }),
+        ]);
+        expect(result.refuted).toEqual([]);
+    });
+
+    it('does not verify a finding that repeats one this unit already reported', async () => {
+        const verify = jest.fn(async () => ({
+            keep: true,
+            rationale: '',
+            judged: true,
+        }));
+        // Two readings of the same lines: the second is a duplicate.
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                authzOnly(file, cls).length ? [IDOR, IDOR] : [],
+            ),
+            llm: fakeLlm(plan),
+            collectSurface: jest.fn(async () => SURFACE),
+            verify,
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings).toHaveLength(1);
+        expect(verify).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('reproduction results that say nothing about the finding', () => {
+    it('records a test that could not install its dependencies as inconclusive, not as not reproduced', async () => {
+        const sandbox = fakeSandbox('e2b');
+        const run = sandbox.run.getMockImplementation()!;
+        sandbox.run.mockImplementation(async (command: string) =>
+            command.includes('npx jest')
+                ? Promise.reject(
+                      Object.assign(new Error('exit status 1'), {
+                          exitCode: 1,
+                          stdout: '',
+                          stderr: 'npm ERR! code EAI_AGAIN\nnpm ERR! request to https://registry.npmjs.org/jest failed',
+                      }),
+                  )
+                : run(command),
+        );
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
+            ),
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        // Run, but stopped on the dependency install: neither reproduced nor
+        // refuted.
+        expect(result.findings[0].reproduction).toEqual({
+            path: 'src/orders/idor.repro.spec.ts',
+            content:
+                'test("idor", async () => { expect(await readOrder("other-user")).toBeDefined(); })',
+            command: 'npx jest src/orders/idor.repro.spec.ts',
+            executed: true,
+            exitCode: 1,
+            inconclusive: true,
+            output: 'npm ERR! code EAI_AGAIN\nnpm ERR! request to https://registry.npmjs.org/jest failed',
+        });
+    });
+
+    it('attaches no test when the model wrote a placeholder', async () => {
+        const llm = fakeLlm({ units: [] });
+        const base = llm.getMockImplementation()!;
+        llm.mockImplementation(async (req: any) =>
+            req.runName.endsWith('-repro')
+                ? {
+                      path: 'src/orders/x.spec.ts',
+                      content: 'PLACEHOLDER',
+                      command: 'npx jest src/orders/x.spec.ts',
+                  }
+                : base(req),
+        );
+        const sandbox = fakeSandbox('e2b');
+        const engine = new SecurityScanEngine({
+            runLens: fakeLens((file, cls) =>
+                file.endsWith('orders.controller.ts') && cls === 'authz'
+                    ? [IDOR]
+                    : [],
+            ),
+            llm,
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams({ reproduce: true }),
+            sandbox,
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+        } as any);
+
+        expect(result.findings[0].reproduction).toBeUndefined();
+        const commands = sandbox.run.mock.calls.map(
+            (c: any[]) => asRepro(c[0]) ?? (c[0] as string),
+        );
+        expect(commands.some((c) => c.includes('npx jest'))).toBe(false);
+    });
+});
+
+describe('couldNotExercise', () => {
+    const { couldNotExercise } = jest.requireActual('./security-scan-engine');
+    it.each([
+        [127, 'sh: jest: not found'],
+        [124, ''],
+        [1, 'Error: Cannot find module "supertest"'],
+        [1, "ModuleNotFoundError: No module named 'flask'"],
+        [1, 'npm ERR! code EAI_AGAIN'],
+    ])(
+        'reads exit %s with %j as a test that never reached the code',
+        (code, output) => {
+            expect(couldNotExercise(code, output)).toBe(true);
+        },
+    );
+    it('reads an assertion failure as a real outcome', () => {
+        expect(couldNotExercise(1, 'FAIL: expected 403, got 200')).toBe(false);
+    });
+});
+
+describe('incremental scans', () => {
+    const BLOBS: Record<string, string> = Object.fromEntries(
+        Object.keys(FILES).map((f, i) => [f, `blob${i}`]),
+    );
+    /** A checkout that lists each tracked file's blob. */
+    function stagedSandbox(blobs = BLOBS) {
+        const sandbox = fakeSandbox();
+        const run = sandbox.run.getMockImplementation()!;
+        sandbox.run.mockImplementation(async (command: string, opts: any) =>
+            command.includes('ls-files -s -z')
+                ? {
+                      exitCode: 0,
+                      stdout: Object.entries(blobs)
+                          .map(([f, b]) => `100644 ${b} 0\t${f}`)
+                          .join('\0'),
+                  }
+                : run(command, opts),
+        );
+        return sandbox;
+    }
+    const controller = 'src/orders/orders.controller.ts';
+    const ledger = (evidenceBlob = BLOBS['src/orders/orders.service.ts']) => [
+        {
+            filePath: controller,
+            vulnerabilityClass: 'authz',
+            blob: BLOBS[controller],
+            evidence: [
+                { file: 'src/orders/orders.service.ts', blob: evidenceBlob },
+            ],
+        },
+    ];
+    const filesLensed = (runLens: jest.Mock) =>
+        runLens.mock.calls.map(
+            ([input]: any) =>
+                /Start from this file:\n`{3,}\n(.+)\n/.exec(
+                    input.userPrompt,
+                )![1],
+        );
+
+    it('does not read again a file whose conclusion still holds', async () => {
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: stagedSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            mode: 'incremental',
+            coverage: ledger(),
+        } as any);
+
+        expect(filesLensed(runLens)).not.toContain(controller);
+        expect(result.units.map((u) => u.file)).not.toContain(controller);
+        expect(result.unchangedFiles).toBe(1);
+    });
+
+    it('reads it again when a file its conclusion leaned on changed', async () => {
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: stagedSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            mode: 'incremental',
+            coverage: ledger('an-older-blob'),
+        } as any);
+
+        expect(filesLensed(runLens)).toContain(controller);
+        expect(result.unchangedFiles).toBe(0);
+    });
+
+    it('reads again, on a file whose conclusions hold, only the class whose lens did not finish', async () => {
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: stagedSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            mode: 'incremental',
+            coverage: [
+                ...ledger(),
+                // Assigned last time, its lens ended on a provider error.
+                {
+                    filePath: controller,
+                    vulnerabilityClass: 'injection',
+                    blob: BLOBS[controller],
+                    evidence: [],
+                    incomplete: true,
+                },
+            ],
+        } as any);
+
+        const onController = runLens.mock.calls
+            .filter(([input]: any) => input.userPrompt.includes(controller))
+            .map(([input]: any) => input.agentName);
+        expect(result.unchangedFiles).toBe(0);
+        // Every class the map ties to it except authz, whose conclusion holds.
+        expect([...onController].sort()).toEqual([
+            'security-scan-injection',
+            'security-scan-misconfiguration',
+            'security-scan-resource_exhaustion',
+        ]);
+    });
+
+    it('records a class of the unit that was not read to the end as incomplete', async () => {
+        const runLens = jest.fn(async (input: any) => {
+            await bill(1000, 100, input.usageRunName);
+            const cls = input.agentName.replace('security-scan-', '');
+            return {
+                findings: { reasoning: '', suggestions: [] },
+                finishReason: cls === 'injection' ? 'error' : 'completed',
+            } as any;
+        });
+        const covered: any[] = [];
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        await engine.run({
+            ...baseParams(),
+            sandbox: stagedSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            units: [
+                {
+                    id: 'c',
+                    file: controller,
+                    relatedFiles: [],
+                    language: 'typescript',
+                    classes: ['authz', 'injection'],
+                    priority: 90,
+                    reasons: [],
+                },
+            ],
+            onUnitDone: async (_p: any, _f: any, _s: any, entries: any[]) =>
+                covered.push(...(entries ?? [])),
+        } as any);
+
+        // Both classes recorded against the file's blob; only the one whose
+        // lens ended on an error is incomplete.
+        expect(covered).toEqual([
+            {
+                filePath: controller,
+                vulnerabilityClass: 'authz',
+                blob: BLOBS[controller],
+                evidence: [],
+            },
+            {
+                filePath: controller,
+                vulnerabilityClass: 'injection',
+                blob: BLOBS[controller],
+                evidence: [],
+                incomplete: true,
+            },
+        ]);
+    });
+
+    it('reads everything again in a full scan', async () => {
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: stagedSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            mode: 'full',
+            coverage: ledger(),
+        } as any);
+
+        expect(filesLensed(runLens)).toContain(controller);
+        expect(result.unchangedFiles).toBeUndefined();
+    });
+
+    it('records each class read to the end, tied to the blobs of what the lens read', async () => {
+        const runLens = jest.fn(async (input: any) => {
+            await bill(1000, 100, input.usageRunName);
+            return {
+                findings: { reasoning: '', suggestions: [] },
+                finishReason: 'completed',
+                toolCalls: [
+                    {
+                        tool: 'readFile',
+                        args: { path: 'src/orders/orders.service.ts' },
+                    },
+                    { tool: 'grep', args: { pattern: 'x' } },
+                ],
+            } as any;
+        });
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({
+                units: [
+                    {
+                        file: controller,
+                        relatedFiles: [],
+                        classes: ['authz'],
+                        priority: 90,
+                        reason: '',
+                    },
+                ],
+            }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+        const onUnitDone = jest.fn(async (..._args: any[]) => undefined);
+
+        await engine.run({
+            ...baseParams(),
+            sandbox: stagedSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            maxUnits: 1,
+            onUnitDone,
+        } as any);
+
+        const covered = onUnitDone.mock.calls.flatMap((c) => c[3] ?? []);
+        const authz = covered.find(
+            (e: any) =>
+                e.filePath === controller && e.vulnerabilityClass === 'authz',
+        );
+        expect(authz).toEqual({
+            filePath: controller,
+            vulnerabilityClass: 'authz',
+            blob: BLOBS[controller],
+            evidence: [
+                {
+                    file: 'src/orders/orders.service.ts',
+                    blob: BLOBS['src/orders/orders.service.ts'],
+                },
+            ],
+        });
+    });
+});
+
+describe('a bounded piece of work per job', () => {
+    it('starts no more units than a run may, and leaves the rest for the next job', async () => {
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm({ units: [] }),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            maxUnitsPerRun: 1,
+        } as any);
+
+        const done = result.progress.filter((p) => p.state === 'done');
+        expect(done).toHaveLength(1);
+        expect(result.finished).toBe(false);
+        expect(result.stoppedByBudget).toBe(false);
+        expect(
+            result.progress.filter((p) => p.state === 'pending').length,
+        ).toBeGreaterThan(0);
+    });
+});
+
+describe('a unit an earlier scan stopped halfway at its limit', () => {
+    const unit = {
+        id: 'u-half',
+        file: 'src/orders/orders.controller.ts',
+        relatedFiles: [],
+        language: 'typescript',
+        classes: ['authz', 'injection'],
+        priority: 90,
+        reasons: [],
+    };
+    const classOf = (input: any) =>
+        input.agentName.replace('security-scan-', '');
+
+    it('runs only the lenses that scan did not read to the end, and claims none it did not read', async () => {
+        const runLens = fakeLens(() => []);
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm(),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 100 }, RATES),
+            units: [unit],
+            progress: [
+                {
+                    unitId: 'u-half',
+                    state: 'pending',
+                    findings: 0,
+                    lensesRun: ['authz'],
+                    lensesExamined: [],
+                    lensesInherited: ['authz'],
+                },
+            ],
+        } as any);
+
+        expect(runLens.mock.calls.map(([input]) => classOf(input))).toEqual([
+            'injection',
+        ]);
+        expect(result.progress[0]).toEqual(
+            expect.objectContaining({ state: 'done' }),
+        );
+        // Read by this scan: injection only; authz resolves nothing here.
+        expect(result.examinedByClass.map((e) => e.vulnerabilityClass)).toEqual(
+            ['injection'],
+        );
+    });
+
+    it('keeps the lenses that ended when the limit stops a unit', async () => {
+        let calls = 0;
+        const runLens = jest.fn(async (input: any) => {
+            calls++;
+            // The first lens ends; the second costs the whole limit.
+            await bill(calls === 2 ? 900_000 : 1, 1, input.usageRunName);
+            return {
+                findings: { reasoning: '', suggestions: [] },
+                finishReason: 'completed',
+            } as any;
+        });
+        const engine = new SecurityScanEngine({
+            runLens,
+            llm: fakeLlm(),
+            collectSurface: jest.fn(async () => SURFACE),
+        });
+
+        const result = await engine.run({
+            ...baseParams(),
+            sandbox: fakeSandbox(),
+            meter: new ScanBudgetMeter({ maxUsd: 0.5 }, RATES),
+            units: [unit],
+        } as any);
+
+        expect(result.stoppedByBudget).toBe(true);
+        expect(result.progress[0]).toEqual(
+            expect.objectContaining({
+                state: 'skipped_budget',
+                lensesRun: ['authz'],
+                lensesExamined: ['authz'],
+            }),
+        );
     });
 });

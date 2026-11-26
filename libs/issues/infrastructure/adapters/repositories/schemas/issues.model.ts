@@ -10,6 +10,7 @@ import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import {
     IIssueEvidence,
+    IIssueOccurrence,
     IIssueOwner,
     IssueSource,
 } from '@libs/issues/domain/interfaces/issues.interface';
@@ -100,6 +101,21 @@ export class IssuesModel extends CoreDocument {
 
     @Prop({ type: String })
     public lastMissedScanId?: string;
+
+    @Prop({ type: [Object], required: false })
+    public occurrences?: IIssueOccurrence[];
+
+    @Prop({ type: String, required: false })
+    public ownSeverity?: SeverityLevel;
+
+    @Prop({ type: [String], required: false })
+    public fingerprintAliases?: string[];
+
+    @Prop({ type: String, required: false })
+    public duplicateOf?: string;
+
+    @Prop({ type: String, required: false })
+    public consolidatedAt?: string;
 }
 
 export const IssuesSchema = SchemaFactory.createForClass(IssuesModel);
@@ -164,4 +180,11 @@ IssuesSchema.index(
 IssuesSchema.index(
     RELEASE_INDEX.oneIssuePerFinding.key,
     RELEASE_INDEX.oneIssuePerFinding.options,
+);
+
+// 7. The deep-scan issue that holds a folded place: a finding without an
+// issue of its own looks it up by its fingerprint among the aliases.
+IssuesSchema.index(
+    RELEASE_INDEX.scanIssueByAlias.key,
+    RELEASE_INDEX.scanIssueByAlias.options,
 );
