@@ -57,3 +57,46 @@ func TestABuilderSilentInsideAProjectStepIsLeftRunning(t *testing.T) {
 		t.Fatal("the hung build returned no error")
 	}
 }
+
+// A big image's export writes its layers for many minutes and prints nothing
+// meanwhile: that is the exporter working, not a hung builder, so it gets the
+// longer export limit and is never stopped at the short one.
+func TestABuilderSilentInsideTheExportIsLeftRunningPastTheShortLimit(t *testing.T) {
+	d, docker := bakeDriver(t)
+	docker.buildOutput = []string{
+		"#8 [api 5/5] COPY . .",
+		"#8 DONE 3.0s",
+		"#9 exporting to image",
+		"#9 exporting layers",
+	}
+	docker.stallBuild = true
+	h := d.hooksForTest()
+	h.buildStallAfter, h.buildStallEvery = 50*time.Millisecond, 5*time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	_, _, err := d.build(ctx, machine("claim-pr", bakeEnv), []sandbox.Build{{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}}, "net", "resolv", bakeSubnet, nil, nil)
+	if errors.Is(err, driver.ErrBuilderFailed) {
+		t.Fatalf("a long silent export was stopped as the cell's failure: %v", err)
+	}
+	if err == nil {
+		t.Fatal("the hung build returned no error")
+	}
+}
+
+// An export that stays silent past the export limit is hung all the same.
+func TestABuilderSilentInTheExportPastItsLimitIsStoppedAsTheCells(t *testing.T) {
+	d, docker := bakeDriver(t)
+	docker.buildOutput = []string{
+		"#9 exporting to image",
+		"#9 exporting layers",
+	}
+	docker.stallBuild = true
+	h := d.hooksForTest()
+	h.buildStallAfter, h.buildExportStallAfter, h.buildStallEvery = 50*time.Millisecond, 150*time.Millisecond, 5*time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, _, err := d.build(ctx, machine("claim-pr", bakeEnv), []sandbox.Build{{Service: "api", Context: project(t), Dockerfile: "Dockerfile"}}, "net", "resolv", bakeSubnet, nil, nil)
+	if !errors.Is(err, driver.ErrBuilderFailed) || !strings.Contains(err.Error(), "printed nothing") {
+		t.Fatalf("a builder silent in its export past the limit was not stopped: %v", err)
+	}
+}

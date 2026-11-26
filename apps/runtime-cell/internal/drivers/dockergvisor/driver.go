@@ -376,6 +376,9 @@ type testHooks struct {
 	// (watchBuildStall); zero: the defaults.
 	buildStallAfter time.Duration
 	buildStallEvery time.Duration
+	// buildExportStallAfter replaces how long a builder may print nothing
+	// while it exports its image; zero: the default.
+	buildExportStallAfter time.Duration
 	// adoptPollEvery and adoptWait replace how often and how long a restored
 	// disk's images are waited for (awaitDiskImages); zero: the defaults.
 	adoptPollEvery time.Duration
