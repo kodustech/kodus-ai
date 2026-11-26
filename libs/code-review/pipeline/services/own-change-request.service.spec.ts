@@ -54,6 +54,8 @@ describe('OwnChangeRequestService', () => {
             recordKodyChangeRequest: jest.fn().mockResolvedValue(true),
             clearKodyChangeRequest: jest.fn().mockResolvedValue(true),
             hasOpenKodyChangeRequest: jest.fn().mockResolvedValue(true),
+            findKodyChangeRequestFindings: jest.fn().mockResolvedValue([]),
+            addKodyChangeRequestSummary: jest.fn().mockResolvedValue(true),
         };
         const isReviewRunning = jest.fn().mockResolvedValue(false);
         const service = new OwnChangeRequestService(
@@ -295,6 +297,92 @@ describe('OwnChangeRequestService', () => {
         });
     });
 
+    describe('withdrawIfResolved, by the findings behind the request', () => {
+        it('withdraws once every finding is implemented, with no comment id on record', async () => {
+            const built = build();
+            built.codeManagement.getPullRequestReviewThreads.mockResolvedValue(
+                [],
+            );
+            built.pullRequests.findKodyChangeRequestFindings.mockResolvedValue([
+                { suggestionId: 's-1', implementationStatus: 'implemented' },
+            ]);
+
+            await expect(
+                built.run(
+                    marked(PlatformType.GITHUB, {
+                        commentIds: [],
+                        suggestionIds: ['s-1'],
+                    }),
+                ),
+            ).resolves.toBe(true);
+
+            expect(
+                built.pullRequests.findKodyChangeRequestFindings,
+            ).toHaveBeenCalledWith('org-1', 'repo-1', 7, ['s-1']);
+            expect(
+                built.codeManagement.dismissOwnPullRequestChangeRequests,
+            ).toHaveBeenCalledTimes(1);
+        });
+
+        it('keeps the request while one finding is neither implemented nor resolved', async () => {
+            const built = build();
+            built.pullRequests.findKodyChangeRequestFindings.mockResolvedValue([
+                {
+                    suggestionId: 's-1',
+                    commentId: '11',
+                    implementationStatus: 'implemented',
+                },
+                {
+                    suggestionId: 's-2',
+                    implementationStatus: 'not_implemented',
+                },
+            ]);
+
+            await expect(
+                built.run(
+                    marked(PlatformType.GITHUB, {
+                        commentIds: ['11'],
+                        suggestionIds: ['s-1', 's-2'],
+                    }),
+                ),
+            ).resolves.toBe(false);
+
+            expectKept(built);
+        });
+
+        // Kody resolves no thread on Forgejo: the status is what lets the
+        // request leave there.
+        it('withdraws on Forgejo though the thread stays open', async () => {
+            const built = build();
+            built.codeManagement.getPullRequestReviewComments.mockResolvedValue(
+                [{ id: 11, isResolved: false }],
+            );
+            built.pullRequests.findKodyChangeRequestFindings.mockResolvedValue([
+                {
+                    suggestionId: 's-1',
+                    commentId: '11',
+                    implementationStatus: 'implemented',
+                },
+            ]);
+
+            await expect(
+                built.run(
+                    marked(PlatformType.FORGEJO, { suggestionIds: ['s-1'] }),
+                ),
+            ).resolves.toBe(true);
+        });
+
+        it('reads no suggestion for a request recorded before them', async () => {
+            const built = build();
+
+            await built.run();
+
+            expect(
+                built.pullRequests.findKodyChangeRequestFindings,
+            ).not.toHaveBeenCalled();
+        });
+    });
+
     describe('record', () => {
         beforeEach(() => {
             jest.useFakeTimers().setSystemTime(
@@ -303,14 +391,17 @@ describe('OwnChangeRequestService', () => {
         });
         afterEach(() => jest.useRealTimers());
 
-        it('writes the request with its comments and the summary the host left', async () => {
+        it('writes the request with its findings and their comments, and answers when', async () => {
             const { service, pullRequests } = build();
 
-            await service.record({
-                ...request,
-                commentIds: ['11', '12'],
-                summaryCommentId: 'd-1',
-            });
+            await expect(
+                service.record({
+                    ...request,
+                    suggestionIds: ['s-1', 's-2'],
+                    commentIds: ['11'],
+                    findingComments: [{ suggestionId: 's-1', commentId: '11' }],
+                }),
+            ).resolves.toBe('2026-11-11T17:23:13.000Z');
 
             expect(pullRequests.recordKodyChangeRequest).toHaveBeenCalledWith(
                 'org-1',
@@ -318,17 +409,75 @@ describe('OwnChangeRequestService', () => {
                 7,
                 {
                     requestedAt: '2026-11-11T17:23:13.000Z',
-                    commentIds: ['11', '12'],
-                    summaryCommentId: 'd-1',
+                    commentIds: ['11'],
+                    suggestionIds: ['s-1', 's-2'],
+                    findingComments: [{ suggestionId: 's-1', commentId: '11' }],
                 },
             );
         });
 
-        it('writes nothing for a request with no comment to check it against', async () => {
+        it('answers null when the write fails or matches no PR', async () => {
+            const { service, pullRequests } = build();
+            pullRequests.recordKodyChangeRequest
+                .mockRejectedValueOnce(new Error('mongo down'))
+                .mockResolvedValueOnce(false);
+            const input = {
+                ...request,
+                suggestionIds: ['s-1'],
+                commentIds: [],
+                findingComments: [],
+            };
+
+            await expect(service.record(input)).resolves.toBeNull();
+            await expect(service.record(input)).resolves.toBeNull();
+        });
+
+        it('writes a request whose findings only have comment ids', async () => {
+            const { service } = build();
+
+            await expect(
+                service.record({
+                    ...request,
+                    suggestionIds: [],
+                    commentIds: ['11'],
+                    findingComments: [],
+                }),
+            ).resolves.toBe('2026-11-11T17:23:13.000Z');
+        });
+
+        it('writes nothing for a request with no finding behind it', async () => {
             const { service, pullRequests } = build();
 
-            await service.record({ ...request, commentIds: [] });
+            await expect(
+                service.record({
+                    ...request,
+                    suggestionIds: [],
+                    commentIds: [],
+                    findingComments: [],
+                }),
+            ).resolves.toBeNull();
 
+            expect(pullRequests.recordKodyChangeRequest).not.toHaveBeenCalled();
+        });
+
+        it('adds the summary to the request it belongs to', async () => {
+            const { service, pullRequests } = build();
+
+            await service.recordSummary({
+                ...request,
+                requestedAt: '2026-11-11T17:23:13.000Z',
+                summaryCommentId: 'd-1',
+            });
+
+            expect(
+                pullRequests.addKodyChangeRequestSummary,
+            ).toHaveBeenCalledWith(
+                'org-1',
+                'repo-1',
+                7,
+                '2026-11-11T17:23:13.000Z',
+                'd-1',
+            );
             expect(pullRequests.recordKodyChangeRequest).not.toHaveBeenCalled();
         });
     });

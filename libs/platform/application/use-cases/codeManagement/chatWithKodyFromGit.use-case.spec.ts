@@ -5,6 +5,16 @@ jest.mock('@libs/common/utils/thread-id', () => ({
     })),
 }));
 
+// Pass-through by default; a spec makes the open's observation fail.
+jest.mock('@libs/core/log/langfuse', () => ({
+    ...jest.requireActual('@libs/core/log/langfuse'),
+    withLangfuseObservation: jest.fn(
+        (_name: string, fn: (traceId?: string) => Promise<unknown>) =>
+            fn(undefined),
+    ),
+}));
+
+import { withLangfuseObservation } from '@libs/core/log/langfuse';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 import { ChatWithKodyFromGitUseCase } from './chatWithKodyFromGit.use-case';
@@ -996,32 +1006,143 @@ describe('ChatWithKodyFromGitUseCase', () => {
             );
         });
 
-        it('continues with a null sandbox when sandbox creation fails', async () => {
-            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
-                {
-                    allowed: true,
-                    byokConfig: { main: { provider: 'anthropic' } },
-                },
-            );
-            leaseManager.acquire.mockRejectedValue(
-                new Error('git clone failed with 403'),
-            );
+        describe('sandbox opened on the first repository read (#2629)', () => {
+            const readsWith =
+                (read: (open: () => Promise<any>) => Promise<unknown>) =>
+                async ({
+                    openSandbox,
+                }: {
+                    openSandbox: () => Promise<any>;
+                }) => {
+                    await read(openSandbox);
+                    return 'an answer';
+                };
 
-            await useCase.execute(conversationPayload());
+            it('opens nothing for a reply that reads no code', async () => {
+                await useCase.execute(conversationPayload());
 
-            expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    sandbox: expect.objectContaining({ type: 'null' }),
-                }),
-            );
-            expect(leaseManager.release).not.toHaveBeenCalled();
-            expect(
-                codeManagementService.createResponseToComment,
-            ).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    body: expect.stringContaining('an answer'),
-                }),
-            );
+                expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        openSandbox: expect.any(Function),
+                    }),
+                );
+                expect(
+                    codeManagementService.getCloneParams,
+                ).not.toHaveBeenCalled();
+                expect(leaseManager.acquire).not.toHaveBeenCalled();
+                expect(leaseManager.release).not.toHaveBeenCalled();
+            });
+
+            it('opens once for parallel first reads and releases after the run', async () => {
+                const sandbox = { type: 'e2b', remoteCommands: {} };
+                leaseManager.acquire.mockResolvedValue({
+                    sandbox,
+                    leaseId: 'lease-test',
+                    wasCreated: false,
+                    sandboxId: 'sb-test',
+                });
+                let opened: unknown[] = [];
+                conversationAgentUseCase.execute.mockImplementation(
+                    readsWith(async (open) => {
+                        opened = await Promise.all([open(), open()]);
+                        expect(leaseManager.release).not.toHaveBeenCalled();
+                    }),
+                );
+
+                await useCase.execute(conversationPayload());
+
+                expect(opened).toEqual([sandbox, sandbox]);
+                expect(
+                    codeManagementService.getCloneParams,
+                ).toHaveBeenCalledTimes(1);
+                expect(leaseManager.acquire).toHaveBeenCalledTimes(1);
+                expect(leaseManager.acquire).toHaveBeenCalledWith(
+                    expect.stringContaining(ORG_UUID),
+                    'conversation',
+                    5 * 60 * 1000,
+                    undefined,
+                );
+                expect(leaseManager.release).toHaveBeenCalledTimes(1);
+                expect(leaseManager.release).toHaveBeenCalledWith('lease-test');
+            });
+
+            it('continues with a null sandbox when the open fails', async () => {
+                leaseManager.acquire.mockRejectedValue(
+                    new Error('git clone failed with 403'),
+                );
+                let opened: any;
+                conversationAgentUseCase.execute.mockImplementation(
+                    readsWith(async (open) => {
+                        opened = await open();
+                    }),
+                );
+
+                await useCase.execute(conversationPayload());
+
+                expect(opened).toEqual(
+                    expect.objectContaining({ type: 'null' }),
+                );
+                expect(leaseManager.release).not.toHaveBeenCalled();
+                expect(
+                    codeManagementService.createResponseToComment,
+                ).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        body: expect.stringContaining('an answer'),
+                    }),
+                );
+            });
+
+            it('keeps the reply and releases the lease when the open fails after acquiring', async () => {
+                (withLangfuseObservation as jest.Mock).mockImplementationOnce(
+                    async (_name: string, fn: () => Promise<unknown>) => {
+                        await fn();
+                        throw new Error('span export failed');
+                    },
+                );
+                // The repository tools catch a rejected open (they answer
+                // REPOSITORY_UNAVAILABLE), as this read does.
+                conversationAgentUseCase.execute.mockImplementation(
+                    readsWith((open) => open().catch(() => undefined)),
+                );
+
+                await useCase.execute(conversationPayload());
+                expect(leaseManager.release).toHaveBeenCalledWith('lease-test');
+                expect(
+                    codeManagementService.createResponseToComment,
+                ).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        body: expect.stringContaining('an answer'),
+                    }),
+                );
+            });
+
+            it('releases a lease whose open was still in flight when the run ended', async () => {
+                let grant!: (lease: unknown) => void;
+                leaseManager.acquire.mockReturnValue(
+                    new Promise((resolve) => (grant = resolve)),
+                );
+                conversationAgentUseCase.execute.mockImplementation(
+                    async ({ openSandbox }) => {
+                        void openSandbox();
+                        // The run ends (here, by failing) before the open does.
+                        setTimeout(
+                            () =>
+                                grant({
+                                    sandbox: { type: 'e2b' },
+                                    leaseId: 'late-lease',
+                                    wasCreated: true,
+                                    sandboxId: 'sb',
+                                }),
+                            10,
+                        );
+                        throw new Error('model timed out');
+                    },
+                );
+
+                await useCase.execute(conversationPayload());
+
+                expect(leaseManager.release).toHaveBeenCalledWith('late-lease');
+            });
         });
     });
 
@@ -1111,6 +1232,13 @@ describe('ChatWithKodyFromGitUseCase', () => {
         });
         permissionValidationService.validateExecutionPermissions.mockResolvedValue(
             { allowed: true },
+        );
+        // Clone params are resolved when the agent first reads the repository.
+        conversationAgentUseCase.execute.mockImplementation(
+            async ({ openSandbox }) => {
+                await openSandbox();
+                return 'an answer';
+            },
         );
 
         await useCase.execute({

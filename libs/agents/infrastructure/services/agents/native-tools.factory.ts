@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
+import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
 import {
     cutLongLines,
     MAX_TOOL_LINE_CHARS,
@@ -36,29 +38,34 @@ type ToolConfig = {
     execute: (input: unknown) => Promise<unknown>;
 };
 
-/**
- * Native tools backed by the sandbox `RemoteCommands` contract. These are
- * registered into the legacy flow-engine orchestration via `orchestration.createTool`.
- *
- * Sandbox is captured by closure — `ToolContext` does not propagate `userContext`
- * down to tools, so each `@kody` request creates its own ephemeral orchestration
- * with tools wired to that request's sandbox instance.
- *
- * NullSandbox path: when `sandbox.type === 'null'`, this returns `[]`. The
- * agent then falls back to MCP-only tools (memory) — same shape as before
- * the runtime sandbox integration.
- */
-export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
-    if (sandbox.type === 'null') {
-        return [];
-    }
+/** A tool over the open sandbox's commands, before it is opened for the call. */
+type RepositoryTool = Omit<ToolConfig, 'execute'> & {
+    execute: (input: unknown, remote: RemoteCommands) => Promise<unknown>;
+};
 
-    const remote = sandbox.remoteCommands;
+/** What a repository tool answers when the turn has no checkout to read. */
+export const REPOSITORY_UNAVAILABLE =
+    'The repository checkout could not be opened for this conversation, so grep, readFile, listDir and exec cannot run. Do not call them again in this turn.';
+
+/**
+ * Native tools backed by the sandbox `RemoteCommands` contract.
+ *
+ * The sandbox is opened by the first call, not before the run (#2629): a turn
+ * that never reads the repository starts, resumes and fetches nothing.
+ * `openSandbox` must hand every call the same sandbox (`openOnFirstUse`), so
+ * the parallel first reads of one step share one open.
+ *
+ * A null sandbox (no provider) or an open that failed answers every call
+ * with REPOSITORY_UNAVAILABLE; the agent keeps its MCP tools.
+ */
+export function buildNativeToolConfigs(
+    openSandbox: () => Promise<SandboxInstance>,
+): ToolConfig[] {
     // Azure Repos paths start with `/`; the sandbox rejects absolute paths.
     const repoPath = (path: string | undefined) =>
         (path ?? '.').replace(/^\/+/, '') || '.';
 
-    const grepTool: ToolConfig = {
+    const grepTool: RepositoryTool = {
         name: 'grep',
         description:
             'Search for a regex pattern in the repository. Returns matching lines with file path and line number. Use to find symbols, references, configuration entries, or any text occurrence.',
@@ -79,7 +86,7 @@ export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
                     'Optional glob filter (e.g. "*.ts") to restrict file types.',
                 ),
         }),
-        execute: async (input: unknown) => {
+        execute: async (input: unknown, remote: RemoteCommands) => {
             const { pattern, path, glob } = input as {
                 pattern: string;
                 path?: string;
@@ -90,7 +97,7 @@ export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
         },
     };
 
-    const readFileTool: ToolConfig = {
+    const readFileTool: RepositoryTool = {
         name: 'readFile',
         description:
             'Read a file from the repository between two line numbers (1-indexed, inclusive). Use to inspect implementation details after grep.',
@@ -107,7 +114,7 @@ export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
                 .min(1)
                 .describe('Last line to return (1-indexed, inclusive).'),
         }),
-        execute: async (input: unknown) => {
+        execute: async (input: unknown, remote: RemoteCommands) => {
             const { path, start, end } = input as {
                 path: string;
                 start: number;
@@ -118,7 +125,7 @@ export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
         },
     };
 
-    const listDirTool: ToolConfig = {
+    const listDirTool: RepositoryTool = {
         name: 'listDir',
         description:
             'List files and folders under a directory in the repository, up to a maximum depth. Use to explore unfamiliar projects.',
@@ -132,7 +139,7 @@ export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
                 .default(2)
                 .describe('Maximum recursion depth. Default 2.'),
         }),
-        execute: async (input: unknown) => {
+        execute: async (input: unknown, remote: RemoteCommands) => {
             const { path, maxDepth } = input as {
                 path: string;
                 maxDepth?: number;
@@ -142,31 +149,44 @@ export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
         },
     };
 
-    const tools: ToolConfig[] = [grepTool, readFileTool, listDirTool];
+    const execTool: RepositoryTool = {
+        name: 'exec',
+        description:
+            'Run a read-only shell command inside the sandbox. Use sparingly for ad-hoc read-only inspection (git log, cat, etc.).',
+        inputSchema: z.object({
+            command: z
+                .string()
+                .describe(
+                    'Shell command to run. Must be read-only (no writes, no network calls outside the sandbox).',
+                ),
+        }),
+        execute: async (input: unknown, remote: RemoteCommands) => {
+            // Optional on RemoteCommands: both providers implement it, and it
+            // cannot be known before the sandbox opens.
+            if (typeof remote.exec !== 'function') {
+                return { error: 'exec is not available in this checkout.' };
+            }
+            const { command } = input as { command: string };
+            return remote.exec(command);
+        },
+    };
 
-    // exec is optional on RemoteCommands — only expose when the provider implements it
-    if (typeof remote.exec === 'function') {
-        const execFn = remote.exec;
-        tools.push({
-            name: 'exec',
-            description:
-                'Run a read-only shell command inside the sandbox. Use sparingly for ad-hoc read-only inspection (git log, cat, etc.).',
-            inputSchema: z.object({
-                command: z
-                    .string()
-                    .describe(
-                        'Shell command to run. Must be read-only (no writes, no network calls outside the sandbox).',
-                    ),
-            }),
+    return [grepTool, readFileTool, listDirTool, execTool].map((tool) =>
+        guardConversationTool({
+            ...tool,
             execute: async (input: unknown) => {
-                const { command } = input as { command: string };
-                const result = await execFn(command);
-                return result;
+                // The opener's caller reports a failed open (the chat logs
+                // it, the eval stops on it); the agent only needs to know.
+                const sandbox = await openSandbox().catch(
+                    () => NULL_SANDBOX_INSTANCE,
+                );
+                if (sandbox.type === 'null') {
+                    return { error: REPOSITORY_UNAVAILABLE };
+                }
+                return tool.execute(input, sandbox.remoteCommands);
             },
-        });
-    }
-
-    return tools.map(guardConversationTool);
+        }),
+    );
 }
 
 /** Argument fields that name a call without the agent's search text. */

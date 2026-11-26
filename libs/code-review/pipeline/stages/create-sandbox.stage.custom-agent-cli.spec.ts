@@ -9,6 +9,7 @@ import { ULTRA_RUN_LEASE_TTL_MS } from '@libs/ee/ultra-review/ultra-review.execu
 
 import { CreateSandboxStage } from './create-sandbox.stage';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { FixedEgressIpUnavailableError } from '@libs/sandbox/domain/egress-plan';
 
 const provision = provisionCustomAgentClis as jest.Mock;
 
@@ -207,5 +208,27 @@ describe('CreateSandboxStage lease on an Ultra review', () => {
         settle();
         await second;
         expect(leaseManager.release).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('CreateSandboxStage when the Git host refused the shared network', () => {
+    it('continues without a sandbox and keeps the reason for the review warning', async () => {
+        const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
+        const blocked = new FixedEgressIpUnavailableError(
+            'ip_allow_list',
+            'plan',
+        );
+        leaseManager.acquire.mockRejectedValueOnce(blocked);
+        const out = await stage.execute(context);
+        expect(out.sandboxHandle).toBeUndefined();
+        expect(out.sandboxUnavailableDetail).toBe(blocked.message);
+        expect(out.sandboxUnavailableDetail).toContain('Teams and Enterprise');
+    });
+
+    it('leaves an ordinary failure without a reason', async () => {
+        const { stage, context, leaseManager } = build({ sandboxType: 'e2b' });
+        leaseManager.acquire.mockRejectedValueOnce(new Error('e2b down'));
+        const out = await stage.execute(context);
+        expect(out.sandboxUnavailableDetail).toBeUndefined();
     });
 });

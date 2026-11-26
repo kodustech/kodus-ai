@@ -61,7 +61,10 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 repo.recordKodyChangeRequest('org-A', 'repo-alpha', 7, {
                     requestedAt: T1,
                     commentIds: ['101', '102'],
-                    summaryCommentId: 'd-1',
+                    suggestionIds: ['s-1', 's-2'],
+                    findingComments: [
+                        { suggestionId: 's-1', commentId: '101' },
+                    ],
                 }),
             ).resolves.toBe(true);
 
@@ -69,24 +72,60 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 $set: { 'kodyChangeRequest.requestedAt': T1 },
                 $addToSet: {
                     'kodyChangeRequest.commentIds': { $each: ['101', '102'] },
-                    'kodyChangeRequest.summaryCommentIds': 'd-1',
+                    'kodyChangeRequest.suggestionIds': {
+                        $each: ['s-1', 's-2'],
+                    },
+                    'kodyChangeRequest.findingComments': {
+                        $each: [{ suggestionId: 's-1', commentId: '101' }],
+                    },
                 },
             });
         });
 
-        it('adds no summary when the host left none, and says when no PR matched', async () => {
+        it('says when no PR matched', async () => {
             model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 0 });
 
             await expect(
                 repo.recordKodyChangeRequest('org-A', 'repo-alpha', 7, {
                     requestedAt: T1,
                     commentIds: ['101'],
+                    suggestionIds: ['s-1'],
+                    findingComments: [],
                 }),
             ).resolves.toBe(false);
+        });
 
-            expect(model.updateOne.mock.calls[0][1].$addToSet).toEqual({
-                'kodyChangeRequest.commentIds': { $each: ['101'] },
-            });
+        it('adds a summary only to the request made at that time', async () => {
+            model.updateOne = jest
+                .fn()
+                .mockResolvedValueOnce({ matchedCount: 1 })
+                .mockResolvedValueOnce({ matchedCount: 0 });
+
+            await expect(
+                repo.addKodyChangeRequestSummary(
+                    'org-A',
+                    'repo-alpha',
+                    7,
+                    T1,
+                    'd-1',
+                ),
+            ).resolves.toBe(true);
+            await expect(
+                repo.addKodyChangeRequestSummary(
+                    'org-A',
+                    'repo-alpha',
+                    7,
+                    T1,
+                    'd-1',
+                ),
+            ).resolves.toBe(false);
+
+            expect(model.updateOne).toHaveBeenCalledWith(
+                { ...target, 'kodyChangeRequest.requestedAt': T1 },
+                {
+                    $addToSet: { 'kodyChangeRequest.summaryCommentIds': 'd-1' },
+                },
+            );
         });
 
         it('forgets only the request it was handed, by unsetting the field', async () => {

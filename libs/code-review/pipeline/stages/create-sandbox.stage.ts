@@ -7,6 +7,7 @@ import {
     ORGANIZATION_SERVICE_TOKEN,
 } from '@libs/organization/domain/organization/contracts/organization.service.contract';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { findFixedEgressIpUnavailable } from '@libs/sandbox/domain/egress-plan';
 import {
     CustomAgentCliProvisioning,
     planRuntimeCliInstalls,
@@ -339,6 +340,26 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                             prNumber: context.pullRequest?.number,
                         },
                     });
+                });
+            }
+            // The team's Git host refused Kodus's shared network and the team
+            // cannot use the fixed IP (plan or its own switch): theirs to act
+            // on, not an outage. The review says why it has no checkout.
+            const egressBlocked = findFixedEgressIpUnavailable(err);
+            if (egressBlocked) {
+                this.logger.warn({
+                    message: `No sandbox for ${label}: the Git host refused Kodus's shared network (${egressBlocked.reason}, ${egressBlocked.blockedBy}), continuing without it`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
+                        prNumber: context?.pullRequest?.number,
+                        reason: egressBlocked.reason,
+                        blockedBy: egressBlocked.blockedBy,
+                    },
+                });
+                return this.updateContext(context, (draft) => {
+                    draft.sandboxUnavailableDetail = egressBlocked.message;
                 });
             }
             this.logger.error({

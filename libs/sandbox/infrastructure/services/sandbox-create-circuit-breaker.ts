@@ -266,6 +266,15 @@ const REPOSITORY_SPECIFIC_FAILURE =
     /authentication failed|could not read username|repository not found|repository '[^']*' not found|could not be found or you don't have permission|either does not exist or you do not have access|requires a username|couldn't find remote ref|not our ref|invalid username or password|http basic: access denied|the requested url returned error: (401|403|404)|terminal prompts disabled|does not appear to be a git repository|permission denied \(publickey\)/i;
 
 export function isRepositorySpecificSandboxFailure(err: unknown): boolean {
+    // A team that cannot use the fixed IP (plan or its own switch) and whose
+    // Git host refused the shared network fails the same way on every try;
+    // its git output lives on `cause`, where the patterns below never look.
+    if (
+        (err as { name?: unknown } | null)?.name ===
+        'FixedEgressIpUnavailableError'
+    ) {
+        return true;
+    }
     const text = describeError(err);
     return REPOSITORY_SPECIFIC_FAILURE.test(text);
 }

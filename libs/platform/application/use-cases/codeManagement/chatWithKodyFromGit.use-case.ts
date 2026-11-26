@@ -6,6 +6,7 @@ import {
     gitlabWebhookSource,
     type WebhookSource,
 } from '@libs/common/utils/webhooks/webhook-source-host';
+import { withLangfuseObservation } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
@@ -35,6 +36,7 @@ import {
 } from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
+    AcquireResult,
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
     buildPrKey,
@@ -43,6 +45,7 @@ import {
     CreateSandboxParams,
     SandboxInstance,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { openOnFirstUse } from '@libs/sandbox/domain/open-on-first-use';
 import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
 // Shared with libs/code-review/.../commentAnalysis.service.ts so the
 // read-side filter that drops Kody's own past comments stays in sync
@@ -2614,53 +2617,34 @@ export class ChatWithKodyFromGitUseCase {
     }): Promise<string> {
         const { prepareContext, organizationAndTeamData, thread } = context;
 
-        // Acquire a sandbox lease for the duration of the conversation turn.
         // Same prKey as review → warm-resume reuse when both run on the same PR.
-        // The lease lets the conversation agent invoke native tools (grep, readFile,
-        // listDir, etc.) inside the sandbox so replies can reference real repo
-        // content — not just MCP tools. 5min TTL covers LLM + comment posting.
         const prKey = buildPrKey(
             organizationAndTeamData.organizationId,
             prepareContext.repository?.id ?? 'unknown',
             prepareContext.pullRequest?.pullRequestNumber ?? 0,
         );
 
-        // Resolve clone params so the lease manager can cold-create the sandbox
-        // when this is the first acquire for this PR (no review ran yet, or this
-        // PR has no automated review). Without these params the manager falls
-        // back to NullSandbox and the agent loses native tools entirely.
-        // When review acquired first, these params are simply ignored — the
-        // existing sandbox is connected for warm-resume.
-        const cloneParams = await this.buildSandboxCloneParams(
-            prepareContext,
-            organizationAndTeamData,
-        );
-
-        // A sandbox enriches the answer with repository-native tools, but it
-        // must not be a prerequisite for replying. For example, an inaccessible
-        // fork or a transient E2B/Git error should still result in a useful
-        // conversational response from the agent.
-        let sandbox: SandboxInstance = NULL_SANDBOX_INSTANCE;
+        // The checkout opens on the agent's first grep/readFile/listDir/exec,
+        // not before the run (#2629): a reply answerable from the thread mints
+        // no Git token and starts, resumes and fetches no sandbox. Parallel
+        // first reads share the one open. Without a repository, PR and
+        // platform there is nothing to clone, and the agent gets no
+        // repository tools.
         let leaseId: string | undefined;
-
-        try {
-            const lease = await this.leaseManager.acquire(
+        const sandbox = openOnFirstUse(async (): Promise<SandboxInstance> => {
+            const lease = await this.openConversationSandbox(
                 prKey,
-                'conversation',
-                5 * 60 * 1000,
-                cloneParams,
+                prepareContext,
+                organizationAndTeamData,
+                (acquired) => (leaseId = acquired),
             );
-            sandbox = lease.sandbox;
-            leaseId = lease.leaseId;
-        } catch (error) {
-            this.logger.warn({
-                message:
-                    'Sandbox unavailable; conversation will continue without native repository tools',
-                context: ChatWithKodyFromGitUseCase.name,
-                error,
-                metadata: { prKey, organizationAndTeamData },
-            });
-        }
+            return lease?.sandbox ?? NULL_SANDBOX_INSTANCE;
+        });
+        const canOpen = Boolean(
+            prepareContext.repository &&
+            prepareContext.pullRequest &&
+            prepareContext.platformType,
+        );
 
         try {
             return await this.conversationAgentUseCase.execute({
@@ -2668,13 +2652,82 @@ export class ChatWithKodyFromGitUseCase {
                 organizationAndTeamData,
                 prepareContext,
                 thread,
-                sandbox,
+                openSandbox: canOpen ? sandbox.open : undefined,
             });
         } finally {
+            // An open still in flight when the run ends is waited for, so the
+            // lease it takes is released too. A failure there must not cost
+            // the reply, nor the release of a lease it already took.
+            await sandbox.settled().catch((error) =>
+                this.logger.warn({
+                    message:
+                        'Conversation sandbox open failed after the run; releasing what it acquired',
+                    context: ChatWithKodyFromGitUseCase.name,
+                    error,
+                    metadata: { prKey, organizationAndTeamData },
+                }),
+            );
             if (leaseId) {
                 await this.leaseManager.release(leaseId);
             }
         }
+    }
+
+    /**
+     * Acquire the conversation's lease. A sandbox enriches the answer with
+     * repository-native tools, but it must not be a prerequisite for
+     * replying: an inaccessible fork or a transient E2B/Git error still ends
+     * in a useful reply, so a failure resolves to no lease and the tools
+     * answer that the checkout is unavailable. The open is its own
+     * observation in the conversation's trace: how long the first read
+     * waited for it, and whether it created the sandbox or joined one.
+     * `onLease` gets the lease the moment it is acquired, so it is released
+     * even when what follows the acquire fails.
+     */
+    private openConversationSandbox(
+        prKey: string,
+        prepareContext: any,
+        organizationAndTeamData: OrganizationAndTeamData,
+        onLease: (leaseId: string) => void,
+    ): Promise<AcquireResult | undefined> {
+        return withLangfuseObservation(
+            'conversationSandboxOpen',
+            async () => {
+                try {
+                    // When this is the first acquire for this PR (no review
+                    // ran yet, or the PR has no automated review) the lease
+                    // manager cold-creates the sandbox from these; when review
+                    // acquired first they are used to sync its checkout.
+                    const cloneParams = await this.buildSandboxCloneParams(
+                        prepareContext,
+                        organizationAndTeamData,
+                    );
+                    // 5min TTL covers the rest of the run + comment posting.
+                    const lease = await this.leaseManager.acquire(
+                        prKey,
+                        'conversation',
+                        5 * 60 * 1000,
+                        cloneParams,
+                    );
+                    onLease(lease.leaseId);
+                    return lease;
+                } catch (error) {
+                    this.logger.warn({
+                        message:
+                            'Sandbox unavailable; conversation will continue without native repository tools',
+                        context: ChatWithKodyFromGitUseCase.name,
+                        error,
+                        metadata: { prKey, organizationAndTeamData },
+                    });
+                    return undefined;
+                }
+            },
+            { prKey },
+            (lease) => ({
+                opened: Boolean(lease && lease.sandbox.type !== 'null'),
+                wasCreated: lease?.wasCreated ?? false,
+            }),
+        );
     }
 
     private async buildSandboxCloneParams(
