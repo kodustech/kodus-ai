@@ -930,7 +930,7 @@ export async function repairAndValidate<T = unknown>(
     const fenceTag = fence ? /^[\w+-]*/.exec(fence.inner)![0] : '';
     const fenceIsJson =
         fence !== null &&
-        (/^json/i.test(fenceTag) ||
+        (/^json[c5]?$/i.test(fenceTag) ||
             (fenceTag === '' && /^\s*[{[]/.test(fence.inner)));
     return firstValidatingObjectAfter<T>(
         stripped,

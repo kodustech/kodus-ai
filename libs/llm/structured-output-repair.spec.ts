@@ -1940,6 +1940,8 @@ describe('repairAndValidate: review on #2700', () => {
             '```ts\nconst retries = [100, 200];\n```',
             '```ts\nconst first = items[0];\n```',
             '```ts\nconst opts = {};\nrun(opts);\n```',
+            // Only json, jsonc and json5 name an answer; jsonnet is code.
+            '```jsonnet\nlocal ids = ["id"];\n```',
         ];
         for (const quote of quotes) {
             await expect(
