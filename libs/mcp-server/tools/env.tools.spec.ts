@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import request from 'supertest';
@@ -229,6 +229,18 @@ describe('/mcp/env tools', () => {
                 },
             }),
         ).toBeNull();
+    });
+
+    it('envToolError forwards the environments a key must choose from, and nothing else of the body', () => {
+        const out = envToolError(
+            new BadRequestException({ code: 'environment_required', message: 'Name the environment: e1 (a/b)', environments: [{ environmentId: 'e1', repositoryName: 'a/b' }], secret: 'x' }),
+        );
+        expect(out.structuredContent).toEqual({
+            status: 400,
+            code: 'environment_required',
+            message: 'Name the environment: e1 (a/b)',
+            environments: [{ environmentId: 'e1', repositoryName: 'a/b' }],
+        });
     });
 
     it('envToolError never forwards an unexpected error message', () => {

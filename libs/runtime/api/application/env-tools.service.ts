@@ -230,11 +230,15 @@ export class RuntimeEnvToolsService {
         } else {
             const mine = await this.reachable(p);
             if (mine.length === 1) return mine[0];
-            throw new BadRequestException(
-                mine.length
-                    ? `Name the environment: ${mine.map((e) => `${e.environmentId} (${e.repositoryName})`).join(', ')}`
-                    : 'This key reaches no Kody Runtime environment. Add its repository to the key and set the environment up first.',
-            );
+            if (!mine.length) {
+                throw new BadRequestException('This key reaches no Kody Runtime environment. Add its repository to the key and set the environment up first.');
+            }
+            // The list as data too (`environments`): the CLI picks the one whose repository is the working directory's git remote.
+            throw new BadRequestException({
+                code: 'environment_required',
+                message: `Name the environment: ${mine.map((e) => `${e.environmentId} (${e.repositoryName})`).join(', ')}`,
+                environments: mine.map((e) => ({ environmentId: e.environmentId, repositoryName: e.repositoryName })),
+            });
         }
         if (!env || !(await this.covers(p, env))) throw notFound();
         return env;

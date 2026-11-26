@@ -1,4 +1,4 @@
-import { ForbiddenException, HttpException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpException, NotFoundException } from '@nestjs/common';
 
 import type { EnvSessionOpen, EnvSessionOwner, EnvSessionView, EnvStepView } from '@libs/runtime/contracts/env-session';
 import { ownsEnvSession } from '@libs/runtime/contracts/env-session';
@@ -527,6 +527,21 @@ describe('RuntimeEnvToolsService (/mcp/env)', () => {
         it('keeps submit as it was: a recipe the repository checks refuse is still sent when it parses', async () => {
             const h = harness({ repoFiles: { 'package.json': '{}' } });
             await expect(h.service.submitRecipe(KEY, { environmentId: 'env-a', recipe: RECIPE, files: [dockerfile, compose('..')] })).resolves.toMatchObject({ setupRequested: true });
+        });
+    });
+
+    it('a key that reaches several environments is told which, as a message and as data the CLI can choose from', async () => {
+        const h = harness({ environments: [env(), env({ environmentId: 'env-c', repositoryId: 'repo-c', repositoryName: 'acme/billing' })] });
+        const key = { ...KEY, repositoryIds: ['repo-a', 'repo-c'] };
+        const refused = await h.service.status(key, {}).catch((e: unknown) => e);
+        expect(refused).toBeInstanceOf(BadRequestException);
+        expect((refused as BadRequestException).getResponse()).toMatchObject({
+            code: 'environment_required',
+            message: 'Name the environment: env-a (acme/shop), env-c (acme/billing)',
+            environments: [
+                { environmentId: 'env-a', repositoryName: 'acme/shop' },
+                { environmentId: 'env-c', repositoryName: 'acme/billing' },
+            ],
         });
     });
 

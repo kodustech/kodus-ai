@@ -111,6 +111,83 @@ describe('kodus env', () => {
         ]);
     });
 
+    describe('a key that reaches several environments', () => {
+        const refusal = rpc(
+            {
+                status: 400,
+                code: 'environment_required',
+                message: 'Name the environment: env-1 (acme/shop), env-2 (acme/billing)',
+                environments: [
+                    { environmentId: 'env-1', repositoryName: 'acme/shop' },
+                    { environmentId: 'env-2', repositoryName: 'Acme/Billing' },
+                ],
+            },
+            true,
+        );
+        const sentTo = (requester: ReturnType<typeof vi.fn>) =>
+            requester.mock.calls.map(
+                (c: any[]) => JSON.parse(c[1].body).params.arguments,
+            );
+
+        it('takes the environment of the git remote origin, case-insensitive, and asks again with it', async () => {
+            const requester = vi
+                .fn()
+                .mockResolvedValueOnce(refusal)
+                .mockResolvedValueOnce(rpc(STATUS));
+            const service = new EnvService(
+                requester as any,
+                async () => 'git@github.com:acme/billing.git',
+            );
+            await expect(service.status({})).resolves.toEqual(STATUS);
+            expect(sentTo(requester)).toEqual([{}, { environmentId: 'env-2' }]);
+        });
+
+        it('keeps the refusal, listing them, when the remote matches none or no remote is set', async () => {
+            for (const remote of [
+                'https://github.com/acme/other.git',
+                null,
+            ]) {
+                const service = new EnvService(
+                    vi.fn(async () => refusal) as any,
+                    async () => remote,
+                );
+                await expect(service.status({})).rejects.toThrow(
+                    /Name the environment: env-1 \(acme\/shop\), env-2/,
+                );
+            }
+        });
+
+        it('keeps the refusal when the remote matches several environments', async () => {
+            const twice = rpc(
+                {
+                    status: 400,
+                    code: 'environment_required',
+                    message: 'Name the environment: a (acme/shop), b (ACME/shop)',
+                    environments: [
+                        { environmentId: 'a', repositoryName: 'acme/shop' },
+                        { environmentId: 'b', repositoryName: 'ACME/shop' },
+                    ],
+                },
+                true,
+            );
+            const service = new EnvService(
+                vi.fn(async () => twice) as any,
+                async () => 'https://github.com/acme/shop',
+            );
+            await expect(service.status({})).rejects.toThrow(/Name the environment/);
+        });
+
+        it('never reads the remote when --env or --repo-id names the environment', async () => {
+            const remote = vi.fn(async () => 'https://github.com/acme/shop');
+            const requester = vi.fn(async () => refusal);
+            const service = new EnvService(requester as any, remote);
+            await expect(service.status({ environmentId: 'env-9' })).rejects.toThrow();
+            await expect(service.health({ repositoryId: 'r' })).rejects.toThrow();
+            expect(remote).not.toHaveBeenCalled();
+            expect(requester).toHaveBeenCalledTimes(2);
+        });
+    });
+
     it('turns a tool error into a message the dev can act on', async () => {
         const forbidden = new EnvService(
             vi.fn(async () =>

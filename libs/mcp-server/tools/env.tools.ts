@@ -311,7 +311,9 @@ export function envToolError(e: unknown): CallToolResult {
                   )
                 : e.message;
     }
-    const payload = { status, code, message };
+    // `environments`: the environments a key that reaches several must choose from (code environment_required).
+    const choices = e instanceof HttpException ? (e.getResponse() as { environments?: unknown }).environments : undefined;
+    const payload = { status, code, message, ...(Array.isArray(choices) ? { environments: choices } : {}) };
     return {
         content: [{ type: 'text', text: JSON.stringify(payload) }],
         structuredContent: payload,

@@ -86,7 +86,10 @@ Four sources, first match wins:
    (`runtime_environments.submitted_recipe`) and asks for a setup that boots it with its files (`origin: 'submitted'`).
    It needs `env:fix` and is audited (`env_recipe_submit`). Kody never repairs it and the learn loop leaves it: the agent
    reads `env_status` (its `setupKey`) and `env_blockers` and sends another. Once it boots twice, the Runtime page offers
-   the PR that commits it, like Kody's. Before writing it, the agent reads the authoring guide: `kodus env recipe guide`,
+   the PR that commits it, like Kody's. A key that reaches several environments refuses a call that names none
+   (`environment_required`, with the list as data); `kodus env` then reads `git remote get-url origin`, takes the
+   environment whose `repositoryName` is that owner/name (case-insensitive) and asks again, and keeps the refusal when none
+   or several match (`apps/cli/src/services/env.service.ts` `targeted`). Before writing it, the agent reads the authoring guide: `kodus env recipe guide`,
    the `/mcp/env` tool `env_recipe_guide` (`env:exec` or `env:fix`, static text, no repository read). It is Kody's own
    author's rules (`recipe-author/recipe-authoring-rules.ts`, one source: the author's prompt is built from the same
    blocks, byte for byte) plus the facts of the sandbox a repository does not show (`recipe-authoring-guide.ts`): compose
