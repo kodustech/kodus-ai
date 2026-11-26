@@ -52,3 +52,32 @@ func TestCellSealIsRefusedWhileAClaimIsLive(t *testing.T) {
 		t.Fatalf("seal started with a claim live")
 	}
 }
+
+// dev, 2026-11-26: the setup claim was released once its bake was acked and the
+// template's seal came 4 minutes later, while the bake still exported its images.
+// The seal stopped the cell, the bake died and the template was saved with an
+// empty catalog: every host made from it built cold. A bake in progress holds
+// the host as a live claim does.
+func TestCellSealIsRefusedWhileABakeIsInProgress(t *testing.T) {
+	s := &recSealer{}
+	h := newHarness(t, func(c *Config) { c.HostSeal = s })
+	finish, ok := h.a.origin.Reserve("org-1", "env-1")
+	if !ok {
+		t.Fatal("no reservation")
+	}
+	if got := nackCode(h.handle("", protocol.MessageTypeCellSeal, &protocol.CellSealBody{})); got != "bake_running" {
+		t.Fatalf("nack %q, want bake_running", got)
+	}
+	h.a.Wait()
+	if s.count() != 0 {
+		t.Fatalf("seal started with a bake in progress")
+	}
+	finish()
+	if err := h.handle("", protocol.MessageTypeCellSeal, &protocol.CellSealBody{}); err != nil {
+		t.Fatalf("seal refused once the bake ended: %v", err)
+	}
+	h.a.Wait()
+	if s.count() != 1 {
+		t.Fatalf("seal started %d times after the bake ended", s.count())
+	}
+}

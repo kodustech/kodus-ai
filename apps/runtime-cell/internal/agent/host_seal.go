@@ -14,8 +14,11 @@ type HostSealer interface {
 
 // cellSeal answers cell.seal, which the hub sends only to the cell of an
 // environment template's setup host (bound key template:<org>/<env>). The
-// cell refuses when it is not a fleet host (no HostSeal) or a claim is live:
-// the hub asks again when the work is done. The ack comes first, the seal
+// cell refuses when it is not a fleet host (no HostSeal), a claim is live or
+// a bake is in progress (the setup claim is released once its bake is acked,
+// minutes before the bake has exported and recorded its images; a seal then
+// stops the cell mid-bake and the template keeps no bake): the fleet asks
+// again when the work is done. The ack comes first, the seal
 // starts right after; once it runs the cell is stopped and its connection
 // closes, which is how the fleet knows the seal finished.
 func (a *Agent) cellSeal() error {
@@ -26,6 +29,9 @@ func (a *Agent) cellSeal() error {
 		if c.State() != claims.Released {
 			return nack("claim_live", "a claim is live on this cell; seal after it is released")
 		}
+	}
+	if _, _, baking := a.origin.Counts(); baking > 0 {
+		return nack("bake_running", "a bake is in progress on this cell; seal after it has recorded its images")
 	}
 	a.goTracked(func(ctx context.Context) {
 		if err := a.cfg.HostSeal.Seal(context.WithoutCancel(ctx)); err != nil {

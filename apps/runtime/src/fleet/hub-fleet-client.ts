@@ -12,6 +12,19 @@ type Post = (url: string, body: string) => Promise<{ status: number; text: strin
 
 const MAX_RESPONSE_BYTES = 64 * 1024;
 
+/** What a cell refuses cell.seal for while it is still working (`cellSeal` in the cell): the fleet asks again later. */
+const SEAL_BUSY = new Set(['bake_running', 'claim_live']);
+
+/** The cell's own nack code the hub put in its 409 (`{ code: 'refused', cellCode }`), when there is one. */
+function cellCodeOf(text: string): string | undefined {
+    try {
+        const b = JSON.parse(text) as { cellCode?: unknown };
+        return typeof b.cellCode === 'string' && /^[a-z_]{1,64}$/.test(b.cellCode) ? b.cellCode : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 export function fleetPost(opts: { tls?: { cert: string; key: string; ca: string }; testOnlyToken?: string; timeoutMs?: number }): Post {
     const agent = opts.tls ? new HttpsAgent({ cert: opts.tls.cert, key: opts.tls.key, ca: opts.tls.ca, minVersion: 'TLSv1.3', keepAlive: true }) : undefined;
     return (url, body) =>
@@ -78,10 +91,15 @@ export class HubFleetClient implements HubFleetPort {
         }
     }
 
-    /** Asks the hub to have the template host's cell seal itself; resolves once the cell acked. A refusal throws `seal_refused_<status>`. */
+    /**
+     * Asks the hub to have the template host's cell seal itself; resolves once the cell acked. A cell that is still working
+     * (a bake in progress, a claim live) throws `seal_busy_<its code>`, to be asked again; any other refusal `seal_refused_<status>`.
+     */
     async seal(hostId: string) {
         const res = await this.call(`${this.hubInternalUrl}/internal/fleet/hosts/${encodeURIComponent(hostId)}/seal`);
-        if (res.status !== 200) throw new Error(`seal_refused_${res.status}`);
+        if (res.status === 200) return;
+        const cellCode = cellCodeOf(res.text);
+        throw new Error(res.status === 409 && cellCode && SEAL_BUSY.has(cellCode) ? `seal_busy_${cellCode}` : `seal_refused_${res.status}`);
     }
 
     async connection(hostId: string): Promise<{ cellId: string | null; connected: boolean }> {
