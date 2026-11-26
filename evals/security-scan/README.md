@@ -58,3 +58,13 @@ provider failure counts and failed units. A case with exhausted HTTP 429
 retries is not a clean measurement: its output is retained, but more than 5%
 such cases exits 2. Rescoring cannot remove that infrastructure failure.
 Scoring hashes are captured when the runner starts, not after a long run.
+
+## On what a production scan reported (`own-scan.js`)
+
+> - **Answers:** Of what a real scan reported, does the scan's independent check refute what people judged false, keep what they judged real and set the severity they judged; and does the root-cause comparison fold the issues people judged one bug without folding different bugs?
+> - **Runs:** on demand, before a change to the verifier (`application/scan-verifier.ts`) or the root-cause comparison (`application/scan-consolidation.ts`, `domain/root-cause.ts`) ships.
+> - **Run it:** `node evals/security-scan/own-scan.js --dataset=<labelled scan.json> --model=deepseek-v4-flash@fireworks [--stages=verify,consolidate] [--limit=N]`
+> - **Gate:** none yet; exit 2 when more than 5% of the findings were not measured.
+> - **Cost:** one verifier run per labelled finding (about $0.02 each on DeepSeek V4 Flash) plus one comparison per issue with a candidate.
+
+The dataset is a production scan's stored issues with a judged verdict, expected severity and duplicate clusters. It describes real vulnerabilities of the scanned repository, possibly unfixed, so it never lives in this public repository: Kodus keeps its own in the private `kodustech/kodus-eval-runs` (`gold/deep-scan-<repo>-<version>.json`, with the judges and dates). The verify stage calls `SecurityScanEngine.verifyReported`, the check a scan runs on each finding before it ships, over production's sandbox at the scanned commit; the consolidate stage calls `consolidateOpenIssues`, what the end of a scan runs over a repository's open issues. Folds outside a labelled cluster are listed for a person to read: a cluster the first-pass labels missed, or a wrong fold.

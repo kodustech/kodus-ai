@@ -16,6 +16,9 @@ export class CustomClient {
         private readonly integration: MCPIntegrationInterface & {
             serverName?: string;
             providerType?: MCPProviderType;
+            /** The URL is the platform's own (a managed entry resolved from
+             *  its env), not an org's: dialed without the address check. */
+            trusted?: boolean;
         },
     ) {
         this.clientInstance = createMCPAdapter({
@@ -25,6 +28,7 @@ export class CustomClient {
                     type: this.integration.protocol,
                     url: this.integration.baseUrl,
                     headers: this.buildHeaders(),
+                    trusted: this.integration.trusted === true,
                 },
             ],
         });

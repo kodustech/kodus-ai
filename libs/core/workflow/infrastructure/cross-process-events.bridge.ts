@@ -6,10 +6,46 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { Client, Pool } from 'pg';
 
+import {
+    describeConnection,
+    resolveDirectConnection,
+    resolveSessionTimeouts,
+} from '@libs/core/infrastructure/database/typeorm/postgres-connection-env';
 import { createLogger } from '@libs/core/log/logger';
 
 const PG_CHANNEL = 'kodus_cross_process_events';
 const PG_TABLE = 'kodus_cross_process_events';
+
+/**
+ * Payload prefix of the LISTEN self-test (verifyListenDelivery). Envelope
+ * notifications carry numeric ids, so the two never collide.
+ */
+const PROBE_PREFIX = 'probe:';
+const LISTEN_PROBE_TIMEOUT_MS = 5_000;
+/**
+ * A self-test whose NOTIFY could not be sent is tried again, from 2s doubling
+ * up to 60s. After a Postgres restart the LISTEN connection (direct) is often
+ * back before the pool is: PgBouncer keeps refusing logins for its
+ * `server_login_retry` (15s by default).
+ */
+const LISTEN_PROBE_RETRY_MIN_MS = 2_000;
+const LISTEN_PROBE_RETRY_MAX_MS = 60_000;
+
+/**
+ * Whether NOTIFYs reach this process's LISTEN connection, as last measured:
+ *   pending         not measured yet (boot, reconnect in flight)
+ *   delivering      the self-test notification came back
+ *   not-delivering  connected and listening, yet the self-test never came
+ *                   back — typical of a pooler in transaction mode. Events
+ *                   still arrive through the 10s polling fallback.
+ *   unknown         the self-test could not run (no primary, query failed)
+ */
+export interface ListenHealth {
+    status: 'pending' | 'delivering' | 'not-delivering' | 'unknown';
+    /** `host:port/db (direct|pooled)` the listener uses. No credentials. */
+    connection?: string;
+    checkedAt?: string;
+}
 
 /**
  * Resolve the SSL option to hand to the raw `pg.Client` for the LISTEN
@@ -185,6 +221,9 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
     private readonly logger = createLogger(CrossProcessEventsBridge.name);
     private client: Client | null = null;
     private stopped = false;
+    private listenTarget = '';
+    private listenHealth: ListenHealth = { status: 'pending' };
+    private pendingProbe: ((payload: string) => void) | null = null;
     private reconnectDelayMs = 1_000;
 
     /**
@@ -288,6 +327,15 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
         return CrossProcessEventsBridge.primary === this;
     }
 
+    /** LISTEN delivery as last measured by the active instance. */
+    static listenStatus(): ListenHealth {
+        return (
+            CrossProcessEventsBridge.primary?.listenHealth ?? {
+                status: 'unknown',
+            }
+        );
+    }
+
     /** Test hook: reset the singleton between spec cases. */
     static resetPrimaryForTests(): void {
         CrossProcessEventsBridge.primary = null;
@@ -356,6 +404,10 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
             clearTimeout(this.forwardFlushTimer);
             this.forwardFlushTimer = null;
         }
+        if (this.probeRetryTimer) {
+            clearTimeout(this.probeRetryTimer);
+            this.probeRetryTimer = null;
+        }
         // Drain any pending flush before the pool goes away —
         // otherwise the flush lands on a closed pool and throws.
         await this.forwardFlushInFlight?.catch(() => undefined);
@@ -390,9 +442,8 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
             keepAlive: true,
             keepAliveInitialDelayMillis: 10_000,
             application_name: 'kodus-bridge-pool',
-            statement_timeout: 30_000,
-            idle_in_transaction_session_timeout: 60_000,
-        } as const;
+            ...resolveSessionTimeouts(),
+        };
         const pool = new Pool(
             options.url
                 ? {
@@ -614,6 +665,42 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
         return rows ?? [];
     }
 
+    /**
+     * Run `work` inside one transaction on one connection — the only unit a
+     * pooler in transaction mode keeps on a single server session. Same
+     * pool fallback as runQuery.
+     */
+    private async withTransaction(
+        work: (
+            query: <T = any>(sql: string, params?: unknown[]) => Promise<T[]>,
+        ) => Promise<void>,
+    ): Promise<void> {
+        const pool = this.bridgePool;
+        if (!pool) {
+            await this.dataSource.transaction(async (manager) => {
+                await work(
+                    async (sql, params) =>
+                        ((await manager.query(sql, params)) ?? []) as any[],
+                );
+            });
+            return;
+        }
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            await work(async (sql, params) => {
+                const result = await client.query(sql, params as any);
+                return result.rows ?? [];
+            });
+            await client.query('COMMIT');
+        } catch (error) {
+            await client.query('ROLLBACK').catch(() => undefined);
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
     private infraReady = false;
 
     /**
@@ -664,8 +751,12 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
      * removes the row.
      */
     async pollFallback(): Promise<void> {
-        if (!this.isPrimary || this.stopped || !this.infraReady) return;
+        if (!this.isPrimary || this.stopped) return;
         try {
+            // Normally done when LISTEN connects. A LISTEN connection that
+            // never comes up (a direct host that is down or misconfigured)
+            // must not also turn off polling, the fallback for that case.
+            await this.ensureInfra();
             if (!this.pollInitialized) {
                 // Anchor to a stable MAX(id) — apply the same 1s visibility
                 // gap as the working query below, otherwise the first anchor
@@ -744,29 +835,27 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
             // per cycle. With 2 API tasks (typical prod), unlocked
             // DELETEs mean 2 concurrent full-table scans every 10 min
             // — Postgres serializes them (no corruption) but wastes
-            // 2× the work. `pg_try_advisory_lock` returns immediately
-            // (never blocks); if another task holds it we simply
-            // skip this cycle and let that task do the sweep.
+            // 2× the work. `pg_try_advisory_xact_lock` returns
+            // immediately (never blocks); if another task holds it we
+            // simply skip this cycle and let that task do the sweep.
             //
-            // Key is a stable hash of the resource name. Any Postgres
-            // instance is fine — the lock lives on the DB, so all
-            // API/worker tasks connected to the same DB share it.
-            const lockRows = await this.runQuery<{ locked: boolean }>(
-                `SELECT pg_try_advisory_lock(hashtext('kodus-bridge-sweep')) AS locked`,
-            );
-            if (!lockRows?.[0]?.locked) {
-                // Another instance is running the sweep — no-op.
-                return;
-            }
-            try {
-                await this.runQuery(
+            // Transaction-scoped on purpose: the lock, the DELETE and
+            // the unlock (COMMIT) share one transaction, which a pooler
+            // in transaction mode keeps on one server session. The
+            // session-level variant could unlock on a different
+            // session and leave the lock held forever.
+            await this.withTransaction(async (query) => {
+                const lockRows = await query<{ locked: boolean }>(
+                    `SELECT pg_try_advisory_xact_lock(hashtext('kodus-bridge-sweep')) AS locked`,
+                );
+                if (!lockRows?.[0]?.locked) {
+                    // Another instance is running the sweep — no-op.
+                    return;
+                }
+                await query(
                     `DELETE FROM ${PG_TABLE} WHERE created_at < now() - interval '${ROW_TTL_MINUTES} minutes'`,
                 );
-            } finally {
-                await this.runQuery(
-                    `SELECT pg_advisory_unlock(hashtext('kodus-bridge-sweep'))`,
-                ).catch(() => undefined);
-            }
+            });
         } catch (error) {
             this.logger.warn({
                 message:
@@ -898,6 +987,42 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
         if (this.stopped) return;
 
         const options = this.dataSource.options as Record<string, any>;
+        // LISTEN needs a real Postgres session: behind a pooler in
+        // transaction mode the server session that ran LISTEN goes back to
+        // the pool and its notifications are dropped. When a direct
+        // connection is configured (DATABASE_DIRECT_URL /
+        // API_PG_DB_DIRECT_HOST), the listener uses it; otherwise it uses the
+        // same connection as the app, as before.
+        let direct: ReturnType<typeof resolveDirectConnection>;
+        try {
+            direct = resolveDirectConnection();
+        } catch (error) {
+            // A malformed direct connection will not fix itself by retrying:
+            // say so once, and keep delivering through the polling fallback.
+            this.listenHealth = {
+                status: 'unknown',
+                checkedAt: new Date().toISOString(),
+            };
+            this.logger.error({
+                message:
+                    'Cross-process LISTEN disabled: the direct connection setting is invalid. Events still arrive through polling, up to 10s late.',
+                context: CrossProcessEventsBridge.name,
+                error,
+            });
+            return;
+        }
+        const target: Record<string, any> = direct
+            ? {
+                  ...options,
+                  url: direct.url,
+                  host: direct.host,
+                  port: direct.port,
+                  username: direct.username,
+                  password: direct.password,
+                  database: direct.database,
+              }
+            : options;
+        this.listenTarget = `${describeConnection(target)} (${direct ? 'direct' : 'pooled'})`;
         // Deployments may configure Postgres via a single URL instead of
         // discrete fields — building the client only from host/port left
         // those installs without a LISTEN connection.
@@ -905,7 +1030,7 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
         // SSL: resolve via `resolvePgSslOption` (see its docstring) so the
         // raw `pg.Client` picks the same value the pool uses — a bare
         // `ssl: true` fails handshake against RDS/self-signed setups.
-        const ssl = resolvePgSslOption(options);
+        const ssl = resolvePgSslOption(target);
         // Connection hardening (added 2026-07-31 after prod incident):
         //   - keepAlive: TCP-level probes stop the LISTEN connection from
         //     looking idle to RDS. Prod's `idle_session_timeout = 1h` was
@@ -926,22 +1051,21 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
             keepAliveInitialDelayMillis: 10_000,
             connectionTimeoutMillis: 10_000,
             application_name: 'kodus-bridge-listener',
-            statement_timeout: 30_000,
-            idle_in_transaction_session_timeout: 60_000,
-        } as const;
+            ...resolveSessionTimeouts(),
+        };
         const client = new Client(
-            options.url
+            target.url
                 ? {
-                      connectionString: options.url,
+                      connectionString: target.url,
                       ...(ssl !== undefined ? { ssl } : {}),
                       ...clientCommonOpts,
                   }
                 : {
-                      host: options.host,
-                      port: options.port,
-                      user: options.username,
-                      password: options.password,
-                      database: options.database,
+                      host: target.host,
+                      port: target.port,
+                      user: target.username,
+                      password: target.password,
+                      database: target.database,
                       ...(ssl !== undefined ? { ssl } : {}),
                       ...clientCommonOpts,
                   },
@@ -959,6 +1083,12 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
 
         client.on('notification', (msg) => {
             if (msg.channel !== PG_CHANNEL || !msg.payload) return;
+            // Self-test pings from any instance's listenProbe: only the
+            // matching one resolves its probe, the rest are ignored.
+            if (msg.payload.startsWith(PROBE_PREFIX)) {
+                this.pendingProbe?.(msg.payload);
+                return;
+            }
             // Payload is either a single id ("77") from the old code
             // path or a comma-joined list ("77,78,79") from the new
             // batched flush. Parsing on ',' handles both — a single id
@@ -991,11 +1121,21 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
             await client.query(`LISTEN ${PG_CHANNEL}`);
             this.client = client;
             this.reconnectDelayMs = 1_000;
+            this.probeRetryDelayMs = LISTEN_PROBE_RETRY_MIN_MS;
             this.logger.log({
                 message: `Listening on ${PG_CHANNEL} (cross-process event bridge: ${FORWARDED_EVENTS.join(', ')})`,
                 context: CrossProcessEventsBridge.name,
+                metadata: { connection: this.listenTarget },
             });
+            // Not awaited: the probe waits for its own notification and
+            // must never hold up boot or the reconnect loop.
+            void this.verifyListenDelivery(client);
         } catch (error) {
+            this.listenHealth = {
+                status: 'unknown',
+                connection: this.listenTarget,
+                checkedAt: new Date().toISOString(),
+            };
             this.logger.warn({
                 message:
                     'Could not establish cross-process LISTEN connection — retrying',
@@ -1006,12 +1146,123 @@ export class CrossProcessEventsBridge implements OnModuleInit, OnModuleDestroy {
         }
     }
 
+    /**
+     * Send one NOTIFY through the bridge pool and wait for it on the LISTEN
+     * connection. A listener behind a pooler in transaction mode connects
+     * and runs LISTEN without error, then never receives anything; this is
+     * the only way to tell from inside the app.
+     */
+    private async verifyListenDelivery(client: Client): Promise<void> {
+        const nonce = `${PROBE_PREFIX}${INSTANCE_ID}:${randomUUID()}`;
+        let settle!: (delivered: boolean) => void;
+        const delivered = new Promise<boolean>((resolve) => {
+            settle = resolve;
+        });
+        // Registered before the NOTIFY is sent: it can arrive before the
+        // query returns.
+        const handler = (payload: string) => {
+            if (payload === nonce) settle(true);
+        };
+        this.pendingProbe = handler;
+        // Probes overlap across a reconnect. Each one clears only its own
+        // handler, and only the probe of the current connection writes the
+        // status: a reconnect or shutdown since it started owns it.
+        const release = () => {
+            if (this.pendingProbe === handler) this.pendingProbe = null;
+        };
+        const current = () => !this.stopped && this.client === client;
+
+        try {
+            await this.runQuery('SELECT pg_notify($1, $2)', [
+                PG_CHANNEL,
+                nonce,
+            ]);
+        } catch (error) {
+            release();
+            if (!current()) return;
+            this.listenHealth = {
+                status: 'unknown',
+                connection: this.listenTarget,
+                checkedAt: new Date().toISOString(),
+            };
+            const retryInMs = this.retryListenProbe(client);
+            this.logger.warn({
+                message:
+                    'Could not run the cross-process LISTEN self-test — delivery unverified, trying again',
+                context: CrossProcessEventsBridge.name,
+                error,
+                metadata: { retryInMs },
+            });
+            return;
+        }
+        this.probeRetryDelayMs = LISTEN_PROBE_RETRY_MIN_MS;
+
+        // The deadline starts once the NOTIFY is sent: time spent waiting
+        // for a pool connection is not delivery time.
+        const timer = setTimeout(() => settle(false), LISTEN_PROBE_TIMEOUT_MS);
+        timer.unref?.();
+        const ok = await delivered;
+        clearTimeout(timer);
+        release();
+        if (!current()) return;
+
+        this.listenHealth = {
+            status: ok ? 'delivering' : 'not-delivering',
+            connection: this.listenTarget,
+            checkedAt: new Date().toISOString(),
+        };
+        if (ok) {
+            this.logger.log({
+                message: 'Cross-process LISTEN verified: notifications reach this process',
+                context: CrossProcessEventsBridge.name,
+                metadata: { connection: this.listenTarget },
+            });
+            return;
+        }
+        this.logger.warn({
+            message:
+                'Cross-process LISTEN is connected but notifications never arrive. ' +
+                'Postgres is probably behind a pooler in transaction mode (PgBouncer, RDS Proxy). ' +
+                'Events still arrive through polling, up to 10s late. ' +
+                'Set API_PG_DB_DIRECT_HOST or DATABASE_DIRECT_URL to the Postgres server itself so LISTEN gets a real session.',
+            context: CrossProcessEventsBridge.name,
+            metadata: {
+                connection: this.listenTarget,
+                probeTimeoutMs: LISTEN_PROBE_TIMEOUT_MS,
+            },
+        });
+    }
+
+    private probeRetryDelayMs = LISTEN_PROBE_RETRY_MIN_MS;
+    private probeRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** Runs the self-test of `client` again later, while it is still the connection. */
+    private retryListenProbe(client: Client): number {
+        const delay = this.probeRetryDelayMs;
+        // One retry at a time, always for the latest failing probe.
+        if (this.probeRetryTimer) clearTimeout(this.probeRetryTimer);
+        this.probeRetryDelayMs = Math.min(delay * 2, LISTEN_PROBE_RETRY_MAX_MS);
+        this.probeRetryTimer = setTimeout(() => {
+            this.probeRetryTimer = null;
+            if (this.stopped || this.client !== client) return;
+            void this.verifyListenDelivery(client);
+        }, delay);
+        this.probeRetryTimer.unref?.();
+        return delay;
+    }
+
     private reconnectPending = false;
 
     private async scheduleReconnect(oldClient: Client): Promise<void> {
         if (this.stopped) return;
         await oldClient.end().catch(() => undefined);
-        if (this.client === oldClient) this.client = null;
+        if (this.client === oldClient) {
+            this.client = null;
+            this.listenHealth = {
+                status: 'pending',
+                connection: this.listenTarget,
+            };
+        }
         // A failing client can fire 'error' AND reject connect() for the
         // same failure — only one reconnect timer may be live at a time.
         if (this.reconnectPending) return;

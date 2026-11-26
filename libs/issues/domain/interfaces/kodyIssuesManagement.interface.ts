@@ -4,7 +4,11 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 
-import type { IIssueEvidence, IIssueOwner } from './issues.interface';
+import type {
+    IIssueEvidence,
+    IIssueOccurrence,
+    IIssueOwner,
+} from './issues.interface';
 
 export interface IIssueDetails {
     id: string;
@@ -47,6 +51,10 @@ export interface IIssueDetails {
         endLine?: number;
         evidence?: IIssueEvidence;
         lastSeenAt?: string;
+        /** Other places of the same root cause, folded into this issue. */
+        occurrences?: IIssueOccurrence[];
+        /** Set when this issue was folded into another as a duplicate. */
+        duplicateOf?: string;
     };
     owner?: IIssueOwner;
 }

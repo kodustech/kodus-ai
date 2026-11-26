@@ -26,6 +26,7 @@ import {
     reviewSettingsKeysAction,
     reviewSettingsUnsetAction,
     riskPreviewAction,
+    riskRulesAction,
     listApprovalsAction,
     previewApprovalAction,
     toggleApprovalAction,
@@ -177,6 +178,21 @@ export function registerRepositoryConfigCommand(
             ) => {
                 await configRepoSetupAction(repository ?? '.', actionOptions);
             },
+        );
+
+    withScopeOptions(
+        command
+            .command('risk-rules [repository]')
+            .description(
+                "List the risk rules a review applies here: Kodus's rules, as the team left them, then the team's own. Requires kodus auth login.",
+            ),
+    )
+        .option('--json', 'Output the rules as JSON')
+        .action(
+            (
+                repository: string | undefined,
+                actionOptions: ReviewSettingsTargetOptions,
+            ) => riskRulesAction(repository ?? '.', actionOptions),
         );
 
     withScopeOptions(

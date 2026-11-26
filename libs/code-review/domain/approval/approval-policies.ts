@@ -10,6 +10,7 @@ import {
     type RiskAssessmentResult,
 } from '../risk/risk-assessment';
 import { approvalPathsOf, type ApprovalDecision } from './approval-decision';
+import { publicName } from '../public-name';
 import {
     evaluateApprovalFileConditions,
     type ApprovalChangedFile,
@@ -117,12 +118,6 @@ export const policyReasonText: Record<PolicyReason, string> = {
         'The eligibility instruction could not be evaluated.',
     'earlier-policy-matched': 'An earlier policy matched.',
 };
-
-const publicName = (name: string) =>
-    name
-        .replace(/[\r\n]/g, ' ')
-        .replace(/[\\`*_[\]<>~|]/g, '\\$&')
-        .replace(/@/g, '@\u200b');
 
 async function fixedConditions(
     policy: NamedApprovalPolicy,
@@ -271,7 +266,7 @@ export async function evaluateApprovalPolicies(
         }
         return {
             kind: 'approve',
-            reason: `Approved by policy “${publicName(policy.name)}”.`,
+            reason: `Approved by policy ${publicName(policy.name)}.`,
             matchedPolicy: { id: policy.id, name: policy.name },
             policies: results,
         };

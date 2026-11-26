@@ -555,6 +555,9 @@ describe('GetModelsByProviderUseCase — native OpenAI behind a custom base URL 
         expect(assertSafeOpenAICompatibleUrl).toHaveBeenCalledWith(PROXY);
     });
 
+    // What the socket refuses when it resolves the proxy host, through the real
+    // axios: get-models-by-provider.address.spec.ts.
+
     it('lists a saved proxy credential against its own endpoint, never api.openai.com', async () => {
         const useCase = buildUseCase(savedProxy);
 

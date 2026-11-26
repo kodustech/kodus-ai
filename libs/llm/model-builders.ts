@@ -10,6 +10,7 @@
  * typed structurally, not via NormalizedByokConfig.
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { bedrockRegion } from '@libs/llm/providers/bedrock/region';
 import { wrapLanguageModel, type LanguageModel } from 'ai';
 import { createVertex } from '@ai-sdk/google-vertex';
 import { createVertexAnthropic } from '@ai-sdk/google-vertex/anthropic';
@@ -139,7 +140,10 @@ const converseToolInputs = new AsyncLocalStorage<{ inputs?: string[] }>();
 const fetchReadingToolInputs: typeof fetch = async (input, init) => {
     const response = await fetch(input, init);
     const store = converseToolInputs.getStore();
-    const url = typeof input === 'string' ? input : (input as any)?.url ?? String(input);
+    const url =
+        typeof input === 'string'
+            ? input
+            : ((input as any)?.url ?? String(input));
     if (store && response.ok && /\/converse$/.test(url)) {
         try {
             const body: any = await response.clone().json();
@@ -218,7 +222,7 @@ export function bedrockModelFromCredentials(
     config: BedrockCredentials | undefined,
     modelId: string,
 ): LanguageModel {
-    const region = config?.awsRegion?.trim() || 'us-east-1';
+    const region = bedrockRegion(config?.awsRegion);
 
     if (byokAuthKind('amazon_bedrock', config) === 'bedrock-bearer') {
         return keepJsonToolAnswerOnly(

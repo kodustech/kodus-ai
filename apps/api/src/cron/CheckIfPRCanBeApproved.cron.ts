@@ -22,6 +22,7 @@ import {
     prRiskDescriptionKey,
 } from '@libs/code-review/domain/risk/risk-configuration';
 import { ApprovalPoliciesService } from '@libs/code-review/pipeline/services/approval-policies.service';
+import { PrRiskAssessmentService } from '@libs/code-review/pipeline/services/pr-risk-assessment.service';
 import { OwnChangeRequestService } from '@libs/code-review/pipeline/services/own-change-request.service';
 import { hostCommentKey } from '@libs/code-review/domain/approval/own-change-request';
 import { deliveredReviewFindingsHoldReason } from '@libs/code-review/domain/approval/verify-delivered-review-findings';
@@ -70,6 +71,7 @@ import {
     approvalPathsOf,
     approvalPolicyForPlatform,
     approvalPolicyFromConfig,
+    approvalRiskFromShared,
     evaluateReviewedHeadApproval,
     type ApprovalDecision,
 } from '@libs/code-review/domain/approval/approval-decision';
@@ -166,6 +168,52 @@ const CHANGE_REQUEST_REFUSAL_BACKOFF_MS = 15 * 60 * 1000;
 const CHANGE_REQUEST_REFUSAL_BACKOFF_MAX_MS = 24 * 60 * 60 * 1000;
 const SHARED_RISK_STALE_REASON =
     'The risk assessment does not match the current PR or risk settings. Run a new review before automatic approval.';
+// A reassessment is a model call on the org's key or Kodus credits. After a
+// deploy that changes the risk configuration every eligible open PR wants one,
+// so a run starts at most this many, spread across orgs, and none after the
+// hold-reason deadline; the rest wait for the next run.
+const MAX_RISK_REASSESSMENTS_PER_RUN = 30;
+const MAX_RISK_REASSESSMENTS_PER_ORG = 5;
+// A failure that may pass (rate limit, timeout, provider or credits) is retried
+// with backoff; after the last attempt it stands until the text, the settings
+// or the commit change.
+const RISK_RETRY_BASE_MS = 2 * 60 * 1000;
+const RISK_RETRY_MAX_MS = 60 * 60 * 1000;
+const RISK_RETRY_MAX_ATTEMPTS = 6;
+
+/** What the cron decides with; `deferred` waits for the next run, silently. */
+type SharedRiskLookup = {
+    risk?: RiskAssessmentResult;
+    /** Assessed in this pass, after the PR was read. */
+    reassessed?: boolean;
+    deferred?: boolean;
+};
+
+/** The same input would fail the same way: retrying spends a call for nothing. */
+const isSettledFailure = (risk: RiskAssessmentResult) =>
+    risk.status !== 'unavailable' ||
+    risk.failure?.code === 'diff_too_large' ||
+    risk.failure?.category === 'CONTEXT_OVERFLOW';
+
+/** A model failure that may pass on its own, as the review stores it. */
+const isTransientModelFailure = (risk: RiskAssessmentResult) =>
+    risk.status === 'unavailable' &&
+    ['RATE_LIMIT', 'TRANSIENT', 'QUOTA_EXCEEDED'].includes(
+        risk.failure?.category ?? '',
+    );
+
+/**
+ * The review held this head on risk alone (the hold records it), and the
+ * same commits, assessed again, now show none: the hold's only cause is gone
+ * without another review.
+ */
+const riskHoldCleared = (
+    reviewedDecision: { heldBy?: string } | undefined,
+    current: RiskAssessmentResult | undefined,
+) =>
+    reviewedDecision?.heldBy === 'risk' &&
+    current?.status === 'assessed' &&
+    !current.riskIdentified;
 
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
@@ -181,6 +229,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
         IPullRequestMessages | null
     >();
     private reasonWriteDeadline = Number.POSITIVE_INFINITY;
+    private riskReassessments = { total: 0, byOrg: new Map<string, number>() };
 
     constructor(
         @Inject(TEAM_SERVICE_TOKEN)
@@ -208,7 +257,38 @@ export class CheckIfPRCanBeApprovedCronProvider {
         private readonly organizationParameters?: IOrganizationParametersService,
         private readonly approvalPolicies?: ApprovalPoliciesService,
         private readonly ownChangeRequest?: OwnChangeRequestService,
+        private readonly prRiskAssessment?: PrRiskAssessmentService,
     ) {}
+
+    /** The identity an assessment of the live PR would have; none without a risk model. */
+    private async liveRiskKeys(input: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        pullRequest: PullRequest;
+        config: CodeReviewConfig;
+    }): Promise<{ configurationKey: string; descriptionKey: string } | null> {
+        if (!this.organizationParameters) return null;
+        const stored = await runWithBoundedTimeout(
+            this.organizationParameters.findByKey(
+                OrganizationParametersKey.BYOK_CONFIG,
+                input.organizationAndTeamData,
+            ),
+            FINAL_PROVIDER_TIMEOUT_MS,
+            'risk model configuration lookup',
+        );
+        const { slot, verdict } = resolveTaskSlot(
+            isByokConfig(stored?.configValue) ? stored.configValue : undefined,
+            LLM_TASK.riskAssessment,
+        );
+        if (verdict && !verdict.modelId) return null;
+        return {
+            configurationKey: prRiskConfigurationKey({
+                criteria: input.config.riskCriteria,
+                language: input.config.languageResultPrompt,
+                modelSlot: slot,
+            }),
+            descriptionKey: prRiskDescriptionKey(input.pullRequest),
+        };
+    }
 
     private async sharedRiskIsCurrent(input: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -218,35 +298,16 @@ export class CheckIfPRCanBeApprovedCronProvider {
         config: CodeReviewConfig;
         risk?: RiskAssessmentResult;
     }): Promise<boolean> {
-        if (!this.organizationParameters) return false;
         try {
-            const stored = await runWithBoundedTimeout(
-                this.organizationParameters.findByKey(
-                    OrganizationParametersKey.BYOK_CONFIG,
-                    input.organizationAndTeamData,
-                ),
-                FINAL_PROVIDER_TIMEOUT_MS,
-                'risk model configuration lookup',
-            );
-            const { slot, verdict } = resolveTaskSlot(
-                isByokConfig(stored?.configValue)
-                    ? stored.configValue
-                    : undefined,
-                LLM_TASK.riskAssessment,
-            );
-            if (verdict && !verdict.modelId) return false;
+            const keys = await this.liveRiskKeys(input);
+            if (!keys) return false;
             return isCurrentRiskAssessment(input.risk, {
                 organizationId: input.organizationAndTeamData.organizationId,
                 repositoryId: input.repositoryId,
                 prNumber: input.prNumber,
                 headSha: input.pullRequest?.head?.sha ?? '',
                 baseSha: input.pullRequest?.base?.sha ?? '',
-                configurationKey: prRiskConfigurationKey({
-                    criteria: input.config.riskCriteria,
-                    language: input.config.languageResultPrompt,
-                    modelSlot: slot,
-                }),
-                descriptionKey: prRiskDescriptionKey(input.pullRequest),
+                ...keys,
             });
         } catch (error) {
             this.logger.warn({
@@ -261,6 +322,173 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 },
             });
             return false;
+        }
+    }
+
+    /**
+     * The shared assessment the cron decides with. Editing a PR's title or
+     * description, or the risk settings, starts no review, so an assessment of
+     * the same commits that only those made stale is redone here and stored on
+     * the execution, instead of asking for a review nobody runs (#2610). New
+     * commits still wait for their own review. No `risk`: no usable assessment.
+     */
+    private async currentSharedRisk(input: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+        prNumber: number;
+        pullRequest: PullRequest | null | undefined;
+        config: CodeReviewConfig;
+        execution: { uuid?: string; dataExecution?: any } | null | undefined;
+    }): Promise<SharedRiskLookup> {
+        const data = input.execution?.dataExecution;
+        const stored = data?.riskAssessment as RiskAssessmentResult | undefined;
+        const live = input.pullRequest;
+        if (!live) return {};
+        const identity = {
+            organizationAndTeamData: input.organizationAndTeamData,
+            repositoryId: input.repository.id,
+            prNumber: input.prNumber,
+            pullRequest: live,
+            config: input.config,
+        };
+        if (await this.sharedRiskIsCurrent({ ...identity, risk: stored }))
+            return { risk: stored };
+        const snapshot =
+            stored && stored.status !== 'disabled'
+                ? stored.snapshot
+                : undefined;
+        if (
+            !this.prRiskAssessment ||
+            !input.execution?.uuid ||
+            !snapshot ||
+            !live.head?.sha ||
+            snapshot.headSha !== live.head.sha ||
+            snapshot.baseSha !== live.base?.sha
+        )
+            return {};
+        try {
+            const keys = await this.liveRiskKeys(identity);
+            if (!keys) return {};
+            const sameInput =
+                snapshot.descriptionKey === keys.descriptionKey &&
+                snapshot.configurationKey === keys.configurationKey;
+            const retry = data.riskRetry as
+                | {
+                      descriptionKey: string;
+                      configurationKey: string;
+                      attempts: number;
+                      retryAfter?: number;
+                  }
+                | undefined;
+            const retryOfThisInput =
+                retry?.descriptionKey === keys.descriptionKey &&
+                retry?.configurationKey === keys.configurationKey
+                    ? retry
+                    : undefined;
+            if (sameInput) {
+                if (stored?.status !== 'unavailable') return {};
+                // Same text and settings: an unavailable result stands and
+                // says why, until a failure that may pass is due a retry. One
+                // the review stored has no attempts yet, so it is due now.
+                const due = retryOfThisInput
+                    ? retryOfThisInput.retryAfter !== undefined &&
+                      Date.now() >= retryOfThisInput.retryAfter
+                    : isTransientModelFailure(stored);
+                if (!due) return { risk: stored };
+            }
+            const orgId = input.organizationAndTeamData.organizationId;
+            const orgCount = this.riskReassessments.byOrg.get(orgId) ?? 0;
+            if (
+                this.riskReassessments.total >=
+                    MAX_RISK_REASSESSMENTS_PER_RUN ||
+                orgCount >= MAX_RISK_REASSESSMENTS_PER_ORG ||
+                Date.now() >= this.reasonWriteDeadline
+            )
+                return { deferred: true };
+            this.riskReassessments.total += 1;
+            this.riskReassessments.byOrg.set(orgId, orgCount + 1);
+            const { assessment } = await this.prRiskAssessment.assess({
+                organizationAndTeamData: input.organizationAndTeamData,
+                repository: input.repository,
+                pullRequest: {
+                    number: input.prNumber,
+                    title: live.title,
+                    body: live.body,
+                    head: { sha: live.head.sha },
+                    base: { sha: live.base?.sha },
+                    changedFilesCount: (live as { changedFilesCount?: number })
+                        .changedFilesCount,
+                },
+                codeReviewConfig: input.config,
+                origin: 'approval-cron',
+            });
+            if (assessment.status === 'disabled') return {};
+            // Keyed to this text and these settings even when it failed, so the
+            // next pass reuses it instead of assessing again.
+            const result: RiskAssessmentResult =
+                assessment.status === 'unavailable' && !assessment.snapshot
+                    ? { ...assessment, snapshot: { ...snapshot, ...keys } }
+                    : assessment;
+            const attempts = (retryOfThisInput?.attempts ?? 0) + 1;
+            const riskRetry = isSettledFailure(result)
+                ? undefined
+                : {
+                      ...keys,
+                      attempts,
+                      ...(attempts < RISK_RETRY_MAX_ATTEMPTS
+                          ? {
+                                retryAfter:
+                                    Date.now() +
+                                    Math.min(
+                                        RISK_RETRY_BASE_MS *
+                                            2 ** (attempts - 1),
+                                        RISK_RETRY_MAX_MS,
+                                    ),
+                            }
+                          : {}),
+                  };
+            const approvalRisk = approvalRiskFromShared(result, live.head.sha);
+            await this.automationExecutionService.update(
+                { uuid: input.execution.uuid },
+                {
+                    dataExecution: {
+                        ...data,
+                        riskAssessment: result,
+                        approvalRisk,
+                        riskRetry,
+                    },
+                },
+            );
+            // Later writes on this pass start from the same data.
+            data.riskAssessment = result;
+            data.approvalRisk = approvalRisk;
+            data.riskRetry = riskRetry;
+            this.logger.log({
+                message: `Reassessed risk for PR#${input.prNumber} after its text or risk settings changed: ${result.status === 'assessed' ? (result.riskIdentified ? 'risk' : 'no risk') : 'unavailable'}`,
+                context: CheckIfPRCanBeApprovedCronProvider.name,
+                metadata: {
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    repositoryId: input.repository.id,
+                    prNumber: input.prNumber,
+                    headSha: live.head.sha,
+                },
+            });
+            return result.status === 'assessed' &&
+                !(await this.sharedRiskIsCurrent({ ...identity, risk: result }))
+                ? { reassessed: true }
+                : { risk: result, reassessed: true };
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not reassess risk after the PR text changed',
+                context: CheckIfPRCanBeApprovedCronProvider.name,
+                error,
+                metadata: {
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    repositoryId: input.repository.id,
+                    prNumber: input.prNumber,
+                },
+            });
+            return {};
         }
     }
 
@@ -304,6 +532,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
         this.pullRequestMessagesCache.clear();
         this.reasonWriteDeadline =
             Date.now() + APPROVAL_REASON_WRITE_DEADLINE_MS;
+        this.riskReassessments = { total: 0, byOrg: new Map() };
 
         try {
             this.logger.log({
@@ -1255,6 +1484,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     ),
             );
             if (findingsHold) return hold(findingsHold);
+            // Labels, authors, files, line limits and sensitive paths decide
+            // without risk: a PR they hold costs no risk reassessment.
             if (
                 codeReviewConfig.riskAssessmentActive === true &&
                 !(await this.sharedRiskIsCurrent({
@@ -1265,7 +1496,40 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     config: codeReviewConfig,
                     risk: data.riskAssessment,
                 }))
-            )
+            ) {
+                const fixed = await this.approvalPolicies.evaluate({
+                    organizationAndTeamData,
+                    repository: pr.repository,
+                    pullRequest: { ...live, number: pr.number },
+                    config: codeReviewConfig,
+                    platformType,
+                    reviewClean: true,
+                    fixedConditionsOnly: true,
+                });
+                if (fixed.decision.kind !== 'approve') {
+                    // As the full evaluation below reports it.
+                    await this.postConditionalApprovalReason(
+                        request,
+                        platformType,
+                        fixed.decision,
+                    );
+                    return false;
+                }
+            }
+            const lookup: SharedRiskLookup =
+                codeReviewConfig.riskAssessmentActive === true
+                    ? await this.currentSharedRisk({
+                          organizationAndTeamData,
+                          repository: pr.repository,
+                          prNumber: pr.number,
+                          pullRequest: live,
+                          config: codeReviewConfig,
+                          execution: latest,
+                      })
+                    : { risk: data.riskAssessment };
+            if (lookup.deferred) return false;
+            const risk = lookup.risk;
+            if (codeReviewConfig.riskAssessmentActive === true && !risk)
                 return hold(SHARED_RISK_STALE_REASON);
             const { decision, eligibility } =
                 await this.approvalPolicies.evaluate({
@@ -1275,7 +1539,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     config: codeReviewConfig,
                     platformType,
                     reviewClean: true,
-                    risk: data.riskAssessment,
+                    risk,
                     heavy: data.heavy,
                     previousEligibility: data.approvalPolicyEligibility,
                 });
@@ -1708,18 +1972,53 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         });
                         return null;
                     })) === PullRequestReviewState.APPROVED;
-                if (
-                    needsSharedRisk &&
-                    !approvedOnHost &&
-                    !(await this.sharedRiskIsCurrent({
-                        organizationAndTeamData,
-                        repositoryId: repository.id,
-                        prNumber,
-                        pullRequest: currentPullRequest,
-                        config: codeReviewConfig,
-                        risk: lastExecution.dataExecution?.riskAssessment,
-                    }))
-                ) {
+                const reviewedHeadInput = {
+                    approvalActive: true,
+                    reviewedDecision,
+                    approvedOnHost,
+                    policy,
+                    author:
+                        currentPullRequest?.user?.login ??
+                        (
+                            currentPullRequest?.user as
+                                { username?: string } | undefined
+                        )?.username,
+                    labels: currentPullRequest?.labels,
+                    changedPaths,
+                    reviewClean: true,
+                    currentHeadSha,
+                };
+                // Scope, authors, labels and sensitive paths decide without
+                // risk: a PR they hold costs no risk reassessment.
+                if (needsSharedRisk && !approvedOnHost && policy?.assessRisk) {
+                    const withoutRisk = evaluateReviewedHeadApproval({
+                        ...reviewedHeadInput,
+                        policy: { ...policy, assessRisk: false },
+                    });
+                    if (withoutRisk.kind !== 'approve') {
+                        if (withoutRisk.kind === 'hold')
+                            await this.postConditionalApprovalReason(
+                                codeManagementRequestData,
+                                platformType,
+                                withoutRisk,
+                            );
+                        return false;
+                    }
+                }
+                const lookup: SharedRiskLookup =
+                    needsSharedRisk && !approvedOnHost
+                        ? await this.currentSharedRisk({
+                              organizationAndTeamData,
+                              repository,
+                              prNumber,
+                              pullRequest: currentPullRequest,
+                              config: codeReviewConfig,
+                              execution: lastExecution,
+                          })
+                        : { risk: lastExecution.dataExecution?.riskAssessment };
+                if (lookup.deferred) return false;
+                const sharedRisk = lookup.risk;
+                if (needsSharedRisk && !approvedOnHost && !sharedRisk) {
                     await this.postConditionalApprovalReason(
                         codeManagementRequestData,
                         platformType,
@@ -1727,10 +2026,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     );
                     return false;
                 }
-                const sharedVeto = lastExecution.dataExecution?.riskAssessment
+                const sharedVeto = sharedRisk
                     ? riskApprovalVeto(
                           codeReviewConfig?.riskAssessmentActive === true,
-                          lastExecution.dataExecution.riskAssessment,
+                          sharedRisk,
                           {
                               headSha: currentHeadSha,
                               baseSha: currentPullRequest?.base?.sha ?? '',
@@ -1747,21 +2046,8 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     return false;
                 }
                 const decision = evaluateReviewedHeadApproval({
-                    approvalActive: true,
-                    reviewedDecision,
-                    approvedOnHost,
-                    policy,
-                    author:
-                        currentPullRequest?.user?.login ??
-                        (
-                            currentPullRequest?.user as
-                                { username?: string } | undefined
-                        )?.username,
-                    labels: currentPullRequest?.labels,
-                    changedPaths,
-                    reviewClean: true,
+                    ...reviewedHeadInput,
                     risk: lastExecution.dataExecution?.approvalRisk,
-                    currentHeadSha,
                 });
                 conditionalDecision = decision;
                 if (decision.kind !== 'approve') {
@@ -1779,8 +2065,13 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     return false;
                 }
                 // A prior hold can become an approval only after another
-                // review confirms that the now-changed policy is safe.
-                if (allowNoComments && reviewedDecision?.kind === 'hold') {
+                // review confirms that the now-changed policy is safe, or when
+                // risk held it and this head, assessed again, is now low.
+                if (
+                    allowNoComments &&
+                    reviewedDecision?.kind === 'hold' &&
+                    !riskHoldCleared(reviewedDecision, sharedRisk)
+                ) {
                     return false;
                 }
             }
@@ -2023,21 +2314,43 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         }
                         return false;
                     }
-                    if (
-                        needsSharedRisk &&
-                        !(await this.sharedRiskIsCurrent({
-                            organizationAndTeamData,
-                            repositoryId: repository.id,
-                            prNumber,
-                            pullRequest: latestPullRequest,
-                            config: codeReviewConfig,
-                            risk: lastExecution.dataExecution?.riskAssessment,
-                        }))
-                    ) {
+                    const lookup: SharedRiskLookup = needsSharedRisk
+                        ? await this.currentSharedRisk({
+                              organizationAndTeamData,
+                              repository,
+                              prNumber,
+                              pullRequest: latestPullRequest,
+                              config: codeReviewConfig,
+                              execution: lastExecution,
+                          })
+                        : {};
+                    // An assessment made here ran after the head was read for
+                    // the last time: it is stored, and the next pass approves
+                    // after checking the head again.
+                    if (lookup.deferred || lookup.reassessed) return false;
+                    const sharedRisk = lookup.risk;
+                    if (needsSharedRisk && !sharedRisk) {
                         await this.postConditionalApprovalReason(
                             codeManagementRequestData,
                             platformType,
                             { kind: 'hold', reason: SHARED_RISK_STALE_REASON },
+                        );
+                        return false;
+                    }
+                    // As on the other paths: the hold names the shared result,
+                    // never the model's own rationale.
+                    const sharedVeto = sharedRisk
+                        ? riskApprovalVeto(true, sharedRisk, {
+                              headSha: latestHeadSha,
+                              baseSha: latestPullRequest?.base?.sha ?? '',
+                              description: latestPullRequest ?? undefined,
+                          })
+                        : undefined;
+                    if (sharedVeto) {
+                        await this.postConditionalApprovalReason(
+                            codeManagementRequestData,
+                            platformType,
+                            { kind: 'hold', reason: sharedVeto },
                         );
                         return false;
                     }

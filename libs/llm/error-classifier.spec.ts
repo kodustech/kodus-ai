@@ -1474,3 +1474,67 @@ describe('classifyLLMError: Kody on #2700, second pass', () => {
         expect(info.friendlyMessage).not.toContain('old.example');
     });
 });
+
+describe('classifyLLMError: the address guard refusal is read from the error, not a body', () => {
+    it('a 400 whose body quotes the refusal sentence keeps its status category', () => {
+        const err = Object.assign(new Error('Bad Request'), {
+            name: 'AI_APICallError',
+            statusCode: 400,
+            responseBody: JSON.stringify({
+                error: {
+                    message:
+                        'messages[0]: the diff says BYOK base URL host "x" resolves to a private or reserved address; the call was not sent.',
+                },
+            }),
+        });
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.REQUEST_REJECTED,
+        );
+    });
+
+    it('a status-less failure whose BODY alone quotes the refusal sentence is not CONFIG_INVALID', () => {
+        const err = Object.assign(new Error('upstream failed'), {
+            responseBody:
+                'the diff says BYOK base URL host "x" resolves to a private or reserved address; the call was not sent.',
+        });
+        expect(classifyLLMError(err).category).toBe(LlmErrorCategory.UNKNOWN);
+    });
+
+    it("a provider's 400 whose own message quotes the refusal sentence keeps its status category", () => {
+        const err = Object.assign(
+            new Error(
+                'Invalid prompt: BYOK base URL host "x" resolves to a private or reserved address; the call was not sent.',
+            ),
+            { name: 'AI_APICallError', statusCode: 400 },
+        );
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.REQUEST_REJECTED,
+        );
+    });
+
+    it('a refusal carried under a status is still CONFIG_INVALID (never retried)', () => {
+        const refusal = Object.assign(new Error('refused'), {
+            name: 'GatewayAddressRefusedError',
+            code: 'EBYOK_GATEWAY_ADDRESS',
+        });
+        const err = Object.assign(new Error('wrapped'), {
+            statusCode: 503,
+            cause: refusal,
+        });
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.CONFIG_INVALID,
+        );
+    });
+
+    it('a status-less failure whose cause carries the guard code is CONFIG_INVALID', () => {
+        const refusal = Object.assign(new Error('refused'), {
+            code: 'EBYOK_GATEWAY_ADDRESS',
+        });
+        const err = Object.assign(new TypeError('fetch failed'), {
+            cause: refusal,
+        });
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.CONFIG_INVALID,
+        );
+    });
+});

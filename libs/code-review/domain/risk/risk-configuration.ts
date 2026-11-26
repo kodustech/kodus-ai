@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { CHANGE_RISK_PROMPT } from './change-risk-prompt';
+import { DEFAULT_RISK_CRITERIA } from './default-risk-criteria';
 import {
     riskCriteriaSchema,
     type RiskCriterion,
@@ -9,16 +10,22 @@ import {
     type NormalizedModel,
 } from '@libs/llm/byok-config';
 
-/** The assessment reads title/body as well as code; edits invalidate its reuse. */
+/**
+ * The assessment reads title/body as well as code; edits invalidate its reuse.
+ * Line endings and surrounding space are normalized, so a provider returning
+ * the same text with CRLF or a trailing newline is not a change.
+ */
 export function prRiskDescriptionKey(input: { title?: string; body?: string }) {
     return createHash('sha256')
-        .update(
-            JSON.stringify({
-                title: input.title ?? '',
-                body: input.body ?? '',
-            }),
-        )
+        .update(JSON.stringify(normalizedPrText(input)))
         .digest('hex');
+}
+
+/** PR text as every risk identity compares it: LF line endings, trimmed. */
+export function normalizedPrText(input: { title?: string; body?: string }) {
+    const text = (value?: string) =>
+        (value ?? '').replace(/\r\n?/g, '\n').trim();
+    return { title: text(input.title), body: text(input.body) };
 }
 
 export function prRiskConfigurationKey(input: {
@@ -42,8 +49,9 @@ export function prRiskConfigurationKey(input: {
     return createHash('sha256')
         .update(
             JSON.stringify({
-                version: 11,
+                version: 13,
                 prompt: CHANGE_RISK_PROMPT,
+                defaults: DEFAULT_RISK_CRITERIA,
                 criteria: riskCriteriaSchema.parse(input.criteria ?? []),
                 language: input.language ?? 'en-US',
                 model: identity(input.modelSlot),

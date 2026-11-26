@@ -4,7 +4,6 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Logger, Module } from '@nestjs/common';
 
-
 import {
     AnalyticsWarehouseModule,
     BackfillOrchestratorService,
@@ -14,6 +13,7 @@ import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { SharedConfigModule } from '@libs/shared/infrastructure/shared-config.module';
 import { SharedLogModule } from '@libs/shared/infrastructure/shared-log.module';
 import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
 
 /**
  * Backfill CLI — populates the analytics warehouse from Mongo `pullRequests`.
@@ -117,6 +117,7 @@ async function main() {
     const args = parseArgs();
 
     const app = await NestFactory.createApplicationContext(BackfillModule, {
+        ...NEST_APP_OPTIONS,
         logger: ['log', 'warn', 'error'],
     });
 
@@ -132,9 +133,7 @@ async function main() {
     const onSignal = (sig: string) => {
         if (signaled) return;
         signaled = true;
-        logger.warn(
-            `received ${sig} — finishing current window then exiting`,
-        );
+        logger.warn(`received ${sig} — finishing current window then exiting`);
         ac.abort();
     };
     process.on('SIGINT', () => onSignal('SIGINT'));

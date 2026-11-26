@@ -1,4 +1,5 @@
 import type { ModelListing, CatalogModel } from '../kernel/types';
+import { AWS_REGION_RE } from './region';
 import { catalogWithReasoning } from '../kernel/listing-helpers';
 
 /**
@@ -9,9 +10,18 @@ import { catalogWithReasoning } from '../kernel/listing-helpers';
  * here, so they are never offered as a pick.
  */
 const CURATED: Array<{ id: string; name: string }> = [
-    { id: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0', name: 'Claude Sonnet 4.5 (us, cross-region)' },
-    { id: 'us.anthropic.claude-opus-4-1-20250805-v1:0', name: 'Claude Opus 4.1 (us, cross-region)' },
-    { id: 'us.anthropic.claude-opus-4-20250514-v1:0', name: 'Claude Opus 4 (us, cross-region)' },
+    {
+        id: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        name: 'Claude Sonnet 4.5 (us, cross-region)',
+    },
+    {
+        id: 'us.anthropic.claude-opus-4-1-20250805-v1:0',
+        name: 'Claude Opus 4.1 (us, cross-region)',
+    },
+    {
+        id: 'us.anthropic.claude-opus-4-20250514-v1:0',
+        name: 'Claude Opus 4 (us, cross-region)',
+    },
 ];
 
 // Look up caps by the Anthropic-style suffix (after "anthropic." — the
@@ -31,7 +41,6 @@ export const BEDROCK_CURATED_CATALOG: CatalogModel[] = CURATED.map(
 /** AWS regions are `<area>-<name>-<number>` (e.g. us-east-1, eu-central-1). The
  *  region flows from user config INTO the request host, so validate it strictly
  *  before it can shape the URL — an unvalidated region is an SSRF vector. */
-const AWS_REGION_RE = /^[a-z]{2}-[a-z]+-\d+$/;
 
 /**
  * Amazon Bedrock model listing.
@@ -90,8 +99,7 @@ const httpListing: ModelListing = {
                 // be offered as a fresh pick. Permissive when the field is
                 // absent rather than dropping everything on an unexpected shape.
                 const lifecycle = s.modelLifecycle as
-                    | { status?: unknown }
-                    | undefined;
+                    { status?: unknown } | undefined;
                 if ((lifecycle?.status ?? 'ACTIVE') !== 'ACTIVE') return false;
                 // ListFoundationModels also returns embedding models (Titan
                 // Embed, Cohere Embed) and image models (Nova Canvas, Stability)
@@ -111,8 +119,7 @@ const httpListing: ModelListing = {
             })
             .map((s) => {
                 const id = typeof s.modelId === 'string' ? s.modelId : '';
-                const name =
-                    typeof s.modelName === 'string' ? s.modelName : id;
+                const name = typeof s.modelName === 'string' ? s.modelName : id;
                 return id
                     ? catalogWithReasoning(id, name, reasoningKeyOf(id))
                     : null;

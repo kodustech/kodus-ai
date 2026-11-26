@@ -108,6 +108,8 @@ To use your own PostgreSQL or MongoDB, set `USE_LOCAL_DB=false` and point the `A
 
 The API accepts `DATABASE_URL` and `MONGODB_URI`. When using the installer, keep `API_PG_DB_PASSWORD` and `API_MG_DB_PASSWORD` set because the installer requires both and Compose still starts the bundled containers.
 
+Running PostgreSQL behind PgBouncer or another connection pooler, or as a highly available cluster? See [PostgreSQL behind a connection pooler](/en/how_to_deploy/deploy_kodus/postgres_pooler).
+
 ### RabbitMQ configuration
 
 RabbitMQ is required. Keep the URI in sync with the user, password and virtual host.

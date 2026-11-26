@@ -38,7 +38,9 @@ describe('OrganizationParametersController.testByokConnection — body passthrou
             undefined as any, // getCockpitMetricsVisibilityUseCase
             undefined as any, // ignoreBotsUseCase
             undefined as any, // updateAutoLicenseAllowedUsersUseCase
-            {} as any, // request
+            undefined as any, // getFixedEgressIpUseCase
+            undefined as any, // setFixedEgressIpUseCase
+            { user: { organization: { uuid: 'org-1' } } } as any, // request
         );
     });
 
@@ -67,7 +69,7 @@ describe('OrganizationParametersController.testByokConnection — body passthrou
                 temperature: 0.3,
                 reasoningEffort: 'high',
             }),
-            undefined,
+            'org-1',
         );
     });
 
@@ -94,7 +96,7 @@ describe('OrganizationParametersController.testByokConnection — body passthrou
                 awsSessionToken: 'session',
                 vertexLocation: 'global',
             }),
-            undefined,
+            'org-1',
         );
     });
 });

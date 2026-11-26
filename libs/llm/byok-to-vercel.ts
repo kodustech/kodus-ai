@@ -6,6 +6,7 @@
  * managed/trial constants to ./byok-defaults (Wave 4, SRP); both are re-exported
  * here so existing `@libs/llm/byok-to-vercel` import paths keep working.
  */
+import { assertVertexServiceAccountKey } from '@libs/llm/providers/vertex/credential-type';
 import type { LanguageModel } from 'ai';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { decrypt } from '@libs/common/utils/crypto';
@@ -14,6 +15,7 @@ import { canonicalUpstreamModelId } from '@libs/llm/providers/kodus/model-id';
 // Provider registry (Phase 1): every BYOK provider resolves through REGISTRY.
 // Importing the barrel registers all provider modules via side effect.
 import { REGISTRY } from '@libs/llm/providers';
+import { gatewayGuardedFetch } from '@libs/llm/gateway-address-guard';
 import { resolveManagedSlot, type ByokModelOptions } from './managed-slot';
 import { DEFAULT_MODEL } from './byok-defaults';
 
@@ -102,15 +104,28 @@ export function buildModelFromSlot(
     // `model` is repaired at the same spread for the same reason: a stored id the
     // upstream has retired (Fireworks' deepseek-v4-flash-0731) 404s on every call
     // until the org edits its config, so it runs as its replacement instead.
+    //
+    // A base URL on a BYOK slot came from the org, so the call is sent through
+    // the gateway address check: what the host resolves to when the connection
+    // opens is judged again, because the save-time check only saw what it
+    // resolved to then. Wraps a caller's transport (the probe's) instead of
+    // replacing it.
     const apiKey = decrypt(slot.apiKey);
+    // An org's Vertex key reaches google-auth-library, which follows the
+    // credential's own URLs for anything but a service account.
+    if (slot.provider === 'google_vertex')
+        assertVertexServiceAccountKey(apiKey);
+    const baseURL = repairBaseUrl(slot.baseURL);
     return REGISTRY.get(slot.provider).build(
         {
             ...slot,
             apiKey,
-            baseURL: repairBaseUrl(slot.baseURL),
+            baseURL,
             model: canonicalUpstreamModelId(slot.model),
         },
-        options,
+        baseURL
+            ? { ...options, fetch: gatewayGuardedFetch(options.fetch) }
+            : options,
     );
 }
 

@@ -21,6 +21,42 @@ services:
             retries: 5
             start_period: 30s
 
+    # PgBouncer in TRANSACTION mode in front of db_postgres, configured the
+    # way the self-hosted docs recommend (track_extra_parameters for the
+    # timeouts Kodus sends at connect). The lock and event-bridge
+    # integration specs run against it as well as against Postgres directly
+    # (TEST_PGBOUNCER_PORT), so anything that needs a real session fails
+    # here instead of on a customer's pooler.
+    db_pgbouncer:
+        image: docker.io/edoburu/pgbouncer:v1.26.1-p0
+        container_name: pgbouncer
+        ports:
+            - '6432:5432'
+        environment:
+            DB_HOST: db_postgres
+            DB_PORT: '5432'
+            DB_USER: ${API_PG_DB_USERNAME}
+            DB_PASSWORD: ${API_PG_DB_PASSWORD}
+            DB_NAME: ${API_PG_DB_DATABASE}
+            POOL_MODE: transaction
+            AUTH_TYPE: scram-sha-256
+            DEFAULT_POOL_SIZE: '5'
+            MAX_CLIENT_CONN: '500'
+        # The image has no env for track_extra_parameters: let its
+        # entrypoint write the ini, append the line, then start pgbouncer.
+        entrypoint:
+            - /bin/sh
+            - -c
+            - >-
+                /entrypoint.sh true &&
+                echo 'track_extra_parameters = statement_timeout,idle_in_transaction_session_timeout' >> /etc/pgbouncer/pgbouncer.ini &&
+                exec pgbouncer /etc/pgbouncer/pgbouncer.ini
+        depends_on:
+            db_postgres:
+                condition: service_healthy
+        networks:
+            - kodus-backend-services-test
+
     db_mongodb:
         image: docker.io/mongo:8.2.11
         container_name: mongodb

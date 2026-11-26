@@ -109,13 +109,31 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
                 repository.recordKodyChangeRequest(ORG, 'repo-1', 1, {
                     requestedAt: T1,
                     commentIds: ['101', '102'],
-                    summaryCommentId: 'd-1',
+                    suggestionIds: ['s-101', 's-102'],
+                    findingComments: [
+                        { suggestionId: 's-101', commentId: '101' },
+                        { suggestionId: 's-102', commentId: '102' },
+                    ],
                 }),
+            ).resolves.toBe(true);
+            await expect(
+                repository.addKodyChangeRequestSummary(
+                    ORG,
+                    'repo-1',
+                    1,
+                    T1,
+                    'd-1',
+                ),
             ).resolves.toBe(true);
 
             expect(await stored(1)).toEqual({
                 requestedAt: T1,
                 commentIds: ['101', '102'],
+                suggestionIds: ['s-101', 's-102'],
+                findingComments: [
+                    { suggestionId: 's-101', commentId: '101' },
+                    { suggestionId: 's-102', commentId: '102' },
+                ],
                 summaryCommentIds: ['d-1'],
             });
             expect(await stored(1, OTHER_ORG)).toBeUndefined();
@@ -135,6 +153,8 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
                 repository.recordKodyChangeRequest(ORG, 'repo-1', 999, {
                     requestedAt: T1,
                     commentIds: ['1'],
+                    suggestionIds: ['s-1'],
+                    findingComments: [{ suggestionId: 's-1', commentId: '1' }],
                 }),
             ).resolves.toBe(false);
         });
@@ -143,23 +163,52 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
             await repository.recordKodyChangeRequest(ORG, 'repo-1', 1, {
                 requestedAt: T2,
                 commentIds: ['102', '103'],
+                suggestionIds: ['s-102', 's-103'],
+                findingComments: [
+                    { suggestionId: 's-102', commentId: '102' },
+                    { suggestionId: 's-103', commentId: '103' },
+                ],
             });
 
             expect(await stored(1)).toEqual({
                 requestedAt: T2,
                 commentIds: ['101', '102', '103'],
+                suggestionIds: ['s-101', 's-102', 's-103'],
+                findingComments: [
+                    { suggestionId: 's-101', commentId: '101' },
+                    { suggestionId: 's-102', commentId: '102' },
+                    { suggestionId: 's-103', commentId: '103' },
+                ],
                 summaryCommentIds: ['d-1'],
             });
+        });
+
+        it('adds no summary to a request replaced since it was made', async () => {
+            await expect(
+                repository.addKodyChangeRequestSummary(
+                    ORG,
+                    'repo-1',
+                    1,
+                    T1,
+                    'd-stale',
+                ),
+            ).resolves.toBe(false);
+
+            expect((await stored(1))?.summaryCommentIds).toEqual(['d-1']);
         });
 
         it('lists the open PRs of the organization that carry a request', async () => {
             await repository.recordKodyChangeRequest(ORG, 'repo-1', 3, {
                 requestedAt: T1,
                 commentIds: ['301'],
+                suggestionIds: ['s-301'],
+                findingComments: [{ suggestionId: 's-301', commentId: '301' }],
             });
             await repository.recordKodyChangeRequest(OTHER_ORG, 'repo-1', 1, {
                 requestedAt: T1,
                 commentIds: ['901'],
+                suggestionIds: ['s-901'],
+                findingComments: [{ suggestionId: 's-901', commentId: '901' }],
             });
 
             // PR 2 has no request, PR 3 is closed.
@@ -175,6 +224,12 @@ const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
                 kodyChangeRequest: {
                     requestedAt: T2,
                     commentIds: ['101', '102', '103'],
+                    suggestionIds: ['s-101', 's-102', 's-103'],
+                    findingComments: [
+                        { suggestionId: 's-101', commentId: '101' },
+                        { suggestionId: 's-102', commentId: '102' },
+                        { suggestionId: 's-103', commentId: '103' },
+                    ],
                     summaryCommentIds: ['d-1'],
                 },
             });

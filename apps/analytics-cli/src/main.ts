@@ -12,6 +12,7 @@ import {
 import { SharedConfigModule } from '@libs/shared/infrastructure/shared-config.module';
 import { SharedLogModule } from '@libs/shared/infrastructure/shared-log.module';
 import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
 
 /**
  * Analytics warehouse backfill CLI — prod-ready entry.
@@ -122,6 +123,7 @@ async function main() {
     const args = parseArgs();
 
     const app = await NestFactory.createApplicationContext(BackfillModule, {
+        ...NEST_APP_OPTIONS,
         logger: ['log', 'warn', 'error'],
     });
 
