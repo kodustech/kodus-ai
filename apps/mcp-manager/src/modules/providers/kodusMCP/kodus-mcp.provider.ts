@@ -35,6 +35,9 @@ interface ManagedIntegrationConfig {
     id: string;
     name: string;
     baseUrl: string;
+    /** The catalog URL was relative, resolved against the platform's own MCP
+     *  server address (`resolveManagedBaseUrl`): a first-party endpoint. */
+    trusted?: boolean;
     protocol: MCPIntegrationProtocol;
     logoUrl: string;
     headers: Record<string, string>;
@@ -105,6 +108,7 @@ export class KodusMCPProvider extends BaseProvider {
                 const config: ManagedIntegrationConfig = {
                     ...raw,
                     baseUrl: this.resolveManagedBaseUrl(raw.baseUrl),
+                    trusted: raw.baseUrl.startsWith('/'),
                     // Single source of truth: derive the legacy `auth` block
                     // (read by the server-side tool-listing/OAuth paths) from the
                     // default method when the entry only declares `authMethods`.
@@ -169,6 +173,7 @@ export class KodusMCPProvider extends BaseProvider {
             authType: managed.auth.type,
             protocol: managed.protocol,
             baseUrl: managed.baseUrl,
+            trusted: managed.trusted === true,
             logoUrl: managed.logoUrl,
             headers: managed.headers,
             serverName: managed.name,

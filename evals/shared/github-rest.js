@@ -7,6 +7,7 @@
 // Only the routes GithubService reaches for the Kodus MCP tools are served, in
 // GitHub's shapes. Any other route answers 404, as GitHub does for a path it
 // does not have, and is kept in `misses` so a run can say what went unserved.
+const { allowLoopback } = require('./loopback-allowance');
 const http = require('http');
 
 class NotFound {
@@ -181,6 +182,7 @@ function startGithubRest({ pr, owner, repository, author = { login: 'dev', id: 1
     return new Promise((resolve) => {
         server.listen(0, '127.0.0.1', () => {
             origin = `http://127.0.0.1:${server.address().port}`;
+            allowLoopback(origin);
             resolve({ host: origin, misses, close: () => new Promise((r) => server.close(() => r())) });
         });
     });

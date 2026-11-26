@@ -10,6 +10,7 @@
 // The route reads production's TypeScript (libs/llm), so the hooks load here,
 // whoever requires this first.
 require('ts-node/register/transpile-only');
+const { allowLoopback } = require('./loopback-allowance');
 require('tsconfig-paths/register');
 const path = require('path');
 
@@ -58,6 +59,7 @@ const BYOK_PROVIDER = {
  */
 function credentialOf(id, provider, m, encrypt) {
     const bedrock = provider === 'amazon_bedrock';
+    if (m.baseURL) allowLoopback(m.baseURL);
     return {
         id,
         provider,

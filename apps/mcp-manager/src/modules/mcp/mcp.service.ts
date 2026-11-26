@@ -878,7 +878,18 @@ export class McpService {
         }
 
         const allowedTools = tools.map((tool) => tool.slug);
-        const resolvedMcpUrl = mcpUrl || integration?.baseUrl || '';
+        // The catalog's URL wins: a managed integration's credential (its OAuth
+        // bearer or stored token) is sent to this URL on every call, so a URL in
+        // the request body must not replace it. Only an integration the catalog
+        // gives no URL (the first-party Kodus MCP, re-pinned to the platform's
+        // configuration when it connects) takes the one it was created with.
+        const resolvedMcpUrl = integration?.baseUrl || mcpUrl || '';
+        if (integration?.baseUrl && mcpUrl && mcpUrl !== integration.baseUrl) {
+            this.logger.warn(
+                'Ignored a managed MCP URL sent in the request body; the catalog URL is used',
+                { organizationId, integrationId },
+            );
+        }
 
         // Create new connection
         const newConnection = this.connectionRepository.create({

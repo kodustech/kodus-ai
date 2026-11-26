@@ -17,6 +17,7 @@
 // Everything else is production's: the reference finder, the Jira tracker,
 // the task-quality gate, the judge (SKILL.md) and its gap check, the verdict,
 // the stage's outcome and the comment it renders.
+const { allowLoopback } = require('../shared/loopback-allowance');
 const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
@@ -201,6 +202,7 @@ async function startServices(world) {
     const server = http.createServer(app);
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const base = `http://127.0.0.1:${server.address().port}`;
+    allowLoopback(base);
     process.env.API_KODUS_SERVICE_MCP_MANAGER = `${base}/`;
     process.env.API_KODUS_MCP_SERVER_URL = `${base}/mcp`;
     return { close: () => new Promise((resolve) => server.close(resolve)) };

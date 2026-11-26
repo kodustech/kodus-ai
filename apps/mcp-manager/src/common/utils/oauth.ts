@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import axios, { AxiosResponse } from 'axios';
+import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import { createHash, randomBytes } from 'crypto';
 
 /** The provider refused to refresh the grant: the user has to connect again. */
@@ -56,10 +57,13 @@ const logger = new Logger('OAuthDiscovery');
 
 export async function discoverOAuth(baseUrl: string) {
     let rsMetadataUrl = buildWellKnownUrl(baseUrl, 'oauth-protected-resource');
+    // Every URL below comes from the org's server or from what it answered:
+    // each request is judged by the address it dials (integrationRequestGuard).
     let rsResp = await axios.get<OAuthProtectedResourceMetadata>(
         rsMetadataUrl,
         {
             validateStatus: () => true,
+            ...integrationRequestGuard(rsMetadataUrl),
         },
     );
     if (rsResp.status >= 400) {
@@ -74,6 +78,7 @@ export async function discoverOAuth(baseUrl: string) {
 
         rsResp = await axios.get(rsMetadataUrl, {
             validateStatus: () => true,
+            ...integrationRequestGuard(rsMetadataUrl),
         });
 
         if (rsResp.status >= 400) {
@@ -107,6 +112,7 @@ export async function discoverOAuth(baseUrl: string) {
     for (const url of issuers.flatMap(authorizationServerMetadataUrls)) {
         const resp = await axios.get<OAuthAuthorizationServerMetadata>(url, {
             validateStatus: () => true,
+            ...integrationRequestGuard(url),
         });
         if (resp.status < 400) {
             asResp = resp;
@@ -147,6 +153,7 @@ export async function registerOauthClient(
     const regResp = await axios.post(registrationEndpoint, registrationBody, {
         headers: { 'Content-Type': 'application/json' },
         validateStatus: () => true,
+        ...integrationRequestGuard(registrationEndpoint),
     });
 
     if (regResp.status >= 400) {
@@ -320,6 +327,7 @@ export async function exchangeCodeForTokens(
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 validateStatus: () => true,
+                ...integrationRequestGuard(endpoint),
             },
         );
 
@@ -398,6 +406,7 @@ export async function checkAndRefreshOAuth(
             },
             timeout: OAUTH_REFRESH_TIMEOUT_MS,
             validateStatus: () => true,
+            ...integrationRequestGuard(endpoint),
         });
 
         // RFC 6749 §5.2: `invalid_grant` is the answer for a refresh token that

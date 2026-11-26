@@ -15,6 +15,7 @@
 //
 // One stack serves a whole run; each case is its own organization, so the
 // stores answer per organization as the databases do.
+const { allowLoopback } = require('./loopback-allowance');
 const crypto = require('crypto');
 const http = require('http');
 const path = require('path');
@@ -415,11 +416,17 @@ async function startKodusMcp({ storedConfig = null } = {}) {
     };
 }
 
+/** The origin, allowed as the eval's own loopback server (loopback-allowance.js). */
+function allowedOrigin(origin) {
+    allowLoopback(origin);
+    return origin;
+}
+
 function listen(handler) {
     const server = handler instanceof http.Server ? handler : http.createServer(handler);
     return new Promise((resolve) => {
         server.listen(0, '127.0.0.1', () =>
-            resolve({ origin: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((r) => (server.closeAllConnections?.(), server.close(() => r()))) }),
+            resolve({ origin: allowedOrigin(`http://127.0.0.1:${server.address().port}`), close: () => new Promise((r) => (server.closeAllConnections?.(), server.close(() => r()))) }),
         );
     });
 }

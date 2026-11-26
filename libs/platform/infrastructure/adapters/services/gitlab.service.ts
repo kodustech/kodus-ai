@@ -1,6 +1,11 @@
 import { connectionCacheScope } from '@libs/integrations/domain/integrations/utils/connection-cache-scope';
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
 import { connectionScope } from '@libs/integrations/domain/integrations/utils/connection-scope';
+import {
+    assertGitServerUrlAllowed,
+    gitServerRefusal,
+} from './git-server-url.guard';
+import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import { instanceConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import type {
     ApprovalTeamMembership,
@@ -1456,12 +1461,14 @@ export class GitlabService implements Omit<
             const { token, host: hostParam } = params;
             const normalizedHost = this.normalizeGitlabHost(hostParam);
             const userApiUrl = `${this.getGitlabWebBaseUrl(hostParam)}/api/v4/user`;
+            if (normalizedHost) await assertGitServerUrlAllowed(userApiUrl);
 
             const testResponse = await axios.get(userApiUrl, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
                 timeout: 30000,
+                ...integrationRequestGuard(userApiUrl, 'Git server'),
             });
 
             if (!testResponse || !testResponse.data) {
@@ -1502,9 +1509,11 @@ export class GitlabService implements Omit<
                 status: CreateAuthIntegrationStatus.SUCCESS,
                 integrationId,
             };
-        } catch {
-            throw new BadRequestException(
-                'Error authenticating with GITLAB PAT.',
+        } catch (err) {
+            // A refused address is not a bad token: say which it was.
+            throw (
+                gitServerRefusal(err) ??
+                new BadRequestException('Error authenticating with GITLAB PAT.')
             );
         }
     }

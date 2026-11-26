@@ -17,6 +17,21 @@ import { GitlabService } from '@libs/platform/infrastructure/adapters/services/g
 import { PlatformIntegrationFactory } from '@libs/platform/infrastructure/adapters/services/platformIntegration.factory';
 import { LocalSandboxService } from '@libs/sandbox/infrastructure/providers/local-sandbox.service';
 
+// The servers this suite starts on loopback are its own: allowed the way an
+// operator allows its private hosts (API_ALLOWED_PRIVATE_HOSTS,
+// libs/llm/gateway-address-guard.ts), which cloud mode otherwise refuses.
+const savedAllowedPrivateHosts = process.env.API_ALLOWED_PRIVATE_HOSTS;
+beforeAll(() => {
+    process.env.API_ALLOWED_PRIVATE_HOSTS = '127.0.0.1,localhost';
+});
+afterAll(() => {
+    if (savedAllowedPrivateHosts === undefined) {
+        delete process.env.API_ALLOWED_PRIVATE_HOSTS;
+    } else {
+        process.env.API_ALLOWED_PRIVATE_HOSTS = savedAllowedPrivateHosts;
+    }
+});
+
 jest.mock('@libs/mcp-server/services/mcp-manager.service', () => ({
     MCPManagerService: jest.fn(),
 }));
@@ -89,10 +104,7 @@ describe('CLI sandbox clone against a self-managed git host', () => {
                 const [path, query = ''] = (req.url || '').split('?');
 
                 const cgi = spawn(
-                    join(
-                        process.env.GIT_EXEC_PATH || '',
-                        'git-http-backend',
-                    ),
+                    join(process.env.GIT_EXEC_PATH || '', 'git-http-backend'),
                     [],
                     {
                         env: scrubbedGitEnv({
@@ -156,11 +168,9 @@ describe('CLI sandbox clone against a self-managed git host', () => {
         await execFileAsync('git', ['-C', workDir, 'add', '.'], {
             env: scrubbedGitEnv(),
         });
-        await execFileAsync(
-            'git',
-            ['-C', workDir, 'commit', '-m', 'initial'],
-            { env: scrubbedGitEnv(GIT_ENV) },
-        );
+        await execFileAsync('git', ['-C', workDir, 'commit', '-m', 'initial'], {
+            env: scrubbedGitEnv(GIT_ENV),
+        });
 
         const { stdout: sha } = await execFileAsync(
             'git',
@@ -177,13 +187,7 @@ describe('CLI sandbox clone against a self-managed git host', () => {
         // The CLI path fetches a bare SHA, which upload-pack refuses by default.
         await execFileAsync(
             'git',
-            [
-                '-C',
-                barePath,
-                'config',
-                'uploadpack.allowAnySHA1InWant',
-                'true',
-            ],
+            ['-C', barePath, 'config', 'uploadpack.allowAnySHA1InWant', 'true'],
             { env: scrubbedGitEnv() },
         );
 
@@ -261,7 +265,13 @@ describe('CLI sandbox clone against a self-managed git host', () => {
         const resolver = buildResolver(host, PlatformType.GITLAB);
 
         const cloneInfo = await resolver.resolve(
-            { origin: 'cli', organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' } } as any,
+            {
+                origin: 'cli',
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+            } as any,
             {
                 gitContext: {
                     // No inferredPlatform: 127.0.0.1 is not a SaaS host, which
@@ -352,7 +362,13 @@ describe('CLI sandbox clone against a self-managed git host', () => {
         const resolver = buildResolver(host, undefined);
 
         const cloneInfo = await resolver.resolve(
-            { origin: 'cli', organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' } } as any,
+            {
+                origin: 'cli',
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+            } as any,
             {
                 gitContext: {
                     remote: `${host}/group/repo.git`,
