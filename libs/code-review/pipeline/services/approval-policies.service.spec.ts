@@ -416,3 +416,29 @@ it('reports the failing approval phase without exporting private error content',
         warn.mockRestore();
     }
 });
+
+it('decides on fixed conditions alone: no risk veto, no instruction call, no final re-read', async () => {
+    const input = request({
+        fixedConditionsOnly: true,
+        risk: { status: 'unavailable', reason: 'Stale.' } as any,
+    });
+    input.config.riskAssessmentActive = true;
+    expect((await service().evaluate(input)).decision).toMatchObject({
+        kind: 'approve',
+        matchedPolicy: { id: 'docs' },
+    });
+    expect(LLM.run).not.toHaveBeenCalled();
+    expect(code.getPullRequest).toHaveBeenCalledTimes(1);
+
+    code.getPullRequest.mockResolvedValue({ ...live, labels: [] });
+    const labelled = request({
+        fixedConditionsOnly: true,
+        config: {
+            ...request().config,
+            approvalPolicies: [{ ...policy, labels: ['ready'] }],
+        } as any,
+    });
+    expect((await service().evaluate(labelled)).decision.kind).toBe(
+        'out-of-scope',
+    );
+});

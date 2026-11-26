@@ -1484,6 +1484,38 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     ),
             );
             if (findingsHold) return hold(findingsHold);
+            // Labels, authors, files, line limits and sensitive paths decide
+            // without risk: a PR they hold costs no risk reassessment.
+            if (
+                codeReviewConfig.riskAssessmentActive === true &&
+                !(await this.sharedRiskIsCurrent({
+                    organizationAndTeamData,
+                    repositoryId: pr.repository.id,
+                    prNumber: pr.number,
+                    pullRequest: live,
+                    config: codeReviewConfig,
+                    risk: data.riskAssessment,
+                }))
+            ) {
+                const fixed = await this.approvalPolicies.evaluate({
+                    organizationAndTeamData,
+                    repository: pr.repository,
+                    pullRequest: { ...live, number: pr.number },
+                    config: codeReviewConfig,
+                    platformType,
+                    reviewClean: true,
+                    fixedConditionsOnly: true,
+                });
+                if (fixed.decision.kind !== 'approve') {
+                    // As the full evaluation below reports it.
+                    await this.postConditionalApprovalReason(
+                        request,
+                        platformType,
+                        fixed.decision,
+                    );
+                    return false;
+                }
+            }
             const lookup: SharedRiskLookup =
                 codeReviewConfig.riskAssessmentActive === true
                     ? await this.currentSharedRisk({

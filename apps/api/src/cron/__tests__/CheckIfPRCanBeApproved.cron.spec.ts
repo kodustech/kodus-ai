@@ -949,11 +949,34 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         },
     );
 
+    // Only the fixed-condition pass runs before a usable assessment exists.
+    const onlyFixedConditionPasses = (evaluate: jest.Mock) =>
+        evaluate.mock.calls.every(([call]) => call.fixedConditionsOnly);
+
     it('does not approve with risk enabled and no current shared assessment', async () => {
         const { deps, input, run } = namedPolicyCase();
         input.codeReviewConfig.riskAssessmentActive = true;
         expect(await run()).toBe(false);
-        expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+        expect(onlyFixedConditionPasses(deps.approvalPolicies.evaluate)).toBe(
+            true,
+        );
+    });
+
+    it('spends no risk reassessment on a PR the policies hold without risk', async () => {
+        const { deps, input, run } = namedPolicyCase();
+        input.codeReviewConfig.riskAssessmentActive = true;
+        deps.approvalPolicies.evaluate.mockResolvedValue({
+            decision: {
+                kind: 'hold',
+                reason: 'No approval policy matched.',
+            },
+            eligibility: {},
+        });
+        expect(await run()).toBe(false);
+        expect(deps.approvalPolicies.evaluate).toHaveBeenCalledWith(
+            expect.objectContaining({ fixedConditionsOnly: true }),
+        );
+        expect(deps.prRiskAssessment.assess).not.toHaveBeenCalled();
     });
 
     it('persists eligibility for cron reuse without mutating review evidence', async () => {
@@ -3866,7 +3889,9 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
             };
             live[field] = 'Changed context after assessment';
             expect(await run()).toBe(false);
-            expect(deps.approvalPolicies.evaluate).not.toHaveBeenCalled();
+            expect(
+                onlyFixedConditionPasses(deps.approvalPolicies.evaluate),
+            ).toBe(true);
             expect(
                 deps.codeManagementService.approvePullRequest,
             ).not.toHaveBeenCalled();
