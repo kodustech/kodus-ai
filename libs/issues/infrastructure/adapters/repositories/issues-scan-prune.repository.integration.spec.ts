@@ -370,5 +370,42 @@ const TEST_DB = 'issues_scan_prune_it';
                 severity: 'high',
             });
         });
+
+        it('a holder stored before its own severity was kept goes back to it once the folded place leaves', async () => {
+            const _id = new mongoose.Types.ObjectId();
+            const { occurrences: _none, ...legacy } = issue('h-1', 'org-1', []);
+            await model.collection.insertOne({
+                ...legacy,
+                _id,
+                fingerprint: 'fp-holder',
+                severity: 'medium',
+                lastSeenAt: '2026-11-20T00:00:00.000Z',
+            } as any);
+
+            await issues.addScanFindingOccurrence({
+                organizationId: 'org-1',
+                repositoryPlatform: PlatformType.GITHUB,
+                repositoryHost: 'github.com',
+                repositoryId: 'repo-1',
+                holderFingerprint: 'fp-holder',
+                occurrence: {
+                    ...place('src/a.ts', 'authz'),
+                    severity: 'critical',
+                },
+                scanId: 'scan-2',
+            } as any);
+            expect(await model.collection.findOne({ _id })).toMatchObject({
+                severity: 'critical',
+                ownSeverity: 'medium',
+            });
+
+            // A later scan reads the place's class again without finding it.
+            await scan('scan-3', '2099-01-01T00:00:00.000Z', [
+                { vulnerabilityClass: 'authz', filePaths: ['src/a.ts'] },
+            ]);
+            const after = (await model.collection.findOne({ _id })) as any;
+            expect(after.occurrences).toEqual([]);
+            expect(after.severity).toBe('medium');
+        });
     },
 );

@@ -618,7 +618,8 @@ export class IssuesRepository implements IIssuesRepository {
         let update: Record<string, unknown> = {};
         let state: Partial<IIssue> = holder;
         for (const place of places) {
-            update = withOccurrence(state, place);
+            // Merged: the own severity only the first place sets is kept.
+            update = { ...update, ...withOccurrence(state, place) };
             state = { ...state, ...update } as Partial<IIssue>;
         }
         const moved = await this.issuesModel.updateOne(
@@ -1017,9 +1018,15 @@ const MAX_OCCURRENCES = 50;
 function withOccurrence(
     issue: Partial<IIssue>,
     place: IIssueOccurrence,
-): Pick<IIssue, 'occurrences' | 'fingerprintAliases' | 'severity'> {
+): Pick<
+    IIssue,
+    'occurrences' | 'fingerprintAliases' | 'severity' | 'ownSeverity'
+> {
     const own = place.fingerprint === issue.fingerprint;
     return {
+        // An issue stored before its own severity was kept holds no place
+        // yet, so its severity is still its own: kept before it is raised.
+        ...(issue.ownSeverity ? {} : { ownSeverity: issue.severity }),
         occurrences: own
             ? (issue.occurrences ?? [])
             : [

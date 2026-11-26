@@ -5,6 +5,8 @@
  */
 import mongoose, { Connection, Model } from 'mongoose';
 
+import { ConflictException } from '@nestjs/common';
+
 import { SecurityScanSchedulesUseCase } from '../application/security-scan-schedules.use-case';
 import { SecurityScanScheduleRepository } from './security-scan-schedule.repository';
 import {
@@ -170,10 +172,11 @@ const TEST_DB = 'security_scan_schedules_it';
                 },
                 now,
             );
-            expect(await stored('org-1', 'repo-1')).toMatchObject({
-                budget: { maxUsd: 9 },
-                nextRunAt: new Date('2026-11-25T03:30:00.000Z'),
-            });
+            const edited = await stored('org-1', 'repo-1');
+            expect(edited.budget).toEqual({ maxUsd: 9 });
+            expect(edited.nextRunAt).toEqual(
+                new Date('2026-11-25T03:30:00.000Z'),
+            );
 
             await useCase.save(
                 {
@@ -188,6 +191,33 @@ const TEST_DB = 'security_scan_schedules_it';
             expect((await stored('org-1', 'repo-1')).nextRunAt).toEqual(
                 new Date('2026-12-02T03:00:00.000Z'),
             );
+        });
+
+        it('a run with no room is stored to try again in 30 minutes, with why', async () => {
+            await schedules.save('org-1', repository, settings);
+            const useCase = new SecurityScanSchedulesUseCase(
+                schedules,
+                {
+                    execute: jest.fn(async () => {
+                        throw new ConflictException(
+                            'A security scan of this repository is already running.',
+                        );
+                    }),
+                } as any,
+                { isEnabledFor: jest.fn(async () => true) } as any,
+            );
+
+            expect(
+                await useCase.runDue(new Date('2026-11-25T03:01:00.000Z')),
+            ).toBe(0);
+
+            const doc = await stored('org-1', 'repo-1');
+            expect(doc.nextRunAt).toEqual(new Date('2026-11-25T03:31:00.000Z'));
+            expect(doc.lastError).toBe(
+                'This repository is already being scanned. It tries again at 03:31 UTC.',
+            );
+            // Not a run: the last run stays as it was.
+            expect(doc.lastRunAt).toBeUndefined();
         });
 
         it("touches only its own organization's and repository's schedule", async () => {

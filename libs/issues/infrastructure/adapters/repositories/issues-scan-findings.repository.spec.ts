@@ -1109,6 +1109,9 @@ describe('IssuesRepository — one issue per root cause', () => {
             occurrences: [{ ...place, lastSeenScanId: 'scan-3' }],
             fingerprintAliases: ['fp-route'],
             severity: 'critical',
+            // Stored before its own severity was kept: its severity is still
+            // its own, kept before the place raises it.
+            ownSeverity: 'high',
             lastSeenScanId: 'scan-3',
             consecutiveScanMisses: 0,
         });
@@ -1249,6 +1252,8 @@ describe('IssuesRepository — one issue per root cause', () => {
             holderUpdate.$set.occurrences.map((o: any) => o.severity),
         ).toEqual(['medium', place.severity]);
         expect(holderUpdate.$set.severity).toBe('critical');
+        // Kept across every place of the fold, not only the first.
+        expect(holderUpdate.$set.ownSeverity).toBe('medium');
         const [foldedFilter, foldedUpdate] = model.updateOne.mock
             .calls[1] as any;
         expect(foldedFilter).toEqual({ _id: 'i-2', status: IssueStatus.OPEN });
