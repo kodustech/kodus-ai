@@ -34,7 +34,7 @@ export interface SpecListerDeps {
 export class TemplateSpecLister {
     constructor(private readonly d: SpecListerDeps) {}
 
-    async list(run: { organizationId: string; environmentId: string; suiteRunId: string; mainSha: string }, suite: { cwd?: string; specsGlob: string }): Promise<SpecListing> {
+    async list(run: { organizationId: string; environmentId: string; suiteRunId: string; mainSha: string }, suite: { cwd?: string; specsGlob: string; service?: string }): Promise<SpecListing> {
         const root = picomatch.scan(suite.specsGlob).base || '.';
         if (!SAFE_DIR.test(root)) return { status: 'unavailable', reason: 'list_failed' };
         await this.d.demand.request({ organizationId: run.organizationId, environmentId: run.environmentId, suiteRunId: run.suiteRunId, shards: [LIST_HOST_SHARD] });
@@ -58,6 +58,9 @@ export class TemplateSpecLister {
                 stepId: `${run.suiteRunId}-list`,
                 command: `find ${quote(root)} -type f -not -path '*/node_modules/*' -exec wc -c {} +`,
                 ...(suite.cwd ? { cwd: suite.cwd } : {}),
+                // In the suite's own service when the recipe names one: the public service's image may leave the specs
+                // out (a .dockerignore), while the suite's service is where they run.
+                ...(suite.service ? { service: suite.service } : {}),
                 timeoutMs: EXEC_TIMEOUT_MS,
             });
             if (!('transport' in r) || r.transport !== 'ok' || r.exitCode !== 0 || r.truncated) return { status: 'unavailable', reason: 'list_failed' };

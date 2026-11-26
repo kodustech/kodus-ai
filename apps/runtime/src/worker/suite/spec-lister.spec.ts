@@ -50,6 +50,15 @@ describe('listing the spec files of a suite on a template host of main', () => {
         expect(w.demand.requested).toEqual([[LIST_HOST_SHARD]]);
     });
 
+    // kr-mono on dev: the public service (api) is built with the repository's .dockerignore, which leaves cypress/ out, so
+    // the find there failed and every baseline ended neutral; the suite's own service is where its specs are.
+    it("lists in the suite's own service when the recipe names one", async () => {
+        const w = world({ stdout: '  120 cypress/e2e/a.cy.ts\n' });
+        await w.lister.list(ref, { specsGlob: 'cypress/e2e/**/*.cy.ts', service: 'e2e' });
+        expect(w.commands[0]).toMatchObject({ service: 'e2e' });
+        await world({ stdout: '  120 cypress/e2e/a.cy.ts\n' }).lister.list(ref, { specsGlob: 'cypress/e2e/**/*.cy.ts' }).then(() => undefined);
+    });
+
     it('lists from the suite directory when the glob has no fixed directory', async () => {
         const w = world({ stdout: '  5 a.spec.ts\n  5 total\n' });
         await w.lister.list(ref, { specsGlob: '**/*.spec.ts' });

@@ -188,7 +188,7 @@ export class SuiteService {
             ? { status: 'listed', specs: cmd.mainSpecs }
             : await new TemplateSpecLister({ env, demand, clock }).list(
                   { organizationId: cmd.organizationId, environmentId: cmd.environmentId, suiteRunId: cmd.suiteRunId, mainSha: cmd.mainSha },
-                  { ...(s.suite.config.cwd ? { cwd: s.suite.config.cwd } : {}), specsGlob: s.suite.specsGlob },
+                  { ...(s.suite.config.cwd ? { cwd: s.suite.config.cwd } : {}), ...(s.suite.config.service ? { service: s.suite.config.service } : {}), specsGlob: s.suite.specsGlob },
               );
         if (listing.status === 'unavailable') {
             await demand.end().catch(() => undefined);
