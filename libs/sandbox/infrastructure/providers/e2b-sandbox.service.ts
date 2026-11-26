@@ -6,7 +6,8 @@ import { createLogger, SimpleLogger } from '@libs/core/log/logger';
 import { PlatformType } from '@libs/core/domain/enums';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { CommandExitError, Sandbox } from 'e2b';
+import { CommandExitError, Sandbox, type CommandHandle } from 'e2b';
+import { MAX_TOOL_SCAN_CHARS } from '@libs/common/utils/tool-output/scan-prefix';
 
 import {
     CreateSandboxParams,
@@ -150,6 +151,26 @@ const TIMEOUTS = {
     COMMAND_SHORT_MS: 10_000,
 };
 
+/**
+ * Most stdout characters `exec` keeps; the command is stopped past it.
+ *
+ * E2B buffers a command's whole stdout in the worker before `run` returns,
+ * and nothing downstream reads more than MAX_TOOL_SCAN_CHARS of it. A
+ * conversation `exec` of a `git log -p` over JSON fixtures printed 424 MB
+ * twice (Nov 2026): the worker held the string, then froze 125 s filtering
+ * it. Twice the scan limit, so a reader still sees that more was printed.
+ * The local provider caps the same output at 5 MB.
+ */
+export const MAX_EXEC_OUTPUT_CHARS = 2 * MAX_TOOL_SCAN_CHARS;
+
+/** Shortens `text` to at most `max` characters, at a line end when it can. */
+function headOf(text: string, max: number): string {
+    if (text.length <= max) return text;
+    const head = text.slice(0, max);
+    const lastLine = head.lastIndexOf('\n');
+    return lastLine > 0 ? head.slice(0, lastLine) : head;
+}
+
 export interface BuildE2BRemoteCommandsOptions {
     /** Logger for the [SANDBOX-READ] empty-read warning (optional). */
     logger?: SimpleLogger;
@@ -221,6 +242,72 @@ export function buildE2BRemoteCommands(
                     stdout: err.stdout,
                     stderr: err.stderr,
                     exitCode: err.exitCode,
+                };
+            }
+            throw err;
+        }
+    };
+
+    // `exec` runs whatever the agent asked for, so its output has no natural
+    // bound: count stdout as it streams and stop the command past the cap,
+    // instead of letting E2B buffer all of it.
+    const runCapped = async (
+        cmd: string,
+        timeoutMs: number,
+        maxChars: number,
+    ): Promise<{
+        stdout: string;
+        stderr: string;
+        exitCode: number;
+        stopped: boolean;
+    }> => {
+        let seen = 0;
+        let stopped = false;
+        // Filled once `run` returns; onStdout can fire before that.
+        const started: { handle?: CommandHandle } = {};
+        const stop = () => {
+            void started.handle?.kill().catch(() => undefined);
+        };
+        const handle = await sandbox.commands.run(cmd, {
+            background: true,
+            timeoutMs,
+            onStdout: (data: string) => {
+                seen += data.length;
+                if (!stopped && seen > maxChars) {
+                    stopped = true;
+                    // Before `run` returns there is no handle yet: the
+                    // check right after it stops the command then.
+                    stop();
+                }
+            },
+        });
+        started.handle = handle;
+        if (stopped) stop();
+        try {
+            const res = await handle.wait();
+            return {
+                stdout: headOf(res.stdout, maxChars),
+                stderr: res.stderr,
+                exitCode: res.exitCode,
+                stopped,
+            };
+        } catch (err) {
+            if (err instanceof CommandExitError) {
+                return {
+                    stdout: headOf(err.stdout, maxChars),
+                    stderr: err.stderr,
+                    exitCode: err.exitCode,
+                    stopped,
+                };
+            }
+            // A killed command can end its stream with an error instead of
+            // an exit code; what it printed before is still the answer.
+            if (stopped) {
+                return {
+                    stdout: headOf(handle.stdout, maxChars),
+                    stderr: handle.stderr,
+                    exitCode: handle.exitCode ?? -1,
+                    stopped,
                 };
             }
             throw err;
@@ -335,14 +422,30 @@ export function buildE2BRemoteCommands(
         exec: async (
             command: string,
         ): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
-            const result = await runCmd(`cd ${REPO_DIR} && ${command}`, {
-                timeoutMs: TIMEOUTS.COMMAND_LONG_MS,
-            });
+            const result = await runCapped(
+                `cd ${REPO_DIR} && ${command}`,
+                TIMEOUTS.COMMAND_LONG_MS,
+                MAX_EXEC_OUTPUT_CHARS,
+            );
             // stdout and stderr kept SEPARATE — merging let a subprocess error
             // masquerade as command output. Tools that want diagnostics use 2>&1.
+            const stderr = result.stderr || '';
+            if (result.stopped) {
+                logger?.warn({
+                    message: `[SANDBOX-EXEC] command stopped after ${MAX_EXEC_OUTPUT_CHARS} stdout characters`,
+                    context: logContext,
+                    metadata: {
+                        ...logMetadata,
+                        command: command.slice(0, 200),
+                        maxChars: MAX_EXEC_OUTPUT_CHARS,
+                    },
+                });
+            }
             return {
                 stdout: result.stdout,
-                stderr: result.stderr || '',
+                stderr: result.stopped
+                    ? `${stderr}${stderr ? '\n' : ''}[output stopped after ${MAX_EXEC_OUTPUT_CHARS} characters: the command printed more and was stopped. Narrow it, for example with a path, --stat or | head -n 200.]`
+                    : stderr,
                 exitCode: result.exitCode,
             };
         },

@@ -29,6 +29,7 @@ import { CommandExitError, Sandbox } from 'e2b';
 import {
     E2BSandboxService,
     buildE2BRemoteCommands,
+    MAX_EXEC_OUTPUT_CHARS,
     fixedIpReasonFrom,
     syncE2BSandboxRepo,
 } from './e2b-sandbox.service';
@@ -160,11 +161,37 @@ describe('buildE2BRemoteCommands', () => {
             error: '',
         } as any);
 
+    /**
+     * `exec` runs in the background and is awaited through its handle, so it
+     * can be stopped mid-stream. `chunks` are delivered to onStdout before
+     * `run` resolves; `outcome` is what `wait()` settles with.
+     */
+    const backgroundRun = (
+        outcome:
+            | { stdout: string; stderr?: string; exitCode: number }
+            | Error,
+        chunks: string[] = [],
+    ) => {
+        const kill = jest.fn().mockResolvedValue(true);
+        const run = jest.fn(async (_cmd: string, opts: any) => {
+            for (const c of chunks) opts.onStdout?.(c);
+            return {
+                kill,
+                stdout: outcome instanceof Error ? chunks.join('') : outcome.stdout,
+                stderr: '',
+                exitCode: undefined,
+                wait: () =>
+                    outcome instanceof Error
+                        ? Promise.reject(outcome)
+                        : Promise.resolve(outcome),
+            };
+        });
+        return { run, kill };
+    };
+
     describe('runCmd normalization', () => {
         it('returns the CommandExitError fields as a plain result instead of throwing (via exec)', async () => {
-            const run = jest
-                .fn()
-                .mockRejectedValue(exitError('out', 'boom', 3));
+            const { run } = backgroundRun(exitError('out', 'boom', 3));
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             const res = await rc.exec('do-thing');
             expect(res).toEqual({ stdout: 'out', stderr: 'boom', exitCode: 3 });
@@ -566,7 +593,7 @@ describe('buildE2BRemoteCommands', () => {
 
     describe('exec', () => {
         it('prefixes the command with cd REPO_DIR and returns separated streams', async () => {
-            const run = jest.fn().mockResolvedValue({
+            const { run, kill } = backgroundRun({
                 stdout: 'ok',
                 stderr: 'warn',
                 exitCode: 0,
@@ -574,13 +601,15 @@ describe('buildE2BRemoteCommands', () => {
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             const res = await rc.exec('git status');
             expect(res).toEqual({ stdout: 'ok', stderr: 'warn', exitCode: 0 });
-            expect(run).toHaveBeenCalledWith(`cd ${REPO_DIR} && git status`, {
-                timeoutMs: 30_000,
-            });
+            expect(run).toHaveBeenCalledWith(
+                `cd ${REPO_DIR} && git status`,
+                expect.objectContaining({ background: true, timeoutMs: 30_000 }),
+            );
+            expect(kill).not.toHaveBeenCalled();
         });
 
         it('defaults a falsy stderr to an empty string', async () => {
-            const run = jest.fn().mockResolvedValue({
+            const { run } = backgroundRun({
                 stdout: 'ok',
                 stderr: undefined,
                 exitCode: 5,
@@ -588,6 +617,46 @@ describe('buildE2BRemoteCommands', () => {
             const rc = buildE2BRemoteCommands(makeSandbox(run));
             const res = await rc.exec('cmd');
             expect(res).toEqual({ stdout: 'ok', stderr: '', exitCode: 5 });
+        });
+
+        // A conversation `git log -p` printed 424 MB; E2B buffered all of it
+        // in the worker before the guards froze on it (Nov 2026).
+        it('stops a command whose stdout passes the cap and keeps only the head', async () => {
+            const line = 'x'.repeat(99) + '\n';
+            const chunk = line.repeat(10_000); // 1 MB
+            const chunks = Array.from({ length: 5 }, () => chunk);
+            const { run, kill } = backgroundRun(
+                exitError(chunks.join(''), '', -1),
+                chunks,
+            );
+            const warn = jest.fn();
+            const rc = buildE2BRemoteCommands(makeSandbox(run), {
+                logger: { warn } as any,
+            });
+
+            const res = await rc.exec('git log -p');
+
+            expect(kill).toHaveBeenCalled();
+            expect(res.stdout.length).toBeLessThanOrEqual(MAX_EXEC_OUTPUT_CHARS);
+            expect(res.stdout.endsWith('x')).toBe(true);
+            expect(res.stderr).toMatch(/output stopped after \d+ characters/);
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining('[SANDBOX-EXEC]'),
+                }),
+            );
+        });
+
+        it('keeps what a stopped command printed when its stream errors', async () => {
+            const chunks = Array.from({ length: 3 }, () => 'y\n'.repeat(600_000));
+            const { run } = backgroundRun(new Error('stream closed'), chunks);
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('cat big.json');
+
+            expect(res.stdout.length).toBeLessThanOrEqual(MAX_EXEC_OUTPUT_CHARS);
+            expect(res.stdout.length).toBeGreaterThan(0);
+            expect(res.exitCode).toBe(-1);
         });
     });
 });

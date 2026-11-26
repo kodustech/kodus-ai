@@ -66,6 +66,33 @@ describe('startEventLoopMonitor', () => {
         );
     });
 
+    it('reports where the memory is, so a slow leak can be told heap from native', () => {
+        const logger = { log: jest.fn(), warn: jest.fn() };
+        const usage = jest.spyOn(process, 'memoryUsage').mockReturnValue({
+            rss: 3_000 * 1024 * 1024,
+            heapTotal: 2_200 * 1024 * 1024,
+            heapUsed: 2_000 * 1024 * 1024,
+            external: 300 * 1024 * 1024,
+            arrayBuffers: 120 * 1024 * 1024,
+        });
+        stop = startEventLoopMonitor({ intervalMs: 100, logger });
+
+        jest.advanceTimersByTime(100);
+        usage.mockRestore();
+
+        expect(logger.log.mock.calls[0][0].metadata).toEqual(
+            expect.objectContaining({
+                rssMb: 3_000,
+                heapUsedMb: 2_000,
+                heapTotalMb: 2_200,
+                externalMb: 300,
+                arrayBuffersMb: 120,
+                gcMs: expect.any(Number),
+                gcCount: expect.any(Number),
+            }),
+        );
+    });
+
     it('warns with the measured delay when the histogram reports a blocked thread', () => {
         const logger = { log: jest.fn(), warn: jest.fn() };
         histogram.max = 400e6;

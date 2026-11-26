@@ -16,6 +16,7 @@ import {
     cutLongLines,
     MAX_TOOL_LINE_CHARS,
 } from '@libs/code-review/infrastructure/agents/engine/long-lines';
+import { scanPrefix } from '@libs/common/utils/tool-output/scan-prefix';
 import { timeSync } from '@libs/core/infrastructure/activity/time-sync';
 import { beginToolActivity } from '@libs/core/infrastructure/activity/activity-registry';
 import {
@@ -486,11 +487,15 @@ export function buildAgentTools(
                             return `Error searching linked repo ${linked.repository} for "${pattern}"`;
                         }
                         // Secret files leave before the cap, so their matches
-                        // never use up the result limit.
-                        const raw = withoutSecretFileLines(stdout).trim();
+                        // never use up the result limit. The filter reads a
+                        // bounded head only: rg -C 2 over a big repo can print
+                        // hundreds of MB, and the filter is synchronous.
+                        const { text: head, unread } = scanPrefix(stdout);
+                        const raw = withoutSecretFileLines(head).trim();
                         if (exitCode === 1 || !raw) {
                             return `No matches found in linked repo ${linked.repository}.`;
                         }
+                        const more = unread > 0 ? '+' : '';
                         // Tag paths so the agent knows which repo they came from.
                         const tagged = raw
                             .split('\n')
@@ -512,10 +517,12 @@ export function buildAgentTools(
                                 groups
                                     .slice(0, MAX_GREP_GROUPS)
                                     .join('\n--\n') +
-                                `\n... (${groups.length - MAX_GREP_GROUPS} more matches hidden — narrow with a more specific regex)`
+                                `\n... (${groups.length - MAX_GREP_GROUPS}${more} more matches hidden — narrow with a more specific regex)`
                             );
                         }
-                        return tagged;
+                        return unread > 0
+                            ? `${tagged}\n... (more matches hidden — narrow with a more specific regex)`
+                            : tagged;
                     } catch (err) {
                         // Kody rule: never swallow — the agent sees the string,
                         // operators need the log (repo + pattern for tracing).
@@ -564,8 +571,12 @@ export function buildAgentTools(
                             throw new Error('rg error');
                         }
                         // Secret files leave before the cap, so their matches
-                        // never use up the result limit.
-                        const raw = withoutSecretFileLines(stdout).trim();
+                        // never use up the result limit. The filter reads a
+                        // bounded head only: rg -C 2 over a big repo can print
+                        // hundreds of MB, and the filter is synchronous.
+                        const { text: head, unread } = scanPrefix(stdout);
+                        const raw = withoutSecretFileLines(head).trim();
+                        const more = unread > 0 ? '+' : '';
                         // exit code 1 = no matches (not an error)
                         if (exitCode === 1 || !raw) {
                             return withSubmoduleNote(
@@ -590,10 +601,12 @@ export function buildAgentTools(
                                     groups
                                         .slice(0, MAX_GREP_GROUPS)
                                         .join('\n--\n') +
-                                    `\n... (${groups.length - MAX_GREP_GROUPS} more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`
+                                    `\n... (${groups.length - MAX_GREP_GROUPS}${more} more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`
                                 );
                             }
-                            return raw;
+                            return unread > 0
+                                ? `${raw}\n... (more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`
+                                : raw;
                         }
                     } catch {
                         // rg not available, fall through to remoteCommands.grep
@@ -616,7 +629,10 @@ export function buildAgentTools(
                         searchPath,
                     );
                 }
-                result = withoutSecretFileLines(result);
+                // A bounded head only, as in the rg path above.
+                const scanned = scanPrefix(result);
+                const more = scanned.unread > 0 ? '+' : '';
+                result = withoutSecretFileLines(scanned.text);
                 if (namesOnly) {
                     // The note has to come BEFORE the file-name mapping, and
                     // on the SAME predicate the note itself uses. An empty
@@ -649,7 +665,9 @@ export function buildAgentTools(
                 if (lines.length > MAX_GREP_MATCHES) {
                     result =
                         lines.slice(0, MAX_GREP_MATCHES).join('\n') +
-                        `\n... (${lines.length - MAX_GREP_MATCHES} more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`;
+                        `\n... (${lines.length - MAX_GREP_MATCHES}${more} more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`;
+                } else if (scanned.unread > 0) {
+                    result += `\n... (more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`;
                 }
                 return withSubmoduleNote(result, searchPath);
             },

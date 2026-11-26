@@ -1,6 +1,7 @@
 import pLimit from 'p-limit';
 import { Injectable, Optional } from '@nestjs/common';
 import { LLM } from '@libs/llm/llm';
+import { timeSync } from '@libs/core/infrastructure/activity/time-sync';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -149,7 +150,13 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             };
         }
 
-        const formatted = this.formatKodyRules(rules, input.changedFiles);
+        // Synchronous over every rule and changed file: a PR with hundreds of
+        // rules held workers 3-7 s around here without a label (Nov 2026).
+        const formatted = timeSync(
+            'kody-rules format rules',
+            () => this.formatKodyRules(rules, input.changedFiles),
+            () => kodyRulesInputSize(rules, input.changedFiles),
+        );
 
         if (!formatted) {
             return {
@@ -192,9 +199,10 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
 
         // T0 — run compiled detectors in code. Pure code, no LLM: this is still
         // the cheap part, it just yields candidates instead of comments.
-        const detectorHits = buildDetectorCandidates(
-            mechanicalRules,
-            input.changedFiles,
+        const detectorHits = timeSync(
+            'kody-rules detectors',
+            () => buildDetectorCandidates(mechanicalRules, input.changedFiles),
+            () => kodyRulesInputSize(mechanicalRules, input.changedFiles),
         );
         // Read through `reviewUnitKey`: the atoms of one decomposed rule share
         // the parent uuid, so a uuid-keyed read counts (and judges) a sibling's
@@ -1339,4 +1347,14 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
     private matchesPathPattern(filePath: string, pattern: string): boolean {
         return fileMatchesRulePath(filePath, pattern);
     }
+}
+
+/** Input sizes for a slow-sync log: what the synchronous rule passes walk. */
+function kodyRulesInputSize(
+    rules: readonly unknown[],
+    files: ReadonlyArray<{ patch?: string | null }> | undefined,
+): Record<string, number> {
+    let patchChars = 0;
+    for (const file of files ?? []) patchChars += file?.patch?.length ?? 0;
+    return { rules: rules.length, files: files?.length ?? 0, patchChars };
 }

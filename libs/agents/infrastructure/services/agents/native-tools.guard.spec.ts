@@ -4,9 +4,30 @@ import {
     runActivity,
 } from '@libs/core/infrastructure/activity/activity-registry';
 
+import { cutLongLines } from '@libs/common/utils/tool-output/long-lines';
+import { withoutSecretFileLines } from '@libs/common/utils/tool-output/secret-files';
+
+// Real guards, recorded: a test checks how much of an answer they read.
+jest.mock('@libs/common/utils/tool-output/secret-files', () => {
+    const actual = jest.requireActual(
+        '@libs/common/utils/tool-output/secret-files',
+    );
+    return {
+        ...actual,
+        withoutSecretFileLines: jest.fn(actual.withoutSecretFileLines),
+    };
+});
+jest.mock('@libs/common/utils/tool-output/long-lines', () => {
+    const actual = jest.requireActual(
+        '@libs/common/utils/tool-output/long-lines',
+    );
+    return { ...actual, cutLongLines: jest.fn(actual.cutLongLines) };
+});
+
 import {
     buildNativeToolConfigs,
     MAX_CONVERSATION_TOOL_OUTPUT_CHARS,
+    MAX_CONVERSATION_TOOL_SCAN_CHARS,
 } from './native-tools.factory';
 
 /**
@@ -94,6 +115,47 @@ describe('conversation tools — guarded outputs', () => {
             MAX_CONVERSATION_TOOL_OUTPUT_CHARS + 200,
         );
         expect(read).toContain('more characters not shown');
+    });
+
+    it('reads only a bounded head of a huge exec answer', async () => {
+        // A `git log -p` of a big repo: tens of MB the agent never sees.
+        const line = '+  "scene": "2026-11-25 take 12-3-4", "ok": true,';
+        const lines = Math.ceil(60_000_000 / (line.length + 1));
+        const stdout = [
+            '.env:1:API_TOKEN=FAKE_VALUE',
+            ...Array.from({ length: lines }, () => line),
+        ].join('\n');
+        const { run } = make({
+            exec: jest
+                .fn()
+                .mockResolvedValue({ stdout, stderr: '', exitCode: 0 }),
+        });
+        const filter = withoutSecretFileLines as jest.Mock;
+        const cut = cutLongLines as jest.Mock;
+        filter.mockClear();
+        cut.mockClear();
+        const out = (await run('exec', { command: 'git log -p' })) as any;
+        // The synchronous guards read the head, never the 60 MB.
+        const read = [...filter.mock.calls, ...cut.mock.calls].map(
+            ([text]) => (text as string).length,
+        );
+        expect(read.length).toBeGreaterThan(0);
+        expect(Math.max(...read)).toBeLessThanOrEqual(
+            MAX_CONVERSATION_TOOL_SCAN_CHARS,
+        );
+
+        expect(out.exitCode).toBe(0);
+        expect(out.stdout).not.toContain('API_TOKEN');
+        expect(out.stdout.length).toBeLessThanOrEqual(
+            MAX_CONVERSATION_TOOL_OUTPUT_CHARS + 200,
+        );
+        const hidden = Number(
+            /\.\.\. \((\d+) more characters not shown/.exec(out.stdout)?.[1],
+        );
+        const shownChars = out.stdout.indexOf('\n... (');
+        // Everything not shown is counted: the dropped secret line aside,
+        // shown + hidden covers the whole answer.
+        expect(hidden + shownChars).toBeGreaterThan(stdout.length - 100);
     });
 
     it('marks the call in flight with its path, and an exec only by its program', async () => {
