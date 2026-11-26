@@ -215,15 +215,10 @@ export class LocalSandboxService implements ISandboxProvider {
             // The git host can be the org's (a self-managed server): resolved
             // and judged, then pinned, so git dials the address that was
             // judged; a redirect is followed with every hop judged and the
-            // fetch runs again where it led (gateway-address-guard.ts).
-            const envFor = (pin: Array<[string, string]>) => {
+            // fetch runs again where it led, with the auth header only when
+            // that is the same origin (gateway-address-guard.ts).
+            const envFor = (gitConfig: Array<[string, string]>) => {
                 const env: Record<string, string> = sandboxEnv() as any;
-                const gitConfig: Array<[string, string]> = [
-                    ...pin,
-                    ...(authToken
-                        ? [['http.extraHeader', authHeader] as [string, string]]
-                        : []),
-                ];
                 if (gitConfig.length) {
                     env.GIT_CONFIG_COUNT = String(gitConfig.length);
                     gitConfig.forEach(([key, value], i) => {

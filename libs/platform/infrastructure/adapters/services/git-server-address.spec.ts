@@ -13,10 +13,23 @@
  *
  * No external network: the resolvers are replaced, the listener is local.
  */
-import { execFile } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { execFile, execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+    createServer,
+    type IncomingMessage,
+    type Server,
+    type ServerResponse,
+} from 'node:http';
+import {
+    createServer as createHttpsServer,
+    globalAgent as httpsAgent,
+} from 'node:https';
+import {
+    createServer as createNetServer,
+    type AddressInfo,
+    type Server as NetServer,
+} from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -24,6 +37,7 @@ import * as dns from 'dns';
 import { BadRequestException } from '@nestjs/common';
 import {
     GatewayAddressRefusedError,
+    gitRedirectTarget,
     pinnedGitFetchConfig,
     withJudgedGitRedirects,
 } from '@libs/llm/gateway-address-guard';
@@ -52,6 +66,23 @@ function resolvesTo(address: string) {
     promiseLookup.mockResolvedValue([{ address, family }]);
     socketLookup.mockImplementation((_host, options, callback) => {
         const cb = typeof options === 'function' ? options : callback;
+        return typeof options === 'object' && options?.all
+            ? cb(null, [{ address, family }])
+            : cb(null, address, family);
+    });
+}
+
+/** Each name to its own address, as the socket and promise lookups answer. */
+function resolvesByHost(addresses: Record<string, string>) {
+    const answer = (host: string) => {
+        const address = addresses[host];
+        if (!address) throw new Error(`unmocked host ${host}`);
+        return { address, family: address.includes(':') ? 6 : 4 };
+    };
+    promiseLookup.mockImplementation(async (host: string) => [answer(host)]);
+    socketLookup.mockImplementation((host, options, callback) => {
+        const cb = typeof options === 'function' ? options : callback;
+        const { address, family } = answer(host);
         return typeof options === 'object' && options?.all
             ? cb(null, [{ address, family }])
             : cb(null, address, family);
@@ -376,7 +407,9 @@ describe('a pinned clone keeps what an unpinned one could do', () => {
         });
     });
 
-    it('self-hosted: a host this process cannot resolve is left to git', async () => {
+    it('self-hosted: a host this process cannot resolve is left to git, which follows no redirect', async () => {
+        // Kody on #2709: git resolves it its own way, so a redirect it would
+        // follow is not judged; it goes through withJudgedGitRedirects.
         environment.API_CLOUD_MODE = false;
         await expect(
             pinnedGitFetchConfig('https://git.corp/r.git', async () => {
@@ -384,7 +417,7 @@ describe('a pinned clone keeps what an unpinned one could do', () => {
                     code: 'ENOTFOUND',
                 });
             }),
-        ).resolves.toEqual([]);
+        ).resolves.toEqual([['http.followRedirects', 'false']]);
     });
 
     it('cloud: a host that does not resolve still fails here', async () => {
@@ -478,23 +511,35 @@ describe('a pinned clone keeps what an unpinned one could do', () => {
             expect(err).toBeInstanceOf(GatewayAddressRefusedError);
         });
 
-        it('cloud: a redirect to a name on the private network is refused', async () => {
-            environment.API_CLOUD_MODE = true;
-            redirectTo = (path) => `http://internal.attacker.test${path}`;
-            resolvesTo('10.0.0.7');
-            const probe = withJudgedGitRedirects(
-                'https://git.example.com/g/r.git',
+        it('a redirect to a name that resolves to the metadata service is refused at that hop', async () => {
+            // The first host is reached; the name the redirect gives is
+            // resolved and judged when the probe follows it.
+            redirectTo = (path) =>
+                `http://internal.attacker.test:${targetPort}${path}`;
+            resolvesByHost({
+                'localhost': '127.0.0.1',
+                'internal.attacker.test': '169.254.169.254',
+            });
+            const err = await withJudgedGitRedirects(
+                `http://localhost:${redirectorPort}/g/r.git`,
                 undefined,
-                async () => {
-                    throw Object.assign(new Error('fetch failed'), {
-                        stderr: 'fatal: unable to access: The requested URL returned error: 301',
-                    });
-                },
-                async () => [],
+                run,
+            ).then(
+                () => undefined,
+                (e: unknown) => e,
             );
-            await expect(probe).rejects.toThrow(
-                /resolves to a private or reserved address/,
-            );
+            expect(err).toBeInstanceOf(GatewayAddressRefusedError);
+            expect({
+                host: (err as GatewayAddressRefusedError).host,
+                address: (err as GatewayAddressRefusedError).address,
+            }).toEqual({
+                host: 'internal.attacker.test',
+                address: '169.254.169.254',
+            });
+            // git and then the probe asked the redirector; nothing reached
+            // the target.
+            expect(redirectorAuth).toEqual([undefined, undefined]);
+            expect(targetSeen).toEqual([]);
         });
 
         it('a fetch that failed for another reason is not retried', async () => {
@@ -518,6 +563,113 @@ describe('a pinned clone keeps what an unpinned one could do', () => {
 });
 
 // Review on #2709 (sartorijr92, round 2): a refusal is not a bad token.
+// Review on #2709 (Kody): the redirect probe sends the token only to the
+// origin it was given for, scheme included: https to http on the same host and
+// port would send it in the clear.
+describe('the redirect probe keeps the token off a downgrade to http', () => {
+    let server: NetServer;
+    let port: number;
+    let seen: Array<{ scheme: string; url: string; auth?: string }>;
+    let certDir: string;
+    const trusted = httpsAgent.options.ca;
+
+    beforeAll(async () => {
+        certDir = mkdtempSync(join(tmpdir(), 'probe-tls-'));
+        execFileSync(
+            'openssl',
+            [
+                'req',
+                '-x509',
+                '-newkey',
+                'rsa:2048',
+                '-nodes',
+                '-days',
+                '1',
+                '-subj',
+                '/CN=127.0.0.1',
+                '-addext',
+                'subjectAltName=IP:127.0.0.1',
+                '-keyout',
+                join(certDir, 'key.pem'),
+                '-out',
+                join(certDir, 'cert.pem'),
+            ],
+            { stdio: 'ignore' },
+        );
+        const handler =
+            (scheme: string) => (req: IncomingMessage, res: ServerResponse) => {
+                seen.push({
+                    scheme,
+                    url: req.url ?? '',
+                    auth: req.headers.authorization,
+                });
+                if (scheme === 'https' && req.url?.startsWith('/g/')) {
+                    res.statusCode = 301;
+                    res.setHeader(
+                        'location',
+                        `http://127.0.0.1:${port}${req.url.replace('/g/', '/moved/')}`,
+                    );
+                } else {
+                    res.statusCode = 404;
+                }
+                res.end();
+            };
+        const plain = createServer(handler('http'));
+        const tls = createHttpsServer(
+            {
+                key: readFileSync(join(certDir, 'key.pem')),
+                cert: readFileSync(join(certDir, 'cert.pem')),
+            },
+            handler('https'),
+        );
+        // One port, both schemes: a TLS ClientHello opens on 0x16.
+        server = createNetServer((socket) => {
+            socket.once('data', (first) => {
+                socket.pause();
+                socket.unshift(first);
+                (first[0] === 0x16 ? tls : plain).emit('connection', socket);
+                process.nextTick(() => socket.resume());
+            });
+        });
+        await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+        port = (server.address() as AddressInfo).port;
+        // The probe uses the default agent: it trusts this test's own cert.
+        httpsAgent.options.ca = readFileSync(join(certDir, 'cert.pem'));
+    });
+
+    afterAll(async () => {
+        httpsAgent.options.ca = trusted;
+        await new Promise<void>((r) => server.close(() => r()));
+        rmSync(certDir, { recursive: true, force: true });
+    });
+
+    beforeEach(() => {
+        seen = [];
+        environment.API_CLOUD_MODE = false;
+        resolvesTo('127.0.0.1');
+    });
+
+    it('https to http on the same host and port: followed, without the token', async () => {
+        const target = await gitRedirectTarget(
+            `https://127.0.0.1:${port}/g/r.git`,
+            'Authorization: Basic c2VjcmV0',
+        );
+        expect(target).toBe(`http://127.0.0.1:${port}/moved/r.git`);
+        expect(seen).toEqual([
+            {
+                scheme: 'https',
+                url: '/g/r.git/info/refs?service=git-upload-pack',
+                auth: 'Basic c2VjcmV0',
+            },
+            {
+                scheme: 'http',
+                url: '/moved/r.git/info/refs?service=git-upload-pack',
+                auth: undefined,
+            },
+        ]);
+    }, 20_000);
+});
+
 describe('connecting a self-managed server that is refused says why', () => {
     const { GitlabService } = jest.requireActual('./gitlab.service');
     const { BitbucketDataCenterService } = jest.requireActual(

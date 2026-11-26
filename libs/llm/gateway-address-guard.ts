@@ -669,8 +669,8 @@ export function gitProxyFor(
  * the check and the connection. Redirects are not followed by git: a hop would
  * resolve on its own (`withJudgedGitRedirects` follows them, judged). Empty for
  * a URL git does not fetch over http(s) (ssh, a local path), one a proxy
- * carries (`gitProxyFor`), and, on a self-hosted install, a host this process
- * cannot resolve: git resolves it its own way, and only metadata is refused there.
+ * carries (`gitProxyFor`). On a self-hosted install, a host this process cannot
+ * resolve is left to git to resolve its own way, with redirects still off.
  */
 export async function pinnedGitFetchConfig(
     rawUrl: string,
@@ -703,7 +703,9 @@ export async function pinnedGitFetchConfig(
         answers = await resolve(url.hostname);
     } catch (err) {
         if (cloud) throw err;
-        return [];
+        // git resolves it its own way; a redirect still comes back here to
+        // be judged hop by hop (withJudgedGitRedirects).
+        return [noRedirects];
     }
     const refused = answers.find(({ address }) => refuses(address));
     if (refused) {
@@ -723,6 +725,15 @@ export async function pinnedGitFetchConfig(
     ];
 }
 
+/** Scheme, host and port: the origin a git credential was given for. */
+function sameGitOrigin(a: URL, b: URL): boolean {
+    return (
+        a.protocol === b.protocol &&
+        a.hostname === b.hostname &&
+        urlPort(a) === urlPort(b)
+    );
+}
+
 const GIT_REFS_SUFFIX = '/info/refs?service=git-upload-pack';
 const GIT_MAX_REDIRECTS = 5;
 
@@ -737,7 +748,7 @@ function isGitRedirectRefusal(err: unknown): boolean {
  * (`integrationRequestGuard`'s rule), as git's own `followRedirects=initial`
  * would: the refs URL is asked for, and the new repository URL is the final
  * location without its `/info/refs` suffix. The auth header goes only to the
- * host it was given for. Undefined when nothing redirects, or a hop does not
+ * origin it was given for (scheme, host and port). Undefined when nothing redirects, or a hop does not
  * keep the suffix (git refuses that too).
  */
 export async function gitRedirectTarget(
@@ -753,9 +764,9 @@ export async function gitRedirectTarget(
     let hops = 0;
     for (; hops <= GIT_MAX_REDIRECTS; hops++) {
         const { lookup } = integrationRequestGuard(current.href, label);
-        const sameHost =
-            current.hostname === origin.hostname &&
-            urlPort(current) === urlPort(origin);
+        // Not across a change of scheme either: https to http on the same
+        // host and port would send it in the clear.
+        const sameHost = sameGitOrigin(current, origin);
         const headers: Record<string, string> = {
             'user-agent': 'git/kodus',
             ...(authHeader && authRest.length && sameHost
@@ -802,26 +813,36 @@ export async function gitRedirectTarget(
 }
 
 /**
- * Runs a git fetch pinned to the judged address. When it fails on a redirect,
- * the redirect is followed here, every hop judged, and the fetch runs again
- * pinned to where it led. Returns the URL and config that worked, for the
- * fetches that follow on the same repository.
+ * Runs a git fetch pinned to the judged address, with the auth header as
+ * `http.extraHeader`. When it fails on a redirect, the redirect is followed
+ * here, every hop judged, and the fetch runs again pinned to where it led;
+ * the header goes along only when that is the same origin (scheme, host,
+ * port), as curl drops it on a redirect it follows itself. Returns the URL
+ * and git config that worked, for the fetches that follow on the same
+ * repository.
  */
 export async function withJudgedGitRedirects<T>(
     rawUrl: string,
     authHeader: string | undefined,
-    run: (url: string, pin: Array<[string, string]>) => Promise<T>,
+    run: (url: string, config: Array<[string, string]>) => Promise<T>,
     pinFor: (url: string) => Promise<Array<[string, string]>> = (url) =>
         pinnedGitFetchConfig(url),
 ): Promise<{ url: string; pin: Array<[string, string]>; result: T }> {
-    const pin = await pinFor(rawUrl);
+    const withAuth = (
+        url: string,
+        pin: Array<[string, string]>,
+    ): Array<[string, string]> =>
+        authHeader && sameGitOrigin(new URL(url), new URL(rawUrl))
+            ? [...pin, ['http.extraHeader', authHeader]]
+            : pin;
+    const pin = withAuth(rawUrl, await pinFor(rawUrl));
     try {
         return { url: rawUrl, pin, result: await run(rawUrl, pin) };
     } catch (err) {
         if (!isGitRedirectRefusal(err)) throw err;
         const target = await gitRedirectTarget(rawUrl, authHeader);
         if (!target || target === rawUrl) throw err;
-        const retargeted = await pinFor(target);
+        const retargeted = withAuth(target, await pinFor(target));
         return {
             url: target,
             pin: retargeted,

@@ -1,3 +1,5 @@
+import { quoteConfigValue } from '../quote-config-value';
+
 /**
  * @ai-sdk/google-vertex builds the host from the location the org types
  * (`https://<location>-aiplatform.googleapis.com/...`, or the bare
@@ -13,7 +15,7 @@ export class VertexLocationInvalidError extends Error {
     readonly code = 'EBYOK_CONFIG_INVALID';
     constructor(readonly location: string) {
         super(
-            `The location "${location.slice(0, 64)}" of this Vertex key is not a Vertex location (like global or us-central1), so the call was not sent.`,
+            `The location "${quoteConfigValue(location, 64)}" of this Vertex key is not a Vertex location (like global or us-central1), so the call was not sent.`,
         );
         this.name = 'VertexLocationInvalidError';
     }
