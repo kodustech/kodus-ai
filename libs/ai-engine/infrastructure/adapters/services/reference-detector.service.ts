@@ -246,7 +246,7 @@ export class ReferenceDetectorService {
     ): Promise<{ references: IDetectedReference[]; reliable: boolean }> {
         const { organizationAndTeamData } = params;
 
-        // Trial-only override: on the 14-day trial with no BYOK key, route
+        // Trial-only override: on the subscription trial with no BYOK key, route
         // reference detection through the Kodus-funded default so we don't burn
         // the production model on Kodus's dime. Off-trial → undefined (resolver
         // uses the production/env default). Any BYOK config still wins.

@@ -19,6 +19,7 @@ vi.mock('../api/index.js', () => ({
             getFormattedCodeReviewParameter: vi.fn(),
             saveCodeReviewConfig: vi.fn(),
             previewPrRisk: vi.fn(),
+            getDefaultRiskCriteria: vi.fn(),
             previewPrApproval: vi.fn(),
             getLLMConfigStatus: vi.fn(),
             testByokModel: vi.fn(),
@@ -45,6 +46,8 @@ import { cockpitApi } from '../api/cockpit.api.js';
 import { gitService } from '../git.service.js';
 import { readLeaf, reviewSettingsService } from '../review-settings.service.js';
 import { userContextService } from '../user-context.service.js';
+import { ApiError } from '../../types/errors.js';
+import { CommandError } from '../../utils/command-errors.js';
 
 const configApi = vi.mocked(api.config);
 const userContext = vi.mocked(userContextService);
@@ -56,6 +59,21 @@ const CTX = {
     teamId: 'team-1',
     teamName: 'Core',
 };
+
+const KODUS_RULES = [
+    {
+        id: 'kodus-security',
+        name: 'Security and permissions',
+        enabled: true,
+        instructions: 'Auth.',
+    },
+    {
+        id: 'kodus-shared-contract',
+        name: 'Shared contracts and public interfaces',
+        enabled: true,
+        instructions: 'Contracts.',
+    },
+];
 
 const RISK_CRITERION = {
     id: 'approval-snapshot',
@@ -791,6 +809,223 @@ describe('reviewSettingsService', () => {
             }),
         );
         expect(configApi.saveCodeReviewConfig).not.toHaveBeenCalled();
+    });
+
+    describe('risk rules', () => {
+        it("lists Kodus's rules as the scope left them, then the team's own", async () => {
+            configApi.getDefaultRiskCriteria.mockResolvedValueOnce({
+                criteria: [
+                    {
+                        id: 'kodus-security',
+                        name: 'Security and permissions',
+                        enabled: true,
+                        instructions: 'Auth.',
+                    },
+                    {
+                        id: 'kodus-shared-contract',
+                        name: 'Shared contracts and public interfaces',
+                        enabled: true,
+                        instructions: 'Contracts.',
+                    },
+                ],
+                retiredIds: ['kodus-retired'],
+            });
+            configApi.getFormattedCodeReviewParameter.mockResolvedValueOnce({
+                configValue: {
+                    configs: {
+                        riskAssessmentActive: leaf(true, 'global'),
+                        riskCriteria: leaf(
+                            [
+                                { id: 'kodus-shared-contract', enabled: false },
+                                {
+                                    id: 'kodus-security',
+                                    enabled: true,
+                                    instructions: 'Only billing auth.',
+                                },
+                                RISK_CRITERION,
+                                {
+                                    id: 'kodus-retired',
+                                    name: 'Old rule',
+                                    enabled: true,
+                                    instructions: 'Stale.',
+                                },
+                            ],
+                            'global',
+                        ),
+                    },
+                    repositories: [],
+                },
+            } as any);
+            const { active, rules } = await reviewSettingsService.riskRules({
+                repository: 'global',
+            });
+            expect(active).toBe(true);
+            expect(
+                rules.map(({ id, enabled, instructions, source }) => ({
+                    id,
+                    enabled,
+                    instructions,
+                    source,
+                })),
+            ).toEqual([
+                {
+                    id: 'kodus-security',
+                    enabled: true,
+                    instructions: 'Only billing auth.',
+                    source: 'edited',
+                },
+                {
+                    id: 'kodus-shared-contract',
+                    enabled: false,
+                    instructions: 'Contracts.',
+                    source: 'kodus',
+                },
+                {
+                    id: RISK_CRITERION.id,
+                    enabled: true,
+                    instructions: RISK_CRITERION.instructions,
+                    source: 'team',
+                },
+            ]);
+        });
+
+        it("calls a Kodus rule edited only when it differs from Kodus's version, and says when assessment is off", async () => {
+            configApi.getDefaultRiskCriteria.mockResolvedValueOnce({
+                criteria: KODUS_RULES,
+                retiredIds: [],
+            });
+            configApi.getFormattedCodeReviewParameter.mockResolvedValueOnce({
+                configValue: {
+                    configs: {
+                        riskAssessmentActive: leaf(false, 'global'),
+                        riskCriteria: leaf(
+                            [
+                                {
+                                    ...KODUS_RULES[0],
+                                    includedFiles: [],
+                                    excludedFiles: [],
+                                },
+                                {
+                                    id: 'kodus-shared-contract',
+                                    enabled: true,
+                                    excludedFiles: ['test/**'],
+                                },
+                            ],
+                            'global',
+                        ),
+                    },
+                    repositories: [],
+                },
+            } as any);
+            const { active, rules } = await reviewSettingsService.riskRules({
+                repository: 'global',
+            });
+            expect(active).toBe(false);
+            expect(rules.map(({ id, source }) => ({ id, source }))).toEqual([
+                { id: 'kodus-security', source: 'kodus' },
+                { id: 'kodus-shared-contract', source: 'edited' },
+            ]);
+        });
+
+        it('says the API is too old for risk rules instead of passing its 404 on', async () => {
+            configApi.getDefaultRiskCriteria.mockRejectedValueOnce(
+                new ApiError(
+                    404,
+                    'Cannot GET /code-review/risk/default-criteria',
+                ),
+            );
+            await expect(
+                reviewSettingsService.riskRules({ repository: 'global' }),
+            ).rejects.toThrow(
+                new CommandError(
+                    'API_REQUEST_FAILED',
+                    'Risk rules need a newer Kodus API.',
+                ),
+            );
+        });
+
+        it("stores only what an entry changes in a Kodus rule, so risk-rules --json sets back without freezing Kodus's wording", async () => {
+            configApi.getDefaultRiskCriteria.mockResolvedValueOnce({
+                criteria: KODUS_RULES,
+                retiredIds: [],
+            });
+            const listed = [
+                { ...KODUS_RULES[0], source: 'kodus' },
+                {
+                    ...KODUS_RULES[1],
+                    enabled: false,
+                    instructions: 'Ours.',
+                    includedFiles: [],
+                    source: 'edited',
+                },
+                { ...RISK_CRITERION, includedFiles: [], source: 'team' },
+            ];
+            const result = await reviewSettingsService.set(
+                { repository: 'global' },
+                'riskCriteria',
+                JSON.stringify(listed),
+            );
+            const stored = [
+                {
+                    id: 'kodus-shared-contract',
+                    enabled: false,
+                    instructions: 'Ours.',
+                },
+                { ...RISK_CRITERION, includedFiles: [] },
+            ];
+            expect(configApi.saveCodeReviewConfig).toHaveBeenCalledWith(
+                CTX.accessToken,
+                expect.objectContaining({
+                    configValue: { riskCriteria: stored },
+                }),
+            );
+            expect(result.value).toEqual(stored);
+        });
+
+        it('matches a padded id to its Kodus rule before comparing', async () => {
+            configApi.getDefaultRiskCriteria.mockResolvedValueOnce({
+                criteria: KODUS_RULES,
+                retiredIds: [],
+            });
+            await reviewSettingsService.set(
+                { repository: 'global' },
+                'riskCriteria',
+                JSON.stringify([
+                    {
+                        ...KODUS_RULES[1],
+                        id: ` ${KODUS_RULES[1].id} `,
+                        enabled: false,
+                    },
+                ]),
+            );
+            expect(configApi.saveCodeReviewConfig).toHaveBeenCalledWith(
+                CTX.accessToken,
+                expect.objectContaining({
+                    configValue: {
+                        riskCriteria: [
+                            { id: KODUS_RULES[1].id, enabled: false },
+                        ],
+                    },
+                }),
+            );
+        });
+
+        it('sets risk rules as given on an API without Kodus rules', async () => {
+            configApi.getDefaultRiskCriteria.mockRejectedValueOnce(
+                new ApiError(404, 'Cannot GET'),
+            );
+            await reviewSettingsService.set(
+                { repository: 'global' },
+                'riskCriteria',
+                JSON.stringify([{ ...RISK_CRITERION, source: 'team' }]),
+            );
+            expect(configApi.saveCodeReviewConfig).toHaveBeenCalledWith(
+                CTX.accessToken,
+                expect.objectContaining({
+                    configValue: { riskCriteria: [RISK_CRITERION] },
+                }),
+            );
+        });
     });
 
     describe('risk preview', () => {

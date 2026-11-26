@@ -33,7 +33,7 @@ import {
     resolveRiskActivation,
 } from '@libs/code-review/domain/approval/migrate-review-settings';
 import {
-    riskCriteriaSchema,
+    riskCriteriaInputSchema,
     riskReviewRoutingSchema,
 } from '@libs/core/infrastructure/config/types/general/risk-assessment';
 import { unavailableReviewSettings } from '@libs/code-review/domain/approval/unavailable-review-settings';
@@ -543,8 +543,9 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     // common policies/agents were already resolved once above.
                     if (
                         (delta.riskCriteria !== undefined &&
-                            !riskCriteriaSchema.safeParse(delta.riskCriteria)
-                                .success) ||
+                            !riskCriteriaInputSchema.safeParse(
+                                delta.riskCriteria,
+                            ).success) ||
                         (delta.riskReviewRouting !== undefined &&
                             !riskReviewRoutingSchema.safeParse(
                                 delta.riskReviewRouting,

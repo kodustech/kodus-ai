@@ -1,5 +1,4 @@
 import {
-    TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED,
     TRIAL_UNLOCK_BYOK_REWARD_LABEL,
     TRIAL_UNLOCK_CODE_ORG_REWARD,
     TRIAL_UNLOCK_COMPANY_EMAIL_REWARD,
@@ -65,19 +64,24 @@ export const getTrialCardState = (params: {
 export const getTrialCreditBalance = (
     credits?: TrialReviewCredits,
 ): TrialCreditBalance => {
-    const hasLiveData =
-        typeof credits?.total === "number" ||
-        typeof credits?.used === "number" ||
-        typeof credits?.remaining === "number";
-
-    const fallbackTotal = TRIAL_MANAGED_REVIEW_CREDITS_INCLUDED;
-    const total = Math.max(0, credits?.total ?? fallbackTotal);
+    // Billing owns the allowance. Without its total it can only be rebuilt
+    // from used + remaining; anything less is not a balance, so the trial
+    // reads as having no credit data (as billing and the API treat it).
     const used = Math.max(0, credits?.used ?? 0);
+    const reportedTotal =
+        typeof credits?.total === "number"
+            ? credits.total
+            : typeof credits?.remaining === "number"
+              ? used + credits.remaining
+              : undefined;
+    const hasLiveData = reportedTotal !== undefined;
+    const total = Math.max(0, reportedTotal ?? 0);
     const remaining = Math.max(
         0,
         credits?.remaining ?? Math.max(0, total - used),
     );
-    const percentUsed = total > 0 ? Math.min(100, (used / total) * 100) : 100;
+    const percentUsed =
+        total > 0 ? Math.min(100, (used / total) * 100) : hasLiveData ? 100 : 0;
 
     return {
         total,
