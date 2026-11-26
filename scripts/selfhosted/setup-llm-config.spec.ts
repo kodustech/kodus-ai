@@ -801,6 +801,28 @@ describe('selfhosted _common.sh carries the LLM config to the VM', () => {
             });
         });
 
+        it('under direnv, a caller sending the embeddings key to a proxy names it with API_LLM_API_KEY', () => {
+            // Kody on #2700: the legacy name equal to the exported key is
+            // ambiguous; the generic name is not, and it wins.
+            const box = sandbox();
+            writeConfig(box, [
+                ...configs.moonshot,
+                'API_OPEN_AI_API_KEY=sk-proj-embed',
+            ]);
+            const vmEnv = vmLlmEnv(box, {
+                ...exported(configs.moonshot),
+                API_LLM_API_KEY: 'sk-proj-embed',
+                API_LLM_BASE_URL: 'https://proxy.example.test/v1',
+            });
+            const declared = resolveDeclaredEnvProvider(vmEnv);
+            expect(declared.kind === 'declared' && declared.config).toEqual({
+                provider: 'openai_compatible',
+                apiKey: 'sk-proj-embed',
+                baseURL: 'https://proxy.example.test/v1',
+                model: 'kimi-k2.6',
+            });
+        });
+
         it('under direnv, overriding only the embeddings key keeps the configured LLM key', () => {
             const box = sandbox();
             writeConfig(box, [
