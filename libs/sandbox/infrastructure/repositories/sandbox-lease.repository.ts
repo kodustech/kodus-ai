@@ -262,8 +262,7 @@ export class SandboxLeaseRepository {
             .findOneAndDelete({ _id: prKey, sandboxId })
             .select('leaseCount')
             .lean();
-        const otherHolders =
-            (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
+        const otherHolders = (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
         const killAt = otherHolders > 0 ? opts.busyKillAt : opts.idleKillAt;
 
         const orgSegment = prKey.split(':')[0];
@@ -303,16 +302,23 @@ export class SandboxLeaseRepository {
      * deployment) can pick up via findReadyToKill().
      *
      * Only sets killAt when the lease has a real sandboxId — there's no
-     * point scheduling a kill for a NullSandbox or a CREATING-only lease.
+     * point scheduling a kill for a NullSandbox or a CREATING-only lease —
+     * and only while nobody holds it. A release reads leaseCount 0 and writes
+     * killAt in two steps; a holder that joins in between has already cleared
+     * killAt, and this write must not land after it (#2628).
+     *
+     * Returns whether the kill was scheduled.
      */
-    async setKillAt(prKey: string, killAt: Date): Promise<void> {
-        await this.leaseModel.updateOne(
+    async setKillAt(prKey: string, killAt: Date): Promise<boolean> {
+        const result = await this.leaseModel.updateOne(
             {
                 _id: prKey,
                 sandboxId: { $exists: true, $ne: '' },
+                leaseCount: { $not: { $gt: 0 } },
             },
             { $set: { killAt } },
         );
+        return result.matchedCount === 1;
     }
 
     /**
@@ -328,7 +334,7 @@ export class SandboxLeaseRepository {
     }
 
     /**
-     * Find leases whose idle-kill timestamp has elapsed. Drives the
+     * Find unheld leases whose idle-kill timestamp has elapsed. Drives the
      * `killIdleSandboxes` cron — runs against the sparse compound index
      * `{ killAt: 1, sandboxId: 1 }` so it only scans docs that are actually
      * waiting to be killed.
@@ -341,17 +347,15 @@ export class SandboxLeaseRepository {
     ): Promise<
         Pick<
             SandboxLeaseModel,
-            | '_id'
-            | 'sandboxId'
-            | 'killAt'
-            | 'killRetryCount'
-            | 'organizationId'
+            '_id' | 'sandboxId' | 'killAt' | 'killRetryCount' | 'organizationId'
         >[]
     > {
         return this.leaseModel
             .find({
                 killAt: { $lte: now },
                 sandboxId: { $exists: true, $ne: '' },
+                // A held sandbox is never idle, whatever killAt says.
+                leaseCount: { $not: { $gt: 0 } },
             })
             .select('_id sandboxId killAt killRetryCount organizationId')
             .lean();

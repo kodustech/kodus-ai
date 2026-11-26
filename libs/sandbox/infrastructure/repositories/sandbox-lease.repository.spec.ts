@@ -162,3 +162,44 @@ describe('SandboxLeaseRepository.claimCleanup', () => {
         expect(update.$set).not.toHaveProperty('killAt');
     });
 });
+
+/**
+ * A release reads leaseCount 0 and writes killAt in two steps. A holder that
+ * joins in between clears killAt first, so the late write must not land, and
+ * the idle-kill cron must never pick a held lease (#2628). Reproduced on real
+ * MongoDB before this change: the joiner's lease ended with leaseCount 1 and a
+ * killAt that findReadyToKill returned.
+ */
+describe('SandboxLeaseRepository idle-kill on a held lease', () => {
+    it('setKillAt only matches a lease nobody holds, and says whether it did', async () => {
+        const updateOne = jest
+            .fn()
+            .mockResolvedValueOnce({ matchedCount: 0 })
+            .mockResolvedValueOnce({ matchedCount: 1 });
+        const repo = new SandboxLeaseRepository({ updateOne } as any);
+        const killAt = new Date('2026-11-26T12:00:00.000Z');
+
+        await expect(repo.setKillAt(PR_KEY, killAt)).resolves.toBe(false);
+        await expect(repo.setKillAt(PR_KEY, killAt)).resolves.toBe(true);
+
+        const [filter, update] = updateOne.mock.calls[0];
+        expect(filter).toMatchObject({
+            _id: PR_KEY,
+            leaseCount: { $not: { $gt: 0 } },
+        });
+        expect(update).toEqual({ $set: { killAt } });
+    });
+
+    it('findReadyToKill skips a held lease', async () => {
+        const lean = jest.fn().mockResolvedValue([]);
+        const select = jest.fn().mockReturnValue({ lean });
+        const find = jest.fn().mockReturnValue({ select });
+        const repo = new SandboxLeaseRepository({ find } as any);
+
+        await repo.findReadyToKill(new Date());
+
+        expect(find.mock.calls[0][0]).toMatchObject({
+            leaseCount: { $not: { $gt: 0 } },
+        });
+    });
+});

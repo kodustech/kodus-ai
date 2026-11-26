@@ -69,6 +69,23 @@ import {
 const IDLE_TIMEOUT_MS = 300_000; // 5 minutes — default for conversation flow
 
 /**
+ * What a joiner's `Sandbox.connect` sets the E2B timeout to (the SDK's
+ * default), and the least a sandbox held again gets back when a release's
+ * idle timeout landed after the joiner connected.
+ */
+const JOINER_MIN_TIMEOUT_MS = 300_000;
+
+/**
+ * How long a release waits for the holder's commands still running on the
+ * sandbox before giving it back. An orchestrator that times out returns with
+ * an agent command still running; giving the sandbox back at once deletes a
+ * local checkout under it, or pauses an E2B sandbox 30s later (#2628). Above
+ * the longest command a holder runs (clone/sync, 5 min); past it the release
+ * goes ahead.
+ */
+const IN_FLIGHT_DRAIN_MAX_MS = 6 * 60 * 1000;
+
+/**
  * Default lease TTL: 30 minutes. The reaper will clean up any lease whose
  * expiresAt has passed — this guards against crashed-worker leaks.
  */
@@ -154,6 +171,12 @@ export class SandboxStaleConnectionError extends Error {
     }
 }
 
+/** Commands a lease's holder has running, and the releases waiting on them. */
+interface InFlightCommands {
+    running: number;
+    waiters: Array<() => void>;
+}
+
 @Injectable()
 export class SandboxLeaseManager implements ISandboxLeaseManager {
     private readonly logger = createLogger(SandboxLeaseManager.name);
@@ -181,6 +204,8 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
     /** How each held lease used its sandbox, until its release (see trackUse). */
     private readonly leaseIdToUse = new Map<string, SandboxUsage>();
+    /** Commands each lease has running on its sandbox; release waits on them. */
+    private readonly leaseIdToInFlight = new Map<string, InFlightCommands>();
 
     /**
      * Fails sandbox creation fast while the infrastructure is degraded —
@@ -607,6 +632,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         this.leaseIdToUse.delete(leaseId);
         if (use) use.releasedAt = new Date();
 
+        // The holder is done, but a command it started may still be running
+        // (an orchestrator that timed out): the sandbox is given back once it
+        // ends, so the checkout is not deleted or paused under it (#2628).
+        await this.drainInFlight(leaseId, prKey);
+
         const updated = await this.leaseRepo.decrementLease(prKey);
         this.leaseIdToPrKey.delete(leaseId);
 
@@ -739,7 +769,18 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             }
 
             const killAt = new Date(Date.now() + idleMs);
-            await this.leaseRepo.setKillAt(prKey, killAt);
+            const scheduled = await this.leaseRepo.setKillAt(prKey, killAt);
+            if (!scheduled) {
+                // A holder joined between the decrement and this write: the
+                // sandbox is theirs now, and neither the kill nor the E2B
+                // timeout may follow (#2628).
+                this.logger.log({
+                    message: `SandboxLeaseManager: a holder joined before the idle-kill was scheduled, leaving the sandbox running sandboxId="${updated.sandboxId}" prKey="${prKey}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey, sandboxId: updated.sandboxId },
+                });
+                return;
+            }
             if (use) use.stopAt = killAt;
 
             this.logger.log({
@@ -759,15 +800,107 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             const apiKey = this.configService.get<string>('API_E2B_KEY');
             const sandboxId = updated.sandboxId;
             if (apiKey) {
-                void Sandbox.setTimeout(sandboxId, idleMs, { apiKey }).catch(
-                    (err) =>
-                        this.logger.warn({
-                            message: `SandboxLeaseManager: failed to set E2B-side idle timeout on sandboxId="${sandboxId}" (kill cron is the primary path)`,
-                            context: SandboxLeaseManager.name,
-                            error: err,
-                        }),
-                );
+                void this.setIdleTimeout(prKey, sandboxId, idleMs, apiKey);
             }
+        }
+    }
+
+    /**
+     * Wait for the commands the lease's holder still has running on its
+     * sandbox, at most IN_FLIGHT_DRAIN_MAX_MS. Commands have their own
+     * timeouts, so the cap only bounds a command that never settles.
+     */
+    private async drainInFlight(leaseId: string, prKey: string): Promise<void> {
+        const inFlight = this.leaseIdToInFlight.get(leaseId);
+        this.leaseIdToInFlight.delete(leaseId);
+        if (!inFlight || inFlight.running === 0) return;
+
+        const running = inFlight.running;
+        const startedAt = Date.now();
+        let timer: NodeJS.Timeout | undefined;
+        const drained = await Promise.race([
+            new Promise<true>((resolve) =>
+                inFlight.waiters.push(() => resolve(true)),
+            ),
+            new Promise<false>((resolve) => {
+                timer = setTimeout(
+                    () => resolve(false),
+                    IN_FLIGHT_DRAIN_MAX_MS,
+                );
+                timer.unref?.();
+            }),
+        ]);
+        clearTimeout(timer);
+
+        const log = drained ? this.logger.log : this.logger.warn;
+        log.call(this.logger, {
+            message: drained
+                ? `SandboxLeaseManager: release waited for the holder's running commands leaseId="${leaseId}" prKey="${prKey}"`
+                : `SandboxLeaseManager: release gave up waiting for the holder's running commands leaseId="${leaseId}" prKey="${prKey}"`,
+            context: SandboxLeaseManager.name,
+            metadata: {
+                leaseId,
+                prKey,
+                running,
+                stillRunning: inFlight.running,
+                waitedMs: Date.now() - startedAt,
+            },
+        });
+    }
+
+    /**
+     * The E2B-side idle timeout behind the kill cron. It is sent after
+     * killAt, so it can land after a holder that joined in between has
+     * connected (connect only lengthens the timeout). Once it has landed, a
+     * lease held again gets its sandbox back for the rest of the lease: a
+     * joiner that incremented before this read is seen here, and one that
+     * increments after it connects after the short timeout and lengthens it
+     * itself (#2628).
+     */
+    private async setIdleTimeout(
+        prKey: string,
+        sandboxId: string,
+        idleMs: number,
+        apiKey: string,
+    ): Promise<void> {
+        try {
+            await Sandbox.setTimeout(sandboxId, idleMs, { apiKey });
+        } catch (err) {
+            this.logger.warn({
+                message: `SandboxLeaseManager: failed to set E2B-side idle timeout on sandboxId="${sandboxId}" (kill cron is the primary path)`,
+                context: SandboxLeaseManager.name,
+                error: err,
+            });
+            return;
+        }
+
+        try {
+            const doc = await this.leaseRepo.findByPrKey(prKey);
+            if (!doc || doc.sandboxId !== sandboxId || !(doc.leaseCount > 0)) {
+                return;
+            }
+            const remainingMs = Math.max(
+                new Date(doc.expiresAt).getTime() - Date.now(),
+                JOINER_MIN_TIMEOUT_MS,
+            );
+            await Sandbox.setTimeout(sandboxId, remainingMs, { apiKey });
+            this.logger.log({
+                message: `SandboxLeaseManager: a holder joined while the idle timeout was being set, restored the sandbox timeout sandboxId="${sandboxId}" prKey="${prKey}"`,
+                context: SandboxLeaseManager.name,
+                metadata: {
+                    prKey,
+                    sandboxId,
+                    leaseCount: doc.leaseCount,
+                    timeoutMs: remainingMs,
+                },
+            });
+        } catch (err) {
+            this.logger.warn({
+                message: `SandboxLeaseManager: could not restore the timeout of a sandbox held again sandboxId="${sandboxId}" prKey="${prKey}"`,
+                context: SandboxLeaseManager.name,
+                error: err,
+                metadata: { prKey, sandboxId },
+            });
         }
     }
 
@@ -1450,33 +1583,47 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
         const use: SandboxUsage = { consumer, acquiredAt: new Date() };
         this.leaseIdToUse.set(leaseId, use);
+        const inFlight: InFlightCommands = { running: 0, waiters: [] };
+        this.leaseIdToInFlight.set(leaseId, inFlight);
 
         // After the release nothing is stamped, so the usage never shows a use
         // after it; a command started then is still run, and logged once.
+        // Every command counts as running until it settles, so the release
+        // waits for it (drainInFlight).
         let warnedUseAfterRelease = false;
         const stamped =
             <A extends unknown[], R>(command: (...args: A) => Promise<R>) =>
             async (...args: A): Promise<R> => {
-                if (use.releasedAt) {
-                    if (!warnedUseAfterRelease) {
-                        warnedUseAfterRelease = true;
-                        this.logger.warn({
-                            message: `SandboxLeaseManager: sandbox used after release consumer="${consumer}" leaseId="${leaseId}"`,
-                            context: SandboxLeaseManager.name,
-                            metadata: {
-                                leaseId,
-                                consumer,
-                                releasedAt: use.releasedAt,
-                            },
-                        });
-                    }
-                    return command(...args);
-                }
-                use.firstUsedAt ??= new Date();
+                inFlight.running += 1;
                 try {
-                    return await command(...args);
+                    if (use.releasedAt) {
+                        if (!warnedUseAfterRelease) {
+                            warnedUseAfterRelease = true;
+                            this.logger.warn({
+                                message: `SandboxLeaseManager: sandbox used after release consumer="${consumer}" leaseId="${leaseId}"`,
+                                context: SandboxLeaseManager.name,
+                                metadata: {
+                                    leaseId,
+                                    consumer,
+                                    releasedAt: use.releasedAt,
+                                },
+                            });
+                        }
+                        return await command(...args);
+                    }
+                    use.firstUsedAt ??= new Date();
+                    try {
+                        return await command(...args);
+                    } finally {
+                        if (!use.releasedAt) use.lastUsedAt = new Date();
+                    }
                 } finally {
-                    if (!use.releasedAt) use.lastUsedAt = new Date();
+                    inFlight.running -= 1;
+                    if (inFlight.running === 0) {
+                        for (const resolve of inFlight.waiters.splice(0)) {
+                            resolve();
+                        }
+                    }
                 }
             };
 
