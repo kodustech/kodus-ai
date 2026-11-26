@@ -50,6 +50,8 @@ export interface AdoptedRecipe {
     files?: AuthoredFile[];
     adjusted?: string[];
     authorVersion?: number;
+    /** The digest of the inferred recipe this authored recipe replaces (EnvironmentRecipeRecord.replacesInferred). */
+    replacesInferred?: string;
 }
 
 /** A recipe text goes through the same checks whoever wrote it (parseRecipe here, the cell's own on boot). */
@@ -78,7 +80,7 @@ export function checkRecipe(run: SetupRun, content: string): { blocker: Omit<Env
 
 /** The recipe the next boot boots: recorded on the setup, its expose list taken. Returns what the recipe step says after its label. */
 export function adoptRecipe(run: SetupRun, a: AdoptedRecipe, parsed: RecipeSummary): string {
-    const { path, content, origin, notes, files, adjusted, authorVersion } = a;
+    const { path, content, origin, notes, files, adjusted, authorVersion, replacesInferred } = a;
     const r: EnvironmentRecipeRecord = {
         path,
         sha: run.sha,
@@ -93,6 +95,7 @@ export function adoptRecipe(run: SetupRun, a: AdoptedRecipe, parsed: RecipeSumma
         ...(notes ? { notes } : {}),
         ...(adjusted?.length ? { adjusted } : {}),
         ...(origin === 'authored' && authorVersion ? { authorVersion } : {}),
+        ...(origin === 'authored' && replacesInferred ? { replacesInferred } : {}),
     };
     run.rec.recipe = r;
     run.expose = parsed.expose;
@@ -153,8 +156,9 @@ export async function resolveRecipe(run: SetupRun): Promise<boolean> {
         // An inferred recipe Kody already repaired for this environment boots Kody's recipe instead (kept, reused or
         // written again from it, as writtenRecipe decides): booting the guess again would fail as before and pay for
         // a boot and a repair on every setup (kr-mono on dev). A different inferred recipe (the compose changed) boots.
-        const written = recipe.origin === 'inferred' && repairedBefore(run, recipe.content) ? await writtenRecipe(run) : undefined;
-        if (written?.status === 'recipe') return useWritten(run, recipeStep, written);
+        const replaces = recipe.origin === 'inferred' && repairedBefore(run, recipe.content) ? recipeDigest(recipe.content) : undefined;
+        const written = replaces ? await writtenRecipe(run) : undefined;
+        if (written?.status === 'recipe') return useWritten(run, recipeStep, written, replaces);
         if (!(await useRecipe(run, recipeStep, { path: recipe.path, content: recipe.content, label: recipe.origin === 'inferred' ? 'inferred by Kodus' : recipe.path, origin: recipe.origin }))) {
             return false;
         }
@@ -164,18 +168,21 @@ export async function resolveRecipe(run: SetupRun): Promise<boolean> {
 }
 
 /** Adopts the recipe Kody wrote (or kept) as the recipe step's answer; false when the setup ended blocked on it. */
-async function useWritten(run: SetupRun, recipeStep: EnvironmentSetupStep, written: Extract<WrittenRecipe, { status: 'recipe' }>): Promise<boolean> {
+async function useWritten(run: SetupRun, recipeStep: EnvironmentSetupStep, written: Extract<WrittenRecipe, { status: 'recipe' }>, replacesInferred?: string): Promise<boolean> {
     if (written.reauthor) run.rec.reauthor = written.reauthor;
-    const adopted = { path: RECIPE_PATH, content: written.content, label: written.label, origin: 'authored' as const, notes: written.notes, files: written.files, adjusted: written.adjusted, authorVersion: written.authorVersion };
+    const adopted = { path: RECIPE_PATH, content: written.content, label: written.label, origin: 'authored' as const, notes: written.notes, files: written.files, adjusted: written.adjusted, authorVersion: written.authorVersion, replacesInferred };
     return useRecipe(run, recipeStep, adopted);
 }
 
-/** The environment's last setup repaired exactly this inferred recipe and ended on a recipe Kody wrote. */
+/**
+ * Kody's recipe already replaced exactly this inferred recipe for this environment: the last setup repaired it,
+ * or its recipe carries the lineage (`replacesInferred`) from an earlier setup that did, however many lie between.
+ */
 function repairedBefore(run: SetupRun, inferred: string): boolean {
     const p = run.previous;
     if (!p || p.recipe?.origin !== 'authored') return false;
     const digest = recipeDigest(inferred);
-    return (p.repairs ?? []).some((r) => r.failedDigest === digest);
+    return p.recipe.replacesInferred === digest || (p.repairs ?? []).some((r) => r.failedDigest === digest);
 }
 
 /**

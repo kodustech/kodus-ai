@@ -99,9 +99,12 @@ export async function authorRepair(run: SetupRun, n: number): Promise<boolean> {
         evidence: lessonText(causeLine(failure.evidence.join('\n')) ?? failure.evidence.at(-1) ?? '', REPAIR_LESSON_LIMITS.evidence),
         changed: changedPaths({ recipe: failed.content, files: failed.files }, { recipe: out.recipe, files: out.files }),
     };
+    // The inferred recipe this lineage started from: the failed one when Kodus inferred it, else the one it already replaced.
+    const inferredFrom = failed.origin === 'inferred' ? failed.digest : failed.replacesInferred;
+    const lineage = inferredFrom ? { replacesInferred: inferredFrom } : {};
     const checked = checkRecipe(run, out.recipe);
     if ('blocker' in checked) return stop('refused', 'failed', `Kody's new recipe was refused: ${checked.blocker.message}`);
-    const detail = adoptRecipe(run, { path: RECIPE_PATH, content: out.recipe, origin: 'authored', notes: out.notes, files: out.files, adjusted: out.adjusted, authorVersion: out.authorVersion }, checked.recipe);
+    const detail = adoptRecipe(run, { path: RECIPE_PATH, content: out.recipe, origin: 'authored', notes: out.notes, files: out.files, adjusted: out.adjusted, authorVersion: out.authorVersion, ...lineage }, checked.recipe);
     if (run.deps.opts.devExpose) run.expose = run.deps.opts.devExpose;
     // The failed boot's evidence went to Kody; what the record keeps from here is the new boot's.
     delete rec.failureBundle;

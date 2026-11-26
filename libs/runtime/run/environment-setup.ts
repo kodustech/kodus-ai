@@ -87,6 +87,13 @@ export interface EnvironmentRecipeRecord {
      */
     authorVersion?: number;
     /**
+     * Digest of the inferred recipe this authored recipe descends from (Kody
+     * repaired or kept it in place of that inferred recipe). While the product
+     * sends that same inferred recipe, the setup boots Kody's recipe, however
+     * many setups lie between. Absent: not a descendant of an inferred recipe.
+     */
+    replacesInferred?: string;
+    /**
      * The Dockerfiles and compose files under .kodus/ Kody wrote with an
      * authored recipe, checked with it at `sha`. Every boot of this recipe
      * (the setup's and every Run's) gets them in claim.acquire; `digest`

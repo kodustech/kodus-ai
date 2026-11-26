@@ -222,6 +222,73 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
         expect(a.calls).toHaveLength(1);
     });
 
+    // The lineage rides on the record: the README commit after two repairs sent the inferred recipe again and Kody started over.
+    describe('the inferred recipe stays replaced across setups', () => {
+        const current = { version: RECIPE_AUTHOR_VERSION } as const;
+        const SHA2 = 'd'.repeat(40);
+        const at = (n: number) => ({ key: `env-1:2026-11-11T1${n}:00:00.000Z`, requestedAt: `2026-11-11T1${n}:00:00.000Z`, llmToken: sealSecret('kst1.setup-token', devSealKey(), `env-1:2026-11-11T1${n}:00:00.000Z`) });
+        const inferredAt = (sha: string, content = FIRST) => ({ path: '.kodus/workspace.yaml' as const, sha, content, origin: 'inferred' as const });
+        const FOURTH = recipe('fourth');
+        const withVersion = (o: RecipeAuthorOutcome, extra: object = {}) => ({ ...o, authorVersion: current.version, ...extra }) as RecipeAuthorOutcome;
+
+        it('boots the recipe Kody repaired twice, at a new commit, not the inferred recipe', async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            let a1Boots = 0;
+            const base = fakeEnv({ first: BUILD_FAILED, third: 'ok' });
+            const env: EnvironmentRuntime = {
+                ...base.env,
+                acquire: async (req) => {
+                    const tag = /# (\w+)\n$/.exec(req.recipe?.content ?? '')?.[1];
+                    // A1 boots in setup 1 and fails from setup 2 on.
+                    if (tag === 'second' && ++a1Boots > 1) return BUILD_FAILED;
+                    return base.env.acquire(req);
+                },
+            };
+            const a = author(store, withVersion(submitted(SECOND)), withVersion(submitted(THIRD)), withVersion(submitted(THIRD), { reused: true }));
+            const svc = () => service(store, env, { author: a.client });
+            const s1 = await svc().run(cmd({ recipe: inferredAt(SHA) }));
+            expect(s1.state).toBe('active');
+            expect(s1.recipe).toMatchObject({ origin: 'authored', content: SECOND, replacesInferred: recipeDigest(FIRST) });
+
+            const s2 = await svc().run(cmd({ ...at(3), recipe: inferredAt(SHA) }));
+            expect(s2.state).toBe('active');
+            expect(s2.recipe).toMatchObject({ origin: 'authored', content: THIRD, replacesInferred: recipeDigest(FIRST) });
+            expect(s2.repairs?.[0].failedDigest).toBe(recipeDigest(SECOND, FILES));
+
+            base.calls.length = 0;
+            const s3 = await svc().run(cmd({ ...at(4), ref: { sha: SHA2, branch: 'main' }, recipe: inferredAt(SHA2) }));
+            expect(s3.state).toBe('active');
+            expect(s3.recipe).toMatchObject({ origin: 'authored', content: THIRD, replacesInferred: recipeDigest(FIRST) });
+            expect(s3.repairs).toBeUndefined();
+            expect(base.calls.filter((c) => c.startsWith('acquire'))).toEqual([`acquire setup:${at(4).key}`]);
+        });
+
+        it('the lineage survives a setup that keeps the recipe with no repair', async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            const { env } = fakeEnv({ first: BUILD_FAILED, second: 'ok' });
+            const a = author(store, withVersion(submitted(SECOND)));
+            const svc = () => service(store, env, { author: a.client });
+            await svc().run(cmd({ recipe: inferredAt(SHA) }));
+            // Kept (same commit), then kept again: no repair in either, and the inferred recipe never boots.
+            const kept = await svc().run(cmd({ ...at(3), recipe: inferredAt(SHA) }));
+            expect(kept.repairs).toBeUndefined();
+            const again = await svc().run(cmd({ ...at(4), recipe: inferredAt(SHA) }));
+            expect(again.recipe).toMatchObject({ origin: 'authored', content: SECOND, replacesInferred: recipeDigest(FIRST) });
+            expect(again.repairs).toBeUndefined();
+        });
+
+        it('a different inferred recipe still boots after two repairs', async () => {
+            const store = new InMemoryEnvironmentSetupStore();
+            const { env } = fakeEnv({ first: BUILD_FAILED, second: 'ok', fourth: 'ok' });
+            const a = author(store, withVersion(submitted(SECOND)));
+            const svc = () => service(store, env, { author: a.client });
+            await svc().run(cmd({ recipe: inferredAt(SHA) }));
+            await svc().run(cmd({ ...at(3), recipe: inferredAt(SHA) }));
+            const rec = await svc().run(cmd({ ...at(4), recipe: inferredAt(SHA, FOURTH) }));
+            expect(rec.recipe).toMatchObject({ origin: 'inferred', content: FOURTH });
+        });
+    });
+
     it('a different inferred recipe (the compose changed) boots, even after Kody repaired the last one', async () => {
         const store = new InMemoryEnvironmentSetupStore();
         const { env } = fakeEnv({ first: BUILD_FAILED, second: 'ok', third: 'ok' });
