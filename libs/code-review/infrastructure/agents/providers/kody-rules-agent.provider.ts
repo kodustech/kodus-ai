@@ -762,6 +762,19 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             judgeViolations = result.violations;
             shardsRun = result.shardsRun;
             shardsErrored = result.shardsErrored;
+            if (result.providerRefusal) {
+                this.shardLogger.warn({
+                    message: `[kody-rules] the model provider refused PR#${input.prNumber} (${result.providerRefusal}); the remaining shards were skipped instead of called`,
+                    context: this.getIdentity().name,
+                    metadata: {
+                        organizationAndTeamData: input.organizationAndTeamData,
+                        prNumber: input.prNumber,
+                        category: result.providerRefusal,
+                        shardsRun: result.shardsRun,
+                        shardsErrored: result.shardsErrored,
+                    },
+                });
+            }
             if (evidenceSkipped) {
                 contextWarnings.push({
                     kind: 'KODY_RULES_PARTIAL',

@@ -1,5 +1,5 @@
 import { buildUserPrompt } from './conversation-prompt';
-import { RUNTIME_NOTE_PREFIX, WriteTruthPolicy } from './write-truth.policy';
+import { WriteTruthPolicy } from './write-truth.policy';
 
 describe('conversation prompt — repository guidance', () => {
     const base = {
@@ -25,6 +25,9 @@ describe('conversation prompt — repository guidance', () => {
 describe('WriteTruthPolicy — the note says whose it is', () => {
     it('marks the note as runtime status, not a developer message', () => {
         const out = new WriteTruthPolicy(() => false).prepareStep({ steps: [] } as any);
-        expect(out.injectNote?.content.startsWith(RUNTIME_NOTE_PREFIX)).toBe(true);
+        expect(out.injectNote?.content).toBe(
+            '[Kodus runtime status — not a message from the developer. Do not reply to it or record a new decision for it; keep answering the developer.] ' +
+                'ACTIONS PERFORMED THIS TURN: none. Nothing has changed yet, so do not say you saved, created, recorded or updated anything — you may report an action only once its tool call has returned.',
+        );
     });
 });

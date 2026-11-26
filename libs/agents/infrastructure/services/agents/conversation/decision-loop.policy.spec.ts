@@ -1,12 +1,9 @@
 import { CONVERSATION_DECISION_TOOL } from './conversation-decision';
-import { DecisionLoopPolicy, MAX_DECISIONS } from './decision-loop.policy';
+import { DecisionLoopPolicy } from './decision-loop.policy';
 
-const decisionStep = () =>
-    ({
-        message: {
-            toolCalls: [{ name: CONVERSATION_DECISION_TOOL, input: { intent: 'answer' } }],
-        },
-    }) as any;
+const step = (call: Record<string, unknown>) =>
+    ({ message: { toolCalls: [{ name: CONVERSATION_DECISION_TOOL, ...call }] } }) as any;
+const decided = () => step({ input: { intent: 'answer' } });
 
 const view = (steps: any[]) =>
     ({
@@ -27,17 +24,24 @@ describe('DecisionLoopPolicy', () => {
 
     it('leaves the tools alone for the first decision and one revision', () => {
         expect(policy.prepareStep(view([]))).toEqual({});
-        expect(policy.prepareStep(view([decisionStep()]))).toEqual({});
+        expect(policy.prepareStep(view([decided()]))).toEqual({});
     });
 
-    it('removes only the decision tool once the agent decided twice', () => {
-        const steps = Array.from({ length: MAX_DECISIONS }, decisionStep);
-        const out = policy.prepareStep(view(steps));
-        expect(out.activeTools).toEqual(['grep', 'readFile']);
+    it('removes only the decision tool after exactly two decisions', () => {
+        expect(policy.prepareStep(view([decided(), decided()]))).toEqual({
+            activeTools: ['grep', 'readFile'],
+            emit: [{ kind: 'decision-loop.stopped', detail: { decisions: 2 } }],
+        });
     });
 
-    it('counts decisions, not steps that used other tools', () => {
+    it('does not count a call that failed or did not parse', () => {
+        const failed = step({ input: { intent: 'answer' }, isError: true });
+        const invalid = step({ input: { intent: 'shout' } });
+        expect(policy.prepareStep(view([failed, invalid, decided()]))).toEqual({});
+    });
+
+    it('does not count steps that used other tools', () => {
         const other = { message: { toolCalls: [{ name: 'grep', input: {} }] } } as any;
-        expect(policy.prepareStep(view([decisionStep(), other, other]))).toEqual({});
+        expect(policy.prepareStep(view([decided(), other, other]))).toEqual({});
     });
 });

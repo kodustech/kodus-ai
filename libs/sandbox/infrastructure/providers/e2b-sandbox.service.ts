@@ -7,7 +7,10 @@ import { PlatformType } from '@libs/core/domain/enums';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CommandExitError, Sandbox, type CommandHandle } from 'e2b';
-import { MAX_TOOL_SCAN_CHARS } from '@libs/common/utils/tool-output/scan-prefix';
+import {
+    cutAt,
+    MAX_TOOL_SCAN_CHARS,
+} from '@libs/common/utils/tool-output/scan-prefix';
 
 import {
     CreateSandboxParams,
@@ -165,10 +168,15 @@ export const MAX_EXEC_OUTPUT_CHARS = 2 * MAX_TOOL_SCAN_CHARS;
 
 /** Shortens `text` to at most `max` characters, at a line end when it can. */
 function headOf(text: string, max: number): string {
-    if (text.length <= max) return text;
-    const head = text.slice(0, max);
+    if (!text || text.length <= max) return text;
+    const head = cutAt(text, max);
     const lastLine = head.lastIndexOf('\n');
     return lastLine > 0 ? head.slice(0, lastLine) : head;
+}
+
+/** First word of a shell command, without its arguments. */
+function programOf(command: string): string {
+    return (command.trim().split(/[\s;|&<>()]+/)[0] ?? '').slice(0, 40);
 }
 
 export interface BuildE2BRemoteCommandsOptions {
@@ -261,8 +269,18 @@ export function buildE2BRemoteCommands(
         exitCode: number;
         stopped: boolean;
     }> => {
+        // stdout and stderr together: a command can flood either one.
         let seen = 0;
         let stopped = false;
+        const count = (data: string) => {
+            seen += data.length;
+            if (!stopped && seen > maxChars) {
+                stopped = true;
+                // Before `run` returns there is no handle yet: the check
+                // right after it stops the command then.
+                stop();
+            }
+        };
         // Filled once `run` returns; onStdout can fire before that.
         const started: { handle?: CommandHandle } = {};
         const stop = () => {
@@ -271,15 +289,8 @@ export function buildE2BRemoteCommands(
         const handle = await sandbox.commands.run(cmd, {
             background: true,
             timeoutMs,
-            onStdout: (data: string) => {
-                seen += data.length;
-                if (!stopped && seen > maxChars) {
-                    stopped = true;
-                    // Before `run` returns there is no handle yet: the
-                    // check right after it stops the command then.
-                    stop();
-                }
-            },
+            onStdout: count,
+            onStderr: count,
         });
         started.handle = handle;
         if (stopped) stop();
@@ -287,7 +298,7 @@ export function buildE2BRemoteCommands(
             const res = await handle.wait();
             return {
                 stdout: headOf(res.stdout, maxChars),
-                stderr: res.stderr,
+                stderr: headOf(res.stderr, maxChars),
                 exitCode: res.exitCode,
                 stopped,
             };
@@ -295,7 +306,7 @@ export function buildE2BRemoteCommands(
             if (err instanceof CommandExitError) {
                 return {
                     stdout: headOf(err.stdout, maxChars),
-                    stderr: err.stderr,
+                    stderr: headOf(err.stderr, maxChars),
                     exitCode: err.exitCode,
                     stopped,
                 };
@@ -305,7 +316,7 @@ export function buildE2BRemoteCommands(
             if (stopped) {
                 return {
                     stdout: headOf(handle.stdout, maxChars),
-                    stderr: handle.stderr,
+                    stderr: headOf(handle.stderr, maxChars),
                     exitCode: handle.exitCode ?? -1,
                     stopped,
                 };
@@ -421,7 +432,12 @@ export function buildE2BRemoteCommands(
 
         exec: async (
             command: string,
-        ): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
+        ): Promise<{
+            stdout: string;
+            stderr: string;
+            exitCode: number;
+            truncated?: boolean;
+        }> => {
             const result = await runCapped(
                 `cd ${REPO_DIR} && ${command}`,
                 TIMEOUTS.COMMAND_LONG_MS,
@@ -429,24 +445,23 @@ export function buildE2BRemoteCommands(
             );
             // stdout and stderr kept SEPARATE — merging let a subprocess error
             // masquerade as command output. Tools that want diagnostics use 2>&1.
-            const stderr = result.stderr || '';
             if (result.stopped) {
                 logger?.warn({
-                    message: `[SANDBOX-EXEC] command stopped after ${MAX_EXEC_OUTPUT_CHARS} stdout characters`,
+                    message: `[SANDBOX-EXEC] command stopped after ${MAX_EXEC_OUTPUT_CHARS} output characters`,
                     context: logContext,
                     metadata: {
                         ...logMetadata,
-                        command: command.slice(0, 200),
+                        // The program only: arguments can carry a token.
+                        program: programOf(command),
                         maxChars: MAX_EXEC_OUTPUT_CHARS,
                     },
                 });
             }
             return {
                 stdout: result.stdout,
-                stderr: result.stopped
-                    ? `${stderr}${stderr ? '\n' : ''}[output stopped after ${MAX_EXEC_OUTPUT_CHARS} characters: the command printed more and was stopped. Narrow it, for example with a path, --stat or | head -n 200.]`
-                    : stderr,
+                stderr: result.stderr || '',
                 exitCode: result.exitCode,
+                ...(result.stopped ? { truncated: true } : {}),
             };
         },
     };

@@ -103,6 +103,26 @@ export function readDecision(
     return decision;
 }
 
+/**
+ * Decisions the agent actually recorded this run: calls that ran without an
+ * error and parsed. A failed or malformed call recorded nothing.
+ */
+export function countDecisions(steps: readonly RunStep[]): number {
+    let count = 0;
+    for (const step of steps) {
+        for (const call of step.message?.toolCalls ?? []) {
+            if (
+                call.name === CONVERSATION_DECISION_TOOL &&
+                !call.isError &&
+                parse(call.input)
+            ) {
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
 function parse(input: unknown): ConversationDecision | undefined {
     let raw = input;
 

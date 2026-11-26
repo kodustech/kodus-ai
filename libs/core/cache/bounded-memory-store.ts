@@ -36,8 +36,6 @@ export class BoundedMemoryStore<V = unknown> extends Map<string, V> {
     }
 
     override set(key: string, value: V): this {
-        // super() calls set() for initial entries before opts exist.
-        if (!this.opts) return super.set(key, value);
         const size = sizeOf(value);
         this.delete(key);
         if (size > this.opts.maxEntryChars) return this;

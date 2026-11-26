@@ -26,6 +26,7 @@ jest.mock('@libs/common/utils/tool-output/long-lines', () => {
 
 import {
     buildNativeToolConfigs,
+    CUT_HINT,
     MAX_CONVERSATION_TOOL_OUTPUT_CHARS,
     MAX_CONVERSATION_TOOL_SCAN_CHARS,
 } from './native-tools.factory';
@@ -104,17 +105,17 @@ describe('conversation tools — guarded outputs', () => {
             .matches as string;
         expect(grep.length).toBeLessThan(3_000);
         expect(grep).toContain('more characters on this line not shown');
-        const read = (
-            (await run('readFile', {
-                path: 'a.ts',
-                start: 1,
-                end: 9_999,
-            })) as any
-        ).content as string;
-        expect(read.length).toBeLessThanOrEqual(
-            MAX_CONVERSATION_TOOL_OUTPUT_CHARS + 200,
-        );
-        expect(read).toContain('more characters not shown');
+        const answer = (await run('readFile', {
+            path: 'a.ts',
+            start: 1,
+            end: 9_999,
+        })) as any;
+        // The content is only content; the cut is reported beside it.
+        expect(answer.content).toBe(many.slice(0, MAX_CONVERSATION_TOOL_OUTPUT_CHARS));
+        expect(answer.cut).toEqual({
+            hiddenChars: { content: many.length - MAX_CONVERSATION_TOOL_OUTPUT_CHARS },
+            hint: CUT_HINT,
+        });
     });
 
     it('reads only a bounded head of a huge exec answer', async () => {
@@ -146,16 +147,13 @@ describe('conversation tools — guarded outputs', () => {
 
         expect(out.exitCode).toBe(0);
         expect(out.stdout).not.toContain('API_TOKEN');
-        expect(out.stdout.length).toBeLessThanOrEqual(
-            MAX_CONVERSATION_TOOL_OUTPUT_CHARS + 200,
-        );
-        const hidden = Number(
-            /\.\.\. \((\d+) more characters not shown/.exec(out.stdout)?.[1],
-        );
-        const shownChars = out.stdout.indexOf('\n... (');
+        expect(out.stdout).toHaveLength(MAX_CONVERSATION_TOOL_OUTPUT_CHARS);
         // Everything not shown is counted: the dropped secret line aside,
-        // shown + hidden covers the whole answer.
-        expect(hidden + shownChars).toBeGreaterThan(stdout.length - 100);
+        // shown + hidden is the whole answer.
+        const secretLine = '.env:1:API_TOKEN=FAKE_VALUE\n';
+        expect(out.stdout.length + out.cut.hiddenChars.stdout).toBe(
+            stdout.length - secretLine.length,
+        );
     });
 
     it('marks the call in flight with its path, and an exec only by its program', async () => {

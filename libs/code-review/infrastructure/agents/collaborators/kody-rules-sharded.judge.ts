@@ -505,6 +505,11 @@ export interface ShardedJudgeResult {
     violations: ShardViolation[];
     shardsRun: number;
     shardsErrored: number;
+    /**
+     * The terminal provider failure (an LlmErrorCategory) after which the
+     * remaining shards were skipped without a call, if that happened.
+     */
+    providerRefusal?: string;
     referenceStats: ShardReferenceStats;
     promptCacheStats: ShardPromptCacheStats;
 }
@@ -1495,12 +1500,8 @@ export async function judgeKodyRulesSharded(
         if (!isTerminalCategory(category)) return;
         terminalFailures++;
         if (!stoppedFor && terminalFailures >= TERMINAL_FAILURES_TO_STOP) {
+            // Reported to the caller, which logs it with the review's ids.
             stoppedFor = category;
-            logger?.warn({
-                message: `[kody-rules-shard] the model provider refused this review (${category}); the remaining shards are skipped instead of called`,
-                context: 'kody-rules-sharded',
-                metadata: { category, terminalFailures },
-            });
         }
     };
     const violations: ShardViolation[] = [];
@@ -1703,5 +1704,6 @@ export async function judgeKodyRulesSharded(
         shardsErrored,
         referenceStats,
         promptCacheStats,
+        ...(stoppedFor ? { providerRefusal: stoppedFor } : {}),
     };
 }

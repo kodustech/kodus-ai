@@ -17,7 +17,7 @@ jest.mock('@libs/core/infrastructure/activity/time-sync', () => ({
  * history. The log now carries the sizes that decide the fix.
  */
 describe('ContextWindowCompressor — slow count log', () => {
-    it('logs the window size and its largest message', () => {
+    it('logs the window size and its largest message, never its text', () => {
         logged.length = 0;
         const head = 'diff line\n'.repeat(5_000);
         const messages = [
@@ -29,6 +29,8 @@ describe('ContextWindowCompressor — slow count log', () => {
             messages,
         );
 
+        // Sizes only: nothing of the messages themselves reaches the log.
+        expect(JSON.stringify(logged)).not.toContain('diff line');
         expect(logged[0]).toEqual({
             messages: 2,
             chars: 'You review code.'.length + head.length,

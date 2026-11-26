@@ -13,6 +13,7 @@ import {
     withoutSecretFileLines,
 } from '@libs/common/utils/tool-output/secret-files';
 import {
+    cutAt,
     MAX_TOOL_SCAN_CHARS,
     scanPrefix,
 } from '@libs/common/utils/tool-output/scan-prefix';
@@ -257,9 +258,14 @@ function refuseSecret(
         : undefined;
 }
 
+/** What the agent reads beside an answer that was cut (`cut.hint`). */
+export const CUT_HINT =
+    'Only the start of this output is shown. Narrow the call: a path, a pattern, --stat or | head.';
+
 function guardOutput(name: string, out: unknown): unknown {
     if (!out || typeof out !== 'object') return out;
     const result = { ...(out as Record<string, unknown>) };
+    const hiddenChars: Record<string, number> = {};
     for (const field of ['matches', 'content', 'listing', 'stdout', 'stderr']) {
         const value = result[field];
         if (typeof value !== 'string') continue;
@@ -273,9 +279,11 @@ function guardOutput(name: string, out: unknown): unknown {
         const capped = cutLongLines(text);
         text = capped.text;
         if (text.length > MAX_CONVERSATION_TOOL_OUTPUT_CHARS || unread > 0) {
-            const shown = text.slice(0, MAX_CONVERSATION_TOOL_OUTPUT_CHARS);
-            const hidden = text.length - shown.length + unread;
-            text = `${shown}\n... (${hidden} more characters not shown — narrow the call)`;
+            const shown = cutAt(text, MAX_CONVERSATION_TOOL_OUTPUT_CHARS);
+            // Beside the content, not inside it: a file can print anything,
+            // including a line that looks like this notice.
+            hiddenChars[field] = text.length - shown.length + unread;
+            text = shown;
         }
         if (capped.cut > 0 || unread > 0 || text.length < value.length) {
             logger.warn({
@@ -293,6 +301,9 @@ function guardOutput(name: string, out: unknown): unknown {
             });
         }
         result[field] = text;
+    }
+    if (Object.keys(hiddenChars).length > 0) {
+        result.cut = { hiddenChars, hint: CUT_HINT };
     }
     return result;
 }

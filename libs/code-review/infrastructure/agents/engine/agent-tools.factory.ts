@@ -36,6 +36,13 @@ export const MAX_GREP_MATCHES = 50;
  * distinct locations for the same token budget, so a definition is not buried
  * beyond the cutoff when a symbol has many usages.
  */
+/**
+ * A grep whose output was cut where every line read so far came from a
+ * secret file: there are matches, so "No matches found" would be false.
+ */
+export const PARTIAL_GREP_NO_VISIBLE_MATCH =
+    'Matches were found, but the part of the output that was read only had matches in secret files, which are not shown. Narrow the search with a path, a glob or a more specific regex.';
+
 export const MAX_GREP_GROUPS = 40;
 export const MAX_READ_LENGTH = 8_000;
 export const MAX_LIST_LENGTH = 4_000;
@@ -481,9 +488,11 @@ export function buildAgentTools(
                         // `-e` and `--`: a pattern or path starting with "-"
                         // is never read as an rg flag (`--pre` runs a command).
                         const cdCmd = `cd ${shSingleQuote(linked.rootPath)} && rg${globArg}${excludeTestsArgs}${modeArg} -e '${safePattern}' -- ${shSingleQuote(relForCd)}`;
-                        const { stdout, exitCode } =
+                        const { stdout, exitCode, truncated } =
                             await remoteCommands.exec(cdCmd);
-                        if (exitCode >= 2) {
+                        // A run stopped at the output cap carries the kill's
+                        // exit code; its partial output is still the answer.
+                        if (exitCode >= 2 && !truncated) {
                             return `Error searching linked repo ${linked.repository} for "${pattern}"`;
                         }
                         // Secret files leave before the cap, so their matches
@@ -492,10 +501,14 @@ export function buildAgentTools(
                         // hundreds of MB, and the filter is synchronous.
                         const { text: head, unread } = scanPrefix(stdout);
                         const raw = withoutSecretFileLines(head).trim();
-                        if (exitCode === 1 || !raw) {
+                        const partial = unread > 0 || !!truncated;
+                        if (!raw && partial) {
+                            return PARTIAL_GREP_NO_VISIBLE_MATCH;
+                        }
+                        if ((exitCode === 1 && !truncated) || !raw) {
                             return `No matches found in linked repo ${linked.repository}.`;
                         }
-                        const more = unread > 0 ? '+' : '';
+                        const more = partial ? '+' : '';
                         // Tag paths so the agent knows which repo they came from.
                         const tagged = raw
                             .split('\n')
@@ -520,7 +533,7 @@ export function buildAgentTools(
                                 `\n... (${groups.length - MAX_GREP_GROUPS}${more} more matches hidden — narrow with a more specific regex)`
                             );
                         }
-                        return unread > 0
+                        return partial
                             ? `${tagged}\n... (more matches hidden — narrow with a more specific regex)`
                             : tagged;
                     } catch (err) {
@@ -555,7 +568,7 @@ export function buildAgentTools(
                         // `-e` and `--`: a pattern or path starting with "-"
                         // is never read as an rg flag (`--pre` runs a command).
                         const cmd = `rg${globArg}${excludeTestsArgs}${modeArg} -e '${safePattern}' -- '${safePath}'`;
-                        const { stdout, exitCode } =
+                        const { stdout, exitCode, truncated } =
                             await remoteCommands.exec(cmd);
                         // exit code 1 with "not allowed" = blocked by sandbox, fall through to fallback
                         if (exitCode === 1 && stdout.includes('not allowed')) {
@@ -567,7 +580,10 @@ export function buildAgentTools(
                         // no-match (exit 1); fall through to the fallback so the
                         // model gets a real error rather than a misleading
                         // "No matches found."
-                        if (exitCode >= 2) {
+                        // A run stopped at the output cap carries the kill's
+                        // exit code: read what it printed instead of falling
+                        // back to a second, full rg run.
+                        if (exitCode >= 2 && !truncated) {
                             throw new Error('rg error');
                         }
                         // Secret files leave before the cap, so their matches
@@ -576,15 +592,21 @@ export function buildAgentTools(
                         // hundreds of MB, and the filter is synchronous.
                         const { text: head, unread } = scanPrefix(stdout);
                         const raw = withoutSecretFileLines(head).trim();
-                        const more = unread > 0 ? '+' : '';
+                        const partial = unread > 0 || !!truncated;
+                        const more = partial ? '+' : '';
+                        // Matches exist, but none in the part that was read
+                        // survived the secret filter: not "no matches".
+                        if (!raw && partial) {
+                            return PARTIAL_GREP_NO_VISIBLE_MATCH;
+                        }
                         // exit code 1 = no matches (not an error)
-                        if (exitCode === 1 || !raw) {
+                        if ((exitCode === 1 && !truncated) || !raw) {
                             return withSubmoduleNote(
                                 'No matches found.',
                                 searchPath,
                             );
                         }
-                        if (exitCode === 0) {
+                        if (exitCode === 0 || truncated) {
                             if (namesOnly) {
                                 return raw
                                     .split('\n')
@@ -604,7 +626,7 @@ export function buildAgentTools(
                                     `\n... (${groups.length - MAX_GREP_GROUPS}${more} more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`
                                 );
                             }
-                            return unread > 0
+                            return partial
                                 ? `${raw}\n... (more matches hidden — narrow with a more specific regex, glob='*.ts', path=<subdir>, or excludeTests=true)`
                                 : raw;
                         }
@@ -633,6 +655,9 @@ export function buildAgentTools(
                 const scanned = scanPrefix(result);
                 const more = scanned.unread > 0 ? '+' : '';
                 result = withoutSecretFileLines(scanned.text);
+                if (!result.trim() && scanned.unread > 0) {
+                    return PARTIAL_GREP_NO_VISIBLE_MATCH;
+                }
                 if (namesOnly) {
                     // The note has to come BEFORE the file-name mapping, and
                     // on the SAME predicate the note itself uses. An empty

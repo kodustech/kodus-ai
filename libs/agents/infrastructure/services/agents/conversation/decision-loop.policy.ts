@@ -15,7 +15,10 @@ import type {
     StepView,
 } from '@libs/agent-harness/domain/contracts/policy.contract';
 
-import { CONVERSATION_DECISION_TOOL } from './conversation-decision';
+import {
+    CONVERSATION_DECISION_TOOL,
+    countDecisions,
+} from './conversation-decision';
 
 /** One decision, plus one revision after reading more (e.g. answer → offer). */
 export const MAX_DECISIONS = 2;
@@ -24,9 +27,9 @@ export class DecisionLoopPolicy implements AgentPolicy {
     readonly name = 'decision-loop';
 
     prepareStep(view: StepView): StepDirectives {
-        const decisions = view.steps
-            .flatMap((step) => step.message?.toolCalls ?? [])
-            .filter((call) => call.name === CONVERSATION_DECISION_TOOL).length;
+        // Only decisions that ran and parsed: a failed or malformed call did
+        // not record anything, and must not use up the agent's chances.
+        const decisions = countDecisions(view.steps);
         if (decisions < MAX_DECISIONS) {
             return {};
         }

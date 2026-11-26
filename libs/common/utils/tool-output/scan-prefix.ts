@@ -18,12 +18,23 @@ export interface ScannedPrefix {
     unread: number;
 }
 
+/**
+ * `text` cut to at most `max` UTF-16 units, one unit shorter when the cut
+ * would leave the high half of a surrogate pair (an emoji) dangling.
+ */
+export function cutAt(text: string, max: number): string {
+    if (text.length <= max) return text;
+    const code = text.charCodeAt(max - 1);
+    const end = code >= 0xd800 && code <= 0xdbff ? max - 1 : max;
+    return text.slice(0, end);
+}
+
 export function scanPrefix(
     value: string,
     max: number = MAX_TOOL_SCAN_CHARS,
 ): ScannedPrefix {
     if (value.length <= max) return { text: value, unread: 0 };
-    const head = value.slice(0, max);
+    const head = cutAt(value, max);
     const lastLine = head.lastIndexOf('\n');
     // One line longer than the cap: the long-line cut shortens it anyway.
     const text = lastLine > 0 ? head.slice(0, lastLine) : head;

@@ -29,7 +29,6 @@ import { CommandExitError, Sandbox } from 'e2b';
 import {
     E2BSandboxService,
     buildE2BRemoteCommands,
-    MAX_EXEC_OUTPUT_CHARS,
     fixedIpReasonFrom,
     syncE2BSandboxRepo,
 } from './e2b-sandbox.service';
@@ -170,15 +169,22 @@ describe('buildE2BRemoteCommands', () => {
         outcome:
             | { stdout: string; stderr?: string; exitCode: number }
             | Error,
-        chunks: string[] = [],
+        chunks: Array<string | { stderr: string }> = [],
     ) => {
         const kill = jest.fn().mockResolvedValue(true);
+        const out = chunks.filter((c): c is string => typeof c === 'string');
+        const err = chunks
+            .filter((c): c is { stderr: string } => typeof c !== 'string')
+            .map((c) => c.stderr);
         const run = jest.fn(async (_cmd: string, opts: any) => {
-            for (const c of chunks) opts.onStdout?.(c);
+            for (const c of chunks) {
+                if (typeof c === 'string') opts.onStdout?.(c);
+                else opts.onStderr?.(c.stderr);
+            }
             return {
                 kill,
-                stdout: outcome instanceof Error ? chunks.join('') : outcome.stdout,
-                stderr: '',
+                stdout: out.join(''),
+                stderr: err.join(''),
                 exitCode: undefined,
                 wait: () =>
                     outcome instanceof Error
@@ -634,17 +640,45 @@ describe('buildE2BRemoteCommands', () => {
                 logger: { warn } as any,
             });
 
-            const res = await rc.exec('git log -p');
+            const res = await rc.exec('git log -p --token=SECRET_CANARY');
 
-            expect(kill).toHaveBeenCalled();
-            expect(res.stdout.length).toBeLessThanOrEqual(MAX_EXEC_OUTPUT_CHARS);
-            expect(res.stdout.endsWith('x')).toBe(true);
-            expect(res.stderr).toMatch(/output stopped after \d+ characters/);
-            expect(warn).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    message: expect.stringContaining('[SANDBOX-EXEC]'),
-                }),
+            expect(kill).toHaveBeenCalledTimes(1);
+            // 2,000,000 characters end on a newline, which the cut drops.
+            expect(res).toEqual({
+                stdout: line.repeat(20_000).slice(0, -1),
+                stderr: '',
+                exitCode: -1,
+                truncated: true,
+            });
+            expect(warn).toHaveBeenCalledTimes(1);
+            // The program only: an argument can carry a token.
+            expect(warn.mock.calls[0][0].metadata).toEqual({
+                program: 'git',
+                maxChars: 2_000_000,
+            });
+            expect(JSON.stringify(warn.mock.calls)).not.toContain('SECRET_CANARY');
+        });
+
+        it('counts stderr toward the cap', async () => {
+            const line = 'e'.repeat(99) + '\n';
+            const chunks = Array.from({ length: 3 }, () => ({
+                stderr: line.repeat(10_000),
+            }));
+            const { run, kill } = backgroundRun(
+                exitError('', chunks.map((c) => c.stderr).join(''), -1),
+                chunks,
             );
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('find / -name x');
+
+            expect(kill).toHaveBeenCalledTimes(1);
+            expect(res).toEqual({
+                stdout: '',
+                stderr: line.repeat(20_000).slice(0, -1),
+                exitCode: -1,
+                truncated: true,
+            });
         });
 
         it('keeps what a stopped command printed when its stream errors', async () => {
@@ -654,9 +688,23 @@ describe('buildE2BRemoteCommands', () => {
 
             const res = await rc.exec('cat big.json');
 
-            expect(res.stdout.length).toBeLessThanOrEqual(MAX_EXEC_OUTPUT_CHARS);
-            expect(res.stdout.length).toBeGreaterThan(0);
-            expect(res.exitCode).toBe(-1);
+            expect(res).toEqual({
+                stdout: 'y\n'.repeat(1_000_000).slice(0, -1),
+                stderr: '',
+                exitCode: -1,
+                truncated: true,
+            });
+        });
+
+        it('does not split an emoji when the cut has no newline to stop at', async () => {
+            // 1,999,999 ASCII characters, then an emoji across the cap.
+            const chunks = ['a'.repeat(1_999_999) + '😀' + 'b'.repeat(10)];
+            const { run } = backgroundRun(exitError(chunks[0], '', -1), chunks);
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+
+            const res = await rc.exec('cat one-line.txt');
+
+            expect(res.stdout).toBe('a'.repeat(1_999_999));
         });
     });
 });

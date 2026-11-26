@@ -3,7 +3,6 @@ import { APICallError } from 'ai';
 import {
     judgeKodyRulesSharded,
     RunJudge,
-    TERMINAL_FAILURES_TO_STOP,
 } from './kody-rules-sharded.judge';
 
 const file = (filename: string): any => ({
@@ -32,6 +31,8 @@ describe('judgeKodyRulesSharded — stops calling a provider that refused the re
     const rules = [{ uuid: 'r1', rule: 'Name things well.' }] as any[];
 
     it('skips the remaining shards after terminal failures and counts them failed', async () => {
+        // Google AI Studio answers a spent monthly cap with a 429, as seen in
+        // production; retrying cannot clear it.
         const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
             async () => {
                 throw refusal(
@@ -48,9 +49,28 @@ describe('judgeKodyRulesSharded — stops calling a provider that refused the re
             concurrency: 1,
         });
 
-        expect(runJudge).toHaveBeenCalledTimes(TERMINAL_FAILURES_TO_STOP);
+        expect(runJudge).toHaveBeenCalledTimes(2);
         expect(res.shardsRun).toBe(files.length);
         expect(res.shardsErrored).toBe(files.length);
+        expect(res.providerRefusal).toBe('QUOTA_EXCEEDED');
+    });
+
+    it('stops the same way on a revoked key', async () => {
+        const runJudge = jest.fn<ReturnType<RunJudge>, Parameters<RunJudge>>(
+            async () => {
+                throw refusal(401, 'Incorrect API key provided');
+            },
+        );
+
+        const res = await judgeKodyRulesSharded({
+            changedFiles: files,
+            rules,
+            runJudge,
+            concurrency: 1,
+        });
+
+        expect(runJudge).toHaveBeenCalledTimes(2);
+        expect(res.providerRefusal).toBe('AUTH_INVALID');
     });
 
     it('keeps calling through a temporary rate limit', async () => {
