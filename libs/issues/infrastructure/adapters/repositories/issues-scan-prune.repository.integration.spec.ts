@@ -128,5 +128,87 @@ const TEST_DB = 'issues_scan_prune_it';
                 'src/kept.ts#authz',
             ]);
         });
+
+        it('sets the severity back to the worst of its own and the places it keeps', async () => {
+            await model.collection.insertMany([
+                {
+                    ...issue('h-1', 'org-1', [
+                        {
+                            ...place('src/fixed.ts', 'authz'),
+                            severity: 'critical',
+                        },
+                        {
+                            ...place('src/kept.ts', 'injection'),
+                            severity: 'high',
+                        },
+                    ]),
+                    severity: 'critical',
+                    ownSeverity: 'medium',
+                },
+                {
+                    ...issue('h-2', 'org-1', [
+                        {
+                            ...place('src/fixed.ts', 'authz'),
+                            severity: 'critical',
+                        },
+                    ]),
+                    severity: 'critical',
+                    ownSeverity: 'medium',
+                },
+                // Stored before its own severity was kept: left as it is.
+                {
+                    ...issue('h-3', 'org-1', [
+                        {
+                            ...place('src/fixed.ts', 'authz'),
+                            severity: 'critical',
+                        },
+                    ]),
+                    severity: 'critical',
+                },
+                // Nothing of it pruned: not rewritten.
+                {
+                    ...issue('h-4', 'org-1', [
+                        {
+                            ...place('src/other.ts', 'authz'),
+                            severity: 'critical',
+                        },
+                    ]),
+                    severity: 'critical',
+                    ownSeverity: 'low',
+                },
+            ] as any[]);
+
+            await issues.resolveUnseenScanFindings({
+                organizationId: 'org-1',
+                repositoryPlatform: PlatformType.GITHUB,
+                repositoryHost: 'github.com',
+                repositoryId: 'repo-1',
+                scanId: 'scan-3',
+                scanStartedAt: '2026-11-25T00:00:00.000Z',
+                trackedFiles: [
+                    'src/holder.ts',
+                    'src/fixed.ts',
+                    'src/kept.ts',
+                    'src/other.ts',
+                ],
+                examined: [
+                    {
+                        vulnerabilityClass: 'authz',
+                        filePaths: ['src/fixed.ts'],
+                    },
+                ],
+            } as any);
+
+            const severityOf = async (_id: string) =>
+                ((await model.collection.findOne({ _id } as any)) as any)
+                    .severity;
+            expect(await placesOf('h-1')).toEqual(['src/kept.ts#injection']);
+            expect(await severityOf('h-1')).toBe('high');
+            expect(await placesOf('h-2')).toEqual([]);
+            expect(await severityOf('h-2')).toBe('medium');
+            expect(await placesOf('h-3')).toEqual([]);
+            expect(await severityOf('h-3')).toBe('critical');
+            expect(await severityOf('h-4')).toBe('critical');
+        });
     },
 );

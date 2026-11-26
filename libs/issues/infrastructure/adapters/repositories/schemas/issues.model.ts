@@ -105,6 +105,9 @@ export class IssuesModel extends CoreDocument {
     @Prop({ type: [Object], required: false })
     public occurrences?: IIssueOccurrence[];
 
+    @Prop({ type: String, required: false })
+    public ownSeverity?: SeverityLevel;
+
     @Prop({ type: [String], required: false })
     public fingerprintAliases?: string[];
 

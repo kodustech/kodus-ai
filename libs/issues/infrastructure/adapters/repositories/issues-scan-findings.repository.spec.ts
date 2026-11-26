@@ -123,6 +123,8 @@ describe('IssuesRepository — security-scan findings', () => {
             any,
         ];
         expect(update.$set.severity).toBe('critical');
+        // Its own place's severity is kept apart, for when that place leaves.
+        expect(update.$set.ownSeverity).toBe('medium');
     });
 
     it('sights a folded duplicate a person reopened as its own issue, not on the holder', async () => {
@@ -160,6 +162,7 @@ describe('IssuesRepository — security-scan findings', () => {
                 source: IssueSource.SECURITY_SCAN,
                 status: IssueStatus.OPEN,
                 fingerprint: 'fp-1',
+                ownSeverity: finding.severity,
                 contributingSuggestions: [],
                 // Stored as the filter reads it, or the next sighting
                 // would miss it.
@@ -529,7 +532,7 @@ describe('IssuesRepository — security-scan findings', () => {
         // Not a model miss: no earlier miss is needed. (The other write
         // prunes the gone file's places from the issues that list them.)
         const resolutions = model.updateMany.mock.calls.filter(
-            (c: any) => !c[1].$pull,
+            (c: any) => !Array.isArray(c[1]),
         );
         expect(resolutions).toHaveLength(1);
         expect((resolutions[0] as unknown[])[0]).toEqual({
@@ -881,16 +884,10 @@ describe('pruning places a scan shows are gone', () => {
             ],
         } as any);
 
-        const pulls = updateMany.mock.calls
-            .map((c: any) => c[1].$pull?.occurrences)
-            .filter(Boolean);
-        expect(pulls).toContainEqual({ filePath: { $in: ['src/gone.ts'] } });
-        expect(pulls).toContainEqual({
-            vulnerabilityClass: 'authz',
-            filePath: { $in: ['src/orders/kept.ts'] },
-            lastSeenScanId: { $ne: 'scan-3' },
-        });
-        // Every prune write is held to this repository's open scan issues.
+        // Every prune write is held to this repository's open scan issues
+        // that list a place it drops, and drops it in a pipeline that also
+        // sets the severity back (its effect is pinned against a real
+        // database in issues-scan-prune.repository.integration.spec.ts).
         const scope = {
             'organizationId': 'org-1',
             'repository.platform': PlatformType.GITHUB,
@@ -900,12 +897,66 @@ describe('pruning places a scan shows are gone', () => {
             'status': IssueStatus.OPEN,
             'occurrences': { $exists: true, $ne: [] },
         };
-        const pruneWrites = updateMany.mock.calls.filter(
-            (c: any) => c[1].$pull,
-        );
-        expect(pruneWrites).toHaveLength(2);
-        for (const [filter] of pruneWrites as any[])
-            expect(filter).toEqual(scope);
+        const pruneWrites = updateMany.mock.calls.filter((c: any) =>
+            Array.isArray(c[1]),
+        ) as any[];
+        expect(pruneWrites.map(([filter]) => filter)).toEqual([
+            { ...scope, 'occurrences.filePath': { $in: ['src/gone.ts'] } },
+            {
+                ...scope,
+                occurrences: {
+                    $elemMatch: {
+                        vulnerabilityClass: 'authz',
+                        filePath: { $in: ['src/orders/kept.ts'] },
+                        lastSeenScanId: { $ne: 'scan-3' },
+                    },
+                },
+            },
+        ]);
+        expect(pruneWrites.map(([, , options]) => options)).toEqual([
+            { updatePipeline: true },
+            { updatePipeline: true },
+        ]);
+        expect(
+            pruneWrites.map(([, pipeline]) => pipeline[0].$set.occurrences),
+        ).toEqual([
+            {
+                $filter: {
+                    input: '$occurrences',
+                    as: 'o',
+                    cond: {
+                        $not: [{ $in: ['$$o.filePath', ['src/gone.ts']] }],
+                    },
+                },
+            },
+            {
+                $filter: {
+                    input: '$occurrences',
+                    as: 'o',
+                    cond: {
+                        $not: [
+                            {
+                                $and: [
+                                    {
+                                        $eq: [
+                                            '$$o.vulnerabilityClass',
+                                            'authz',
+                                        ],
+                                    },
+                                    {
+                                        $in: [
+                                            '$$o.filePath',
+                                            ['src/orders/kept.ts'],
+                                        ],
+                                    },
+                                    { $ne: ['$$o.lastSeenScanId', 'scan-3'] },
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+        ]);
         expect((aggregate.mock.calls[0] as any)[0][0]).toEqual({
             $match: scope,
         });
@@ -1122,6 +1173,7 @@ describe('IssuesRepository — one issue per root cause', () => {
                 startLine: 9,
                 endLine: 12,
                 severity: 'high',
+                ownSeverity: 'medium',
                 occurrences: [place],
             },
             'fp-1': {
@@ -1150,6 +1202,11 @@ describe('IssuesRepository — one issue per root cause', () => {
         expect(
             holderUpdate.$set.occurrences.map((o: any) => o.fingerprint),
         ).toEqual(['fp-dos', 'fp-route']);
+        // The folded issue's place carries its own severity; its places
+        // come along with theirs.
+        expect(
+            holderUpdate.$set.occurrences.map((o: any) => o.severity),
+        ).toEqual(['medium', place.severity]);
         expect(holderUpdate.$set.severity).toBe('critical');
         const [foldedFilter, foldedUpdate] = model.updateOne.mock
             .calls[1] as any;

@@ -102,6 +102,12 @@ export interface IIssue {
      */
     occurrences?: IIssueOccurrence[];
     /**
+     * The severity of the issue's own finding, without its occurrences:
+     * `severity` is the worst of this and theirs, so a place that leaves
+     * takes its severity with it.
+     */
+    ownSeverity?: SeverityLevel;
+    /**
      * The identities of those places: a scan that finds one again sights
      * this issue instead of opening another.
      */

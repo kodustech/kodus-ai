@@ -325,6 +325,7 @@ export class IssuesRepository implements IIssuesRepository {
                             host: finding.repository.host ?? '',
                         },
                         filePath: normalizeScanPath(finding.filePath),
+                        ownSeverity: finding.severity,
                         source: IssueSource.SECURITY_SCAN,
                         status: IssueStatus.OPEN,
                         contributingSuggestions: [],
@@ -383,6 +384,7 @@ export class IssuesRepository implements IIssuesRepository {
             lastSeenScanId?: string;
             description?: string;
             severity?: string;
+            ownSeverity?: string;
             title?: string;
             startLine?: number;
             endLine?: number;
@@ -437,6 +439,11 @@ export class IssuesRepository implements IIssuesRepository {
                             existing.severity,
                             finding.severity,
                         ),
+                        // Both weaknesses are the issue's own place.
+                        ownSeverity: moreSevere(
+                            existing.ownSeverity ?? existing.severity,
+                            finding.severity,
+                        ),
                         lastSeenAt: now,
                         consecutiveScanMisses: 0,
                     },
@@ -466,6 +473,7 @@ export class IssuesRepository implements IIssuesRepository {
                 (worst, o) => moreSevere(worst, o.severity ?? ''),
                 finding.severity,
             ) as SeverityLevel,
+            ownSeverity: finding.severity,
             language: finding.language,
             cwe: finding.cwe,
             vulnerabilityClass: finding.vulnerabilityClass,
@@ -591,7 +599,8 @@ export class IssuesRepository implements IIssuesRepository {
                 startLine: folded.startLine ?? 1,
                 endLine: folded.endLine ?? folded.startLine ?? 1,
                 symbol: folded.symbol,
-                severity: String(folded.severity ?? ''),
+                // Its own: its places come along on their own, with theirs.
+                severity: String(folded.ownSeverity ?? folded.severity ?? ''),
                 vulnerabilityClass: folded.vulnerabilityClass,
                 lastSeenScanId: folded.lastSeenScanId,
             },
@@ -901,24 +910,41 @@ export class IssuesRepository implements IIssuesRepository {
                 }
             }
             if (gone.length) {
-                await this.issuesModel.updateMany(scope, {
-                    $pull: { occurrences: { filePath: { $in: gone } } },
-                });
+                await this.issuesModel.updateMany(
+                    { ...scope, 'occurrences.filePath': { $in: gone } },
+                    withoutPlaces({ $in: ['$$o.filePath', gone] }),
+                    { updatePipeline: true },
+                );
             }
         }
         for (const area of params.examined) {
             if (!area.filePaths.length) continue;
-            await this.issuesModel.updateMany(scope, {
-                $pull: {
+            const filePaths = area.filePaths.map(normalizeScanPath);
+            await this.issuesModel.updateMany(
+                {
+                    ...scope,
                     occurrences: {
-                        vulnerabilityClass: area.vulnerabilityClass,
-                        filePath: {
-                            $in: area.filePaths.map(normalizeScanPath),
+                        $elemMatch: {
+                            vulnerabilityClass: area.vulnerabilityClass,
+                            filePath: { $in: filePaths },
+                            lastSeenScanId: { $ne: params.scanId },
                         },
-                        lastSeenScanId: { $ne: params.scanId },
                     },
                 },
-            });
+                withoutPlaces({
+                    $and: [
+                        {
+                            $eq: [
+                                '$$o.vulnerabilityClass',
+                                area.vulnerabilityClass,
+                            ],
+                        },
+                        { $in: ['$$o.filePath', filePaths] },
+                        { $ne: ['$$o.lastSeenScanId', params.scanId] },
+                    ],
+                }),
+                { updatePipeline: true },
+            );
         }
     }
 }
@@ -993,4 +1019,61 @@ function moreSevere(a: string | undefined, b: string): string {
     return (SEVERITY_RANK.get(a ?? '') ?? -1) > (SEVERITY_RANK.get(b) ?? -1)
         ? (a as string)
         : b;
+}
+
+/**
+ * An update that drops the places `drop` matches (`$$o` is the place) and,
+ * when one went, sets the issue's severity back to the worst of its own and
+ * the places it keeps: a place that leaves takes its severity with it. An
+ * issue stored before its own severity was kept stays as it is.
+ */
+function withoutPlaces(drop: Record<string, unknown>) {
+    const ranks = [...SEVERITY_RANK.keys()];
+    const kept = {
+        $filter: { input: '$occurrences', as: 'o', cond: { $not: [drop] } },
+    };
+    const worst = {
+        $max: {
+            $map: {
+                input: { $concatArrays: [['$ownSeverity'], '$$kept.severity'] },
+                as: 's',
+                in: { $indexOfArray: [ranks, '$$s'] },
+            },
+        },
+    };
+    return [
+        {
+            $set: {
+                occurrences: kept,
+                severity: {
+                    $let: {
+                        vars: { kept },
+                        in: {
+                            $cond: [
+                                { $eq: [{ $type: '$ownSeverity' }, 'missing'] },
+                                '$severity',
+                                {
+                                    $let: {
+                                        vars: { rank: worst },
+                                        in: {
+                                            $cond: [
+                                                { $gte: ['$$rank', 0] },
+                                                {
+                                                    $arrayElemAt: [
+                                                        ranks,
+                                                        '$$rank',
+                                                    ],
+                                                },
+                                                '$ownSeverity',
+                                            ],
+                                        },
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            },
+        },
+    ];
 }
