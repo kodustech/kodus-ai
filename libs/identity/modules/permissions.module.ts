@@ -6,8 +6,7 @@ import { PERMISSIONS_SERVICE_TOKEN } from '../domain/permissions/contracts/permi
 import { AUTHORIZATION_SERVICE_TOKEN } from '../domain/permissions/contracts/authorization.service.contract';
 import { PermissionsRepository } from '../infrastructure/adapters/repositories/permissions.repository';
 import { PermissionsModel } from '../infrastructure/adapters/repositories/schemas/permissions.model';
-import { UserConnectionAccessModel } from '../infrastructure/adapters/repositories/schemas/userConnectionAccess.model';
-import { ConnectionAccessService } from '../infrastructure/adapters/services/permissions/connection-access.service';
+import { ConnectionAccessModule } from './connection-access.module';
 import { AuthorizationService } from '../infrastructure/adapters/services/permissions/authorization.service';
 import { PermissionsService } from '../infrastructure/adapters/services/permissions/permissions.service';
 import { PermissionsAbilityFactory } from '../infrastructure/adapters/services/permissions/permissionsAbility.factory';
@@ -17,7 +16,8 @@ import { IntegrationConfigModule } from '@libs/integrations/modules/config.modul
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([PermissionsModel, UserConnectionAccessModel]),
+        TypeOrmModule.forFeature([PermissionsModel]),
+        ConnectionAccessModule,
         forwardRef(() => UserModule),
         forwardRef(() => IntegrationConfigModule),
     ],
@@ -31,7 +31,6 @@ import { IntegrationConfigModule } from '@libs/integrations/modules/config.modul
             useClass: PermissionsService,
         },
         PermissionsAbilityFactory,
-        ConnectionAccessService,
         AuthorizationService,
         {
             provide: AUTHORIZATION_SERVICE_TOKEN,
@@ -43,7 +42,7 @@ import { IntegrationConfigModule } from '@libs/integrations/modules/config.modul
         PERMISSIONS_REPOSITORY_TOKEN,
         PERMISSIONS_SERVICE_TOKEN,
         PermissionsAbilityFactory,
-        ConnectionAccessService,
+        ConnectionAccessModule,
         AuthorizationService,
         AUTHORIZATION_SERVICE_TOKEN,
         ...UseCases,

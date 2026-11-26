@@ -1,3 +1,5 @@
+import { UserConnectionAccessRepository } from '@libs/identity/infrastructure/adapters/repositories/userConnectionAccess.repository';
+
 import { ConnectionAccessService } from './connection-access.service';
 
 jest.mock('@libs/core/log/logger', () => ({
@@ -19,23 +21,30 @@ const build = (opts: {
             return opts.connections.map((uuid) => ({ uuid }));
         }
         if (sql.includes('FROM "user_connection_access"')) {
-            return opts.granted.map((integration_id) => ({ integration_id }));
+            const users = params[0] as string[];
+            return users.flatMap((user_id) =>
+                opts.granted.map((integration_id) => ({
+                    user_id,
+                    integration_id,
+                })),
+            );
         }
         if (sql.includes('integration_configs')) {
             const ids = params[1] as string[];
             return ids.map((id) => ({
+                integration_id: id,
                 configValue: opts.reposByConnection?.[id] ?? [],
             }));
         }
         return [];
     });
-    const repository = {
-        manager: { query },
-        insert: jest.fn(),
-        delete: jest.fn(),
-        createQueryBuilder: jest.fn(),
+    const repository = { manager: { query } };
+    return {
+        service: new ConnectionAccessService(
+            new UserConnectionAccessRepository(repository as any),
+        ),
+        query,
     };
-    return { service: new ConnectionAccessService(repository as any), query };
 };
 
 describe('ConnectionAccessService.readScopeFor', () => {
@@ -155,6 +164,65 @@ describe('ConnectionAccessService.restrictionFor', () => {
     });
 });
 
+describe('ConnectionAccessService — ids and names repeated across connections', () => {
+    it('leaves out a repository id or name another, ungranted connection also lists', async () => {
+        const { service } = build({
+            connections: ['gl-a', 'gl-b'],
+            granted: ['gl-a'],
+            reposByConnection: {
+                'gl-a': [
+                    { id: 3, full_name: 'acme/api' },
+                    { id: 4, full_name: 'acme/web' },
+                ] as any,
+                'gl-b': [{ id: 3, full_name: 'ACME/web' }] as any,
+            },
+        });
+
+        const restriction = await service.restrictionFor({
+            ...user,
+            role: 'contributor',
+        });
+
+        expect(restriction?.allowsRepository({ id: 3 })).toBe(false);
+        expect(restriction?.allowsRepository({ name: 'acme/web' })).toBe(false);
+        expect(restriction?.allowsRepository({ id: 4 })).toBe(true);
+        expect(restriction?.allowsRepository({ name: 'acme/api' })).toBe(true);
+    });
+});
+
+describe('ConnectionAccessService.restrictionsFor', () => {
+    it('reads many members of an organization in one pass', async () => {
+        const { service, query } = build({
+            connections: ['gh-a', 'gl-b'],
+            granted: ['gh-a'],
+            reposByConnection: { 'gh-a': [{ id: 1 }] },
+        });
+
+        const restrictions = await service.restrictionsFor([
+            {
+                uuid: 'u-1',
+                role: 'contributor',
+                organization: { uuid: 'org-1' },
+            },
+            {
+                uuid: 'u-2',
+                role: 'repo_admin',
+                organization: { uuid: 'org-1' },
+            },
+            { uuid: 'u-3', role: 'owner', organization: { uuid: 'org-1' } },
+        ]);
+
+        expect(restrictions.get('u-3')).toBeNull();
+        expect(restrictions.get('u-1')?.allowsRepository({ id: 1 })).toBe(true);
+        expect(restrictions.get('u-2')?.allowsRepository({ id: 1 })).toBe(true);
+        const grantReads = query.mock.calls.filter(([sql]) =>
+            String(sql).includes('FROM "user_connection_access"'),
+        );
+        expect(grantReads).toHaveLength(1);
+        expect(grantReads[0][1]).toEqual([['u-1', 'u-2']]);
+    });
+});
+
 describe('ConnectionAccessService.replaceGrants', () => {
     const buildTx = (current: string[]) => {
         const calls: string[] = [];
@@ -177,7 +245,9 @@ describe('ConnectionAccessService.replaceGrants', () => {
             },
         };
         return {
-            service: new ConnectionAccessService(repository as any),
+            service: new ConnectionAccessService(
+                new UserConnectionAccessRepository(repository as any),
+            ),
             tx,
             calls,
             repository,

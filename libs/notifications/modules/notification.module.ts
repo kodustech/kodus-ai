@@ -4,8 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
-import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
-import { UserConnectionAccessModel } from '@libs/identity/infrastructure/adapters/repositories/schemas/userConnectionAccess.model';
+import { ConnectionAccessModule } from '@libs/identity/modules/connection-access.module';
 
 // Domain models
 import { NotificationDeliveryModel } from '../infrastructure/repositories/schemas/notification-delivery.model';
@@ -88,14 +87,10 @@ import { WorkflowCoreModule } from '@libs/core/workflow/modules/workflow-core.mo
             NotificationDeliveryModel,
             UserNotificationModel,
             RoutingRuleModel,
-            UserConnectionAccessModel,
         ]),
+        ConnectionAccessModule,
     ],
     providers: [
-        // Narrows repository events to members who can read the repository.
-        // Provided here rather than through PermissionsModule, whose imports
-        // lead back to this module.
-        ConnectionAccessService,
         // Stops @GatedCron runs before the database closes. Provided here
         // only: api, worker and webhooks all import this module, and a second
         // instance would hold shutdown for its own budget again.

@@ -65,7 +65,13 @@ const build = (
                     : { status: 'bound', primaryConnectionId: 'gh-a' },
             ),
     };
-    const ignoreBots = { execute: jest.fn().mockResolvedValue(undefined) };
+    const ignoreBots = {
+        execute: jest.fn().mockResolvedValue(undefined),
+        claimConnectionLists: jest.fn().mockResolvedValue(undefined),
+    };
+    const connectionAccess = {
+        grantWorkspaceMembers: jest.fn().mockResolvedValue(['u-1']),
+    };
     const useCase = new CreateIntegrationUseCase(
         codeManagementService as any,
         { emit: jest.fn() } as any,
@@ -81,6 +87,7 @@ const build = (
         { gitIntegrationChanged: jest.fn() } as any,
         integrationService as any,
         connectionBilling as any,
+        connectionAccess as any,
         parametersService as any,
     );
     return {
@@ -88,6 +95,7 @@ const build = (
         codeManagementService,
         integrationService,
         connectionBilling,
+        connectionAccess,
         ignoreBots,
         parametersService,
     };
@@ -286,6 +294,63 @@ describe('CreateIntegrationUseCase — connections', () => {
             });
             expect(
                 reconnect.connectionBilling.attributeLegacySeatsBeforeAdding,
+            ).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('who reads a new connection', () => {
+        it("grants every workspace member the workspace's first connection, as before connections existed", async () => {
+            const { useCase, connectionAccess } = build();
+
+            await useCase.execute({
+                integrationType: 'github',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(connectionAccess.grantWorkspaceMembers).toHaveBeenCalledWith(
+                TEAM,
+                'new-conn',
+            );
+        });
+
+        it('starts a connection added beside others with owners only, and its own empty author lists', async () => {
+            const { useCase, connectionAccess, ignoreBots } = build({
+                workspaceConnections: [{ uuid: 'gh-a' }],
+            });
+
+            await useCase.execute({
+                integrationType: 'gitlab',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(
+                connectionAccess.grantWorkspaceMembers,
+            ).not.toHaveBeenCalled();
+            expect(ignoreBots.claimConnectionLists).toHaveBeenCalledWith({
+                organizationId: ORG,
+                integrationId: 'new-conn',
+            });
+            expect(
+                ignoreBots.claimConnectionLists.mock.invocationCallOrder[0],
+            ).toBeLessThan(ignoreBots.execute.mock.invocationCallOrder[0]);
+        });
+
+        it("leaves a reconnected connection's readers as they are", async () => {
+            const { useCase, connectionAccess } = build({
+                existingConnection: { uuid: 'gh-a' },
+                workspaceConnections: [{ uuid: 'gh-a' }],
+            });
+
+            await useCase.execute({
+                integrationType: 'github',
+                connectionId: 'gh-a',
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(
+                connectionAccess.grantWorkspaceMembers,
             ).not.toHaveBeenCalled();
         });
     });

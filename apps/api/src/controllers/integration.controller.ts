@@ -9,7 +9,6 @@ import {
     Put,
     Query,
     UseGuards,
-    Optional,
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
@@ -21,6 +20,7 @@ import {
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -67,8 +67,7 @@ export class IntegrationController {
         // comes from the query (the web passes the selected team).
         @Inject(REQUEST)
         private readonly request: UserRequest,
-        @Optional()
-        private readonly connectionAccess?: ConnectionAccessService,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     @Post('/clone-integration')
@@ -184,6 +183,7 @@ export class IntegrationController {
 
     @Get('/connections')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -200,7 +200,7 @@ export class IntegrationController {
         const connections = await this.getConnectionsUseCase.execute(
             query.teamId,
         );
-        const restriction = await this.connectionAccess?.restrictionFor(
+        const restriction = await this.connectionAccess.restrictionFor(
             this.request?.user,
         );
         if (!restriction || !Array.isArray(connections)) return connections;

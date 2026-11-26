@@ -39,7 +39,10 @@ import {
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
-import { FullConnectionAccessGuard } from '@libs/identity/infrastructure/adapters/services/permissions/full-connection-access.guard';
+import {
+    BillingManagersReadEveryConnection,
+    FullConnectionAccessGuard,
+} from '@libs/identity/infrastructure/adapters/services/permissions/full-connection-access.guard';
 import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
 import {
     ApiBearerAuth,
@@ -75,6 +78,7 @@ import {
         resource: ResourceType.TokenUsage,
     }),
 )
+@BillingManagersReadEveryConnection()
 @Controller({ path: 'usage', scope: Scope.REQUEST })
 export class TokenUsageController {
     constructor(

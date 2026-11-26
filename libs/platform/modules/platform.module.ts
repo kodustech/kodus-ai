@@ -40,6 +40,7 @@ import { PlatformCoreModule } from './platform-core.module';
 
 import { AutomationModule } from '@libs/automation/modules/automation.module';
 import { LicenseModule } from '@libs/ee/license/license.module';
+import { ConnectionAccessModule } from '@libs/identity/modules/connection-access.module';
 import { ConnectionBillingService } from '../application/services/billing/connection-billing.service';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
 import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-review-configuration.module';
@@ -77,6 +78,7 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         forwardRef(() => CodeReviewConfigurationModule),
         forwardRef(() => SandboxModule),
         forwardRef(() => LicenseModule),
+        ConnectionAccessModule,
         forwardRef(() => PermissionValidationModule),
     ],
     providers: [

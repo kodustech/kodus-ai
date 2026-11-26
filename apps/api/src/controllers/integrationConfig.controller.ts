@@ -1,11 +1,4 @@
-import {
-    Controller,
-    Get,
-    Inject,
-    Optional,
-    Query,
-    UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Inject, Query, UseGuards } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
@@ -44,8 +37,7 @@ export class IntegrationConfigController {
         private readonly getIntegrationConfigsByIntegrationCategoryUseCase: GetIntegrationConfigsByIntegrationCategoryUseCase,
         @Inject(REQUEST)
         private readonly request: UserRequest,
-        @Optional()
-        private readonly connectionAccess?: ConnectionAccessService,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     @Get('/get-integration-configs-by-integration-category')
@@ -76,7 +68,7 @@ export class IntegrationConfigController {
         @Query('teamId') teamId: string,
         @Query('connectionId') connectionId?: string,
     ) {
-        const restriction = await this.connectionAccess?.restrictionFor(
+        const restriction = await this.connectionAccess.restrictionFor(
             this.request?.user,
         );
         assertConnectionReadable(restriction, connectionId);

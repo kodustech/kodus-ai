@@ -11,6 +11,8 @@ import {
     disconnectTestPostgres,
     skipPostgresIntegration,
 } from '../../../../../../test/helpers/postgres-integration';
+import { UserConnectionAccessRepository } from '@libs/identity/infrastructure/adapters/repositories/userConnectionAccess.repository';
+
 import { ConnectionAccessService } from './connection-access.service';
 
 jest.mock('@libs/core/log/logger', () => ({
@@ -38,9 +40,11 @@ jest.mock('@libs/core/log/logger', () => ({
         beforeAll(async () => {
             ds = await connectTestPostgres({ replica: true });
             if (!ds) return;
-            service = new ConnectionAccessService({
-                manager: ds.manager,
-            } as any);
+            service = new ConnectionAccessService(
+                new UserConnectionAccessRepository({
+                    manager: ds.manager,
+                } as any),
+            );
         });
 
         afterAll(async () => {

@@ -26,6 +26,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import { createLogger } from '@libs/core/log/logger';
 import { ConnectionBillingService } from '@libs/platform/application/services/billing/connection-billing.service';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import {
     IParametersService,
@@ -61,6 +62,8 @@ export class CreateIntegrationUseCase implements IUseCase {
         private readonly integrationService: IIntegrationService,
 
         private readonly connectionBilling: ConnectionBillingService,
+
+        private readonly connectionAccess: ConnectionAccessService,
 
         @Optional()
         @Inject(PARAMETERS_SERVICE_TOKEN)
@@ -100,11 +103,23 @@ export class CreateIntegrationUseCase implements IUseCase {
             organizationAndTeamData.integrationId = connectionId;
         }
         const newConnection = !connectionId && params?.newConnection === true;
+        const workspace = {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+        };
+        const connectionsBefore = connectionId
+            ? undefined
+            : new Set(
+                  (
+                      await this.connectionBilling.workspaceConnections(
+                          workspace,
+                      )
+                  ).map((connection) => connection.uuid),
+              );
         if (!connectionId) {
-            await this.connectionBilling.attributeLegacySeatsBeforeAdding({
-                organizationId: organizationAndTeamData.organizationId,
-                teamId: organizationAndTeamData.teamId,
-            });
+            await this.connectionBilling.attributeLegacySeatsBeforeAdding(
+                workspace,
+            );
         }
         const separateConnection = newConnection
             ? await this.bindPrimaryConnection(organizationAndTeamData)
@@ -135,6 +150,15 @@ export class CreateIntegrationUseCase implements IUseCase {
                     team: { uuid: organizationAndTeamData.teamId },
                 },
                 { name: name.slice(0, 120) },
+            );
+        }
+
+        if (result?.success && integrationId && connectionsBefore) {
+            await this.settleNewConnectionReaders(
+                workspace,
+                integrationId,
+                connectionsBefore,
+                separateConnection,
             );
         }
 
@@ -225,6 +249,49 @@ export class CreateIntegrationUseCase implements IUseCase {
             });
 
         return result;
+    }
+
+    /**
+     * The workspace's first connection is read by every member, as the
+     * workspace was before connections existed. One added beside others
+     * starts with owners only, and with author lists of its own.
+     */
+    private async settleNewConnectionReaders(
+        workspace: { organizationId: string; teamId: string },
+        integrationId: string,
+        connectionsBefore: ReadonlySet<string>,
+        separateConnection: boolean,
+    ): Promise<void> {
+        if (connectionsBefore.has(integrationId)) return;
+        try {
+            if (separateConnection) {
+                await this.ignoreBotsUseCase.claimConnectionLists({
+                    organizationId: workspace.organizationId,
+                    integrationId,
+                });
+                return;
+            }
+            const members = await this.connectionAccess.grantWorkspaceMembers(
+                workspace.teamId,
+                integrationId,
+            );
+            this.logger.log({
+                message: 'connection_granted_to_workspace_members',
+                context: CreateIntegrationUseCase.name,
+                metadata: {
+                    ...workspace,
+                    integrationId,
+                    members: members.length,
+                },
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'Could not settle who reads the new Git connection',
+                context: CreateIntegrationUseCase.name,
+                error,
+                metadata: { ...workspace, integrationId, separateConnection },
+            });
+        }
     }
 
     /**

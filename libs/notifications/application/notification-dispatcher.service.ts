@@ -1,11 +1,13 @@
-import pLimit from 'p-limit';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
-import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import {
+    ConnectionAccessService,
+    ConnectionRestriction,
+} from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import {
     IUsersService,
     USER_SERVICE_TOKEN,
@@ -76,20 +78,40 @@ interface ResolvedRecipient {
     directed?: boolean;
 }
 
-/** Access lookups in flight at once while narrowing an audience. */
-const SCOPE_LOOKUP_CONCURRENCY = 4;
+type NamedRepository = { id?: string; name?: string };
 
-/** The repository an event payload names, under the fields emitters use. */
-const repositoryOfPayload = (
+/**
+ * The repositories an event payload names, under the fields emitters use:
+ * its own repository, or each listed rule's (a rule list can span several
+ * Git connections). A global rule names none.
+ */
+const repositoriesOfPayload = (
     payload: Record<string, unknown>,
-): { id?: string; name?: string } | undefined => {
+): NamedRepository[] => {
     const id = payload?.repositoryId;
     const name = payload?.repoName;
-    if (typeof id !== 'string' && typeof name !== 'string') return undefined;
-    return {
-        ...(typeof id === 'string' && id ? { id } : {}),
-        ...(typeof name === 'string' && name ? { name } : {}),
-    };
+    if (typeof id === 'string' || typeof name === 'string') {
+        return [
+            {
+                ...(typeof id === 'string' && id ? { id } : {}),
+                ...(typeof name === 'string' && name ? { name } : {}),
+            },
+        ];
+    }
+    const rules = Array.isArray(payload?.rules) ? payload.rules : [];
+    const ids = rules
+        .map((rule) =>
+            rule && typeof rule === 'object'
+                ? (rule as { repositoryId?: unknown }).repositoryId
+                : undefined,
+        )
+        .filter(
+            (ruleRepository): ruleRepository is string =>
+                typeof ruleRepository === 'string' &&
+                !!ruleRepository &&
+                ruleRepository !== 'global',
+        );
+    return [...new Set(ids)].map((ruleRepository) => ({ id: ruleRepository }));
 };
 
 /**
@@ -117,9 +139,8 @@ export class NotificationDispatcherService {
         private readonly usersService: IUsersService,
         private readonly sseService: NotificationSseService,
         @Optional()
-        private readonly metricsCollector?: MetricsCollectorService,
-        @Optional()
-        private readonly connectionAccess?: ConnectionAccessService,
+        private readonly metricsCollector: MetricsCollectorService | undefined,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {
         this.adapterMap = new Map(
             adapters
@@ -168,11 +189,22 @@ export class NotificationDispatcherService {
                   (r) => ({ ...r, directed: true }),
               )
             : [];
+        // Only members of a role the event reaches are checked for access.
         const audience = defaults.defaultRoles
             ? await this.readersOf(
-                  await this.resolveAllOrgMembers(organizationId),
+                  (await this.resolveAllOrgMembers(organizationId)).filter(
+                      (member) =>
+                          this.resolveEnabledChannels(
+                              ruleByKey,
+                              event,
+                              member.role,
+                              defaults,
+                          ).length > 0,
+                  ),
                   organizationId,
-                  message.repository ?? repositoryOfPayload(payload),
+                  message.repository
+                      ? [message.repository]
+                      : repositoriesOfPayload(payload),
               )
             : [];
         const recipients = this.dedupeByUser([...directed, ...audience]);
@@ -710,43 +742,48 @@ export class NotificationDispatcherService {
     }
 
     /**
-     * Members who can read the event's repository: one granted only some Git
-     * connections hears about their repositories only.
+     * Members who can read every repository the event names: one granted
+     * only some Git connections hears about their repositories only. Read in
+     * one pass; when access cannot be read, no member is reached.
      */
     private async readersOf(
         members: ResolvedRecipient[],
         organizationId: string,
-        repository?: { id?: string; name?: string },
+        repositories: NamedRepository[],
     ): Promise<ResolvedRecipient[]> {
-        if (!this.connectionAccess || (!repository?.id && !repository?.name)) {
-            return members;
-        }
-        const limit = pLimit(SCOPE_LOOKUP_CONCURRENCY);
-        const scopes = await Promise.allSettled(
-            members.map((member) =>
-                limit(() =>
-                    this.connectionAccess.restrictionFor({
-                        uuid: member.userId,
-                        role: member.role,
-                        organization: { uuid: organizationId },
-                    }),
-                ),
-            ),
+        const named = repositories.filter(
+            (repository) => repository?.id || repository?.name,
         );
-        // A member whose access could not be read is left out, never widened.
-        const unread = scopes.filter((s) => s.status === 'rejected').length;
-        if (unread) {
+        if (!named.length || !members.length) return members;
+
+        let restrictions: Map<string, ConnectionRestriction | null>;
+        try {
+            restrictions = await this.connectionAccess.restrictionsFor(
+                members.map((member) => ({
+                    uuid: member.userId,
+                    role: member.role,
+                    organization: { uuid: organizationId },
+                })),
+            );
+        } catch (error) {
             this.logger.warn({
                 message: 'notification_readers_unresolved',
                 context: NotificationDispatcherService.name,
-                metadata: { organizationId, unresolvedCount: unread },
+                error,
+                metadata: { organizationId, memberCount: members.length },
             });
+            return [];
         }
-        return members.filter((_member, index) => {
-            const scope = scopes[index];
+        return members.filter((member) => {
+            if (!member.userId || !restrictions.has(member.userId)) {
+                return false;
+            }
+            const restriction = restrictions.get(member.userId);
             return (
-                scope.status === 'fulfilled' &&
-                (!scope.value || scope.value.allowsRepository(repository))
+                !restriction ||
+                named.every((repository) =>
+                    restriction.allowsRepository(repository),
+                )
             );
         });
     }

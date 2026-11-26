@@ -14,7 +14,7 @@ import {
 } from '@libs/identity/domain/permissions/policies/role-policies';
 import { AppAbility } from '@libs/identity/domain/permissions/types/permissions.types';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import {
     ConnectionAccessService,
@@ -26,11 +26,20 @@ export class PermissionsAbilityFactory {
     constructor(
         @Inject(PERMISSIONS_SERVICE_TOKEN)
         private readonly permissionsService: IPermissionsService,
-        // Absent where abilities are built without a database (the RBAC
-        // manifest): reads then stay as the role defines them.
-        @Optional()
+        // Always injected by Nest. Only the RBAC manifest builds abilities
+        // without a database, constructing this by hand without it: reads
+        // then stay as the role defines them.
         private readonly connectionAccessService?: ConnectionAccessService,
     ) {}
+
+    /** Whether the user reads only some Git connections of the organization. */
+    async isConnectionRestricted(user: IUser): Promise<boolean> {
+        if (user?.role === Role.OWNER || !this.connectionAccessService) {
+            return false;
+        }
+        const scope = await this.connectionAccessService.readScopeFor(user);
+        return scope.kind === 'connections';
+    }
 
     async createForUser(
         user: IUser,

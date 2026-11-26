@@ -1,6 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Inject, Injectable } from '@nestjs/common';
 import { sealInvitation } from '@libs/identity/domain/user/invitation-token';
 import { randomBytes } from 'crypto';
 
@@ -29,7 +27,7 @@ import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { createLogger } from '@libs/core/log/logger';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
-import { UserConnectionAccessModel } from '@libs/identity/infrastructure/adapters/repositories/schemas/userConnectionAccess.model';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 
 @Injectable()
 export class TeamMemberService implements ITeamMemberService {
@@ -44,9 +42,7 @@ export class TeamMemberService implements ITeamMemberService {
 
         private readonly notificationService: NotificationService,
 
-        @Optional()
-        @InjectRepository(UserConnectionAccessModel)
-        private readonly connectionAccessRepository?: Repository<UserConnectionAccessModel>,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     findManyById(ids: string[]): Promise<TeamMemberEntity[]> {
@@ -102,17 +98,11 @@ export class TeamMemberService implements ITeamMemberService {
         userId?: string,
         teamId?: string,
     ): Promise<void> {
-        if (!userId || !teamId || !this.connectionAccessRepository) return;
+        if (!userId || !teamId) return;
         try {
-            await this.connectionAccessRepository.manager.query(
-                `INSERT INTO "user_connection_access" ("user_id", "integration_id")
-                 SELECT $1::uuid, i."uuid"
-                   FROM "integrations" i
-                  WHERE i."team_id" = $2
-                    AND i."status" = true
-                    AND i."integrationCategory" = 'CODE_MANAGEMENT'
-                 ON CONFLICT ("user_id", "integration_id") DO NOTHING`,
-                [userId, teamId],
+            await this.connectionAccess.grantWorkspaceConnections(
+                userId,
+                teamId,
             );
         } catch (error) {
             this.logger.error({

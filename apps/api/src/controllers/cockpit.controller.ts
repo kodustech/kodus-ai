@@ -35,6 +35,7 @@ import {
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -119,6 +120,8 @@ export class CockpitController {
 
     @Get('/validate')
     @UseGuards(PolicyGuard)
+    // Answers only whether the organization has pull requests.
+    @AppliesConnectionScope()
     @CheckPolicies(canReadCockpit)
     @ApiOperation({ summary: 'Cockpit data validation (PR presence)' })
     async validate(@Query('organizationId') organizationId: string) {
@@ -141,6 +144,8 @@ export class CockpitController {
 @ApiBearerAuth('jwt')
 @UseGuards(PolicyGuard, CockpitConnectionScopeGuard)
 @CheckPolicies(canReadCockpit)
+// CockpitConnectionScopeGuard narrows each read to the granted connections.
+@AppliesConnectionScope()
 @Controller('cockpit/access')
 export class CockpitAccessController {
     @Get()
@@ -160,6 +165,8 @@ export class CockpitAccessController {
 @ApiBearerAuth('jwt')
 @UseGuards(PolicyGuard, CockpitTierGuard, CockpitConnectionScopeGuard)
 @CheckPolicies(canReadCockpit)
+// CockpitConnectionScopeGuard narrows each read to the granted connections.
+@AppliesConnectionScope()
 @Controller('code-health')
 export class CockpitCodeHealthController {
     constructor(private readonly codeHealth: CockpitCodeHealthService) {}
@@ -218,6 +225,8 @@ export class CockpitCodeHealthController {
 @ApiBearerAuth('jwt')
 @UseGuards(PolicyGuard, CockpitTierGuard, CockpitConnectionScopeGuard)
 @CheckPolicies(canReadCockpit)
+// CockpitConnectionScopeGuard narrows each read to the granted connections.
+@AppliesConnectionScope()
 @Controller('review-analytics')
 export class CockpitReviewAnalyticsController {
     constructor(
@@ -348,6 +357,8 @@ export class CockpitReviewAnalyticsController {
 @ApiBearerAuth('jwt')
 @UseGuards(PolicyGuard, CockpitTierGuard, CockpitConnectionScopeGuard)
 @CheckPolicies(canReadCockpit)
+// CockpitConnectionScopeGuard narrows each read to the granted connections.
+@AppliesConnectionScope()
 @Controller('productivity')
 export class CockpitProductivityController {
     constructor(

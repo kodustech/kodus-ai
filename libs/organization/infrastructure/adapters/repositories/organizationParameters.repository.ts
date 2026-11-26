@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { v4 as uuidv4 } from 'uuid';
 import {
     FindManyOptions,
     FindOneOptions,
@@ -10,7 +11,10 @@ import {
 import { OrganizationParametersModel } from './schemas/organizationParameters.model';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { IOrganizationParametersRepository } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.repository.contract';
+import {
+    ConfigValueMerge,
+    IOrganizationParametersRepository,
+} from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.repository.contract';
 import { OrganizationParametersEntity } from '@libs/organization/domain/organizationParameters/entities/organizationParameters.entity';
 import { IOrganizationParameters } from '@libs/organization/domain/organizationParameters/interfaces/organizationParameters.interface';
 import { OrganizationParametersKey } from '@libs/core/domain/enums/organization-parameters-key.enum';
@@ -238,6 +242,67 @@ export class OrganizationParametersRepository implements IOrganizationParameters
         } catch (error) {
             console.log(error);
         }
+    }
+
+    async mergeConfigValue(
+        configKey: OrganizationParametersKey,
+        organizationId: string,
+        patch: Record<string, unknown>,
+        options: ConfigValueMerge = {},
+    ): Promise<void> {
+        const { connectionId, onlyIfAbsent } = options;
+        const manager = this.organizationParametersRepository.manager;
+        const value = JSON.stringify(patch);
+
+        const [, affected] = (
+            connectionId
+                ? await manager.query(
+                      `UPDATE "organization_parameters" op
+                          SET "configValue" = jsonb_set(
+                                  COALESCE(op."configValue", '{}'::jsonb)
+                                      || jsonb_build_object('connections', COALESCE(op."configValue"->'connections', '{}'::jsonb)),
+                                  ARRAY['connections', $3::text],
+                                  COALESCE(op."configValue"->'connections'->$3::text, '{}'::jsonb) || $4::jsonb
+                              ),
+                              "updatedAt" = now()
+                        WHERE op."organization_id" = $1
+                          AND op."configKey" = $2
+                          ${onlyIfAbsent ? `AND NOT (COALESCE(op."configValue"->'connections', '{}'::jsonb) ? $3::text)` : ''}`,
+                      [organizationId, configKey, connectionId, value],
+                  )
+                : await manager.query(
+                      `UPDATE "organization_parameters" op
+                          SET "configValue" = COALESCE(op."configValue", '{}'::jsonb) || $3::jsonb,
+                              "updatedAt" = now()
+                        WHERE op."organization_id" = $1
+                          AND op."configKey" = $2`,
+                      [organizationId, configKey, value],
+                  )
+        ) as [unknown, number];
+        if (affected > 0) return;
+
+        const existing = (await manager.query(
+            `SELECT 1 FROM "organization_parameters"
+              WHERE "organization_id" = $1 AND "configKey" = $2
+              LIMIT 1`,
+            [organizationId, configKey],
+        )) as unknown[];
+        if (existing.length) return;
+
+        await manager.query(
+            `INSERT INTO "organization_parameters" ("uuid", "configKey", "configValue", "organization_id")
+             VALUES ($1, $2, $3::jsonb, $4)`,
+            [
+                uuidv4(),
+                configKey,
+                JSON.stringify(
+                    connectionId
+                        ? { connections: { [connectionId]: patch } }
+                        : patch,
+                ),
+                organizationId,
+            ],
+        );
     }
 
     async findByKey(

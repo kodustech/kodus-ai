@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '@libs/core/log/logger';
 
 import {
+    ConfigValueMerge,
     IOrganizationParametersRepository,
     ORGANIZATION_PARAMETERS_REPOSITORY_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.repository.contract';
@@ -61,6 +62,20 @@ export class OrganizationParametersService implements IOrganizationParametersSer
 
     delete(uuid: string): Promise<void> {
         return this.organizationParametersRepository.delete(uuid);
+    }
+
+    mergeConfigValue(
+        configKey: OrganizationParametersKey,
+        organizationId: string,
+        patch: Record<string, unknown>,
+        options?: ConfigValueMerge,
+    ): Promise<void> {
+        return this.organizationParametersRepository.mergeConfigValue(
+            configKey,
+            organizationId,
+            patch,
+            options,
+        );
     }
 
     async findByKey(

@@ -6,6 +6,7 @@ import { STATUS } from '@libs/core/infrastructure/config/types/database/status.t
 import { PERMISSIONS_SERVICE_TOKEN } from '@libs/identity/domain/permissions/contracts/permissions.service.contract';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import { PermissionsAbilityFactory } from '@libs/identity/infrastructure/adapters/services/permissions/permissionsAbility.factory';
 import { ManageImportedKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/manage-imported-kody-rules.use-case';
 import { KodyRulesSyncService } from '@libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service';
@@ -59,6 +60,14 @@ describe('ManageImportedKodyRulesUseCase — repo scope', () => {
                 ManageImportedKodyRulesUseCase,
                 AuthorizationService,
                 PermissionsAbilityFactory,
+                // Every member reads every Git connection here.
+                {
+                    provide: ConnectionAccessService,
+                    useValue: {
+                        readScopeFor: async () => ({ kind: 'all' }),
+                        restrictionFor: async () => null,
+                    },
+                },
                 {
                     provide: PERMISSIONS_SERVICE_TOKEN,
                     useValue: permissionsServiceMock,

@@ -424,4 +424,44 @@ describe('repository scope — execution events stream', () => {
             (await received).map((event: any) => event.data.executionUuid),
         ).toEqual(['e-mine', 'e-signal']);
     });
+
+    it('stops streaming a repository soon after the grant to it is revoked', async () => {
+        const { EventEmitter2 } = await import('@nestjs/event-emitter');
+        const { Subject } = await import('rxjs');
+        const eventEmitter = new EventEmitter2();
+        const authorizationService = makeAuthorization();
+        const controller = make(PullRequestController, {
+            eventEmitter,
+            authorizationService,
+            shutdown$: new Subject<void>(),
+        });
+        let now = 1_000_000;
+        const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+        const received: string[] = [];
+        const subscription = controller
+            .executionEvents()
+            .subscribe((event: any) => {
+                if (event.data.type === 'execution_updated') {
+                    received.push(event.data.executionUuid);
+                }
+            });
+        const emit = (executionUuid: string) =>
+            eventEmitter.emit('pr-execution.updated', {
+                organizationId: 'org-1',
+                executionUuid,
+                repositoryId: ALLOWED,
+                status: 'success',
+            });
+
+        emit('before');
+        await flush();
+        authorizationService.getRepositoryScope.mockResolvedValue([]);
+        now += 16_000;
+        emit('after');
+        await flush();
+
+        subscription.unsubscribe();
+        clock.mockRestore();
+        expect(received).toEqual(['before']);
+    });
 });

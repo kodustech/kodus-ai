@@ -52,14 +52,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { from, fromEvent, interval, merge, Subject } from 'rxjs';
-import {
-    filter,
-    map,
-    mergeMap,
-    shareReplay,
-    take,
-    takeUntil,
-} from 'rxjs/operators';
+import { filter, map, mergeMap, takeUntil } from 'rxjs/operators';
 import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adapters/services/automationExecution.service';
 import { BackfillPRsDto } from '../dtos/backfill-prs.dto';
 import { EnrichedPullRequestsQueryDto } from '@libs/code-review/dtos/dashboard/enriched-pull-requests-query.dto';
@@ -73,6 +66,7 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -119,6 +113,9 @@ import {
     PullRequestBackfillResponseDto,
     PullRequestExecutionsResponseDto,
 } from '../dtos/pull-request-executions-response.dto';
+
+/** How long a stream trusts the repository scope it read. */
+const EXECUTION_STREAM_SCOPE_TTL_MS = 15_000;
 
 @ApiTags('Pull Requests')
 @ApiStandardResponses()
@@ -184,6 +181,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Get('/executions')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -204,6 +202,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Get('/executions/totals')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -224,6 +223,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Get('/executions/summary')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -254,6 +254,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Get('/executions/facets')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -288,6 +289,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Get('/awaiting')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -307,6 +309,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Get('/authors')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -337,6 +340,7 @@ export class PullRequestController implements OnApplicationShutdown {
     @Sse('/executions/events')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -358,14 +362,28 @@ export class PullRequestController implements OnApplicationShutdown {
         }
 
         // A member who reads only some repositories (assignment, or the
-        // Git connections they are granted) hears only about those.
-        const scope$ = from(
-            this.authorizationService.getRepositoryScope({
-                user: this.request.user,
-                action: Action.Read,
-                resource: ResourceType.PullRequests,
-            }),
-        ).pipe(shareReplay(1));
+        // Git connections they are granted) hears only about those. The
+        // scope is read again every few seconds, so a revoked grant stops
+        // the stream without a reconnect.
+        const user = this.request.user;
+        let scope: { value: Promise<string[] | null>; readAt: number } | null =
+            null;
+        const currentScope = () => {
+            if (
+                !scope ||
+                Date.now() - scope.readAt >= EXECUTION_STREAM_SCOPE_TTL_MS
+            ) {
+                scope = {
+                    value: this.authorizationService.getRepositoryScope({
+                        user,
+                        action: Action.Read,
+                        resource: ResourceType.PullRequests,
+                    }),
+                    readAt: Date.now(),
+                };
+            }
+            return scope.value;
+        };
 
         const events$ = fromEvent(
             this.eventEmitter,
@@ -373,13 +391,12 @@ export class PullRequestController implements OnApplicationShutdown {
         ).pipe(
             filter((event: any) => event?.organizationId === organizationId),
             mergeMap((event: any) =>
-                scope$.pipe(
-                    take(1),
+                from(currentScope()).pipe(
                     filter(
-                        (scope) =>
-                            scope === null ||
+                        (readable) =>
+                            readable === null ||
                             event?.repositoryId == null ||
-                            scope.includes(String(event.repositoryId)),
+                            readable.includes(String(event.repositoryId)),
                     ),
                     map(() => event),
                 ),

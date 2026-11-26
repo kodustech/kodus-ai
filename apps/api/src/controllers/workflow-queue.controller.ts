@@ -13,7 +13,10 @@ import {
     Action,
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
-import { PolicyGuard } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
+import {
+    AppliesConnectionScope,
+    PolicyGuard,
+} from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 import { CheckPolicies } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
 import { JOB_STATUS_SERVICE_TOKEN } from '@libs/core/workflow/domain/contracts/job-status.service.contract';
@@ -59,6 +62,7 @@ export class WorkflowQueueController {
     }
 
     @Get('/jobs/:jobId')
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -86,6 +90,7 @@ export class WorkflowQueueController {
     }
 
     @Get('/jobs/:jobId/detail')
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,

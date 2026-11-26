@@ -1,15 +1,19 @@
 import { ForbiddenException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 
-import { FullConnectionAccessGuard } from './full-connection-access.guard';
+import {
+    BillingManagersReadEveryConnection,
+    FullConnectionAccessGuard,
+} from './full-connection-access.guard';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({ log: jest.fn(), warn: jest.fn(), error: jest.fn() }),
 }));
 
-const contextFor = () =>
+const contextFor = (controller: object = class {}) =>
     ({
         getHandler: () => () => undefined,
-        getClass: () => class {},
+        getClass: () => controller,
         switchToHttp: () => ({
             getRequest: () => ({
                 user: {
@@ -24,24 +28,49 @@ const contextFor = () =>
 
 describe('FullConnectionAccessGuard', () => {
     it('lets through a member who reads every Git connection', async () => {
-        const guard = new FullConnectionAccessGuard({
-            restrictionFor: jest.fn().mockResolvedValue(null),
-        } as any);
+        const guard = new FullConnectionAccessGuard(
+            {
+                restrictionFor: jest.fn().mockResolvedValue(null),
+            } as any,
+            new Reflector(),
+        );
 
         await expect(guard.canActivate(contextFor())).resolves.toBe(true);
     });
 
     it('refuses an organization-wide read to a member granted only some connections', async () => {
-        const guard = new FullConnectionAccessGuard({
-            restrictionFor: jest.fn().mockResolvedValue({
-                connectionIds: new Set(['gh-a']),
-                repositoryIds: new Set(),
-                allowsRepository: () => false,
-            }),
-        } as any);
+        const guard = new FullConnectionAccessGuard(
+            {
+                restrictionFor: jest.fn().mockResolvedValue({
+                    connectionIds: new Set(['gh-a']),
+                    repositoryIds: new Set(),
+                    allowsRepository: () => false,
+                }),
+            } as any,
+            new Reflector(),
+        );
 
         await expect(guard.canActivate(contextFor())).rejects.toThrow(
             ForbiddenException,
+        );
+    });
+
+    it('lets a billing manager read token usage across every connection, as before connections existed', async () => {
+        @BillingManagersReadEveryConnection()
+        class TokenUsage {}
+        const guard = new FullConnectionAccessGuard(
+            {
+                restrictionFor: jest.fn().mockResolvedValue({
+                    connectionIds: new Set(['gh-a']),
+                    repositoryIds: new Set(),
+                    allowsRepository: () => false,
+                }),
+            } as any,
+            new Reflector(),
+        );
+
+        await expect(guard.canActivate(contextFor(TokenUsage))).resolves.toBe(
+            true,
         );
     });
 });

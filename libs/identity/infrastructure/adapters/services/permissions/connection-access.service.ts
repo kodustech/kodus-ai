@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { createLogger } from '@libs/core/log/logger';
-import { UserConnectionAccessModel } from '@libs/identity/infrastructure/adapters/repositories/schemas/userConnectionAccess.model';
+import {
+    ConnectionRepositoryList,
+    UserConnectionAccessRepository,
+} from '@libs/identity/infrastructure/adapters/repositories/userConnectionAccess.repository';
 
 /**
  * What a non-owner member may read across the organization's Git
@@ -37,9 +38,49 @@ export type ConnectionRestriction = {
     allowsRepository(repository: { id?: unknown; name?: unknown }): boolean;
 };
 
+type StoredRepository = {
+    id?: unknown;
+    name?: string;
+    full_name?: string;
+    organizationName?: string;
+};
+
 /** Grants change rarely; a short memory spares a query on every check. */
 const SCOPE_TTL_MS = 15_000;
 
+const NO_CONNECTION: ConnectionReadScope = {
+    kind: 'connections',
+    connectionIds: [],
+    repositoryIds: [],
+    repositoryNames: [],
+};
+
+const repositoriesOf = (list: ConnectionRepositoryList): StoredRepository[] =>
+    Array.isArray(list.repositories)
+        ? (list.repositories as StoredRepository[])
+        : [];
+
+const idsOf = (repositories: StoredRepository[]) =>
+    repositories.map((repository) => String(repository?.id));
+
+/** Only owner/name forms: a bare name is not unique. */
+const namesOf = (repositories: StoredRepository[]) =>
+    repositories.flatMap((repository) =>
+        [
+            repository?.full_name,
+            repository?.organizationName && repository?.name
+                ? `${repository.organizationName}/${repository.name}`
+                : undefined,
+            repository?.name,
+        ]
+            .filter(
+                (name): name is string =>
+                    typeof name === 'string' && name.includes('/'),
+            )
+            .map((name) => name.toLowerCase()),
+    );
+
+/** Who reads which Git connections of the organization. */
 @Injectable()
 export class ConnectionAccessService {
     private readonly logger = createLogger(ConnectionAccessService.name);
@@ -48,127 +89,74 @@ export class ConnectionAccessService {
         { scope: ConnectionReadScope; expiresAt: number }
     >();
 
-    constructor(
-        @InjectRepository(UserConnectionAccessModel)
-        private readonly repository: Repository<UserConnectionAccessModel>,
-    ) {}
+    constructor(private readonly access: UserConnectionAccessRepository) {}
 
     async readScopeFor(user: ScopeUser): Promise<ConnectionReadScope> {
         const userId = user?.uuid;
         const organizationId = user?.organization?.uuid;
-        if (!userId || !organizationId) {
-            return {
-                kind: 'connections',
-                connectionIds: [],
-                repositoryIds: [],
-                repositoryNames: [],
-            };
-        }
+        if (!userId || !organizationId) return NO_CONNECTION;
 
-        const key = `${organizationId}:${userId}`;
-        const cached = this.scopes.get(key);
-        if (cached && cached.expiresAt > Date.now()) {
-            return cached.scope;
-        }
+        const cached = this.scopes.get(this.key(organizationId, userId));
+        if (cached && cached.expiresAt > Date.now()) return cached.scope;
 
-        const scope = await this.loadScope(organizationId, userId);
-        this.scopes.set(key, { scope, expiresAt: Date.now() + SCOPE_TTL_MS });
+        const [scope] = (
+            await this.loadScopes(organizationId, [userId])
+        ).values();
         return scope;
-    }
-
-    private async loadScope(
-        organizationId: string,
-        userId: string,
-    ): Promise<ConnectionReadScope> {
-        const [connections, grants] = await Promise.all([
-            this.repository.manager.query(
-                `SELECT i."uuid"
-                   FROM "integrations" i
-                  WHERE i."organization_id" = $1
-                    AND i."status" = true
-                    AND i."integrationCategory" = 'CODE_MANAGEMENT'`,
-                [organizationId],
-            ) as Promise<Array<{ uuid: string }>>,
-            this.repository.manager.query(
-                `SELECT a."integration_id"
-                   FROM "user_connection_access" a
-                  WHERE a."user_id" = $1`,
-                [userId],
-            ) as Promise<Array<{ integration_id: string }>>,
-        ]);
-
-        const granted = new Set(grants.map((g) => g.integration_id));
-        const connectionIds = connections
-            .map((c) => c.uuid)
-            .filter((uuid) => granted.has(uuid));
-
-        if (connectionIds.length === connections.length) {
-            return { kind: 'all' };
-        }
-
-        const configs = connectionIds.length
-            ? ((await this.repository.manager.query(
-                  `SELECT ic."configValue"
-                     FROM "integration_configs" ic
-                    WHERE ic."configKey" = 'repositories'
-                      AND ic."integration_id" IN (
-                          SELECT i."uuid" FROM "integrations" i
-                           WHERE i."organization_id" = $1
-                             AND i."uuid" = ANY($2::uuid[])
-                      )`,
-                  [organizationId, connectionIds],
-              )) as Array<{ configValue: unknown }>)
-            : [];
-
-        type StoredRepository = {
-            id?: unknown;
-            name?: string;
-            full_name?: string;
-            organizationName?: string;
-        };
-        const repositories = configs.flatMap((config) =>
-            Array.isArray(config.configValue)
-                ? (config.configValue as StoredRepository[])
-                : [],
-        );
-        const repositoryIds = [
-            ...new Set(
-                repositories.map((repository) => String(repository?.id)),
-            ),
-        ];
-        const repositoryNames = [
-            ...new Set(
-                repositories.flatMap((repository) =>
-                    [
-                        repository?.full_name,
-                        repository?.organizationName && repository?.name
-                            ? `${repository.organizationName}/${repository.name}`
-                            : undefined,
-                        repository?.name,
-                    ]
-                        // Only owner/name forms: a bare name is not unique.
-                        .filter(
-                            (name): name is string =>
-                                typeof name === 'string' && name.includes('/'),
-                        )
-                        .map((name) => name.toLowerCase()),
-                ),
-            ),
-        ];
-
-        return {
-            kind: 'connections',
-            connectionIds,
-            repositoryIds,
-            repositoryNames,
-        };
     }
 
     async restrictionFor(
         user: ScopeUser,
     ): Promise<ConnectionRestriction | null> {
         if (user?.role === Role.OWNER) return null;
-        const scope = await this.readScopeFor(user);
+        return this.restrictionOf(await this.readScopeFor(user));
+    }
+
+    /**
+     * `restrictionFor` for many members of one organization, read in one
+     * pass instead of one lookup per member.
+     */
+    async restrictionsFor(
+        users: ScopeUser[],
+    ): Promise<Map<string, ConnectionRestriction | null>> {
+        const restrictions = new Map<string, ConnectionRestriction | null>();
+        const byOrganization = new Map<string, string[]>();
+        for (const user of users) {
+            if (!user?.uuid) continue;
+            const organizationId = user.organization?.uuid;
+            if (user.role === Role.OWNER) {
+                restrictions.set(user.uuid, null);
+            } else if (!organizationId) {
+                restrictions.set(user.uuid, this.restrictionOf(NO_CONNECTION));
+            } else {
+                const cached = this.scopes.get(
+                    this.key(organizationId, user.uuid),
+                );
+                if (cached && cached.expiresAt > Date.now()) {
+                    restrictions.set(
+                        user.uuid,
+                        this.restrictionOf(cached.scope),
+                    );
+                } else {
+                    byOrganization.set(organizationId, [
+                        ...(byOrganization.get(organizationId) ?? []),
+                        user.uuid,
+                    ]);
+                }
+            }
+        }
+        for (const [organizationId, userIds] of byOrganization) {
+            const scopes = await this.loadScopes(organizationId, userIds);
+            for (const [userId, scope] of scopes) {
+                restrictions.set(userId, this.restrictionOf(scope));
+            }
+        }
+        return restrictions;
+    }
+
+    private restrictionOf(
+        scope: ConnectionReadScope,
+    ): ConnectionRestriction | null {
         if (scope.kind === 'all') return null;
         const repositoryIds = new Set(scope.repositoryIds);
         const repositoryNames = new Set(scope.repositoryNames);
@@ -182,58 +170,105 @@ export class ConnectionAccessService {
         };
     }
 
-    async connectionInWorkspace(
+    /**
+     * Repository ids and names repeat across servers. One listed by a
+     * connection the member is not granted is left out: records keyed by
+     * the bare id cannot tell the two repositories apart.
+     */
+    private async loadScopes(
+        organizationId: string,
+        userIds: string[],
+    ): Promise<Map<string, ConnectionReadScope>> {
+        const [connections, grants] = await Promise.all([
+            this.access.activeConnectionIds(organizationId),
+            this.access.grantsOf(userIds),
+        ]);
+        const live = new Set(connections);
+        const anyPartial = userIds.some(
+            (userId) =>
+                (grants.get(userId) ?? []).filter((id) => live.has(id))
+                    .length !== connections.length,
+        );
+        const lists = anyPartial
+            ? await this.access.repositoryLists(organizationId, connections)
+            : [];
+
+        const scopes = new Map<string, ConnectionReadScope>();
+        for (const userId of userIds) {
+            const granted = new Set(
+                (grants.get(userId) ?? []).filter((id) => live.has(id)),
+            );
+            const scope: ConnectionReadScope =
+                granted.size === connections.length
+                    ? { kind: 'all' }
+                    : this.partialScope(granted, lists);
+            scopes.set(userId, scope);
+            this.scopes.set(this.key(organizationId, userId), {
+                scope,
+                expiresAt: Date.now() + SCOPE_TTL_MS,
+            });
+        }
+        return scopes;
+    }
+
+    private partialScope(
+        granted: ReadonlySet<string>,
+        lists: ConnectionRepositoryList[],
+    ): ConnectionReadScope {
+        const mine = lists
+            .filter((list) => granted.has(list.integrationId))
+            .flatMap(repositoriesOf);
+        const others = lists
+            .filter((list) => !granted.has(list.integrationId))
+            .flatMap(repositoriesOf);
+        const otherIds = new Set(idsOf(others));
+        const otherNames = new Set(namesOf(others));
+        return {
+            kind: 'connections',
+            connectionIds: [...granted],
+            repositoryIds: [
+                ...new Set(idsOf(mine).filter((id) => !otherIds.has(id))),
+            ],
+            repositoryNames: [
+                ...new Set(
+                    namesOf(mine).filter((name) => !otherNames.has(name)),
+                ),
+            ],
+        };
+    }
+
+    connectionInWorkspace(
         organizationId: string,
         teamId: string,
         integrationId: string,
     ): Promise<boolean> {
-        const rows = (await this.repository.manager.query(
-            `SELECT 1 FROM "integrations" i
-              WHERE i."uuid" = $1
-                AND i."organization_id" = $2
-                AND i."team_id" = $3
-                AND i."integrationCategory" = 'CODE_MANAGEMENT'`,
-            [integrationId, organizationId, teamId],
-        )) as unknown[];
-        return rows.length > 0;
+        return this.access.connectionInWorkspace(
+            organizationId,
+            teamId,
+            integrationId,
+        );
     }
 
-    async connectionInOrganization(
+    connectionInOrganization(
         organizationId: string,
         integrationId: string,
     ): Promise<boolean> {
-        const rows = (await this.repository.manager.query(
-            `SELECT 1 FROM "integrations" i
-              WHERE i."uuid" = $1
-                AND i."organization_id" = $2
-                AND i."integrationCategory" = 'CODE_MANAGEMENT'`,
-            [integrationId, organizationId],
-        )) as unknown[];
-        return rows.length > 0;
+        return this.access.connectionInOrganization(
+            organizationId,
+            integrationId,
+        );
     }
 
     /** The given users that belong to the organization. */
-    async membersOfOrganization(
+    membersOfOrganization(
         organizationId: string,
         userIds: string[],
     ): Promise<string[]> {
-        if (!userIds.length) return [];
-        const rows = (await this.repository.manager.query(
-            `SELECT u."uuid" FROM "users" u
-              WHERE u."organization_id" = $1
-                AND u."uuid" = ANY($2::uuid[])`,
-            [organizationId, userIds],
-        )) as Array<{ uuid: string }>;
-        return rows.map((row) => row.uuid);
+        return this.access.membersOfOrganization(organizationId, userIds);
     }
 
-    async listGrants(integrationId: string): Promise<string[]> {
-        const rows = (await this.repository.manager.query(
-            `SELECT a."user_id" FROM "user_connection_access" a
-              WHERE a."integration_id" = $1`,
-            [integrationId],
-        )) as Array<{ user_id: string }>;
-        return rows.map((row) => row.user_id);
+    listGrants(integrationId: string): Promise<string[]> {
+        return this.access.listGrants(integrationId);
     }
 
     /**
@@ -244,62 +279,56 @@ export class ConnectionAccessService {
         integrationId: string,
         userIds: string[],
     ): Promise<{ granted: string[]; revoked: string[] }> {
-        const diff = await this.repository.manager.transaction(async (tx) => {
-            await tx.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
-                `user_connection_access:${integrationId}`,
-            ]);
-            const rows = (await tx.query(
-                `SELECT a."user_id" FROM "user_connection_access" a
-                  WHERE a."integration_id" = $1`,
-                [integrationId],
-            )) as Array<{ user_id: string }>;
-            const current = new Set(rows.map((row) => row.user_id));
-            const wanted = new Set(userIds);
-            const granted = [...wanted].filter((id) => !current.has(id));
-            const revoked = [...current].filter((id) => !wanted.has(id));
-
-            if (granted.length) {
-                await tx.query(
-                    `INSERT INTO "user_connection_access" ("user_id", "integration_id")
-                     SELECT u, $1::uuid FROM unnest($2::uuid[]) AS u
-                     ON CONFLICT ("user_id", "integration_id") DO NOTHING`,
-                    [integrationId, granted],
-                );
-            }
-            if (revoked.length) {
-                await tx.query(
-                    `DELETE FROM "user_connection_access"
-                      WHERE "integration_id" = $1 AND "user_id" = ANY($2::uuid[])`,
-                    [integrationId, revoked],
-                );
-            }
-            return { granted, revoked };
-        });
-
+        const diff = await this.access.replaceGrants(integrationId, userIds);
         this.forget([...diff.granted, ...diff.revoked]);
         return diff;
     }
 
-    /** Grants each user read access to the connection; existing grants stay. */
-    async grant(integrationId: string, userIds: string[]): Promise<void> {
-        if (!userIds.length) return;
-        await this.repository.manager.query(
-            `INSERT INTO "user_connection_access" ("user_id", "integration_id")
-             SELECT u, $1::uuid FROM unnest($2::uuid[]) AS u
-             ON CONFLICT ("user_id", "integration_id") DO NOTHING`,
-            [integrationId, userIds],
+    /** A member who joins a workspace reads its Git connections. */
+    async grantWorkspaceConnections(
+        userId: string,
+        teamId: string,
+    ): Promise<void> {
+        const connections = await this.access.workspaceConnectionIds(teamId);
+        await this.access.grant(
+            connections.map((integrationId) => ({ userId, integrationId })),
         );
-        this.forget(userIds);
+        this.forget([userId]);
+    }
+
+    /** Every member of the workspace reads the connection. */
+    async grantWorkspaceMembers(
+        teamId: string,
+        integrationId: string,
+    ): Promise<string[]> {
+        const members = await this.access.workspaceMemberIds(teamId);
+        await this.access.grant(
+            members.map((userId) => ({ userId, integrationId })),
+        );
+        this.forget(members);
+        return members;
+    }
+
+    /** The user reads every Git connection of the organization. */
+    async grantOrganizationConnections(
+        userId: string,
+        organizationId: string,
+    ): Promise<void> {
+        const connections =
+            await this.access.activeConnectionIds(organizationId);
+        await this.access.grant(
+            connections.map((integrationId) => ({ userId, integrationId })),
+        );
+        this.forget([userId]);
     }
 
     async revoke(integrationId: string, userIds: string[]): Promise<void> {
-        if (!userIds.length) return;
-        await this.repository.manager.query(
-            `DELETE FROM "user_connection_access"
-              WHERE "integration_id" = $1 AND "user_id" = ANY($2::uuid[])`,
-            [integrationId, userIds],
-        );
+        await this.access.revoke(integrationId, userIds);
         this.forget(userIds);
+    }
+
+    private key(organizationId: string, userId: string) {
+        return `${organizationId}:${userId}`;
     }
 
     private forget(userIds: string[]): void {

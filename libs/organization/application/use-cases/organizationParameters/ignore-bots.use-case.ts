@@ -6,10 +6,7 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationParametersAutoAssignConfig } from '@libs/organization/domain/organizationParameters/types/organizationParameters.types';
-import {
-    authorFiltersFor,
-    withConnectionAuthorFilters,
-} from '@libs/organization/domain/organizationParameters/utils/author-filters';
+import { authorFiltersFor } from '@libs/organization/domain/organizationParameters/utils/author-filters';
 import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { PullRequestHandlerService } from '@libs/code-review/infrastructure/adapters/services/pullRequestManager.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -103,19 +100,13 @@ export class IgnoreBotsUseCase implements IUseCase {
         const seededBotIds = new Set(current.seededBotIds);
         const newBotIds = botIds.filter((id) => !seededBotIds.has(id));
 
-        const base: OrganizationParametersAutoAssignConfig = stored ?? {
-            enabled: false,
-            ignoredUsers: [],
-            allowedUsers: [],
-        };
-
-        const next = withConnectionAuthorFilters(base, target, {
+        const lists = {
             ignoredUsers: Array.from(
                 new Set([...current.ignoredUsers, ...newBotIds]),
             ),
             allowedUsers: current.allowedUsers,
             seededBotIds: Array.from(new Set([...seededBotIds, ...botIds])),
-        });
+        };
 
         this.logger.log({
             message: 'pr_author_bots_seeded',
@@ -128,10 +119,31 @@ export class IgnoreBotsUseCase implements IUseCase {
             },
         });
 
-        await this.organizationParametersService.createOrUpdateConfig(
+        // Only these lists are written, merged into the stored value, so a
+        // concurrent change to another connection's lists or to the
+        // revocation timers is kept.
+        await this.organizationParametersService.mergeConfigValue(
             OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-            next,
-            organizationAndTeamData,
+            params.organizationId,
+            lists,
+            target ? { connectionId: target } : {},
+        );
+    }
+
+    /**
+     * A connection added beside others gets lists of its own at once, empty,
+     * so until its bots are found it never reads another connection's (an
+     * allow-list there would skip every PR on it).
+     */
+    async claimConnectionLists(params: {
+        organizationId: string;
+        integrationId: string;
+    }): Promise<void> {
+        await this.organizationParametersService.mergeConfigValue(
+            OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
+            params.organizationId,
+            { ignoredUsers: [], allowedUsers: [], seededBotIds: [] },
+            { connectionId: params.integrationId, onlyIfAbsent: true },
         );
     }
 }

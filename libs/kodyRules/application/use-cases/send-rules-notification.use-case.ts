@@ -1,6 +1,5 @@
-import pLimit from 'p-limit';
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import {
@@ -12,7 +11,10 @@ import {
     ORGANIZATION_SERVICE_TOKEN,
 } from '@libs/organization/domain/organization/contracts/organization.service.contract';
 import { NotificationService } from '@libs/notifications/application/notification.service';
-import { ConnectionAccessService } from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
+import {
+    ConnectionAccessService,
+    ConnectionRestriction,
+} from '@libs/identity/infrastructure/adapters/services/permissions/connection-access.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 
 @Injectable()
@@ -24,8 +26,7 @@ export class SendRulesNotificationUseCase {
         @Inject(ORGANIZATION_SERVICE_TOKEN)
         private readonly organizationService: IOrganizationService,
         private readonly notificationService: NotificationService,
-        @Optional()
-        private readonly connectionAccess?: ConnectionAccessService,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     async execute(
@@ -93,24 +94,29 @@ export class SendRulesNotificationUseCase {
                 string,
                 { titles: string[]; users: typeof users }
             >();
-            // Bounded: one lookup per member, a few in flight at a time.
-            const limit = pLimit(4);
-            const scopes = await Promise.allSettled(
-                users.map((user) =>
-                    limit(() =>
-                        this.connectionAccess?.restrictionFor({
-                            uuid: user.uuid,
-                            role: user.role,
-                            organization: { uuid: organizationId },
-                        }),
-                    ),
-                ),
-            );
-            for (const [index, user] of users.entries()) {
-                const scope = scopes[index];
-                // A member whose access could not be read hears nothing.
-                if (scope.status === 'rejected') continue;
-                const restriction = scope.value;
+            // One pass for every member. Unreadable access: nobody hears.
+            let restrictions: Map<string, ConnectionRestriction | null>;
+            try {
+                restrictions = await this.connectionAccess.restrictionsFor(
+                    users.map((user) => ({
+                        uuid: user.uuid,
+                        role: user.role,
+                        organization: { uuid: organizationId },
+                    })),
+                );
+            } catch (error) {
+                this.logger.error({
+                    message:
+                        'Could not read which Git connections members are granted; rules notification not sent',
+                    context: SendRulesNotificationUseCase.name,
+                    error,
+                    metadata: { organizationId },
+                });
+                return;
+            }
+            for (const user of users) {
+                if (!restrictions.has(user.uuid)) continue;
+                const restriction = restrictions.get(user.uuid);
                 const titles = entries
                     .filter(
                         (rule) =>

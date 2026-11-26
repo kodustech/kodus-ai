@@ -1,5 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsString } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsUUID } from 'class-validator';
+
+/** More than any organization has members. */
+const MAX_MEMBERS = 5000;
 
 export class SetConnectionAccessDto {
     @ApiProperty({
@@ -8,6 +11,7 @@ export class SetConnectionAccessDto {
             'Every member who reads the connection; an empty list revokes all.',
     })
     @IsArray()
-    @IsString({ each: true })
+    @ArrayMaxSize(MAX_MEMBERS)
+    @IsUUID('4', { each: true })
     userIds: string[];
 }

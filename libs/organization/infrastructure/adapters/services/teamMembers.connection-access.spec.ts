@@ -9,18 +9,20 @@ describe('TeamMemberService — Git connection access', () => {
         const repo = {
             create: jest.fn(async (member: unknown) => member),
         };
-        const query = jest.fn().mockResolvedValue(undefined);
+        const connectionAccess = {
+            grantWorkspaceConnections: jest.fn().mockResolvedValue(undefined),
+        };
         const service = new TeamMemberService(
             repo as any,
             {} as any,
             {} as any,
-            { manager: { query } } as any,
+            connectionAccess as any,
         );
-        return { service, repo, query };
+        return { service, repo, connectionAccess };
     };
 
     it('grants a member joining a workspace that workspace’s Git connections', async () => {
-        const { service, query } = build();
+        const { service, connectionAccess } = build();
 
         await service.create({
             user: { uuid: 'user-1' },
@@ -28,17 +30,19 @@ describe('TeamMemberService — Git connection access', () => {
             organization: { uuid: 'org-1' },
         } as any);
 
-        expect(query).toHaveBeenCalledWith(
-            expect.stringContaining('INSERT INTO "user_connection_access"'),
-            ['user-1', 'team-1'],
+        expect(connectionAccess.grantWorkspaceConnections).toHaveBeenCalledWith(
+            'user-1',
+            'team-1',
         );
     });
 
     it('grants nothing for a member row without a user', async () => {
-        const { service, query } = build();
+        const { service, connectionAccess } = build();
 
         await service.create({ team: { uuid: 'team-1' } } as any);
 
-        expect(query).not.toHaveBeenCalled();
+        expect(
+            connectionAccess.grantWorkspaceConnections,
+        ).not.toHaveBeenCalled();
     });
 });

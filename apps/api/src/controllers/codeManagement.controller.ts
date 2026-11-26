@@ -6,7 +6,6 @@ import {
     ForbiddenException,
     Get,
     Inject,
-    Optional,
     Post,
     Put,
     Query,
@@ -21,6 +20,7 @@ import {
 } from '@libs/identity/infrastructure/adapters/services/permissions/connection-read';
 import { GetAreaRiskMapUseCase } from '../use-cases/get-area-risk-map.use-case';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -110,8 +110,7 @@ export class CodeManagementController {
         private readonly getRepositorySelectionUseCase: GetRepositorySelectionUseCase,
         private readonly setRepositorySelectionUseCase: SetRepositorySelectionUseCase,
         private readonly previewAllRepositoriesUseCase: PreviewAllRepositoriesUseCase,
-        @Optional()
-        private readonly connectionAccess?: ConnectionAccessService,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     @Get('/area-risk-map')
@@ -139,6 +138,7 @@ export class CodeManagementController {
 
     @Get('/repositories/org')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -187,6 +187,7 @@ export class CodeManagementController {
 
     @Get('/repositories/selected')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -264,6 +265,7 @@ export class CodeManagementController {
 
     @Get('/repository-selection')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -276,11 +278,18 @@ export class CodeManagementController {
             'Whether the team picks repositories by hand or reviews every repository its git integration can see, and the progress of the automatic sync.',
     })
     @ApiQuery({ name: 'teamId', required: true })
-    public async getRepositorySelection(@Query() query: { teamId: string }) {
+    @ApiQuery({ name: 'connectionId', required: false })
+    public async getRepositorySelection(
+        @Query() query: { teamId: string; connectionId?: string },
+    ) {
+        const integrationId = await this.memberListConnection(
+            query.connectionId,
+        );
         return this.getRepositorySelectionUseCase.execute({
             organizationAndTeamData: {
                 organizationId: this.request?.user?.organization?.uuid,
                 teamId: query.teamId,
+                ...(integrationId ? { integrationId } : {}),
             },
         });
     }
@@ -448,6 +457,7 @@ export class CodeManagementController {
 
     @Get('/get-prs')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -479,6 +489,19 @@ export class CodeManagementController {
             repository?: string;
         },
     ) {
+        // A member granted some connections names one of their repositories.
+        const restriction = await this.readRestriction();
+        if (
+            restriction &&
+            !restriction.allowsRepository({
+                id: query.repositoryId,
+                name: query.repositoryName ?? query.repository,
+            })
+        ) {
+            throw new ForbiddenException(
+                'Name a repository of the Git connections you are granted.',
+            );
+        }
         return await this.getPRsUseCase.execute({
             teamId: query.teamId,
             number: query.number,
@@ -492,6 +515,7 @@ export class CodeManagementController {
 
     @Get('/get-prs-repo')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -528,6 +552,15 @@ export class CodeManagementController {
         },
     ) {
         const { teamId, repositoryId, ...filters } = query;
+        const restriction = await this.readRestriction();
+        if (
+            restriction &&
+            !restriction.allowsRepository({ id: repositoryId })
+        ) {
+            throw new ForbiddenException(
+                'You are not granted the Git connection of this repository.',
+            );
+        }
         return await this.getPRsByRepoUseCase.execute({
             teamId,
             repositoryId,
@@ -741,6 +774,7 @@ export class CodeManagementController {
     // the webhooks service (see __tests__/webhook-path-routing.spec.ts).
     @Get('/hook-status')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -775,13 +809,14 @@ export class CodeManagementController {
     }
 
     private readRestriction() {
-        return this.connectionAccess?.restrictionFor(this.request?.user);
+        return this.connectionAccess.restrictionFor(this.request?.user);
     }
 
     // Not `/webhook-*`: in the cloud the load balancer sends `*/webhook*` to
     // the webhooks service (see __tests__/webhook-path-routing.spec.ts).
     @Get('/hook-failures')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -794,16 +829,26 @@ export class CodeManagementController {
             'Repositories whose webhook could not be created during the last repository selection save, with the reason returned by the provider.',
     })
     @ApiQuery({ name: 'teamId', required: true })
+    @ApiQuery({
+        name: 'connectionId',
+        required: false,
+        description:
+            'The Git connection whose save is read; its own failures only.',
+    })
     @ApiOkResponse({ type: CodeManagementWebhookCreationFailuresResponseDto })
     public async getWebhookCreationFailures(
-        @Query() query: { teamId: string },
+        @Query() query: { teamId: string; connectionId?: string },
     ) {
         const organizationId = this.request?.user?.organization?.uuid;
+        const integrationId = await this.memberListConnection(
+            query.connectionId,
+        );
 
         return this.getWebhookCreationFailuresUseCase.execute({
             organizationAndTeamData: {
                 organizationId,
                 teamId: query.teamId,
+                ...(integrationId ? { integrationId } : {}),
             },
         });
     }

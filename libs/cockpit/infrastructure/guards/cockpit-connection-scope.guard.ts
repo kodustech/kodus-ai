@@ -3,7 +3,6 @@ import {
     ExecutionContext,
     ForbiddenException,
     Injectable,
-    Optional,
     SetMetadata,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -29,8 +28,7 @@ export class CockpitConnectionScopeGuard implements CanActivate {
 
     constructor(
         private readonly reflector: Reflector,
-        @Optional()
-        private readonly connectionAccess?: ConnectionAccessService,
+        private readonly connectionAccess: ConnectionAccessService,
     ) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -47,7 +45,7 @@ export class CockpitConnectionScopeGuard implements CanActivate {
             };
             query?: Record<string, unknown>;
         }>();
-        const restriction = await this.connectionAccess?.restrictionFor(
+        const restriction = await this.connectionAccess.restrictionFor(
             request.user ?? {},
         );
         if (!restriction) return true;

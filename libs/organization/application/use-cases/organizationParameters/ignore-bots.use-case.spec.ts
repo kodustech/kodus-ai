@@ -26,7 +26,33 @@ describe('IgnoreBotsUseCase', () => {
     }) => {
         const organizationParametersService = {
             findByKey: jest.fn().mockResolvedValue(overrides?.storedConfig),
-            createOrUpdateConfig: jest.fn().mockResolvedValue(undefined),
+            // Applies the patch the way the stored value is merged, so
+            // assertions read the value that results.
+            mergeConfigValue: jest.fn(
+                (
+                    _key: string,
+                    _organizationId: string,
+                    patch: Record<string, unknown>,
+                    options?: { connectionId?: string },
+                ) => {
+                    const stored = ((overrides?.storedConfig as any)
+                        ?.configValue ?? {}) as Record<string, any>;
+                    return options?.connectionId
+                        ? {
+                              ...stored,
+                              connections: {
+                                  ...(stored.connections ?? {}),
+                                  [options.connectionId]: {
+                                      ...(stored.connections?.[
+                                          options.connectionId
+                                      ] ?? {}),
+                                      ...patch,
+                                  },
+                              },
+                          }
+                        : { ...stored, ...patch };
+                },
+            ),
         };
         const codeManagementService = {
             getListMembers: jest
@@ -51,8 +77,8 @@ describe('IgnoreBotsUseCase', () => {
         };
     };
 
-    const savedConfig = (service: { createOrUpdateConfig: jest.Mock }) =>
-        service.createOrUpdateConfig.mock.calls[0]?.[1];
+    const savedConfig = (service: { mergeConfigValue: jest.Mock }) =>
+        service.mergeConfigValue.mock.results[0]?.value;
 
     it('seeds the ignore list with discovered bots when no config exists yet', async () => {
         const { useCase, organizationParametersService } = makeUseCase({
@@ -65,14 +91,33 @@ describe('IgnoreBotsUseCase', () => {
         await useCase.execute(params);
 
         expect(
-            organizationParametersService.createOrUpdateConfig,
+            organizationParametersService.mergeConfigValue,
         ).toHaveBeenCalledWith(
             OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
+            organizationAndTeamData.organizationId,
             expect.objectContaining({
                 ignoredUsers: ['bot-1'],
                 seededBotIds: ['bot-1'],
             }),
-            organizationAndTeamData,
+            {},
+        );
+    });
+
+    it("claims a new connection's own empty lists, never overwriting existing ones", async () => {
+        const { useCase, organizationParametersService } = makeUseCase();
+
+        await useCase.claimConnectionLists({
+            organizationId: 'org-1',
+            integrationId: 'gl-b',
+        });
+
+        expect(
+            organizationParametersService.mergeConfigValue,
+        ).toHaveBeenCalledWith(
+            OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
+            'org-1',
+            { ignoredUsers: [], allowedUsers: [], seededBotIds: [] },
+            { connectionId: 'gl-b', onlyIfAbsent: true },
         );
     });
 

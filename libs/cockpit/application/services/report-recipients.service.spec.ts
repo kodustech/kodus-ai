@@ -10,7 +10,9 @@ describe('ReportRecipientsService', () => {
     beforeEach(() => {
         usersService = { find: jest.fn() };
         review = { getRepositoryNames: jest.fn() };
-        service = new ReportRecipientsService(usersService, review);
+        service = new ReportRecipientsService(usersService, review, {
+            restrictionFor: jest.fn().mockResolvedValue(null),
+        } as any);
     });
 
     describe('getOwners', () => {

@@ -30,6 +30,7 @@ import {
     ResourceType,
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import {
+    AppliesConnectionScope,
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
@@ -62,6 +63,7 @@ export class CliReviewsController {
     @Get('/executions')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,
@@ -112,6 +114,7 @@ export class CliReviewsController {
     @Get('/:executionUuid')
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
+    @AppliesConnectionScope()
     @CheckPolicies(
         checkPermissions({
             action: Action.Read,

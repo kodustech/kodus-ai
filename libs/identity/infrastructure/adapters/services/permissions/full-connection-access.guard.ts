@@ -3,9 +3,12 @@ import {
     ExecutionContext,
     ForbiddenException,
     Injectable,
+    SetMetadata,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 
 import { createLogger } from '@libs/core/log/logger';
+import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 
 import { ConnectionAccessService } from './connection-access.service';
 
@@ -14,12 +17,25 @@ import { ConnectionAccessService } from './connection-access.service';
  * repositories of some Git connections: only owners and members granted
  * every connection get them.
  */
+const BILLING_MANAGERS_READ_EVERY_CONNECTION =
+    'billing_managers_read_every_connection';
+
+/**
+ * Billing managers manage the organization's spend, so they read this
+ * across every connection whatever they are granted.
+ */
+export const BillingManagersReadEveryConnection = () =>
+    SetMetadata(BILLING_MANAGERS_READ_EVERY_CONNECTION, true);
+
 @Injectable()
 export class FullConnectionAccessGuard implements CanActivate {
     private readonly logger = createLogger(FullConnectionAccessGuard.name);
 
     // Required: without it the guard could not tell who is restricted.
-    constructor(private readonly connectionAccess: ConnectionAccessService) {}
+    constructor(
+        private readonly connectionAccess: ConnectionAccessService,
+        private readonly reflector: Reflector,
+    ) {}
 
     async canActivate(context: ExecutionContext): Promise<boolean> {
         const request = context.switchToHttp().getRequest<{
@@ -30,6 +46,16 @@ export class FullConnectionAccessGuard implements CanActivate {
             };
             route?: { path?: string };
         }>();
+        if (
+            request.user?.role === Role.BILLING_MANAGER &&
+            this.reflector.getAllAndOverride<boolean>(
+                BILLING_MANAGERS_READ_EVERY_CONNECTION,
+                [context.getHandler(), context.getClass()],
+            )
+        ) {
+            return true;
+        }
+
         const restriction = await this.connectionAccess.restrictionFor(
             request.user ?? {},
         );

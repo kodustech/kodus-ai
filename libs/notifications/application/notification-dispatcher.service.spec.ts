@@ -116,6 +116,14 @@ const baseMessage = (
     ...overrides,
 });
 
+/** A `restrictionsFor` stub answering each member through `of`. */
+const restrictionsBy = (of: (uuid: string) => unknown) => ({
+    restrictionsFor: jest.fn(
+        async (members: Array<{ uuid: string }>) =>
+            new Map(members.map((member) => [member.uuid, of(member.uuid)])),
+    ),
+});
+
 describe('NotificationDispatcherService', () => {
     describe('resolveRecipients', () => {
         it('resolves a user-kind recipient by uuid', async () => {
@@ -283,18 +291,16 @@ describe('NotificationDispatcherService', () => {
 
         it("leaves out members who cannot read the event's repository", async () => {
             const t = makeDispatcher();
-            const connectionAccess = {
-                restrictionFor: jest.fn(async (user: { uuid: string }) =>
-                    user.uuid === 'c-1'
-                        ? {
-                              connectionIds: new Set(['gh-a']),
-                              repositoryIds: new Set(['repo-gh']),
-                              allowsRepository: ({ id }: { id?: unknown }) =>
-                                  id === 'repo-gh',
-                          }
-                        : null,
-                ),
-            };
+            const connectionAccess = restrictionsBy((uuid) =>
+                uuid === 'c-1'
+                    ? {
+                          connectionIds: new Set(['gh-a']),
+                          repositoryIds: new Set(['repo-gh']),
+                          allowsRepository: ({ id }: { id?: unknown }) =>
+                              id === 'repo-gh',
+                      }
+                    : null,
+            );
             const dispatcher = new NotificationDispatcherService(
                 [t.emailAdapter, t.inAppAdapter],
                 t.deliveryRepo,
@@ -341,17 +347,15 @@ describe('NotificationDispatcherService', () => {
                 t.usersService as unknown as IUsersService,
                 t.sseService,
                 t.metricsCollector as unknown as MetricsCollectorService,
-                {
-                    restrictionFor: jest.fn(async (user: { uuid: string }) =>
-                        user.uuid === 'c-1'
-                            ? {
-                                  connectionIds: new Set(),
-                                  repositoryIds: new Set(),
-                                  allowsRepository: () => false,
-                              }
-                            : null,
-                    ),
-                } as any,
+                restrictionsBy((uuid) =>
+                    uuid === 'c-1'
+                        ? {
+                              connectionIds: new Set(),
+                              repositoryIds: new Set(),
+                              allowsRepository: () => false,
+                          }
+                        : null,
+                ) as any,
             );
             t.usersService.find.mockResolvedValueOnce([
                 { uuid: 'owner-1', email: 'o@a.com', role: 'owner' } as any,
@@ -378,6 +382,133 @@ describe('NotificationDispatcherService', () => {
                     ([delivery]) => delivery.userEmail,
                 ),
             ).toEqual(['o@a.com']);
+        });
+
+        it('delivers a list of paused rules only to members who read every repository in it', async () => {
+            const t = makeDispatcher();
+            const connectionAccess = restrictionsBy((uuid) =>
+                uuid === 'c-1'
+                    ? {
+                          connectionIds: new Set(['gh-a']),
+                          repositoryIds: new Set(['repo-gh']),
+                          allowsRepository: ({ id }: { id?: unknown }) =>
+                              id === 'repo-gh',
+                      }
+                    : null,
+            );
+            const dispatcher = new NotificationDispatcherService(
+                [t.emailAdapter, t.inAppAdapter],
+                t.deliveryRepo,
+                t.routingRuleRepo,
+                t.usersService as unknown as IUsersService,
+                t.sseService,
+                t.metricsCollector as unknown as MetricsCollectorService,
+                connectionAccess as any,
+            );
+            t.usersService.find.mockResolvedValueOnce([
+                { uuid: 'owner-1', email: 'o@a.com', role: 'owner' } as any,
+                { uuid: 'c-1', email: 'c@a.com', role: 'contributor' } as any,
+            ]);
+            t.routingRuleRepo.findByOrganization.mockResolvedValueOnce([
+                {
+                    event: NotificationEvent.KODY_RULES_AUTO_PAUSED,
+                    role: '*',
+                    channels: { email: true, in_app: false },
+                } as any,
+            ]);
+            const entry = (ruleId: string, repositoryId: string | null) => ({
+                ruleId,
+                title: ruleId,
+                repositoryId,
+                state: 'ignored',
+                triggers: 10,
+                implemented: 0,
+                windowDays: 30,
+            });
+
+            await dispatcher.dispatch(
+                baseMessage({
+                    event: NotificationEvent.KODY_RULES_AUTO_PAUSED,
+                    payload: {
+                        rules: [
+                            entry('r-gh', 'repo-gh'),
+                            entry('r-gl', 'repo-gl'),
+                            entry('r-global', null),
+                        ],
+                    },
+                    recipients: [],
+                }),
+            );
+
+            expect(
+                t.emailAdapter.deliver.mock.calls.map(
+                    ([delivery]) => delivery.userEmail,
+                ),
+            ).toEqual(['o@a.com']);
+        });
+
+        it("reads members' access in one pass, only for the roles the event reaches", async () => {
+            const t = makeDispatcher();
+            const connectionAccess = restrictionsBy(() => null);
+            const dispatcher = new NotificationDispatcherService(
+                [t.emailAdapter, t.inAppAdapter],
+                t.deliveryRepo,
+                t.routingRuleRepo,
+                t.usersService as unknown as IUsersService,
+                t.sseService,
+                t.metricsCollector as unknown as MetricsCollectorService,
+                connectionAccess as any,
+            );
+            t.usersService.find.mockResolvedValueOnce([
+                { uuid: 'owner-1', email: 'o@a.com', role: 'owner' } as any,
+                { uuid: 'c-1', email: 'c@a.com', role: 'contributor' } as any,
+                { uuid: 'c-2', email: 'd@a.com', role: 'contributor' } as any,
+            ]);
+
+            await dispatcher.dispatch(
+                baseMessage({
+                    event: SPEND_THRESHOLD,
+                    payload: { ...thresholdPayload, repositoryId: 'repo-gh' },
+                    recipients: [],
+                }),
+            );
+
+            expect(connectionAccess.restrictionsFor).toHaveBeenCalledTimes(1);
+            expect(
+                connectionAccess.restrictionsFor.mock.calls[0][0].map(
+                    (member: { uuid: string }) => member.uuid,
+                ),
+            ).toEqual(['owner-1']);
+        });
+
+        it('reaches nobody of the audience when their access cannot be read', async () => {
+            const t = makeDispatcher();
+            const dispatcher = new NotificationDispatcherService(
+                [t.emailAdapter, t.inAppAdapter],
+                t.deliveryRepo,
+                t.routingRuleRepo,
+                t.usersService as unknown as IUsersService,
+                t.sseService,
+                t.metricsCollector as unknown as MetricsCollectorService,
+                {
+                    restrictionsFor: jest
+                        .fn()
+                        .mockRejectedValue(new Error('pg down')),
+                } as any,
+            );
+            t.usersService.find.mockResolvedValueOnce([
+                { uuid: 'owner-1', email: 'o@a.com', role: 'owner' } as any,
+            ]);
+
+            await dispatcher.dispatch(
+                baseMessage({
+                    event: SPEND_THRESHOLD,
+                    payload: { ...thresholdPayload, repositoryId: 'repo-gh' },
+                    recipients: [],
+                }),
+            );
+
+            expect(t.emailAdapter.deliver).not.toHaveBeenCalled();
         });
 
         it('applies a "*" rule to every role (literal all-roles baseline)', async () => {

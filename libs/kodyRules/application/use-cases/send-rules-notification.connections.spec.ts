@@ -14,15 +14,24 @@ describe('SendRulesNotificationUseCase per Git connection', () => {
             emit: jest.fn().mockResolvedValue(undefined),
         };
         const connectionAccess = {
-            restrictionFor: jest.fn(async (user: { uuid: string }) =>
-                user.uuid === 'member'
-                    ? {
-                          connectionIds: new Set(['gh-a']),
-                          repositoryIds: new Set(['repo-gh']),
-                          allowsRepository: ({ id }: { id?: unknown }) =>
-                              id === 'repo-gh',
-                      }
-                    : null,
+            restrictionsFor: jest.fn(
+                async (members: Array<{ uuid: string }>) =>
+                    new Map(
+                        members.map((member) => [
+                            member.uuid,
+                            member.uuid === 'member'
+                                ? {
+                                      connectionIds: new Set(['gh-a']),
+                                      repositoryIds: new Set(['repo-gh']),
+                                      allowsRepository: ({
+                                          id,
+                                      }: {
+                                          id?: unknown;
+                                      }) => id === 'repo-gh',
+                                  }
+                                : null,
+                        ]),
+                    ),
             ),
         };
         const useCase = new SendRulesNotificationUseCase(
@@ -69,6 +78,9 @@ describe('SendRulesNotificationUseCase per Git connection', () => {
             } as any,
             { findOne: jest.fn().mockResolvedValue({ name: 'Acme' }) } as any,
             notificationService as any,
+            {
+                restrictionsFor: jest.fn(async () => new Map([['u', null]])),
+            } as any,
         );
 
         await useCase.execute('org-1', ['A rule']);
@@ -77,5 +89,31 @@ describe('SendRulesNotificationUseCase per Git connection', () => {
         expect(notificationService.emit.mock.calls[0][0].payload.rules).toEqual(
             ['A rule'],
         );
+    });
+
+    it("tells nobody when members' access cannot be read", async () => {
+        const notificationService = {
+            emit: jest.fn().mockResolvedValue(undefined),
+        };
+        const useCase = new SendRulesNotificationUseCase(
+            {
+                find: jest
+                    .fn()
+                    .mockResolvedValue([{ uuid: 'u', role: 'contributor' }]),
+            } as any,
+            { findOne: jest.fn().mockResolvedValue({ name: 'Acme' }) } as any,
+            notificationService as any,
+            {
+                restrictionsFor: jest
+                    .fn()
+                    .mockRejectedValue(new Error('pg down')),
+            } as any,
+        );
+
+        await useCase.execute('org-1', [
+            { title: 'A rule', repositoryId: 'repo-gh' },
+        ]);
+
+        expect(notificationService.emit).not.toHaveBeenCalled();
     });
 });

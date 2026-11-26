@@ -1,6 +1,7 @@
 import {
     CanActivate,
     ExecutionContext,
+    ForbiddenException,
     Injectable,
     SetMetadata,
     Type,
@@ -13,10 +14,22 @@ import {
     PolicyHandlerCallback,
 } from '@libs/identity/domain/permissions/types/policy.types';
 
+import { isConnectionScopedReadPolicy } from './policy.handlers';
+
 const CHECK_POLICIES_KEY = 'check_policy';
+const APPLIES_CONNECTION_SCOPE_KEY = 'applies_connection_scope';
 
 export const CheckPolicies = (...handlers: PolicyHandler[]) =>
     SetMetadata(CHECK_POLICIES_KEY, handlers);
+
+/**
+ * The handler narrows what it reads to the Git connections the member is
+ * granted (or reads nothing that belongs to one). Without it, an
+ * organization-wide read of connection data is refused to a member granted
+ * only some connections.
+ */
+export const AppliesConnectionScope = () =>
+    SetMetadata(APPLIES_CONNECTION_SCOPE_KEY, true);
 
 @Injectable()
 export class PolicyGuard implements CanActivate {
@@ -52,6 +65,19 @@ export class PolicyGuard implements CanActivate {
             if (!(await this.executeHandler(handler, ability, request))) {
                 return false;
             }
+        }
+
+        if (
+            policyHandlers.some(isConnectionScopedReadPolicy) &&
+            !this.reflector.getAllAndOverride<boolean>(
+                APPLIES_CONNECTION_SCOPE_KEY,
+                [context.getHandler(), context.getClass()],
+            ) &&
+            (await this.abilityFactory.isConnectionRestricted(user))
+        ) {
+            throw new ForbiddenException(
+                'You are granted only some Git connections of the workspace, and this reads all of them.',
+            );
         }
 
         return true;

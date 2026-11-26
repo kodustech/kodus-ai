@@ -7,6 +7,26 @@ import {
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AppAbility } from '@libs/identity/domain/permissions/types/permissions.types';
 import { PolicyHandler } from '@libs/identity/domain/permissions/types/policy.types';
+import { CONNECTION_SCOPED_READS } from '@libs/identity/domain/permissions/policies/role-policies';
+
+/**
+ * Marks a policy that grants an organization-wide read of data that belongs
+ * to Git connections: `PolicyGuard` holds it to members granted every
+ * connection unless the handler narrows the read itself.
+ */
+export const CONNECTION_SCOPED_READ = Symbol('connectionScopedRead');
+
+const isConnectionScopedRead = (action: Action, resource: ResourceType) =>
+    action === Action.Read && CONNECTION_SCOPED_READS.has(resource);
+
+const tagged = <H extends PolicyHandler>(handler: H, scopedRead: boolean): H =>
+    scopedRead
+        ? Object.assign(handler, { [CONNECTION_SCOPED_READ]: true })
+        : handler;
+
+export const isConnectionScopedReadPolicy = (handler: unknown): boolean =>
+    !!handler &&
+    (handler as Record<symbol, unknown>)[CONNECTION_SCOPED_READ] === true;
 
 const getNestedValue = (obj: any, path: string): any => {
     return path.split('.').reduce((acc, key) => acc?.[key], obj);
@@ -57,17 +77,20 @@ export const checkPermissions = (params: {
 }): PolicyHandler => {
     const { action, resource, status = [STATUS.ACTIVE] } = params;
 
-    return (ability, request) => {
-        if (!request.user?.organization?.uuid) {
-            return false;
-        }
+    return tagged(
+        (ability, request) => {
+            if (!request.user?.organization?.uuid) {
+                return false;
+            }
 
-        if (!status.includes(request.user.status)) {
-            return false;
-        }
+            if (!status.includes(request.user.status)) {
+                return false;
+            }
 
-        return ability.can(action, resource);
-    };
+            return ability.can(action, resource);
+        },
+        isConnectionScopedRead(action, resource),
+    );
 };
 
 /**
@@ -85,19 +108,25 @@ export const checkAnyPermission = (
     options: Array<{ action: Action; resource: ResourceType }>,
     status: STATUS[] = [STATUS.ACTIVE],
 ): PolicyHandler => {
-    return (ability, request) => {
-        if (!request.user?.organization?.uuid) {
-            return false;
-        }
+    return tagged(
+        (ability, request) => {
+            if (!request.user?.organization?.uuid) {
+                return false;
+            }
 
-        if (!status.includes(request.user.status)) {
-            return false;
-        }
+            if (!status.includes(request.user.status)) {
+                return false;
+            }
 
-        return options.some(({ action, resource }) =>
-            ability.can(action, resource),
-        );
-    };
+            return options.some(({ action, resource }) =>
+                ability.can(action, resource),
+            );
+        },
+        options.length > 0 &&
+            options.every(({ action, resource }) =>
+                isConnectionScopedRead(action, resource),
+            ),
+    );
 };
 
 /**
