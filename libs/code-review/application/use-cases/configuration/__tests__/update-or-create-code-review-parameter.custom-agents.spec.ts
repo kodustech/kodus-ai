@@ -55,6 +55,13 @@ const buildUseCase = (
         execute: jest.fn().mockResolvedValue(true),
     };
     const eventEmitter = { emit: jest.fn() };
+    const validateOrganizationLicense = jest.fn().mockResolvedValue(
+        stored.license ?? {
+            valid: true,
+            subscriptionStatus: 'active',
+            planType: 'teams_byok',
+        },
+    );
     const useCase = new UpdateOrCreateCodeReviewParameterUseCase(
         {
             findByKey: jest.fn().mockResolvedValue({
@@ -124,15 +131,7 @@ const buildUseCase = (
             getSubscriptionStatus: jest.fn(),
         } as any,
         { execute: jest.fn().mockResolvedValue(undefined) } as any,
-        {
-            validateOrganizationLicense: jest.fn().mockResolvedValue(
-                stored.license ?? {
-                    valid: true,
-                    subscriptionStatus: 'active',
-                    planType: 'teams_byok',
-                },
-            ),
-        } as any,
+        { validateOrganizationLicense } as any,
         { codeReviewSettingsUpdated: jest.fn() } as any,
         undefined,
         {
@@ -174,7 +173,13 @@ const buildUseCase = (
             : repository.configs;
     };
 
-    return { save, eventEmitter, useCase, createOrUpdateParametersUseCase };
+    return {
+        save,
+        eventEmitter,
+        useCase,
+        createOrUpdateParametersUseCase,
+        validateOrganizationLicense,
+    };
 };
 
 describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
@@ -719,17 +724,17 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — locked review modes', () 
             { reviewMode: 'ultra' },
             { riskReviewRouting: { riskFound: 'ultra' } },
         ]) {
-            await expect(
-                buildUseCase(
-                    {},
-                    {
-                        ultraEnabled: false,
-                        byok: trioConfig(['m1', 'm2', 'm3']),
-                    },
-                ).save(configValue, { source: 'web' }),
-            ).rejects.toThrow(
+            const { save, validateOrganizationLicense } = buildUseCase(
+                {},
+                {
+                    ultraEnabled: false,
+                    byok: trioConfig(['m1', 'm2', 'm3']),
+                },
+            );
+            await expect(save(configValue, { source: 'web' })).rejects.toThrow(
                 'Ultra review is not available for this organization yet',
             );
+            expect(validateOrganizationLicense).not.toHaveBeenCalled();
         }
     });
 
