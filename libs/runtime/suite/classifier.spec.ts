@@ -54,6 +54,17 @@ describe('planReruns (9.4)', () => {
         expect(p.rerunSpecs).toEqual([]);
         expect(p.infraRetrySpecs).toEqual([]);
     });
+    // kr-mono on dev: 14 specs that also fail on main and 2 real regressions were 16 of 39 failed, a mass failure, so the
+    // regressions were never re-run nor reported. What the baseline already shows failing on main is not this PR's mass.
+    it('does not count the specs a usable baseline shows failing on main toward a mass failure', () => {
+        const onMain = Array.from({ length: 14 }, (_, i) => `old${i}`);
+        const failures = [...onMain.map((s) => fail(s)), fail('orders-list'), fail('orders-filters')];
+        const p = planReruns({ specsRun: 39, failures, failingOnMain: new Set(onMain) });
+        expect(p.massFailure).toBe(false);
+        expect(p.rerunSpecs).toEqual(expect.arrayContaining(['orders-list', 'orders-filters']));
+        // Without the baseline the same failures are a mass failure, as before.
+        expect(planReruns({ specsRun: 39, failures }).massFailure).toBe(true);
+    });
     it('is not a mass failure at exactly 25%', () => {
         const failures = Array.from({ length: 25 }, (_, i) => fail(`s${i}`));
         expect(planReruns({ specsRun: 100, failures }).massFailure).toBe(false);

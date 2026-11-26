@@ -82,8 +82,12 @@ export interface RerunPlan {
     infraRetrySpecs: string[];
 }
 
-export function planReruns(i: { specsRun: number; failures: readonly SuiteFailure[]; budget?: number }): RerunPlan {
-    const failedSpecs = new Set(i.failures.map((f) => f.spec));
+/**
+ * `failingOnMain`: the specs a usable baseline records as failed on main. They are main's failures, not this PR's, so
+ * they do not count toward a mass failure (they are still re-run and classified, pre_existing by the baseline).
+ */
+export function planReruns(i: { specsRun: number; failures: readonly SuiteFailure[]; budget?: number; failingOnMain?: ReadonlySet<string> }): RerunPlan {
+    const failedSpecs = new Set(i.failures.map((f) => f.spec).filter((s) => !i.failingOnMain?.has(s)));
     if (i.specsRun > 0 && failedSpecs.size / i.specsRun > MASS_FAILURE_RATIO) {
         return { massFailure: true, rerunSpecs: [], overBudgetSpecs: [], infraRetrySpecs: [] };
     }

@@ -390,7 +390,10 @@ Notes:
 - **Re-run budget.** At most `min(failed specs, 40)` specs re-run; the rest are `unclassified/budget` and the check
   says so. If more than 25% of the specs fail in the first pass, no re-run starts (a broken build or environment, not
   a flake): all are `unclassified/mass_failure`, the check fails with "most of the suite failed; this is usually the
-  environment, not a test" and the Kody Run gets a boot-style finding, not N regressions.
+  environment, not a test" and the Kody Run gets a boot-style finding, not N regressions. The specs a usable
+  baseline records as failing on main do not count toward that 25% (an owner's decision, 2026-11-25): they are
+  main's failures, so a repository with many old failures still gets its new ones re-run and judged (kr-mono on dev:
+  14 specs that also fail on main hid the PR's 2 regressions behind a mass failure).
 - **Time.** The re-run phase has its own cap of 12 min (`timeout.rerun`, derived: 1.2 x the longest failed spec plus
   3 min of boot). Past it, unfinished re-runs are `unclassified/timeout`.
 

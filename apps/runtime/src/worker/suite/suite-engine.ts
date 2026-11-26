@@ -759,10 +759,12 @@ export class SuiteEngine {
 
         const ran = firstPass.filter((s) => s.status === 'passed' || s.status === 'failed' || s.status === 'skipped').length;
         const testFailures = failures.filter((f) => f.kind === 'test');
-        const plan = planReruns({ specsRun: ran, failures: testFailures });
-        const rerunSpecs = new Set(plan.rerunSpecs);
         const { baseline, baseDrift } = await this.baselineOf(ctx);
         const usableBaseline = !!baseline && baseline.exactMergeBase && baseline.digestMatches && baseline.commitsBehindMain <= BASELINE_MAX_COMMITS_BEHIND;
+        // What main already fails (the usable baseline) is not this PR's mass failure.
+        const failingOnMain = usableBaseline ? new Set(Object.entries(baseline!.specs).filter(([, r]) => r.status === 'failed').map(([spec]) => spec)) : undefined;
+        const plan = planReruns({ specsRun: ran, failures: testFailures, ...(failingOnMain ? { failingOnMain } : {}) });
+        const rerunSpecs = new Set(plan.rerunSpecs);
         ctx.judged = { ...(usableBaseline ? { baselineSha: baseline!.sha } : {}), baseDrift };
 
         let prRerun: Record<string, Rerun> = {};
