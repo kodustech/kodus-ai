@@ -57,13 +57,15 @@ export interface SetupInFlightFacts {
 /**
  * Whether a setup of the environment is queued or running. Queued: the product asked after the worker's latest
  * record began, and the worker has not written one since. Running: the record says `setting_up`. Either goes stale
- * after PUSH_SETUP_STALE_MS without a sign of life.
+ * after PUSH_SETUP_STALE_MS without a sign of life. A request is answered by any setup that ended after it was
+ * made, whichever request that setup carried: two setups of one environment that raced left the older request's
+ * record last, and the product kept reading its newer request as still waiting for up to PUSH_SETUP_STALE_MS.
  */
 export function isSetupInFlight(f: SetupInFlightFacts, now: Date): boolean {
     const fresh = (iso: string | undefined) => !!iso && now.getTime() - Date.parse(iso) < PUSH_SETUP_STALE_MS;
     if (f.record?.state === 'setting_up' && fresh(f.record.updatedAt)) return true;
     if (f.productState !== 'setup_requested' || !f.setupRequestedAt) return false;
-    const answered = f.record && Date.parse(f.record.requestedAt) >= Date.parse(f.setupRequestedAt);
+    const answered = f.record && (Date.parse(f.record.requestedAt) >= Date.parse(f.setupRequestedAt) || (f.record.state !== 'setting_up' && Date.parse(f.record.updatedAt) >= Date.parse(f.setupRequestedAt)));
     return !answered && fresh(f.setupRequestedAt);
 }
 
