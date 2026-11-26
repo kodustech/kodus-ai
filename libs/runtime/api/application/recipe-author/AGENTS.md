@@ -18,6 +18,7 @@ Kody's recipe author: an agent on the product's harness, with the org's BYOK (AD
 - The version recorded on an authored recipe: `libs/runtime/run/recipe-author-version.ts`.
 
 ## Rules and limits
+- `recipe-authoring-rules.ts` is the one source of the rules a recipe is written by: Kody's prompt (`recipe-author.agent.ts` `SYSTEM`) and the developer-agent guide (`recipe-authoring-guide.ts`, `env_recipe_guide`) are both built from it. Model-free. A word changed there changes Kody's prompt: bump the revision (below).
 - What the model read can be steered by a PR or a README, so a written recipe gets no field a team recipe could not have and its files pass stricter rules than the cell's; the cell still checks and sandboxes them.
 - Kodus rewrites only Kody's own files under `.kodus/`, and says each change back to the model.
 - Reads are bounded (`READ_LIMITS`) and pass `modelView` (secret files and assignments masked, token patterns redacted) before the model sees them; nothing of the repository runs here.
@@ -34,7 +35,7 @@ Kody's recipe author: an agent on the product's harness, with the org's BYOK (AD
 
 ## Module map
 
-Files (18, tests apart): `authored-compose-sanitiser.ts`, `authored-dockerfile-e2e.ts`, `authored-dockerfile-firebase.ts`, `authored-dockerfile-mirror.ts`, `authored-files-policy.ts`, `authored-recipe-policy.ts`, `ci-evidence.ts`, `firebase-emulators-fetch-script.ts`, `git-repo-reader.ts`, `pull-request-focus.ts`, `recipe-author-context.ts`, `recipe-author.agent.ts`, `repair-lessons.ts`, `repo-reader.ts`, `repository-facts.ts`, `suite-block.ts`, `suite-candidate.ts`, `workspace-repo-reader.ts`
+Files (20, tests apart): `authored-compose-sanitiser.ts`, `authored-dockerfile-e2e.ts`, `authored-dockerfile-firebase.ts`, `authored-dockerfile-mirror.ts`, `authored-files-policy.ts`, `authored-recipe-policy.ts`, `ci-evidence.ts`, `firebase-emulators-fetch-script.ts`, `git-repo-reader.ts`, `pull-request-focus.ts`, `recipe-author-context.ts`, `recipe-author.agent.ts`, `recipe-authoring-guide.ts`, `recipe-authoring-rules.ts`, `repair-lessons.ts`, `repo-reader.ts`, `repository-facts.ts`, `suite-block.ts`, `suite-candidate.ts`, `workspace-repo-reader.ts`
 
 Imports these Runtime modules:
 
@@ -48,6 +49,7 @@ Imports these Runtime modules:
 
 Imported by:
 
+- [`libs/runtime/api/application`](../AGENTS.md)
 - [`libs/runtime/api/application/use-cases`](../use-cases/AGENTS.md)
 - [`libs/runtime/api/infrastructure`](../../infrastructure/AGENTS.md)
 

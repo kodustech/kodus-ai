@@ -3,6 +3,7 @@ import type {
     EnvFixResult,
     EnvHealth,
     EnvRecipeCheck,
+    EnvRecipeGuide,
     EnvRecipeInput,
     EnvRecipeSubmit,
     EnvStatus,
@@ -105,6 +106,11 @@ export class EnvService {
     /** env_status: the state and which setup it reads (setupKey). */
     health(target: EnvTarget): Promise<EnvHealth> {
         return this.callTool<EnvHealth>('env_status', compact(target));
+    }
+
+    /** env_recipe_guide: the rules a recipe is written by; static text, names no environment. */
+    recipeGuide(): Promise<EnvRecipeGuide> {
+        return this.callTool<EnvRecipeGuide>('env_recipe_guide', {});
     }
 
     /** env_recipe_check: what Kodus would refuse in the recipe; keeps nothing. */

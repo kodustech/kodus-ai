@@ -60,6 +60,9 @@ export type EnvRecipeCheck = {
     };
 };
 
+/** env_recipe_guide: the authoring rules as text. */
+export type EnvRecipeGuide = { guide: string };
+
 /** env_recipe_submit: the setup that boots it (env_status answers it as setupKey once it is the latest). */
 export type EnvRecipeSubmit = {
     setupRequested: true;

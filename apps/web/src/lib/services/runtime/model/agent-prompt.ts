@@ -5,6 +5,7 @@
 export const agentPrompt = (repositoryName: string) =>
     [
         `Write .kodus/workspace.yaml for ${repositoryName}, so Kody Runtime can boot this app on a clean machine.`,
+        "First run `kodus env recipe guide` and follow it: it has the recipe format and the rules the sandbox applies, which win over the summary below.",
         "If .kodus/workspace.yaml already exists for another tool, write .kodus/workspace.runtime.yaml instead: Kody Runtime reads it first and leaves the other file alone.",
         "",
         "Use what already runs it here (the CI job that boots it for e2e or integration tests, docker-compose, Dockerfile, README, .nvmrc / .tool-versions). Format, version 1:",

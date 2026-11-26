@@ -210,6 +210,19 @@ export const ENV_TOOLS: EnvToolDefinition[] = [
         run: (s, p, a) => s.fix(p, a),
     },
     {
+        name: 'env_recipe_guide',
+        description:
+            "The rules for writing the recipe (.kodus/workspace.yaml and its .kodus/ build files), the same Kody's own author is given, plus what the sandbox does that the repository does not show (compose paths are relative to the repository root, builds reach registries only, the mirror's build args, what the checks refuse). Read it before writing a recipe. Static text: nothing is read from the repository. Needs env:exec or env:fix.",
+        inputSchema: {},
+        annotations: {
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: false,
+        },
+        run: (s, p) => s.recipeGuide(p),
+    },
+    {
         name: 'env_recipe_check',
         description:
             "Check a recipe the developer's agent wrote (.kodus/workspace.yaml and its .kodus/ build files) the way Kodus checks one before it boots: `ok`, each error to fix, and what Kodus read from it (public service, health path, exposed services). Nothing is kept and nothing boots. Needs env:exec or env:fix.",

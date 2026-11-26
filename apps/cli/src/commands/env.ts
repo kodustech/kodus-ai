@@ -355,11 +355,32 @@ export async function envRecipeSubmitAction(
     }
 }
 
+export async function envRecipeGuideAction(options: {
+    json?: boolean;
+}): Promise<void> {
+    try {
+        const { guide } = await envService.recipeGuide();
+        cliInfo(options.json ? JSON.stringify({ guide }, null, 2) : guide);
+    } catch (error) {
+        const normalized = normalizeCommandError(error);
+        cliError(chalk.red(normalized.message));
+        exitWithCode(normalized.exitCode);
+    }
+}
+
 const recipeCommand = envCommand
     .command('recipe')
     .description(
         'The setup file your own coding agent writes (.kodus/workspace.yaml): check it, then send it so Kodus boots it on a clean machine',
     );
+
+recipeCommand
+    .command('guide')
+    .description(
+        'Print the rules a recipe is written by (the same Kody follows) and what the sandbox does that the repository does not show; read it before writing one',
+    )
+    .option('--json', 'Output as JSON')
+    .action(envRecipeGuideAction);
 
 recipeCommand
     .command('check')

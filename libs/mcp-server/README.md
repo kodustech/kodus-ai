@@ -18,7 +18,8 @@ O endpoint HTTP MCP da Kodus roda em modo `Streamable HTTP` stateless.
 
 ## `/mcp/env` (Kody Runtime)
 
-- Tools `env_up`, `env_exec`, `env_upload`, `env_validate`, `env_step`, `env_status`, `env_blockers`, `env_fix`, `env_recipe_check`, `env_recipe_submit`, `env_down` (`tools/env.tools.ts`), sobre `RuntimeEnvToolsService` (`libs/runtime/api/application/env-tools.service.ts`).
+- Tools `env_up`, `env_exec`, `env_upload`, `env_validate`, `env_step`, `env_status`, `env_blockers`, `env_fix`, `env_recipe_check`, `env_recipe_guide`, `env_recipe_submit`, `env_down` (`tools/env.tools.ts`), sobre `RuntimeEnvToolsService` (`libs/runtime/api/application/env-tools.service.ts`).
+- `env_recipe_guide`: as regras de escrita da receita (as mesmas do autor do Kody, `recipe-authoring-rules.ts`) mais o que o sandbox faz e o repositório não mostra; texto estático, `env:exec` ou `env:fix`, não lê o repositório. O agente do dev lê antes de escrever (`kodus env recipe guide`).
 - `env_recipe_check` / `env_recipe_submit`: a receita que o agente do dev escreve com o modelo dele (`kodus env recipe`, skill `kodus-runtime-setup`). Check não guarda nada; submit (`env:fix`, auditado) guarda a receita no ambiente e pede um setup que a sobe com os arquivos `.kodus/`, enquanto o branch default não tem receita commitada. Devolve o `setupKey`, que o `env_status` passa a responder.
 - Só aceita Team API key, inclusive na descoberta (`guards/mcp-env-team-key.guard.ts`); o token de serviço (chat da Kody) recebe 403.
 - Capability exata: `env:exec` para up/exec/step/down, `env:fix` para fix e recipe_submit, qualquer das duas para status e blockers; o repo do objeto precisa estar em `config.repositoryIds` da chave. Fora disso: 404, e nada chega à célula (S-46).

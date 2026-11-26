@@ -129,6 +129,7 @@ describe('MCP SDK → scoped tools → signed session listener → cell protocol
             'env_exec',
             'env_fix',
             'env_recipe_check',
+            'env_recipe_guide',
             'env_recipe_submit',
             'env_status',
             'env_step',

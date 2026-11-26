@@ -65,6 +65,7 @@ describe('/mcp/env tools', () => {
             'env_exec',
             'env_fix',
             'env_recipe_check',
+            'env_recipe_guide',
             'env_recipe_submit',
             'env_status',
             'env_step',
@@ -72,6 +73,13 @@ describe('/mcp/env tools', () => {
             'env_upload',
             'env_validate',
         ]);
+    });
+
+    it('env_recipe_guide answers the authoring guide from the credential alone, with no environment named', async () => {
+        const recipeGuide = jest.fn(async () => ({ guide: 'the rules' }));
+        const res = await post(app(TEAM_KEY, { recipeGuide }), call('env_recipe_guide', {}));
+        expect(res.body.result.structuredContent).toEqual({ guide: 'the rules' });
+        expect(recipeGuide).toHaveBeenCalledTimes(1);
     });
 
     it('refuses every env_* call as not available to an org Kody Runtime is not released to, before the service', async () => {

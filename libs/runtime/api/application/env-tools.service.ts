@@ -63,6 +63,7 @@ import {
 } from '../domain/ports';
 import { membersOr, RuntimeEnvironmentMembers } from './environment-members.service';
 import { RuntimeSetupRequester } from './runtime-setup-requester.service';
+import { recipeAuthoringGuide } from './recipe-author/recipe-authoring-guide';
 import { sealForRuntime } from './secret-sealer';
 import { ApplyBlockerFixUseCase, KODY_FIX_ORIGIN, KODY_FIX_PREFIX } from './use-cases/apply-blocker-fix.use-case';
 import { blockerGroups, EnvironmentViewBuilder, memoryFor, type RuntimeBlockerGroupView } from './use-cases/environments.use-cases';
@@ -97,6 +98,11 @@ export interface EnvRecipeCheckView {
     errors: string[];
     environment: { environmentId: string; repositoryName: string };
     summary?: { public?: string; health?: string; expose: RecipeExpose[] };
+}
+
+/** env_recipe_guide: the rules a recipe is written by, as text. */
+export interface EnvRecipeGuideView {
+    guide: string;
 }
 
 /** env_recipe_submit: the recipe is kept for the environment and a setup boots it. */
@@ -530,6 +536,15 @@ export class RuntimeEnvToolsService {
         const r = parsed.recipe;
         const summary = { ...(r.public ? { public: r.public } : {}), ...(r.health ? { health: r.health } : {}), expose: r.expose };
         return { errors, recipe: input.recipe, files, summary };
+    }
+
+    /**
+     * env_recipe_guide: the authoring rules Kody's author gets in its prompt (one source, recipe-authoring-rules.ts) and the
+     * facts of the sandbox a repository does not show. Static text: no repository is read and no environment is resolved.
+     */
+    async recipeGuide(p: EnvKeyPrincipal): Promise<EnvRecipeGuideView> {
+        this.require(p, TEAM_CLI_KEY_CAPABILITIES.ENV_EXEC, TEAM_CLI_KEY_CAPABILITIES.ENV_FIX);
+        return { guide: recipeAuthoringGuide() };
     }
 
     /** env_recipe_check: would Kodus boot this recipe; nothing is kept and nothing boots. */

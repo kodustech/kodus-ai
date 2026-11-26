@@ -81,7 +81,14 @@ Four sources, first match wins:
    (`runtime_environments.submitted_recipe`) and asks for a setup that boots it with its files (`origin: 'submitted'`).
    It needs `env:fix` and is audited (`env_recipe_submit`). Kody never repairs it and the learn loop leaves it: the agent
    reads `env_status` (its `setupKey`) and `env_blockers` and sends another. Once it boots twice, the Runtime page offers
-   the PR that commits it, like Kody's.
+   the PR that commits it, like Kody's. Before writing it, the agent reads the authoring guide: `kodus env recipe guide`,
+   the `/mcp/env` tool `env_recipe_guide` (`env:exec` or `env:fix`, static text, no repository read). It is Kody's own
+   author's rules (`recipe-author/recipe-authoring-rules.ts`, one source: the author's prompt is built from the same
+   blocks, byte for byte) plus the facts of the sandbox a repository does not show (`recipe-authoring-guide.ts`): compose
+   paths are relative to the repository root, a build reaches registries only (download at start instead), the mirror's
+   build args and that a stage must declare them (Kodus adds those `ARG`s, and the Firebase emulator fetch, only to
+   Dockerfiles Kody writes, not to files a developer sends), and the Firebase emulators mirror
+   (`FIREBASE_EMULATORS_MIRROR`, `buildmirror.go`).
 3. **Inferred** by Kodus from the files, with no model (`runtime-setup-requester.service.ts:173-176`).
 4. **Written by Kody**, only when nothing is committed and inference failed
    (`environment-setup.service.ts:443`), and only for the default-branch head (`:935`;

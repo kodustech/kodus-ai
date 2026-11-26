@@ -467,6 +467,25 @@ describe('RuntimeEnvToolsService (/mcp/env)', () => {
         expect(h.audit.rows.map((r) => r.kind)).toEqual(['env_fix', 'env_fix']);
     });
 
+    it('env_recipe_guide tells the developer agent what Kody is told and what only the sandbox shows, and needs env:exec or env:fix', async () => {
+        const h = harness();
+        const { guide } = await h.service.recipeGuide(KEY);
+        // The rules Kody's author gets, word for word (one source).
+        expect(guide).toContain('The build reaches package registries and the read-only hosts');
+        expect(guide).toContain('COPY --parents');
+        // What a repository does not show.
+        expect(guide).toContain('relative to the repository root');
+        expect(guide).toContain('ARG npm_config_registry'.replace('ARG ', ''));
+        expect(guide).toContain('FIREBASE_EMULATORS_MIRROR');
+        expect(guide).toContain('fetch it when the service starts instead');
+        // Kody's own prompt mechanics stay out.
+        expect(guide).not.toContain('submit_recipe');
+        expect(guide).not.toContain('list_files');
+        expect(guide).not.toMatch(/in notes|in the Facts/);
+        await expect(h.service.recipeGuide({ ...KEY, capabilities: ['runs:read'] })).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(h.service.recipeGuide({ ...KEY, capabilities: ['env:exec'] })).resolves.toHaveProperty('guide');
+    });
+
     it('env_blockers names the failed build step and carries its output, where the Runtime page keeps one line', async () => {
         const lines = ['step [build 3/5] RUN npm run build failed:', ...Array.from({ length: 30 }, (_, i) => `  src/a.ts(${i},1): error TS2322: line ${i}`), 'docker build: exit status 1: ERROR: failed to solve'];
         const failed: EnvironmentSetupRecord = {

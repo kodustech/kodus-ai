@@ -87,6 +87,25 @@ describe('kodus env', () => {
         });
     });
 
+    it('reads the authoring guide from env_recipe_guide with no environment named', async () => {
+        const requester = vi.fn(async () => rpc({ guide: 'the rules' }));
+        const service = new EnvService(requester as any);
+        await expect(service.recipeGuide()).resolves.toEqual({
+            guide: 'the rules',
+        });
+        const [, init] = (requester.mock.calls[0] as any[]) ?? [];
+        expect(JSON.parse(init.body).params).toEqual({
+            name: 'env_recipe_guide',
+            arguments: {},
+        });
+        const recipe = envCommand.commands.find((c) => c.name() === 'recipe')!;
+        expect(recipe.commands.map((c) => c.name()).sort()).toEqual([
+            'check',
+            'guide',
+            'submit',
+        ]);
+    });
+
     it('turns a tool error into a message the dev can act on', async () => {
         const forbidden = new EnvService(
             vi.fn(async () =>
