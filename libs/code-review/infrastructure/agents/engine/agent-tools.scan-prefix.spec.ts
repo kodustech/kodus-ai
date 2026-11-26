@@ -1,13 +1,7 @@
 import { MAX_TOOL_SCAN_CHARS } from '@libs/common/utils/tool-output/scan-prefix';
 import { withoutSecretFileLines } from '@libs/code-review/infrastructure/agents/engine/secret-files';
 
-import {
-    buildAgentTools,
-    MAX_GREP_GROUPS,
-    PARTIAL_GREP_NO_VISIBLE_MATCH,
-    PARTIAL_GREP_STOPPED_EMPTY,
-    PARTIAL_NAMES_NOTE,
-} from './agent-tools.factory';
+import { buildAgentTools, MAX_GREP_GROUPS } from './agent-tools.factory';
 
 // The real filter, recorded: the test checks how much of an answer it reads.
 jest.mock('@libs/code-review/infrastructure/agents/engine/secret-files', () => {
@@ -114,7 +108,9 @@ describe('agent tools — grep reads a bounded head of a huge rg answer', () => 
 
         const out = await buildAgentTools(rc).grep.execute({ pattern: 'TOKEN' });
 
-        expect(out).toBe(PARTIAL_GREP_NO_VISIBLE_MATCH);
+        expect(out).toBe(
+            'Matches were found, but the part of the output that was read only had matches in secret files, which are not shown. Narrow the search with a path, a glob or a more specific regex.',
+        );
     });
 
     it('does not blame secret files when the cut came from stderr alone', async () => {
@@ -130,7 +126,9 @@ describe('agent tools — grep reads a bounded head of a huge rg answer', () => 
 
         const out = await buildAgentTools(rc).grep.execute({ pattern: 'x' });
 
-        expect(out).toBe(PARTIAL_GREP_STOPPED_EMPTY);
+        expect(out).toBe(
+            'The search was stopped at the output limit before it printed any match, so whether anything matches is unknown. Narrow the search with a path, a glob or a more specific regex.',
+        );
         expect(rc.grep).not.toHaveBeenCalled();
     });
 
@@ -151,6 +149,8 @@ describe('agent tools — grep reads a bounded head of a huge rg answer', () => 
             namesOnly: true,
         });
 
-        expect(out).toBe(`${names}\n${PARTIAL_NAMES_NOTE}`);
+        expect(out).toBe(
+            `${names}\n... (the search output was cut: more files may match — narrow with a path or glob)`,
+        );
     });
 });
