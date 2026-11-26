@@ -6,34 +6,34 @@ index 99dd520e4..43f05c7c8 100644
              // Real-world scenario: two GitLab self-hosted instances both have a
              // project with id=93. Without disambiguation the first one (sorted
              // by updatedAt DESC) wins and the webhook is routed to the wrong org.
--            const omarHerreraConfig = buildConfig(
--                'org-omar',
--                'team-omar',
--                'vcs.789.com.mx',
+-            const legacyConfigD = buildConfig(
+-                'org-d',
+-                'team-d',
+-                'gitlab-d.example',
 -            );
--            const ikatecConfig = buildConfig(
--                'org-ikatec',
--                'team-ikatec',
--                'gitlab.ikatec.cloud',
+-            const legacyConfigC = buildConfig(
+-                'org-c',
+-                'team-c',
+-                'gitlab-c.example',
 -            );
 +            const configD = buildConfig('org-d', 'team-d', 'gitlab-d.example');
 +            const configC = buildConfig('org-c', 'team-c', 'gitlab-c.example');
  
              integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
--                [omarHerreraConfig, ikatecConfig],
+-                [legacyConfigD, legacyConfigC],
 +                [configD, configC],
              );
  
              const result = await service.getContext(PlatformType.GITLAB, '93', {
--                host: 'gitlab.ikatec.cloud',
+-                host: 'gitlab-c.example',
 +                host: 'gitlab-c.example',
              });
  
              expect(result?.organizationAndTeamData.organizationId).toBe(
--                'org-ikatec',
+-                'org-c',
 +                'org-c',
              );
--            expect(result?.organizationAndTeamData.teamId).toBe('team-ikatec');
+-            expect(result?.organizationAndTeamData.teamId).toBe('team-c');
 +            expect(result?.organizationAndTeamData.teamId).toBe('team-c');
          });
  
@@ -41,9 +41,9 @@ index 99dd520e4..43f05c7c8 100644
 -            const configA = buildConfig(
 -                'org-a',
 -                'team-a',
--                'GitLab.IKATEC.cloud',
+-                'GitLab-C.Example',
 -            );
--            const configB = buildConfig('org-b', 'team-b', 'vcs.789.com.mx');
+-            const configB = buildConfig('org-b', 'team-b', 'gitlab-d.example');
 +            const configA = buildConfig('org-a', 'team-a', 'GitLab-C.Example');
 +            const configB = buildConfig('org-b', 'team-b', 'gitlab-d.example');
  
@@ -52,7 +52,7 @@ index 99dd520e4..43f05c7c8 100644
              );
  
              const result = await service.getContext(PlatformType.GITLAB, '93', {
--                host: 'https://gitlab.ikatec.cloud/agnus/agnuscloud',
+-                host: 'https://gitlab-c.example/initech/portal',
 +                host: 'https://gitlab-c.example/initech/portal',
              });
  
@@ -61,25 +61,25 @@ index 99dd520e4..43f05c7c8 100644
  
          it('takes the config on the sending host beside a legacy config that stores no host', async () => {
              const configWithoutHost = buildConfig('org-legacy', 'team-legacy');
--            const configIkatec = buildConfig(
--                'org-ikatec',
--                'team-ikatec',
--                'gitlab.ikatec.cloud',
+-            const legacyConfigC = buildConfig(
+-                'org-c',
+-                'team-c',
+-                'gitlab-c.example',
 -            );
 +            const configC = buildConfig('org-c', 'team-c', 'gitlab-c.example');
  
              integrationConfigServiceMock.findIntegrationConfigWithTeams.mockResolvedValue(
--                [configWithoutHost, configIkatec],
+-                [configWithoutHost, legacyConfigC],
 +                [configWithoutHost, configC],
              );
  
              const result = await service.getContext(PlatformType.GITLAB, '93', {
--                host: 'gitlab.ikatec.cloud',
+-                host: 'gitlab-c.example',
 +                host: 'gitlab-c.example',
              });
  
              expect(result?.organizationAndTeamData.organizationId).toBe(
--                'org-ikatec',
+-                'org-c',
 +                'org-c',
              );
          });
