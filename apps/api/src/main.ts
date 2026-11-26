@@ -36,6 +36,7 @@ import { environment } from '@libs/ee/configs/environment';
 import { initPyroscope } from '@libs/core/infrastructure/config/profiling/pyroscope';
 import { reportExceptionToSentry } from '@libs/core/infrastructure/config/log/sentry';
 import { configureLongFetchTimeouts } from '@libs/core/infrastructure/http/fetch-timeouts';
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
 
 // Bump undici HTTP timeouts before any fetch() happens so long-running
 // LLM calls don't get aborted by the HTTP layer's default 5-minute
@@ -91,14 +92,9 @@ async function bootstrap() {
     process.env.COMPONENT_TYPE = 'api';
 
     console.log('[BOOTSTRAP] calling NestFactory.create...');
-    // NOTE: `snapshot: true` was removed here. That flag requires
-    // `@nestjs/devtools-integration` (not installed in this repo). It
-    // used to be a silent no-op, but after the @nestjs/core 11.1.19 →
-    // 11.1.21 bump it began to hang NestFactory.create() forever — no
-    // throw, no log — which on ECS surfaced as a 46s-silent container
-    // killed by the health check. Do not re-add without also adding
-    // the devtools package.
-    const app = await NestFactory.create<NestExpressApplication>(ApiModule);
+    const app = await NestFactory.create<NestExpressApplication>(ApiModule, {
+        ...NEST_APP_OPTIONS,
+    });
 
     console.log('[BOOTSTRAP] NestFactory.create returned, wiring app...');
 

@@ -4,6 +4,7 @@ import 'source-map-support/register';
 import { initPyroscope } from '@libs/core/infrastructure/config/profiling/pyroscope';
 import { reportExceptionToSentry } from '@libs/core/infrastructure/config/log/sentry';
 import { configureLongFetchTimeouts } from '@libs/core/infrastructure/http/fetch-timeouts';
+import { NEST_APP_OPTIONS } from '@libs/core/infrastructure/nest/nest-app-options';
 
 // Bump undici HTTP timeouts before any fetch() happens — Gemini calls with
 // high reasoning can take 4-7 minutes before the first byte. Must run
@@ -58,7 +59,7 @@ async function bootstrap() {
     try {
         appContext = await NestFactory.createApplicationContext(
             WorkerModule.forRoot(),
-            { snapshot: true },
+            { ...NEST_APP_OPTIONS },
         );
 
         logger = appContext.get(LoggerWrapperService);

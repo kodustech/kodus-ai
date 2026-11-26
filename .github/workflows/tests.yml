@@ -190,7 +190,12 @@ jobs:
                   enc() { node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$1"; }
                   # --json/--outputFile feed the quality signal. No `--` before them:
                   # pnpm forwards it to jest, which reads what follows as path patterns.
+                  # TEST_PGBOUNCER_PORT: the lock and event-bridge integration
+                  # specs also run through PgBouncer in transaction mode
+                  # (docker-compose.test.yml db_pgbouncer, published on 6432),
+                  # and refuse to run in CI without it.
                   API_NODE_ENV=test \
+                  TEST_PGBOUNCER_PORT=6432 \
                   TEST_MONGODB_URI="mongodb://$(enc "$MG_USER"):$(enc "$MG_PASS")@localhost:27017/kodus_test_integration?authSource=admin" \
                   pnpm run test --shard=${{ matrix.shard }}/4 --json --outputFile=/tmp/jest-results.json
 
