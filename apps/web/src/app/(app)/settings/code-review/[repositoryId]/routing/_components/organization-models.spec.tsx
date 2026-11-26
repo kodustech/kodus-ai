@@ -167,6 +167,7 @@ function mount(
         ultraAllowed?: boolean;
         ultraInUse?: boolean;
         deepScan?: boolean;
+        ultraReview?: boolean;
     } = {},
 ) {
     const client = new QueryClient({
@@ -177,7 +178,10 @@ function mount(
         ...render(
             <QueryClientProvider client={client}>
                 <FeatureFlagsProvider
-                    featureFlags={{ deepScan: props.deepScan }}>
+                    featureFlags={{
+                        deepScan: props.deepScan,
+                        ultraReview: props.ultraReview ?? true,
+                    }}>
                     <TooltipProvider>
                         <Harness {...props} />
                     </TooltipProvider>
