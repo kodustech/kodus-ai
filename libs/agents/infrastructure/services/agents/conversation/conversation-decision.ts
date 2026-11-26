@@ -21,6 +21,13 @@ import type { WriteAuthorization } from './write-authorization';
 
 export const CONVERSATION_DECISION_TOOL = 'kodusDecideAction';
 
+/** Decisions a run records before the tool tells the agent to answer instead. */
+export const MAX_DECISIONS = 2;
+
+/** The decision tool's answer once MAX_DECISIONS were recorded. */
+export const DECISION_ALREADY_RECORDED =
+    'Your decision is already recorded. Do not call kodusDecideAction again: write your reply to the developer now.';
+
 export type ConversationIntent = 'answer' | 'offer' | 'act';
 
 export interface ConversationDecision {
@@ -37,6 +44,7 @@ const INTENTS: readonly ConversationIntent[] = ['answer', 'offer', 'act'];
 export function buildDecisionTool(
     onDecision?: (decision: ConversationDecision) => void,
 ): Record<string, Tool> {
+    let recorded = 0;
     return {
         [CONVERSATION_DECISION_TOOL]: tool({
             description:
@@ -75,8 +83,15 @@ export function buildDecisionTool(
                 const decision = parse(input);
                 if (decision) {
                     onDecision?.(decision);
+                    recorded++;
                 }
-                return 'noted';
+                // Some models record a decision on every step and never
+                // answer. The answer says so: removing the tool instead would
+                // change the request's tool list, and Anthropic then rejects
+                // every earlier thinking block (#2731).
+                return recorded > MAX_DECISIONS
+                    ? DECISION_ALREADY_RECORDED
+                    : 'noted';
             },
         }),
     };
