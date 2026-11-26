@@ -693,6 +693,28 @@ func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sa
 			extra = append(extra, buildprogress.Phase{Name: "failed try on state", Ms: first.took.Milliseconds()})
 		}
 	}
+	// A RUN that dies with SIGSEGV (exit 139) under gVisor is the sandbox's
+	// flake more often than the code's: once, it runs again as it was. Only
+	// 139: a command that fails with any other status is the code's.
+	segfaultRetried := false
+	if a.err != nil && !a.oom && !a.overDisk && !a.stalled && ctx.Err() == nil {
+		if why, again := d.segfaultRetry(ctx, a); again {
+			d.log().Warn("build.retry", "machine", ref.MachineID, "service", b.Service, "reason", why, "err", firstLine(a.err))
+			release()
+			release = func() {}
+			first := a
+			if a, err = d.buildOnce(ctx, ref, b, tag, network, resolv, subnet, secrets, out, !stateFallback, reg); err != nil {
+				return "", withPhases(first.ran, extra...), err
+			}
+			release = a.release
+			extra = append(extra, first.prep...)
+			segfaultRetried = true
+			built += a.took
+			extra = append(extra, buildprogress.Phase{Name: "failed try (segfault)", Ms: first.took.Milliseconds()})
+		} else if why != "" {
+			d.log().Info("build.retry.skipped", "machine", ref.MachineID, "service", b.Service, "reason", why)
+		}
+	}
 	err = a.err
 	if a.overDisk && reg != nil {
 		// What it pushed is the bound's: never sealed into the seed.
@@ -753,7 +775,7 @@ func (d *Driver) runBuildPhases(ctx context.Context, ref driver.MachineRef, b sa
 	// what the registry path saved.
 	d.log().Info("build.timing", "machine", ref.MachineID, "service", b.Service, "buildMs", built.Milliseconds(), "loadMs", loaded.Milliseconds(),
 		"outcome", outcome, "loadAttempted", loadAttempted, "imageTarBytes", imageBytes, "stateFallback", stateFallback,
-		"transfer", transfer, "registryAddedBytes", pushedBytes, "phases", ran.Phases)
+		"transfer", transfer, "registryAddedBytes", pushedBytes, "segfaultRetried", segfaultRetried, "phases", ran.Phases)
 	if a.oom {
 		return "", ran, fmt.Errorf("%w: build %s passed %s (%w)", driver.ErrOutOfMemory, b.Service, a.mem, err)
 	}
@@ -1159,6 +1181,26 @@ func (d *Driver) overlayRetry(ctx context.Context, a *buildAttempt) (string, boo
 		}
 	}
 	return "overlay_may_cause", true
+}
+
+// exitSegfault is the status of a process ended by SIGSEGV (128 + 11).
+const exitSegfault = 139
+
+// segfaultRetry says whether a build whose RUN step died with exit 139 runs
+// again as it was, and why (or why not, when the failure is a segfault the
+// claim has no time to try again). A step that exited with any other status
+// is the code's failure and is not run twice.
+func (d *Driver) segfaultRetry(ctx context.Context, a *buildAttempt) (string, bool) {
+	f, failed := a.steps.Failure()
+	if !failed || !f.ProcessExit || f.ExitCode != exitSegfault {
+		return "", false
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		if deadline.Sub(d.clock.Now()) < d.clock.Now().Sub(a.started) {
+			return "segfault_no_time", false
+		}
+	}
+	return "segfault", true
 }
 
 // buildkitSaysSolveFailed is a builder whose stderr carries BuildKit's own

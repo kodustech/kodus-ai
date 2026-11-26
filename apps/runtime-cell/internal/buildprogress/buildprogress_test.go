@@ -263,3 +263,28 @@ func TestATrackerSaysWhenAProjectStepIsRunning(t *testing.T) {
 		t.Fatal("a failed step still reads as running")
 	}
 }
+
+// A failed RUN's exit status is what BuildKit's error line says; a step that
+// did not exit has none.
+func TestFailureCarriesTheExitCodeOfTheStepsCommand(t *testing.T) {
+	for _, tc := range []struct {
+		name, line string
+		want       int
+		exited     bool
+	}{
+		{"segfault", `#4 ERROR: process "/bin/sh -c apt-get update" did not complete successfully: exit code: 139`, 139, true},
+		{"plain", `#4 ERROR: process "/bin/sh -c make" did not complete successfully: exit code: 2`, 2, true},
+		{"not a process", `#4 ERROR: failed to compute cache key: not found`, 0, false},
+		{"words in the command", `#4 ERROR: process "/bin/sh -c echo exit code: 139; false" did not complete successfully: exit code: 1`, 1, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := New()
+			tr.Line("#4 [a 1/1] RUN something")
+			tr.Line(tc.line)
+			f, ok := tr.Failure()
+			if !ok || f.ExitCode != tc.want || f.ProcessExit != tc.exited {
+				t.Fatalf("%+v", f)
+			}
+		})
+	}
+}

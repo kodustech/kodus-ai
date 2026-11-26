@@ -94,6 +94,7 @@ type stepOutput struct {
 	errLine    string
 	cacheMount bool
 	exited     bool
+	exitCode   int
 }
 
 func New() *Tracker { return NewAt(time.Now) }
@@ -115,6 +116,9 @@ type Failure struct {
 	// ProcessExit: the step's command ran and exited unsuccessfully (a RUN
 	// that failed), not BuildKit failing around it.
 	ProcessExit bool
+	// ExitCode is the command's exit status BuildKit reported ("exit code:
+	// 139"), 0 when the step did not exit or BuildKit named none.
+	ExitCode int
 	// CacheMount: the step mounts a build cache (RUN --mount=type=cache),
 	// which a build's persisted state provides.
 	CacheMount bool
@@ -128,6 +132,8 @@ var (
 	stepLine = regexp.MustCompile(`^#(\d{1,6}) (.+)$`)
 	doneIn   = regexp.MustCompile(`^DONE (\d+(?:\.\d+)?)s$`)
 	printed  = regexp.MustCompile(`^\d+\.\d+ `)
+	// exitCodeLine is how BuildKit ends a failed RUN's error line.
+	exitCodeLine = regexp.MustCompile(`exit code: (\d{1,3})\s*$`)
 )
 
 // Line reads one line of the build's progress output.
@@ -174,6 +180,9 @@ func (t *Tracker) Line(line string) {
 		if o.errLine == "" {
 			o.errLine = cleanLine(rest)
 			o.exited = strings.Contains(rest, "did not complete successfully")
+			if m := exitCodeLine.FindStringSubmatch(rest); o.exited && m != nil {
+				o.exitCode, _ = strconv.Atoi(m[1])
+			}
 		}
 	case printed.MatchString(rest):
 		t.printed(id, printed.ReplaceAllString(rest, ""))
@@ -262,7 +271,7 @@ func (t *Tracker) Failure() (Failure, bool) {
 		f.Step = "#" + strconv.Itoa(t.failedFirst)
 	}
 	if o := t.out[t.failedFirst]; o != nil {
-		f.ProcessExit, f.CacheMount = o.exited, o.cacheMount
+		f.ProcessExit, f.CacheMount, f.ExitCode = o.exited, o.cacheMount, o.exitCode
 		lines := o.errors
 		if len(lines) == 0 {
 			lines = o.tail
