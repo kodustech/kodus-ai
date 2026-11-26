@@ -21,6 +21,8 @@ const build = (
     opts: {
         existingConnection?: unknown;
         workspaceConnections?: Array<{ uuid: string; createdAt?: Date }>;
+        /** Created by another request between this one's reads. */
+        addedMeanwhile?: Array<{ uuid: string }>;
         bindPrimary?: boolean;
         centralized?: Record<string, unknown>;
         selectionMode?: 'manual' | 'all';
@@ -36,11 +38,15 @@ const build = (
             ),
         createOrUpdateConfig: jest.fn().mockResolvedValue(true),
     };
+    let created = false;
     const codeManagementService = {
-        createAuthIntegration: jest.fn().mockResolvedValue({
-            success: true,
-            status: 'SUCCESS',
-            integrationId: 'new-conn',
+        createAuthIntegration: jest.fn(async () => {
+            created = true;
+            return {
+                success: true,
+                status: 'SUCCESS',
+                integrationId: 'new-conn',
+            };
         }),
     };
     const integrationService = {
@@ -49,13 +55,16 @@ const build = (
         update: jest.fn().mockResolvedValue(undefined),
     };
     const connectionBilling = {
-        workspaceConnections: jest.fn(async () =>
-            [...(opts.workspaceConnections ?? [])].sort(
+        workspaceConnections: jest.fn(async () => [
+            ...[...(opts.workspaceConnections ?? [])].sort(
                 (a, b) =>
                     (a.createdAt?.getTime() ?? Infinity) -
                     (b.createdAt?.getTime() ?? Infinity),
             ),
-        ),
+            ...(created
+                ? [...(opts.addedMeanwhile ?? []), { uuid: 'new-conn' }]
+                : []),
+        ]),
         attributeLegacySeatsBeforeAdding: jest
             .fn()
             .mockResolvedValue(undefined),
@@ -397,6 +406,32 @@ describe('CreateIntegrationUseCase — connections', () => {
             expect(
                 ignoreBots.claimConnectionLists.mock.invocationCallOrder[0],
             ).toBeLessThan(ignoreBots.execute.mock.invocationCallOrder[0]);
+        });
+
+        it('grants the workspace members only the first of two first connections added at once', async () => {
+            const { useCase, connectionAccess, ignoreBots } = build({
+                addedMeanwhile: [{ uuid: 'gh-a' }],
+            });
+
+            await useCase.execute({
+                integrationType: 'gitlab',
+                newConnection: true,
+                organizationAndTeamData: { teamId: TEAM },
+            });
+
+            expect(
+                connectionAccess.grantWorkspaceMembers,
+            ).not.toHaveBeenCalled();
+            expect(ignoreBots.claimConnectionLists).toHaveBeenCalledWith({
+                organizationId: ORG,
+                integrationId: 'new-conn',
+            });
+            expect(ignoreBots.execute).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    integrationId: 'new-conn',
+                    separateConnection: true,
+                }),
+            );
         });
 
         it("leaves a reconnected connection's readers as they are", async () => {

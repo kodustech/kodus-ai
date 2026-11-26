@@ -23,6 +23,8 @@ import { WebhookContextService } from '@libs/platform/application/services/webho
 // Definindo localmente para evitar problemas de importação circular ou paths não resolvidos
 const AuthMode = { TOKEN: 'token' };
 const PlatformType = { GITHUB: 'GITHUB' };
+// A review job always carries the workspace its webhook was routed to.
+const WORKSPACE = { organizationId: 'org-123', teamId: 'team-456' };
 
 // Mock Crypto
 jest.mock('@/common/utils/crypto', () => ({
@@ -241,6 +243,7 @@ describe('Code Review Workflow Logic Integrity (No AST)', () => {
             codeManagementPayload: payload,
             event: 'pull_request.opened',
             platformType: PlatformType.GITHUB,
+            organizationAndTeamData: WORKSPACE,
             throwOnError: true,
         } as any);
 
@@ -289,7 +292,7 @@ describe('Code Review Workflow Logic Integrity (No AST)', () => {
             },
             event: 'pull_request.opened',
             platformType: PlatformType.GITHUB,
-            organizationAndTeamData: {} as any,
+            organizationAndTeamData: WORKSPACE,
             teamAutomationId: 'test-automation-id',
         } as any);
 

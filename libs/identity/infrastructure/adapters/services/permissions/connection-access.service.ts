@@ -88,6 +88,8 @@ export class ConnectionAccessService {
         string,
         { scope: ConnectionReadScope; expiresAt: number }
     >();
+    /** Bumped when a user's grants change, so a read already under way is not remembered. */
+    private readonly generations = new Map<string, number>();
 
     constructor(private readonly access: UserConnectionAccessRepository) {}
 
@@ -179,6 +181,9 @@ export class ConnectionAccessService {
         organizationId: string,
         userIds: string[],
     ): Promise<Map<string, ConnectionReadScope>> {
+        const startedAt = new Map(
+            userIds.map((userId) => [userId, this.generationOf(userId)]),
+        );
         const [connections, grants] = await Promise.all([
             this.access.activeConnectionIds(organizationId),
             this.access.grantsOf(userIds),
@@ -203,6 +208,7 @@ export class ConnectionAccessService {
                     ? { kind: 'all' }
                     : this.partialScope(granted, lists);
             scopes.set(userId, scope);
+            if (startedAt.get(userId) !== this.generationOf(userId)) continue;
             this.scopes.set(this.key(organizationId, userId), {
                 scope,
                 expiresAt: Date.now() + SCOPE_TTL_MS,
@@ -247,6 +253,11 @@ export class ConnectionAccessService {
             teamId,
             integrationId,
         );
+    }
+
+    /** The workspace's active Git connections. */
+    workspaceConnectionIds(teamId: string): Promise<string[]> {
+        return this.access.workspaceConnectionIds(teamId);
     }
 
     connectionInOrganization(
@@ -331,8 +342,15 @@ export class ConnectionAccessService {
         return `${organizationId}:${userId}`;
     }
 
+    private generationOf(userId: string): number {
+        return this.generations.get(userId) ?? 0;
+    }
+
     private forget(userIds: string[]): void {
         const users = new Set(userIds);
+        for (const userId of users) {
+            this.generations.set(userId, this.generationOf(userId) + 1);
+        }
         for (const key of this.scopes.keys()) {
             if (users.has(key.slice(key.lastIndexOf(':') + 1))) {
                 this.scopes.delete(key);

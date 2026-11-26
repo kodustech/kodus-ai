@@ -100,17 +100,15 @@ export class PruneLicenseSeatsCronProvider {
     }
 
     /**
-     * Completes a billing hand-over a reset or an outage left undone, for
-     * workspaces with several Git connections (the only ones that have one).
+     * Completes a billing hand-over a reset or an outage left undone,
+     * including freeing a primary that left a workspace now down to one
+     * connection.
      */
     private async settleBillingPrimary(workspace: {
         organizationId: string;
         teamId: string;
     }): Promise<void> {
         try {
-            const connections =
-                await this.connectionBilling.workspaceConnections(workspace);
-            if (connections.length < 2) return;
             await this.connectionBilling.ensurePrimary(workspace);
         } catch (error) {
             this.logger.error({

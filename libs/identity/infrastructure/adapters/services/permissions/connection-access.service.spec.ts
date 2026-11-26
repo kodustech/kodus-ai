@@ -108,6 +108,52 @@ describe('ConnectionAccessService.readScopeFor', () => {
 
         expect(query.mock.calls.length).toBe(calls);
     });
+
+    it('does not remember a read that started before a revoke finished', async () => {
+        let grants: string[] = ['gh-a', 'gl-b'];
+        let releaseRead: () => void = () => undefined;
+        const readHeld = new Promise<void>((resolve) => {
+            releaseRead = resolve;
+        });
+        let holdNextRead = true;
+        const query = jest.fn(async (sql: string, params: unknown[]) => {
+            if (sql.includes('DELETE FROM "user_connection_access"')) {
+                grants = grants.filter((id) => id !== params[0]);
+                return [];
+            }
+            if (sql.includes('FROM "user_connection_access"')) {
+                const granted = [...grants];
+                if (holdNextRead) {
+                    holdNextRead = false;
+                    await readHeld;
+                }
+                return granted.map((integration_id) => ({
+                    user_id: 'user-1',
+                    integration_id,
+                }));
+            }
+            if (sql.includes('FROM "integrations"')) {
+                return [{ uuid: 'gh-a' }, { uuid: 'gl-b' }];
+            }
+            return [];
+        });
+        const service = new ConnectionAccessService(
+            new UserConnectionAccessRepository({ manager: { query } } as any),
+        );
+
+        const staleRead = service.readScopeFor(user);
+        await new Promise((resolve) => setImmediate(resolve));
+        await service.revoke('gl-b', ['user-1']);
+        releaseRead();
+        await expect(staleRead).resolves.toEqual({ kind: 'all' });
+
+        await expect(service.readScopeFor(user)).resolves.toEqual({
+            kind: 'connections',
+            connectionIds: ['gh-a'],
+            repositoryIds: [],
+            repositoryNames: [],
+        });
+    });
 });
 
 describe('ConnectionAccessService.restrictionFor', () => {

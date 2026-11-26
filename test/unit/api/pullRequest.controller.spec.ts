@@ -117,7 +117,7 @@ const mockTeamCliKeyService = { validateKey: jest.fn() };
 const mockCliDeviceService = {
     validateOrRegisterDevice: jest.fn().mockResolvedValue({}),
 };
-const mockPullRequestsService = { findOne: jest.fn() };
+const mockPullRequestsService = { findOne: jest.fn(), find: jest.fn() };
 const mockAutomationExecutionService = {
     create: jest.fn().mockResolvedValue({}),
 };
@@ -219,9 +219,10 @@ function buildProviders(eventEmitter: any) {
 
 describe('PullRequestController', () => {
     let controller: PullRequestController;
+    let module: TestingModule;
 
     beforeEach(async () => {
-        const module: TestingModule = await Test.createTestingModule({
+        module = await Test.createTestingModule({
             providers: buildProviders({ emit: jest.fn() }),
         })
             .overrideGuard(PolicyGuard)
@@ -240,6 +241,7 @@ describe('PullRequestController', () => {
             status: STATUS.ACTIVE,
         });
         mockPullRequestsService.findOne.mockResolvedValue(makePrEntity());
+        mockPullRequestsService.find.mockResolvedValue([]);
         mockCliDeviceService.validateOrRegisterDevice.mockResolvedValue({});
         mockAutomationExecutionService.create.mockResolvedValue({});
         mockGetPullRequestSuggestionsUseCase.execute.mockResolvedValue({
@@ -577,6 +579,63 @@ describe('PullRequestController', () => {
                     undefined,
                     'repo-123',
                     '999',
+                    'json',
+                    undefined,
+                    undefined,
+                    TEAM_KEY,
+                ),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it("picks the team key's own pull request when the same repository id and number exist on another server, reading the workspace's repositories once", async () => {
+            const listed = module.get(INTEGRATION_CONFIG_SERVICE_TOKEN);
+            listed.findIntegrationConfigFormatted.mockResolvedValue([
+                { id: 'repo-123', name: 'repo', organizationName: 'org' },
+            ]);
+            mockPullRequestsService.find.mockResolvedValue([
+                makePrEntity({
+                    repository: { id: 'repo-123', fullName: 'elsewhere/repo' },
+                }),
+                makePrEntity({
+                    repository: { id: 'repo-123', fullName: 'org/repo' },
+                }),
+            ]);
+
+            const result = await controller.getSuggestionsByPullRequest(
+                undefined,
+                'repo-123',
+                '42',
+                'json',
+                undefined,
+                undefined,
+                TEAM_KEY,
+            );
+
+            expect(result.prNumber).toBe(42);
+            expect(
+                mockGetPullRequestSuggestionsUseCase.execute,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    pr: expect.objectContaining({
+                        repository: { id: 'repo-123', fullName: 'org/repo' },
+                    }),
+                }),
+            );
+            expect(listed.findIntegrationConfigFormatted).toHaveBeenCalledTimes(
+                1,
+            );
+        });
+
+        it('refuses a pull request recorded without its repository full name', async () => {
+            mockPullRequestsService.findOne.mockResolvedValue(
+                makePrEntity({ repository: { id: 'repo-123' } }),
+            );
+
+            await expect(
+                controller.getSuggestionsByPullRequest(
+                    PR_URL,
+                    undefined,
+                    undefined,
                     'json',
                     undefined,
                     undefined,

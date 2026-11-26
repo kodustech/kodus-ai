@@ -53,6 +53,51 @@ describe('narrowParameterToConnections', () => {
         expect(Object.keys(narrowed.configValue.connections)).toEqual(['gh-a']);
     });
 
+    it("hides the workspace's own centralized config when its connection is not granted", () => {
+        const stored = {
+            enabled: true,
+            integrationId: 'gl-b',
+            repository: { id: '2', name: 'acme/config' },
+            connections: { 'gh-a': { enabled: true } },
+        };
+
+        expect(
+            narrowParameterToConnections(
+                ParametersKey.CENTRALIZED_CONFIG,
+                { configValue: stored },
+                restriction,
+            ).configValue,
+        ).toEqual({ connections: { 'gh-a': { enabled: true } } });
+        expect(
+            narrowParameterToConnections(
+                ParametersKey.CENTRALIZED_CONFIG,
+                { configValue: { ...stored, integrationId: 'gh-a' } },
+                restriction,
+            ).configValue,
+        ).toEqual({ ...stored, integrationId: 'gh-a' });
+    });
+
+    it('shows a config saved before connections only when its repository is readable', () => {
+        const legacy = (id: string) => ({
+            configValue: { enabled: true, repository: { id, name: 'config' } },
+        });
+
+        expect(
+            narrowParameterToConnections(
+                ParametersKey.CENTRALIZED_CONFIG,
+                legacy('1'),
+                restriction,
+            ).configValue,
+        ).toEqual(legacy('1').configValue);
+        expect(
+            narrowParameterToConnections(
+                ParametersKey.CENTRALIZED_CONFIG,
+                legacy('2'),
+                restriction,
+            ).configValue,
+        ).toEqual({});
+    });
+
     it('leaves the parameter whole for a member granted every connection, and other keys as they are', () => {
         const parameter = { configValue: { repositories: [{ id: '2' }] } };
 

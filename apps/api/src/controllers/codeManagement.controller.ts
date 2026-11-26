@@ -493,14 +493,21 @@ export class CodeManagementController {
             repository?: string;
         },
     ) {
-        // A member granted some connections names one of their repositories.
+        // A member granted some connections names one of their
+        // repositories, and every identifier given has to be one of them.
         const restriction = await this.readRestriction();
+        const named = [
+            ...(query.repositoryId ? [{ id: query.repositoryId }] : []),
+            ...[query.repositoryName, query.repository]
+                .filter((name): name is string => !!name)
+                .map((name) => ({ name })),
+        ];
         if (
             restriction &&
-            !restriction.allowsRepository({
-                id: query.repositoryId,
-                name: query.repositoryName ?? query.repository,
-            })
+            (!named.length ||
+                !named.every((repository) =>
+                    restriction.allowsRepository(repository),
+                ))
         ) {
             throw new ForbiddenException(
                 'Name a repository of the Git connections you are granted.',

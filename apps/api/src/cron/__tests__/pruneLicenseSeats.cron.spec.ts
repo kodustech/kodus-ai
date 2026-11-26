@@ -24,10 +24,7 @@ describe('PruneLicenseSeatsCronProvider', () => {
     let teamService: jest.Mocked<ITeamService>;
     let autoRevokeUseCase: jest.Mocked<AutoRevokeRemovedLicenseSeatsUseCase>;
     let lockService: jest.Mocked<DistributedLockService>;
-    let connectionBilling: {
-        workspaceConnections: jest.Mock;
-        ensurePrimary: jest.Mock;
-    };
+    let connectionBilling: { ensurePrimary: jest.Mock };
     let release: jest.Mock;
 
     beforeEach(() => {
@@ -46,7 +43,6 @@ describe('PruneLicenseSeatsCronProvider', () => {
         } as any;
 
         connectionBilling = {
-            workspaceConnections: jest.fn().mockResolvedValue([{ uuid: 'a' }]),
             ensurePrimary: jest.fn().mockResolvedValue({ status: 'unbound' }),
         };
 
@@ -58,25 +54,23 @@ describe('PruneLicenseSeatsCronProvider', () => {
         );
     });
 
-    it('settles the billing primary of every workspace with several Git connections, before its seats', async () => {
+    it('settles the billing primary of every workspace, before its seats', async () => {
         teamService.findTeamsWithIntegrations.mockResolvedValue([
             team('team-1', 'org-1'),
             team('team-2', 'org-2'),
         ] as any);
-        connectionBilling.workspaceConnections.mockImplementation(
-            async ({ teamId }) =>
-                teamId === 'team-2'
-                    ? [{ uuid: 'a' }, { uuid: 'b' }]
-                    : [{ uuid: 'a' }],
-        );
 
         await cron.handleCron();
 
-        expect(connectionBilling.ensurePrimary).toHaveBeenCalledTimes(1);
-        expect(connectionBilling.ensurePrimary).toHaveBeenCalledWith({
-            organizationId: 'org-2',
-            teamId: 'team-2',
-        });
+        // A workspace left with one connection can still hold a primary
+        // that left it; settling frees it.
+        expect(connectionBilling.ensurePrimary.mock.calls).toEqual([
+            [{ organizationId: 'org-1', teamId: 'team-1' }],
+            [{ organizationId: 'org-2', teamId: 'team-2' }],
+        ]);
+        expect(
+            connectionBilling.ensurePrimary.mock.invocationCallOrder[0],
+        ).toBeLessThan(autoRevokeUseCase.execute.mock.invocationCallOrder[0]);
         expect(autoRevokeUseCase.execute).toHaveBeenCalledTimes(2);
     });
 
@@ -84,13 +78,19 @@ describe('PruneLicenseSeatsCronProvider', () => {
         teamService.findTeamsWithIntegrations.mockResolvedValue([
             team('team-1', 'org-1'),
         ] as any);
-        connectionBilling.workspaceConnections.mockRejectedValue(
-            new Error('pg down'),
+        connectionBilling.ensurePrimary.mockRejectedValue(
+            new Error('billing down'),
         );
 
         await cron.handleCron();
 
-        expect(autoRevokeUseCase.execute).toHaveBeenCalledTimes(1);
+        expect(connectionBilling.ensurePrimary).toHaveBeenCalledTimes(1);
+        expect(autoRevokeUseCase.execute).toHaveBeenCalledWith({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+        });
     });
 
     it('skips the sweep entirely when another instance holds the lock', async () => {

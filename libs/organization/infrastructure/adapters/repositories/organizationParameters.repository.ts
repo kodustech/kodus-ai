@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import {
+    EntityManager,
     FindManyOptions,
     FindOneOptions,
     Repository,
@@ -254,55 +255,68 @@ export class OrganizationParametersRepository implements IOrganizationParameters
         const manager = this.organizationParametersRepository.manager;
         const value = JSON.stringify(patch);
 
-        const [, affected] = (
-            connectionId
-                ? await manager.query(
-                      `UPDATE "organization_parameters" op
-                          SET "configValue" = jsonb_set(
-                                  COALESCE(op."configValue", '{}'::jsonb)
-                                      || jsonb_build_object('connections', COALESCE(op."configValue"->'connections', '{}'::jsonb)),
-                                  ARRAY['connections', $3::text],
-                                  COALESCE(op."configValue"->'connections'->$3::text, '{}'::jsonb) || $4::jsonb
-                              ),
-                              "updatedAt" = now()
-                        WHERE op."organization_id" = $1
-                          AND op."configKey" = $2
-                          ${onlyIfAbsent ? `AND NOT (COALESCE(op."configValue"->'connections', '{}'::jsonb) ? $3::text)` : ''}`,
-                      [organizationId, configKey, connectionId, value],
-                  )
-                : await manager.query(
-                      `UPDATE "organization_parameters" op
-                          SET "configValue" = COALESCE(op."configValue", '{}'::jsonb) || $3::jsonb,
-                              "updatedAt" = now()
-                        WHERE op."organization_id" = $1
-                          AND op."configKey" = $2`,
-                      [organizationId, configKey, value],
-                  )
-        ) as [unknown, number];
-        if (affected > 0) return;
+        const merge = async (runner: Pick<EntityManager, 'query'>) => {
+            const [, affected] = (
+                connectionId
+                    ? await runner.query(
+                          `UPDATE "organization_parameters" op
+                              SET "configValue" = jsonb_set(
+                                      COALESCE(op."configValue", '{}'::jsonb)
+                                          || jsonb_build_object('connections', COALESCE(op."configValue"->'connections', '{}'::jsonb)),
+                                      ARRAY['connections', $3::text],
+                                      COALESCE(op."configValue"->'connections'->$3::text, '{}'::jsonb) || $4::jsonb
+                                  ),
+                                  "updatedAt" = now()
+                            WHERE op."organization_id" = $1
+                              AND op."configKey" = $2
+                              ${onlyIfAbsent ? `AND NOT (COALESCE(op."configValue"->'connections', '{}'::jsonb) ? $3::text)` : ''}`,
+                          [organizationId, configKey, connectionId, value],
+                      )
+                    : await runner.query(
+                          `UPDATE "organization_parameters" op
+                              SET "configValue" = COALESCE(op."configValue", '{}'::jsonb) || $3::jsonb,
+                                  "updatedAt" = now()
+                            WHERE op."organization_id" = $1
+                              AND op."configKey" = $2`,
+                          [organizationId, configKey, value],
+                      )
+            ) as [unknown, number];
+            return affected > 0;
+        };
+        if (await merge(manager)) return;
 
-        const existing = (await manager.query(
-            `SELECT 1 FROM "organization_parameters"
-              WHERE "organization_id" = $1 AND "configKey" = $2
-              LIMIT 1`,
-            [organizationId, configKey],
-        )) as unknown[];
-        if (existing.length) return;
+        // No row yet: writers that find none take turns, so the first one
+        // creates it and every later one merges into it.
+        await manager.transaction(async (transaction) => {
+            await transaction.query(
+                `SELECT pg_advisory_xact_lock(hashtext($1))`,
+                [`organization_parameters:${organizationId}:${configKey}`],
+            );
+            if (await merge(transaction)) return;
 
-        await manager.query(
-            `INSERT INTO "organization_parameters" ("uuid", "configKey", "configValue", "organization_id")
-             VALUES ($1, $2, $3::jsonb, $4)`,
-            [
-                uuidv4(),
-                configKey,
-                JSON.stringify(
-                    connectionId
-                        ? { connections: { [connectionId]: patch } }
-                        : patch,
-                ),
-                organizationId,
-            ],
-        );
+            const existing = (await transaction.query(
+                `SELECT 1 FROM "organization_parameters"
+                  WHERE "organization_id" = $1 AND "configKey" = $2
+                  LIMIT 1`,
+                [organizationId, configKey],
+            )) as unknown[];
+            if (existing.length) return;
+
+            await transaction.query(
+                `INSERT INTO "organization_parameters" ("uuid", "configKey", "configValue", "organization_id")
+                 VALUES ($1, $2, $3::jsonb, $4)`,
+                [
+                    uuidv4(),
+                    configKey,
+                    JSON.stringify(
+                        connectionId
+                            ? { connections: { [connectionId]: patch } }
+                            : patch,
+                    ),
+                    organizationId,
+                ],
+            );
+        });
     }
 
     async findByKey(

@@ -161,6 +161,41 @@ describe('connection reads for a member granted some connections', () => {
         });
     });
 
+    it('lists pull requests only when every repository the call names is readable', async () => {
+        const execute = jest.fn().mockResolvedValue([]);
+        const controller = make(CodeManagementController, {
+            getPRsUseCase: { execute },
+            connectionAccess: {
+                restrictionFor: jest.fn().mockResolvedValue({
+                    connectionIds: new Set(['gh-a']),
+                    repositoryIds: new Set(['repo-gh']),
+                    allowsRepository: ({
+                        id,
+                        name,
+                    }: {
+                        id?: unknown;
+                        name?: unknown;
+                    }) => id === 'repo-gh' || name === 'acme/web',
+                }),
+            },
+        });
+
+        await controller.getPRs({ teamId: 't', repositoryId: 'repo-gh' });
+        await controller.getPRs({ teamId: 't', repositoryName: 'acme/web' });
+        for (const query of [
+            { repositoryId: 'repo-gl', repositoryName: 'acme/web' },
+            { repositoryId: 'repo-gh', repository: 'other/api' },
+            { repositoryName: 'acme/web', repository: 'other/api' },
+            {},
+        ]) {
+            await expect(
+                controller.getPRs({ teamId: 't', ...query }),
+            ).rejects.toBeInstanceOf(ForbiddenException);
+        }
+
+        expect(execute).toHaveBeenCalledTimes(2);
+    });
+
     describe('CLI reviews', () => {
         const scoped = {
             getRepositoryScope: jest.fn().mockResolvedValue(['repo-gh']),
@@ -186,12 +221,10 @@ describe('connection reads for a member granted some connections', () => {
         it('answers a CLI review of another repository like an unknown one', async () => {
             const controller = make(CliReviewsController, {
                 getCliReviewByIdUseCase: {
-                    execute: jest
-                        .fn()
-                        .mockResolvedValue({
-                            uuid: 'e-1',
-                            repositoryId: 'repo-gl',
-                        }),
+                    execute: jest.fn().mockResolvedValue({
+                        uuid: 'e-1',
+                        repositoryId: 'repo-gl',
+                    }),
                 },
                 authorizationService: scoped,
             });

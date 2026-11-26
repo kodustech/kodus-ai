@@ -12,11 +12,6 @@ import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 
 import { ConnectionAccessService } from './connection-access.service';
 
-/**
- * For reads that cover the whole organization and cannot be narrowed to the
- * repositories of some Git connections: only owners and members granted
- * every connection get them.
- */
 const BILLING_MANAGERS_READ_EVERY_CONNECTION =
     'billing_managers_read_every_connection';
 
@@ -27,6 +22,11 @@ const BILLING_MANAGERS_READ_EVERY_CONNECTION =
 export const BillingManagersReadEveryConnection = () =>
     SetMetadata(BILLING_MANAGERS_READ_EVERY_CONNECTION, true);
 
+/**
+ * For reads that cover the whole organization and cannot be narrowed to the
+ * repositories of some Git connections: only owners and members granted
+ * every connection get them.
+ */
 @Injectable()
 export class FullConnectionAccessGuard implements CanActivate {
     private readonly logger = createLogger(FullConnectionAccessGuard.name);

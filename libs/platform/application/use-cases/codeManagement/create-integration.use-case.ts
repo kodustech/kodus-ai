@@ -168,14 +168,15 @@ export class CreateIntegrationUseCase implements IUseCase {
             );
         }
 
-        if (result?.success && integrationId && connectionsBefore) {
-            await this.settleNewConnectionReaders(
-                workspace,
-                integrationId,
-                connectionsBefore,
-                separateConnection,
-            );
-        }
+        const separate =
+            result?.success && integrationId && connectionsBefore
+                ? await this.settleNewConnectionReaders(
+                      workspace,
+                      integrationId,
+                      connectionsBefore,
+                      separateConnection,
+                  )
+                : separateConnection;
 
         if (result?.success) {
             this.logger.log({
@@ -211,7 +212,7 @@ export class CreateIntegrationUseCase implements IUseCase {
                 teamId: organizationAndTeamData.teamId,
                 integrationId:
                     integrationId ?? organizationAndTeamData.integrationId,
-                separateConnection,
+                separateConnection: separate,
             })
             .catch((error) => {
                 this.logger.error({
@@ -269,22 +270,35 @@ export class CreateIntegrationUseCase implements IUseCase {
     /**
      * The workspace's first connection is read by every member, as the
      * workspace was before connections existed. One added beside others
-     * starts with owners only, and with author lists of its own.
+     * starts with owners only, and with author lists of its own. Answers
+     * whether the connection is one added beside others.
      */
     private async settleNewConnectionReaders(
         workspace: { organizationId: string; teamId: string },
         integrationId: string,
         connectionsBefore: ReadonlySet<string>,
         separateConnection: boolean,
-    ): Promise<void> {
-        if (connectionsBefore.has(integrationId)) return;
+    ): Promise<boolean> {
+        if (connectionsBefore.has(integrationId)) return separateConnection;
         try {
-            if (separateConnection) {
+            // Two connections added at once to an empty workspace both read
+            // it empty; only the oldest of them is its first.
+            const separate =
+                separateConnection ||
+                !(await this.isOldestConnection(workspace, integrationId));
+            if (separate) {
+                if (!separateConnection) {
+                    this.logger.warn({
+                        message: 'connection_added_beside_a_concurrent_first',
+                        context: CreateIntegrationUseCase.name,
+                        metadata: { ...workspace, integrationId },
+                    });
+                }
                 await this.ignoreBotsUseCase.claimConnectionLists({
                     organizationId: workspace.organizationId,
                     integrationId,
                 });
-                return;
+                return true;
             }
             const members = await this.connectionAccess.grantWorkspaceMembers(
                 workspace.teamId,
@@ -299,6 +313,7 @@ export class CreateIntegrationUseCase implements IUseCase {
                     members: members.length,
                 },
             });
+            return false;
         } catch (error) {
             this.logger.error({
                 message: 'Could not settle who reads the new Git connection',
@@ -306,7 +321,17 @@ export class CreateIntegrationUseCase implements IUseCase {
                 error,
                 metadata: { ...workspace, integrationId, separateConnection },
             });
+            return separateConnection;
         }
+    }
+
+    private async isOldestConnection(
+        workspace: { organizationId: string; teamId: string },
+        integrationId: string,
+    ): Promise<boolean> {
+        const [oldest] =
+            await this.connectionBilling.workspaceConnections(workspace);
+        return oldest?.uuid === integrationId;
     }
 
     /**

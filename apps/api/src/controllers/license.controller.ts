@@ -2,6 +2,7 @@ import {
     BadRequestException,
     Body,
     Controller,
+    ForbiddenException,
     Get,
     Inject,
     NotFoundException,
@@ -213,14 +214,14 @@ export class LicenseController {
             );
         }
 
-        await this.assertSeatConnection(
+        const seatConnectionId = await this.seatConnection(
             organizationId,
             undefined,
             connectionId,
         );
         return this.licenseService.getAllUsersEverWithLicense({
             organizationId,
-            ...(connectionId ? { integrationId: connectionId } : {}),
+            ...(seatConnectionId ? { integrationId: seatConnectionId } : {}),
         });
     }
 
@@ -259,7 +260,7 @@ export class LicenseController {
             );
         }
 
-        await this.assertSeatConnection(
+        const seatConnectionId = await this.seatConnection(
             organizationId,
             body.teamId,
             body.connectionId,
@@ -267,7 +268,7 @@ export class LicenseController {
         const orgData = {
             organizationId,
             teamId: body.teamId,
-            ...(body.connectionId ? { integrationId: body.connectionId } : {}),
+            ...(seatConnectionId ? { integrationId: seatConnectionId } : {}),
         };
 
         const successful: any[] = [];
@@ -346,7 +347,11 @@ export class LicenseController {
     })
     public async pruneSeats(
         @Body()
-        body: { teamId?: string; connectionId?: string; gitIds?: string[] },
+        body: {
+            teamId?: string;
+            connectionId?: string;
+            gitIds?: string[];
+        },
     ) {
         return this.pruneRemovedLicenseSeatsUseCase.execute({
             organizationAndTeamData: await this.resolveOrganizationAndTeamData(
@@ -397,28 +402,40 @@ export class LicenseController {
             );
         }
 
-        await this.assertSeatConnection(organizationId, teamId, connectionId);
+        const seatConnectionId = await this.seatConnection(
+            organizationId,
+            teamId,
+            connectionId,
+        );
         return {
             organizationId,
             teamId,
-            ...(connectionId ? { integrationId: connectionId } : {}),
+            ...(seatConnectionId ? { integrationId: seatConnectionId } : {}),
         };
     }
 
     /**
-     * A seat call may name only a connection of the caller's workspace (or
-     * organization, when no workspace is given) that the caller is granted.
+     * The connection a seat call is on. It may name only a connection of the
+     * caller's workspace (or organization, when no workspace is given) that
+     * the caller is granted. A member granted only some connections who
+     * names none is on the one they are granted there, else refused: the
+     * workspace's seats include the other connections'.
      */
-    private async assertSeatConnection(
+    private async seatConnection(
         organizationId: string,
         teamId: string | undefined,
-        connectionId: string | undefined,
-    ): Promise<void> {
-        if (!connectionId) return;
-        assertConnectionReadable(
-            await this.connectionAccess.restrictionFor(this.request?.user),
-            connectionId,
+        requested: string | undefined,
+    ): Promise<string | undefined> {
+        const restriction = await this.connectionAccess.restrictionFor(
+            this.request?.user,
         );
+        const connectionId =
+            requested ??
+            (restriction
+                ? await this.onlyGrantedConnection(restriction, teamId)
+                : undefined);
+        if (!connectionId) return undefined;
+        assertConnectionReadable(restriction, connectionId);
         const known = teamId
             ? await this.connectionAccess.connectionInWorkspace(
                   organizationId,
@@ -432,5 +449,23 @@ export class LicenseController {
         if (!known) {
             throw new NotFoundException('Git connection not found.');
         }
+        return connectionId;
+    }
+
+    private async onlyGrantedConnection(
+        restriction: { connectionIds: ReadonlySet<string> },
+        teamId: string | undefined,
+    ): Promise<string> {
+        const candidates = teamId
+            ? (
+                  await this.connectionAccess.workspaceConnectionIds(teamId)
+              ).filter((id) => restriction.connectionIds.has(id))
+            : [...restriction.connectionIds];
+        if (candidates.length !== 1) {
+            throw new ForbiddenException(
+                'Name one of your Git connections (connectionId).',
+            );
+        }
+        return candidates[0];
     }
 }

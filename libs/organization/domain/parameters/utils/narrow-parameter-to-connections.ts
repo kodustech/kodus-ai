@@ -38,20 +38,26 @@ export const narrowParameterToConnections = <P extends StoredParameter>(
         };
     }
 
-    if (
-        key === ParametersKey.CENTRALIZED_CONFIG &&
-        value.connections &&
-        typeof value.connections === 'object'
-    ) {
+    if (key === ParametersKey.CENTRALIZED_CONFIG) {
+        // The workspace's own config belongs to the connection it names;
+        // one saved before connections, to the connection of its repository.
+        const ownConfigReadable = value.integrationId
+            ? restriction.connectionIds.has(String(value.integrationId))
+            : restriction.allowsRepository({ id: value.repository?.id });
+        const connections =
+            value.connections && typeof value.connections === 'object'
+                ? Object.fromEntries(
+                      Object.entries(value.connections).filter(
+                          ([connectionId]) =>
+                              restriction.connectionIds.has(connectionId),
+                      ),
+                  )
+                : undefined;
         return {
             ...parameter,
             configValue: {
-                ...value,
-                connections: Object.fromEntries(
-                    Object.entries(value.connections).filter(([connectionId]) =>
-                        restriction.connectionIds.has(connectionId),
-                    ),
-                ),
+                ...(ownConfigReadable ? value : {}),
+                ...(connections ? { connections } : {}),
             },
         };
     }

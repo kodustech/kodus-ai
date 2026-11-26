@@ -156,26 +156,21 @@ export class PullRequestController implements OnApplicationShutdown {
         this.jwtConfig = this.configService.get<JWT>('jwtConfig');
     }
 
-    /** Whether a team key's workspace lists the repository, across its Git connections. */
     /**
-     * Whether the key's workspace lists the pull request's repository. Ids
-     * repeat across servers, so a recorded full name has to match too.
+     * The lower-cased owner/name forms of each repository the key's
+     * workspace lists, by repository id, read once per lookup.
      */
-    private async keyWorkspaceListsRepository(
+    private async keyWorkspaceRepositoryNames(
         organizationId: string,
-        teamId: string | undefined,
-        repository: { id?: unknown; fullName?: string } | undefined,
-    ): Promise<boolean> {
-        if (!teamId || repository?.id == null) return false;
+        teamId: string,
+    ): Promise<Map<string, string[]>> {
         const repositories =
             (await this.integrationConfigService.findIntegrationConfigFormatted<
                 Repositories[]
             >(IntegrationConfigKey.REPOSITORIES, { organizationId, teamId })) ??
             [];
-        const fullName = repository.fullName?.toLowerCase();
-        return repositories.some((listed) => {
-            if (String(listed.id) !== String(repository.id)) return false;
-            if (!fullName) return true;
+        const byId = new Map<string, string[]>();
+        for (const listed of repositories) {
             const names = [
                 listed.full_name,
                 listed.organizationName && listed.name
@@ -185,8 +180,26 @@ export class PullRequestController implements OnApplicationShutdown {
             ]
                 .filter((name): name is string => !!name?.includes('/'))
                 .map((name) => name.toLowerCase());
-            return !names.length || names.includes(fullName);
-        });
+            const id = String(listed.id);
+            byId.set(id, [...(byId.get(id) ?? []), ...names]);
+        }
+        return byId;
+    }
+
+    /**
+     * Whether the key's workspace lists the pull request's repository. Ids
+     * repeat across servers, so the recorded full name has to match too; a
+     * record without one cannot be told apart and is refused.
+     */
+    private keyWorkspaceListsRepository(
+        listed: Map<string, string[]>,
+        repository: { id?: unknown; fullName?: string } | undefined,
+    ): boolean {
+        const fullName = repository?.fullName?.toLowerCase();
+        if (repository?.id == null || !fullName) return false;
+        const names = listed.get(String(repository.id));
+        if (!names) return false;
+        return !names.length || names.includes(fullName);
     }
 
     onApplicationShutdown() {
@@ -758,18 +771,19 @@ export class PullRequestController implements OnApplicationShutdown {
             const found = await this.findPrEntity(params);
             if (found) candidates.push(found);
         }
-        for (const candidate of candidates) {
-            if (
-                await this.keyWorkspaceListsRepository(
-                    organizationId,
-                    teamId,
+        if (!candidates.length || !teamId) return null;
+        const listed = await this.keyWorkspaceRepositoryNames(
+            organizationId,
+            teamId,
+        );
+        return (
+            candidates.find((candidate) =>
+                this.keyWorkspaceListsRepository(
+                    listed,
                     candidate.toObject().repository,
-                )
-            ) {
-                return candidate;
-            }
-        }
-        return null;
+                ),
+            ) ?? null
+        );
     }
 
     private async findPrEntity(params: {

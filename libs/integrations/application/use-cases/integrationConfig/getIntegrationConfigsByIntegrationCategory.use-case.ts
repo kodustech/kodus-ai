@@ -1,3 +1,4 @@
+import pLimit from 'p-limit';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
@@ -18,6 +19,8 @@ import {
     IIntegrationService,
     INTEGRATION_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
+
+const CONNECTION_READS_AT_ONCE = 4;
 
 export class GetIntegrationConfigsByIntegrationCategoryUseCase implements IUseCase {
     private readonly logger = createLogger(
@@ -124,16 +127,19 @@ export class GetIntegrationConfigsByIntegrationCategoryUseCase implements IUseCa
             (connection) =>
                 connection && (!readable || readable.has(connection.uuid)),
         );
-        // Read together; merged oldest connection first, so a key only one
-        // connection can hold answers the same way on every call. One
+        // Read a few at a time; merged oldest connection first, so a key only
+        // one connection can hold answers the same way on every call. One
         // unreadable connection fails the answer rather than hiding its part.
+        const limit = pLimit(CONNECTION_READS_AT_ONCE);
         const configsByConnection = await Promise.all(
-            listed.map(
-                async (connection) =>
-                    (await this.integrationConfigService.find({
-                        integration: { uuid: connection.uuid },
-                        team: { uuid: organizationAndTeamData.teamId },
-                    })) ?? [],
+            listed.map((connection) =>
+                limit(
+                    async () =>
+                        (await this.integrationConfigService.find({
+                            integration: { uuid: connection.uuid },
+                            team: { uuid: organizationAndTeamData.teamId },
+                        })) ?? [],
+                ),
             ),
         );
         const byKey = new Map<string, unknown>();

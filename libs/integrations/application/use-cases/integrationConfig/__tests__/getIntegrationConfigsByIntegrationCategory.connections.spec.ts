@@ -101,6 +101,41 @@ describe('GetIntegrationConfigsByIntegrationCategoryUseCase — Git connections'
         ]);
     });
 
+    it('reads at most four connections at a time, and fails when one read fails', async () => {
+        const connections = Array.from({ length: 9 }, (_, i) => ({
+            uuid: `conn-${i}`,
+        }));
+        let inFlight = 0;
+        let peak = 0;
+        const read = (fail?: string) =>
+            jest.fn(async (filter: any) => {
+                inFlight += 1;
+                peak = Math.max(peak, inFlight);
+                await new Promise((resolve) => setTimeout(resolve, 5));
+                inFlight -= 1;
+                if (filter.integration.uuid === fail) {
+                    throw new Error('db down');
+                }
+                return [];
+            });
+        const run = (find: jest.Mock) =>
+            new GetIntegrationConfigsByIntegrationCategoryUseCase(
+                { find: jest.fn().mockResolvedValue(connections) } as any,
+                { find } as any,
+                { user: { organization: { uuid: 'org-1' } } } as any,
+            ).execute({
+                teamId: 'team-1',
+                integrationCategory: IntegrationCategory.CODE_MANAGEMENT,
+            });
+
+        const find = read();
+        await run(find);
+        expect(find).toHaveBeenCalledTimes(9);
+        expect(peak).toBe(4);
+
+        await expect(run(read('conn-7'))).rejects.toThrow('db down');
+    });
+
     it('lists only the named connection’s configs', async () => {
         const { useCase } = build({
             'gh-a': [{ id: '1' }],

@@ -137,8 +137,14 @@ import { IntegrationConfigRepository } from './integrationConfig.repository';
         let ds: DataSource | undefined;
         let repository: IntegrationConfigRepository;
         const organizationId = randomUUID();
-        const [active, inactive] = [randomUUID(), randomUUID()];
-        const [auth, configA, configB] = [
+        const otherOrganizationId = randomUUID();
+        const [active, inactive, otherActive] = [
+            randomUUID(),
+            randomUUID(),
+            randomUUID(),
+        ];
+        const [auth, configA, configB, configC] = [
+            randomUUID(),
             randomUUID(),
             randomUUID(),
             randomUUID(),
@@ -161,14 +167,32 @@ import { IntegrationConfigRepository } from './integrationConfig.repository';
             await ds.query(
                 `INSERT INTO "integrations" ("uuid", "status", "platform", "integrationCategory", "organization_id", "auth_integration_id")
                  VALUES ($1, true, 'GITLAB', 'CODE_MANAGEMENT', $3, $4),
-                        ($2, false, 'GITLAB', 'CODE_MANAGEMENT', $3, NULL)`,
-                [active, inactive, organizationId, auth],
+                        ($2, false, 'GITLAB', 'CODE_MANAGEMENT', $3, NULL),
+                        ($5, true, 'GITHUB', 'CODE_MANAGEMENT', $6, NULL)`,
+                [
+                    active,
+                    inactive,
+                    organizationId,
+                    auth,
+                    otherActive,
+                    otherOrganizationId,
+                ],
             );
             await ds.query(
                 `INSERT INTO "integration_configs" ("uuid", "configKey", "configValue", "integration_id", "team_id")
-                 VALUES ($1, 'repositories', '[{"id": 42}]'::jsonb, $3, $5),
-                        ($2, 'repositories', '[{"id": 7}]'::jsonb, $4, $5)`,
-                [configA, configB, active, inactive, randomUUID()],
+                 VALUES ($1, 'repositories', '[{"id": 42}]'::jsonb, $4, $7),
+                        ($2, 'repositories', '[{"id": 7}]'::jsonb, $5, $7),
+                        ($3, 'repositories', '[{"id": 42}]'::jsonb, $6, $8)`,
+                [
+                    configA,
+                    configB,
+                    configC,
+                    active,
+                    inactive,
+                    otherActive,
+                    randomUUID(),
+                    randomUUID(),
+                ],
             );
         });
 
@@ -176,11 +200,11 @@ import { IntegrationConfigRepository } from './integrationConfig.repository';
             if (!ds) return;
             await ds.query(
                 `DELETE FROM "integration_configs" WHERE "uuid" = ANY($1::uuid[])`,
-                [[configA, configB]],
+                [[configA, configB, configC]],
             );
             await ds.query(
                 `DELETE FROM "integrations" WHERE "uuid" = ANY($1::uuid[])`,
-                [[active, inactive]],
+                [[active, inactive, otherActive]],
             );
             await ds.query(
                 `DELETE FROM "auth_integrations" WHERE "uuid" = $1`,
@@ -201,6 +225,18 @@ import { IntegrationConfigRepository } from './integrationConfig.repository';
                     integrationId: active,
                     platform: 'GITLAB',
                     host: 'https://git.acme.io',
+                    repositories: [{ id: 42 }],
+                },
+            ]);
+            expect(
+                await repository.findRepositoryListsOfOrganization(
+                    otherOrganizationId,
+                ),
+            ).toEqual([
+                {
+                    integrationId: otherActive,
+                    platform: 'GITHUB',
+                    host: null,
                     repositories: [{ id: 42 }],
                 },
             ]);

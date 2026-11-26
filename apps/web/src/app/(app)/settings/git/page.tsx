@@ -1,4 +1,5 @@
-import { redirect } from "next/navigation";
+// eslint-disable-next-line camelcase -- Next.js's own export name
+import { redirect, unstable_rethrow } from "next/navigation";
 import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
 import {
@@ -32,6 +33,31 @@ import { ReviewAllRepositoriesCard } from "./_components/review-all-repositories
 import { GitRepositoriesTable } from "./_components/table";
 import { connectionLabel } from "./_constants";
 
+// Ancillary reads fall back, but a session redirect still has to happen.
+const orFallback =
+    <T,>(fallback: T) =>
+    (error: unknown): T => {
+        unstable_rethrow(error);
+        return fallback;
+    };
+
+// A few connections at a time, each reading its members and hooks.
+const CONNECTIONS_READ_AT_ONCE = 3;
+const inBatches = async <T, R>(
+    items: T[],
+    read: (item: T) => Promise<R>,
+): Promise<R[]> => {
+    const results: R[] = [];
+    for (let i = 0; i < items.length; i += CONNECTIONS_READ_AT_ONCE) {
+        results.push(
+            ...(await Promise.all(
+                items.slice(i, i + CONNECTIONS_READ_AT_ONCE).map(read),
+            )),
+        );
+    }
+    return results;
+};
+
 const MANUAL_SELECTION: RepositorySelection = {
     mode: "manual",
     includeForksAndMirrors: false,
@@ -58,9 +84,10 @@ export default async function GitSettings() {
         ] = await Promise.all([
             getConnections(teamId),
             getIntegrationConfig({ teamId }),
-            getAutoLicenseAssignmentConfig().catch(() => undefined),
+            getAutoLicenseAssignmentConfig().catch(orFallback(undefined)),
         ]);
     } catch (err) {
+        unstable_rethrow(err);
         console.error("[GitSettings] error fetching data:", err);
         connectionsError = true;
     }
@@ -88,12 +115,14 @@ export default async function GitSettings() {
     const readWebhookFailures = (connectionId?: string) =>
         getWebhookCreationFailures(teamId, connectionId)
             .then((failures) => ({ failures, unavailable: false }))
-            .catch(() => ({
-                failures: {} as Awaited<
-                    ReturnType<typeof getWebhookCreationFailures>
-                >,
-                unavailable: true,
-            }));
+            .catch(
+                orFallback({
+                    failures: {} as Awaited<
+                        ReturnType<typeof getWebhookCreationFailures>
+                    >,
+                    unavailable: true,
+                }),
+            );
 
     const gitConnections = connections.filter(
         (c) => c.category === "CODE_MANAGEMENT",
@@ -108,30 +137,30 @@ export default async function GitSettings() {
     // Git ids differ per provider and host, so with several connections
     // each one reads its own members and its own webhook failures.
     const byConnection = severalConnections
-        ? await Promise.all(
-              gitConnections.map(async (connection) => {
-                  const [members, webhooks] = await Promise.all([
-                      getOrganizationMembers({
-                          teamId,
-                          connectionId: connection.connectionId,
-                      })
-                          .catch(() => MEMBERS_UNAVAILABLE)
-                          .then(toMemberOptions),
-                      readWebhookFailures(connection.connectionId),
-                  ]);
-                  return { members, webhooks };
-              }),
-          )
+        ? await inBatches(gitConnections, async (connection) => {
+              const [members, webhooks] = await Promise.all([
+                  getOrganizationMembers({
+                      teamId,
+                      connectionId: connection.connectionId,
+                  })
+                      .catch(orFallback(MEMBERS_UNAVAILABLE))
+                      .then(toMemberOptions),
+                  readWebhookFailures(connection.connectionId),
+              ]);
+              return { members, webhooks };
+          })
         : [];
 
     const [organizationMembersRaw, singleWebhooks, repositorySelection] =
         !severalConnections && gitConnection
             ? await Promise.all([
                   getOrganizationMembers({ teamId }).catch(
-                      () => MEMBERS_UNAVAILABLE,
+                      orFallback(MEMBERS_UNAVAILABLE),
                   ),
                   readWebhookFailures(),
-                  getRepositorySelection(teamId).catch(() => MANUAL_SELECTION),
+                  getRepositorySelection(teamId).catch(
+                      orFallback(MANUAL_SELECTION),
+                  ),
               ])
             : [
                   MEMBERS_UNAVAILABLE,

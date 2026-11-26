@@ -166,5 +166,72 @@ const KEY = OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT;
                 { connections: { 'gl-b': { allowedUsers: [] } } },
             ]);
         });
+
+        it("never touches another organization's value", async () => {
+            if (!ds) return;
+            const neighbour = await organizationWith({
+                enabled: true,
+                connections: { 'gh-a': { ignoredUsers: ['1'] } },
+            });
+            const organizationId = await organizationWith({
+                connections: { 'gh-a': { ignoredUsers: ['2'] } },
+            });
+
+            await repository.mergeConfigValue(
+                KEY,
+                organizationId,
+                { ignoredUsers: ['9'] },
+                { connectionId: 'gh-a' },
+            );
+            await repository.mergeConfigValue(KEY, organizationId, {
+                enabled: false,
+            });
+
+            expect(await stored(organizationId)).toEqual([
+                {
+                    enabled: false,
+                    connections: { 'gh-a': { ignoredUsers: ['9'] } },
+                },
+            ]);
+            expect(await stored(neighbour)).toEqual([
+                {
+                    enabled: true,
+                    connections: { 'gh-a': { ignoredUsers: ['1'] } },
+                },
+            ]);
+        });
+
+        it('keeps every patch of concurrent first writes in one row', async () => {
+            if (!ds) return;
+            const fresh = await organizationWith();
+
+            await Promise.all([
+                repository.mergeConfigValue(
+                    KEY,
+                    fresh,
+                    { allowedUsers: ['1'] },
+                    { connectionId: 'gh-a' },
+                ),
+                repository.mergeConfigValue(
+                    KEY,
+                    fresh,
+                    { allowedUsers: ['2'] },
+                    { connectionId: 'gl-b' },
+                ),
+                repository.mergeConfigValue(KEY, fresh, {
+                    pendingRevocations: { '3': 'x' },
+                }),
+            ]);
+
+            expect(await stored(fresh)).toEqual([
+                {
+                    pendingRevocations: { '3': 'x' },
+                    connections: {
+                        'gh-a': { allowedUsers: ['1'] },
+                        'gl-b': { allowedUsers: ['2'] },
+                    },
+                },
+            ]);
+        });
     },
 );

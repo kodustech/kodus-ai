@@ -74,6 +74,27 @@ export class RepositoryConnectionService {
         );
     }
 
+    private async onlyRepositoriesRow(
+        filter: { team: { uuid: string }; configKey: IntegrationConfigKey },
+        organizationAndTeamData: OrganizationAndTeamData,
+    ) {
+        const rows =
+            (await this.integrationConfigService.find({
+                ...filter,
+                integration: { status: true },
+            })) ?? [];
+        if (rows.length > 1) {
+            this.logger.warn({
+                message:
+                    'Several Git connections list repositories and none was named; repository records not created',
+                context: RepositoryConnectionService.name,
+                metadata: { organizationAndTeamData, rows: rows.length },
+            });
+            return undefined;
+        }
+        return rows[0];
+    }
+
     /**
      * Finds or creates the repository record of each repository. The record
      * points at the team's REPOSITORIES config row, which is what the AST
@@ -94,18 +115,21 @@ export class RepositoryConnectionService {
             return [];
         }
 
-        // The connection's own row when it is named: with several, the
-        // records must point at the list the repositories are in.
-        const repositoriesConfig = await this.integrationConfigService.findOne({
+        // The connection's own row when it is named. Unnamed, only a
+        // workspace with one listing connection says whose list it is.
+        const filter = {
             team: { uuid: organizationAndTeamData.teamId },
             configKey: IntegrationConfigKey.REPOSITORIES,
-            integration: {
-                status: true,
-                ...(organizationAndTeamData.integrationId
-                    ? { uuid: organizationAndTeamData.integrationId }
-                    : {}),
-            },
-        });
+        };
+        const repositoriesConfig = organizationAndTeamData.integrationId
+            ? await this.integrationConfigService.findOne({
+                  ...filter,
+                  integration: {
+                      status: true,
+                      uuid: organizationAndTeamData.integrationId,
+                  },
+              })
+            : await this.onlyRepositoriesRow(filter, organizationAndTeamData);
 
         if (!repositoriesConfig?.uuid) {
             this.logger.warn({
@@ -131,7 +155,8 @@ export class RepositoryConnectionService {
                     integrationConfigId: repositoriesConfig.uuid,
                     externalId: String(repository.id),
                     name: repository.name,
-                    fullName: RepositoryConnectionService.fullNameOf(repository),
+                    fullName:
+                        RepositoryConnectionService.fullNameOf(repository),
                     platform,
                     defaultBranch: repository.default_branch,
                 });
@@ -276,7 +301,8 @@ export class RepositoryConnectionService {
                 repositories: repositories.map((repository) => ({
                     id: String(repository.id),
                     name: repository.name,
-                    fullName: RepositoryConnectionService.fullNameOf(repository),
+                    fullName:
+                        RepositoryConnectionService.fullNameOf(repository),
                     url: repository.http_url || '',
                 })),
             })

@@ -712,11 +712,6 @@ export class ExecuteCliReviewUseCase implements IUseCase {
     }
 
     /**
-     * Resolve the repository id and name by matching the git remote URL against
-     * configured repositories. Falls back to 'global' if no match is found,
-     * which ensures global rules are still applied.
-     */
-    /**
      * The rules this review applies. A connection's own global rules review
      * only that connection's repositories, so the repository's connection is
      * looked up when the key names none.
@@ -746,6 +741,11 @@ export class ExecuteCliReviewUseCase implements IUseCase {
         );
     }
 
+    /**
+     * Resolve the repository id and name by matching the git remote URL against
+     * configured repositories. Falls back to 'global' if no match is found,
+     * which ensures global rules are still applied.
+     */
     private resolveRepositoryFromRemote(
         remote?: string,
         repositories?: Array<{ id: string; name: string; http_url?: string }>,
