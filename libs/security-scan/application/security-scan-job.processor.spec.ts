@@ -29,7 +29,11 @@ import {
 import { SecurityScanStatus } from '../domain/security-scan.types';
 import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { SCAN_NEEDS_BYOK_MESSAGE } from './scan-model';
-import { SCAN_NO_AREA_EXAMINED_MESSAGE } from '../domain/scan-failure';
+import {
+    SCAN_NO_AREA_EXAMINED_MESSAGE,
+    SCAN_NO_PROGRESS_MESSAGE,
+} from '../domain/scan-failure';
+import { ownFingerprintOf } from '../domain/finding-fingerprint';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { SlicePreemptedError } from '@libs/core/workflow/domain/errors/slice-preempted.error';
@@ -762,9 +766,7 @@ describe('SecurityScanJobProcessor', () => {
         await processor.process('job-1');
 
         expect(jobQueue.enqueue).not.toHaveBeenCalled();
-        expect(lastUpdate(scans).error).toEqual(
-            expect.stringContaining('made no progress'),
-        );
+        expect(lastUpdate(scans).error).toBe(SCAN_NO_PROGRESS_MESSAGE);
     });
 
     it('records what a failed slice spent', async () => {
@@ -1462,17 +1464,17 @@ describe('scanErrorMessage', () => {
                 },
             }),
         });
-        const message = scanErrorMessage(error);
-        expect(message).toMatch(
-            /^The model provider refused a request: Invalid key/,
+        expect(scanErrorMessage(error)).toBe(
+            'The model provider refused a request: Invalid key [redacted]',
         );
-        expect(message).not.toMatch(/abcdefghijklmnop/);
     });
 
     it('hides any other error', () => {
         expect(
             scanErrorMessage(new Error('E11000 duplicate key one_active_scan')),
-        ).toMatch(/^The scan stopped on an internal error/);
+        ).toBe(
+            'The scan stopped on an internal error. Its findings so far are kept; run it again, and contact support if it keeps failing.',
+        );
     });
 });
 
@@ -1610,11 +1612,12 @@ describe('SecurityScanJobProcessor: one issue per root cause', () => {
 
         await processor.process('job-1');
 
-        expect(issuesService.upsertScanFinding).toHaveBeenCalledWith(
-            expect.objectContaining({
-                fingerprint: expect.not.stringMatching(/^fp-gone$/),
-            }),
+        // Under its own identity, not the gone issue's.
+        const [stored] = issuesService.upsertScanFinding.mock.calls[0] as any;
+        expect(stored.fingerprint).toBe(
+            ownFingerprintOf(scanRecord() as any, finding as any),
         );
+        expect(stored.fingerprint).not.toBe('fp-gone');
     });
 
     it('folds open issues that share a root cause at the end of the scan, and records what it compared', async () => {
@@ -1640,12 +1643,10 @@ describe('SecurityScanJobProcessor: one issue per root cause', () => {
         ];
         // The engine's own read happens first; the sweep reads them again.
         issuesService.findOpenScanFindings.mockResolvedValue(open as any);
-        const run = jest
-            .spyOn(LLM, 'run')
-            .mockResolvedValue({
-                sameAs: 'c1',
-                reason: 'the DoS is the missing auth',
-            } as any);
+        const run = jest.spyOn(LLM, 'run').mockResolvedValue({
+            sameAs: 'c1',
+            reason: 'the DoS is the missing auth',
+        } as any);
 
         await processor.process('job-1');
 

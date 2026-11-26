@@ -451,5 +451,84 @@ const TEST_DB = 'issues_scan_prune_it';
             } as any)) as any;
             expect(other.occurrences[0].lastSeenScanId).toBe('scan-1');
         });
+
+        it('a fold that lost a race to a sighting changes nothing, and lands when tried again', async () => {
+            const holderId = new mongoose.Types.ObjectId();
+            const duplicateId = new mongoose.Types.ObjectId();
+            const { occurrences: _a, ...holder } = issue('h-1', 'org-1', []);
+            const { occurrences: _b, ...duplicate } = issue('d-1', 'org-1', []);
+            await model.collection.insertMany([
+                {
+                    ...holder,
+                    _id: holderId,
+                    fingerprint: 'fp-holder',
+                    severity: 'high',
+                    ownSeverity: 'high',
+                },
+                {
+                    ...duplicate,
+                    _id: duplicateId,
+                    fingerprint: 'fp-dup',
+                    filePath: 'src/a.ts',
+                    severity: 'critical',
+                    ownSeverity: 'critical',
+                },
+            ] as any[]);
+            const fold = () =>
+                issues.foldScanIssueInto({
+                    organizationId: 'org-1',
+                    repositoryPlatform: PlatformType.GITHUB,
+                    repositoryHost: 'github.com',
+                    repositoryId: 'repo-1',
+                    fingerprint: 'fp-dup',
+                    into: 'fp-holder',
+                } as any);
+            // A sighting of the holder lands between the fold's read and write.
+            const updateOne = model.updateOne.bind(model);
+            const race = jest
+                .spyOn(model, 'updateOne')
+                .mockImplementationOnce(((...args: any[]) =>
+                    model.collection
+                        .updateOne(
+                            { _id: holderId },
+                            {
+                                $set: {
+                                    severity: 'medium',
+                                    ownSeverity: 'medium',
+                                },
+                            },
+                        )
+                        .then(() =>
+                            updateOne(...(args as [any, any])),
+                        )) as any);
+
+            expect(await fold()).toBe(false);
+            race.mockRestore();
+            const holderAfter = (await model.collection.findOne({
+                _id: holderId,
+            })) as any;
+            const duplicateAfter = (await model.collection.findOne({
+                _id: duplicateId,
+            })) as any;
+            expect(holderAfter.occurrences).toBeUndefined();
+            expect(holderAfter.severity).toBe('medium');
+            expect(duplicateAfter.status).toBe(IssueStatus.OPEN);
+            expect(duplicateAfter.duplicateOf).toBeUndefined();
+
+            // The next sweep compares it again, and the fold lands.
+            expect(await fold()).toBe(true);
+            const holderFolded = (await model.collection.findOne({
+                _id: holderId,
+            })) as any;
+            expect(
+                holderFolded.occurrences.map((o: any) => o.fingerprint),
+            ).toEqual(['fp-dup']);
+            expect(holderFolded.severity).toBe('critical');
+            expect(holderFolded.ownSeverity).toBe('medium');
+            expect(
+                ((await model.collection.findOne({ _id: duplicateId })) as any)
+                    .duplicateOf,
+            ).toBe('fp-holder');
+        });
     },
 );

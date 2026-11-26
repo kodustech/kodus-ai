@@ -2373,7 +2373,7 @@ describe('SecurityScanEngine: across slices and units', () => {
         [
             'the issue, when the unit already holds the same finding',
             [IDOR, IDOR],
-            ['fp-old-controller'],
+            ['fp-old-controller', 'fp-service'],
         ],
     ])(
         'stores a finding as the first open issue it repeats, and sights %s',
@@ -2430,13 +2430,17 @@ describe('SecurityScanEngine: across slices and units', () => {
 
             // One stored, as the first issue; every other issue it repeats is
             // found again, so none is resolved as gone.
-            expect(result.findings).toEqual([
-                expect.objectContaining({ storedAs: 'fp-service' }),
-            ]);
+            expect(
+                result.findings.map((f: any) => [
+                    f.filePath,
+                    f.startLine,
+                    f.storedAs,
+                ]),
+            ).toEqual([['src/orders/orders.controller.ts', 7, 'fp-service']]);
             const sighted = (
                 onUnitDone.mock.calls as unknown as [unknown, unknown, any[]?][]
             ).flatMap(([, , s]) => (s ?? []).map((x) => x.fingerprint));
-            for (const fp of expectSighted) expect(sighted).toContain(fp);
+            expect(sighted).toEqual(expectSighted);
         },
     );
 
@@ -2485,9 +2489,13 @@ describe('SecurityScanEngine: across slices and units', () => {
             onUnitDone.mock.calls as unknown as [unknown, unknown, any[]?][]
         ).flatMap(([, , s]) => (s ?? []).map((x) => x.fingerprint));
         // Stored as the service's issue, and its own place found again.
-        expect(result.findings).toEqual([
-            expect.objectContaining({ storedAs: 'fp-service' }),
-        ]);
+        expect(
+            result.findings.map((f: any) => [
+                f.filePath,
+                f.startLine,
+                f.storedAs,
+            ]),
+        ).toEqual([['src/orders/orders.controller.ts', 7, 'fp-service']]);
         expect(sighted).toEqual(['fp-own:src/orders/orders.controller.ts:7']);
     });
 
