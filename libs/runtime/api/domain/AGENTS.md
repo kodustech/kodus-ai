@@ -3,7 +3,7 @@
 The domain layer of the product's Runtime API: the ports every use case depends on, their injection tokens, and the pure rules the product decides by (when a Run starts, what it may spend, what an admin may set). No Nest and no driver. Use cases in `../application/` call it; adapters in `../infrastructure/` implement its ports; `apps/runtime` imports a few files (`runtime-commands`, `run-cost`, `run-token`, `ports`, `external-findings`) and the web imports its types.
 
 ## Owns
-- Ports and tokens: `ports.ts` (Runtime readers, product stores, `RuntimeGitPort`, the repo token issuer, LLM provider and usage store, team and org repositories, clock, config) and the ports of an area in its file: `env-tools.ts`, `external-findings.ts`, `previews.ts`, `pull-request-runs.ts`, `secrets.ts`, `organization-purge.ts`, `setup-calls.ts`, `model-turn.ts`, `webhook-reconciler.ts`.
+- Ports and tokens: `ports.ts` (Runtime readers, product stores, `RuntimeGitPort`, the repo token issuer, LLM provider and usage store, team and org repositories, clock, config) and the ports of an area in its file: `env-tools.ts`, `external-findings.ts`, `previews.ts`, `pull-request-runs.ts`, `secrets.ts`, `organization-purge.ts`, `setup-calls.ts`, `model-turn.ts`, `webhook-reconciler.ts`, `push-setup.ts` (the push setup ledger, `isSetupInFlight`, the daily limit default).
 - When a Run starts: `trigger-rules.ts` `decideRun`, `parseTriggerRules`, `compileGlob` (linear, no backtracking); forks: `fork-policy.ts` `decideForkRun`, `forkRunMaxTokens`.
 - What a Run may spend: `budget.ts` `planLlmCall`, `decideBudget` (per Run, per PR, per org per day); the Run token: `run-token.ts` `signRunToken`, `verifyRunToken`, and the setup token `signSetupToken`, `verifySetupToken`.
 - Admin settings bounded by the plan: `pool.ts` (`effectivePoolSize`, `parsePoolPolicy`, `desiredPoolSize`), `machine-size-plan.ts` `effectiveMachineSize`, `egress.ts` `normalizeEgressHost`, `deniedBy` (the Kodus denylist wins over an approval).
@@ -33,7 +33,7 @@ The domain layer of the product's Runtime API: the ports every use case depends 
 
 ## Module map
 
-Files (29, tests apart): `budget.ts`, `cell-token.ts`, `deterministic-id.ts`, `egress.ts`, `env-tools.ts`, `external-findings.ts`, `fork-policy.ts`, `llm-spend.ts`, `machine-minutes-today.ts`, `machine-size-plan.ts`, `model-turn.ts`, `organization-purge.ts`, `pool.ts`, `ports.ts`, `previews.ts`, `pull-request-runs.ts`, `run-cost-summary.ts`, `run-cost.ts`, `run-token.ts`, `runtime-commands.ts`, `runtime-health.ts`, `runtime-speed.ts`, `secrets.ts`, `setup-calls.ts`, `suite-view.ts`, `suite.ts`, `trigger-rules.ts`, `usage-report.ts`, `webhook-reconciler.ts`
+Files (30, tests apart): `budget.ts`, `cell-token.ts`, `deterministic-id.ts`, `egress.ts`, `env-tools.ts`, `external-findings.ts`, `fork-policy.ts`, `llm-spend.ts`, `machine-minutes-today.ts`, `machine-size-plan.ts`, `model-turn.ts`, `organization-purge.ts`, `pool.ts`, `ports.ts`, `previews.ts`, `pull-request-runs.ts`, `push-setup.ts`, `run-cost-summary.ts`, `run-cost.ts`, `run-token.ts`, `runtime-commands.ts`, `runtime-health.ts`, `runtime-speed.ts`, `secrets.ts`, `setup-calls.ts`, `suite-view.ts`, `suite.ts`, `trigger-rules.ts`, `usage-report.ts`, `webhook-reconciler.ts`
 
 Imports these Runtime modules:
 

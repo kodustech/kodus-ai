@@ -9,6 +9,7 @@ import { DEFAULT_MACHINE_MINUTES_PER_ORG_DAY } from '@libs/runtime/environment/m
 import { parseDenylist } from '../domain/egress';
 import { CELL_HOST_LIST_PRICES, type CellHostPrice } from '../domain/run-cost';
 import type { RuntimeApiConfig } from '../domain/ports';
+import { DEFAULT_PUSH_SETUP_DAILY_LIMIT, type PushSetupConfig } from '../domain/push-setup';
 import { type WebhookReconcilerConfig } from '../domain/webhook-reconciler';
 
 const MINUTE = 60_000;
@@ -24,6 +25,11 @@ export function loadWebhookReconcilerConfig(env: NodeJS.ProcessEnv = process.env
         perTick: positiveInt(env.RUNTIME_WEBHOOK_RECONCILER_PER_TICK, 10, 200),
         repositoriesPerTick: positiveInt(env.RUNTIME_WEBHOOK_RECONCILER_REPOSITORIES_PER_TICK, 100, 2_000),
     };
+}
+
+/** Setups a push to an environment's default branch may start per environment per UTC day (RUNTIME_PUSH_SETUP_DAILY_LIMIT); 0 turns the push trigger off. */
+export function loadPushSetupConfig(env: NodeJS.ProcessEnv = process.env): PushSetupConfig {
+    return { dailyLimit: Math.min(envIntOr(env.RUNTIME_PUSH_SETUP_DAILY_LIMIT, DEFAULT_PUSH_SETUP_DAILY_LIMIT, 0), 1_000) };
 }
 
 /** Kodus's own address (API_FRONTEND_URL), for links in what the API posts on a PR; undefined when unset. */

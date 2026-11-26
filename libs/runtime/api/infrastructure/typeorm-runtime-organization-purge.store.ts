@@ -26,6 +26,7 @@ export const RUNTIME_PRODUCT_ORGANIZATION_TABLES: readonly string[] = [
     'runtime_pr_comments',
     'runtime_pr_checks',
     'runtime_reconciled_heads',
+    'runtime_push_setups',
     'runtime_kept_checks',
     'runtime_run_targets',
 ];

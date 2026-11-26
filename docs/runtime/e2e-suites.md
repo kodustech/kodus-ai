@@ -34,7 +34,11 @@ Everything below is inside these four.
 
 ### 2.1 Step by step: a main commit
 
-1. A commit lands on the default branch. The default-branch setup runs and bakes; the template rebuild pass finds a
+1. A commit lands on the default branch. The push re-runs the environment's setup by itself
+   (`github webhook -> runtime.default_branch_push.observed -> RuntimeDefaultBranchPushSetup`; fork-from-checkpoint.md
+   R6): only the default branch of a repository in an environment, coalesced per environment, at most
+   `RUNTIME_PUSH_SETUP_DAILY_LIMIT` (12) setups per environment per UTC day, GitHub only today; a manual "Set up again"
+   still works when the day is spent. The setup runs and bakes; the template rebuild pass finds a
    new bake fingerprint (digest of every repository's commit and the recipe, `bake-probe.ts:21-30`) and builds the
    environment template (`template-rebuild.ts:43-61`, `TemplateBuildTrigger.onSetupFinished`).
 2. When the template turns `ready` (`runtime_env_templates`), the trigger also enqueues a **baseline suite run** for

@@ -285,7 +285,7 @@ Reading the table:
 | R3 | A restored side keeps the template's process state | Timers, caches, request ids, pids repeat across sides and rounds. Good for comparison, bad for anything seeded once | The "after restore" hook is not built (P3 residual). Step 4 checks the Run's probes do not depend on boot time |
 | R4 | Holdings leak which environments a cell holds | Ids only, org-scoped, to the hub that already knows the cell's claims | Same rule as `evictedBuildStates`; org purge covers the table |
 | R5 | A hub that lies in holdings or placement | Can steer a claim to a cold cell, not to another org's template | Cell-side checks (`microvm.go:496-503`, H11) stay the authority |
-| R6 | Refresh trigger on default-branch pushes (step 9) | A webhook starting setups is a cost and abuse path | Only the default branch of a repository already enabled; coalesced per environment; never a PR or fork; budgeted like any setup |
+| R6 | Refresh trigger on default-branch pushes (step 9) | A webhook starting setups is a cost and abuse path | **Built** (`libs/runtime/api/application/default-branch-push-setup.service.ts`). Only the default branch of a repository in an environment (the Git API names the branch and the commit, not the payload; a fork is another repository; tags, deletions and other branches never pass); coalesced per environment (a push while a setup is queued or running starts nothing, the newest commit runs once after it, or the running setup is enough if it already is at that commit); at most `RUNTIME_PUSH_SETUP_DAILY_LIMIT` (default 12, 0 turns it off) setups per environment per UTC day, the next push is logged and skipped; the setup is the one "Set up again" requests, so it is budgeted and blocked like any setup. GitHub only, because setup reads the default branch from GitHub only |
 | R7 | Round writes on the boot path | A 10 GiB memory write through the VMM's cgroup page cache caused an OOM kill once (`isolation-p3-snapshots.md` "The exec that closed its stream") | Fixed (cgroup room grows during a create); re-run at kodus-ai's size in step 1 |
 | R8 | Disk | Two rounds per Run plus templates on one state disk | `Room` and `RoundTTL`; step 1 sizes it |
 | R9 | CPU feature fingerprint | A template restores only on the same CPU family, kernel and Firecracker build (H13). A mixed fleet strands templates | Same instance family per pool (`host-providers.md:243`); holdings list only restorable templates |
@@ -329,7 +329,8 @@ ceiling, refresh trigger, placement wait) depends on it.
 9. **Refresh the template when the default branch advances.** On a push to the default branch of an enabled repository,
    request a setup, coalesced per environment, rate-limited, never from a PR or a fork. *Proof:* a trigger spec (a push
    to the default branch yields one `setup_requested`, a burst yields one, a PR branch and a fork yield none) and a
-   step 1 re-run showing the base's `deltaMs` near zero. Needs decision 2 first.
+   step 1 re-run showing the base's `deltaMs` near zero. Decision 2 is made. *Built:* `default-branch-push-setup.spec.ts`
+   covers the trigger; the step 1 re-run is still to do.
 10. **Spike on docker-gvisor: one image, two network namespaces with the same addresses.** With raw runsc as in
     `gvisor-checkpoint-reset.md` §2 (`raw.sh`), restore one checkpoint into a second namespace that carries the same
     addresses and MACs, and check that both answer and keep their state. *Proof:* pass means both containers answer and
@@ -340,7 +341,10 @@ ceiling, refresh trigger, placement wait) depends on it.
 
 1. **Turn on Firecracker environments for Kodus Cloud cells** (explicit `-isolation-backend firecracker`) before the P3
    review closes, or wait. Everything in idea 1 is gated by it.
-2. **Refresh the template on default-branch pushes** (step 9): yes or no, and the budget per environment per day.
+2. **Refresh the template on default-branch pushes** (step 9): **decided, yes** (owner approved). Limits: default branch of a
+   repository already in an environment only; coalesced per environment; 12 setups per environment per UTC day
+   (`RUNTIME_PUSH_SETUP_DAILY_LIMIT`; a manual "Set up again" is not counted); GitHub only until setup reads the other
+   platforms (R6).
 3. **Placement strictness.** Soft rank with a cold fallback (this design), a bounded wait for the holder, or both sides
    required on the same cell.
 4. **Round ceiling** (step 8): how many seconds of boot path a round may cost before the environment keeps compose resets.

@@ -68,6 +68,7 @@ export const RuntimeEventName = {
     RunCancelRequested: 'runtime.run.cancel_requested',
     PublishRequested: 'runtime.publish.requested',
     PullRequestObserved: 'runtime.pull_request.observed',
+    DefaultBranchPushObserved: 'runtime.default_branch_push.observed',
 } as const;
 
 const id = z.string().min(1).max(128);
@@ -415,6 +416,28 @@ export const RuntimePullRequestObservedSchema = z.strictObject({
 });
 export type RuntimePullRequestObserved = z.infer<typeof RuntimePullRequestObservedSchema>;
 
+/**
+ * A push to a branch the webhook handler saw, for a repository in a Runtime environment (docs/runtime/fork-from-checkpoint.md
+ * R6). It only says what happened: whether the branch is the default one and which commit it holds are read back from the
+ * Git API before anything is decided (ADR-057), so `headSha` and `branch` here are logs and a first filter, never facts.
+ */
+export const RuntimeDefaultBranchPushObservedSchema = z.strictObject({
+    organizationId: id,
+    teamId: id,
+    repository: z.strictObject({ id, name: z.string().min(1).max(256), fullName: z.string().max(512).optional() }),
+    /** The branch the push moved, without `refs/heads/`. */
+    branch: z.string().min(1).max(1_024),
+    headSha: sha.optional(),
+    observedAt: z.iso.datetime(),
+    traceparent: TraceparentSchema.optional(),
+});
+export type RuntimeDefaultBranchPushObserved = z.infer<typeof RuntimeDefaultBranchPushObservedSchema>;
+
+/** The outbox row the webhook handler writes for a push to a branch (product worker consumes it, on the trigger queue). */
+export function runtimePushOutboxMessage(payload: RuntimeDefaultBranchPushObserved, messageId: string) {
+    return runtimeOutboxMessage(RuntimeEventName.DefaultBranchPushObserved, payload, messageId);
+}
+
 /** The outbox row the webhook handler writes for a pull request event (product worker consumes it). */
 export function runtimeTriggerOutboxMessage(payload: RuntimePullRequestObserved, messageId: string) {
     return runtimeOutboxMessage(RuntimeEventName.PullRequestObserved, payload, messageId);
@@ -480,6 +503,7 @@ export interface RuntimeEventPayloads {
     'runtime.run.cancel_requested': RuntimeRunCancelRequested;
     'runtime.publish.requested': RuntimePublishRequested;
     'runtime.pull_request.observed': RuntimePullRequestObserved;
+    'runtime.default_branch_push.observed': RuntimeDefaultBranchPushObserved;
 }
 
 const EVENT_ROUTES: Record<RuntimeEventNameValue, { schema: z.ZodType; routingKey: string; workflowType: WorkflowType }> = {
@@ -487,6 +511,7 @@ const EVENT_ROUTES: Record<RuntimeEventNameValue, { schema: z.ZodType; routingKe
     [RuntimeEventName.RunCancelRequested]: { schema: RuntimeRunCancelRequestedSchema, routingKey: RUNTIME_RUN_ROUTING_KEY, workflowType: WorkflowType.RUNTIME_RUN },
     [RuntimeEventName.PublishRequested]: { schema: RuntimePublishRequestedSchema, routingKey: RUNTIME_PUBLISH_ROUTING_KEY, workflowType: WorkflowType.RUNTIME_PUBLISH },
     [RuntimeEventName.PullRequestObserved]: { schema: RuntimePullRequestObservedSchema, routingKey: RUNTIME_TRIGGER_ROUTING_KEY, workflowType: WorkflowType.RUNTIME_TRIGGER },
+    [RuntimeEventName.DefaultBranchPushObserved]: { schema: RuntimeDefaultBranchPushObservedSchema, routingKey: RUNTIME_TRIGGER_ROUTING_KEY, workflowType: WorkflowType.RUNTIME_TRIGGER },
 };
 
 /**

@@ -35,6 +35,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CodeManagementService } from '../../adapters/services/codeManagement.service';
 import { CarryReviewCheckToMergeQueueUseCase } from '@libs/platform/application/use-cases/codeManagement/carry-review-check-to-merge-queue.use-case';
+import { defaultBranchPushOf } from './default-branch-push';
 import { isMergeQueuePush } from './merge-queue-ref';
 import {
     IOutboxMessageRepository,
@@ -46,8 +47,10 @@ import {
 } from '@libs/sandbox/domain/events/sandbox-invalidate.event';
 import { randomUUID } from 'crypto';
 import {
+    runtimePushOutboxMessage,
     runtimeTriggerOutboxMessage,
     RuntimePullRequestObservedSchema,
+    type RuntimeDefaultBranchPushObserved,
     type RuntimePullRequestObserved,
 } from '@libs/runtime/run/run-messages';
 import {
@@ -99,10 +102,15 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
             return true;
         }
 
-        // Pushes are only handled for merge queue branches, to report
-        // Kody's check on the commit the queue tests.
+        // Pushes are handled for merge queue branches, to report Kody's check
+        // on the commit the queue tests, and, where the Runtime is on, for the
+        // default branch (an environment's setup, R6).
         if (params.event === 'push') {
-            return isMergeQueuePush(params.event, params.payload);
+            return (
+                isMergeQueuePush(params.event, params.payload) ||
+                (!!this.runtimeGate &&
+                    defaultBranchPushOf(params.event, params.payload) !== null)
+            );
         }
 
         // Verify if the event is one of the supported events
@@ -168,7 +176,13 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                 await this.handleComment(params);
                 break;
             case 'push':
-                await this.carryReviewCheckToMergeQueueUseCase.execute(params);
+                if (isMergeQueuePush(event, params.payload)) {
+                    await this.carryReviewCheckToMergeQueueUseCase.execute(
+                        params,
+                    );
+                } else {
+                    await this.recordDefaultBranchPushForRuntime(params);
+                }
                 break;
             default:
                 this.logger.warn({
@@ -899,6 +913,68 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
             .shouldRecord({ organizationId, repositoryId })
             .catch(() => true);
         return inRuntime ? ctx.organizationAndTeamData : undefined;
+    }
+
+    /**
+     * Writes a push to the repository's default branch to the outbox for the
+     * Runtime (R6), only for a repository in a Runtime environment (the gate).
+     * It only says what happened: the Runtime reads the default branch and its
+     * head from the Git API before it sets the environment up again. A failure
+     * here never blocks the webhook.
+     */
+    private async recordDefaultBranchPushForRuntime(
+        params: IWebhookEventParams,
+    ): Promise<void> {
+        const push = defaultBranchPushOf(params.event, params.payload);
+        const repository = params.payload?.repository;
+        if (!this.runtimeGate || !push || !repository?.id || !repository?.name) {
+            return;
+        }
+        try {
+            const context = await this.webhookContextService.getContext(
+                PlatformType.GITHUB,
+                String(repository.id),
+                githubWebhookSource(params.payload),
+            );
+            const { organizationId, teamId } =
+                context?.organizationAndTeamData ?? {};
+            if (!organizationId || !teamId) return;
+            if (
+                !(await this.runtimeGate.shouldRecord({
+                    organizationId,
+                    repositoryId: String(repository.id),
+                }))
+            ) {
+                return;
+            }
+            const payload: RuntimeDefaultBranchPushObserved = {
+                organizationId,
+                teamId,
+                repository: {
+                    id: String(repository.id),
+                    name: repository.name,
+                    ...(repository.full_name
+                        ? { fullName: repository.full_name }
+                        : {}),
+                },
+                branch: push.branch,
+                headSha: push.after,
+                observedAt: new Date().toISOString(),
+                ...(params.correlationId
+                    ? { traceparent: traceparentFor(params.correlationId) }
+                    : {}),
+            };
+            await this.outboxRepository.create(
+                runtimePushOutboxMessage(payload, randomUUID()),
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to record the default branch push for Kody Runtime',
+                context: GitHubPullRequestHandler.name,
+                error,
+                metadata: { repositoryId: repository.id },
+            });
+        }
     }
 
     private async recordPullRequestEventForRuntime(input: {

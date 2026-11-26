@@ -9,6 +9,8 @@ export interface RuntimeCronSchedules {
     prSessionSweep: string;
     poolScheduler: string;
     publicationRedrive: string;
+    /** RUNTIME_CRON_PUSH_SETUP_DRAIN: the setups a default-branch push held back while another setup ran. */
+    pushSetupDrain: string;
 }
 
 export function loadRuntimeCronSchedules(env: NodeJS.ProcessEnv): RuntimeCronSchedules {
@@ -18,6 +20,7 @@ export function loadRuntimeCronSchedules(env: NodeJS.ProcessEnv): RuntimeCronSch
         prSessionSweep: env.RUNTIME_CRON_PR_SESSION_SWEEP || '*/30 * * * *',
         poolScheduler: env.RUNTIME_CRON_POOL_SCHEDULER || '*/5 * * * *',
         publicationRedrive: env.RUNTIME_CRON_PUBLICATION_REDRIVE || '* * * * *',
+        pushSetupDrain: env.RUNTIME_CRON_PUSH_SETUP_DRAIN || '*/2 * * * *',
     };
 }
 

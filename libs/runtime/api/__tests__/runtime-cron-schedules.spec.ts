@@ -11,6 +11,7 @@ describe('Runtime product cron schedules', () => {
             prSessionSweep: '*/30 * * * *',
             poolScheduler: '*/5 * * * *',
             publicationRedrive: '* * * * *',
+            pushSetupDrain: '*/2 * * * *',
         });
     });
 

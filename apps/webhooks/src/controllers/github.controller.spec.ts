@@ -53,8 +53,33 @@ describe('GithubController push filtering', () => {
         });
     });
 
+    it('enqueues a push to the default branch, for the Runtime', async () => {
+        const payload = {
+            ref: 'refs/heads/main',
+            after: 'a'.repeat(40),
+            repository: { id: 1, default_branch: 'main', fork: false },
+        };
+
+        const res = await send(payload);
+
+        expect(res.send).toHaveBeenCalledWith('Webhook received');
+        expect(enqueue).toHaveBeenCalledWith({
+            platformType: PlatformType.GITHUB,
+            event: 'push',
+            payload,
+        });
+    });
+
     it.each([
         ['an ordinary branch push', { ref: 'refs/heads/main' }],
+        [
+            'a push to another branch',
+            {
+                ref: 'refs/heads/feature',
+                after: 'a'.repeat(40),
+                repository: { default_branch: 'main' },
+            },
+        ],
         ['a merge queue branch deletion', { ref: queueRef, deleted: true }],
     ])('does not enqueue %s', async (_label, payload) => {
         const res = await send(payload);

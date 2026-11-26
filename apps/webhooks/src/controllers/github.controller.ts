@@ -5,6 +5,7 @@ import { Request, Response } from 'express';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import { EnqueueWebhookUseCase } from '@libs/platform/application/use-cases/webhook/enqueue-webhook.use-case';
+import { defaultBranchPushOf } from '@libs/platform/infrastructure/webhooks/github/default-branch-push';
 import { isMergeQueuePush } from '@libs/platform/infrastructure/webhooks/github/merge-queue-ref';
 import { isNewRepositoryEvent } from '@libs/platform/infrastructure/webhooks/github/new-repository-event';
 import { requestedReviewerOf } from '@libs/platform/infrastructure/webhooks/github/review-request';
@@ -30,12 +31,15 @@ export class GithubController {
             'pull_request_review_comment',
             'push',
         ];
-        // Pushes matter only for merge queue branches; every other push
-        // would be enqueued just to be dropped by the worker.
+        // Pushes matter only for merge queue branches and for a repository's
+        // default branch (a Runtime environment's setup, R6); every other
+        // push would be enqueued just to be dropped by the worker.
         if (
             !isNewRepositoryEvent(event, payload) &&
             (!supportedEvents.includes(event) ||
-                (event === 'push' && !isMergeQueuePush(event, payload)))
+                (event === 'push' &&
+                    !isMergeQueuePush(event, payload) &&
+                    !defaultBranchPushOf(event, payload)))
         ) {
             return res
                 .status(HttpStatus.OK)

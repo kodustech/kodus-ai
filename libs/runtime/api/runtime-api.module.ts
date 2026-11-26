@@ -169,11 +169,13 @@ import {
 import { TypeOrmRuntimeLlmBudgetStore } from './infrastructure/typeorm-llm-budget.store';
 import { PgBuildStateEvictionReader, PgEnvironmentSetupReader, PgLessonReader, ProjectionEnvironmentReader, ReadOnlyRunProjectionStore } from './infrastructure/pg-runtime-readers';
 import { PgRuntimeCellReader, PgRuntimeCellTokenReader, PgSandboxCellFactsReader } from './infrastructure/pg-runtime-cell.reader';
-import { loadDashboardUrl, loadRuntimeApiConfig, loadWebhookReconcilerConfig } from './infrastructure/runtime-api.config';
+import { loadDashboardUrl, loadPushSetupConfig, loadRuntimeApiConfig, loadWebhookReconcilerConfig } from './infrastructure/runtime-api.config';
 import { RuntimeReadDb } from './infrastructure/runtime-read-db';
 import { RuntimeProductRetentionCron } from './infrastructure/runtime-product-retention.cron';
 import { RuntimeWebhookReconciler } from './application/webhook-reconciler.service';
 import { RUNTIME_RECONCILED_HEAD_STORE, RUNTIME_WEBHOOK_RECONCILER_CONFIG } from './domain/webhook-reconciler';
+import { RUNTIME_PUSH_SETUP_CONFIG, RUNTIME_PUSH_SETUP_LEDGER } from './domain/push-setup';
+import { TypeOrmPushSetupLedger } from './infrastructure/typeorm-push-setups.store';
 import { TypeOrmReconciledHeadStore } from './infrastructure/typeorm-reconciled-heads.store';
 import { TypeOrmSql } from './infrastructure/typeorm-sql';
 import { RuntimeReaderAuthGuard } from './infrastructure/runtime-reader.guard';
@@ -181,6 +183,7 @@ import { ByokRuntimeAgentRunnerFactory, ByokRuntimeLlmProvider, permissionSlotRe
 import { CodeManagementRepoTokenIssuer } from './infrastructure/repo-token-issuer.adapter';
 import { DevStubRepoTokenIssuer, DevStubRuntimeGit, devGitStubFile } from './infrastructure/dev-stub-git.adapter';
 import { RUNTIME_PLATFORM_RESOLVER, RuntimeRunEnqueuer } from './application/runtime-run-enqueuer.service';
+import { RuntimeDefaultBranchPushSetup } from './application/default-branch-push-setup.service';
 import { RuntimeSetupRequester } from './application/runtime-setup-requester.service';
 import { RuntimeEnvToolsService } from './application/env-tools.service';
 import { ListRuntimeAuditUseCase } from './application/use-cases/env-audit.use-case';
@@ -430,6 +433,10 @@ const useCases = [
         { provide: RUNTIME_WEBHOOK_RECONCILER_CONFIG, useFactory: () => loadWebhookReconcilerConfig() },
         { provide: RUNTIME_RECONCILED_HEAD_STORE, inject: [TypeOrmSql], useFactory: (sql: TypeOrmSql) => new TypeOrmReconciledHeadStore(sql) },
         RuntimeWebhookReconciler,
+        // A push to an environment's default branch sets it up again (R6): the ledger coalesces and budgets.
+        { provide: RUNTIME_PUSH_SETUP_LEDGER, inject: [TypeOrmSql], useFactory: (sql: TypeOrmSql) => new TypeOrmPushSetupLedger(sql) },
+        { provide: RUNTIME_PUSH_SETUP_CONFIG, useFactory: () => loadPushSetupConfig() },
+        RuntimeDefaultBranchPushSetup,
         {
             provide: RUNTIME_RUN_STREAM_STORE,
             inject: [RUNTIME_API_CONFIG, RuntimeReadDb],
@@ -620,6 +627,6 @@ const useCases = [
         RuntimeA2ABearerGuard,
         ...useCases,
     ],
-    exports: [RUNTIME_RUN_PROJECTION_STORE, RUNTIME_SANDBOX_CELL_FACTS_READER, RUNTIME_RELEASE_GATE, RUNTIME_CLOCK, RUNTIME_WEBHOOK_RECONCILER_CONFIG, RuntimeWebhookReconciler, ...useCases, RuntimeReaderAuthGuard, RuntimeRunEnqueuer, RuntimeEnvToolsService, RuntimePoolController, RuntimeA2AAdapter, RuntimeA2ABearerGuard],
+    exports: [RUNTIME_RUN_PROJECTION_STORE, RUNTIME_SANDBOX_CELL_FACTS_READER, RUNTIME_RELEASE_GATE, RUNTIME_CLOCK, RUNTIME_WEBHOOK_RECONCILER_CONFIG, RuntimeWebhookReconciler, RuntimeDefaultBranchPushSetup, ...useCases, RuntimeReaderAuthGuard, RuntimeRunEnqueuer, RuntimeEnvToolsService, RuntimePoolController, RuntimeA2AAdapter, RuntimeA2ABearerGuard],
 })
 export class RuntimeApiModule {}

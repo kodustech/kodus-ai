@@ -356,6 +356,64 @@ describe('GitHubPullRequestHandler', () => {
             );
         });
     });
+    describe('Kody Runtime push to the default branch (R6)', () => {
+        const SHA = 'a'.repeat(40);
+        const pushRows = () =>
+            outboxRepository.create.mock.calls
+                .map(([row]) => row)
+                .filter((row) => row?.payload?.event_name === 'runtime.default_branch_push.observed');
+        const params = (patch: Record<string, unknown> = {}, repository: Record<string, unknown> = {}) => ({
+            platformType: PlatformType.GITHUB,
+            event: 'push',
+            correlationId: 'corr-1',
+            payload: {
+                ref: 'refs/heads/main',
+                after: SHA,
+                repository: { id: 12345, name: 'test-repo', full_name: 'org/test-repo', default_branch: 'main', fork: false, ...repository },
+                ...patch,
+            },
+        });
+
+        it('takes a push to the default branch', () => {
+            expect(handler.canHandle(params() as any)).toBe(true);
+        });
+
+        it('records the push for the Runtime in the outbox, with the branch and the commit', async () => {
+            await handler.execute(params() as any);
+            const [row] = pushRows();
+            expect(row.payload.payload).toMatchObject({
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                repository: { id: '12345', name: 'test-repo', fullName: 'org/test-repo' },
+                branch: 'main',
+                headSha: SHA,
+            });
+            expect(carryReviewCheckToMergeQueueUseCase.execute).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ['another branch', { ref: 'refs/heads/feature' }, {}],
+            ['a tag', { ref: 'refs/tags/main' }, {}],
+            ['a deletion', { deleted: true }, {}],
+            ['a fork', {}, { fork: true }],
+        ])('records nothing for %s', async (_label, payload, repository) => {
+            expect(handler.canHandle(params(payload, repository) as any)).toBe(false);
+            await handler.execute(params(payload, repository) as any);
+            expect(pushRows()).toHaveLength(0);
+        });
+
+        it('records nothing for a repository that is in no Runtime environment', async () => {
+            runtimeGate.shouldRecord.mockResolvedValue(false);
+            await handler.execute(params() as any);
+            expect(pushRows()).toHaveLength(0);
+        });
+
+        it('does not fail the event when the outbox cannot take the row', async () => {
+            outboxRepository.create.mockRejectedValue(new Error('down'));
+            await expect(handler.execute(params() as any)).resolves.toBeUndefined();
+        });
+    });
+
     describe('Kody Runtime trigger (PR 2)', () => {
         const runtimeRows = () =>
             outboxRepository.create.mock.calls
