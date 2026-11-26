@@ -2060,12 +2060,15 @@ describe('SandboxLeaseManager', () => {
             const { sandbox, leaseId } = await acquireCreated();
             const provided = await (sandboxProvider.createSandboxWithRepo.mock
                 .results[0].value as Promise<SandboxInstance>);
-            let finish!: (content: string) => void;
+            let finishFirst!: (content: string) => void;
+            let finishSecond!: (content: string) => void;
             (provided.readFile as jest.Mock)
                 .mockReturnValueOnce(
-                    new Promise<string>((resolve) => (finish = resolve)),
+                    new Promise<string>((resolve) => (finishFirst = resolve)),
                 )
-                .mockResolvedValueOnce('again');
+                .mockReturnValueOnce(
+                    new Promise<string>((resolve) => (finishSecond = resolve)),
+                );
 
             const tool = (async () => {
                 await sandbox.readFile('a.ts');
@@ -2074,12 +2077,18 @@ describe('SandboxLeaseManager', () => {
             releasedWith(0);
             await manager.release(leaseId, { idleMs: 30_000 });
 
-            finish('first');
-            await expect(tool).resolves.toBe('again');
+            finishFirst('first');
             await settle();
+            // The second read runs 800ms: past where the first one's quiet
+            // window would have ended
+            await jest.advanceTimersByTimeAsync(800);
+            finishSecond('again');
+            await expect(tool).resolves.toBe('again');
+
+            await jest.advanceTimersByTimeAsync(999);
             expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
 
-            await goQuiet();
+            await jest.advanceTimersByTimeAsync(1);
             expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
         });
 
