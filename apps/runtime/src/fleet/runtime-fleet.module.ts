@@ -106,7 +106,7 @@ class FleetRunner implements OnApplicationBootstrap, OnApplicationShutdown {
                     return p ? { poolId, pool: p.pool } : null;
                 },
                 boatPoolsOf,
-                build: (req) => buildEnvironmentTemplate(req, { store: templateStore, provider: boat, setupHosts, cellBase: cellBaseOf(req.pool.hostClass) ?? '', poll }),
+                build: (req) => buildEnvironmentTemplate(req, { store: templateStore, provider: boat, setupHosts, cellBase: cellBaseOf(req.pool.hostClass) ?? '', poll, log }),
                 log,
             });
             templates = new TriggeringTemplateResolver(templates, trigger);

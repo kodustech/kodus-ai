@@ -104,7 +104,7 @@ export class TemplateBuildTrigger {
         void this.d
             .build({ organizationId, environmentId, poolId, pool, fingerprint })
             .then(async (r) => {
-                this.d.log?.('template.built', { environmentId, poolId, ok: r.ok, ...(r.ok === false ? { reason: r.reason, ...(r.cause ? { cause: r.cause } : {}) } : {}) });
+                this.d.log?.('template.built', { environmentId, poolId, ok: r.ok, ...(r.source ? { source: r.source } : {}), ...(r.ok === false ? { reason: r.reason, ...(r.cause ? { cause: r.cause } : {}) } : {}) });
                 // A template that turned ready now (not one that was already there) holds a main commit nobody ran the suite on.
                 if (r.ok && !r.reused && rec.sha && wantsBaseline(rec)) await this.requestBaseline({ organizationId, environmentId, repositoryId: rec.repositoryId, mainSha: rec.sha, fingerprint });
             })

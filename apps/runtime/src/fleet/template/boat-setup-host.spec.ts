@@ -1,5 +1,6 @@
 import { FakeHostProvider } from '@libs/runtime/fleet/fake-provider';
 import { parseHostPool } from '@libs/runtime/fleet/pool';
+import { ProviderError } from '@libs/runtime/fleet/provider-error';
 import { boundKeyOfTemplate } from '@libs/runtime/placement/candidate-pools';
 
 import { InMemoryTemplateStore } from '../testing';
@@ -43,6 +44,39 @@ describe('the live setup host on boat (docs/runtime/host-providers.md §8.2)', (
         expect(w.minted).toEqual([{ hostId: 'tpl-1', poolId: 'boat-eu-perrun', boundKey: boundKeyOfTemplate('org-kodus', 'env-shop'), ttlSeconds: expect.any(Number) }]);
         expect(w.provider.hosts.get(providerId)?.from).toBe('kodus-cell-r42-kit7');
         expect(w.provider.hosts.get(providerId)?.tags).toEqual({ installation: 'it', pool: 'boat-eu-perrun', host: 'tpl-1' });
+    });
+
+    it("boots from the environment's previous template when given one, with the same token bound to the template's environment", async () => {
+        const w = world();
+        const r = await w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', fingerprint: 'a'.repeat(64), base: 'kodus-cell-r42-kit7', from: 'kodus-env-previous' });
+        expect(r.source).toBe('template');
+        expect(w.provider.hosts.get(r.providerId)?.from).toBe('kodus-env-previous');
+        expect(w.minted).toHaveLength(1);
+        expect(w.minted[0].boundKey).toBe(boundKeyOfTemplate('org-kodus', 'env-shop'));
+    });
+
+    it('falls back to the cell base, with a client token of its own, when the host cannot be created from the template', async () => {
+        const w = world();
+        const create = w.provider.create.bind(w.provider);
+        const tokens: string[] = [];
+        w.provider.create = async (req) => {
+            tokens.push(req.clientToken);
+            if (req.from === 'kodus-env-previous') throw new ProviderError('transient', 'snapshot_gone');
+            return create(req);
+        };
+        const r = await w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', fingerprint: 'a'.repeat(64), base: 'kodus-cell-r42-kit7', from: 'kodus-env-previous' });
+        expect(r.source).toBe('base');
+        expect(w.provider.hosts.get(r.providerId)?.from).toBe('kodus-cell-r42-kit7');
+        expect(new Set(tokens).size).toBe(2);
+        expect(w.minted).toHaveLength(1);
+    });
+
+    it('does not hide a failure of the cell base itself: with no template, the create error is the build error', async () => {
+        const w = world();
+        w.provider.create = async () => {
+            throw new ProviderError('capacity_unavailable', 'no_ready_machine');
+        };
+        await expect(w.host.boot({ hostId: 'tpl-1', organizationId: 'org-kodus', environmentId: 'env-shop', poolId: 'boat-eu-perrun', fingerprint: 'a'.repeat(64), base: 'b' })).rejects.toThrow('no_ready_machine');
     });
 
     it('waits for a machine instead of failing fast when none is ready: the template build runs in the background, no Run waits on it', async () => {
@@ -110,7 +144,7 @@ describe('the live setup host on boat (docs/runtime/host-providers.md §8.2)', (
     it('runs the whole template workflow: ready template named for the environment, setup host destroyed', async () => {
         const w = world();
         const r = await buildEnvironmentTemplate(w.req, { store: w.store, provider: w.provider, setupHosts: w.host, cellBase: 'kodus-cell-r42-kit7', poll: { sleep: async () => undefined, attempts: 5 } });
-        expect(r).toEqual({ ok: true, name: templateNameOf('org-kodus', 'env-shop', FP, 'kodus-cell-r42-kit7'), reused: false });
+        expect(r).toEqual({ ok: true, name: templateNameOf('org-kodus', 'env-shop', FP, 'kodus-cell-r42-kit7'), reused: false, source: 'base' });
         expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', 'kodus-cell-r42-kit7')).toBe(r.ok ? r.name : '');
         expect([...w.provider.hosts.values()].every((h) => h.state === 'gone')).toBe(true);
     });

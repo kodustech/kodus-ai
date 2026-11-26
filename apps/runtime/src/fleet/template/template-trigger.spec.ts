@@ -144,10 +144,24 @@ describe('when an environment template is built', () => {
         expect(w.builds).toHaveLength(1);
         w.release();
     });
+    it('says in template.built whether the build started from the previous template or from the cell base', async () => {
+        const logs: Array<[string, Record<string, unknown>]> = [];
+        const trigger = new TemplateBuildTrigger({
+            store: new InMemoryTemplateStore(),
+            environmentSetups: { get: async () => record() },
+            poolOf: async (poolId) => ({ poolId, pool }),
+            boatPoolsOf: async () => [{ poolId: 'p', pool }],
+            build: async () => ({ ok: true, name: 'n', reused: false, source: 'template' }),
+            log: (m, f) => void logs.push([m, f]),
+        });
+        await trigger.onSetupFinished(record());
+        await new Promise((r) => setImmediate(r));
+        expect(logs.find(([m]) => m === 'template.built')?.[1]).toMatchObject({ ok: true, source: 'template' });
+    });
     it('asks the setup request path for the environment bound to its template once the setup host is booted', async () => {
         const calls: string[] = [];
         const host = new RequestingSetupHost(
-            { boot: async () => (calls.push('boot'), { providerId: 'pid' }), waitForBake: async () => ({ ok: false, reason: 'x' }), seal: async () => undefined, destroy: async () => undefined },
+            { boot: async () => (calls.push('boot'), { providerId: 'pid', source: 'base' as const }), waitForBake: async () => ({ ok: false, reason: 'x' }), seal: async () => undefined, destroy: async () => undefined },
             { request: async (r) => void calls.push(`${r.boundKey}|${r.key}`) },
         );
         await host.boot({ hostId: 'tpl-1', organizationId: 'org-1', environmentId: 'env-1', poolId: 'p', fingerprint: FP, base: 'b' });

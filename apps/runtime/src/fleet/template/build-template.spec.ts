@@ -22,12 +22,16 @@ class FakeSetupHosts implements SetupHostPort {
     readonly booted: string[] = [];
     readonly sealed: string[] = [];
     readonly destroyed: string[] = [];
+    readonly events: string[] = [];
+    /** What each setup host was created from, in order. */
+    readonly from: string[] = [];
     bake: { ok: true; fingerprint: string; ref: 'default_branch' } | { ok: false; reason: string } = { ok: true, fingerprint: FP, ref: 'default_branch' };
     constructor(private readonly provider: FakeHostProvider) {}
-    async boot(req: { hostId: string; base: string }) {
+    async boot(req: { hostId: string; base: string; from?: string }) {
         this.booted.push(req.hostId);
-        const h = await this.provider.create({ hostId: req.hostId, clientToken: req.hostId, cls: pool.hostClass, from: req.base, bootstrap: { hubUrl: 'h', hubCa: 'c', token: 't' }, tags: { installation: 'it', pool: 'boat-eu-perrun', host: req.hostId } });
-        return { providerId: h.providerId };
+        this.from.push(req.from ?? req.base);
+        const h = await this.provider.create({ hostId: req.hostId, clientToken: req.hostId, cls: pool.hostClass, from: req.from ?? req.base, bootstrap: { hubUrl: 'h', hubCa: 'c', token: 't' }, tags: { installation: 'it', pool: 'boat-eu-perrun', host: req.hostId } });
+        return { providerId: h.providerId, source: req.from ? ('template' as const) : ('base' as const) };
     }
     async waitForBake() {
         return this.bake;
@@ -37,6 +41,7 @@ class FakeSetupHosts implements SetupHostPort {
     }
     async destroy(hostId: string) {
         this.destroyed.push(hostId);
+        this.events.push('destroy');
     }
 }
 
@@ -56,7 +61,7 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         const w = world();
         const r = await buildEnvironmentTemplate(w.req, w.deps);
         const name = templateNameOf('org-kodus', 'env-shop', FP, BASE);
-        expect(r).toEqual({ ok: true, name, reused: false });
+        expect(r).toEqual({ ok: true, name, reused: false, source: 'base' });
         expect(w.provider.savedImages.get(name)?.state).toBe('ready');
         expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', BASE)).toBe(name);
         expect(w.hosts.sealed).toEqual(w.hosts.booted);
@@ -80,7 +85,7 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         await buildEnvironmentTemplate(w.req, w.deps);
         const next = { ...w.deps, cellBase: 'kodus-cell-r43-kit7' };
         const r = await buildEnvironmentTemplate(w.req, next);
-        expect(r).toEqual({ ok: true, name: templateNameOf('org-kodus', 'env-shop', FP, 'kodus-cell-r43-kit7'), reused: false });
+        expect(r).toEqual({ ok: true, name: templateNameOf('org-kodus', 'env-shop', FP, 'kodus-cell-r43-kit7'), reused: false, source: 'base' });
         expect(w.hosts.booted).toHaveLength(2);
         expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', 'kodus-cell-r43-kit7')).toBe(templateNameOf('org-kodus', 'env-shop', FP, 'kodus-cell-r43-kit7'));
         expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', BASE)).toBeNull();
@@ -120,7 +125,7 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         await buildEnvironmentTemplate({ ...w.req, fingerprint: old }, w.deps);
         w.hosts.bake = { ok: true, fingerprint: FP, ref: 'default_branch' };
         w.provider.images.save = async ({ name }) => ({ name, state: 'failed' });
-        expect(await buildEnvironmentTemplate(w.req, w.deps)).toEqual({ ok: false, reason: 'save_failed' });
+        expect(await buildEnvironmentTemplate(w.req, w.deps)).toEqual({ ok: false, reason: 'save_failed', source: 'template' });
         expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', BASE)).toBe(templateNameOf('org-kodus', 'env-shop', old, BASE));
     });
 
@@ -149,7 +154,7 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         const w = world();
         let recordedBeforeBoot: string | undefined;
         const boot = w.hosts.boot.bind(w.hosts);
-        w.hosts.boot = async (req: { hostId: string; base: string }) => {
+        w.hosts.boot = async (req: { hostId: string; base: string; from?: string }) => {
             recordedBeforeBoot = w.store.rows[0]?.setupHostId;
             return boot(req);
         };
@@ -170,7 +175,7 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
 
     it('records why the provider failed (its code, never its message) on the failed template, and still destroys the setup host', async () => {
         const w = world();
-        w.hosts.boot = async (req: { hostId: string; base: string }) => {
+        w.hosts.boot = async (req: { hostId: string; base: string; from?: string }) => {
             w.hosts.booted.push(req.hostId);
             throw new ProviderError('capacity_unavailable', 'no_ready_machine');
         };
@@ -187,8 +192,72 @@ describe('the environment template step (boat profile, docs/runtime/host-provide
         };
         const r = await buildEnvironmentTemplate(w.req, w.deps);
         // A free message is never stored: it may carry provider or host detail.
-        expect(r).toEqual({ ok: false, reason: 'build_error', cause: 'unexpected' });
+        expect(r).toEqual({ ok: false, reason: 'build_error', cause: 'unexpected', source: 'base' });
         expect(w.store.rows.map((x) => x.state)).toEqual(['failed']);
         expect(w.hosts.destroyed).toEqual(w.hosts.booted);
+    });
+});
+
+describe('a template build starts from the environment\'s previous ready template', () => {
+    const OLD = 'b'.repeat(64);
+    const oldName = templateNameOf('org-kodus', 'env-shop', OLD, BASE);
+    /** The environment's first template is ready (built cold); the next build is for FP. */
+    async function withOldTemplate() {
+        const w = world();
+        w.hosts.bake = { ok: true, fingerprint: OLD, ref: 'default_branch' };
+        await buildEnvironmentTemplate({ ...w.req, fingerprint: OLD }, w.deps);
+        w.hosts.bake = { ok: true, fingerprint: FP, ref: 'default_branch' };
+        w.hosts.from.length = 0;
+        w.hosts.events.length = 0;
+        return w;
+    }
+
+    it('creates the setup host from that template, so the build cache and the image layers are already on its disk, and says so', async () => {
+        const w = await withOldTemplate();
+        const r = await buildEnvironmentTemplate(w.req, w.deps);
+        expect(w.hosts.from).toEqual([oldName]);
+        expect(r).toEqual({ ok: true, name: templateNameOf('org-kodus', 'env-shop', FP, BASE), reused: false, source: 'template' });
+    });
+
+    it('starts from the cell base when the environment has no ready template yet', async () => {
+        const w = world();
+        const r = await buildEnvironmentTemplate(w.req, w.deps);
+        expect(w.hosts.from).toEqual([BASE]);
+        expect(r).toMatchObject({ ok: true, source: 'base' });
+    });
+
+    it('starts from the cell base when the previous template holds the cell of another base: its disk would boot the old cell', async () => {
+        const w = await withOldTemplate();
+        const next = 'kodus-cell-r43-kit7';
+        const r = await buildEnvironmentTemplate(w.req, { ...w.deps, cellBase: next });
+        expect(w.hosts.from).toEqual([next]);
+        expect(r).toMatchObject({ ok: true, source: 'base' });
+    });
+
+    it('starts from the cell base when the previous template is gone at the provider', async () => {
+        const w = await withOldTemplate();
+        w.provider.savedImages.delete(oldName);
+        const r = await buildEnvironmentTemplate(w.req, w.deps);
+        expect(w.hosts.from).toEqual([BASE]);
+        expect(r).toMatchObject({ ok: true, source: 'base' });
+    });
+
+    it("deletes the previous template's snapshot only after the new one is ready and the setup host created from it is destroyed", async () => {
+        const w = await withOldTemplate();
+        const remove = w.provider.images.remove.bind(w.provider.images);
+        w.provider.images.remove = async (name) => (w.hosts.events.push(`remove:${name}`), remove(name));
+        const save = w.provider.images.save.bind(w.provider.images);
+        w.provider.images.save = async (r) => (w.hosts.events.push(`save:${r.name}`), save(r));
+        await buildEnvironmentTemplate(w.req, w.deps);
+        expect(w.hosts.events).toEqual([`save:${templateNameOf('org-kodus', 'env-shop', FP, BASE)}`, 'destroy', `remove:${oldName}`]);
+    });
+
+    it('keeps the previous template, source snapshot included, when the build from it fails', async () => {
+        const w = await withOldTemplate();
+        w.hosts.bake = { ok: false, reason: 'bake_failed' };
+        const r = await buildEnvironmentTemplate(w.req, w.deps);
+        expect(r).toMatchObject({ ok: false, reason: 'bake_failed', source: 'template' });
+        expect(w.provider.savedImages.has(oldName)).toBe(true);
+        expect(await w.store.readyName('org-kodus', 'env-shop', 'boat-eu-perrun', BASE)).toBe(oldName);
     });
 });

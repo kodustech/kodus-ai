@@ -44,24 +44,38 @@ export class BoatSetupHost implements SetupHostPort {
 
     constructor(private readonly deps: BoatSetupHostDeps) {}
 
-    async boot(req: { hostId: string; organizationId: string; environmentId: string; poolId: string; fingerprint: string; base: string }) {
+    async boot(req: { hostId: string; organizationId: string; environmentId: string; poolId: string; fingerprint: string; base: string; from?: string }) {
         const d = this.deps;
         const pool = await d.poolOf(req.poolId);
         if (!pool) throw new Error('pool_gone');
         const minted = await d.hub.mint({ hostId: req.hostId, poolId: req.poolId, boundKey: boundKeyOfTemplate(req.organizationId, req.environmentId), ttlSeconds: d.tokenTtlSeconds ?? 600 });
         if (minted.ok === false) throw new Error('token_refused');
-        const host = await d.provider.create({
-            hostId: req.hostId,
-            clientToken: req.hostId,
-            // The build runs in the background and no Run waits on it: wait for a machine rather than fail fast.
-            cls: pool.hostClass.provider === 'boat' ? { ...pool.hostClass, boat: { ...pool.hostClass.boat, failFast: false } } : pool.hostClass,
-            from: req.base,
-            bootstrap: { ...d.bootstrap, token: minted.token },
-            tags: { installation: d.installation, pool: req.poolId, host: req.hostId },
-            saveable: true,
-        });
+        const create = (from: string, clientToken: string) =>
+            d.provider.create({
+                hostId: req.hostId,
+                clientToken,
+                // The build runs in the background and no Run waits on it: wait for a machine rather than fail fast.
+                cls: pool.hostClass.provider === 'boat' ? { ...pool.hostClass, boat: { ...pool.hostClass.boat, failFast: false } } : pool.hostClass,
+                from,
+                bootstrap: { ...d.bootstrap, token: minted.token },
+                tags: { installation: d.installation, pool: req.poolId, host: req.hostId },
+                saveable: true,
+            });
+        let source: 'template' | 'base' = 'base';
+        let host: Awaited<ReturnType<typeof create>>;
+        if (req.from) {
+            // The environment's previous template keeps its build cache and image layers. A snapshot that cannot start a host
+            // is no reason to lose the build: the cell base builds it cold, as before. The retry has its own client token,
+            // since the provider answers a repeated one with the host it already made.
+            try {
+                host = await create(req.from, req.hostId);
+                source = 'template';
+            } catch {
+                host = await create(req.base, `${req.hostId}-base`);
+            }
+        } else host = await create(req.base, req.hostId);
         this.providerIds.set(req.hostId, host.providerId);
-        return { providerId: host.providerId };
+        return { providerId: host.providerId, source };
     }
 
     async waitForBake(req: { hostId: string; organizationId: string; environmentId: string }) {

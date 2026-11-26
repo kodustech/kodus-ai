@@ -922,3 +922,69 @@ func TestAHostThatAdoptsNothingKeysItsCacheByItsOwnCell(t *testing.T) {
 		t.Fatalf("key %s, want %s", got, want)
 	}
 }
+
+// A template build that starts from the environment's previous template runs on
+// a host that adopted the previous catalog (its build cache and layers are
+// found under the old owner's id). Its setup is still clean: it reads none of
+// the previous seed, and once its own bake is acknowledged the previous
+// generation, with its seeded volumes, is gone from the disk it saves.
+func TestASetupOnAnAdoptedTemplateStartsItsDataFromScratchAndReplacesTheOldSeed(t *testing.T) {
+	d, docker := bakeDriver(t)
+	ctx := context.Background()
+	old := bakeWithData(t, d, docker, "claim-setup", "previous seed")
+	first, err := d.Bake(ctx, bakeSpec(old))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.AcknowledgeBake(ctx, first.ImageID); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Destroy(ctx, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := d.cfg
+	cfg.CellID, cfg.BakeAdoptOrg = "cell-2", bakeOrg
+	host, err := New(ctx, docker, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer host.Close()
+	if _, err := host.RecoverBakes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := host.envKey(bakeOrg, bakeEnv), buildstate.EnvKey("cell-1", bakeOrg, bakeEnv); got != want {
+		t.Fatalf("the adopted host keys the environment's cache by %s, the previous template's is %s", got, want)
+	}
+
+	// The new setup is a machine of its own flagged as a setup: even handed the
+	// previous bake's id it copies none of the previous seed.
+	ref := machine("claim-setup-2", bakeEnv)
+	ref.ImageID = first.ImageID
+	host.machineLocked(ref.MachineID).setup = true
+	before := len(docker.copies)
+	if n, err := host.restoreData(ctx, ref, ref.MachineID, []string{"pgdata"}); err != nil || n != 0 {
+		t.Fatalf("the setup restored %d volumes from the previous template: %v", n, err)
+	}
+	if len(docker.copies) != before {
+		t.Fatal("the setup read the previous template's seed")
+	}
+
+	// Its own seed is what the next bake keeps; the previous generation's seeded volume is removed.
+	next := bakeWithData(t, host, docker, "claim-setup-3", "new seed")
+	spec := bakeSpec(next)
+	spec.CellID = "cell-2"
+	second, err := host.Bake(ctx, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := host.AcknowledgeBake(ctx, second.ImageID); err != nil {
+		t.Fatal(err)
+	}
+	vols := bakeVolumes(docker)
+	if len(vols) != 1 || !strings.HasSuffix(vols[0], "=new seed") {
+		t.Fatalf("seeded volumes left on the saved disk: %v", vols)
+	}
+}

@@ -598,6 +598,18 @@ Rules:
 - **Replacement.** A new template is recorded in `runtime_env_templates` (org, environment, fingerprint, snapshot name,
   state). Once it is `ready`, the older one of that environment is marked replaced and its saved snapshot deleted. A
   name is at most 63 characters (`^[a-z0-9][a-z0-9-]{0,62}$`), so org and environment go in as short hashes.
+- **A build starts from the environment's previous template.** When the environment has a ready template on the same
+  pool and the same cell base as the pool's now, the setup host is created `from` that template's snapshot, not from the
+  cell base. Its disk already holds the images, the build cache (`cache/env/<key>`), the build state and the registry
+  seed of the last setup, so the build is incremental instead of cold (a compose build of four services, two of them
+  large, took 22 minutes cold). The template cell adopts the previous catalog as a Run host does (section 8.2.1; the
+  bound key `template:<org>/<env>` is accepted), so those keys are found. Only images, build cache and build state carry
+  over. The new setup is a clean setup claim: it never restores the previous bake's volumes (`restoreData` returns for a
+  setup), so every service's data is seeded from scratch, and once its own bake is acknowledged the previous generation
+  and its seeded volumes are removed before the disk is saved. If there is no ready template, it is of another cell base,
+  its snapshot is gone, or creating a host from it fails, the build falls back to the cell base and is cold, as before.
+  `template.built` says which one was used (`source: template|base`). The previous snapshot is deleted last: after the new
+  one is ready, promoted, and the setup host created from it is destroyed. A failed build keeps it.
 - **A new cell base rebuilds the template.** A template's disk holds the cell of the base its setup host booted, so the
   row records that base (`cell_base`, migration 61). Once the pool names another base (a cell release, a security fix),
   the old template is no ready template: Run hosts boot the new base (cold) and the rebuild pass builds the template
