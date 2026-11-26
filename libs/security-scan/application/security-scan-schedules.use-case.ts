@@ -40,6 +40,22 @@ export const SCHEDULE_NOT_FOUND_MESSAGE =
 /** How long a run that found no room waits before trying again. */
 const BUSY_RETRY_MS = 30 * 60 * 1000;
 
+/**
+ * Why a run found no room, said in our words: a refusal that waiting beats,
+ * by its status. The exception's own text is not stored.
+ */
+export const BUSY_REASONS: ReadonlyMap<number, string> = new Map([
+    [
+        HttpStatus.TOO_MANY_REQUESTS,
+        "The organization's running deep scans are at their limit.",
+    ],
+    [HttpStatus.CONFLICT, 'This repository is already being scanned.'],
+    [
+        HttpStatus.SERVICE_UNAVAILABLE,
+        'The deep scan workers are not taking scans right now.',
+    ],
+]);
+
 /** Most scheduled scans one cron run starts; the rest stay due for the next. */
 export const MAX_SCHEDULED_STARTS_PER_RUN = 20;
 
@@ -248,13 +264,9 @@ export class SecurityScanSchedulesUseCase {
                 // a little and tries again instead of losing its turn, or the
                 // same schedules would lose it every day.
                 const busy =
-                    error instanceof HttpException &&
-                    [
-                        HttpStatus.TOO_MANY_REQUESTS,
-                        HttpStatus.CONFLICT,
-                        // The scan workers are not taking jobs (a deploy).
-                        HttpStatus.SERVICE_UNAVAILABLE,
-                    ].includes(error.getStatus());
+                    error instanceof HttpException
+                        ? BUSY_REASONS.get(error.getStatus())
+                        : undefined;
                 const retryAt = new Date(now.getTime() + BUSY_RETRY_MS);
                 if (busy && retryAt < next) {
                     const deferred = await this.schedules
@@ -264,7 +276,7 @@ export class SecurityScanSchedulesUseCase {
                         await this.schedules
                             .recordError(
                                 schedule.uuid,
-                                `${(error as HttpException).message} It tries again at ${retryAt.toISOString().slice(11, 16)} UTC.`,
+                                `${busy} It tries again at ${retryAt.toISOString().slice(11, 16)} UTC.`,
                             )
                             .catch(() => undefined);
                         continue;

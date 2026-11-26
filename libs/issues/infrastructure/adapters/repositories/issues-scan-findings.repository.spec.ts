@@ -9,12 +9,16 @@ import { IssuesRepository } from './issues.repository';
 const exec = (value: unknown) => ({ exec: jest.fn(async () => value) });
 
 /** An aggregation whose cursor yields these rows. */
-const cursorOf = (rows: unknown[]) => ({
-    cursor: () =>
-        (async function* () {
-            yield* rows;
-        })(),
-});
+const cursorOf = (rows: unknown[]) => {
+    const query = {
+        allowDiskUse: jest.fn(() => query),
+        cursor: () =>
+            (async function* () {
+                yield* rows;
+            })(),
+    };
+    return query;
+};
 
 const finding = {
     title: 'Order lookup skips the owner check',
@@ -226,6 +230,8 @@ describe('IssuesRepository — security-scan findings', () => {
             _id: 'i-1',
             status: IssueStatus.RESOLVED,
             lastSeenScanId: null,
+            // Nor while a place was added since it was read.
+            occurrences: { $in: [null, []] },
         });
     });
 
@@ -366,6 +372,7 @@ describe('IssuesRepository — security-scan findings', () => {
             _id: 'i-1',
             status: IssueStatus.OPEN,
             description: 'Injection in the name filter.',
+            occurrences: { $in: [null, []] },
         });
         expect(update.$set.description).toContain(
             'Injection in the name filter.',
@@ -500,10 +507,15 @@ describe('IssuesRepository — security-scan findings', () => {
         });
 
         expect(resolved).toBe(3);
-        expect((model.updateMany.mock.calls[0] as unknown[])[0]).toEqual({
+        const resolutions = model.updateMany.mock.calls.filter(
+            (c: any) => !Array.isArray(c[1]),
+        );
+        expect((resolutions[0] as unknown[])[0]).toEqual({
             ...unseen,
-            consecutiveScanMisses: { $gte: 1 },
-            $or: [
+            // An issue that still holds a place is not fixed.
+            'occurrences.0': { $exists: false },
+            'consecutiveScanMisses': { $gte: 1 },
+            '$or': [
                 {
                     vulnerabilityClass: 'authz',
                     filePath: { $in: ['src/a.ts', 'src/b.ts'] },
@@ -537,7 +549,8 @@ describe('IssuesRepository — security-scan findings', () => {
         expect(resolutions).toHaveLength(1);
         expect((resolutions[0] as unknown[])[0]).toEqual({
             ...unseen,
-            filePath: { $in: ['src/gone.ts'] },
+            'occurrences.0': { $exists: false },
+            'filePath': { $in: ['src/gone.ts'] },
         });
     });
 
@@ -859,9 +872,12 @@ describe('pruning places a scan shows are gone', () => {
     it('drops places of a class read again without them, and places whose file left the branch', async () => {
         const updateMany = jest.fn(async () => ({ modifiedCount: 0 }));
         const distinct = jest.fn(() => exec([]));
-        const aggregate = jest.fn(() =>
-            cursorOf([{ _id: 'src/orders/kept.ts' }, { _id: 'src/gone.ts' }]),
-        );
+        const places = cursorOf([
+            { _id: 'src/orders/kept.ts' },
+            { _id: 'src/gone.ts' },
+        ]);
+        const aggregate = jest.fn(() => places);
+        const startedAt = '2026-11-25T00:00:00.000Z';
         const repository = new IssuesRepository({
             updateMany,
             distinct,
@@ -874,7 +890,7 @@ describe('pruning places a scan shows are gone', () => {
             repositoryHost: 'github.com',
             repositoryId: 'repo-1',
             scanId: 'scan-3',
-            scanStartedAt: '2026-11-25T00:00:00.000Z',
+            scanStartedAt: startedAt,
             trackedFiles: ['src/orders/kept.ts'],
             examined: [
                 {
@@ -901,7 +917,15 @@ describe('pruning places a scan shows are gone', () => {
             Array.isArray(c[1]),
         ) as any[];
         expect(pruneWrites.map(([filter]) => filter)).toEqual([
-            { ...scope, 'occurrences.filePath': { $in: ['src/gone.ts'] } },
+            {
+                ...scope,
+                occurrences: {
+                    $elemMatch: {
+                        filePath: { $in: ['src/gone.ts'] },
+                        lastSeenAt: { $not: { $gte: startedAt } },
+                    },
+                },
+            },
             {
                 ...scope,
                 occurrences: {
@@ -909,6 +933,7 @@ describe('pruning places a scan shows are gone', () => {
                         vulnerabilityClass: 'authz',
                         filePath: { $in: ['src/orders/kept.ts'] },
                         lastSeenScanId: { $ne: 'scan-3' },
+                        lastSeenAt: { $not: { $gte: startedAt } },
                     },
                 },
             },
@@ -917,6 +942,10 @@ describe('pruning places a scan shows are gone', () => {
             { updatePipeline: true },
             { updatePipeline: true },
         ]);
+        // A place a scan that overlapped this one saw after it started stays.
+        const seenBefore = {
+            $not: [{ $gte: ['$$o.lastSeenAt', startedAt] }],
+        };
         expect(
             pruneWrites.map(([, pipeline]) => pipeline[0].$set.occurrences),
         ).toEqual([
@@ -925,7 +954,14 @@ describe('pruning places a scan shows are gone', () => {
                     input: '$occurrences',
                     as: 'o',
                     cond: {
-                        $not: [{ $in: ['$$o.filePath', ['src/gone.ts']] }],
+                        $not: [
+                            {
+                                $and: [
+                                    { $in: ['$$o.filePath', ['src/gone.ts']] },
+                                    seenBefore,
+                                ],
+                            },
+                        ],
                     },
                 },
             },
@@ -950,6 +986,7 @@ describe('pruning places a scan shows are gone', () => {
                                         ],
                                     },
                                     { $ne: ['$$o.lastSeenScanId', 'scan-3'] },
+                                    seenBefore,
                                 ],
                             },
                         ],
@@ -957,9 +994,13 @@ describe('pruning places a scan shows are gone', () => {
                 },
             },
         ]);
-        expect((aggregate.mock.calls[0] as any)[0][0]).toEqual({
-            $match: scope,
-        });
+        // The places' paths, grouped where they can spill to disk.
+        expect(aggregate).toHaveBeenCalledWith([
+            { $match: scope },
+            { $unwind: '$occurrences' },
+            { $group: { _id: '$occurrences.filePath' } },
+        ]);
+        expect(places.allowDiskUse).toHaveBeenCalledWith(true);
     });
 });
 

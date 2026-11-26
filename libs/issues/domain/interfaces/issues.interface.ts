@@ -132,4 +132,6 @@ export interface IIssueOccurrence {
     severity?: string;
     vulnerabilityClass?: string;
     lastSeenScanId?: string;
+    /** When a scan last saw this place: a scan that started later prunes it. */
+    lastSeenAt?: string;
 }

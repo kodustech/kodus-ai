@@ -26,7 +26,6 @@ import type { SurfaceMap } from '../domain/surface/surface.types';
 import { admitRequest, reportUsage } from '@libs/llm/usage-meter';
 import { buildPlatformEmbedder } from '@libs/common/utils/document';
 
-import { rankCandidates } from '../domain/scan-units';
 import { SecurityScanEngine } from './security-scan-engine';
 
 const RATES = {
@@ -3004,8 +3003,12 @@ describe('incremental scans', () => {
             .filter(([input]: any) => input.userPrompt.includes(controller))
             .map(([input]: any) => input.agentName);
         expect(result.unchangedFiles).toBe(0);
-        expect(onController).toContain('security-scan-injection');
-        expect(onController).not.toContain('security-scan-authz');
+        // Every class the map ties to it except authz, whose conclusion holds.
+        expect([...onController].sort()).toEqual([
+            'security-scan-injection',
+            'security-scan-misconfiguration',
+            'security-scan-resource_exhaustion',
+        ]);
     });
 
     it('records a class of the unit that was not read to the end as incomplete', async () => {
@@ -3032,7 +3035,10 @@ describe('incremental scans', () => {
             onUnitDone: async (_p: any, _f: any, _s: any, entries: any[]) => covered.push(...(entries ?? [])),
         } as any);
 
-        expect(covered.find((e) => e.vulnerabilityClass === 'authz')?.incomplete).toBeUndefined();
+        const authz = covered.filter((e) => e.vulnerabilityClass === 'authz');
+        expect(authz).toHaveLength(1);
+        expect(authz[0]).toMatchObject({ filePath: controller });
+        expect(authz[0].incomplete).toBeUndefined();
         expect(covered.find((e) => e.vulnerabilityClass === 'injection')).toMatchObject({ filePath: controller, incomplete: true });
     });
 

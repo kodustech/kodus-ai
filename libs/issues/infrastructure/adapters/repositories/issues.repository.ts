@@ -429,7 +429,10 @@ export class IssuesRepository implements IIssuesRepository {
             const reopen = existing.status === IssueStatus.RESOLVED;
             return {
                 outcome: 'merged',
-                guard: { description: existing.description },
+                guard: {
+                    description: existing.description,
+                    ...sameOccurrences(existing),
+                },
                 update: {
                     ...(reopen ? { $unset: { resolvedAt: '' } } : {}),
                     $set: {
@@ -494,7 +497,11 @@ export class IssuesRepository implements IIssuesRepository {
         };
         // Lands only while no other writer of this scan stored the identity
         // first: the loser goes round again, into the merge.
-        const guard = { lastSeenScanId: existing.lastSeenScanId ?? null };
+        // Nor while a place was added: the severity is worked out from them.
+        const guard = {
+            lastSeenScanId: existing.lastSeenScanId ?? null,
+            ...sameOccurrences(existing),
+        };
         if (existing.status === IssueStatus.RESOLVED) {
             refreshed.status = IssueStatus.OPEN;
             return {
@@ -528,6 +535,7 @@ export class IssuesRepository implements IIssuesRepository {
             const update = withOccurrence(holder, {
                 ...params.occurrence,
                 lastSeenScanId: params.scanId,
+                lastSeenAt: now,
             });
             const dismissed = holder.status === IssueStatus.DISMISSED;
             const reopen = holder.status === IssueStatus.RESOLVED;
@@ -603,6 +611,7 @@ export class IssuesRepository implements IIssuesRepository {
                 severity: String(folded.ownSeverity ?? folded.severity ?? ''),
                 vulnerabilityClass: folded.vulnerabilityClass,
                 lastSeenScanId: folded.lastSeenScanId,
+                lastSeenAt: folded.lastSeenAt,
             },
             ...(folded.occurrences ?? []),
         ];
@@ -803,6 +812,11 @@ export class IssuesRepository implements IIssuesRepository {
             'lastMissedScanId': { $ne: params.scanId },
         };
 
+        // Places first: an issue resolves only once it holds none (one fix,
+        // one issue: a place still there is the root cause still there).
+        await this.pruneUnseenOccurrences(params);
+        const holdsNoPlace = { 'occurrences.0': { $exists: false } };
+
         let resolved = 0;
         if (params.trackedFiles?.length) {
             const tracked = new Set(params.trackedFiles.map(normalizeScanPath));
@@ -816,7 +830,7 @@ export class IssuesRepository implements IIssuesRepository {
             // is gone with it, on this scan.
             if (gone.length) {
                 const result = await this.issuesModel.updateMany(
-                    { ...unseen, filePath: { $in: gone } },
+                    { ...unseen, ...holdsNoPlace, filePath: { $in: gone } },
                     {
                         $set: {
                             status: IssueStatus.RESOLVED,
@@ -837,14 +851,18 @@ export class IssuesRepository implements IIssuesRepository {
                 filePath: { $in: e.filePaths.map(normalizeScanPath) },
             }));
         if (!where.length) {
-            await this.pruneUnseenOccurrences(params);
             return resolved;
         }
 
         // A single model miss is not a fix. Two distinct completed scans
         // must miss it in an examined area; a replay cannot add another miss.
         const result = await this.issuesModel.updateMany(
-            { ...unseen, $or: where, consecutiveScanMisses: { $gte: 1 } },
+            {
+                ...unseen,
+                ...holdsNoPlace,
+                $or: where,
+                consecutiveScanMisses: { $gte: 1 },
+            },
             {
                 $set: {
                     status: IssueStatus.RESOLVED,
@@ -875,7 +893,6 @@ export class IssuesRepository implements IIssuesRepository {
             },
         );
 
-        await this.pruneUnseenOccurrences(params);
         return resolved + (result?.modifiedCount ?? 0);
     }
 
@@ -893,6 +910,14 @@ export class IssuesRepository implements IIssuesRepository {
             status: IssueStatus.OPEN,
             occurrences: { $exists: true, $ne: [] },
         };
+        // A place a scan that overlapped this one saw after it started is not
+        // gone (a place stored before sightings were timed has no time).
+        const seenBefore = {
+            lastSeenAt: { $not: { $gte: params.scanStartedAt } },
+        };
+        const seenBeforeExpr = {
+            $not: [{ $gte: ['$$o.lastSeenAt', params.scanStartedAt] }],
+        };
         if (params.trackedFiles?.length) {
             const tracked = new Set(params.trackedFiles.map(normalizeScanPath));
             // Streamed: the repository's places, one path at a time.
@@ -903,6 +928,7 @@ export class IssuesRepository implements IIssuesRepository {
                     { $unwind: '$occurrences' },
                     { $group: { _id: '$occurrences.filePath' } },
                 ])
+                .allowDiskUse(true)
                 .cursor();
             for await (const { _id: path } of places) {
                 if (path && !tracked.has(normalizeScanPath(path))) {
@@ -911,8 +937,18 @@ export class IssuesRepository implements IIssuesRepository {
             }
             if (gone.length) {
                 await this.issuesModel.updateMany(
-                    { ...scope, 'occurrences.filePath': { $in: gone } },
-                    withoutPlaces({ $in: ['$$o.filePath', gone] }),
+                    {
+                        ...scope,
+                        occurrences: {
+                            $elemMatch: {
+                                filePath: { $in: gone },
+                                ...seenBefore,
+                            },
+                        },
+                    },
+                    withoutPlaces({
+                        $and: [{ $in: ['$$o.filePath', gone] }, seenBeforeExpr],
+                    }),
                     { updatePipeline: true },
                 );
             }
@@ -928,6 +964,7 @@ export class IssuesRepository implements IIssuesRepository {
                             vulnerabilityClass: area.vulnerabilityClass,
                             filePath: { $in: filePaths },
                             lastSeenScanId: { $ne: params.scanId },
+                            ...seenBefore,
                         },
                     },
                 },
@@ -941,6 +978,7 @@ export class IssuesRepository implements IIssuesRepository {
                         },
                         { $in: ['$$o.filePath', filePaths] },
                         { $ne: ['$$o.lastSeenScanId', params.scanId] },
+                        seenBeforeExpr,
                     ],
                 }),
                 { updatePipeline: true },
@@ -957,6 +995,15 @@ function scanScope(params: ScanRepositoryScope) {
         'repository.host': params.repositoryHost,
         'repository.id': params.repositoryId,
         'source': IssueSource.SECURITY_SCAN,
+    };
+}
+
+/** The issue's places as read: a write that must not race a new place. */
+function sameOccurrences(issue: { occurrences?: IIssueOccurrence[] }) {
+    return {
+        occurrences: issue.occurrences?.length
+            ? issue.occurrences
+            : { $in: [null, []] },
     };
 }
 

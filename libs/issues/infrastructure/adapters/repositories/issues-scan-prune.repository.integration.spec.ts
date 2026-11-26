@@ -9,6 +9,8 @@ import mongoose, { Connection, Model } from 'mongoose';
 import { IssueStatus } from '@libs/core/infrastructure/config/types/general/issues.type';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IssueSource } from '@libs/issues/domain/interfaces/issues.interface';
+import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
+import { LabelType } from '@libs/common/utils/codeManagement/labels';
 
 import { IssuesRepository } from './issues.repository';
 import { IssuesModel, IssuesSchema } from './schemas/issues.model';
@@ -80,6 +82,10 @@ const TEST_DB = 'issues_scan_prune_it';
             );
             issues = new IssuesRepository(model as any);
         }, 30_000);
+
+        beforeEach(async () => {
+            await model.deleteMany({});
+        });
 
         afterAll(async () => {
             await connection?.dropDatabase();
@@ -209,6 +215,160 @@ const TEST_DB = 'issues_scan_prune_it';
             expect(await placesOf('h-3')).toEqual([]);
             expect(await severityOf('h-3')).toBe('critical');
             expect(await severityOf('h-4')).toBe('critical');
+        });
+
+        const scan = (
+            scanId: string,
+            scanStartedAt: string,
+            examined: unknown[],
+        ) =>
+            issues.resolveUnseenScanFindings({
+                organizationId: 'org-1',
+                repositoryPlatform: PlatformType.GITHUB,
+                repositoryHost: 'github.com',
+                repositoryId: 'repo-1',
+                scanId,
+                scanStartedAt,
+                trackedFiles: ['src/holder.ts', 'src/a.ts', 'src/b.ts'],
+                examined,
+            } as any);
+
+        it('keeps a place a scan that overlapped this one saw after it started', async () => {
+            await model.collection.insertOne(
+                issue('i-1', 'org-1', [
+                    // Seen by a newer scan while this one ran.
+                    {
+                        ...place('src/a.ts', 'authz', 'scan-9'),
+                        lastSeenAt: '2026-11-25T12:00:00.000Z',
+                    },
+                    {
+                        ...place('src/b.ts', 'authz', 'scan-1'),
+                        lastSeenAt: '2026-11-20T00:00:00.000Z',
+                    },
+                ]) as any,
+            );
+
+            await scan('scan-2', '2026-11-25T00:00:00.000Z', [
+                {
+                    vulnerabilityClass: 'authz',
+                    filePaths: ['src/a.ts', 'src/b.ts'],
+                },
+            ]);
+
+            expect(await placesOf('i-1')).toEqual(['src/a.ts#authz']);
+        });
+
+        it('resolves an issue missed twice only once it holds no place', async () => {
+            const missed = {
+                lastSeenAt: '2026-11-20T00:00:00.000Z',
+                consecutiveScanMisses: 1,
+            };
+            await model.collection.insertMany([
+                // Its own place missed again, another place of it unread.
+                {
+                    ...issue('i-1', 'org-1', [place('src/a.ts', 'injection')]),
+                    ...missed,
+                },
+                // Its own place missed again, and its only place gone too.
+                {
+                    ...issue('i-2', 'org-1', [place('src/a.ts', 'authz')]),
+                    ...missed,
+                },
+            ] as any[]);
+
+            await scan('scan-3', '2026-11-25T00:00:00.000Z', [
+                {
+                    vulnerabilityClass: 'authz',
+                    filePaths: ['src/holder.ts', 'src/a.ts'],
+                },
+            ]);
+
+            const statusOf = async (_id: string) =>
+                ((await model.collection.findOne({ _id } as any)) as any)
+                    .status;
+            expect(await statusOf('i-1')).toBe(IssueStatus.OPEN);
+            expect(await statusOf('i-2')).toBe(IssueStatus.RESOLVED);
+        });
+
+        it('refreshes an issue that holds places when its own finding is seen again', async () => {
+            // An id as the schema stores it: the sighting reads it back.
+            const _id = new mongoose.Types.ObjectId();
+            await model.collection.insertOne({
+                ...issue('i-1', 'org-1', [
+                    { ...place('src/a.ts', 'authz'), severity: 'critical' },
+                ]),
+                fingerprint: 'fp-own',
+                severity: 'critical',
+                ownSeverity: 'medium',
+                lastSeenScanId: 'scan-1',
+                _id,
+            } as any);
+
+            const { outcome } = await issues.upsertScanFinding({
+                title: 'Order lookup skips the owner check',
+                description: 'Any signed-in user can read any order by id.',
+                filePath: 'src/holder.ts',
+                language: 'typescript',
+                label: LabelType.SECURITY,
+                severity: SeverityLevel.LOW,
+                repository: {
+                    ...repository,
+                    name: 'shop',
+                    full_name: 'acme/shop',
+                },
+                organizationId: 'org-1',
+                fingerprint: 'fp-own',
+                vulnerabilityClass: 'authz',
+                startLine: 1,
+                endLine: 2,
+                lastSeenScanId: 'scan-2',
+            } as any);
+
+            const stored = (await model.collection.findOne({ _id })) as any;
+            expect(outcome).toBe('still_open');
+            expect(stored).toMatchObject({
+                lastSeenScanId: 'scan-2',
+                ownSeverity: 'low',
+                severity: 'critical',
+            });
+        });
+
+        it('refreshes an issue that never held a place', async () => {
+            const _id = new mongoose.Types.ObjectId();
+            const { occurrences: _none, ...plain } = issue('i-1', 'org-1', []);
+            await model.collection.insertOne({
+                ...plain,
+                fingerprint: 'fp-own',
+                lastSeenScanId: 'scan-1',
+                _id,
+            } as any);
+
+            const { outcome } = await issues.upsertScanFinding({
+                title: 'Order lookup skips the owner check',
+                description: 'Any signed-in user can read any order by id.',
+                filePath: 'src/holder.ts',
+                language: 'typescript',
+                label: LabelType.SECURITY,
+                severity: SeverityLevel.HIGH,
+                repository: {
+                    ...repository,
+                    name: 'shop',
+                    full_name: 'acme/shop',
+                },
+                organizationId: 'org-1',
+                fingerprint: 'fp-own',
+                vulnerabilityClass: 'authz',
+                startLine: 1,
+                endLine: 2,
+                lastSeenScanId: 'scan-2',
+            } as any);
+
+            expect(outcome).toBe('still_open');
+            expect(await model.collection.findOne({ _id })).toMatchObject({
+                lastSeenScanId: 'scan-2',
+                ownSeverity: 'high',
+                severity: 'high',
+            });
         });
     },
 );

@@ -5,6 +5,7 @@
  */
 import mongoose, { Connection, Model } from 'mongoose';
 
+import { SecurityScanSchedulesUseCase } from '../application/security-scan-schedules.use-case';
 import { SecurityScanScheduleRepository } from './security-scan-schedule.repository';
 import {
     SecurityScanScheduleModel,
@@ -123,6 +124,70 @@ const TEST_DB = 'security_scan_schedules_it';
             expect(
                 await schedules.setEnabled('org-2', repository, true),
             ).toBeNull();
+        });
+
+        it('an edit keeps the next run the cron moved, and a new cadence counts from the last run', async () => {
+            const useCase = new SecurityScanSchedulesUseCase(
+                schedules,
+                {
+                    scanModelFor: jest.fn(async () => undefined),
+                    repositoryKeyOf: jest.fn(async () => repository),
+                } as any,
+                {} as any,
+            );
+            const orgTeam = { organizationId: 'org-1', teamId: 'team-1' };
+            const now = new Date('2026-11-24T10:00:00.000Z');
+            const created = await useCase.save(
+                {
+                    organizationAndTeamData: orgTeam,
+                    repositoryId: 'repo-1',
+                    cadence: 'daily',
+                    budget: { maxUsd: 5 },
+                },
+                now,
+            );
+            expect((await stored('org-1', 'repo-1')).nextRunAt).toEqual(
+                new Date('2026-11-25T03:00:00.000Z'),
+            );
+            // The cron ran it and handed it back to 03:30 (no room).
+            await schedules.recordRun(created.uuid, {
+                lastRunAt: '2026-11-25T03:00:00.000Z',
+            });
+            expect(
+                await schedules.claim(
+                    created.uuid,
+                    '2026-11-25T03:00:00.000Z',
+                    new Date('2026-11-25T03:30:00.000Z'),
+                ),
+            ).toBe(true);
+
+            await useCase.save(
+                {
+                    organizationAndTeamData: orgTeam,
+                    repositoryId: 'repo-1',
+                    cadence: 'daily',
+                    budget: { maxUsd: 9 },
+                },
+                now,
+            );
+            expect(await stored('org-1', 'repo-1')).toMatchObject({
+                budget: { maxUsd: 9 },
+                nextRunAt: new Date('2026-11-25T03:30:00.000Z'),
+            });
+
+            await useCase.save(
+                {
+                    organizationAndTeamData: orgTeam,
+                    repositoryId: 'repo-1',
+                    cadence: 'weekly',
+                    budget: { maxUsd: 9 },
+                },
+                new Date('2026-11-25T10:00:00.000Z'),
+            );
+            // A week after the last run, not a day after the edit.
+            expect((await stored('org-1', 'repo-1')).nextRunAt).toEqual(
+                new Date('2026-12-02T03:00:00.000Z'),
+            );
         });
 
         it("touches only its own organization's and repository's schedule", async () => {

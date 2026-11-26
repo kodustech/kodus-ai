@@ -123,24 +123,34 @@ describe('SecurityScanSchedulesUseCase', () => {
     });
 
     it('tries again in 30 minutes when there is no room, instead of losing its turn', async () => {
-        for (const busy of [
-            new ConflictException(
-                'A security scan of this repository is already running.',
-            ),
-            new HttpException(
-                'This organization already has 3 deep scans queued or running.',
-                HttpStatus.TOO_MANY_REQUESTS,
-            ),
-            new ServiceUnavailableException(
-                'The deep scan worker is not taking jobs right now. Try again in a moment.',
-            ),
+        for (const [busy, reason] of [
+            [
+                new ConflictException(
+                    'A security scan of this repository is already running.',
+                ),
+                'This repository is already being scanned.',
+            ],
+            [
+                new HttpException(
+                    'This organization already has 3 deep scans queued or running.',
+                    HttpStatus.TOO_MANY_REQUESTS,
+                ),
+                "The organization's running deep scans are at their limit.",
+            ],
+            [
+                new ServiceUnavailableException(
+                    'The deep scan worker is not taking jobs right now. Try again in a moment.',
+                ),
+                'The deep scan workers are not taking scans right now.',
+            ],
         ]) {
             const { useCase, schedules, start } = setup();
             start.execute.mockRejectedValue(busy);
 
             expect(await useCase.runDue(now)).toBe(0);
 
-            // Claimed to tomorrow, then handed back to now + 30 minutes.
+            // Claimed to tomorrow, then handed back to now + 30 minutes,
+            // with the reason in our words, not the exception's.
             expect(schedules.claim).toHaveBeenLastCalledWith(
                 'sch-1',
                 '2026-11-25T03:00:00.000Z',
@@ -148,7 +158,7 @@ describe('SecurityScanSchedulesUseCase', () => {
             );
             expect(schedules.recordError).toHaveBeenCalledWith(
                 'sch-1',
-                `${busy.message} It tries again at 03:31 UTC.`,
+                `${reason} It tries again at 03:31 UTC.`,
             );
             expect(schedules.recordRun).not.toHaveBeenCalled();
         }
