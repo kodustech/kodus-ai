@@ -277,3 +277,29 @@ describe('SandboxLeaseRepository.detachIdle', () => {
         expect(findOneAndDelete).not.toHaveBeenCalled();
     });
 });
+
+/**
+ * A holder's lease can be retired and a new one created for the same prKey.
+ * Its release must then find nothing instead of taking the new holder's
+ * count to 0 (#2628).
+ */
+describe('SandboxLeaseRepository.decrementLease', () => {
+    it('decrements only the lease on the given sandbox', async () => {
+        const findOneAndUpdate = jest.fn().mockResolvedValue(null);
+        const repo = new SandboxLeaseRepository({ findOneAndUpdate } as any);
+
+        await repo.decrementLease(PR_KEY, 'sbx-1');
+        await repo.decrementLease(PR_KEY, '');
+        await repo.decrementLease(PR_KEY);
+
+        expect(findOneAndUpdate.mock.calls.map(([filter]) => filter)).toEqual([
+            { _id: PR_KEY, sandboxId: 'sbx-1' },
+            { _id: PR_KEY, sandboxId: '' },
+            { _id: PR_KEY },
+        ]);
+        expect(findOneAndUpdate.mock.calls[0].slice(1)).toEqual([
+            { $inc: { leaseCount: -1 } },
+            { new: true },
+        ]);
+    });
+});

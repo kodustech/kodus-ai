@@ -147,10 +147,21 @@ export class SandboxLeaseRepository {
     /**
      * Atomically decrement leaseCount by 1. Returns the updated document
      * (which may have leaseCount === 0 after the decrement).
+     *
+     * With `sandboxId`, only the lease on that sandbox is decremented. A
+     * holder's lease can be retired and a new one created for the same prKey
+     * (a joiner whose connect failed, the TTL reaper, a PR closed and
+     * reopened); the old holder's release must then find nothing, not take
+     * the new holder's count to 0 (#2628).
      */
-    async decrementLease(prKey: string): Promise<SandboxLeaseModel | null> {
+    async decrementLease(
+        prKey: string,
+        sandboxId?: string,
+    ): Promise<SandboxLeaseModel | null> {
         return this.leaseModel.findOneAndUpdate(
-            { _id: prKey },
+            sandboxId === undefined
+                ? { _id: prKey }
+                : { _id: prKey, sandboxId },
             { $inc: { leaseCount: -1 } },
             { new: true },
         );

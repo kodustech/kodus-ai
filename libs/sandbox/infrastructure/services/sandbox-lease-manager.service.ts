@@ -86,6 +86,14 @@ const JOINER_MIN_TIMEOUT_MS = 300_000;
 const IN_FLIGHT_DRAIN_MAX_MS = 6 * 60 * 1000;
 
 /**
+ * How long the holder's commands must stay quiet before the sandbox is given
+ * back. A tool can run two commands back to back (an outline-first read reads
+ * the file, then reads it again), so a running count of 0 between them is not
+ * the holder being done.
+ */
+const IN_FLIGHT_QUIET_MS = 1_000;
+
+/**
  * Default lease TTL: 30 minutes. The reaper will clean up any lease whose
  * expiresAt has passed — this guards against crashed-worker leaks.
  */
@@ -174,6 +182,8 @@ export class SandboxStaleConnectionError extends Error {
 /** Commands a lease's holder has running, and the releases waiting on them. */
 interface InFlightCommands {
     running: number;
+    /** When the last command settled (ms since epoch). */
+    lastSettledAt?: number;
     waiters: Array<() => void>;
 }
 
@@ -206,6 +216,8 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     private readonly leaseIdToUse = new Map<string, SandboxUsage>();
     /** Commands each lease has running on its sandbox; release waits on them. */
     private readonly leaseIdToInFlight = new Map<string, InFlightCommands>();
+    /** The sandbox each lease was bound to; its release decrements only that one. */
+    private readonly leaseIdToSandboxId = new Map<string, string>();
 
     /**
      * Fails sandbox creation fast while the infrastructure is degraded —
@@ -617,6 +629,8 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         this.leaseIdToPrKey.delete(leaseId);
         const inFlight = this.leaseIdToInFlight.get(leaseId);
         this.leaseIdToInFlight.delete(leaseId);
+        const sandboxId = this.leaseIdToSandboxId.get(leaseId);
+        this.leaseIdToSandboxId.delete(leaseId);
 
         if (!prKey) {
             if (held) this.dropSlot(held.prKey, held.slot);
@@ -639,9 +653,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         // are given back once it ends, so the checkout is not deleted or
         // paused under it; the caller does not wait for that, so a pipeline
         // that awaits its release still finishes on time (#2628).
-        if (inFlight && inFlight.running > 0) {
+        if (inFlight && this.isBusy(inFlight)) {
             void this.drainInFlight(inFlight, leaseId, prKey)
-                .then(() => this.giveBack(leaseId, prKey, held, use, opts))
+                .then(() =>
+                    this.giveBack(leaseId, prKey, sandboxId, held, use, opts),
+                )
                 .catch((err) =>
                     this.logger.warn({
                         message: `SandboxLeaseManager: release after the holder's running commands failed leaseId="${leaseId}" prKey="${prKey}"; the lease TTL reaper frees it`,
@@ -653,7 +669,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             return;
         }
 
-        await this.giveBack(leaseId, prKey, held, use, opts);
+        await this.giveBack(leaseId, prKey, sandboxId, held, use, opts);
     }
 
     /**
@@ -663,13 +679,14 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     private async giveBack(
         leaseId: string,
         prKey: string,
+        sandboxId: string | undefined,
         held: { prKey: string; slot: WorkerSlot } | undefined,
         use: SandboxUsage | undefined,
         opts?: { idleMs?: number },
     ): Promise<void> {
         if (held) this.dropSlot(held.prKey, held.slot);
 
-        const updated = await this.leaseRepo.decrementLease(prKey);
+        const updated = await this.leaseRepo.decrementLease(prKey, sandboxId);
 
         this.logger.log({
             message: `SandboxLeaseManager: released leaseId="${leaseId}" prKey="${prKey}" leaseCount=${updated?.leaseCount ?? 'unknown'}`,
@@ -832,10 +849,19 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         }
     }
 
+    /** A command is running, or one settled less than the quiet window ago. */
+    private isBusy(inFlight: InFlightCommands): boolean {
+        return (
+            inFlight.running > 0 ||
+            (inFlight.lastSettledAt !== undefined &&
+                Date.now() - inFlight.lastSettledAt < IN_FLIGHT_QUIET_MS)
+        );
+    }
+
     /**
-     * Wait for the commands the lease's holder still has running on its
-     * sandbox, at most IN_FLIGHT_DRAIN_MAX_MS. Commands have their own
-     * timeouts, so the cap only bounds a command that never settles.
+     * Wait until the lease's holder has had no command running for
+     * IN_FLIGHT_QUIET_MS, at most IN_FLIGHT_DRAIN_MAX_MS. Commands have their
+     * own timeouts, so the cap only bounds a holder that never goes quiet.
      */
     private async drainInFlight(
         inFlight: InFlightCommands,
@@ -844,20 +870,29 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     ): Promise<void> {
         const running = inFlight.running;
         const startedAt = Date.now();
-        let timer: NodeJS.Timeout | undefined;
-        const drained = await Promise.race([
-            new Promise<true>((resolve) =>
-                inFlight.waiters.push(() => resolve(true)),
-            ),
-            new Promise<false>((resolve) => {
-                timer = setTimeout(
-                    () => resolve(false),
-                    IN_FLIGHT_DRAIN_MAX_MS,
+        const deadline = startedAt + IN_FLIGHT_DRAIN_MAX_MS;
+
+        let drained = false;
+        while (Date.now() < deadline) {
+            if (inFlight.running > 0) {
+                await this.waitWithin(
+                    new Promise<void>((resolve) =>
+                        inFlight.waiters.push(resolve),
+                    ),
+                    deadline - Date.now(),
                 );
-                timer.unref?.();
-            }),
-        ]);
-        clearTimeout(timer);
+                continue;
+            }
+            const quietFor = Date.now() - (inFlight.lastSettledAt ?? 0);
+            if (quietFor >= IN_FLIGHT_QUIET_MS) {
+                drained = true;
+                break;
+            }
+            await this.waitWithin(
+                undefined,
+                Math.min(IN_FLIGHT_QUIET_MS - quietFor, deadline - Date.now()),
+            );
+        }
 
         const log = drained ? this.logger.log : this.logger.warn;
         log.call(this.logger, {
@@ -873,6 +908,22 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 waitedMs: Date.now() - startedAt,
             },
         });
+    }
+
+    /** Resolve when `settled` does or after `ms`, whichever comes first. */
+    private async waitWithin(
+        settled: Promise<void> | undefined,
+        ms: number,
+    ): Promise<void> {
+        let timer: NodeJS.Timeout | undefined;
+        await Promise.race([
+            ...(settled ? [settled] : []),
+            new Promise<void>((resolve) => {
+                timer = setTimeout(resolve, Math.max(ms, 0));
+                timer.unref?.();
+            }),
+        ]);
+        clearTimeout(timer);
     }
 
     /**
@@ -1192,6 +1243,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             }
 
             this.leaseIdToPrKey.set(leaseId, prKey);
+            if (sandboxId !== undefined) {
+                this.leaseIdToSandboxId.set(leaseId, sandboxId);
+            }
 
             // Wrap cleanup so callers use leaseManager.release() not sandbox.kill()
             sandbox = {
@@ -1468,6 +1522,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             // No E2B key — return null sandbox (callers in self-contained mode)
             const sandbox = this.buildNullSandboxWithRelease(prKey, leaseId);
             this.leaseIdToPrKey.set(leaseId, prKey);
+            this.leaseIdToSandboxId.set(leaseId, sandboxId);
             return { sandbox, leaseId, sandboxId, wasCreated: false };
         }
 
@@ -1495,6 +1550,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             // Drop the in-memory lease tracking before delete (release()
             // would no-op without it; we want a clean slate)
             this.leaseIdToPrKey.delete(leaseId);
+            this.leaseIdToSandboxId.delete(leaseId);
             // Retire, not delete: connect can fail transiently while the
             // sandbox still exists (paused), and a dropped lease is the
             // last trace the kill crons had of it. A co-tenant still using
@@ -1585,6 +1641,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             leaseDoc?.privilegesDropped === true,
         );
         this.leaseIdToPrKey.set(leaseId, prKey);
+        this.leaseIdToSandboxId.set(leaseId, sandboxId);
 
         this.logger.log({
             message: `SandboxLeaseManager: connected to existing sandbox prKey="${prKey}" consumer="${consumer}" leaseId="${leaseId}"`,
@@ -1647,6 +1704,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     }
                 } finally {
                     inFlight.running -= 1;
+                    inFlight.lastSettledAt = Date.now();
                     if (inFlight.running === 0) {
                         for (const resolve of inFlight.waiters.splice(0)) {
                             resolve();

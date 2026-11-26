@@ -1805,6 +1805,15 @@ describe('SandboxLeaseManager', () => {
     describe('sandbox usage', () => {
         const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77';
 
+        // A release waits for the holder's commands to stay quiet for 1s
+        beforeEach(() => {
+            jest.useFakeTimers({
+                doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'],
+            });
+        });
+        afterEach(() => jest.useRealTimers());
+        const goQuiet = () => jest.advanceTimersByTimeAsync(1_000);
+
         const acquireCreated = async () => {
             leaseRepo.upsertAcquire.mockResolvedValue({
                 _id: prKey,
@@ -1861,6 +1870,7 @@ describe('SandboxLeaseManager', () => {
             expect(firstUsedAt).toBeInstanceOf(Date);
             expect(sandbox.usage?.().firstUsedAt).toBe(firstUsedAt);
             expect(lastUsedAt).toBeInstanceOf(Date);
+            await goQuiet();
 
             releasedWith(0);
             await manager.release(leaseId, { idleMs: 30_000 });
@@ -1934,6 +1944,9 @@ describe('SandboxLeaseManager', () => {
             finish('content');
             await reading;
             await settle();
+            expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+            await goQuiet();
 
             expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
             expect(leaseRepo.setKillAt).toHaveBeenCalledTimes(1);
@@ -1964,7 +1977,7 @@ describe('SandboxLeaseManager', () => {
 
             second();
             await b;
-            await settle();
+            await goQuiet();
             expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
         });
 
@@ -1985,7 +1998,7 @@ describe('SandboxLeaseManager', () => {
             ]);
             finish();
             await running;
-            await settle();
+            await goQuiet();
 
             expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
         });
@@ -2029,14 +2042,72 @@ describe('SandboxLeaseManager', () => {
             });
         });
 
-        it('releases at once when nothing is running', async () => {
+        it('releases at once when the holder has been quiet', async () => {
             const { sandbox, leaseId } = await acquireCreated();
             await sandbox.run('git status');
+            await goQuiet();
 
             releasedWith(0);
             await manager.release(leaseId, { idleMs: 30_000 });
 
             expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
+
+        // A tool can run two commands back to back (an outline-first read
+        // reads the file, then reads it again): a running count of 0 between
+        // them is not the holder being done (#2628)
+        it('keeps the sandbox through a tool that runs two commands back to back', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            const provided = await (sandboxProvider.createSandboxWithRepo.mock
+                .results[0].value as Promise<SandboxInstance>);
+            let finish!: (content: string) => void;
+            (provided.readFile as jest.Mock)
+                .mockReturnValueOnce(
+                    new Promise<string>((resolve) => (finish = resolve)),
+                )
+                .mockResolvedValueOnce('again');
+
+            const tool = (async () => {
+                await sandbox.readFile('a.ts');
+                return sandbox.readFile('a.ts');
+            })();
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            finish('first');
+            await expect(tool).resolves.toBe('again');
+            await settle();
+            expect(leaseRepo.decrementLease).not.toHaveBeenCalled();
+
+            await goQuiet();
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
+
+        it('decrements only the lease on the sandbox it was given', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            await goQuiet();
+
+            releasedWith(0);
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(leaseRepo.decrementLease).toHaveBeenCalledWith(
+                prKey,
+                sandbox.sandboxId,
+            );
+        });
+
+        // The lease was retired and a new one created for the prKey (a
+        // joiner whose connect failed cold-created it): this release must
+        // leave the new holder's lease alone (#2628)
+        it('schedules nothing when its lease was replaced', async () => {
+            const { sandbox, leaseId } = await acquireCreated();
+            await goQuiet();
+            leaseRepo.decrementLease.mockResolvedValueOnce(null);
+
+            await manager.release(leaseId, { idleMs: 30_000 });
+
+            expect(leaseRepo.setKillAt).not.toHaveBeenCalled();
+            expect(sandbox.usage?.().stopAt).toBeUndefined();
         });
 
         it('stamps a command that fails too', async () => {
