@@ -1,7 +1,7 @@
 import { MAX_TOOL_SCAN_CHARS } from '@libs/common/utils/tool-output/scan-prefix';
 import { withoutSecretFileLines } from '@libs/code-review/infrastructure/agents/engine/secret-files';
 
-import { buildAgentTools, MAX_GREP_GROUPS } from './agent-tools.factory';
+import { buildAgentTools } from './agent-tools.factory';
 
 // The real filter, recorded: the test checks how much of an answer it reads.
 jest.mock('@libs/code-review/infrastructure/agents/engine/secret-files', () => {
@@ -46,8 +46,8 @@ describe('agent tools — grep reads a bounded head of a huge rg answer', () => 
             .trim()
             .split('\n--\n');
         return (
-            kept.slice(0, MAX_GREP_GROUPS).join('\n--\n') +
-            `\n... (${kept.length - MAX_GREP_GROUPS}+${HIDDEN_NOTE}`
+            kept.slice(0, 40).join('\n--\n') +
+            `\n... (${kept.length - 40}+${HIDDEN_NOTE}`
         );
     };
 
