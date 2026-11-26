@@ -140,29 +140,38 @@ export const refreshOrganizationMembers = async (params: {
 
 /**
  * Length and Kodus-paid reviews of a trial started now, so onboarding shows
- * billing's config instead of numbers of its own. `null` on self-hosted (no
- * billing) or when billing does not answer with both numbers.
+ * billing's config instead of numbers of its own.
+ *
+ * `null` only for definite answers: self-hosted (no billing), a billing build
+ * without the route (404), or a payload missing either number. Anything else
+ * (5xx, timeout, network) throws, so the query retries instead of caching a
+ * transient failure as "no terms".
  */
 export const getTrialTerms = async (): Promise<TrialTerms | null> => {
     if (isSelfHosted) return null;
 
+    let terms: Partial<TrialTerms> | null | undefined;
     try {
-        const terms = await billingFetch<Partial<TrialTerms> | undefined>(
+        terms = await billingFetch<Partial<TrialTerms> | null | undefined>(
             `trial-terms`,
         );
-        if (
-            typeof terms?.trialDays !== "number" ||
-            typeof terms.trialReviewCreditsIncluded !== "number"
-        ) {
+    } catch (error) {
+        if ((error as { statusCode?: number } | null)?.statusCode === 404) {
             return null;
         }
-        return {
-            trialDays: terms.trialDays,
-            trialReviewCreditsIncluded: terms.trialReviewCreditsIncluded,
-        };
-    } catch {
+        throw error;
+    }
+
+    if (
+        typeof terms?.trialDays !== "number" ||
+        typeof terms.trialReviewCreditsIncluded !== "number"
+    ) {
         return null;
     }
+    return {
+        trialDays: terms.trialDays,
+        trialReviewCreditsIncluded: terms.trialReviewCreditsIncluded,
+    };
 };
 
 export const startTeamTrial = async (params: {

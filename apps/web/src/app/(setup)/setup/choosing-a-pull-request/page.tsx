@@ -26,7 +26,7 @@ import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { useFinishOnboardingReviewingPR } from "src/features/ee/onboarding/_hooks/use-finish-onboarding-reviewing-pr";
 import { useFinishOnboardingWithoutSelectingPR } from "src/features/ee/onboarding/_hooks/use-finish-onboarding-without-selecting-pr";
-import { useTrialTerms } from "src/features/ee/subscription/_hooks/use-trial-terms";
+import { TrialTermsAlert } from "src/features/ee/subscription/_components/trial-terms-alert";
 
 type PullRequestOption = ComponentProps<typeof SelectPullRequest>["value"];
 
@@ -42,7 +42,6 @@ export default function App() {
     const organizationId = useSuspenseGetOrganizationId();
     const byokConfig = useSuspenseGetBYOK();
     const hasBYOK = hasVisibleModels(byokConfig?.configValue);
-    const trialTerms = useTrialTerms();
 
     const [open, setOpen] = useState(false);
     const [selectedPR, setSelectedPR] = useState<PullRequestOption>(
@@ -148,37 +147,12 @@ export default function App() {
                                                 </p>
                                             </AlertDescription>
                                         </Alert>
-                                    ) : trialTerms ? (
-                                        // Billing's config is the only source
-                                        // for these numbers; without it (self-
-                                        // hosted, billing down) the alert is
-                                        // left out rather than guessed.
-                                        <Alert variant="info" className="mb-1">
-                                            <InfoIcon />
-                                            <AlertTitle>
-                                                Your first{" "}
-                                                {
-                                                    trialTerms.trialReviewCreditsIncluded
-                                                }{" "}
-                                                PR reviews are on us
-                                            </AlertTitle>
-                                            <AlertDescription>
-                                                <p>
-                                                    During your{" "}
-                                                    {trialTerms.trialDays}-day
-                                                    trial, this review uses 1 of
-                                                    the{" "}
-                                                    {
-                                                        trialTerms.trialReviewCreditsIncluded
-                                                    }{" "}
-                                                    we cover for you. After
-                                                    that, connect your AI key
-                                                    for unlimited reviews (free,
-                                                    on any plan).
-                                                </p>
-                                            </AlertDescription>
-                                        </Alert>
-                                    ) : null}
+                                    ) : (
+                                        <TrialTermsAlert
+                                            variant="pull-request"
+                                            className="mb-1"
+                                        />
+                                    )}
 
                                     <FormControl.Root>
                                         <FormControl.Label htmlFor="select-pull-request">

@@ -150,12 +150,11 @@ describe("getTrialTerms", () => {
 
     it.each([
         [
-            "billing fails",
-            () => billingFetchMock().mockRejectedValue(new Error("down")),
-        ],
-        [
-            "billing predates the route",
-            () => billingFetchMock().mockResolvedValue(undefined),
+            "billing predates the route (404)",
+            () =>
+                billingFetchMock().mockRejectedValue(
+                    Object.assign(new Error("404"), { statusCode: 404 }),
+                ),
         ],
         [
             "a number is missing",
@@ -170,4 +169,14 @@ describe("getTrialTerms", () => {
             await expect(getTrialTerms()).resolves.toBeNull();
         },
     );
+
+    it.each([
+        ["a 5xx", Object.assign(new Error("503"), { statusCode: 503 })],
+        ["a network failure", new Error("Network error: fetch failed")],
+    ])("throws on %s, so the query retries", async (_label, error) => {
+        billingFetchMock().mockRejectedValue(error);
+        const { getTrialTerms } = await import("./fetch");
+
+        await expect(getTrialTerms()).rejects.toBe(error);
+    });
 });
