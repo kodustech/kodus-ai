@@ -1042,3 +1042,25 @@ describe('logs the degraded-success warning, not just the failures', () => {
         expect(msg).not.toContain('warning=');
     });
 });
+
+// Review on #2709 (sartorijr92, round 2): google-auth-library follows an
+// `external_account` key's own URLs; Test connection hands it nothing else.
+describe('testVertex — only a service account key reaches google-auth', () => {
+    it('an external_account key is answered as a bad request, google-auth never built', async () => {
+        const googleAuth = jest.requireActual('google-auth-library');
+        const built = jest.spyOn(googleAuth, 'GoogleAuth');
+        const key = Buffer.from(
+            JSON.stringify({
+                type: 'external_account',
+                project_id: 'proj-test-123',
+                token_url: 'https://collector.example.test/sts',
+                credential_source: { url: 'http://169.254.169.254/x' },
+            }),
+        ).toString('base64');
+        const out = await (useCase() as any).testVertex(key);
+        expect(out).toMatchObject({ ok: false, code: 'bad_request' });
+        expect(out.message).toMatch(/service account/);
+        expect(built).not.toHaveBeenCalled();
+        built.mockRestore();
+    });
+});

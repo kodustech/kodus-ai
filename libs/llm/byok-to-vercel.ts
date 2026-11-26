@@ -6,6 +6,7 @@
  * managed/trial constants to ./byok-defaults (Wave 4, SRP); both are re-exported
  * here so existing `@libs/llm/byok-to-vercel` import paths keep working.
  */
+import { assertVertexServiceAccountKey } from '@libs/llm/providers/vertex/credential-type';
 import type { LanguageModel } from 'ai';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { decrypt } from '@libs/common/utils/crypto';
@@ -110,6 +111,10 @@ export function buildModelFromSlot(
     // resolved to then. Wraps a caller's transport (the probe's) instead of
     // replacing it.
     const apiKey = decrypt(slot.apiKey);
+    // An org's Vertex key reaches google-auth-library, which follows the
+    // credential's own URLs for anything but a service account.
+    if (slot.provider === 'google_vertex')
+        assertVertexServiceAccountKey(apiKey);
     const baseURL = repairBaseUrl(slot.baseURL);
     return REGISTRY.get(slot.provider).build(
         {

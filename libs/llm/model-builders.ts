@@ -9,6 +9,7 @@
  * No LangChain runtime dependency: the bedrock config is
  * typed structurally, not via NormalizedByokConfig.
  */
+import { bedrockRegion } from '@libs/llm/providers/bedrock/region';
 import type { LanguageModel } from 'ai';
 import { createVertex } from '@ai-sdk/google-vertex';
 import { createVertexAnthropic } from '@ai-sdk/google-vertex/anthropic';
@@ -136,7 +137,7 @@ export function bedrockModelFromCredentials(
     config: BedrockCredentials | undefined,
     modelId: string,
 ): LanguageModel {
-    const region = config?.awsRegion?.trim() || 'us-east-1';
+    const region = bedrockRegion(config?.awsRegion);
 
     if (byokAuthKind('amazon_bedrock', config) === 'bedrock-bearer') {
         return createAmazonBedrock({

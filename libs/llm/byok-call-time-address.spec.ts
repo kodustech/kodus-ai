@@ -198,3 +198,89 @@ describe('a gateway the self-hosted operator allowed runs the review call (#2381
         },
     );
 });
+
+// Review on #2709 (sartorijr92, round 2): Bedrock takes no base URL, but its
+// host is built from the region the org typed.
+describe('a Bedrock region is a region, not a host', () => {
+    it.each(['localhost:PORT/#', 'x.attacker.test/#'])(
+        'awsRegion %s: refused as configuration, nothing reaches the host',
+        async (template) => {
+            const slot = {
+                provider: 'amazon_bedrock',
+                apiKey: '',
+                model: 'anthropic.claude-sonnet-4-5',
+                awsRegion: template.replace('PORT', String(port)),
+                awsBearerToken: 'ABSK-test',
+            } as unknown as NormalizedModel;
+            const error = await Promise.resolve()
+                .then(() =>
+                    generateText({
+                        model: buildModelFromSlot(slot) as any,
+                        prompt: 'ping',
+                        maxRetries: 0,
+                    }),
+                )
+                .then(
+                    () => undefined,
+                    (e: unknown) => e,
+                );
+            expect(requests).toEqual([]);
+            const info = classifyLLMError(error, 'amazon_bedrock');
+            expect(info.category).toBe(LlmErrorCategory.CONFIG_INVALID);
+            expect(info.friendlyMessage).toMatch(/not an AWS region/);
+        },
+    );
+});
+
+// Review on #2709 (sartorijr92, round 2): a Vertex key is handed to
+// google-auth-library, which for `type: "external_account"` GETs the org's
+// `credential_source.url` and POSTs what it read to the org's `token_url`,
+// through its own transport. Only a service account key is accepted.
+describe('a Vertex BYOK key is a service account key', () => {
+    const externalAccount = () =>
+        JSON.stringify({
+            type: 'external_account',
+            project_id: 'proj-test-123',
+            audience:
+                '//iam.googleapis.com/projects/1/locations/global/workloadIdentityPools/p/providers/x',
+            subject_token_type: 'urn:ietf:params:oauth:token-type:jwt',
+            token_url: `http://localhost:${port}/sts`,
+            credential_source: {
+                url: `http://localhost:${port}/credential-source`,
+            },
+        });
+
+    it('an external_account credential is refused before google-auth sees it', () => {
+        const slot = {
+            provider: 'google_vertex',
+            apiKey: Buffer.from(externalAccount()).toString('base64'),
+            model: 'gemini-3.5-flash',
+        } as unknown as NormalizedModel;
+        let error: unknown;
+        try {
+            buildModelFromSlot(slot);
+        } catch (e) {
+            error = e;
+        }
+        expect(requests).toEqual([]);
+        const info = classifyLLMError(error, 'google_vertex');
+        expect(info.category).toBe(LlmErrorCategory.CONFIG_INVALID);
+        expect(info.friendlyMessage).toMatch(/service account/);
+    });
+
+    it('a service account key still builds', () => {
+        const slot = {
+            provider: 'google_vertex',
+            apiKey: Buffer.from(
+                JSON.stringify({
+                    type: 'service_account',
+                    project_id: 'proj-test-123',
+                    client_email: 'x@proj-test-123.iam.gserviceaccount.com',
+                    private_key: 'k',
+                }),
+            ).toString('base64'),
+            model: 'gemini-3.5-flash',
+        } as unknown as NormalizedModel;
+        expect(() => buildModelFromSlot(slot)).not.toThrow();
+    });
+});

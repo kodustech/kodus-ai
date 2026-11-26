@@ -3,6 +3,7 @@ import {
     describeProtocolMismatch,
     suggestApiVersion,
 } from '@libs/llm/base-url-hygiene';
+import { assertVertexServiceAccountKey } from '@libs/llm/providers/vertex/credential-type';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
 import { REGISTRY } from '@libs/llm/providers';
@@ -681,6 +682,17 @@ export class TestByokConnectionUseCase {
                 latencyMs: Date.now() - start,
                 message:
                     "The service account key isn't valid JSON (or base64-encoded JSON). Paste the contents of your service account JSON file.",
+            };
+        }
+
+        try {
+            assertVertexServiceAccountKey(JSON.stringify(credentials));
+        } catch (error) {
+            return {
+                ok: false,
+                code: 'bad_request',
+                latencyMs: Date.now() - start,
+                message: (error as Error).message,
             };
         }
 

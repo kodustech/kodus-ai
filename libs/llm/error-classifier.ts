@@ -1,6 +1,11 @@
 import { extractProviderMessage } from './review-error-diagnostics';
 import { AgentContextWindowTooSmallError } from './errors';
 import { isRoutingRefusal } from './routing-refusal';
+import {
+    ALLOWED_PRIVATE_HOSTS_ENV,
+    isMetadataAddress,
+} from './gateway-address-guard';
+import { environment } from '@libs/ee/configs/environment';
 
 /**
  * Canonical categories for LLM/provider errors surfaced when calling a model.
@@ -134,9 +139,13 @@ export function classifyLLMError(
         extractErrorText(err).toLowerCase() || rawMessage.toLowerCase();
     const httpStatus = extractHttpStatus(err);
 
-    let category = refusedByAddressGuard(err, httpStatus === undefined)
-        ? LlmErrorCategory.CONFIG_INVALID
-        : matchByHttpStatus(httpStatus, lower);
+    // A configuration the call refused to send (a Bedrock region that is no
+    // region name): the org's to fix, said in its own words.
+    const configRefusal = byokConfigRefusal(err);
+    let category =
+        configRefusal || refusedByAddressGuard(err, httpStatus === undefined)
+            ? LlmErrorCategory.CONFIG_INVALID
+            : matchByHttpStatus(httpStatus, lower);
     if (category === LlmErrorCategory.UNKNOWN) {
         category = matchByMessage(lower);
     }
@@ -172,7 +181,12 @@ export function classifyLLMError(
                 : category === LlmErrorCategory.REQUEST_REJECTED &&
                     providerMessage
                   ? `The provider${provider ? ` (${provider})` : ''} refused the request for this model: ${providerMessage}`
-                  : buildFriendlyMessage(category, provider, lower),
+                  : configRefusal
+                    ? configRefusal
+                    : buildFriendlyMessage(category, provider, lower) +
+                      (category === LlmErrorCategory.CONFIG_INVALID
+                          ? selfHostedAllowanceHint(err)
+                          : ''),
         providerMessage,
         ...(category === LlmErrorCategory.MODEL_NOT_FOUND &&
         isRoutingRefusal(lower)
@@ -494,6 +508,49 @@ function looksLikeModelAccessDenied(lower: string): boolean {
         lower.includes('not been allowlisted') ||
         lower.includes('enable the model')
     );
+}
+
+/** The message of a `EBYOK_CONFIG_INVALID` error on `err` or its causes. */
+function byokConfigRefusal(err: unknown): string | undefined {
+    for (let e = err as any, depth = 0; e && depth < 6; e = e.cause, depth++) {
+        if (
+            e?.code === 'EBYOK_CONFIG_INVALID' &&
+            typeof e.message === 'string'
+        ) {
+            return e.message;
+        }
+    }
+    return undefined;
+}
+
+/**
+ * On a self-hosted install a gateway on the operator's network is the usual
+ * setup, and "point it at a public endpoint" is no fix there: the operator's
+ * allowance is (#2381). Never offered for the metadata service, which no
+ * allowance opens: its address is on the refusal, or in its sentence when the
+ * org typed it.
+ */
+function selfHostedAllowanceHint(err: unknown): string {
+    if (environment.API_CLOUD_MODE === true) return '';
+    const addresses: string[] = [];
+    const walk = (e: unknown, depth: number) => {
+        if (!e || typeof e !== 'object' || depth > 5) return;
+        const node = e as Record<string, unknown>;
+        if (typeof node.address === 'string') addresses.push(node.address);
+        const named =
+            /resolves to a private or reserved address \(([^)]+)\)/.exec(
+                String(node.message ?? ''),
+            );
+        if (named) addresses.push(named[1]);
+        walk(node.cause, depth + 1);
+        walk(node.lastError, depth + 1);
+        if (Array.isArray(node.errors)) {
+            node.errors.forEach((m) => walk(m, depth + 1));
+        }
+    };
+    walk(err, 0);
+    if (addresses.some((a) => isMetadataAddress(a))) return '';
+    return ` On a self-hosted install, the operator can allow a gateway on its own network with ${ALLOWED_PRIVATE_HOSTS_ENV} (host[:port], IP or range); a host named there may use http.`;
 }
 
 /**

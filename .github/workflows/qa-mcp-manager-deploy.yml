@@ -68,6 +68,7 @@ jobs:
                   docker buildx build \
                       --file docker/Dockerfile \
                       --target mcp-manager \
+                      --build-arg API_CLOUD_MODE=true \
                       --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
                       --cache-from type=gha,scope=mcp-manager-qa \
                       --cache-to type=gha,scope=mcp-manager-qa,mode=max \

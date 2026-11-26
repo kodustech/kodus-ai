@@ -1281,3 +1281,92 @@ describe('the Ultra trio while a review mode is Ultra', () => {
         expect(teamService.find).not.toHaveBeenCalled();
     });
 });
+
+// Review on #2709 (sartorijr92, round 2): the Bedrock host is built from the
+// region the org types (`bedrock-runtime.<region>.amazonaws.com`), so a
+// "region" that is a host and a path is refused before it is saved.
+describe('CreateOrUpdateOrganizationParametersUseCase — Bedrock region', () => {
+    const bedrock = (awsRegion: string) =>
+        v2({
+            credentials: [
+                {
+                    id: 'cred-bedrock',
+                    provider: 'amazon_bedrock',
+                    apiKey: '',
+                    settings: { awsRegion, awsBearerToken: 'ABSK-test' },
+                } as any,
+            ],
+            models: [
+                {
+                    id: 'model-a',
+                    credentialId: 'cred-bedrock',
+                    model: 'anthropic.claude-sonnet-4-5',
+                },
+            ],
+        });
+
+    it.each(['localhost:8080/#', 'x.attacker.test/#', 'us-east-1.evil.test'])(
+        'refuses %s',
+        async (region) => {
+            const { useCase, createOrUpdateConfig } = buildUseCase();
+            await expect(saveByok(useCase, bedrock(region))).rejects.toThrow(
+                /not an AWS region/,
+            );
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['us-east-1', 'eu-central-2', 'us-gov-west-1', ' ap-southeast-1 '])(
+        'accepts %s',
+        async (region) => {
+            const { useCase, createOrUpdateConfig } = buildUseCase();
+            await saveByok(useCase, bedrock(region));
+            expect(createOrUpdateConfig).toHaveBeenCalled();
+        },
+    );
+});
+
+describe('CreateOrUpdateOrganizationParametersUseCase — Vertex key type', () => {
+    const vertex = (key: object) =>
+        v2({
+            credentials: [
+                {
+                    id: 'cred-vertex',
+                    provider: 'google_vertex',
+                    apiKey: Buffer.from(JSON.stringify(key)).toString('base64'),
+                } as any,
+            ],
+            models: [
+                {
+                    id: 'model-a',
+                    credentialId: 'cred-vertex',
+                    model: 'gemini-3.5-flash',
+                },
+            ],
+        });
+
+    it('refuses an external_account key', async () => {
+        const { useCase, createOrUpdateConfig } = buildUseCase();
+        await expect(
+            saveByok(
+                useCase,
+                vertex({
+                    type: 'external_account',
+                    project_id: 'proj-test-123',
+                    token_url: 'https://collector.example.test/sts',
+                    credential_source: { url: 'http://169.254.169.254/x' },
+                }),
+            ),
+        ).rejects.toThrow(/only a service account key/);
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('saves a service account key', async () => {
+        const { useCase, createOrUpdateConfig } = buildUseCase();
+        await saveByok(
+            useCase,
+            vertex({ type: 'service_account', project_id: 'proj-test-123' }),
+        );
+        expect(createOrUpdateConfig).toHaveBeenCalled();
+    });
+});

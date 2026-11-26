@@ -627,12 +627,50 @@ export function integrationRequestGuard(
 }
 
 /**
+ * The proxy curl will use for `url`, from the same variables it reads
+ * (`https_proxy`/`HTTPS_PROXY`, `http_proxy` for http only, `all_proxy`), unless
+ * `no_proxy` names the host. Through a proxy curl resolves nothing itself, so a
+ * pin would not hold and a local lookup proves nothing.
+ */
+export function gitProxyFor(
+    url: URL,
+    env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+    const pick = (...names: string[]) =>
+        names.map((n) => env[n]).find((v) => !!v && v.trim() !== '');
+    const proxy =
+        url.protocol === 'https:'
+            ? pick('https_proxy', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY')
+            : pick('http_proxy', 'all_proxy', 'ALL_PROXY');
+    if (!proxy) return undefined;
+    const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    const port = String(urlPort(url));
+    const excluded = (pick('no_proxy', 'NO_PROXY') ?? '')
+        .split(/[\s,]+/)
+        .filter(Boolean)
+        .some((raw) => {
+            const entry = raw.toLowerCase();
+            if (entry === '*') return true;
+            const [name, entryPort] = entry.startsWith('[')
+                ? [entry.slice(1, entry.indexOf(']')), entry.split(']:')[1]]
+                : (entry.split(':') as [string, string | undefined]);
+            if (entryPort && entryPort !== port) return false;
+            const bare = name.replace(/^\*?\./, '');
+            return host === bare || host.endsWith(`.${bare}`);
+        });
+    return excluded ? undefined : proxy;
+}
+
+/**
  * Git config for a fetch from a git server URL: the host is resolved here,
  * judged by `integrationAddressRefusal`, and pinned for curl
- * (`http.curloptResolve`, git 2.37+), so git dials exactly the address that was
- * judged and cannot be rebound between the check and the connection. Redirects
- * are not followed: a hop would resolve on its own. Empty for a URL git does
- * not fetch over http(s) (ssh, a local path).
+ * (`http.curloptResolve`, git 2.37+, every judged address so curl keeps its
+ * fallback), so git dials exactly what was judged and cannot be rebound between
+ * the check and the connection. Redirects are not followed by git: a hop would
+ * resolve on its own (`withJudgedGitRedirects` follows them, judged). Empty for
+ * a URL git does not fetch over http(s) (ssh, a local path), one a proxy
+ * carries (`gitProxyFor`), and, on a self-hosted install, a host this process
+ * cannot resolve: git resolves it its own way, and only metadata is refused there.
  */
 export async function pinnedGitFetchConfig(
     rawUrl: string,
@@ -641,6 +679,7 @@ export async function pinnedGitFetchConfig(
     ) => Promise<Array<{ address: string; family: number }>> = (host) =>
         dns.promises.lookup(host, { all: true }),
     label = 'Git server',
+    env: NodeJS.ProcessEnv = process.env,
 ): Promise<Array<[string, string]>> {
     let url: URL;
     try {
@@ -650,16 +689,22 @@ export async function pinnedGitFetchConfig(
     }
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return [];
     const port = urlPort(url);
-    const refuses = integrationAddressRefusal(url.hostname, port);
+    const cloud = environment.API_CLOUD_MODE === true;
+    const refuses = integrationAddressRefusal(url.hostname, port, cloud);
     const noRedirects: [string, string] = ['http.followRedirects', 'false'];
     const literal = ipLiteral(url.hostname);
-    if (literal) {
-        if (refuses(literal)) {
-            throw new GatewayAddressRefusedError(url.hostname, literal, label);
-        }
-        return [noRedirects];
+    if (literal && refuses(literal)) {
+        throw new GatewayAddressRefusedError(url.hostname, literal, label);
     }
-    const answers = await resolve(url.hostname);
+    if (gitProxyFor(url, env)) return [];
+    if (literal) return [noRedirects];
+    let answers: Array<{ address: string; family: number }>;
+    try {
+        answers = await resolve(url.hostname);
+    } catch (err) {
+        if (cloud) throw err;
+        return [];
+    }
     const refused = answers.find(({ address }) => refuses(address));
     if (refused) {
         throw new GatewayAddressRefusedError(
@@ -668,11 +713,119 @@ export async function pinnedGitFetchConfig(
             label,
         );
     }
-    const [first] = answers;
-    if (!first) return [noRedirects];
-    const address = first.family === 6 ? `[${first.address}]` : first.address;
+    if (!answers.length) return [noRedirects];
+    const addresses = answers
+        .map(({ address, family }) => (family === 6 ? `[${address}]` : address))
+        .join(',');
     return [
-        ['http.curloptResolve', `${url.hostname}:${port}:${address}`],
+        ['http.curloptResolve', `${url.hostname}:${port}:${addresses}`],
         noRedirects,
     ];
+}
+
+const GIT_REFS_SUFFIX = '/info/refs?service=git-upload-pack';
+const GIT_MAX_REDIRECTS = 5;
+
+/** A git fetch that failed on a redirect it was told not to follow. */
+function isGitRedirectRefusal(err: unknown): boolean {
+    const text = `${(err as { stderr?: unknown })?.stderr ?? ''} ${(err as Error)?.message ?? ''}`;
+    return /returned error: 30[12378]\b/.test(text);
+}
+
+/**
+ * Where a git server's redirects lead, followed here with every hop judged
+ * (`integrationRequestGuard`'s rule), as git's own `followRedirects=initial`
+ * would: the refs URL is asked for, and the new repository URL is the final
+ * location without its `/info/refs` suffix. The auth header goes only to the
+ * host it was given for. Undefined when nothing redirects, or a hop does not
+ * keep the suffix (git refuses that too).
+ */
+export async function gitRedirectTarget(
+    rawUrl: string,
+    authHeader?: string,
+    label = 'Git server',
+): Promise<string | undefined> {
+    const http = await import('node:http');
+    const https = await import('node:https');
+    const origin = new URL(rawUrl);
+    const [authName, ...authRest] = (authHeader ?? '').split(':');
+    let current = new URL(`${rawUrl.replace(/\/+$/, '')}${GIT_REFS_SUFFIX}`);
+    let hops = 0;
+    for (; hops <= GIT_MAX_REDIRECTS; hops++) {
+        const { lookup } = integrationRequestGuard(current.href, label);
+        const sameHost =
+            current.hostname === origin.hostname &&
+            urlPort(current) === urlPort(origin);
+        const headers: Record<string, string> = {
+            'user-agent': 'git/kodus',
+            ...(authHeader && authRest.length && sameHost
+                ? { [authName.trim()]: authRest.join(':').trim() }
+                : {}),
+        };
+        const transport = current.protocol === 'https:' ? https : http;
+        const location = await new Promise<string | undefined>(
+            (resolve, reject) => {
+                const req = transport.request(
+                    current,
+                    {
+                        method: 'GET',
+                        headers,
+                        lookup: lookup as any,
+                        timeout: 15_000,
+                    },
+                    (res) => {
+                        res.resume();
+                        const status = res.statusCode ?? 0;
+                        resolve(
+                            status >= 300 && status < 400
+                                ? (res.headers.location ?? undefined)
+                                : undefined,
+                        );
+                    },
+                );
+                req.on('timeout', () => req.destroy(new Error('timeout')));
+                req.on('error', reject);
+                req.end();
+            },
+        );
+        if (!location) break;
+        current = new URL(location, current);
+        if (current.protocol !== 'https:' && current.protocol !== 'http:') {
+            return undefined;
+        }
+    }
+    if (hops === 0 || hops > GIT_MAX_REDIRECTS) return undefined;
+    const href = current.href;
+    return href.endsWith(GIT_REFS_SUFFIX)
+        ? href.slice(0, -GIT_REFS_SUFFIX.length)
+        : undefined;
+}
+
+/**
+ * Runs a git fetch pinned to the judged address. When it fails on a redirect,
+ * the redirect is followed here, every hop judged, and the fetch runs again
+ * pinned to where it led. Returns the URL and config that worked, for the
+ * fetches that follow on the same repository.
+ */
+export async function withJudgedGitRedirects<T>(
+    rawUrl: string,
+    authHeader: string | undefined,
+    run: (url: string, pin: Array<[string, string]>) => Promise<T>,
+    pinFor: (url: string) => Promise<Array<[string, string]>> = (url) =>
+        pinnedGitFetchConfig(url),
+): Promise<{ url: string; pin: Array<[string, string]>; result: T }> {
+    const pin = await pinFor(rawUrl);
+    try {
+        return { url: rawUrl, pin, result: await run(rawUrl, pin) };
+    } catch (err) {
+        if (!isGitRedirectRefusal(err)) throw err;
+        const target = await gitRedirectTarget(rawUrl, authHeader);
+        if (!target || target === rawUrl) throw err;
+        const retargeted = await pinFor(target);
+        return {
+            url: target,
+            pin: retargeted,
+            result: await run(target, retargeted),
+        };
+    }
 }

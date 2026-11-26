@@ -1,5 +1,8 @@
 import { withChangeRequestExitNote } from '@libs/common/utils/codeManagement/changeRequestNote';
-import { assertGitServerUrlAllowed } from './git-server-url.guard';
+import {
+    assertGitServerUrlAllowed,
+    gitServerRefusal,
+} from './git-server-url.guard';
 import { integrationRequestGuard } from '@libs/llm/gateway-address-guard';
 import { instanceConfigsForWebhook } from '@libs/common/utils/webhooks/webhook-source-host';
 import type {
@@ -1490,9 +1493,11 @@ export class GitlabService implements Omit<
                 success: true,
                 status: CreateAuthIntegrationStatus.SUCCESS,
             };
-        } catch {
-            throw new BadRequestException(
-                'Error authenticating with GITLAB PAT.',
+        } catch (err) {
+            // A refused address is not a bad token: say which it was.
+            throw (
+                gitServerRefusal(err) ??
+                new BadRequestException('Error authenticating with GITLAB PAT.')
             );
         }
     }

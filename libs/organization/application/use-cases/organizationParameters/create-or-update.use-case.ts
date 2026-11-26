@@ -16,6 +16,8 @@ import {
     KodusProviderGate,
 } from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
+import { bedrockRegion } from '@libs/llm/providers/bedrock/region';
+import { assertVertexServiceAccountKey } from '@libs/llm/providers/vertex/credential-type';
 import { describeProtocolMismatch } from '@libs/llm/base-url-hygiene';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
@@ -380,6 +382,33 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         }
 
         for (const cred of config.credentials ?? []) {
+            // Bedrock builds its host from the region (providers/bedrock/region.ts).
+            const awsRegion = (cred?.settings as { awsRegion?: unknown })
+                ?.awsRegion;
+            if (
+                cred?.provider === 'amazon_bedrock' &&
+                typeof awsRegion === 'string' &&
+                awsRegion.trim()
+            ) {
+                try {
+                    bedrockRegion(awsRegion);
+                } catch (err) {
+                    throw new BadRequestException((err as Error).message);
+                }
+            }
+            // A new Vertex key reaches google-auth-library, which follows the
+            // key's own URLs for anything but a service account.
+            if (
+                cred?.provider === 'google_vertex' &&
+                typeof cred.apiKey === 'string' &&
+                cred.apiKey.trim()
+            ) {
+                try {
+                    assertVertexServiceAccountKey(cred.apiKey);
+                } catch (err) {
+                    throw new BadRequestException((err as Error).message);
+                }
+            }
             const baseURL = cred?.settings?.baseURL;
             if (typeof baseURL !== 'string' || !baseURL.trim()) continue;
             const key = String(cred?.id ?? cred?.provider ?? '');

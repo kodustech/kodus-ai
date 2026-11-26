@@ -22,7 +22,11 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import * as dns from 'dns';
 import { BadRequestException } from '@nestjs/common';
-import { pinnedGitFetchConfig } from '@libs/llm/gateway-address-guard';
+import {
+    GatewayAddressRefusedError,
+    pinnedGitFetchConfig,
+    withJudgedGitRedirects,
+} from '@libs/llm/gateway-address-guard';
 import { assertGitServerUrlAllowed } from './git-server-url.guard';
 import { gitlabRequestHandler } from './gitlab-request-handler';
 
@@ -246,5 +250,348 @@ describe('a clone is pinned to the address that was judged', () => {
         expect(
             reached.some((r) => r.startsWith('GET /g/r.git/info/refs')),
         ).toBe(true);
+    });
+});
+
+/** Runs a real `git fetch` of `url` with `config` in a fresh repo. */
+async function gitFetch(url: string, config: Array<[string, string]>) {
+    const dir = mkdtempSync(join(tmpdir(), 'pin-'));
+    try {
+        await execFileAsync('git', ['init', '-q', dir]);
+        const env: Record<string, string> = {
+            ...(process.env as Record<string, string>),
+            GIT_TERMINAL_PROMPT: '0',
+            GIT_CONFIG_COUNT: String(config.length),
+        };
+        config.forEach(([k, v], i) => {
+            env[`GIT_CONFIG_KEY_${i}`] = k;
+            env[`GIT_CONFIG_VALUE_${i}`] = v;
+        });
+        return await execFileAsync(
+            'git',
+            ['-C', dir, 'fetch', '--depth=1', url, 'HEAD'],
+            { env, timeout: 20_000 },
+        );
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+// Review on #2709 (sartorijr92, round 2): what a pinned clone must still do.
+describe('a pinned clone keeps what an unpinned one could do', () => {
+    const resolver =
+        (...answers: Array<[string, number]>) =>
+        async () =>
+            answers.map(([address, family]) => ({ address, family }));
+
+    it('pins every judged address, so curl falls back past a dead one', async () => {
+        environment.API_CLOUD_MODE = false;
+        const config = await pinnedGitFetchConfig(
+            `http://git.pinned.test:${port}/g/r.git`,
+            // ::1 has no listener (the server is on 127.0.0.1 only).
+            resolver(['::1', 6], ['127.0.0.1', 4]),
+        );
+        expect(config[0]).toEqual([
+            'http.curloptResolve',
+            `git.pinned.test:${port}:[::1],127.0.0.1`,
+        ]);
+        await gitFetch(`http://git.pinned.test:${port}/g/r.git`, config).catch(
+            () => undefined,
+        );
+        expect(
+            reached.some((r) => r.startsWith('GET /g/r.git/info/refs')),
+        ).toBe(true);
+    });
+
+    it('cloud: every answer is still judged before any is pinned', async () => {
+        await expect(
+            pinnedGitFetchConfig(
+                'https://git.example.com/r.git',
+                resolver(['140.82.112.3', 4], ['10.4.0.9', 4]),
+            ),
+        ).rejects.toThrow(/resolves to a private or reserved address/);
+    });
+
+    describe('through a proxy curl resolves nothing, so nothing is pinned', () => {
+        const noLookup = async () => {
+            throw new Error('no DNS here');
+        };
+
+        it.each([
+            [{ HTTPS_PROXY: 'http://proxy.corp:3128' }],
+            [{ https_proxy: 'http://proxy.corp:3128' }],
+            [{ ALL_PROXY: 'http://proxy.corp:3128' }],
+        ])('%j: no lookup, no pin, git as before', async (env) => {
+            await expect(
+                pinnedGitFetchConfig(
+                    'https://github.com/o/r.git',
+                    noLookup,
+                    'Git server',
+                    env,
+                ),
+            ).resolves.toEqual([]);
+        });
+
+        it('a host NO_PROXY names is resolved and pinned as usual', async () => {
+            await expect(
+                pinnedGitFetchConfig(
+                    'https://git.corp.example/o/r.git',
+                    resolver(['140.82.112.3', 4]),
+                    'Git server',
+                    {
+                        HTTPS_PROXY: 'http://proxy.corp:3128',
+                        NO_PROXY: 'localhost,.corp.example',
+                    },
+                ),
+            ).resolves.toContainEqual([
+                'http.curloptResolve',
+                'git.corp.example:443:140.82.112.3',
+            ]);
+        });
+
+        it('http_proxy does not carry https, as in curl', async () => {
+            await expect(
+                pinnedGitFetchConfig(
+                    'https://git.corp.example/o/r.git',
+                    resolver(['140.82.112.3', 4]),
+                    'Git server',
+                    { http_proxy: 'http://proxy.corp:3128' },
+                ),
+            ).resolves.toHaveLength(2);
+        });
+
+        it('the metadata address typed as the host is refused even so', async () => {
+            await expect(
+                pinnedGitFetchConfig(
+                    'http://169.254.169.254/r.git',
+                    noLookup,
+                    'Git server',
+                    {
+                        HTTPS_PROXY: 'http://p:3128',
+                        HTTP_PROXY: 'http://p:3128',
+                        ALL_PROXY: 'http://p:3128',
+                    },
+                ),
+            ).rejects.toThrow(/169\.254\.169\.254/);
+        });
+    });
+
+    it('self-hosted: a host this process cannot resolve is left to git', async () => {
+        environment.API_CLOUD_MODE = false;
+        await expect(
+            pinnedGitFetchConfig('https://git.corp/r.git', async () => {
+                throw Object.assign(new Error('getaddrinfo ENOTFOUND'), {
+                    code: 'ENOTFOUND',
+                });
+            }),
+        ).resolves.toEqual([]);
+    });
+
+    it('cloud: a host that does not resolve still fails here', async () => {
+        await expect(
+            pinnedGitFetchConfig('https://git.corp/r.git', async () => {
+                throw new Error('getaddrinfo ENOTFOUND');
+            }),
+        ).rejects.toThrow(/ENOTFOUND/);
+    });
+
+    describe('a redirect is followed with every hop judged', () => {
+        let target: Server;
+        let targetPort: number;
+        let targetSeen: Array<{ url: string; ua: string; auth?: string }>;
+        let redirector: Server;
+        let redirectorPort: number;
+        let redirectTo: (url: string) => string;
+        let redirectorAuth: Array<string | undefined>;
+
+        beforeAll(async () => {
+            target = createServer((req, res) => {
+                targetSeen.push({
+                    url: req.url ?? '',
+                    ua: String(req.headers['user-agent']),
+                    auth: req.headers.authorization,
+                });
+                res.statusCode = 404;
+                res.end();
+            });
+            await new Promise<void>((r) => target.listen(0, '127.0.0.1', r));
+            targetPort = (target.address() as AddressInfo).port;
+            redirector = createServer((req, res) => {
+                redirectorAuth.push(req.headers.authorization);
+                res.statusCode = 301;
+                res.setHeader('location', redirectTo(req.url ?? ''));
+                res.end();
+            });
+            await new Promise<void>((r) =>
+                redirector.listen(0, '127.0.0.1', r),
+            );
+            redirectorPort = (redirector.address() as AddressInfo).port;
+        });
+
+        afterAll(async () => {
+            await new Promise<void>((r) => target.close(() => r()));
+            await new Promise<void>((r) => redirector.close(() => r()));
+        });
+
+        beforeEach(() => {
+            targetSeen = [];
+            redirectorAuth = [];
+            environment.API_CLOUD_MODE = false;
+            resolvesTo('127.0.0.1');
+        });
+
+        const run = (url: string, pin: Array<[string, string]>) =>
+            gitFetch(url, pin);
+
+        it('a server that moved (301 to another host) is fetched where it moved to', async () => {
+            redirectTo = (path) =>
+                `http://127.0.0.1:${targetPort}${path.replace('/g/r.git', '/moved/r.git')}`;
+            await withJudgedGitRedirects(
+                `http://localhost:${redirectorPort}/g/r.git`,
+                'Authorization: Basic c2VjcmV0',
+                run,
+            ).catch(() => undefined);
+            const byGit = targetSeen.filter((r) => r.ua.startsWith('git/2'));
+            expect(byGit.map((r) => r.url)).toContainEqual(
+                expect.stringMatching(/^\/moved\/r\.git\/info\/refs/),
+            );
+            // The probe carried the token to the host it was given for only.
+            expect(redirectorAuth).toContain('Basic c2VjcmV0');
+            expect(
+                targetSeen
+                    .filter((r) => r.ua === 'git/kodus')
+                    .map((r) => r.auth),
+            ).toEqual([undefined]);
+        });
+
+        it('a redirect to the metadata service is refused, git never dials it', async () => {
+            redirectTo = () =>
+                'http://169.254.169.254/latest/meta-data/info/refs?service=git-upload-pack';
+            const err = await withJudgedGitRedirects(
+                `http://localhost:${redirectorPort}/g/r.git`,
+                undefined,
+                run,
+            ).then(
+                () => undefined,
+                (e: unknown) => e,
+            );
+            expect(err).toBeInstanceOf(GatewayAddressRefusedError);
+        });
+
+        it('cloud: a redirect to a name on the private network is refused', async () => {
+            environment.API_CLOUD_MODE = true;
+            redirectTo = (path) => `http://internal.attacker.test${path}`;
+            resolvesTo('10.0.0.7');
+            const probe = withJudgedGitRedirects(
+                'https://git.example.com/g/r.git',
+                undefined,
+                async () => {
+                    throw Object.assign(new Error('fetch failed'), {
+                        stderr: 'fatal: unable to access: The requested URL returned error: 301',
+                    });
+                },
+                async () => [],
+            );
+            await expect(probe).rejects.toThrow(
+                /resolves to a private or reserved address/,
+            );
+        });
+
+        it('a fetch that failed for another reason is not retried', async () => {
+            const runs: string[] = [];
+            await expect(
+                withJudgedGitRedirects(
+                    'https://git.example.com/g/r.git',
+                    undefined,
+                    async (url) => {
+                        runs.push(url);
+                        throw Object.assign(new Error('fetch failed'), {
+                            stderr: 'fatal: Authentication failed',
+                        });
+                    },
+                    async () => [],
+                ),
+            ).rejects.toThrow('fetch failed');
+            expect(runs).toEqual(['https://git.example.com/g/r.git']);
+        });
+    });
+});
+
+// Review on #2709 (sartorijr92, round 2): a refusal is not a bad token.
+describe('connecting a self-managed server that is refused says why', () => {
+    const { GitlabService } = jest.requireActual('./gitlab.service');
+    const { BitbucketDataCenterService } = jest.requireActual(
+        './bitbucket/bitbucket-data-center.service',
+    );
+    const noDeps = [{}, {}, {}, { get: () => undefined }, {}] as any[];
+
+    it.each([
+        [
+            'GitLab',
+            () =>
+                new GitlabService(...noDeps).authenticateWithToken({
+                    token: 'glpat-x',
+                    host: 'https://gitlab.attacker.test',
+                    organizationAndTeamData: {
+                        organizationId: 'o',
+                        teamId: 't',
+                    },
+                }),
+        ],
+        [
+            'Bitbucket Data Center',
+            () =>
+                new BitbucketDataCenterService(
+                    ...noDeps.slice(0, 4),
+                ).authenticateWithToken({
+                    token: 'bbdc-x',
+                    host: 'https://bitbucket.attacker.test',
+                    organizationAndTeamData: {
+                        organizationId: 'o',
+                        teamId: 't',
+                    },
+                }),
+        ],
+    ])(
+        '%s: cloud, the host resolves to a private address',
+        async (_name, call) => {
+            resolvesTo('10.0.0.7');
+            const err = await call().then(
+                () => undefined,
+                (e: unknown) => e,
+            );
+            expect(err).toBeInstanceOf(BadRequestException);
+            expect((err as Error).message).toMatch(
+                /resolves to a private or reserved address/,
+            );
+            expect(reached).toEqual([]);
+        },
+    );
+
+    it('GitLab: a host rebound to a private address when it connects says so too', async () => {
+        // Public to the save check, private to the socket.
+        promiseLookup.mockResolvedValue([
+            { address: '140.82.112.3', family: 4 },
+        ]);
+        socketLookup.mockImplementation((_h, options, callback) => {
+            const cb = typeof options === 'function' ? options : callback;
+            return typeof options === 'object' && options?.all
+                ? cb(null, [{ address: '127.0.0.1', family: 4 }])
+                : cb(null, '127.0.0.1', 4);
+        });
+        const err = await new GitlabService(...noDeps)
+            .authenticateWithToken({
+                token: 'glpat-x',
+                host: `http://gitlab.attacker.test:${port}`,
+                organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+            })
+            .then(
+                () => undefined,
+                (e: unknown) => e,
+            );
+        expect((err as Error).message).toMatch(
+            /resolves to a private or reserved address/,
+        );
+        expect(reached).toEqual([]);
     });
 });
