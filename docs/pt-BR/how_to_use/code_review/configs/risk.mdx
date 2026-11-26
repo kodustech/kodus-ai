@@ -29,25 +29,39 @@ A avaliação de risco vem desligada. A Kody pode avaliar risco mesmo com a apro
 
 ## Resultados
 
-- **Risk found:** agentes condicionados a risco podem rodar, o Routing usa o modo de risk-found e a aprovação automática é bloqueada.
+- **Risk found:** o PR se enquadra em pelo menos uma [regra de risco](#regras-de-risco) ativada. Agentes condicionados a risco podem rodar, o Routing usa o modo de risk-found e a aprovação automática é bloqueada. O comentário de aprovação cita as regras.
 - **No risk found:** o Routing usa o modo de no-risk. A aprovação ainda exige um review limpo e uma policy correspondente.
-- **Unavailable:** o Routing usa o modo de review padrão configurado. A aprovação automática é bloqueada, e agentes que exigem risco confirmado não rodam automaticamente.
+- **Unavailable:** o Routing usa o modo de review padrão configurado. A aprovação automática é bloqueada, e agentes que exigem risco confirmado não rodam automaticamente. O comentário de aprovação diz o motivo, por exemplo quando o provedor Git não retornou o diff de um arquivo de código.
 
 Com a avaliação desativada, o Routing usa um único modo configurado para todos os PRs. Agentes condicionais não rodam sem risco confirmado; comandos manuais explícitos de agente ignoram essa condição.
 
-Uma avaliação cobre um head de PR, o título e a descrição. Um novo commit, ou uma mudança no título ou na descrição, mantém a aprovação automática em espera até um novo review.
+Uma avaliação cobre um head de PR, o título e a descrição. Um novo commit mantém a aprovação automática em espera até o review dele. Quando só o título, a descrição ou as configurações de risco mudam, a Kody avalia de novo os mesmos commits antes de decidir sobre a aprovação.
 
 ## Preview em um PR
 
-**Preview on a PR** abre um painel lateral. Escolha um repositório conectado e o número do PR para testar os critérios atuais, incluindo edições não salvas. Ele usa o modelo de risk assessment configurado e não publica comentário nem aprova o PR.
+**Preview on a PR** abre um painel lateral. Escolha um repositório conectado e o número do PR para testar as regras atuais, incluindo edições não salvas. Ele usa o modelo de risk assessment configurado e não publica comentário nem aprova o PR.
 
-## Critérios opcionais do time
+## Regras de risco
 
-A Kody avalia o risco sem critérios do time. Os critérios adicionam contexto do time, como as consequências de alterar permissões de conta ou apagar dados de clientes.
+A Kody encontra risco quando um PR se enquadra em uma regra ativada. A Kodus entrega estas regras, todas ativadas:
 
-Um critério tem um nome, instruções, um switch e padrões opcionais de arquivos incluídos/excluídos. Você pode adicionar até 50. O nome tem até 120 caracteres e as instruções até 4.000; em um arquivo, cada `id` deve ser único. Os filtros de arquivo delimitam a orientação; casar com um arquivo não declara automaticamente o PR como arriscado. A Kody ainda avalia o restante da mudança.
+- `kodus-security` **Security and permissions:** autenticação, autorização, permissões, isolamento entre tenants, validação de entrada ou qualquer verificação que proteja dados ou ações, incluindo um novo endpoint, handler ou job que lê ou altera dados sem a proteção que os vizinhos têm.
+- `kodus-money` **Money, billing and licensing:** pagamentos, preços, cobranças, créditos, faturas, assinaturas ou licenciamento.
+- `kodus-data` **Stored data and migrations:** migrações de dados ou de schema, exclusão ou reescrita de dados armazenados, ou o formato dos dados persistidos e as queries que os leem ou escrevem.
+- `kodus-infrastructure` **Secrets and infrastructure:** segredos, credenciais, infraestrutura, rede ou o ambiente de execução.
+- `kodus-ci-build` **CI, build, release and dependencies:** configuração de CI, build, release ou deploy, ou a versão de uma dependência ou ferramenta.
+- `kodus-shared-contract` **Shared contracts and public interfaces:** aquilo de que outro código, usuários ou integrações dependem, como os resultados de uma API pública, de uma função de biblioteca ou de uma CLI.
+- `kodus-concurrency` **Concurrency, retries, queues and caching.**
+- `kodus-ai-behavior` **Production prompts and model behavior:** os prompts, a escolha de modelo ou as configurações de modelo com que uma funcionalidade em produção roda.
+- `kodus-broad-change` **Broad or mixed changes:** uma reescrita ampla de caminhos centrais, ou um PR que mistura várias mudanças com consequências.
 
-A avaliação usa o diff e o contexto de código/histórico disponível. Histórico ausente é informação desconhecida, não evidência de segurança.
+Você pode desativar uma regra da Kodus ou editar o nome, as instruções ou os filtros de arquivo dela. Suas edições substituem a versão da Kodus até você clicar em **Reset**; o que você não alterar acompanha as atualizações da Kodus. Adicione suas próprias regras para dar contexto do time, como as consequências de alterar permissões de conta ou apagar dados de clientes.
+
+Uma regra tem um nome, instruções, um switch e padrões opcionais de arquivos incluídos/excluídos. As configurações guardam até 50 entradas, contando as suas regras e as regras da Kodus que você alterou. O nome tem até 120 caracteres e as instruções até 4.000; em um arquivo, cada `id` deve ser único. Uma regra com filtros de arquivo se aplica só às mudanças nos arquivos que casam com eles; a Kody ainda avalia o restante do PR com as outras regras. Quando nenhuma regra ativada se aplica aos arquivos alterados, a Kody não encontra risco sem chamar o modelo, então um review limpo pode aprovar.
+
+Instruções de risco salvas antes de existirem regras de risco aparecem como **Team context**. A Kody as lê como contexto, não como uma regra: elas podem dizer que uma mudança precisa de uma pessoa ou que não precisa. Quando pedem uma pessoa, o comentário de aprovação cita **Team context**.
+
+A avaliação lê o diff, o título e a descrição do PR e o histórico de correções de bugs das áreas alteradas. Histórico ausente é informação desconhecida, não evidência de segurança.
 
 ## YAML
 
@@ -56,6 +70,12 @@ Ative **Prefer kodus-config.yml settings** em **Code review → General** (escop
 ```yaml
 riskAssessmentActive: true
 riskCriteria:
+  - id: kodus-shared-contract # A Kodus rule, turned off
+    enabled: false
+  - id: kodus-ci-build # A Kodus rule, limited to release workflows
+    enabled: true
+    includedFiles:
+      - '.github/workflows/release*.yml'
   - id: access-control
     name: Access control
     enabled: true
@@ -66,6 +86,6 @@ riskCriteria:
       - '**/*.test.ts'
 ```
 
-`riskCriteria: []` mantém a avaliação padrão da Kody. Para parar a avaliação, defina `riskAssessmentActive: false`.
+Uma regra da Kodus é listada pelo seu `id`, só com o que você altera. Uma entrada cujo `id` não corresponde a nenhuma regra da Kodus precisa de nome e instruções. `riskCriteria: []` aplica as regras da Kodus como são entregues. Um repositório ou diretório que define `riskCriteria` substitui a lista que herda, então liste ali todas as mudanças de que ele precisa, incluindo as regras próprias da organização. `kodus config remote risk-rules .` lista as regras em vigor, com seus ids. Para parar a avaliação, defina `riskAssessmentActive: false`.
 
 Uma configuração que nunca definiu **Risk assessment** mantém o comportamento de risco da aprovação existente até você alterar essa configuração. Ativar ou desativar a aprovação automática não altera o switch **Risk assessment**.

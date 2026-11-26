@@ -536,10 +536,23 @@
                 "type": "object",
                 "required": [
                     "id",
-                    "name",
-                    "enabled",
-                    "instructions"
+                    "enabled"
                 ],
+                "if": {
+                    "not": {
+                        "properties": {
+                            "id": {
+                                "pattern": "^kodus-"
+                            }
+                        }
+                    }
+                },
+                "then": {
+                    "required": [
+                        "name",
+                        "instructions"
+                    ]
+                },
                 "properties": {
                     "id": {
                         "type": "string",

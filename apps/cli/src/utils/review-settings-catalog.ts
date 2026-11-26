@@ -126,7 +126,7 @@ export const REVIEW_SETTINGS: readonly ReviewSettingDefinition[] = [
         section: 'risk-assessment',
         inheritField: true,
         description:
-            'Replace the list of team risk criteria. [] uses standard assessment.',
+            "Replace the stored risk rules: team rules, and Kodus rules turned off or edited by id (see 'risk-rules'). [] applies Kodus's rules as shipped.",
     },
     {
         key: 'reviewMode',

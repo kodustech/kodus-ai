@@ -309,9 +309,9 @@ it('publishes a reason per enabled non-matching policy without exposing instruct
         labels: [],
         judgeEligibility: async () => ({ status: 'ineligible' }),
     });
-    expect(result.reason).toContain('Labels: Required labels did not match.');
+    expect(result.reason).toContain('`Labels`: Required labels did not match.');
     expect(result.reason).toContain(
-        'Instruction: The eligibility instruction did not match.',
+        '`Instruction`: The eligibility instruction did not match.',
     );
     expect(result.reason).not.toContain('private-label');
     expect(result.reason).not.toContain('private strategy');
