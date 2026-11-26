@@ -29,6 +29,7 @@ import {
     extractJsonFromText,
     normalizeEnvelope,
     readOutput,
+    endedOnItsOwn,
     repairAndValidate,
     salvageStructuredError,
 } from '@libs/llm/structured-output-repair';
@@ -752,6 +753,8 @@ async function runReviewCall<T>(
             const repaired = await salvageStructuredError<T>(
                 err,
                 mode.validatingSchema,
+                // Already the re-ask: nothing follows it.
+                { lastChance: true },
             );
             if (repaired !== undefined) {
                 logger.warn({
@@ -781,23 +784,38 @@ async function runReviewCall<T>(
     if (structuredPlan === 'reroute-json') {
         const inv = buildInvocation(false);
         const reroutedSystem = withJsonContract(system, mode.schemaForPrompt);
-        const reroute = () =>
+        const noValidObject = new WeakSet<Error>();
+        const reroute = (recovery?: string) =>
             call(
                 inv.model,
                 inv.modelName,
                 reroutedSystem,
-                { structuredReroute: 'thinking-forced-tool_choice' },
+                {
+                    structuredReroute: 'thinking-forced-tool_choice',
+                    ...(recovery ? { structuredRecovery: recovery } : {}),
+                },
                 {
                     outputArgs: {}, // plain generateText — no Output.object, no tool_choice
+                    ...(recovery ? { prompt: withJsonUserHint(user) } : {}),
                     extract: async (r: any) => {
+                        const ended = endedOnItsOwn(r?.finishReason);
                         const value = await repairAndValidate<T>(
                             mode.validatingSchema,
                             (r?.text ?? '') as string,
+                            // The re-ask is the last request this path makes.
+                            { lastChance: !!recovery && ended },
                         );
                         if (value === undefined) {
-                            throw new Error(
+                            const e = new Error(
                                 `[structured-output] reroute-json produced no valid object for ${runName}`,
                             );
+                            // A reply cut off by the token limit, a filter or
+                            // an unnamed upstream stop re-asks into the same
+                            // wall: thrown as is, like the text path.
+                            if (ended) {
+                                noValidObject.add(e);
+                            }
+                            throw e;
                         }
                         return value;
                     },
@@ -806,7 +824,25 @@ async function runReviewCall<T>(
         try {
             return await reroute();
         } catch (err) {
-            // Single-shot otherwise; only a 429 earns the re-issue.
+            // No valid object is repairAndValidate's "re-ask" (a reply cut off
+            // after a quoted code block, or valid objects on both sides of one):
+            // the same one re-ask the text path gives a schema mismatch, through
+            // the reroute itself, since Output.object is what this model rejects.
+            if (err instanceof Error && noValidObject.has(err)) {
+                try {
+                    return await reroute('reroute-no-valid-object');
+                } catch (again) {
+                    // Already the second request: a 429 here goes to the fallback.
+                    if (
+                        classifyLLMError(again).category ===
+                        LlmErrorCategory.RATE_LIMIT
+                    ) {
+                        throw markRetriesExhausted(again);
+                    }
+                    throw again;
+                }
+            }
+            // Otherwise only a 429 earns the re-issue.
             if (
                 classifyLLMError(err).category !== LlmErrorCategory.RATE_LIMIT
             ) {

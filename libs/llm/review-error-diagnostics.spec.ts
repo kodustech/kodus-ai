@@ -281,3 +281,311 @@ describe('buildReviewErrorMessage', () => {
         ).toBe('Network failure.');
     });
 });
+
+describe('OpenRouter upstream errors (#1871)', () => {
+    // OpenRouter answers an upstream failure with its own wrapper sentence and
+    // puts the upstream answer in `error.metadata`. The AI SDK's error schema
+    // drops `metadata` from `data`, so only `responseBody` still carries it.
+    const openRouterError = (metadata: Record<string, unknown>) => ({
+        message: 'Provider returned error',
+        statusCode: 429,
+        data: { error: { message: 'Provider returned error', code: 429 } },
+        responseBody: JSON.stringify({
+            error: { message: 'Provider returned error', code: 429, metadata },
+        }),
+    });
+
+    it("quotes the upstream provider's plain-text reason, not OpenRouter's wrapper", () => {
+        const out = extractProviderMessage(
+            openRouterError({
+                raw: 'google/gemma-3-27b-it:free is temporarily rate-limited upstream. Please retry shortly.',
+                provider_name: 'Chutes',
+            }),
+        );
+        expect(out).toBe(
+            'Chutes: google/gemma-3-27b-it:free is temporarily rate-limited upstream. Please retry shortly.',
+        );
+    });
+
+    it('reads the message field of an upstream JSON body kept as a string in metadata.raw', () => {
+        const out = extractProviderMessage(
+            openRouterError({
+                raw: JSON.stringify({
+                    error: {
+                        message: 'Quota exceeded for model on this project.',
+                        status: 'RESOURCE_EXHAUSTED',
+                    },
+                }),
+                provider_name: 'Google AI Studio',
+            }),
+        );
+        expect(out).toBe(
+            'Google AI Studio: Quota exceeded for model on this project.',
+        );
+    });
+
+    // What must not change: the upstream text gets the same publishing gate as
+    // any other body, and a body without it reads as before.
+    describe('impact: what must not change', () => {
+        it('keeps the wrapper sentence when the upstream raw body is a payload, not prose', () => {
+            const echoed =
+                'Request rejected. Input was: ' +
+                'function computeInternalPricing(customer) { return customer.tier * 1.7; } ' +
+                'and the rest of the file followed';
+            expect(
+                extractProviderMessage(openRouterError({ raw: echoed })),
+            ).toBe('Provider returned error');
+        });
+
+        it('never publishes the flagged input of a moderation error', () => {
+            const out = extractProviderMessage(
+                openRouterError({
+                    reasons: ['violence'],
+                    flagged_input: 'the user prompt that was flagged',
+                    provider_name: 'OpenAI',
+                }),
+            );
+            expect(out).toBe('Provider returned error');
+        });
+
+        it('never publishes a key the upstream body echoes', () => {
+            const out = extractProviderMessage(
+                openRouterError({
+                    raw: 'Invalid key sk-or-v1-abcdef0123456789abcdef',
+                }),
+            );
+            expect(out).not.toContain('abcdef0123456789');
+        });
+
+        it('reads an ordinary provider body exactly as before', () => {
+            expect(
+                extractProviderMessage({
+                    data: { error: { message: 'Rate limit exceeded' } },
+                    responseBody: JSON.stringify({
+                        error: { message: 'Rate limit exceeded' },
+                    }),
+                }),
+            ).toBe('Rate limit exceeded');
+        });
+    });
+});
+
+describe('extractProviderMessage — a wrapper with no body of its own', () => {
+    // The shape the AI SDK throws for a provider's answer (APICallError).
+    const apiError = (body: unknown) =>
+        Object.assign(new Error('Too Many Requests'), {
+            name: 'AI_APICallError',
+            statusCode: 429,
+            responseBody: JSON.stringify(body),
+        });
+
+    it("reads the provider's sentence from a RetryError's last attempt", () => {
+        const retry = Object.assign(new Error('Failed after 3 attempts.'), {
+            name: 'AI_RetryError',
+            lastError: apiError({
+                error: {
+                    message: 'Rate limit reached for gpt-x on tokens per min',
+                },
+            }),
+        });
+        expect(extractProviderMessage(retry)).toBe(
+            'Rate limit reached for gpt-x on tokens per min',
+        );
+    });
+
+    it('reads it from the cause of our own wrapper error', () => {
+        const wrapped = new Error('summary failed', {
+            cause: apiError({ error: { message: 'Overloaded' } }),
+        });
+        expect(extractProviderMessage(wrapped)).toBe('Overloaded');
+    });
+
+    it('keeps redacting a key found on the last attempt', () => {
+        const retry = Object.assign(new Error('Failed after 3 attempts.'), {
+            lastError: apiError({
+                error: {
+                    message:
+                        'Incorrect API key provided: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789',
+                },
+            }),
+        });
+        const published = extractProviderMessage(retry);
+        expect(published).toContain('Incorrect API key provided');
+        expect(published).not.toContain('abcdefghijklmnopqrstuvwxyz0123456789');
+    });
+
+    it("reads the provider's sentence across a cause cycle and still terminates", () => {
+        const a: any = new Error('wrapper');
+        const b: any = apiError({ error: { message: 'Overloaded' } });
+        a.cause = b;
+        b.cause = a;
+        expect(extractProviderMessage(a)).toBe('Overloaded');
+        const c: any = new Error('c');
+        const d: any = new Error('d');
+        c.cause = d;
+        d.cause = c;
+        expect(extractProviderMessage(c)).toBeUndefined();
+    });
+});
+
+// Review on #2700 (sartorijr92): each case is the reviewer's reproduction.
+describe('extractProviderMessage: review on #2700', () => {
+    const apiError = (body: unknown, statusCode = 429) =>
+        Object.assign(new Error('Bad Request'), {
+            name: 'AI_APICallError',
+            statusCode,
+            responseBody: JSON.stringify(body),
+        });
+
+    it("does not publish an upstream's labelled message that is a payload (vLLM's validation repr)", () => {
+        const raw = JSON.stringify({
+            object: 'error',
+            message:
+                "[{'type': 'string_type', 'loc': ('body','messages',1,'content','str'), 'msg': 'Input should be a valid string', 'input': [{'type':'text','text':'diff --git a/src/billing/pricing.ts const INTERNAL_MARGIN = 0.37'}]}]",
+            type: 'BadRequestError',
+        });
+        const err = apiError(
+            {
+                error: {
+                    message: 'Provider returned error',
+                    metadata: { raw, provider_name: 'Chutes' },
+                },
+            },
+            400,
+        );
+        expect(extractProviderMessage(err) ?? '').not.toContain(
+            'INTERNAL_MARGIN',
+        );
+    });
+
+    it("does not publish a quoted request from an upstream's detail", () => {
+        const raw = JSON.stringify({
+            detail: 'Invalid request: messages[0].content="def charge(card): return card.number"',
+        });
+        const err = apiError(
+            {
+                error: {
+                    message: 'Provider returned error',
+                    metadata: { raw },
+                },
+            },
+            400,
+        );
+        expect(extractProviderMessage(err) ?? '').not.toContain('card.number');
+    });
+
+    it("still quotes an upstream's plain sentence (#1871)", () => {
+        const raw = JSON.stringify({
+            error: { message: 'Upstream rate-limited, retry in 30s' },
+        });
+        const err = apiError({
+            error: {
+                message: 'Provider returned error',
+                metadata: { raw, provider_name: 'Fireworks' },
+            },
+        });
+        expect(extractProviderMessage(err)).toBe(
+            'Fireworks: Upstream rate-limited, retry in 30s',
+        );
+    });
+
+    it('does not publish the body of a cause that is not a provider error', () => {
+        expect(
+            extractProviderMessage({
+                message: 'wrap',
+                cause: {
+                    name: 'SomeError',
+                    body: 'connection refused to mongodb://admin:pw@10.0.0.5:27017',
+                },
+            }),
+        ).toBeUndefined();
+        expect(
+            extractProviderMessage({
+                message: 'wrap',
+                cause: { status: 404, data: { message: 'Not Found' } },
+            }),
+        ).toBeUndefined();
+    });
+
+    it("reads a RetryError's earlier attempt when the last one has no body", () => {
+        const timeout = Object.assign(
+            new Error('The operation was aborted due to timeout'),
+            {
+                name: 'TimeoutError',
+            },
+        );
+        const rateLimited = apiError({
+            error: {
+                message: 'Provider returned error',
+                metadata: {
+                    raw: 'Upstream rate-limited, retry in 30s',
+                    provider_name: 'OpenRouter',
+                },
+            },
+        });
+        const retry = {
+            name: 'AI_RetryError',
+            reason: 'errorNotRetryable',
+            message: 'Failed after 2 attempts.',
+            errors: [rateLimited, timeout],
+            lastError: timeout,
+        };
+        expect(extractProviderMessage(retry)).toBe(
+            'OpenRouter: Upstream rate-limited, retry in 30s',
+        );
+    });
+
+    it.each([
+        [
+            'a Google AI Studio auth key',
+            'Invalid API key provided: AQ.Ab8RN6LkqZ3vT9xPqWcD2mF7sHjK',
+        ],
+        [
+            'a key in a query string',
+            'Request to https://gw.example.test/v1/models?key=plainvalue1234 failed',
+        ],
+        [
+            'a Bedrock API key',
+            'Invalid API key provided: ABSKQmVkcm9ja0FQSUtleS1leGFtcGxl',
+        ],
+        [
+            'a Fireworks key',
+            'Invalid API key provided: fw_3ZkV8mQ2xR7tY1nB5cL9',
+        ],
+        [
+            'a Together key',
+            'Invalid API key provided: tgp_v1_Zk3V8mQ2xR7tY1nB5cL9wQ',
+        ],
+        ['a Novita key', 'Invalid API key provided: sk_Zk3V8mQ2xR7tY1nB5cL9wQ'],
+        ['an xAI key', 'Invalid API key provided: xai-Zk3V8mQ2xR7tY1nB5cL9wQ'],
+        ['a Groq key', 'Invalid API key provided: gsk_Zk3V8mQ2xR7tY1nB5cL9wQ'],
+        [
+            'a Hugging Face key',
+            'Invalid API key provided: hf_Zk3V8mQ2xR7tY1nB5cL9wQ',
+        ],
+        [
+            'a Z.ai key',
+            'Invalid API key provided: 0123456789abcdef0123456789abcdef.Zk3V8mQ2xR7tY1nB',
+        ],
+        [
+            'a JWT',
+            'Invalid token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJl',
+        ],
+        ['a token= pair', 'Rejected: token=Zk3V8mQ2xR7tY1nB5cL9'],
+        ['a password: pair', 'Rejected: password: hunter2hunter2'],
+        [
+            'an e-mail address',
+            'Account owner jane.doe@example.com has no credit',
+        ],
+    ])('redacts %s', (_label, sentence) => {
+        const secret = sentence.match(
+            /(plainvalue1234|AQ\.\S+|ABSK\S+|fw_\S+|tgp_v1_\S+|sk_\S+|xai-\S+|gsk_\S+|hf_\S+|[0-9a-f]{32}\.\S+|eyJ\S+|Zk3V8mQ2xR7tY1nB5cL9|hunter2hunter2|jane\.doe@example\.com)/,
+        )![0];
+        const published =
+            extractProviderMessage(
+                apiError({ error: { message: sentence } }, 401),
+            ) ?? '';
+        expect(published).not.toContain(secret);
+        expect(published).toContain('[redacted]');
+    });
+});

@@ -17,8 +17,10 @@ const createAnthropicMock = jest.fn(
 );
 
 jest.mock('@ai-sdk/anthropic', () => ({
-    createAnthropic: (cfg: { baseURL?: string; headers?: Record<string, string> }) =>
-        createAnthropicMock(cfg),
+    createAnthropic: (cfg: {
+        baseURL?: string;
+        headers?: Record<string, string>;
+    }) => createAnthropicMock(cfg),
 }));
 
 import { moonshotModule } from '../moonshot/index';
@@ -85,5 +87,20 @@ describe('anthropicBrandModule — baseURL fallback for a key-only connect', () 
 
         expect(baseURLOf()).toBe('https://opencode.ai/zen/go/v1');
         expect(headersOf()?.['x-opencode-session']).toMatch(/^[0-9a-f]{32}$/);
+    });
+});
+
+describe('anthropicBrandModule — capabilities', () => {
+    // The brand exposes reasoning for every model, so "no level can be sent"
+    // (reasoningAlwaysOn) must not leak through from the anthropic module,
+    // which reads glm-5.3 / kimi-k3.1-pro as always-on compatible models.
+    it.each([
+        ['zai', zaiModule, 'glm-5.3'],
+        ['zai', zaiModule, 'GLM-5.3-Flash'],
+        ['moonshot', moonshotModule, 'kimi-k3.1-pro'],
+    ])('%s %s reports reasoning, never always-on', (_brand, mod, model) => {
+        const caps = mod.capabilities(model);
+        expect(caps.supportsReasoning).toBe(true);
+        expect(caps.reasoningAlwaysOn).toBeUndefined();
     });
 });

@@ -20,6 +20,7 @@
  *     before we spend a model re-ask. It never fixes a SHAPE mismatch (valid JSON,
  *     wrong keys) — that needs the model.
  */
+import { isDeepStrictEqual } from 'node:util';
 import Ajv from 'ajv';
 import {
     asSchema,
@@ -94,6 +95,77 @@ export function ensureValidatingSchema(wire: unknown): unknown {
         return wire;
     }
     return jsonSchema(s.jsonSchema as any, { validate: validate as any });
+}
+
+/**
+ * The end of every container opened after `start`, from ONE string-aware pass
+ * read the way {@link balancedSpanEnd} reads it from `start`: an opener outside
+ * a string in that pass gets its end (or -1, never closed) in `ends`. Two
+ * openers outside a string see the same strings after them, so the pass
+ * answers for all of them at once; one that sat inside a string here gets its
+ * own pass when asked. Returns the chars scanned.
+ */
+function resolveSpansFrom(
+    s: string,
+    start: number,
+    ends: Map<number, number>,
+): number {
+    const curly: number[] = [];
+    const square: number[] = [];
+    let inStr = false;
+    let escaped = false;
+    for (let i = start; i < s.length; i++) {
+        const ch = s[i];
+        if (inStr) {
+            if (escaped) escaped = false;
+            else if (ch === '\\') escaped = true;
+            else if (ch === '"') inStr = false;
+            continue;
+        }
+        if (ch === '"') inStr = true;
+        else if (ch === '{') curly.push(i);
+        else if (ch === '[') square.push(i);
+        else if (ch === '}') {
+            const open = curly.pop();
+            if (open !== undefined && !ends.has(open)) ends.set(open, i + 1);
+        } else if (ch === ']') {
+            const open = square.pop();
+            if (open !== undefined && !ends.has(open)) ends.set(open, i + 1);
+        }
+    }
+    for (const open of [...curly, ...square]) {
+        if (!ends.has(open)) ends.set(open, -1);
+    }
+    return s.length - start;
+}
+
+/** End (exclusive) of the balanced span opened at `s[start]`, which must be
+ *  `{` or `[`, or -1 when it never closes. Same string-aware rule as
+ *  {@link sliceBalancedJson}, without copying the text after `start`. */
+function balancedSpanEnd(s: string, start: number): number {
+    const open = s[start];
+    const close = open === '{' ? '}' : ']';
+    let depth = 0;
+    let inStr = false;
+    let escaped = false;
+    for (let i = start; i < s.length; i++) {
+        const ch = s[i];
+        if (inStr) {
+            if (escaped) escaped = false;
+            else if (ch === '\\') escaped = true;
+            else if (ch === '"') inStr = false;
+            continue;
+        }
+        if (ch === '"') {
+            inStr = true;
+        } else if (ch === open) {
+            depth++;
+        } else if (ch === close) {
+            depth--;
+            if (depth === 0) return i + 1;
+        }
+    }
+    return -1;
 }
 
 /** Slice out the outermost balanced `{ … }` / `[ … ]`, string-aware so braces
@@ -172,6 +244,28 @@ export function stripReasoningBlocks(text: string): string | null {
 }
 
 /**
+ * The first markdown code fence: the first ``` that a later ``` closes, with
+ * what lies between them (`inner`, tag included). A linear scan: the regex
+ * forms (`/```(?:json)?\s*([\s\S]*?)```/`) backtrack over a run of
+ * whitespace after an unclosed fence once per character, quadratic in
+ * model-generated text.
+ */
+function firstFence(
+    text: string,
+): { start: number; end: number; inner: string } | null {
+    const start = text.indexOf('```');
+    if (start < 0) return null;
+    const close = text.indexOf('```', start + 3);
+    if (close < 0) return null;
+    return { start, end: close + 3, inner: text.slice(start + 3, close) };
+}
+
+/** A fence's body as the `(?:json)?\s*` prefix leaves it. */
+function fenceBody(inner: string): string {
+    return inner.replace(/^(?:json)?/i, '').trimStart();
+}
+
+/**
  * Pull the JSON value out of free-form LLM text: unwrap a ```json fence, drop any
  * prose before/after the outermost balanced `{…}`/`[…]` (string-aware), and strip
  * trailing commas. Returns the JSON substring — even when the input was ALREADY
@@ -189,8 +283,9 @@ export function extractJsonFromText(text: string): string | null {
     let s = stripped;
 
     // 1. Unwrap a markdown code fence.
-    const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fence?.[1]) s = fence[1].trim();
+    const fence = firstFence(s);
+    const fenced = fence ? fenceBody(fence.inner) : '';
+    if (fenced) s = fenced.trim();
 
     // 2. Drop any prose before/after the outermost balanced JSON value.
     const sliced = sliceBalancedJson(s);
@@ -327,6 +422,12 @@ export function repairJsonText(text: string): string | null {
 
 /** Above this size a broken payload is not worth a character scan (#2112). */
 const SALVAGE_MAX_CHARS = 1_000_000;
+/** Chars the fallback walk may scan in total: openers that start no parseable
+ *  container each rescan the text after them, and a balanced span that is not
+ *  JSON also pays a regex and a parse. The costliest of 3,725 recorded model
+ *  replies in evals/ scans ~0.85M, so 5M leaves 6x room and caps the worst
+ *  shape at well under a tenth of a second. */
+const FALLBACK_SCAN_BUDGET = 5_000_000;
 
 /**
  * Make the string literals of almost-JSON legal: raw control characters
@@ -548,9 +649,9 @@ function windowStartAfterCutSpans(text: string): number {
  *  be established (no fence, no balanced slice from the first delimiter) —
  *  the conservative no-floor. */
 function primarySpanEnd(text: string): number | null {
-    const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fence?.[1]) {
-        return (fence.index ?? 0) + fence[0].length;
+    const fence = firstFence(text);
+    if (fence && fenceBody(fence.inner)) {
+        return fence.end;
     }
     const start = text.search(/[{[]/);
     if (start < 0) {
@@ -603,11 +704,19 @@ async function firstValidatingObjectAfter<T = unknown>(
               | ValidationResult<unknown>
               | PromiseLike<ValidationResult<unknown>>)
         | null,
-    /** Candidates must start at/after the primary candidate's span end, in
-     *  the coordinates of `text` as passed in (the window mapping below
-     *  adjusts it); null when there was no primary candidate — everything
-     *  competes. */
+    /** Candidates must END past the primary's span end, in the coordinates
+     *  of `text` as passed in (the window mapping below adjusts it): one
+     *  that starts after the span, or one that encloses it (the first fence
+     *  sat inside the answer's own string value). Null when the text has no
+     *  first fence and no balanced span — everything competes. */
     floor: number | null,
+    /** The first fence quoted code (no primary candidate came out of it, or
+     *  what came out did not validate): a valid object before it makes the
+     *  one after it ambiguous, see the walk below. */
+    before = false,
+    /** No re-ask follows this attempt: an answer before the quote is taken
+     *  when it is the only valid object (see the walk below). */
+    lastChance = false,
 ): Promise<T | undefined> {
     // Same #2112 bound as salvageJsonText for the EXPENSIVE part: the
     // candidate walk (sliceBalancedJson + a parse per delimiter) scans at
@@ -623,13 +732,31 @@ async function firstValidatingObjectAfter<T = unknown>(
         text = text.slice(windowStart);
         floor = floor === null ? null : Math.max(0, floor - windowStart);
     }
-    const candidates: { value: unknown; start: number }[] = [];
+    const candidates: { value: unknown; end: number }[] = [];
+    // Every opener that starts no parseable container rescans the text after
+    // it, so the window alone does not bound the walk: `{` × 1M is ~10^12
+    // steps. Past FALLBACK_SCAN_BUDGET chars scanned the walk stops and judges
+    // only the candidates it already has.
+    // A pass resolves the end of every opener it reads outside a string
+    // (resolveSpansFrom), so an unclosed opener no longer charges the rest of
+    // the text once per opener: prose quoting `function f(req) {` twenty times
+    // before a long answer costs one pass, not twenty.
+    let scanned = 0;
+    const ends = new Map<number, number>();
     for (let i = 0; i < text.length; i++) {
         const ch = text[i];
         if (ch !== '{' && ch !== '[') continue;
-        const slice = sliceBalancedJson(text.slice(i));
+        if (!ends.has(i)) scanned += resolveSpansFrom(text, i, ends);
+        const end = ends.get(i)!;
+        if (scanned > FALLBACK_SCAN_BUDGET) {
+            // Stop scanning, keep what was found: candidates come in order and
+            // the first valid one wins, so a later one could not have beaten
+            // it; none found → re-ask, as before.
+            break;
+        }
         // Unbalanced from HERE says nothing about a later `{` — keep scanning.
-        if (!slice) continue;
+        if (end < 0) continue;
+        const slice = text.slice(i, end);
         // String-aware (tryParseLenient's rule): a comma inside a literal
         // (`f(a, }` in improvedCode) is payload content and stays; only
         // commas OUTSIDE string literals are stripped. The string
@@ -647,7 +774,7 @@ async function firstValidatingObjectAfter<T = unknown>(
                 typeof parsed === 'object' &&
                 !Array.isArray(parsed)
             ) {
-                candidates.push({ value: parsed, start: i });
+                candidates.push({ value: parsed, end: i + slice.length });
             }
             i += slice.length - 1;
             continue;
@@ -656,39 +783,74 @@ async function firstValidatingObjectAfter<T = unknown>(
         // it (an unmatched brace before the answer, its closer after), so
         // keep scanning within instead of skipping the span whole.
     }
-    for (const { value, start } of candidates) {
-        if (floor !== null && start < floor) {
-            // Inside/at the primary candidate's span — the fallback only
-            // takes objects that come AFTER it (review 5939864639).
-            continue;
-        }
+    const accept = async (
+        value: unknown,
+    ): Promise<{ value: unknown } | undefined> => {
         if (!validate) {
-            return value as T;
+            return { value };
         }
         const r = await validate(value);
         if (r.success) {
-            return r.value as T;
+            return { value: r.value };
         }
         // The envelope models wrap around the payload (normalizeEnvelope's
         // keys): retry the wrapper's child before giving up on this candidate.
-        if (!Array.isArray(value)) {
-            for (const key of ENVELOPE_WRAPPER_KEYS) {
-                const child = (value as Record<string, unknown>)[key];
-                if (
-                    !child ||
-                    typeof child !== 'object' ||
-                    Array.isArray(child)
-                ) {
-                    continue;
-                }
-                const rc = await validate(child);
-                if (rc.success) {
-                    return rc.value as T;
-                }
+        for (const key of ENVELOPE_WRAPPER_KEYS) {
+            const child = (value as Record<string, unknown>)[key];
+            if (!child || typeof child !== 'object' || Array.isArray(child)) {
+                continue;
+            }
+            const rc = await validate(child);
+            if (rc.success) {
+                return { value: rc.value };
             }
         }
+        return undefined;
+    };
+    const firstAccepted = async (
+        list: { value: unknown }[],
+    ): Promise<{ value: unknown } | undefined> => {
+        for (const { value } of list) {
+            const hit = await accept(value);
+            if (hit) {
+                return hit;
+            }
+        }
+        return undefined;
+    };
+    // Before or inside the primary's span vs past it. An object that starts
+    // before the span but runs past it ENCLOSES it — the first fence sat
+    // inside the answer's own string value — so it counts as past.
+    const after = candidates.filter((c) => floor === null || c.end > floor);
+    const fromAfter = await firstAccepted(after);
+    if (!before) {
+        // A primary JSON candidate failed: the fallback only takes objects
+        // that come AFTER it (review 5939864639).
+        return fromAfter?.value as T | undefined;
     }
-    return undefined;
+    // The first fence quoted code, so it is no answer, and the object before
+    // it is as plausible as the one after: `{answer} ```ts…``` Empty would
+    // be {…}` and `If nothing is wrong I would return {…} ```ts…```
+    // {answer}` differ only in order. A schema-valid object on BOTH sides is
+    // ambiguous → re-ask, never a guess that can ship an empty review. An
+    // object before the quote never stands alone either: a reply cut off
+    // after the quote leaves only the prose example.
+    const fromBefore = await firstAccepted(
+        candidates.filter((c) => floor !== null && c.end <= floor),
+    );
+    if (!fromAfter) {
+        // Only an object before the quote. With a re-ask left it is not
+        // taken: a reply cut off after the quote leaves only the prose
+        // example. With none left (the caller says so, and only for a reply
+        // that ended on its own), it is the answer or nothing.
+        return lastChance ? (fromBefore?.value as T | undefined) : undefined;
+    }
+    if (!fromBefore) return fromAfter.value as T;
+    // The same object on both sides (the answer restated after the quote) is
+    // no ambiguity.
+    return isDeepStrictEqual(fromBefore.value, fromAfter.value)
+        ? (fromAfter.value as T)
+        : undefined;
 }
 
 /**
@@ -715,6 +877,10 @@ async function firstValidatingObjectAfter<T = unknown>(
 export async function repairAndValidate<T = unknown>(
     wire: unknown,
     rawText: string,
+    /** No model re-ask follows this attempt (the second request, a tool-call
+     *  correction), and the reply ended on its own: an answer the walk would
+     *  otherwise re-ask over is taken when it is the only valid object. */
+    opts: { lastChance?: boolean } = {},
 ): Promise<T | undefined> {
     // A reasoning block that opens first and never closes carries no answer at
     // all — no primary candidate, and no fallback either: the reasoning quotes
@@ -740,17 +906,53 @@ export async function repairAndValidate<T = unknown>(
         }
     }
     // The fallback walks FORWARD from the primary candidate (review
-    // 5939864639): only objects that start after its SPAN compete. The span
+    // 5939864639): only objects that run past its SPAN compete. The span
     // comes from primarySpanEnd — pre-normalisation, because an indexOf of
     // the normalised candidate (`{,}` → `{}`) can land INSIDE the real
     // answer and exclude it — and it is computed only now that the primary
     // has FAILED: the success path, the common case, never pays the span
-    // scan. No primary candidate, or a span that cannot be established,
-    // → no floor — conservative, more candidates never fewer.
+    // scan. A first fence that quoted bracketless code yields no candidate
+    // but is still the span the extractor took, so it splits the walk too:
+    // without it a prose example BEFORE the quote (`If nothing is wrong I
+    // would return {"violations":[]}`) beat the real findings after it. No
+    // fence and no balanced span → no floor.
+    // A first fence whose content did not validate is a quote as well, braces
+    // or not: code with `{ b() }` in it made a primary candidate that failed,
+    // and without this the `Empty would be {…}` after it beat the answer
+    // before it.
+    const fence = firstFence(stripped);
+    // Only a quote of code lets the object before it stand alone. A fence the
+    // model tagged as JSON (json, jsonc, json5), or an untagged one whose body
+    // opens on a bracket, is its own answer, invalid: taking the object before
+    // it would ship the prompt's example instead. Judged on the fence itself,
+    // not on a span the extractor slices from inside it: `request.args["id"]`
+    // in a ```python quote has a span that parses, and it is still code.
+    const fenceTag = fence ? /^[\w+-]*/.exec(fence.inner)![0] : '';
+    const fenceIsJson =
+        fence !== null &&
+        (/^json[c5]?$/i.test(fenceTag) ||
+            (fenceTag === '' && /^\s*[{[]/.test(fence.inner)));
     return firstValidatingObjectAfter<T>(
         stripped,
         validate,
-        candidate != null ? primarySpanEnd(stripped) : null,
+        primarySpanEnd(stripped),
+        candidate == null || fence !== null,
+        opts.lastChance === true && !fenceIsJson,
+    );
+}
+
+/**
+ * A reply that ended on its own: `stop`, a tool call, or a finish the SDK did
+ * not name. `length`, `content-filter` and `other` (what the OpenAI-compatible
+ * SDK maps an upstream's `max_tokens` to) are not: asking again meets the same
+ * limit or refusal, and what was cut off is not a complete answer.
+ */
+export function endedOnItsOwn(finishReason: unknown): boolean {
+    return (
+        finishReason === undefined ||
+        finishReason === 'stop' ||
+        finishReason === 'tool-calls' ||
+        finishReason === 'unknown'
     );
 }
 
@@ -1024,13 +1226,21 @@ export function readOutput<T = unknown>(result: unknown): T {
 export async function salvageStructuredError<T = unknown>(
     err: unknown,
     wire: unknown,
+    /** No model re-ask follows (see repairAndValidate). */
+    opts: { lastChance?: boolean } = {},
 ): Promise<T | undefined> {
     if (!NoObjectGeneratedError.isInstance(err)) {
         return undefined;
     }
-    const { cause, text } = err as { cause?: unknown; text?: unknown };
+    const { cause, text, finishReason } = err as {
+        cause?: unknown;
+        text?: unknown;
+        finishReason?: unknown;
+    };
     if (!JSONParseError.isInstance(cause) || typeof text !== 'string') {
         return undefined;
     }
-    return repairAndValidate<T>(wire, text);
+    return repairAndValidate<T>(wire, text, {
+        lastChance: opts.lastChance === true && endedOnItsOwn(finishReason),
+    });
 }
