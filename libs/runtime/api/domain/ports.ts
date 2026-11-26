@@ -1,3 +1,4 @@
+import type { AuthoredFile } from '@libs/runtime/contracts/authored-files';
 import type { KeptCheckOutcomeKind, KeptCheckProbe, KeptCheckStaleReason } from '@libs/runtime/contracts/kept-check';
 import type { ProbeAssertions } from '@libs/runtime/contracts/probe-assertions';
 import type { PreviewSecrets } from '@libs/runtime/contracts/preview';
@@ -719,8 +720,21 @@ export interface ProductEnvironment {
     previewSecrets?: PreviewSecrets;
     /** Run the e2e suite on every push as a CI check (docs/runtime/e2e-suites.md section 11); null or absent: the deployment's default (`RUNTIME_SUITE_CI`). */
     suiteCi?: boolean | null;
+    /**
+     * The recipe a developer's own coding agent sent through a team key (env_recipe_submit, the Kodus CLI):
+     * set up from while the default branch has no recipe; a committed one always wins. Null or absent: none.
+     */
+    submittedRecipe?: SubmittedRecipe | null;
     createdAt: string;
     updatedAt: string;
+}
+
+/** A recipe sent by a developer's agent: its text, its .kodus/ build files, which key sent it and when. */
+export interface SubmittedRecipe {
+    content: string;
+    files?: AuthoredFile[];
+    keyId: string;
+    submittedAt: string;
 }
 
 /** What the org admin sets on one environment (PATCH /runtime/environments/:id/settings). */
@@ -746,6 +760,8 @@ export interface ProductEnvironmentStore {
     /** Idempotent on (organizationId, repositoryId): returns the existing row when there is one. */
     create(input: Omit<ProductEnvironment, 'environmentId' | 'createdAt' | 'updatedAt' | 'state' | 'setupRequestedAt'>): Promise<ProductEnvironment>;
     markSetupRequested(organizationId: string, environmentId: string, at: Date): Promise<void>;
+    /** Keeps the recipe a developer's agent sent (env_recipe_submit); the next setup reads it. */
+    setSubmittedRecipe(organizationId: string, environmentId: string, recipe: SubmittedRecipe): Promise<void>;
     /** The org admin's settings, written together in one update: a field left out keeps its value. */
     updateSettings(organizationId: string, environmentId: string, settings: ProductEnvironmentSettings): Promise<void>;
     markPoolActivity(organizationId: string, environmentId: string, at: Date): Promise<void>;

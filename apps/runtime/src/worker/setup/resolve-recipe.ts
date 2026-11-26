@@ -129,8 +129,8 @@ export async function resolveRecipe(run: SetupRun): Promise<boolean> {
     const recipeStep = await journal.start('recipe');
     run.expose = [];
     const recipe = cmd.recipe && cmd.recipe.sha === sha ? cmd.recipe : undefined;
-    // What the cell boots with: the recipe the product read, or the one Kody wrote.
-    run.bootRecipe = recipe ? { path: recipe.path, content: recipe.content } : undefined;
+    // What the cell boots with: the recipe the product read (a submitted one with its .kodus/ files), or the one Kody wrote.
+    run.bootRecipe = recipe ? { path: recipe.path, content: recipe.content, ...(recipe.files?.length ? { files: recipe.files } : {}) } : undefined;
     if (!recipe) {
         await journal.finish(recipeStep, 'skipped', cmd.recipe ? 'the recipe was read at another commit than the one booting' : 'the request carries no recipe');
     } else if (recipe.content === null) {
@@ -159,12 +159,19 @@ export async function resolveRecipe(run: SetupRun): Promise<boolean> {
         const replaces = recipe.origin === 'inferred' && repairedBefore(run, recipe.content) ? recipeDigest(recipe.content) : undefined;
         const written = replaces ? await writtenRecipe(run) : undefined;
         if (written?.status === 'recipe') return useWritten(run, recipeStep, written, replaces);
-        if (!(await useRecipe(run, recipeStep, { path: recipe.path, content: recipe.content, label: recipe.origin === 'inferred' ? 'inferred by Kodus' : recipe.path, origin: recipe.origin }))) {
+        if (!(await useRecipe(run, recipeStep, { path: recipe.path, content: recipe.content, label: recipeLabel(recipe.origin, recipe.path), origin: recipe.origin, ...(recipe.files?.length ? { files: recipe.files } : {}) }))) {
             return false;
         }
     }
     if (run.deps.opts.devExpose) run.expose = run.deps.opts.devExpose;
     return true;
+}
+
+/** How the recipe step names where a recipe the product read came from. */
+function recipeLabel(origin: SetupRecipeOrigin | undefined, path: string): string {
+    if (origin === 'inferred') return 'inferred by Kodus';
+    if (origin === 'submitted') return "sent by the developer's coding agent (not committed yet)";
+    return path;
 }
 
 /** Adopts the recipe Kody wrote (or kept) as the recipe step's answer; false when the setup ended blocked on it. */

@@ -6,7 +6,7 @@ import type { EnvSessionOpen, EnvSessionOwner, EnvSessionUpload, EnvSessionView,
 export const ENV_EXEC_QUOTA = { perKeyPerHour: 120, perOrgPerHour: 600, windowMs: 3_600_000 } as const;
 /** The command as the audit keeps it: redacted, then cut. */
 export const ENV_AUDIT_MAX_COMMAND = 2_048;
-export const ENV_AUDIT_KINDS = ['env_exec', 'env_fix', 'env_upload'] as const;
+export const ENV_AUDIT_KINDS = ['env_exec', 'env_fix', 'env_upload', 'env_recipe_submit'] as const;
 /** The kinds the env_exec quota counts: each sends work to a cell. */
 export const ENV_QUOTA_KINDS = ['env_exec', 'env_upload'] as const;
 export type EnvAuditKind = (typeof ENV_AUDIT_KINDS)[number];

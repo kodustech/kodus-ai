@@ -202,6 +202,33 @@ describe('repairs of a recipe Kody wrote, inside one setup', () => {
         expect(rec.repairs).toHaveLength(1);
     });
 
+    // The developer's own coding agent sent the recipe through the Kodus CLI (env_recipe_submit): it boots with its
+    // .kodus/ files, and a failure goes back to that agent through env_blockers, never to Kody.
+    it("a recipe a developer's agent sent boots with its files and, when it fails, is not rewritten by Kody", async () => {
+        const store = new InMemoryEnvironmentSetupStore();
+        const { env, acquired } = fakeEnv({ first: BUILD_FAILED });
+        const a = author(store, submitted(SECOND));
+        const rec = await service(store, env, { author: a.client }).run(
+            cmd({ recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST, origin: 'submitted', files: FILES } }),
+        );
+
+        expect(rec.state).toBe('blocked');
+        expect(rec.recipe).toMatchObject({ origin: 'submitted', content: FIRST, files: FILES, digest: recipeDigest(FIRST, FILES) });
+        expect(acquired[0].recipe).toMatchObject({ content: FIRST, files: FILES });
+        expect(a.calls).toHaveLength(0);
+        expect(rec.repairs ?? []).toEqual([]);
+        expect(rec.steps.find((s) => s.name === 'recipe')?.detail).toMatch(/^sent by the developer's coding agent \(not committed yet\) with 1 file under \.kodus\/ sha256:/);
+    });
+
+    it("a recipe a developer's agent sent that boots ends active and counts its clean boots", async () => {
+        const store = new InMemoryEnvironmentSetupStore();
+        const { env } = fakeEnv({});
+        const rec = await service(store, env).run(cmd({ recipe: { path: '.kodus/workspace.yaml', sha: SHA, content: FIRST, origin: 'submitted', files: FILES } }));
+
+        expect(rec.state).toBe('active');
+        expect(rec.recipe).toMatchObject({ origin: 'submitted', cleanBoots: 1 });
+    });
+
     // kr-mono on dev: every setup booted the inferred recipe again, failed as before, and paid Kody for the same repair.
     it("the next setup boots Kody's repair of the inferred recipe, not the inferred recipe again", async () => {
         const store = new InMemoryEnvironmentSetupStore();

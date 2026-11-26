@@ -72,11 +72,18 @@ sequenceDiagram
 
 ## 3. The recipe
 
-Three sources, first match wins:
+Four sources, first match wins:
 
 1. **Committed** in the repository (the paths above).
-2. **Inferred** by Kodus from the files, with no model (`runtime-setup-requester.service.ts:173-176`).
-3. **Written by Kody**, only when nothing is committed and inference failed
+2. **Submitted** by the developer's own coding agent with their own model: `kodus env recipe submit` (the
+   `kodus-runtime-setup` skill), the `/mcp/env` tool `env_recipe_submit`. The API checks it (parse, `.kodus/` build files
+   under Kody's bounds: `libs/runtime/api/application/env-tools.service.ts` `recipeProblems`), keeps it on the environment
+   (`runtime_environments.submitted_recipe`) and asks for a setup that boots it with its files (`origin: 'submitted'`).
+   It needs `env:fix` and is audited (`env_recipe_submit`). Kody never repairs it and the learn loop leaves it: the agent
+   reads `env_status` (its `setupKey`) and `env_blockers` and sends another. Once it boots twice, the Runtime page offers
+   the PR that commits it, like Kody's.
+3. **Inferred** by Kodus from the files, with no model (`runtime-setup-requester.service.ts:173-176`).
+4. **Written by Kody**, only when nothing is committed and inference failed
    (`environment-setup.service.ts:443`), and only for the default-branch head (`:935`;
    `libs/runtime/api/application/use-cases/recipe-author.use-case.ts:202`). The last setup's authored recipe comes
    first: at the same commit, one that booted is kept with no call (`environment-setup.service.ts:948`); at a new

@@ -1,4 +1,4 @@
-import { RUNTIME_RECIPE_MAX_BYTES, RUNTIME_RECIPE_PATHS } from '@libs/runtime/contracts/runtime-commands';
+import { recipeOutsideRepository, RUNTIME_RECIPE_MAX_BYTES, RUNTIME_RECIPE_PATHS } from '@libs/runtime/contracts/runtime-commands';
 import { parseRecipe, suiteShardCeiling, type RecipeSuite } from '@libs/runtime/protocol/recipe';
 import type { EnvironmentSetupRecord } from '@libs/runtime/run';
 
@@ -18,7 +18,7 @@ export type SuiteSource = 'repository' | 'environment';
 export function environmentRecipeAt(setup: SuiteSetup, sha: string): string | undefined {
     const r = setup?.recipe;
     if (!r || r.state !== 'found' || !r.content || r.sha !== sha || setup?.sha !== sha) return undefined;
-    return r.origin === 'authored' || r.origin === 'inferred' ? r.content : undefined;
+    return recipeOutsideRepository(r.origin) ? r.content : undefined;
 }
 
 /**

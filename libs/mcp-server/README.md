@@ -18,9 +18,10 @@ O endpoint HTTP MCP da Kodus roda em modo `Streamable HTTP` stateless.
 
 ## `/mcp/env` (Kody Runtime)
 
-- Tools `env_up`, `env_exec`, `env_upload`, `env_validate`, `env_step`, `env_status`, `env_blockers`, `env_fix`, `env_down` (`tools/env.tools.ts`), sobre `RuntimeEnvToolsService` (`libs/runtime/api/application/env-tools.service.ts`).
+- Tools `env_up`, `env_exec`, `env_upload`, `env_validate`, `env_step`, `env_status`, `env_blockers`, `env_fix`, `env_recipe_check`, `env_recipe_submit`, `env_down` (`tools/env.tools.ts`), sobre `RuntimeEnvToolsService` (`libs/runtime/api/application/env-tools.service.ts`).
+- `env_recipe_check` / `env_recipe_submit`: a receita que o agente do dev escreve com o modelo dele (`kodus env recipe`, skill `kodus-runtime-setup`). Check não guarda nada; submit (`env:fix`, auditado) guarda a receita no ambiente e pede um setup que a sobe com os arquivos `.kodus/`, enquanto o branch default não tem receita commitada. Devolve o `setupKey`, que o `env_status` passa a responder.
 - Só aceita Team API key, inclusive na descoberta (`guards/mcp-env-team-key.guard.ts`); o token de serviço (chat da Kody) recebe 403.
-- Capability exata: `env:exec` para up/exec/step/down, `env:fix` para fix, qualquer das duas para status e blockers; o repo do objeto precisa estar em `config.repositoryIds` da chave. Fora disso: 404, e nada chega à célula (S-46).
+- Capability exata: `env:exec` para up/exec/step/down, `env:fix` para fix e recipe_submit, qualquer das duas para status e blockers; o repo do objeto precisa estar em `config.repositoryIds` da chave. Fora disso: 404, e nada chega à célula (S-46).
 - `env_status` devolve o `EnvironmentHealth` (docs §5: estado, boots de setup dos últimos 7 dias, taxa, p50 até ready, imagem, célula, blockers por assinatura) calculado na API por `environmentHealthOf` sobre o registro de setup que o Runtime guarda (`runtime_environment_setups`, lido só-leitura por `kodus_runtime_reader` e filtrado pela org da chave). Não chama a célula; registro de outra org lê `not_set_up`.
 - `env_exec` não espera o comando: devolve o `stepId`, lido depois com `env_step`. Cota por chave e por org e auditoria de cada chamada (`GET /runtime/audit?kind=env_exec`).
 - Responde JSON (não SSE). As tools chamam o listener `env-session` do runtime-worker (`RUNTIME_ENV_SESSION_URL`), assinado com chave derivada de `RUNTIME_SECRET_SEAL_KEY`.

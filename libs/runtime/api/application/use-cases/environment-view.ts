@@ -1,3 +1,4 @@
+import { recipeOutsideRepository } from '@libs/runtime/contracts/runtime-commands';
 import { stuckSetups } from '@libs/runtime/health/stuck';
 import { Inject, Injectable, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 
@@ -411,7 +412,7 @@ export class EnvironmentViewBuilder {
                                         sha: ours.recipe.sha,
                                         state: ours.recipe.state,
                                         ...(ours.recipe.digest ? { digest: ours.recipe.digest } : {}),
-                                        ...(ours.recipe.origin === 'inferred' || ours.recipe.origin === 'authored'
+                                        ...(ours.recipe.origin && recipeOutsideRepository(ours.recipe.origin)
                                             ? {
                                                   origin: ours.recipe.origin,
                                                   cleanBoots: ours.recipe.cleanBoots ?? 0,

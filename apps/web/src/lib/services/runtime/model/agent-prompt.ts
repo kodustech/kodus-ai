@@ -1,10 +1,13 @@
-/** The prompt for the developer's own coding agent: it already knows how to run the project. */
+/**
+ * The prompt for the developer's own coding agent: it already knows how to run the project, and with the Kodus CLI it
+ * checks the recipe, sends it to Kodus to boot on a clean machine, and reads why it failed, with the developer's own model.
+ */
 export const agentPrompt = (repositoryName: string) =>
     [
         `Write .kodus/workspace.yaml for ${repositoryName}, so Kody Runtime can boot this app on a clean machine.`,
         "If .kodus/workspace.yaml already exists for another tool, write .kodus/workspace.runtime.yaml instead: Kody Runtime reads it first and leaves the other file alone.",
         "",
-        "Use what already runs it here (CI workflow, docker-compose, README, .nvmrc / .tool-versions). Format, version 1:",
+        "Use what already runs it here (the CI job that boots it for e2e or integration tests, docker-compose, Dockerfile, README, .nvmrc / .tool-versions). Format, version 1:",
         "version: 1",
         "setup: [commands that install the toolchain and dependencies]",
         "services:",
@@ -14,6 +17,12 @@ export const agentPrompt = (repositoryName: string) =>
         "  migrate: <command that runs the migrations>",
         "  seed: <command or { service, sql, user, database } that loads test data>",
         "",
-        "Never copy .env or any secret into the recipe: name the variables the app needs and use test values or fakes.",
-        "Then boot it locally with the recipe, check the health URL answers, and open a pull request with the file.",
+        "A Dockerfile or compose file the repository lacks, or that is broken, goes directly under .kodus/ (at most 4 files, 16 KiB each) and the recipe names it there.",
+        "Never copy .env or any secret into the recipe: name the variables the app needs and use test values or fakes; external services get emulators or fakes.",
+        "",
+        "Then, with the Kodus CLI (a team key with env:fix, this repository added to it):",
+        "1. kodus env recipe check, until it answers ok.",
+        "2. kodus env recipe submit --wait: Kodus boots it from zero on a clean machine.",
+        "3. Blocked: read the blockers it prints, fix the recipe or the .kodus/ files, and submit again.",
+        "4. Active: open a pull request with .kodus/; a committed recipe always wins over a submitted one.",
     ].join("\n");

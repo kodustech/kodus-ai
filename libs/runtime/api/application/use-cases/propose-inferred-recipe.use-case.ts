@@ -6,7 +6,7 @@ import { AuthorizationService } from '@libs/identity/infrastructure/adapters/ser
 import { applyRecipeChange } from '@libs/runtime/blockers/recipe-edit';
 import { recipeDigest } from '@libs/runtime/run/recipe';
 
-import { RUNTIME_RECIPE_MAX_BYTES, RUNTIME_RECIPE_PATH, RUNTIME_RECIPE_PATHS } from '@libs/runtime/contracts/runtime-commands';
+import { recipeOutsideRepository, RUNTIME_RECIPE_MAX_BYTES, RUNTIME_RECIPE_PATH, RUNTIME_RECIPE_PATHS } from '@libs/runtime/contracts/runtime-commands';
 import { type ProductEnvironmentStore, RUNTIME_GIT_PORT, RUNTIME_PRODUCT_ENVIRONMENT_STORE, type RuntimeGitPort } from '../../domain/ports';
 import { inferRecipeAtCommit } from '../recipe-inference.reader';
 import { environmentRepositoryIds, RuntimeEnvironmentMembers } from '../environment-members.service';
@@ -28,8 +28,9 @@ export interface ProposedRecipe {
  * that adds that exact file (ADR-015: the recipe only changes by a PR). It is
  * refused when a recipe appeared on the default branch meanwhile, or when the
  * files moved so the inference no longer gives the proven recipe. A recipe
- * Kody wrote (origin `authored`) is offered the same way; its proof holds
- * only at the commit it booted on, since no inference can redo it.
+ * Kody wrote (origin `authored`), or one a developer's coding agent sent
+ * (origin `submitted`), is offered the same way with its .kodus/ files; its
+ * proof holds only at the commit it booted on, since no inference can redo it.
  */
 @Injectable()
 export class ProposeInferredRecipeUseCase {
@@ -59,12 +60,14 @@ export class ProposeInferredRecipeUseCase {
 
         const setup = await this.environment.setup(env);
         const recipe = setup?.recipe;
-        if (!setup || (recipe?.origin !== 'inferred' && recipe?.origin !== 'authored') || recipe.state !== 'found' || !recipe.content || !recipe.digest) {
-            throw new ConflictException('The latest setup did not boot with a recipe Kodus inferred or Kody wrote, so there is nothing to propose.');
+        if (!setup || !recipeOutsideRepository(recipe?.origin) || recipe?.state !== 'found' || !recipe.content || !recipe.digest) {
+            throw new ConflictException('The latest setup did not boot with a recipe Kodus inferred, Kody wrote or a developer sent, so there is nothing to propose.');
         }
-        const authored = recipe.origin === 'authored';
-        const what = authored ? 'The recipe Kody wrote' : 'The inferred recipe';
-        // Kody's build files go in the same PR: the recipe names them, and the digest that booted covers them.
+        const submitted = recipe.origin === 'submitted';
+        // Written as a whole (by Kody or a developer's agent), never inferred again: proven at its commit only, with its files.
+        const authored = recipe.origin === 'authored' || submitted;
+        const what = submitted ? "The recipe the developer's agent sent" : authored ? 'The recipe Kody wrote' : 'The inferred recipe';
+        // The build files go in the same PR: the recipe names them, and the digest that booted covers them.
         const files = authored ? (recipe.files ?? []) : [];
         if (recipeDigest(recipe.content, files) !== recipe.digest || recipe.content.length > RUNTIME_RECIPE_MAX_BYTES) {
             throw new ConflictException('The recorded recipe does not match what booted. Set up again.');
@@ -125,7 +128,9 @@ export class ProposeInferredRecipeUseCase {
         const body = [
             learned
                 ? `The default branch has no Kody Runtime recipe, so Kodus wrote one from the repository files. It did not boot as written; with one change (**${learned.fix.label}**) it booted from zero on ${boots} clean machines at \`${(setup.sha ?? head.sha).slice(0, 12)}\`, and each one answered the ready check.`
-                : authored
+                : submitted
+                  ? `The default branch has no Kody Runtime recipe, so a developer's coding agent wrote this one and sent it through the Kodus CLI. It booted from zero on ${boots} clean machines at \`${(setup.sha ?? head.sha).slice(0, 12)}\`, and each one answered the ready check.`
+                  : authored
                   ? `The default branch has no Kody Runtime recipe and Kodus could not infer one, so Kody read the repository and wrote this one. It booted from zero on ${boots} clean machines at \`${(setup.sha ?? head.sha).slice(0, 12)}\`, and each one answered the ready check.`
                   : `The default branch has no Kody Runtime recipe, so Kodus wrote this one from the repository files (no LLM) and booted it from zero on ${boots} clean machines at \`${(setup.sha ?? head.sha).slice(0, 12)}\`. Each one answered the ready check.`,
             ...(learned ? ['', KODY_FIX_ORIGIN] : []),
@@ -134,10 +139,12 @@ export class ProposeInferredRecipeUseCase {
             content.trimEnd(),
             '```',
             '',
-            ...(files.length ? [`It builds from ${files.length === 1 ? 'a file' : 'files'} Kody wrote next to it, added here too: ${files.map((f) => `\`${f.path}\``).join(', ')}.`, ''] : []),
+            ...(files.length ? [`It builds from ${files.length === 1 ? 'a file' : 'files'} ${submitted ? 'sent' : 'Kody wrote'} next to it, added here too: ${files.map((f) => `\`${f.path}\``).join(', ')}.`, ''] : []),
             'Once merged, every setup and pull request Run boots from this file, and you change it like any recipe (docs §6). It holds no secret: env values are test values that name themselves.',
         ].join('\n');
-        const title = authored ? 'chore(kody-runtime): add the environment recipe Kody wrote' : 'chore(kody-runtime): add the environment recipe Kodus inferred';
+        const title = submitted
+            ? 'chore(kody-runtime): add the environment recipe'
+            : authored ? 'chore(kody-runtime): add the environment recipe Kody wrote' : 'chore(kody-runtime): add the environment recipe Kodus inferred';
         const pr = await gitCall(() =>
             this.git.openPullRequestWithFiles!({
                 ...repo,

@@ -29,6 +29,9 @@ import {
     envSessionTokenBinding,
 } from '@libs/runtime/contracts/env-session';
 import { RepositoryAliasSchema } from '@libs/runtime/contracts/workspace';
+import { AuthoredFilesSchema, type AuthoredFile } from '@libs/runtime/contracts/authored-files';
+import { RUNTIME_RECIPE_MAX_BYTES } from '@libs/runtime/contracts/runtime-commands';
+import { parseRecipeSummary, recipeDigest, type RecipeExpose } from '@libs/runtime/run';
 import { redactPatterns } from '@libs/runtime/redaction';
 import { environmentHealthOf } from '@libs/runtime/environment/environment-health';
 import type { EnvironmentHealth } from '@libs/runtime/environment/environment-runtime';
@@ -88,6 +91,26 @@ export interface EnvBlockersView {
     blockers: RuntimeBlockerGroupView[];
 }
 
+/** env_recipe_check: whether Kodus would boot this recipe, and what it read from it. */
+export interface EnvRecipeCheckView {
+    ok: boolean;
+    errors: string[];
+    environment: { environmentId: string; repositoryName: string };
+    summary?: { public?: string; health?: string; expose: RecipeExpose[] };
+}
+
+/** env_recipe_submit: the recipe is kept for the environment and a setup boots it. */
+export interface EnvRecipeSubmitResult {
+    setupRequested: true;
+    environmentId: string;
+    recipeDigest: string;
+    /** The setup that boots it: env_status answers it as `setupKey` once that setup is the environment's latest. */
+    setupKey: string;
+}
+
+/** env_status: the environment's health, and which setup it reads (`setupKey`), so a caller waits for its own. */
+export type EnvStatusView = EnvironmentHealth & { setupKey?: string };
+
 export type EnvFixResult = { action: 'retry_setup'; setupRequested: true } | { action: RecipePrAction; pullRequest: { number: number; url: string } };
 
 // The shape only: paths, base64 and sizes are the worker's to check (it knows the checkout's rules).
@@ -117,7 +140,7 @@ export class RuntimeEnvToolsService {
 
     constructor(
         @Inject(RUNTIME_PRODUCT_ENVIRONMENT_STORE)
-        private readonly products: Pick<ProductEnvironmentStore, 'get' | 'findByRepository' | 'listByOrganization'>,
+        private readonly products: Pick<ProductEnvironmentStore, 'get' | 'findByRepository' | 'listByOrganization' | 'setSubmittedRecipe'>,
         private readonly views: EnvironmentViewBuilder,
         @Inject(RUNTIME_GIT_PORT)
         private readonly git: Pick<RuntimeGitPort, 'getDefaultBranchHead'>,
@@ -476,12 +499,96 @@ export class RuntimeEnvToolsService {
      * (runtime_environment_setups, read-only and org-scoped), never a cell. A record of another org or
      * another environment reads as never set up.
      */
-    async status(p: EnvKeyPrincipal, target: EnvTarget): Promise<EnvironmentHealth> {
+    async status(p: EnvKeyPrincipal, target: EnvTarget): Promise<EnvStatusView> {
         this.require(p, TEAM_CLI_KEY_CAPABILITIES.ENV_EXEC, TEAM_CLI_KEY_CAPABILITIES.ENV_FIX);
         const env = await this.resolve(p, target);
         const rec = await this.views.setup(env.organizationId, env.environmentId);
         const ours = rec && rec.organizationId === env.organizationId && rec.environmentId === env.environmentId ? rec : null;
-        return environmentHealthOf(ours ?? { environmentId: env.environmentId }, this.now());
+        return { ...environmentHealthOf(ours ?? { environmentId: env.environmentId }, this.now()), ...(ours?.key ? { setupKey: ours.key } : {}) };
+    }
+
+    /**
+     * The checks a recipe sent by a developer's agent passes before Kodus keeps it: the same parse every recipe
+     * passes (the worker and the cell check again on boot), and the .kodus/ build files under Kody's bounds.
+     * Nothing is read from the repository and nothing runs: the setup's boot is the proof.
+     */
+    private recipeProblems(input: { recipe?: unknown; files?: unknown }): { errors: string[]; recipe?: string; files?: AuthoredFile[]; summary?: EnvRecipeCheckView['summary'] } {
+        const errors: string[] = [];
+        if (typeof input.recipe !== 'string' || !input.recipe.trim()) return { errors: ['recipe: send the recipe text (.kodus/workspace.yaml)'] };
+        if (Buffer.byteLength(input.recipe) > RUNTIME_RECIPE_MAX_BYTES) return { errors: [`recipe: larger than ${RUNTIME_RECIPE_MAX_BYTES} bytes`] };
+        let files: AuthoredFile[] | undefined;
+        if (input.files !== undefined && input.files !== null && !(Array.isArray(input.files) && input.files.length === 0)) {
+            const parsed = AuthoredFilesSchema.safeParse(input.files);
+            if (parsed.success) files = parsed.data;
+            else errors.push(...parsed.error.issues.map((i) => `files${i.path.length ? `[${i.path.join('.')}]` : ''}: ${i.message}`));
+        }
+        const parsed = parseRecipeSummary(input.recipe);
+        if (parsed.ok === false) {
+            errors.push(parsed.error);
+            return { errors, recipe: input.recipe, files };
+        }
+        const r = parsed.recipe;
+        const summary = { ...(r.public ? { public: r.public } : {}), ...(r.health ? { health: r.health } : {}), expose: r.expose };
+        return { errors, recipe: input.recipe, files, summary };
+    }
+
+    /** env_recipe_check: would Kodus boot this recipe; nothing is kept and nothing boots. */
+    async checkRecipe(p: EnvKeyPrincipal, input: EnvTarget & { recipe?: unknown; files?: unknown }): Promise<EnvRecipeCheckView> {
+        this.require(p, TEAM_CLI_KEY_CAPABILITIES.ENV_EXEC, TEAM_CLI_KEY_CAPABILITIES.ENV_FIX);
+        const env = await this.resolve(p, input);
+        const { errors, summary } = this.recipeProblems(input);
+        return {
+            ok: errors.length === 0,
+            errors,
+            environment: { environmentId: env.environmentId, repositoryName: env.repositoryName },
+            ...(summary ? { summary } : {}),
+        };
+    }
+
+    /**
+     * env_recipe_submit: keeps the recipe a developer's agent wrote for the environment and asks for a setup that boots it
+     * from zero. It boots while the default branch has no recipe (a committed one always wins), like a recipe Kody writes,
+     * and the Runtime page offers the PR that commits it once it booted twice. Never repaired by Kody: the agent reads
+     * env_status and env_blockers and sends another.
+     */
+    async submitRecipe(p: EnvKeyPrincipal, input: EnvTarget & { recipe?: unknown; files?: unknown }): Promise<EnvRecipeSubmitResult> {
+        this.require(p, TEAM_CLI_KEY_CAPABILITIES.ENV_FIX);
+        const env = await this.resolve(p, input);
+        const checked = this.recipeProblems(input);
+        if (checked.errors.length || !checked.recipe) {
+            throw new BadRequestException({ code: 'recipe_refused', message: `Kodus refused the recipe: ${checked.errors.join('; ')}` });
+        }
+        const submitted = {
+            content: checked.recipe,
+            ...(checked.files?.length ? { files: checked.files } : {}),
+            keyId: p.keyId,
+            submittedAt: this.now().toISOString(),
+        };
+        const digest = recipeDigest(submitted.content, submitted.files);
+        const record: EnvAuditRecord = {
+            auditId: randomUUID(),
+            kind: 'env_recipe_submit',
+            organizationId: p.organizationId,
+            teamId: p.teamId,
+            keyId: p.keyId,
+            repositoryId: env.repositoryId,
+            environmentId: env.environmentId,
+            command: `recipe ${digest}`.slice(0, ENV_AUDIT_MAX_COMMAND),
+            at: submitted.submittedAt,
+            outcome: 'accepted',
+        };
+        await this.audit.record(record);
+        const setupKey = `${env.environmentId}:${submitted.submittedAt}`;
+        try {
+            await this.products.setSubmittedRecipe(env.organizationId, env.environmentId, submitted);
+            await this.setups.request({ ...env, submittedRecipe: submitted }, { uuid: `team-key:${p.keyId}` }, { key: setupKey });
+        } catch (e) {
+            await this.audit
+                .setOutcome(p.organizationId, record.auditId, 'failed', e instanceof HttpException ? String(e.getStatus()) : 'error')
+                .catch((error: unknown) => this.auditOutcomeLost(p.organizationId, record.auditId, 'env_recipe_submit', error));
+            throw e;
+        }
+        return { setupRequested: true, environmentId: env.environmentId, recipeDigest: digest, setupKey };
     }
 
     /**

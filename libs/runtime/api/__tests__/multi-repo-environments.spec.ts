@@ -84,6 +84,7 @@ class Environments implements ProductEnvironmentStore {
         return e;
     }
     async markSetupRequested() {}
+    async setSubmittedRecipe() {}
     async updateSettings() {}
     async markPoolActivity() {}
     async setPoolApplied() {}

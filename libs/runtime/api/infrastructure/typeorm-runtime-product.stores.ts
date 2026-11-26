@@ -22,6 +22,7 @@ import {
     type FindingIntentStore,
     type ProductEnvironment,
     type ProductEnvironmentSettings,
+    type SubmittedRecipe,
     type ProductEnvironmentStore,
     type RuntimeRepositorySettingsRecord,
     type RuntimeSettingsStore,
@@ -62,6 +63,7 @@ const toEnvironment = (m: RuntimeEnvironmentModel): ProductEnvironment => ({
     forkPullRequests: forkPolicyOf(m.forkPullRequests),
     previewSecrets: m.previewSecrets === 'run' ? 'run' : 'none',
     suiteCi: typeof m.suiteCi === 'boolean' ? m.suiteCi : null,
+    submittedRecipe: m.submittedRecipe ?? null,
     poolPolicy: m.poolPolicy ?? null,
     poolActivityAt: m.poolActivityAt ? new Date(m.poolActivityAt).toISOString() : null,
     poolAppliedSize: m.poolAppliedSize ?? null,
@@ -121,6 +123,10 @@ export class TypeOrmProductEnvironmentStore implements ProductEnvironmentStore {
 
     async markSetupRequested(organizationId: string, environmentId: string, at: Date) {
         await this.repo.update({ uuid: environmentId, organizationId }, { state: 'setup_requested', setupRequestedAt: at });
+    }
+
+    async setSubmittedRecipe(organizationId: string, environmentId: string, recipe: SubmittedRecipe) {
+        await this.repo.update({ uuid: environmentId, organizationId }, { submittedRecipe: recipe });
     }
 
     async updateSettings(organizationId: string, environmentId: string, settings: ProductEnvironmentSettings) {

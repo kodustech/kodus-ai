@@ -83,7 +83,8 @@ const NOT_LEARNABLE = new Set(['platform', 'resources', 'security_violation', 'r
 export function learnTarget(rec: EnvironmentSetupRecord): { classified: ClassifiedBlocker; blocker: EnvironmentSetupRecord['blockers'][number] } | null {
     if (rec.state !== 'blocked' || rec.refSource !== 'default_branch' || rec.recipe?.state !== 'found' || !rec.recipe.content) return null;
     // A recipe Kody wrote is not on the default branch: a one-field PR has no file to change. Its blocker goes back to Kody's author instead (V3).
-    if (rec.recipe.origin === 'authored') return null;
+    // A recipe a developer's agent sent is not either: that agent reads the blockers and sends another.
+    if (rec.recipe.origin === 'authored' || rec.recipe.origin === 'submitted') return null;
     if (!rec.steps.some((s) => s.name === 'boot')) return null;
     const blocker = rec.blockers[0];
     if (!blocker) return null;

@@ -200,7 +200,9 @@ export const InferredRecipe = ({
             </RuntimeSection>
         );
     }
-    const authored = recipe?.origin === "authored";
+    const submitted = recipe?.origin === "submitted";
+    // Written whole (by Kody or the developer's agent), never inferred: no learn-loop fix applies to it.
+    const authored = recipe?.origin === "authored" || submitted;
     if (
         !setup ||
         (recipe?.origin !== "inferred" && !authored) ||
@@ -256,12 +258,16 @@ export const InferredRecipe = ({
         <RuntimeSection
             id={ENVIRONMENT_SECTION.recipe}
             title={
-                authored
-                    ? "Kody wrote the setup file"
-                    : "Setup file inferred by Kodus"
+                submitted
+                    ? "Setup file sent from your coding agent"
+                    : authored
+                      ? "Kody wrote the setup file"
+                      : "Setup file inferred by Kodus"
             }
             description={
-                authored
+                submitted
+                    ? "The default branch has no setup file, so this one, which a coding agent wrote and sent with kodus env recipe submit, is what every setup and Run boots. Commit it in a pull request: a committed setup file always wins."
+                    : authored
                     ? "The default branch has no setup file and Kodus could not infer one from the compose file, Dockerfile or package.json, so Kody read the repository and wrote this one. It passed the same checks as a setup file you write."
                     : "The default branch has no setup file, so Kodus wrote this one from the repository files (compose, Dockerfile, package.json), without an LLM."
             }>
@@ -313,7 +319,11 @@ export const InferredRecipe = ({
             )}
             <pre
                 aria-label={
-                    authored ? "Setup file Kody wrote" : "Inferred setup file"
+                    submitted
+                        ? "Setup file sent from a coding agent"
+                        : authored
+                          ? "Setup file Kody wrote"
+                          : "Inferred setup file"
                 }
                 className="bg-card-lv2 overflow-x-auto rounded-md p-3 font-mono text-xs leading-5">
                 {learned?.content ?? recipe.content}
@@ -327,7 +337,9 @@ export const InferredRecipe = ({
             )}
             {setup.state === "blocked" && !learned && (
                 <p className="text-text-secondary text-sm">
-                    {!authored
+                    {submitted
+                        ? "It did not boot: the blockers say why. Your coding agent reads them with kodus env status, fixes the setup file and sends it again."
+                        : !authored
                         ? "It did not boot: the blockers say why. Fix the repository or write .kodus/workspace.yaml yourself, then set up again."
                         : isRecipeFailureBlocker(setup.blockers[0])
                           ? "It did not boot: the last setup says where. Set up again and Kody rewrites it from that failure, or write .kodus/workspace.yaml yourself."

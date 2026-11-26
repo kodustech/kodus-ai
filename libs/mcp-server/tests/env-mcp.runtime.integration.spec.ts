@@ -128,6 +128,8 @@ describe('MCP SDK → scoped tools → signed session listener → cell protocol
             'env_down',
             'env_exec',
             'env_fix',
+            'env_recipe_check',
+            'env_recipe_submit',
             'env_status',
             'env_step',
             'env_up',
@@ -248,6 +250,72 @@ describe('MCP SDK → scoped tools → signed session listener → cell protocol
         expect(
             [...h.store.claims.values()].map((claim) => claim.state),
         ).toEqual(['released']);
+    });
+
+    it("env_recipe_check answers what Kodus would refuse, and env_recipe_submit keeps the developer's recipe and sets up from it", async () => {
+        h = await runtimeEnvFixture({ noCommittedRecipe: true });
+        const client = await h.connect();
+        const recipe = 'version: 1\nservices:\n  compose:\n    files: [.kodus/compose.yaml]\n    public: web\n    health: /health\n  expose: [{service: web, port: 3000, kind: http}]\n';
+        const files = [{ path: '.kodus/compose.yaml', content: 'services:\n  web:\n    build: .\n' }];
+
+        const bad = await call<{ ok: boolean; errors: string[] }>(client, 'env_recipe_check', { environmentId: 'blocked', recipe: 'version: 2\n' });
+        expect(bad.ok).toBe(false);
+        expect(bad.errors.length).toBeGreaterThan(0);
+        const outside = await call<{ ok: boolean; errors: string[] }>(client, 'env_recipe_check', {
+            environmentId: 'blocked',
+            recipe,
+            files: [{ path: 'compose.yaml', content: 'x' }],
+        });
+        expect(outside.ok).toBe(false);
+        expect(outside.errors.join(' ')).toMatch(/files/);
+        expect(await call(client, 'env_recipe_check', { environmentId: 'blocked', recipe, files })).toMatchObject({
+            ok: true,
+            errors: [],
+            summary: { public: 'web', health: '/health' },
+        });
+        // A check keeps nothing and boots nothing.
+        expect(h.outbox).toHaveLength(0);
+
+        const refused = await refuse(client, 'env_recipe_submit', { environmentId: 'blocked', recipe: 'version: 2\n' }, 400);
+        expect(refused.message).toMatch(/refused the recipe/);
+        expect(h.outbox).toHaveLength(0);
+
+        const sent = await call<{ setupRequested: true; recipeDigest: string }>(client, 'env_recipe_submit', { environmentId: 'blocked', recipe, files });
+        expect(sent).toMatchObject({ setupRequested: true, environmentId: 'blocked' });
+        expect(sent.recipeDigest).toMatch(/^sha256:/);
+        expect((sent as { setupKey?: string }).setupKey).toMatch(/^blocked:/);
+        expect(h.outbox[0]).toMatchObject({ payload: { payload: { key: (sent as { setupKey?: string }).setupKey } } });
+        expect(h.outbox).toHaveLength(1);
+        expect(h.outbox[0]).toMatchObject({
+            payload: {
+                event_name: 'runtime.environment.setup_requested',
+                payload: {
+                    environmentId: 'blocked',
+                    requestedBy: { userId: `team-key:${OWNER.keyId}` },
+                    recipe: { sha: SHA, path: '.kodus/workspace.yaml', origin: 'submitted', content: recipe, files },
+                },
+            },
+        });
+        expect(h.audit.rows.map((row) => row.kind)).toEqual(['env_recipe_submit']);
+    });
+
+    it('a recipe committed on the default branch wins over the one a developer sent', async () => {
+        h = await runtimeEnvFixture();
+        const client = await h.connect();
+        await call(client, 'env_recipe_submit', { environmentId: 'blocked', recipe: 'version: 1\nservices:\n  compose:\n    files: [x.yaml]\n    public: web\n' });
+        const payload = (h.outbox[0] as { payload: { payload: { recipe: { origin?: string; content: string } } } }).payload.payload;
+        expect(payload.recipe.origin).toBeUndefined();
+        expect(payload.recipe.content).toContain('compose.yaml');
+    });
+
+    it('sending a recipe needs env:fix', async () => {
+        h = await runtimeEnvFixture({ noCommittedRecipe: true });
+        h.keys.set('kodus_test_fixture_exec_only', { ...OWNER, capabilities: ['env:exec'] });
+        const execOnly = await h.connect('kodus_test_fixture_exec_only');
+        const recipe = 'version: 1\nservices:\n  compose:\n    files: [x.yaml]\n    public: web\n';
+        await call(execOnly, 'env_recipe_check', { environmentId: 'blocked', recipe });
+        await refuse(execOnly, 'env_recipe_submit', { environmentId: 'blocked', recipe }, 403);
+        expect(h.outbox).toHaveLength(0);
     });
 
     it('denies missing/revoked credentials and a valid service JWT even during SDK initialization', async () => {

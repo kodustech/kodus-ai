@@ -1,3 +1,4 @@
+import { recipeOutsideRepository } from '@libs/runtime/contracts/runtime-commands';
 import { type BlockerFixView, classifyBlocker, KODY_FIX_PREFIX } from '@libs/runtime/blockers/catalog';
 import { BLOCKER_KINDS } from '@libs/runtime/contracts/enums';
 import { type Lesson, lessonsFor } from '@libs/runtime/blockers/lessons';
@@ -10,9 +11,9 @@ import { type EnvironmentRepository, type RuntimeLessonReader } from '../../doma
 import { RuntimeBlockerFixView, RuntimeBlockerGroupView, type RuntimeMembershipBlockerGroupView } from './environment-view';
 
 /** The recipe text the setup read, when the worker kept it (never shown as is; only the diff of a fix). */
-// An inferred or authored recipe is not on the default branch yet: a one-field fix PR waits for the recipe PR.
+// An inferred, authored or submitted recipe is not on the default branch yet: a one-field fix PR waits for the recipe PR.
 const recipeText = (setup: EnvironmentSetupRecord | null) =>
-    setup?.recipe?.state === 'found' && setup.recipe.origin !== 'inferred' && setup.recipe.origin !== 'authored' ? setup.recipe.content : undefined;
+    setup?.recipe?.state === 'found' && !recipeOutsideRepository(setup.recipe.origin) ? setup.recipe.content : undefined;
 
 /** A catalog fix for the product: a recipe change becomes its diff, or plain guidance when it cannot be made by a PR. */
 export function fixView(fix: BlockerFixView, recipe?: { text?: string; path?: string }): RuntimeBlockerFixView {

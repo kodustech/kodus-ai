@@ -193,8 +193,20 @@ export class RuntimeSetupRequester {
         // Not found anywhere: recorded as absent at the shared path.
         if (content === null) path = RUNTIME_RECIPE_PATH;
         let recipe: NonNullable<Resolved['recipe']> = { path, sha: head.sha, content };
+        // No recipe committed, but a developer's agent sent one (env_recipe_submit): it boots, with its .kodus/ files,
+        // until a recipe is committed. A committed recipe always wins; Kodus infers nothing over one a developer sent.
+        const submitted = content === null ? env.submittedRecipe : undefined;
+        if (submitted) {
+            recipe = {
+                path: RUNTIME_RECIPE_PATH,
+                sha: head.sha,
+                content: submitted.content,
+                origin: 'submitted',
+                ...(submitted.files?.length ? { files: submitted.files } : {}),
+            };
+        }
         // No recipe: Kodus writes one from the repository files (deterministic, no LLM). The PR offering it comes after it boots (ENV-06).
-        if (content === null) {
+        else if (content === null) {
             const inferred = await inferRecipeAtCommit(this.git, { ...orgTeam, ...repo, sha: head.sha });
             if (inferred?.status === 'inferred') recipe = { path: RUNTIME_RECIPE_PATH, sha: head.sha, content: inferred.content, origin: 'inferred' };
             else if (inferred) recipe = { ...recipe, inference: { reason: inferred.reason, message: inferred.message.slice(0, 500) } };

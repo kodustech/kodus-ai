@@ -9,7 +9,7 @@ import type { SetupStepRunner } from './setup-scope';
 export function countSetupOutcome(metrics: RuntimeMetrics | undefined, rec: EnvironmentSetupRecord): void {
     if (!metrics || rec.state === 'setting_up') return;
     const origin = rec.recipe?.origin;
-    const recipeOrigin = rec.recipe?.state !== 'found' ? 'none' : origin === 'inferred' || origin === 'authored' ? origin : 'committed';
+    const recipeOrigin = rec.recipe?.state !== 'found' ? 'none' : origin === 'inferred' || origin === 'authored' || origin === 'submitted' ? origin : 'committed';
     metrics.recordSetupOutcome(rec.state, { orgId: rec.organizationId, recipeOrigin });
     for (const b of rec.blockers) metrics.recordBlocker(b, { orgId: rec.organizationId, consumer: 'setup' });
 }

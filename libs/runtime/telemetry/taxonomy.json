@@ -21,7 +21,7 @@
     "kodus.runtime.setup.key": { "group": "what", "cardinality": "id", "type": "string", "meaning": "The idempotency key of an environment setup.", "aliases": ["setupKey"] },
     "kodus.runtime.setup.state": { "group": "what", "cardinality": "dimension", "type": "string", "meaning": "An environment setup state (setting_up, active, blocked)." },
     "kodus.runtime.setup.outcome": { "group": "why", "cardinality": "dimension", "type": "string", "meaning": "How a setup ended: active or blocked." },
-    "kodus.runtime.recipe.origin": { "group": "why", "cardinality": "dimension", "type": "string", "meaning": "Where the recipe came from: committed, inferred, authored, or none." },
+    "kodus.runtime.recipe.origin": { "group": "why", "cardinality": "dimension", "type": "string", "meaning": "Where the recipe came from: committed, inferred, authored, submitted (a developer's agent through the CLI), or none." },
     "kodus.runtime.claim.id": { "group": "what", "cardinality": "id", "type": "string", "meaning": "One lease on a cell.", "aliases": ["claimId", "claim", "runtime.claim.id"] },
     "kodus.runtime.preview.id": { "group": "what", "cardinality": "id", "type": "string", "meaning": "One preview of one side of a Run (docs/runtime/preview-urls.md); spans and logs only.", "aliases": ["previewId", "preview"] },
     "kodus.runtime.preview.access": { "group": "how", "cardinality": "dimension", "type": "string", "meaning": "How the viewer got into a preview: member (a grant from the app) or link (a share link, a later phase).", "aliases": ["access"] },

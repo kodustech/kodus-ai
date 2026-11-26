@@ -68,6 +68,10 @@ class InMemoryEnvironments implements ProductEnvironmentStore {
         e.state = 'setup_requested';
         e.setupRequestedAt = at.toISOString();
     }
+    async setSubmittedRecipe(organizationId: string, environmentId: string, recipe: NonNullable<ProductEnvironment['submittedRecipe']>) {
+        const e = this.rows.find((x) => x.organizationId === organizationId && x.environmentId === environmentId);
+        if (e) e.submittedRecipe = recipe;
+    }
     readonly settingsWrites: ProductEnvironmentSettings[] = [];
     async updateSettings(organizationId: string, environmentId: string, settings: ProductEnvironmentSettings) {
         this.settingsWrites.push(settings);

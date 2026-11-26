@@ -5,6 +5,7 @@ import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enu
 import { ENVIRONMENT_REPOSITORY_ROLES, RECIPE_FILE_PATHS } from '@libs/runtime/contracts/enums';
 import { EGRESS_APPROVAL_MODES, EGRESS_WHO_MAY_ADD } from '@libs/runtime/contracts/egress';
 import { EgressHostSchema, SealedTokenSchema } from '@libs/runtime/contracts/boundary-values';
+import { AuthoredFilesSchema } from '@libs/runtime/contracts/authored-files';
 import { MachineSizeSchema } from '@libs/runtime/contracts/machine-size';
 import { MAX_WORKSPACE_REPOSITORIES, RepositoryAliasSchema, RepositoryFullNameSchema, workspaceShapeError } from '@libs/runtime/contracts/workspace';
 import { RUNTIME_CONTROL_ROUTING_KEY, RUNTIME_EXCHANGE, RUNTIME_RUN_ROUTING_KEY, RuntimeEventName, runtimeEnvelope } from '@libs/runtime/run/run-messages';
@@ -203,11 +204,14 @@ export const SETUP_REQUEST_BLOCKER_KINDS = [
 export type SetupRequestBlockerKind = (typeof SETUP_REQUEST_BLOCKER_KINDS)[number];
 
 /**
- * Where a setup's recipe came from: the default branch, or written by Kodus
+ * Where a setup's recipe came from: the default branch; written by Kodus
  * from the repository files because the default branch has none (the
- * deterministic first step of the learning loop).
+ * deterministic first step of the learning loop); or `submitted`: the
+ * default branch has none and a developer's own coding agent sent one
+ * through a team key (env_recipe_submit, the Kodus CLI), kept by the product
+ * until a recipe is committed.
  */
-export const RECIPE_ORIGINS = ['repository', 'inferred'] as const;
+export const RECIPE_ORIGINS = ['repository', 'inferred', 'submitted'] as const;
 export type RecipeOrigin = (typeof RECIPE_ORIGINS)[number];
 /**
  * Where the recipe a setup booted with came from: the command's origins, or
@@ -216,6 +220,10 @@ export type RecipeOrigin = (typeof RECIPE_ORIGINS)[number];
  * records it (never in the command), from the product's answer.
  */
 export type SetupRecipeOrigin = RecipeOrigin | 'authored';
+
+/** A recipe the product holds rather than the repository: Kodus inferred it, Kody wrote it, or a developer's agent sent it. */
+export const recipeOutsideRepository = (origin: SetupRecipeOrigin | undefined): boolean =>
+    origin === 'inferred' || origin === 'authored' || origin === 'submitted';
 /** Why Kodus could not infer a recipe: nothing to boot from, a compose file it cannot read, or no HTTP port to call. */
 export const RECIPE_INFERENCE_GAPS = ['no_build_files', 'compose_unreadable', 'no_http_port', 'published_image'] as const;
 export type RecipeInferenceGap = (typeof RECIPE_INFERENCE_GAPS)[number];
@@ -316,10 +324,16 @@ export const RuntimeEnvironmentSetupRequestedSchema = z.strictObject({
             content: z.string().max(RUNTIME_RECIPE_MAX_BYTES).nullable(),
             origin: z.enum(RECIPE_ORIGINS).optional(),
             inference: z.strictObject({ reason: z.enum(RECIPE_INFERENCE_GAPS), message: z.string().min(1).max(500) }).optional(),
+            /** The .kodus/ build files a submitted recipe carries (the same bounds as Kody's). */
+            files: AuthoredFilesSchema.optional(),
         })
         .refine((r) => r.origin !== 'inferred' || (r.content !== null && r.path === RUNTIME_RECIPE_PATH && !r.inference), {
             message: 'an inferred recipe carries its text, at the shared path',
         })
+        .refine((r) => r.origin !== 'submitted' || (r.content !== null && r.path === RUNTIME_RECIPE_PATH && !r.inference), {
+            message: 'a submitted recipe carries its text, at the shared path',
+        })
+        .refine((r) => !r.files || r.origin === 'submitted', { message: 'only a submitted recipe carries build files' })
         .refine((r) => !r.inference || r.content === null, { message: 'an inference gap goes with no recipe text' })
         .optional(),
     /**

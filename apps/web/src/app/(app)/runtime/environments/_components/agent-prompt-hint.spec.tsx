@@ -32,6 +32,10 @@ describe("AgentPromptHint", () => {
         expect(screen.getByLabelText("Prompt")).toHaveTextContent(
             "If .kodus/workspace.yaml already exists for another tool, write .kodus/workspace.runtime.yaml instead",
         );
+        // The agent checks and sends the recipe through the Kodus CLI, with the developer's own model.
+        expect(screen.getByLabelText("Prompt")).toHaveTextContent(
+            "kodus env recipe submit --wait",
+        );
         expect(
             screen.getByRole("button", { name: "Copy prompt" }),
         ).toBeInTheDocument();

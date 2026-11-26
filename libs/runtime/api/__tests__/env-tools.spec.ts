@@ -294,6 +294,8 @@ describe('RuntimeEnvToolsService (/mcp/env)', () => {
                 imageId: 'img-1',
                 cellId: 'cell-1',
                 blockers: [{ signature: 'missing_env', kind: 'unknown', count: 1, lastAt: at(2 * DAY) }],
+                // Which setup it read: a caller that sent a recipe waits for its own (env_recipe_submit's setupKey).
+                setupKey: activeSetup.key,
             });
             expect(h.setupReads).toEqual([{ organizationId: ORG, environmentId: 'env-a' }]);
         });

@@ -481,10 +481,12 @@ type NextStepEnvironment = Pick<
 > &
     Partial<Pick<RuntimeEnvironment, "repositoryId">>;
 
-/** A recipe Kodus inferred or Kody wrote: it lives here until a PR adds it to the repository. */
+/** A recipe Kodus inferred, Kody wrote or a developer's agent sent: it lives here until a PR adds it to the repository. */
 const generatedRecipe = (env: NextStepEnvironment) => {
     const recipe = env.setup?.recipe;
-    return recipe?.origin === "inferred" || recipe?.origin === "authored"
+    return recipe?.origin === "inferred" ||
+        recipe?.origin === "authored" ||
+        recipe?.origin === "submitted"
         ? recipe
         : undefined;
 };

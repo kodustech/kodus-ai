@@ -102,7 +102,7 @@ export type AttrKey = (typeof ATTR)[keyof typeof ATTR];
 export const RUN_VERDICTS = ['no_regressions', 'regression', 'partly_tested', 'could_not_boot', 'nothing_to_test'] as const;
 export const SETUP_STATES = ['setting_up', 'active', 'blocked'] as const;
 export const SETUP_OUTCOMES = ['active', 'blocked'] as const;
-export const RECIPE_ORIGINS = ['committed', 'inferred', 'authored', 'none'] as const;
+export const RECIPE_ORIGINS = ['committed', 'inferred', 'authored', 'submitted', 'none'] as const;
 export const CLAIM_STARTS = ['cold', 'pool', 'bake', 'template', 'session'] as const;
 export const BOOT_PHASE_VALUES = ['prepare', 'boot', 'build', 'up', 'seed', 'ready', 'snapshot'] as const;
 /** The export step's parts as the cell names them (internal/buildprogress exportPhases) → their label value. */

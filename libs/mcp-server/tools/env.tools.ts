@@ -182,7 +182,7 @@ export const ENV_TOOLS: EnvToolDefinition[] = [
     {
         name: 'env_status',
         description:
-            "The environment's health without booting it: `state` (setting_up, active, blocked or not_set_up), the last 7 days of setup boots (`boots7d`, `bootRate7d`, `readyP50Ms`), the current `imageId` and `cellId`, and the blockers grouped by signature with how often each failed this week (env_blockers has their evidence and fixes). Needs env:exec or env:fix.",
+            "The environment's health without booting it: `state` (setting_up, active, blocked or not_set_up), the last 7 days of setup boots (`boots7d`, `bootRate7d`, `readyP50Ms`), the current `imageId` and `cellId`, the `setupKey` of the setup it reads, and the blockers grouped by signature with how often each failed this week (env_blockers has their evidence and fixes). Needs env:exec or env:fix.",
         inputSchema: target,
         annotations: {
             readOnlyHint: true,
@@ -208,6 +208,48 @@ export const ENV_TOOLS: EnvToolDefinition[] = [
             openWorldHint: true,
         },
         run: (s, p, a) => s.fix(p, a),
+    },
+    {
+        name: 'env_recipe_check',
+        description:
+            "Check a recipe the developer's agent wrote (.kodus/workspace.yaml and its .kodus/ build files) the way Kodus checks one before it boots: `ok`, each error to fix, and what Kodus read from it (public service, health path, exposed services). Nothing is kept and nothing boots. Needs env:exec or env:fix.",
+        inputSchema: {
+            ...target,
+            recipe: z.string().max(65_536).describe('The recipe text, version 1.'),
+            files: z
+                .array(z.object({ path: z.string().max(80).describe('Directly under .kodus/, e.g. .kodus/Dockerfile.'), content: z.string().max(16_384) }))
+                .max(4)
+                .optional()
+                .describe('The build files the recipe names that the repository lacks: at most 4, 16 KiB each, 48 KiB together.'),
+        },
+        annotations: {
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: false,
+        },
+        run: (s, p, a) => s.checkRecipe(p, a),
+    },
+    {
+        name: 'env_recipe_submit',
+        description:
+            "Send the recipe the developer's agent wrote: Kodus keeps it for the environment and sets it up from zero on a clean machine. It boots while the default branch has no recipe (a committed one always wins); Kody never rewrites it. Answers the `setupKey`: follow with env_status until its `setupKey` is this one and its state is `active` or `blocked`; when blocked, env_blockers has the evidence to fix it and send again. Once it boots, commit it in a pull request. Needs env:fix.",
+        inputSchema: {
+            ...target,
+            recipe: z.string().max(65_536).describe('The recipe text, version 1.'),
+            files: z
+                .array(z.object({ path: z.string().max(80), content: z.string().max(16_384) }))
+                .max(4)
+                .optional()
+                .describe('The build files the recipe names that the repository lacks, directly under .kodus/.'),
+        },
+        annotations: {
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: true,
+        },
+        run: (s, p, a) => s.submitRecipe(p, a),
     },
     {
         name: 'env_down',

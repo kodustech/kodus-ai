@@ -167,7 +167,7 @@ const setup = (
  * Only persistence, key/repo/token lookup and the product outbox are local.
  */
 export async function runtimeEnvFixture(
-    options: { wrongSessionSignature?: boolean; isolatedValidation?:boolean; validationExitCode?:number; loseValidation?:boolean } = {},
+    options: { wrongSessionSignature?: boolean; isolatedValidation?:boolean; validationExitCode?:number; loseValidation?:boolean; noCommittedRecipe?: boolean } = {},
 ) {
     const clients: Client[] = [];
     const pending = new Set<Promise<void>>();
@@ -282,6 +282,10 @@ export async function runtimeEnvFixture(
         listByOrganization: async (org: string) =>
             environments.filter((env) => env.organizationId === org),
         markSetupRequested: async () => undefined,
+        setSubmittedRecipe: async (org: string, id: string, recipe) => {
+            const env = environments.find((e) => e.organizationId === org && e.environmentId === id);
+            if (env) env.submittedRecipe = recipe;
+        },
         create: unexpectedPortCall,
         updateSettings: unexpectedPortCall,
         markPoolActivity: unexpectedPortCall,
@@ -370,7 +374,8 @@ export async function runtimeEnvFixture(
             branch: 'main',
             sha: SHA,
         }),
-        readFileAtCommit: async () => RECIPE,
+        // noCommittedRecipe: the default branch has none (a recipe a developer's agent sends boots instead).
+        readFileAtCommit: async () => (options.noCommittedRecipe ? null : RECIPE),
         getPullRequestHead: unexpectedPortCall,
         getPullRequestDiff: unexpectedPortCall,
         resolveGitIdentity: unexpectedPortCall,

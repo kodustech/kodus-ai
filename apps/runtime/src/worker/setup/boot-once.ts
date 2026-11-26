@@ -1,3 +1,4 @@
+import { recipeOutsideRepository } from '@libs/runtime/contracts/runtime-commands';
 import { notReadyWaited } from '@libs/runtime/blockers/catalog';
 import { type BakeOutcome, type BakeRequest, type Blocked, type Claim, EnvironmentRuntime, isBlocked, isCapacityWait, isEnvError, POOL_SIZE_UNSUPPORTED } from '@libs/runtime/environment';
 import { LATEST_IMAGE } from '@libs/runtime/gate';
@@ -108,7 +109,7 @@ export async function bootOnce(run: SetupRun, bootEnv: EnvironmentRuntime, attem
         const baked = await bake(run, b, claim);
         await fillPool(run, b, claim, baked);
         rec.state = 'active';
-        if (rec.recipe?.origin === 'inferred' || rec.recipe?.origin === 'authored') rec.recipe.cleanBoots = cleanBootsOf(run.previous, rec);
+        if (rec.recipe && recipeOutsideRepository(rec.recipe.origin)) rec.recipe.cleanBoots = cleanBootsOf(run.previous, rec);
         return { claimFailed };
     } catch (e) {
         if (isCancellation(e)) {
@@ -492,7 +493,7 @@ export function cleanBootsOf(previous: EnvironmentSetupRecord | null, rec: Envir
         previous &&
         previous.key !== rec.key &&
         previous.state === 'active' &&
-        (previous.recipe?.origin === 'inferred' || previous.recipe?.origin === 'authored') &&
+        recipeOutsideRepository(previous.recipe?.origin) &&
         previous.recipe.origin === rec.recipe?.origin &&
         previous.recipe.digest !== undefined &&
         previous.recipe.digest === rec.recipe?.digest;

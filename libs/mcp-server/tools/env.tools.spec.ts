@@ -50,7 +50,7 @@ const post = (a: express.Express, body: unknown) =>
         .send(body);
 
 describe('/mcp/env tools', () => {
-    it('lists the original six env_* tools plus named validation, status and upload', async () => {
+    it('lists the original six env_* tools plus named validation, status, upload and the recipe tools', async () => {
         const res = await post(app(TEAM_KEY, {}), {
             jsonrpc: '2.0',
             id: 1,
@@ -64,6 +64,8 @@ describe('/mcp/env tools', () => {
             'env_down',
             'env_exec',
             'env_fix',
+            'env_recipe_check',
+            'env_recipe_submit',
             'env_status',
             'env_step',
             'env_up',

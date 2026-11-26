@@ -7,6 +7,7 @@ import type { PreviewSecrets } from '@libs/runtime/contracts/preview';
 import type { ProbeAssertions } from '@libs/runtime/contracts/probe-assertions';
 
 import type { PoolPolicy, PoolUsage } from '../domain/pool';
+import type { SubmittedRecipe } from '../domain/ports';
 
 import { CoreModel } from '@libs/core/infrastructure/repositories/model/typeOrm';
 
@@ -73,6 +74,10 @@ export class RuntimeEnvironmentModel extends CoreModel {
     /** Run the e2e suite on every push as a CI check (docs/runtime/e2e-suites.md section 11); null: the deployment's default (RUNTIME_SUITE_CI). */
     @Column({ name: 'suite_ci', type: 'boolean', nullable: true })
     suiteCi: boolean | null;
+
+    /** The recipe a developer's agent sent through a team key (env_recipe_submit); null: none. */
+    @Column({ name: 'submitted_recipe', type: 'jsonb', nullable: true })
+    submittedRecipe: SubmittedRecipe | null;
 }
 
 /**
