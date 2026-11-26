@@ -1,4 +1,3 @@
-import { quoteConfigValue } from '../quote-config-value';
 import { parseSaCredentials } from '@libs/llm/model-builders';
 
 /**
@@ -14,7 +13,7 @@ export class VertexCredentialTypeError extends Error {
     readonly code = 'EBYOK_CONFIG_INVALID';
     constructor(readonly credentialType: string) {
         super(
-            `The Vertex key is a "${quoteConfigValue(credentialType, 40)}" credential; only a service account key (type "service_account") is accepted, so the call was not sent.`,
+            'The Vertex key is not a service account key (type "service_account"), so the call was not sent.',
         );
         this.name = 'VertexCredentialTypeError';
     }

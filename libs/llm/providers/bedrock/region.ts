@@ -1,5 +1,3 @@
-import { quoteConfigValue } from '../quote-config-value';
-
 /**
  * The Bedrock hosts are built from the region the org types
  * (`bedrock-runtime.<region>.amazonaws.com`, `bedrock.<region>…`), so a value
@@ -13,7 +11,7 @@ export class BedrockRegionInvalidError extends Error {
     readonly code = 'EBYOK_CONFIG_INVALID';
     constructor(readonly region: string) {
         super(
-            `The AWS region "${quoteConfigValue(region, 64)}" of this Bedrock key is not an AWS region name (like us-east-1), so the call was not sent.`,
+            'The AWS region of this Bedrock key is not an AWS region name (like us-east-1), so the call was not sent.',
         );
         this.name = 'BedrockRegionInvalidError';
     }

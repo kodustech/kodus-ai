@@ -774,3 +774,24 @@ describe('connecting a self-managed server that is refused says why', () => {
         expect(reached).toEqual([]);
     });
 });
+
+// Review on #2709 (Kody): a remote that is no URL (scp-like, a local path)
+// still gets the auth header for its own fetch, as before the redirect change.
+describe('a git remote that is not a URL', () => {
+    it.each(['git@git.example.com:o/r.git', '/srv/git/r.git'])(
+        '%s: fetched with the auth header, nothing pinned',
+        async (remote) => {
+            const seen: Array<Array<[string, string]>> = [];
+            await withJudgedGitRedirects(
+                remote,
+                'Authorization: Basic c2VjcmV0',
+                async (_url, config) => {
+                    seen.push(config);
+                },
+            );
+            expect(seen).toEqual([
+                [['http.extraHeader', 'Authorization: Basic c2VjcmV0']],
+            ]);
+        },
+    );
+});

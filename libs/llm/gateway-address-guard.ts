@@ -734,6 +734,17 @@ function sameGitOrigin(a: URL, b: URL): boolean {
     );
 }
 
+/** The same origin for two git remotes; a remote that is no URL (scp-like
+ *  `git@host:o/r.git`, a local path) is only its own. */
+function sameGitRemoteOrigin(a: string, b: string): boolean {
+    if (a === b) return true;
+    try {
+        return sameGitOrigin(new URL(a), new URL(b));
+    } catch {
+        return false;
+    }
+}
+
 const GIT_REFS_SUFFIX = '/info/refs?service=git-upload-pack';
 const GIT_MAX_REDIRECTS = 5;
 
@@ -832,7 +843,7 @@ export async function withJudgedGitRedirects<T>(
         url: string,
         pin: Array<[string, string]>,
     ): Array<[string, string]> =>
-        authHeader && sameGitOrigin(new URL(url), new URL(rawUrl))
+        authHeader && sameGitRemoteOrigin(url, rawUrl)
             ? [...pin, ['http.extraHeader', authHeader]]
             : pin;
     const pin = withAuth(rawUrl, await pinFor(rawUrl));

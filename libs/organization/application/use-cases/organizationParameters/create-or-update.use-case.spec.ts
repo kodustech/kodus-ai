@@ -1313,7 +1313,7 @@ describe('CreateOrUpdateOrganizationParametersUseCase — Bedrock region', () =>
                 saveByok(useCase, bedrock(region)),
             ).rejects.toHaveProperty(
                 'message',
-                `The AWS region "${region}" of this Bedrock key is not an AWS region name (like us-east-1), so the call was not sent.`,
+                'The AWS region of this Bedrock key is not an AWS region name (like us-east-1), so the call was not sent.',
             );
             expect(createOrUpdateConfig).not.toHaveBeenCalled();
         },
@@ -1362,7 +1362,7 @@ describe('CreateOrUpdateOrganizationParametersUseCase — Vertex key type', () =
             ),
         ).rejects.toHaveProperty(
             'message',
-            'The Vertex key is a "external_account" credential; only a service account key (type "service_account") is accepted, so the call was not sent.',
+            'The Vertex key is not a service account key (type "service_account"), so the call was not sent.',
         );
         expect(createOrUpdateConfig).not.toHaveBeenCalled();
     });
@@ -1413,7 +1413,7 @@ describe('CreateOrUpdateOrganizationParametersUseCase — Vertex location', () =
                 saveByok(useCase, vertexAt(location)),
             ).rejects.toHaveProperty(
                 'message',
-                `The location "${location}" of this Vertex key is not a Vertex location (like global or us-central1), so the call was not sent.`,
+                'The location of this Vertex key is not a Vertex location (like global or us-central1), so the call was not sent.',
             );
             expect(createOrUpdateConfig).not.toHaveBeenCalled();
         },

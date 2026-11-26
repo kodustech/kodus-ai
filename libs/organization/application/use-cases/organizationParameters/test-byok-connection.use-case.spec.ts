@@ -1060,7 +1060,7 @@ describe('testVertex — only a service account key reaches google-auth', () => 
         const out = await (useCase() as any).testVertex(key);
         expect(out).toMatchObject({ ok: false, code: 'bad_request' });
         expect(out.message).toBe(
-            'The Vertex key is a "external_account" credential; only a service account key (type "service_account") is accepted, so the call was not sent.',
+            'The Vertex key is not a service account key (type "service_account"), so the call was not sent.',
         );
         expect(built).not.toHaveBeenCalled();
         built.mockRestore();

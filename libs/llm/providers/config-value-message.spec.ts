@@ -5,29 +5,29 @@ import {
 } from './vertex/credential-type';
 import { VertexLocationInvalidError } from './vertex/location';
 
-// Review on #2709 (Kody): the org's value is quoted cut to a length; the cut
-// never ends on the first half of a surrogate pair.
-const loneSurrogate =
-    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
-
-describe('a refused config value is quoted without a broken character', () => {
+// Review on #2709 (Kody): a refusal can be shown where others read it (a PR
+// comment), and a value typed in the wrong field may be a secret. The message
+// is a fixed sentence: the value is never quoted back.
+describe('a refused config value is never quoted in the message', () => {
+    const typed = 'AKIA-CANARY [link](https://evil.test) 😀';
     it.each([
-        ['Bedrock region', (v: string) => new BedrockRegionInvalidError(v), 64],
+        [
+            'Bedrock region',
+            () => new BedrockRegionInvalidError(typed),
+            'The AWS region of this Bedrock key is not an AWS region name (like us-east-1), so the call was not sent.',
+        ],
         [
             'Vertex location',
-            (v: string) => new VertexLocationInvalidError(v),
-            64,
+            () => new VertexLocationInvalidError(typed),
+            'The location of this Vertex key is not a Vertex location (like global or us-central1), so the call was not sent.',
         ],
         [
             'Vertex key type',
-            (v: string) => new VertexCredentialTypeError(v),
-            40,
+            () => new VertexCredentialTypeError(typed),
+            'The Vertex key is not a service account key (type "service_account"), so the call was not sent.',
         ],
-    ])('%s', (_name, refuse, max) => {
-        const value = `${'a'.repeat(max - 1)}😀tail`;
-        const { message } = refuse(value);
-        expect(loneSurrogate.test(message)).toBe(false);
-        expect(message).toContain(`"${'a'.repeat(max - 1)}"`);
+    ])('%s', (_name, refuse, message) => {
+        expect(refuse().message).toBe(message);
     });
 });
 
@@ -49,6 +49,6 @@ it('a refused Vertex key says its type and nothing it carries', () => {
         message = (e as Error).message;
     }
     expect(message).toBe(
-        'The Vertex key is a "external_account" credential; only a service account key (type "service_account") is accepted, so the call was not sent.',
+        'The Vertex key is not a service account key (type "service_account"), so the call was not sent.',
     );
 });

@@ -71,7 +71,9 @@ describe('a redirected sandbox clone keeps the token on its own origin', () => {
                 platform: PlatformType.GITHUB,
             })
             .catch(() => undefined);
-    const byGit = (seen: Seen[]) => seen.filter((r) => r.ua.startsWith('git/'));
+    // git's own requests: the redirect probe says `git/kodus`.
+    const byGit = (seen: Seen[]) =>
+        seen.filter((r) => r.ua.startsWith('git/') && r.ua !== 'git/kodus');
 
     it('a redirect to another host gets no token from the fetch that follows', async () => {
         redirectTo = (path) =>
